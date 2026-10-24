@@ -1,9 +1,6 @@
 import {
-  OFFICIAL_MARKETPLACE_OWNER,
   OFFICIAL_MARKETPLACE_GIT_SOURCE,
   isOfficialMarketplaceGitSource,
-  isOfficialOrganizationGitSource,
-  isOfficialPluginIdentity,
   isMarketplaceListingSupported,
   pluginMarketplaceGitSourceSchema,
   type PluginMarketplaceEntry,
@@ -20,11 +17,13 @@ import {
   type PluginMarketplaceRegisteredSource
 } from './plugin-marketplace-store'
 import type { PluginKillListEntry } from '../../shared/plugins/plugin-kill-list'
+import type { PluginImageCache } from './plugin-image-cache'
 import { validateMarketplaceProvenance } from './plugin-marketplace-provenance'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
-import type {
-  PluginMarketplaceListing,
-  PluginMarketplaceSourceState
+import {
+  pluginMarketplaceListing,
+  type PluginMarketplaceListing,
+  type PluginMarketplaceSourceState
 } from './plugin-marketplace-projection'
 export type {
   PluginMarketplaceListing,
@@ -39,6 +38,8 @@ export class PluginMarketplaceService {
   private readonly store: PluginMarketplaceStore
   private readonly fetcher: MarketplaceFetcher
   private readonly getKillListEntry: (pluginKey: string) => PluginKillListEntry | null
+  private readonly hostVersion: string | null
+  private readonly imageCache: PluginImageCache | null
   private readonly refreshChains = new Map<string, Promise<PluginMarketplaceSourceState>>()
   private readonly sourceErrors = new Map<string, string>()
   private officialSeedPromise: Promise<PluginMarketplaceSourceState> | null = null
@@ -49,7 +50,12 @@ export class PluginMarketplaceService {
     fetcher?: MarketplaceFetcher
     store?: PluginMarketplaceStore
     getKillListEntry?: (pluginKey: string) => PluginKillListEntry | null
+    /** Picks which of an entry's releases to offer; without it the newest is offered. */
+    hostVersion?: string
+    imageCache?: PluginImageCache
   }) {
+    this.hostVersion = options.hostVersion ?? null
+    this.imageCache = options.imageCache ?? null
     this.store = options.store ?? new PluginMarketplaceStore(options.pluginsDataDir)
     this.fetcher = options.fetcher ?? fetchPluginMarketplace
     this.getKillListEntry = options.getKillListEntry ?? (() => null)
@@ -241,6 +247,10 @@ export class PluginMarketplaceService {
   ): Promise<PluginMarketplaceFetchResult> {
     const fetched = await this.fetcher(source)
     validateMarketplaceProvenance(source, fetched)
+    const cache = this.imageCache
+    if (cache) {
+      await Promise.all((fetched.images ?? []).map((image) => cache.put(image)))
+    }
     return fetched
   }
 
@@ -269,33 +279,13 @@ export class PluginMarketplaceService {
     snapshot: PluginMarketplaceCachedSnapshot,
     entry: PluginMarketplaceEntry
   ): PluginMarketplaceListing {
-    const official =
-      isOfficialMarketplaceGitSource(source.source.url) &&
-      snapshot.marketplace.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
-      isOfficialPluginIdentity(entry.id) &&
-      isOfficialOrganizationGitSource(entry.source.url)
-    const blocked = this.getKillListEntry(entry.id)
-    return {
-      marketplaceSourceId: source.id,
-      marketplaceName: snapshot.marketplace.name,
-      marketplaceOwner: snapshot.marketplace.owner,
-      marketplaceCommit: snapshot.marketplaceCommit,
-      pluginKey: entry.id,
-      source: entry.source,
-      ...(entry.description ? { description: entry.description } : {}),
-      categories: entry.categories,
-      official,
-      bundled: false,
-      ...(entry.release ? { release: entry.release } : {}),
-      ...(blocked
-        ? {
-            blockedByKillList: {
-              reason: blocked.reason,
-              ...(blocked.advisoryUrl ? { advisoryUrl: blocked.advisoryUrl } : {})
-            }
-          }
-        : {})
-    }
+    return pluginMarketplaceListing({
+      source,
+      snapshot,
+      entry,
+      hostVersion: this.hostVersion,
+      blocked: this.getKillListEntry(entry.id)
+    })
   }
 
   private stateFromSnapshot(

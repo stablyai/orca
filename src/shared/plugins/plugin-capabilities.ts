@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { PLUGIN_ENUM_SINCE_KEY } from './plugin-engine-floor-keys'
+import { pluginFieldDoc, PLUGIN_SCHEMA_SINCE_V1 } from './plugin-schema-field-docs'
 
 /**
  * Plugin capability model v0. The manifest declares capabilities, the user
@@ -24,9 +26,28 @@ export const PLUGIN_CAPABILITY_KINDS = [
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
 
+/** The release each capability arrived in; engines.orca must cover every one a plugin asks for. */
+export const PLUGIN_CAPABILITY_SINCE: Record<PluginCapabilityKind, string> = {
+  'workspace:read': PLUGIN_SCHEMA_SINCE_V1,
+  'terminal:send': PLUGIN_SCHEMA_SINCE_V1,
+  'notifications:show': PLUGIN_SCHEMA_SINCE_V1,
+  storage: PLUGIN_SCHEMA_SINCE_V1,
+  secrets: PLUGIN_SCHEMA_SINCE_V1,
+  'events:subscribe': PLUGIN_SCHEMA_SINCE_V1,
+  'settings:own': PLUGIN_SCHEMA_SINCE_V1
+}
+
 // Strict object (not a bare enum) so scoped fields can be added per-kind later
 // without changing the manifest shape.
-export const pluginCapabilitySchema = z.object({ kind: z.enum(PLUGIN_CAPABILITY_KINDS) }).strict()
+export const pluginCapabilitySchema = z
+  .object({
+    kind: z.enum(PLUGIN_CAPABILITY_KINDS).meta({
+      ...pluginFieldDoc('Capability granted on user consent.', PLUGIN_SCHEMA_SINCE_V1),
+      [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_CAPABILITY_SINCE
+    })
+  })
+  .strict()
+  .meta({ id: 'Capability', description: 'A host API the plugin may call once the user consents.' })
 
 export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
 

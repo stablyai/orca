@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -9,7 +9,6 @@ import {
 import {
   isAllowedPluginGitUrl,
   PLUGIN_COMMIT_PATTERN,
-  PLUGIN_CONTENT_HASH_PATTERN,
   pluginInstallSourceSchema,
   removePluginLock
 } from '../../shared/plugins/plugin-install-lockfile'
@@ -21,7 +20,7 @@ import {
   type PluginInstallResult
 } from './plugin-install-staging'
 import { checkoutPluginGitSource } from './plugin-git-repository'
-import { readPluginCurrentPointer } from './plugin-current-pointer'
+import { findPluginRollbackCandidate } from './plugin-rollback-candidate'
 import { readPluginInstallProvenance } from './plugin-install-provenance'
 import { publishPluginInstall } from './plugin-install-publication'
 
@@ -214,28 +213,11 @@ export async function rollbackInstalledPlugin(input: {
   }
   return serializePluginMutation(input.pluginsDir, async () => {
     const pluginDir = join(input.pluginsDir, input.pluginKey)
-    const currentContentHash = await readPluginCurrentPointer(pluginDir).catch(() => null)
-    if (!currentContentHash) {
-      return { ok: false, error: 'installed plugin has no current version' }
+    const candidate = await findPluginRollbackCandidate(pluginDir)
+    if (!candidate.ok) {
+      return candidate
     }
-    const candidates = (await readdir(pluginDir, { withFileTypes: true }).catch(() => []))
-      .filter(
-        (entry) =>
-          entry.isDirectory() &&
-          PLUGIN_CONTENT_HASH_PATTERN.test(entry.name) &&
-          entry.name !== currentContentHash
-      )
-      .map((entry) => entry.name)
-    if (candidates.length !== 1) {
-      return {
-        ok: false,
-        error:
-          candidates.length === 0
-            ? 'no rollback version is available'
-            : 'rollback state is ambiguous'
-      }
-    }
-    const contentHash = candidates[0]!
+    const { contentHash } = candidate
     const provenance = await readPluginInstallProvenance(pluginDir, contentHash)
     if (
       !provenance ||

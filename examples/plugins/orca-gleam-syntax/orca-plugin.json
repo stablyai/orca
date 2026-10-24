@@ -1,4 +1,5 @@
 {
+  "$schema": "./orca-plugin.v2.schema.json",
   "manifestVersion": 2,
   "execution": "data",
   "id": "orca-gleam-syntax",
@@ -6,8 +7,7 @@
   "name": "Gleam",
   "version": "1.0.0",
   "description": "Syntax highlighting for Gleam files.",
-  "engines": { "orca": ">=1.4.0" },
-  "pluginApi": 1,
+  "engines": { "orca": ">=1.4.240" },
   "contributes": {
     "syntaxes": [
       {

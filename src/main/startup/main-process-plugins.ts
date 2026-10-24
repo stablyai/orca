@@ -1,3 +1,7 @@
+import { join } from 'node:path'
+import { PluginImageCache } from '../plugins/plugin-image-cache'
+import { installPluginImageProtocolHandler } from '../plugins/plugin-image-protocol'
+import { pluginHostVersion } from '../../shared/plugins/plugin-host-version'
 import { app, BrowserWindow } from 'electron'
 import { performance } from 'node:perf_hooks'
 import { PluginService } from '../plugins/plugin-service'
@@ -36,9 +40,14 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
   })
   await state.pluginKillListService.initialize()
+  const pluginImageCache = new PluginImageCache(
+    join(getPluginsDataDir(app.getPath('userData')), 'image-cache')
+  )
   state.pluginMarketplaceService = new PluginMarketplaceService({
+    imageCache: pluginImageCache,
     pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
-    getKillListEntry: (pluginKey) => state.pluginKillListService?.find(pluginKey) ?? null
+    getKillListEntry: (pluginKey) => state.pluginKillListService?.find(pluginKey) ?? null,
+    hostVersion: pluginHostVersion(app.getVersion())
   })
   const requestOfficialMarketplaceSeed = (): void => {
     if (store.getSettings().pluginSystemEnabled !== true) {
@@ -53,12 +62,13 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   state.pluginMarketplaceInstaller = new PluginMarketplaceInstaller({
     marketplace: state.pluginMarketplaceService,
     userDataPath: app.getPath('userData'),
-    hostVersion: app.getVersion(),
-    blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null
+    hostVersion: pluginHostVersion(app.getVersion()),
+    blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null,
+    imageCache: pluginImageCache
   })
   state.pluginService = new PluginService({
     userDataPath: app.getPath('userData'),
-    hostVersion: app.getVersion(),
+    hostVersion: pluginHostVersion(app.getVersion()),
     // Feature flag: with the setting off, discovery returns nothing and no
     // plugin code path runs at all.
     isPluginSystemEnabled: () => state.store?.getSettings().pluginSystemEnabled === true,
@@ -69,6 +79,10 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     getPluginKillListEntry: (pluginKey) => state.pluginKillListService?.find(pluginKey) ?? null,
     hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged)
   })
+  installPluginImageProtocolHandler({
+    cache: pluginImageCache,
+    findValidPlugin: (pluginKey) => state.pluginService?.findValidPlugin(pluginKey) ?? null
+  })
   const bundledPluginBootstrap = new PluginBundledBootstrapCoordinator({
     root: resolveBundledPluginRoot({
       isPackaged: app.isPackaged,
@@ -76,7 +90,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       appPath: app.getAppPath()
     }),
     userDataPath: app.getPath('userData'),
-    hostVersion: app.getVersion(),
+    hostVersion: pluginHostVersion(app.getVersion()),
     isEnabled: () => state.store?.getSettings().pluginSystemEnabled === true,
     blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null,
     refreshPlugins: () => state.pluginService?.refresh() ?? Promise.resolve()

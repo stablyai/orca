@@ -51,6 +51,8 @@ export const pluginsApi = {
   previewMarketplaceUpdate: (args) => ipcRenderer.invoke('plugins:previewMarketplaceUpdate', args),
   rollbackMarketplacePlugin: (args) =>
     ipcRenderer.invoke('plugins:rollbackMarketplacePlugin', args),
+  getRollbackVersion: (args) => ipcRenderer.invoke('plugins:getRollbackVersion', args),
+  getInstalledManifest: (args) => ipcRenderer.invoke('plugins:getInstalledManifest', args),
   remove: (args: { pluginKey: string }): Promise<PluginHostListEntry[]> =>
     ipcRenderer.invoke('plugins:remove', args),
   getLogs: (args: { pluginKey: string }): Promise<PluginHostLogLine[]> =>

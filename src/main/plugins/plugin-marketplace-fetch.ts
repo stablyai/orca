@@ -1,12 +1,17 @@
 import { tmpdir } from 'node:os'
 import {
   PLUGIN_MARKETPLACE_FILENAME,
-  PLUGIN_MARKETPLACE_V2_FILENAME,
   pluginMarketplaceSchema,
-  pluginMarketplaceV2Schema,
   type PluginMarketplace
 } from '../../shared/plugins/plugin-marketplace'
+import {
+  PLUGIN_CATALOG_FILENAME,
+  pluginCatalogSchema,
+  pluginCatalogVersionError
+} from '../../shared/plugins/plugin-catalog'
+import { formatPluginSchemaIssues } from '../../shared/plugins/plugin-schema-issues'
 import { gitExecFileAsyncBuffer } from '../git/runner'
+import { extractCatalogImages } from './plugin-catalog-image-extraction'
 import { readPluginGitCommit } from './plugin-git-repository'
 import type { PluginMarketplaceRegisteredSource } from './plugin-marketplace-store'
 
@@ -18,6 +23,8 @@ const MARKETPLACE_GIT_TIMEOUT_MS = 120_000
 export type PluginMarketplaceFetchResult = {
   marketplaceCommit: string
   marketplace: PluginMarketplace
+  /** Catalog images whose bytes matched their declared hash, size and format. */
+  images?: Buffer[]
 }
 
 /** Fetches a marketplace through system Git so private repositories use the
@@ -34,26 +41,18 @@ export async function fetchPluginMarketplace(
     },
     readMarketplaceAtCommit
   )
-  return { marketplaceCommit: commit, marketplace: value }
+  return { marketplaceCommit: commit, marketplace: value.marketplace, images: value.images }
 }
 
 /** Reads only the catalog index blobs, so the rest of the repository is never written out.
- *  Prefers the release-pinned v2 catalog; repositories that only publish v1 still load. */
+ *  Prefers orca-catalog.json; repositories that only publish the frozen v1 file still load. */
 async function readMarketplaceAtCommit(
   repository: string,
   commit: string
-): Promise<PluginMarketplace> {
+): Promise<{ marketplace: PluginMarketplace; images: Buffer[] }> {
   const options = { cwd: repository, timeout: MARKETPLACE_GIT_TIMEOUT_MS }
   const listing = await gitExecFileAsyncBuffer(
-    [
-      'ls-tree',
-      '-l',
-      '-z',
-      commit,
-      '--',
-      PLUGIN_MARKETPLACE_V2_FILENAME,
-      PLUGIN_MARKETPLACE_FILENAME
-    ],
+    ['ls-tree', '-l', '-z', commit, '--', PLUGIN_CATALOG_FILENAME, PLUGIN_MARKETPLACE_FILENAME],
     { ...options, maxBuffer: 64 * 1024 }
   )
   const blobs = new Map<string, { object: string; size: number }>()
@@ -63,8 +62,8 @@ async function readMarketplaceAtCommit(
       blobs.set(match[3]!, { object: match[1]!, size: Number(match[2]) })
     }
   }
-  const filename = blobs.has(PLUGIN_MARKETPLACE_V2_FILENAME)
-    ? PLUGIN_MARKETPLACE_V2_FILENAME
+  const filename = blobs.has(PLUGIN_CATALOG_FILENAME)
+    ? PLUGIN_CATALOG_FILENAME
     : PLUGIN_MARKETPLACE_FILENAME
   const blob = blobs.get(filename)
   if (!blob) {
@@ -77,18 +76,61 @@ async function readMarketplaceAtCommit(
     ...options,
     maxBuffer: MARKETPLACE_INDEX_MAX_BYTES
   })
-  return parsePluginMarketplaceIndex(filename, bytes.stdout)
+  const marketplace = parsePluginMarketplaceIndex(filename, bytes.stdout)
+  return extractCatalogImages(marketplace, (path, maxBytes) =>
+    readCatalogBlob(repository, commit, path, maxBytes)
+  )
+}
+
+/** One file from the catalog commit, refused before reading when it is larger than allowed. */
+async function readCatalogBlob(
+  repository: string,
+  commit: string,
+  path: string,
+  maxBytes: number
+): Promise<Buffer | null> {
+  const options = { cwd: repository, timeout: MARKETPLACE_GIT_TIMEOUT_MS }
+  const listing = await gitExecFileAsyncBuffer(['ls-tree', '-l', '-z', commit, '--', path], {
+    ...options,
+    maxBuffer: 4 * 1024
+  })
+  const match = /^100(?:644|755) blob ([0-9a-f]{40}) +([0-9]+)\t/.exec(
+    listing.stdout.toString('utf8')
+  )
+  if (!match?.[1] || Number(match[2]) > maxBytes) {
+    return null
+  }
+  const blob = await gitExecFileAsyncBuffer(['cat-file', 'blob', match[1]], {
+    ...options,
+    maxBuffer: maxBytes
+  })
+  return blob.stdout
 }
 
 export function parsePluginMarketplaceIndex(filename: string, bytes: Buffer): PluginMarketplace {
+  let raw: unknown
   try {
-    const raw: unknown = JSON.parse(bytes.toString('utf8'))
-    return filename === PLUGIN_MARKETPLACE_V2_FILENAME
-      ? pluginMarketplaceV2Schema.parse(raw)
-      : pluginMarketplaceSchema.parse(raw)
+    raw = JSON.parse(bytes.toString('utf8'))
   } catch (error) {
     throw new Error(
       `invalid ${filename}: ${error instanceof Error ? error.message : String(error)}`
     )
   }
+  if (filename === PLUGIN_CATALOG_FILENAME) {
+    const tooNew = pluginCatalogVersionError(raw)
+    if (tooNew) {
+      throw new Error(`${filename} ${tooNew}`)
+    }
+    const parsed = pluginCatalogSchema.safeParse(raw)
+    if (!parsed.success) {
+      throw new Error(`invalid ${filename}: ${formatPluginSchemaIssues(parsed.error.issues, raw)}`)
+    }
+    const { name, owner, plugins } = parsed.data
+    return { name, owner, plugins }
+  }
+  const parsed = pluginMarketplaceSchema.safeParse(raw)
+  if (!parsed.success) {
+    throw new Error(`invalid ${filename}: ${formatPluginSchemaIssues(parsed.error.issues, raw)}`)
+  }
+  return parsed.data
 }

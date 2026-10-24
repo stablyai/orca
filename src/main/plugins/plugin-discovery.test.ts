@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
+import { PLUGIN_SCHEMA_NEWEST_SINCE } from '../../shared/plugins/plugin-host-version'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -35,7 +36,7 @@ describe('installed plugin discovery identity', () => {
           publisher: 'orca-samples',
           name: 'Worker',
           version: '1.0.0',
-          engines: { orca: '>=1.0.0' },
+          engines: { orca: `>=${PLUGIN_SCHEMA_NEWEST_SINCE}` },
           pluginApi: 1,
           main: 'main.mjs'
         })
@@ -43,7 +44,7 @@ describe('installed plugin discovery identity', () => {
       const [plugin] = await discoverPlugins({
         pluginsDir,
         devPluginPaths: [],
-        hostVersion: '1.4.0'
+        hostVersion: PLUGIN_SCHEMA_NEWEST_SINCE
       })
       if (!plugin || isInvalidDiscoveredPlugin(plugin)) {
         throw new Error('expected a valid plugin')
@@ -85,6 +86,34 @@ describe('installed plugin discovery identity', () => {
     expect(plugin && isInvalidDiscoveredPlugin(plugin)).toBe(true)
     expect(plugin?.pluginKey).toBe(installedKey)
     expect(plugin && 'error' in plugin ? plugin.error : '').toContain('does not match')
+  })
+
+  it('names the version gap when a plugin for a newer Orca uses fields this build lacks', async () => {
+    const pluginsDir = await tempPluginsDir()
+    const hash = 'b'.repeat(64)
+    const versionDir = join(pluginsDir, 'acme.future', hash)
+    await mkdir(versionDir, { recursive: true })
+    await writeFile(join(pluginsDir, 'acme.future', 'current'), hash)
+    await writeFile(
+      join(versionDir, 'orca-plugin.json'),
+      JSON.stringify({
+        manifestVersion: 2,
+        execution: 'data',
+        id: 'future',
+        publisher: 'acme',
+        name: 'Future',
+        version: '1.0.0',
+        engines: { orca: '>=9.0.0' },
+        pluginApi: 1,
+        contributes: { widgets: [{ id: 'clock' }] }
+      })
+    )
+
+    const [plugin] = await discoverPlugins({ pluginsDir, devPluginPaths: [], hostVersion: '1.4.0' })
+
+    expect(plugin && 'error' in plugin ? plugin.error : '').toBe(
+      'requires Orca >=9.0.0 (this is 1.4.0)'
+    )
   })
 
   it('keeps a removable qualified identity when the current pointer is missing', async () => {

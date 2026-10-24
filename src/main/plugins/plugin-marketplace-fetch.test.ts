@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  PLUGIN_MARKETPLACE_FILENAME,
-  PLUGIN_MARKETPLACE_V2_FILENAME
-} from '../../shared/plugins/plugin-marketplace'
+import { PLUGIN_CATALOG_FILENAME } from '../../shared/plugins/plugin-catalog'
+import { PLUGIN_MARKETPLACE_FILENAME } from '../../shared/plugins/plugin-marketplace'
 import { parsePluginMarketplaceIndex } from './plugin-marketplace-fetch'
 
 const entry = {
@@ -24,31 +22,49 @@ function parse(filename: string, catalog: unknown) {
 }
 
 describe('parsePluginMarketplaceIndex', () => {
-  it('keeps valid v2 entries next to ones this client cannot install', () => {
-    const marketplace = parse(PLUGIN_MARKETPLACE_V2_FILENAME, {
+  it('keeps valid catalog entries next to ones this client cannot install', () => {
+    const marketplace = parse(PLUGIN_CATALOG_FILENAME, {
+      catalogVersion: 2,
       name: 'New',
       owner: 'samples',
       futureHeader: true,
       plugins: [
-        { ...entry, id: 'samples.theme', release: { ...release, types: ['file-viewer'] } },
-        { ...entry, id: 'samples.broken', release: { ...release, commit: 'nope' } },
-        { ...entry, release: { ...release, futureField: 1 }, futureField: 1 }
+        { ...entry, id: 'samples.theme', releases: [{ ...release, types: ['file-viewer'] }] },
+        { ...entry, id: 'samples.broken', releases: [{ ...release, commit: 'nope' }] },
+        { ...entry, releases: [{ ...release, futureField: 1 }], futureField: 1 }
       ]
     })
-    expect(marketplace).toEqual({ name: 'New', owner: 'samples', plugins: [{ ...entry, release }] })
+    expect(marketplace).toMatchObject({
+      name: 'New',
+      owner: 'samples',
+      plugins: [{ ...entry, releases: [release] }]
+    })
+    expect(marketplace.plugins).toHaveLength(1)
   })
 
-  it('rejects duplicate ids even when one copy is unreadable', () => {
+  it('keeps the first readable copy of a repeated id', () => {
+    const marketplace = parse(PLUGIN_CATALOG_FILENAME, {
+      catalogVersion: 2,
+      name: 'New',
+      owner: 'samples',
+      plugins: [
+        { ...entry, releases: [{ ...release, commit: 'nope' }] },
+        { ...entry, description: 'first readable', releases: [release] },
+        { ...entry, description: 'later copy', releases: [release] }
+      ]
+    })
+    expect(marketplace.plugins.map((plugin) => plugin.description)).toEqual(['first readable'])
+  })
+
+  it('refuses a newer catalog format with the fix', () => {
     expect(() =>
-      parse(PLUGIN_MARKETPLACE_V2_FILENAME, {
+      parse(PLUGIN_CATALOG_FILENAME, {
+        catalogVersion: 3,
         name: 'New',
         owner: 'samples',
-        plugins: [
-          { ...entry, release },
-          { ...entry, release: { ...release, commit: 'nope' } }
-        ]
+        plugins: []
       })
-    ).toThrow('duplicate plugin id')
+    ).toThrow('orca-catalog.json uses catalog format 3; update Orca to browse this catalog')
   })
 
   it('keeps release entries out of the frozen v1 file', () => {

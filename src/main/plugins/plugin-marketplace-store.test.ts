@@ -111,14 +111,16 @@ describe('PluginMarketplaceStore', () => {
             id: 'community.notes',
             source: { kind: 'git', url: 'https://github.com/community/notes.git', ref: 'v1' },
             categories: [],
-            release: {
-              version: '1.0.0',
-              commit: 'c'.repeat(40),
-              contentHash: 'f'.repeat(64),
-              execution: 'data',
-              minimumOrca: '1.4.0',
-              types: ['interface-language']
-            }
+            releases: [
+              {
+                version: '1.0.0',
+                commit: 'c'.repeat(40),
+                contentHash: 'f'.repeat(64),
+                execution: 'data',
+                minimumOrca: '1.4.0',
+                types: ['interface-language']
+              }
+            ]
           }
         ]
       }

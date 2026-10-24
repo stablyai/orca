@@ -3,6 +3,7 @@
  * its extension; View plugin opens the reviewed preview and never installs.
  */
 
+import { PLUGIN_MANIFEST_V2_SINCE } from '../../src/shared/plugins/plugin-schema-field-docs'
 import { cp, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,24 +35,27 @@ async function createCatalogFixture(root: string) {
   const catalog = join(repositories, 'orca-plugins.git')
   await mkdir(catalog, { recursive: true })
   await writeFile(
-    join(catalog, 'orca-marketplace.v2.json'),
+    join(catalog, 'orca-catalog.json'),
     JSON.stringify({
+      catalogVersion: 2,
       name: 'Orca Plugins',
       owner: 'stablyai',
       plugins: [
         {
           id: PLUGIN_KEY,
           source: { kind: 'git', url: `https://github.com/stablyai/${PLUGIN}.git`, ref: 'v1.0.0' },
-          release: {
-            version: '1.0.0',
-            commit: await headCommit(plugin, gitEnvironment),
-            contentHash: hashed.hash,
-            execution: 'data',
-            minimumOrca: '1.4.0',
-            name: 'Gleam',
-            types: ['syntax'],
-            fileTypes: ['gleam']
-          }
+          releases: [
+            {
+              version: '1.0.0',
+              commit: await headCommit(plugin, gitEnvironment),
+              contentHash: hashed.hash,
+              execution: 'data',
+              minimumOrca: PLUGIN_MANIFEST_V2_SINCE,
+              name: 'Gleam',
+              types: ['syntax'],
+              fileTypes: ['gleam']
+            }
+          ]
         }
       ]
     })

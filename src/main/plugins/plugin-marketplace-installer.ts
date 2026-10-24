@@ -2,7 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
+import { PLUGIN_IMAGE_RULES } from '../../shared/plugins/plugin-image-fields'
+import { pluginShaImageUrl, type PluginHostImages } from '../../shared/plugins/plugin-image-url'
+import { readContainedPluginArtifactBytes } from './plugin-artifact-validation'
+import { declaredPluginImages } from './plugin-image-artifact-validation'
+import type { PluginImageCache } from './plugin-image-cache'
+import { pluginManifestHostImages } from './plugin-manifest-images'
+import { pluginCatalogReleaseCompatibilityError } from '../../shared/plugins/plugin-manifest-compatibility'
+import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
 import { getUserPluginsDir } from './plugin-discovery'
+import { readPluginRollbackVersion } from './plugin-rollback-candidate'
 import { checkoutPluginGitSource } from './plugin-git-repository'
 import {
   installPluginFromMarketplace,
@@ -31,6 +40,8 @@ export type PluginMarketplaceInstallPreview = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** The manifest's images, verified at preview and cached by hash. */
+  images?: PluginHostImages
 }
 
 export type PluginMarketplacePreviewIdentity = Pick<
@@ -43,13 +54,16 @@ export class PluginMarketplaceInstaller {
   private readonly userDataPath: string
   private readonly hostVersion: string
   private readonly blockedPluginReason: (pluginKey: string) => string | null
+  private readonly imageCache: PluginImageCache | null
 
   constructor(options: {
     marketplace: PluginMarketplaceService
     userDataPath: string
     hostVersion: string
     blockedPluginReason?: (pluginKey: string) => string | null
+    imageCache?: PluginImageCache
   }) {
+    this.imageCache = options.imageCache ?? null
     this.marketplace = options.marketplace
     this.userDataPath = options.userDataPath
     this.hostVersion = options.hostVersion
@@ -61,6 +75,10 @@ export class PluginMarketplaceInstaller {
     pluginKey: string
   ): Promise<PluginMarketplaceInstallPreview> {
     const listing = await this.requireListing(marketplaceSourceId, pluginKey)
+    const incompatible = this.releaseCompatibilityError(listing)
+    if (incompatible) {
+      throw new Error(incompatible)
+    }
     const stagingDirectory = await mkdtemp(join(tmpdir(), 'orca-plugin-marketplace-preview-'))
     try {
       const resolvedCommit = await checkoutPluginGitSource({
@@ -79,6 +97,7 @@ export class PluginMarketplaceInstaller {
       if (!inspection.ok) {
         throw new Error(inspection.error)
       }
+      const images = await this.cachePreviewImages(stagingDirectory, inspection.manifest)
       return {
         marketplaceSourceId,
         marketplaceName: listing.marketplaceName,
@@ -92,7 +111,8 @@ export class PluginMarketplaceInstaller {
         manifest: inspection.manifest,
         official: listing.official,
         bundled: listing.bundled,
-        ...(listing.blockedByKillList ? { blockedByKillList: listing.blockedByKillList } : {})
+        ...(listing.blockedByKillList ? { blockedByKillList: listing.blockedByKillList } : {}),
+        ...(images ? { images } : {})
       }
     } finally {
       await rm(stagingDirectory, { recursive: true, force: true })
@@ -105,6 +125,10 @@ export class PluginMarketplaceInstaller {
       listing.blockedByKillList?.reason ?? this.blockedPluginReason(preview.pluginKey)
     if (blockedReason) {
       return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
+    }
+    const incompatible = this.releaseCompatibilityError(listing)
+    if (incompatible) {
+      return { ok: false, error: incompatible }
     }
     if (listing.marketplaceCommit !== preview.marketplaceCommit) {
       return { ok: false, error: 'marketplace changed after preview; review the plugin again' }
@@ -145,6 +169,13 @@ export class PluginMarketplaceInstaller {
     return this.preview(sourceId, pluginKey)
   }
 
+  /** What `rollback` would restore, read only when the UI asks. */
+  async rollbackVersion(pluginKey: string): Promise<string | null> {
+    return isQualifiedPluginKey(pluginKey)
+      ? readPluginRollbackVersion(join(getUserPluginsDir(this.userDataPath), pluginKey))
+      : null
+  }
+
   async rollback(pluginKey: string): Promise<PluginInstallResult> {
     return rollbackInstalledPlugin({
       pluginsDir: getUserPluginsDir(this.userDataPath),
@@ -152,6 +183,40 @@ export class PluginMarketplaceInstaller {
       hostVersion: this.hostVersion,
       blockedPluginReason: this.blockedPluginReason
     })
+  }
+
+  /** Why cache now: the staging tree is deleted after preview, and images were already checked by
+   *  the install inspection, so their hashes are the only stable names. */
+  private async cachePreviewImages(
+    rootDir: string,
+    manifest: PluginManifest
+  ): Promise<PluginHostImages | undefined> {
+    const cache = this.imageCache
+    if (!cache) {
+      return undefined
+    }
+    const hashes = new Map<string, string>()
+    for (const image of declaredPluginImages(manifest)) {
+      const bytes = await readContainedPluginArtifactBytes(
+        rootDir,
+        image.path,
+        PLUGIN_IMAGE_RULES[image.kind].maxBytes
+      ).catch(() => null)
+      const sha256 = bytes ? await cache.put(bytes) : null
+      if (sha256) {
+        hashes.set(image.path, sha256)
+      }
+    }
+    return pluginManifestHostImages(manifest, (_slot, path) => {
+      const sha256 = hashes.get(path)
+      return sha256 ? pluginShaImageUrl(sha256) : null
+    })
+  }
+
+  private releaseCompatibilityError(listing: PluginMarketplaceListing): string | null {
+    return listing.release
+      ? pluginCatalogReleaseCompatibilityError(listing.release, this.hostVersion)
+      : null
   }
 
   private async requireListing(

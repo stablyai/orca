@@ -12,7 +12,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-it('reads only the catalog index, prefers the v2 file, and ignores plugin size limits', async () => {
+it('reads only the catalog index, prefers orca-catalog.json, and ignores plugin size limits', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-marketplace-fetch-'))
   roots.push(root)
   const repository = join(root, 'catalog')
@@ -30,7 +30,10 @@ it('reads only the catalog index, prefers the v2 file, and ignores plugin size l
     await writeFile(join(repository, 'packs', `${index}.txt`), String(index))
   }
   await writeFile(join(repository, 'orca-marketplace.json'), catalog('Old', [entry]))
-  await writeFile(join(repository, 'orca-marketplace.v2.json'), catalog('New', []))
+  await writeFile(
+    join(repository, 'orca-catalog.json'),
+    JSON.stringify({ catalogVersion: 2, name: 'New', owner: 'samples', plugins: [] })
+  )
   await git(['init', '--quiet'])
   await git(['add', '--all'])
   await git(['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'c'])

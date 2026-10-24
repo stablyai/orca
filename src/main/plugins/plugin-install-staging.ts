@@ -8,6 +8,7 @@ import {
   satisfiesOrcaEngineRange,
   type PluginManifest
 } from '../../shared/plugins/plugin-manifest'
+import { pluginManifestCompatibilityError } from '../../shared/plugins/plugin-manifest-compatibility'
 import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
 import {
   pluginCatalogReleaseError,
@@ -72,7 +73,8 @@ async function readInstallManifest(
   }
   const parsed = parsePluginManifest(raw)
   if (!parsed.ok) {
-    return { ok: false, error: `invalid manifest: ${parsed.error}` }
+    const incompatible = pluginManifestCompatibilityError(raw, hostVersion)
+    return { ok: false, error: incompatible ?? `invalid manifest: ${parsed.error}` }
   }
   if (!satisfiesOrcaEngineRange(hostVersion, parsed.manifest.engines.orca)) {
     return {

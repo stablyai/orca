@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
 import {
   PLUGIN_COMMAND_LIMIT,
   PLUGIN_ID_MAX_LENGTH,
   parsePluginManifest,
-  pluginManifestSchema
+  pluginManifestSchema,
+  satisfiesOrcaEngineRange
 } from './plugin-manifest'
 
 function manifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -47,6 +49,33 @@ describe('pluginManifestSchema boundaries', () => {
     expect(parsePluginManifest(manifest({ version: '1.0.0-alpha.1+build.5' })).ok).toBe(true)
   })
 
+  it('reports one specific issue per bad id or path', () => {
+    const reserved = pluginManifestSchema.safeParse(manifest({ id: 'constructor' }))
+    expect(reserved.error?.issues.map((issue) => issue.message)).toEqual([
+      'must not be a reserved name'
+    ])
+    const badPath = pluginManifestSchema.safeParse(manifest({ main: '../escape.js' }))
+    expect(badPath.error?.issues).toHaveLength(1)
+    const device = pluginManifestSchema.safeParse(manifest({ main: 'dist/CON.js' }))
+    expect(device.error?.issues).toHaveLength(1)
+  })
+
+  it('accepts a $schema URL in v2 manifests only as an ignored hint', () => {
+    const $schema = 'https://example.com/orca-plugin.schema.json'
+    const v2 = parsePluginManifest(
+      manifest({
+        manifestVersion: 2,
+        execution: 'data',
+        contributes: {},
+        pluginApi: undefined,
+        engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` },
+        $schema
+      })
+    )
+    expect(v2).toMatchObject({ ok: true, manifest: { $schema } })
+    expect(parsePluginManifest(manifest({ $schema }))).toMatchObject({ ok: true })
+  })
+
   it('rejects duplicate contribution ids', () => {
     const parsed = pluginManifestSchema.safeParse(
       manifest({
@@ -86,5 +115,19 @@ describe('pluginManifestSchema boundaries', () => {
         })
       ).ok
     ).toBe(false)
+  })
+})
+
+describe('satisfiesOrcaEngineRange', () => {
+  it.each([
+    ['1.5.0', '>=1.5.0', true],
+    ['1.5.1', '>=1.5.0', true],
+    ['1.4.9', '>=1.5.0', false],
+    ['1.5.0-rc.1', '>=1.5.0', false],
+    ['1.5.1-rc.1', '>=1.5.0', true],
+    ['1.5.0+build.7', '>=1.5.0', true],
+    ['1.5.0+build-7', '>=1.5.0', true]
+  ])('%s against %s is %s', (host, range, expected) => {
+    expect(satisfiesOrcaEngineRange(host, range)).toBe(expected)
   })
 })

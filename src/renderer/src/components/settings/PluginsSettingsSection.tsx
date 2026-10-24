@@ -235,6 +235,12 @@ export function PluginsSettingsSection({
         enabled: nextEnabled
       })
       applyCompletedMutation(nextPlugins)
+      // Why: enabling never grants consent, so a plugin that was never approved comes back
+      // pending; open its review instead of silently flipping the row back to "Needs review".
+      const next = nextPlugins.find((entry) => entry.pluginKey === plugin.pluginKey)
+      if (nextEnabled && next?.status === 'pending' && mountedRef.current) {
+        setConsentPluginId(plugin.pluginKey)
+      }
     } catch (cause) {
       if (mountedRef.current) {
         setPluginListError(cause)

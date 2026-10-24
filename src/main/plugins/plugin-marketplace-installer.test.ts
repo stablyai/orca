@@ -1,4 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import {
+  PLUGIN_SCHEMA_NEWEST_SINCE,
+  pluginHostVersion
+} from '../../shared/plugins/plugin-host-version'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,7 +59,7 @@ function marketplace(): PluginMarketplace {
           ref: 'stable'
         },
         categories: ['productivity'],
-        ...(git.release ? { release: git.release } : {})
+        ...(git.release ? { releases: [git.release] } : {})
       }
     ]
   }
@@ -70,15 +74,14 @@ async function writeCurrentPlugin(destination: string): Promise<void> {
         ? {
             manifestVersion: 2,
             execution: 'instructional',
+            engines: { orca: `>=${PLUGIN_SCHEMA_NEWEST_SINCE}` },
             contributes: { commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }] }
           }
-        : { manifestVersion: 1 }),
+        : { manifestVersion: 1, engines: { orca: '>=1.0.0' }, pluginApi: 1 }),
       id: git.id,
       publisher: git.publisher,
       name: 'Notes',
       version: git.version,
-      engines: { orca: '>=1.0.0' },
-      pluginApi: 1,
       capabilities: []
     })
   )
@@ -107,7 +110,7 @@ async function setup(): Promise<{
     installer: new PluginMarketplaceInstaller({
       marketplace: service,
       userDataPath: root,
-      hostVersion: '1.4.0'
+      hostVersion: pluginHostVersion('1.4.0')
     }),
     sourceId: added.id
   }
@@ -191,7 +194,7 @@ describe('PluginMarketplaceInstaller', () => {
       commit: git.commit,
       contentHash: unpinned.contentHash,
       execution: 'instructional',
-      minimumOrca: '1.0.0',
+      minimumOrca: PLUGIN_SCHEMA_NEWEST_SINCE,
       types: ['instructions']
     }
     const { installer, sourceId } = await setup()
@@ -209,6 +212,35 @@ describe('PluginMarketplaceInstaller', () => {
     await expect(installer.preview(sourceId, 'community.notes')).rejects.toThrow(
       'plugin bytes do not match the catalog release'
     )
+  })
+
+  it('lists a release for a newer Orca but refuses it before downloading', async () => {
+    git.release = {
+      version: '1.0.0',
+      commit: git.commit,
+      contentHash: 'c'.repeat(64),
+      execution: 'instructional',
+      minimumOrca: '9.0.0',
+      types: ['instructions']
+    }
+    const { marketplace, installer, sourceId } = await setup()
+    await expect(marketplace.findPlugin(sourceId, 'community.notes')).resolves.toBeTruthy()
+
+    await expect(installer.preview(sourceId, 'community.notes')).rejects.toThrow(
+      `requires Orca >=9.0.0 (this is ${PLUGIN_SCHEMA_NEWEST_SINCE})`
+    )
+    await expect(
+      installer.install({
+        marketplaceSourceId: sourceId,
+        marketplaceCommit: 'f'.repeat(40),
+        pluginKey: 'community.notes',
+        resolvedCommit: git.commit
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: `requires Orca >=9.0.0 (this is ${PLUGIN_SCHEMA_NEWEST_SINCE})`
+    })
+    expect(git.checkout).not.toHaveBeenCalled()
   })
 
   it('rejects a source whose manifest identity differs from its listing', async () => {
@@ -239,6 +271,8 @@ describe('PluginMarketplaceInstaller', () => {
       version: '2.0.0'
     })
 
+    await expect(installer.rollbackVersion('community.notes')).resolves.toBe('1.0.0')
+    await expect(installer.rollbackVersion('not a key')).resolves.toBeNull()
     await expect(installer.rollback('community.notes')).resolves.toMatchObject({
       ok: true,
       version: '1.0.0',

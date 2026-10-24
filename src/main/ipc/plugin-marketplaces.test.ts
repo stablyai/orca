@@ -65,8 +65,11 @@ beforeEach(() => {
 
 describe('plugin marketplace IPC authority', () => {
   it('validates every mutating or plugin-selecting request strictly', async () => {
-    registerPluginMarketplaceHandlers(createPluginService(), createServices(), () =>
-      getDefaultSettings('/tmp')
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      createServices(),
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
     )
 
     await expect(
@@ -110,8 +113,11 @@ describe('plugin marketplace IPC authority', () => {
 
   it('dispatches source listing, add, removal, and refresh operations', async () => {
     const services = createServices()
-    registerPluginMarketplaceHandlers(createPluginService(), services, () =>
-      getDefaultSettings('/tmp')
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      services,
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
     )
     const source = {
       kind: 'git' as const,
@@ -137,7 +143,12 @@ describe('plugin marketplace IPC authority', () => {
   it('refreshes discovery only after a successful install', async () => {
     const services = createServices()
     const pluginService = createPluginService()
-    registerPluginMarketplaceHandlers(pluginService, services, () => getDefaultSettings('/tmp'))
+    registerPluginMarketplaceHandlers(
+      pluginService,
+      services,
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
     const preview = {
       marketplaceSourceId: SOURCE_ID,
       marketplaceCommit: MARKETPLACE_COMMIT,
@@ -158,7 +169,12 @@ describe('plugin marketplace IPC authority', () => {
   it('deactivates before rollback and refreshes discovery only on success', async () => {
     const services = createServices()
     const pluginService = createPluginService()
-    registerPluginMarketplaceHandlers(pluginService, services, () => getDefaultSettings('/tmp'))
+    registerPluginMarketplaceHandlers(
+      pluginService,
+      services,
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
 
     await invoke('plugins:rollbackMarketplacePlugin', { pluginKey: PLUGIN_KEY })
 
@@ -173,5 +189,61 @@ describe('plugin marketplace IPC authority', () => {
     vi.mocked(services.installer.rollback).mockResolvedValueOnce({ ok: false, error: 'failed' })
     await invoke('plugins:rollbackMarketplacePlugin', { pluginKey: PLUGIN_KEY })
     expect(pluginService.refresh).not.toHaveBeenCalled()
+  })
+
+  it('turns on only content-only plugins, and only when asked, with main reading the manifest', async () => {
+    const services = createServices()
+    services.installer.install = vi
+      .fn()
+      .mockResolvedValue({ ok: true, pluginKey: PLUGIN_KEY, consentFingerprint: 'sha256-fp' })
+    const execution = { value: 'data' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only refresh and findValidPlugin.
+    const pluginService = {
+      ...createPluginService(),
+      findValidPlugin: vi.fn(() => ({
+        pluginKey: PLUGIN_KEY,
+        consentFingerprint: 'sha256-fp',
+        manifest: { manifestVersion: 2, execution: execution.value }
+      }))
+    } as unknown as PluginService
+    const approve = vi.fn().mockResolvedValue(undefined)
+    registerPluginMarketplaceHandlers(
+      pluginService,
+      services,
+      () => getDefaultSettings('/tmp'),
+      approve
+    )
+    const handler = handlers.get('plugins:installMarketplacePlugin')
+    const identity = {
+      marketplaceSourceId: SOURCE_ID,
+      marketplaceCommit: MARKETPLACE_COMMIT,
+      pluginKey: PLUGIN_KEY,
+      resolvedCommit: PLUGIN_COMMIT
+    }
+    const event = { sender: { id: 7 } }
+
+    await expect(handler?.(event, identity)).resolves.not.toHaveProperty('needsReview')
+    expect(approve).not.toHaveBeenCalled()
+    await expect(handler?.(event, { ...identity, enableIfData: true })).resolves.toMatchObject({
+      needsReview: false
+    })
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+
+    approve.mockClear()
+    await expect(
+      handler?.(event, { ...identity, enableIfData: true, expectedFingerprint: 'sha256-other' })
+    ).resolves.toMatchObject({ needsReview: true })
+    expect(approve).not.toHaveBeenCalled()
+    await expect(
+      handler?.(event, { ...identity, enableIfData: true, expectedFingerprint: 'sha256-fp' })
+    ).resolves.toMatchObject({ needsReview: false })
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+
+    approve.mockClear()
+    execution.value = 'instructional'
+    await expect(handler?.(event, { ...identity, enableIfData: true })).resolves.toMatchObject({
+      needsReview: true
+    })
+    expect(approve).not.toHaveBeenCalled()
   })
 })

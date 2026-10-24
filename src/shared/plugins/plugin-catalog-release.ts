@@ -1,11 +1,33 @@
 import { z } from 'zod'
 import {
+  PLUGIN_CONTRIBUTION_POINT_POLICY,
+  PLUGIN_CONTRIBUTION_POINTS
+} from './plugin-contribution-points'
+import {
   pluginExecutionAllows,
   pluginExecutionProfileSchema,
   type PluginExecutionProfile
 } from './plugin-execution-profile'
+import { PLUGIN_CAPABILITY_KINDS } from './plugin-capabilities'
+import {
+  pluginContributionSummary,
+  pluginContributionSummaryKey,
+  pluginContributionSummarySchema
+} from './plugin-contribution-summary'
+import { pluginCatalogReleaseDetailFields } from './plugin-detail-fields'
+import { pluginCatalogImagesSchema } from './plugin-image-fields'
 import { pluginFileTypeSchema } from './plugin-file-type'
 import type { PluginManifest } from './plugin-manifest'
+import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
+
+const NEXT = PLUGIN_MANIFEST_V2_SINCE
+
+// Why hex only: these are painted directly, so anything that could carry url() or var() is out.
+const hexColor = (description: string) =>
+  z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'must be a #rrggbb color')
+    .meta(pluginFieldDoc(description, NEXT, ['#1b1430']))
 
 // Why only installable types: a catalog entry naming any other type fails to parse, so the
 // v2 catalog drops it instead of listing a plugin this client cannot install.
@@ -32,29 +54,137 @@ const CATALOG_TYPE_PROFILE: Partial<Record<PluginCatalogType, PluginExecutionPro
  *  can add optional fields without breaking clients that predate them. */
 export const pluginCatalogReleaseSchema = z
   .object({
-    version: z.string().min(1).max(128),
+    version: z
+      .string()
+      .min(1)
+      .max(128)
+      .meta(pluginFieldDoc("The manifest's `version` for this release.", NEXT, ['1.2.0'])),
     // Why SHA-1 only: plugin materialization rejects SHA-256 repositories.
-    commit: z.string().regex(/^[0-9a-f]{40}$/),
-    contentHash: z.string().regex(/^[0-9a-f]{64}$/),
-    execution: pluginExecutionProfileSchema,
-    minimumOrca: z.string().regex(/^\d+\.\d+\.\d+$/),
+    commit: z
+      .string()
+      .regex(/^[0-9a-f]{40}$/, 'must be a full lowercase SHA-1 commit')
+      .meta(pluginFieldDoc('Full SHA-1 commit Orca checks out for this release.', NEXT)),
+    contentHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/, 'must be a lowercase SHA-256 hex digest')
+      .meta(
+        pluginFieldDoc(
+          "SHA-256 of the plugin's installed files, as Orca computes it at install.",
+          NEXT
+        )
+      ),
+    execution: pluginExecutionProfileSchema.meta(
+      pluginFieldDoc("The manifest's `execution` profile.", NEXT, ['data'])
+    ),
+    minimumOrca: z
+      .string()
+      .regex(/^\d+\.\d+\.\d+$/, 'must be an x.y.z version')
+      .meta(
+        pluginFieldDoc(
+          "The manifest's `engines.orca` without `>=`. Older Orca lists the plugin but will not install it.",
+          NEXT,
+          [NEXT]
+        )
+      ),
     types: z
       .array(z.enum(PLUGIN_CATALOG_TYPES))
       .min(1)
       .max(PLUGIN_CATALOG_TYPES.length)
-      .refine((types) => new Set(types).size === types.length, 'duplicate contribution type'),
-    /** The plugin's name, so a suggestion can show it before anything is downloaded. */
-    name: z.string().min(1).max(128).optional(),
-    /** Extensions this release can open, for suggesting it when such a file has no viewer. Invalid
-     *  entries are dropped, not fatal, so a newer catalog never hides the plugin. */
+      .refine((types) => new Set(types).size === types.length, 'duplicate contribution type')
+      .meta({
+        ...pluginFieldDoc(
+          'Every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `instructional` profile or higher, `panel` needs `sandboxed-ui`, and `worker` needs `trusted-worker`.',
+          NEXT,
+          [['syntax']]
+        ),
+        uniqueItems: true
+      }),
+    name: z
+      .string()
+      .min(1)
+      .max(128)
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          "The manifest's `name`, so Orca can suggest the plugin before downloading it.",
+          NEXT,
+          ['Gleam']
+        )
+      ),
+    ...pluginCatalogReleaseDetailFields,
+    images: pluginCatalogImagesSchema
+      .optional()
+      .catch(undefined)
+      .meta(
+        pluginFieldDoc(
+          'Icon, cover and screenshots for the listing, shown before anything is downloaded.',
+          NEXT
+        )
+      ),
+    themePreview: z
+      .array(
+        z
+          .strictObject({
+            label: z
+              .string()
+              .min(1)
+              .max(128)
+              .meta(pluginFieldDoc('Theme name.', NEXT, ['Dusk'])),
+            base: z.enum(['light', 'dark']).meta(pluginFieldDoc('Light or dark theme.', NEXT)),
+            background: hexColor('Window background.'),
+            foreground: hexColor('Main text.'),
+            accent: hexColor('Accent, such as buttons.'),
+            surface: hexColor('Cards and sidebars.')
+          })
+          .meta({
+            id: 'CatalogThemePreview',
+            description: 'Colors to draw a theme card before install.'
+          })
+      )
+      .max(4)
+      .optional()
+      .catch(undefined)
+      .meta(
+        pluginFieldDoc(
+          'Up to 4 theme palettes for listing art. Display only; the installed theme files decide the real colors.',
+          NEXT
+        )
+      ),
+    contributes: pluginContributionSummarySchema
+      .optional()
+      .catch(undefined)
+      .meta(
+        pluginFieldDoc(
+          'What the release adds, as the listing shows it. Generate it with the catalog tooling; Orca refuses an install whose manifest says otherwise.',
+          NEXT
+        )
+      ),
+    capabilities: z
+      .array(z.enum(PLUGIN_CAPABILITY_KINDS))
+      .max(PLUGIN_CAPABILITY_KINDS.length)
+      .optional()
+      .catch(undefined)
+      .meta(
+        pluginFieldDoc(
+          'Every capability the release asks for. Orca refuses an install whose manifest asks for different ones.',
+          NEXT,
+          [['notifications:show']]
+        )
+      ),
+    /** Invalid entries are dropped, not fatal, so a newer catalog never hides the plugin. */
     fileTypes: z
-      .array(z.unknown())
+      .array(pluginFileTypeSchema.optional().catch(undefined))
       .transform((entries) =>
-        [...new Set(entries)]
-          .filter((entry): entry is string => pluginFileTypeSchema.safeParse(entry).success)
-          .slice(0, 32)
+        [...new Set(entries)].filter((entry): entry is string => entry !== undefined).slice(0, 32)
       )
       .optional()
+      .meta(
+        pluginFieldDoc(
+          'Extensions, without the dot, that this release opens. Orca suggests the plugin when such a file has no viewer.',
+          NEXT,
+          [['gleam']]
+        )
+      )
   })
   .superRefine((release, ctx) => {
     for (const [index, type] of release.types.entries()) {
@@ -68,37 +198,25 @@ export const pluginCatalogReleaseSchema = z
       }
     }
   })
+  .meta({
+    id: 'CatalogRelease',
+    description: 'The exact release the catalog vouches for. Orca refuses bytes that differ.'
+  })
 
 export type PluginCatalogRelease = z.infer<typeof pluginCatalogReleaseSchema>
 
 export function pluginCatalogTypes(manifest: PluginManifest): PluginCatalogType[] {
-  const c = manifest.contributes
-  const types: PluginCatalogType[] = []
-  if (c.languagePacks.length > 0) {
-    types.push('interface-language')
-  }
-  if (c.themes.length > 0) {
-    types.push('app-theme')
-  }
-  if (c.terminalThemes.length > 0) {
-    types.push('terminal-theme')
-  }
-  if (c.iconThemes.length > 0) {
-    types.push('icon-theme')
-  }
-  if (c.syntaxes.length > 0) {
-    types.push('syntax')
-  }
-  if (c.commands.length || c.keybindings.length || c.vmRecipes.length || c.agents.length) {
-    types.push('instructions')
-  }
-  if (c.panels.length > 0) {
-    types.push('panel')
+  const declared = new Set<PluginCatalogType>()
+  for (const point of PLUGIN_CONTRIBUTION_POINTS) {
+    const type = PLUGIN_CONTRIBUTION_POINT_POLICY[point].catalogType
+    if (type && manifest.contributes[point].length > 0) {
+      declared.add(type)
+    }
   }
   if (manifest.main !== undefined) {
-    types.push('worker')
+    declared.add('worker')
   }
-  return types
+  return PLUGIN_CATALOG_TYPES.filter((type) => declared.has(type))
 }
 
 /** Why null-or-message: install and preview surface the first mismatch verbatim. */
@@ -142,6 +260,19 @@ export function pluginCatalogReleaseError(input: {
   }
   if (release.fileTypes?.some((fileType) => !handled.has(fileType))) {
     return 'file types do not match the catalog release'
+  }
+  if (
+    release.contributes &&
+    pluginContributionSummaryKey(release.contributes) !==
+      pluginContributionSummaryKey(pluginContributionSummary(manifest))
+  ) {
+    return 'the listed contributions do not match the catalog release'
+  }
+  const asked = [...new Set(manifest.capabilities.map((capability) => capability.kind))]
+    .sort()
+    .join()
+  if (release.capabilities && [...new Set(release.capabilities)].sort().join() !== asked) {
+    return 'the listed capabilities do not match the catalog release'
   }
   return null
 }

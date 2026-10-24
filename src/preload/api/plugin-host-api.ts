@@ -1,3 +1,5 @@
+import type { PluginHostImages } from '../../shared/plugins/plugin-image-url'
+import type { PluginExecutionProfile } from '../../shared/plugins/plugin-execution-profile'
 import type {
   PluginIconThemeMetadata,
   PluginIconThemeRegistration
@@ -17,6 +19,7 @@ import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
 import type { PluginMarketplaceGitSource } from '../../shared/plugins/plugin-marketplace'
+import type { PluginCatalogRelease } from '../../shared/plugins/plugin-catalog-release'
 
 export type PluginHostPanel = {
   id: string
@@ -44,6 +47,15 @@ export type PluginHostListEntry = {
   version: string
   publisher: string
   description?: string
+  /** The verified execution profile from the installed manifest; absent for invalid entries and
+   *  on hosts that predate it. Never infer it from the plugin's contents. */
+  execution?: PluginExecutionProfile
+  /** Declared images (format 2 manifests), as orca-plugin-image URLs main serves. */
+  images?: PluginHostImages
+  /** SPDX license expression from the manifest. */
+  license?: string
+  homepage?: string
+  repository?: string
   status: PluginHostStatus
   needsReconsent: boolean
   error?: string
@@ -76,7 +88,8 @@ export type PluginHostListEntry = {
     reference: string
     resolvedCommit: string | null
     contentHash: string
-    marketplace?: { reference: string; resolvedCommit: string }
+    /** `ref` is the catalog's ref, so a client can join to the exact catalog source. */
+    marketplace?: { reference: string; ref?: string; resolvedCommit: string }
   }
 }
 
@@ -98,6 +111,9 @@ export type PluginHostInstallResult =
       contentHash: string
       consentFingerprint: string
       resolvedCommit: string | null
+      /** Set when install was asked to enable a content-only plugin: false means it is on;
+       *  true means it runs or adds instructions, so it waits for review. */
+      needsReview?: boolean
     }
   | { ok: false; error: string }
 
@@ -128,6 +144,20 @@ export type PluginMarketplaceHostListing = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** The release record a v2 catalog vouches for; absent for v1 catalogs. */
+  release?: PluginCatalogRelease
+  /** The offered release's images, verified and cached by main; never hotlinked. */
+  images?: PluginHostImages
+  /** Release details from a v2 catalog; all absent for v1 catalogs. */
+  name?: string
+  version?: string
+  license?: string
+  repository?: string
+  homepage?: string
+  /** ISO 8601 date or date-time the release was published. */
+  updatedAt?: string
+  /** Plain-text release notes, at most 2000 characters. */
+  changelog?: string
 }
 
 export type PluginFileTypeHostSuggestion = {
@@ -151,6 +181,8 @@ export type PluginMarketplaceHostInstallPreview = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** The manifest's images, verified at preview. */
+  images?: PluginHostImages
 }
 
 export type PluginsApi = {
@@ -192,16 +224,27 @@ export type PluginsApi = {
     marketplaceSourceId: string
     pluginKey: string
   }) => Promise<PluginMarketplaceHostInstallPreview>
+  /** With `enableIfData`, main also turns the plugin on when the installed manifest is
+   *  `execution: 'data'` and, if given, its fingerprint is `expectedFingerprint`; anything else
+   *  comes back `needsReview: true`. Older hosts ignore both fields. */
   installMarketplacePlugin: (
     preview: Pick<
       PluginMarketplaceHostInstallPreview,
       'marketplaceSourceId' | 'marketplaceCommit' | 'pluginKey' | 'resolvedCommit'
-    >
+    > & {
+      enableIfData?: true
+      /** The preview's consentFingerprint; with it, main approves only those exact bytes. */
+      expectedFingerprint?: string
+    }
   ) => Promise<PluginHostInstallResult>
   previewMarketplaceUpdate: (args: {
     pluginKey: string
   }) => Promise<PluginMarketplaceHostInstallPreview>
   rollbackMarketplacePlugin: (args: { pluginKey: string }) => Promise<PluginHostInstallResult>
+  /** Version a rollback would restore, or null. Read on demand so listing plugins stays I/O-free. */
+  getRollbackVersion: (args: { pluginKey: string }) => Promise<string | null>
+  /** An installed plugin's parsed manifest, read on demand; works while the plugin system is off. */
+  getInstalledManifest: (args: { pluginKey: string }) => Promise<PluginManifest | null>
   remove: (args: { pluginKey: string }) => Promise<PluginHostListEntry[]>
   getLogs: (args: { pluginKey: string }) => Promise<PluginHostLogLine[]>
   /** Re-discovers after settings edits (feature flag, dev paths). */

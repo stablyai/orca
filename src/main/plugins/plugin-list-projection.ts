@@ -5,7 +5,9 @@ import {
 import { needsReconsent } from '../../shared/plugins/plugin-consent-state'
 import { pluginPanelTabKey } from '../../shared/plugins/plugin-manifest'
 import type { PluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
-import { isInvalidDiscoveredPlugin } from './plugin-discovery'
+import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from './plugin-discovery'
+import type { PluginHostImages } from '../../shared/plugins/plugin-image-url'
+import { pluginInstalledHostImages } from './plugin-manifest-images'
 import type { PluginService } from './plugin-service'
 import { listPluginVmRecipeCommands } from '../../shared/plugins/plugin-vm-recipe-artifact'
 import type { PluginCommandAliasActionId } from '../../shared/plugins/plugin-command-actions'
@@ -15,6 +17,10 @@ import {
   isOfficialPluginIdentity
 } from '../../shared/plugins/plugin-marketplace'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import {
+  pluginExecutionProfile,
+  type PluginExecutionProfile
+} from '../../shared/plugins/plugin-execution-profile'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
@@ -49,6 +55,13 @@ export type PluginListEntry = {
   version: string
   publisher: string
   description?: string
+  /** Verified from the installed manifest, so the UI never infers authority from contents. */
+  execution?: PluginExecutionProfile
+  /** Declared images, as orca-plugin-image URLs main serves after checking them. */
+  images?: PluginHostImages
+  license?: string
+  homepage?: string
+  repository?: string
   status: PluginListStatus
   needsReconsent: boolean
   error?: string
@@ -78,20 +91,23 @@ export type PluginListEntry = {
     reference: string
     resolvedCommit: string | null
     contentHash: string
-    marketplace?: { reference: string; resolvedCommit: string }
+    marketplace?: { reference: string; ref: string; resolvedCommit: string }
   }
 }
 
+const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
+
 export async function buildPluginList(
   service: PluginService,
-  lock: PluginLockfile
+  lock: PluginLockfile,
+  discovered: readonly DiscoveredPlugin[] = service.getDiscovered()
 ): Promise<PluginListEntry[]> {
   const consents = {
     pluginConsents: service.options.getPluginConsents(),
     disabledPlugins: service.options.getDisabledPlugins()
   }
   return mapWithConcurrency(
-    service.getDiscovered(),
+    discovered,
     PLUGIN_LIST_PROJECTION_CONCURRENCY,
     async (plugin, index): Promise<PluginListEntry> => {
       if (isInvalidDiscoveredPlugin(plugin)) {
@@ -159,6 +175,13 @@ export async function buildPluginList(
         version: plugin.manifest.version,
         publisher: plugin.manifest.publisher,
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
+        execution: pluginExecutionProfile(plugin.manifest),
+        ...withImages(
+          pluginInstalledHostImages(plugin.pluginKey, plugin.contentHash, plugin.manifest)
+        ),
+        ...(plugin.manifest.license ? { license: plugin.manifest.license } : {}),
+        ...(plugin.manifest.homepage ? { homepage: plugin.manifest.homepage } : {}),
+        ...(plugin.manifest.repository ? { repository: plugin.manifest.repository } : {}),
         status,
         needsReconsent: needsReconsent(plugin.pluginKey, plugin.consentFingerprint, consents),
         ...(status === 'errored'
@@ -218,6 +241,7 @@ export async function buildPluginList(
                   ? {
                       marketplace: {
                         reference: lockEntry.source.marketplace.url,
+                        ref: lockEntry.source.marketplace.ref,
                         resolvedCommit: lockEntry.source.marketplace.resolvedCommit
                       }
                     }

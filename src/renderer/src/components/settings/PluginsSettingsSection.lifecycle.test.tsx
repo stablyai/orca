@@ -284,6 +284,31 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(window.api.plugins.remove).toHaveBeenCalledWith({ pluginKey: plugin.pluginKey })
   })
 
+  it('opens review when enabling a plugin that was never approved', async () => {
+    installApi({
+      list: vi.fn().mockResolvedValue([{ ...plugin, status: 'disabled' }]),
+      refresh: vi.fn().mockResolvedValue([{ ...plugin, status: 'disabled' }]),
+      setEnabled: vi.fn().mockResolvedValue([{ ...plugin, status: 'pending' }])
+    })
+    const { container } = await renderSection()
+    const pluginSwitch = container.querySelector('[aria-label="Enable Notes"]')
+    if (!pluginSwitch) {
+      throw new Error('missing plugin switch')
+    }
+
+    await act(async () => click(pluginSwitch))
+
+    expect(window.api.plugins.setEnabled).toHaveBeenCalledWith({
+      pluginKey: plugin.pluginKey,
+      enabled: true
+    })
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Approve'
+      )
+    ).toBe(true)
+  })
+
   it('confirms marketplace rollback before invoking plugin IPC', async () => {
     const marketplacePlugin: PluginHostListEntry = {
       ...plugin,

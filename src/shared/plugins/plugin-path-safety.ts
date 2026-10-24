@@ -4,6 +4,11 @@ const WINDOWS_DEVICE_NAME_RE =
 
 const WINDOWS_FORBIDDEN_CHAR_RE = /[<>:"|?*]/
 
+// Why a regex beside the predicates: published JSON Schemas carry it as `pattern`, so editors
+// flag the character rules; only Windows device names are left to the predicate.
+const PATH_SEGMENT = String.raw`[^<>:"|?*\x00-\x1f\\/]*[^<>:"|?*\x00-\x1f\\/. ]`
+export const PLUGIN_RELATIVE_PATH_RE = new RegExp(`^${PATH_SEGMENT}(?:[\\\\/]${PATH_SEGMENT})*$`)
+
 export function pluginPathSegmentError(segment: string): string | null {
   if (segment.length === 0 || segment === '.' || segment === '..') {
     return 'empty and dot path segments are not allowed'

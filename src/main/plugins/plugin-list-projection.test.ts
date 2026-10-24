@@ -1,11 +1,34 @@
+import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { emptyPluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
 import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
 import type { InvalidDiscoveredPlugin, ValidDiscoveredPlugin } from './plugin-discovery'
 import { buildPluginList } from './plugin-list-projection'
 import type { PluginService } from './plugin-service'
+
+// Why spy on every fs entry point: the list is rebuilt on every plugin change and at startup,
+// so it must stay pure projection; per-plugin reads belong behind on-demand IPC.
+const fsCalls = vi.hoisted(() => ({ count: 0 }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  const counted =
+    <Args extends unknown[], Result>(fn: (...args: Args) => Result) =>
+    (...args: Args): Result => {
+      fsCalls.count += 1
+      return fn(...args)
+    }
+  return {
+    ...actual,
+    readdir: counted(actual.readdir),
+    readFile: counted(actual.readFile),
+    stat: counted(actual.stat),
+    lstat: counted(actual.lstat),
+    open: counted(actual.open),
+    opendir: counted(actual.opendir)
+  }
+})
 
 const manifest = pluginManifestSchema.parse({
   manifestVersion: 1,
@@ -58,7 +81,9 @@ describe('buildPluginList consent identity', () => {
     expect((await buildPluginList(serviceWith(plugin), emptyPluginLockfile()))[0]).toMatchObject({
       pluginKey: plugin.pluginKey,
       consentFingerprint: 'sha256-current',
-      status: 'pending'
+      status: 'pending',
+      // Why instructional: a capability makes it more than content, with no worker in sight.
+      execution: 'instructional'
     })
   })
 
@@ -220,5 +245,71 @@ describe('buildPluginList consent identity', () => {
         keybindings: [{ key: 'Mod+Alt+T', when: 'worktree' }]
       }
     ])
+  })
+})
+
+describe('buildPluginList I/O', () => {
+  it('builds the list for installed plugins without reading the plugin directories', async () => {
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'orca-samples.demo', 'a'.repeat(64)),
+      manifest,
+      consentFingerprint: 'sha256-current',
+      contentHash: 'a'.repeat(64),
+      isDev: false
+    }
+    const lock = emptyPluginLockfile()
+    lock.plugins[plugin.pluginKey] = {
+      pluginKey: plugin.pluginKey,
+      version: '1.0.0',
+      source: { kind: 'git', url: 'https://github.com/orca-samples/demo.git', ref: 'main' },
+      resolvedCommit: 'c'.repeat(40),
+      contentHash: 'a'.repeat(64),
+      consentFingerprint: 'sha256-current',
+      installedAt: 1
+    }
+    fsCalls.count = 0
+
+    const [entry] = await buildPluginList(serviceWith(plugin), lock)
+
+    expect(entry?.source?.kind).toBe('git')
+    expect(fsCalls.count).toBe(0)
+  })
+
+  it('reports the catalog ref a marketplace install came from', async () => {
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'orca-samples.demo', 'a'.repeat(64)),
+      manifest,
+      consentFingerprint: 'sha256-current',
+      contentHash: 'a'.repeat(64),
+      isDev: false
+    }
+    const lock = emptyPluginLockfile()
+    lock.plugins[plugin.pluginKey] = {
+      pluginKey: plugin.pluginKey,
+      version: '1.0.0',
+      source: {
+        kind: 'marketplace',
+        marketplace: {
+          url: 'https://github.com/acme/catalog.git',
+          ref: 'stable',
+          resolvedCommit: 'f'.repeat(40)
+        },
+        plugin: { url: 'https://github.com/orca-samples/demo.git', ref: 'main' }
+      },
+      resolvedCommit: 'c'.repeat(40),
+      contentHash: 'a'.repeat(64),
+      consentFingerprint: 'sha256-current',
+      installedAt: 1
+    }
+
+    const [entry] = await buildPluginList(serviceWith(plugin), lock)
+
+    expect(entry?.source?.marketplace).toEqual({
+      reference: 'https://github.com/acme/catalog.git',
+      ref: 'stable',
+      resolvedCommit: 'f'.repeat(40)
+    })
   })
 })

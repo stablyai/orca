@@ -69,7 +69,7 @@ const removeArgsSchema = z.object({
 const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
 
 // Preserve import compatibility; runtime RPC uses the Electron-free client-list module.
-import { listPluginsForClients } from '../plugins/plugin-client-list'
+import { listPluginsForClients, readInstalledPluginManifest } from '../plugins/plugin-client-list'
 
 export function canRemoveInstalledPlugin(
   pluginService: PluginService,
@@ -108,6 +108,10 @@ export function registerPluginHandlers(
 
   // All handlers must await startup discovery to avoid returning a pre-discovery empty list.
   ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
+  ipcMain.handle('plugins:getInstalledManifest', async (_event, args: unknown) => {
+    const { pluginKey } = logsArgsSchema.parse(args)
+    return readInstalledPluginManifest(pluginService, pluginKey)
+  })
   ipcMain.handle('plugins:listLanguagePacks', async () => {
     await pluginService.whenReady()
     return pluginService.contentPacks.languagePacks.list()
@@ -268,6 +272,19 @@ export function registerPluginHandlers(
     return listPluginsForClients(pluginService)
   })
   if (marketplaceServices) {
-    registerPluginMarketplaceHandlers(pluginService, marketplaceServices, () => store.getSettings())
+    registerPluginMarketplaceHandlers(
+      pluginService,
+      marketplaceServices,
+      () => store.getSettings(),
+      (pluginKey, reviewedFingerprint, originWebContentsId) =>
+        applyPluginConsent({
+          store,
+          pluginService,
+          pluginKey,
+          reviewedFingerprint,
+          decision: 'approve',
+          originWebContentsId
+        })
+    )
   }
 }

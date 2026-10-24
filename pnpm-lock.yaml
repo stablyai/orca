@@ -425,6 +425,9 @@ importers:
       '@xterm/xterm':
         specifier: 6.1.0-beta.304
         version: 6.1.0-beta.304(patch_hash=87de83f62154c0f2c31eb17d14b881e139f3368f8be1e9e2951bfeba16d86156)
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
       bun:
         specifier: 1.4.4
         version: 1.4.4

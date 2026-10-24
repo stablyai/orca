@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
 import {
   pluginCatalogReleaseError,
   pluginCatalogReleaseSchema,
   type PluginCatalogRelease
 } from './plugin-catalog-release'
+import { pluginContributionSummary } from './plugin-contribution-summary'
 import { parsePluginManifest, type PluginManifest } from './plugin-manifest'
 
 const COMMIT = 'c'.repeat(40)
@@ -17,8 +19,7 @@ function manifest(overrides: Record<string, unknown> = {}): PluginManifest {
     publisher: 'samples',
     name: 'Demo',
     version: '1.2.0',
-    engines: { orca: '>=1.4.0' },
-    pluginApi: 1,
+    engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` },
     contributes: { languagePacks: [{ locale: 'pt-BR', path: 'pt.json' }] },
     ...overrides
   })
@@ -34,7 +35,7 @@ function release(overrides: Partial<PluginCatalogRelease> = {}): PluginCatalogRe
     commit: COMMIT,
     contentHash: HASH,
     execution: 'data',
-    minimumOrca: '1.4.0',
+    minimumOrca: PLUGIN_MANIFEST_V2_SINCE,
     types: ['interface-language'],
     ...overrides
   })
@@ -57,8 +58,7 @@ function manifestInput(): Record<string, unknown> {
     publisher: 'samples',
     name: 'Demo',
     version: '1.2.0',
-    engines: { orca: '>=1.4.0' },
-    pluginApi: 1
+    engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` }
   }
 }
 
@@ -140,10 +140,77 @@ describe('catalog releases', () => {
   })
 
   it('requires a v2 manifest', () => {
-    const v1 = parsePluginManifest({ ...manifestInput(), manifestVersion: 1, execution: undefined })
+    const v1 = parsePluginManifest({
+      ...manifestInput(),
+      manifestVersion: 1,
+      pluginApi: 1,
+      execution: undefined
+    })
     if (!v1.ok) {
       throw new Error(v1.error)
     }
     expect(check(release(), v1.manifest)).toContain('version 2 manifest')
+  })
+})
+
+describe('catalog release summaries', () => {
+  it('must match what the manifest adds and asks for', () => {
+    const themed = manifest({
+      contributes: { themes: [{ id: 'dusk', label: 'Dusk', path: 'dusk.json' }] },
+      capabilities: []
+    })
+    const base = { manifest: themed, resolvedCommit: COMMIT, contentHash: HASH }
+    const listed = release({ types: ['app-theme'] })
+    expect(
+      pluginCatalogReleaseError({
+        ...base,
+        release: { ...listed, contributes: pluginContributionSummary(themed), capabilities: [] }
+      })
+    ).toBeNull()
+    expect(
+      pluginCatalogReleaseError({
+        ...base,
+        release: { ...listed, contributes: [{ kind: 'themes', name: 'Midnight' }] }
+      })
+    ).toBe('the listed contributions do not match the catalog release')
+    expect(
+      pluginCatalogReleaseError({ ...base, release: { ...listed, capabilities: ['secrets'] } })
+    ).toBe('the listed capabilities do not match the catalog release')
+  })
+
+  it('drops unreadable summaries and images instead of hiding the release', () => {
+    const parsed = pluginCatalogReleaseSchema.parse({
+      ...release(),
+      contributes: [{ kind: 'widgets', name: 'x' }],
+      capabilities: ['root'],
+      images: {
+        cover: { path: '../escape.png', alt: 'x', sha256: 'f'.repeat(64), width: 1, height: 1 }
+      }
+    })
+    expect(parsed.contributes).toBeUndefined()
+    expect(parsed.capabilities).toBeUndefined()
+    expect(parsed.images).toBeUndefined()
+  })
+})
+
+describe('catalog theme previews', () => {
+  it('keeps hex palettes and drops anything else', () => {
+    const palette = {
+      label: 'Dusk',
+      base: 'dark',
+      background: '#1b1430',
+      foreground: '#e8e0ff',
+      accent: '#c38bff',
+      surface: '#241843'
+    }
+    expect(
+      pluginCatalogReleaseSchema.parse({ ...release(), themePreview: [palette] }).themePreview
+    ).toEqual([palette])
+    expect(
+      pluginCatalogReleaseSchema.parse({
+        ...release(),
+        themePreview: [{ ...palette, background: 'url(https://example.com/x)' }]
+      }).themePreview
+    ).toBeUndefined()
   })
 })

@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import type { RefinementCtx } from 'zod'
+import {
+  PLUGIN_CONTRIBUTION_POINT_POLICY,
+  PLUGIN_CONTRIBUTION_POINTS,
+  type PluginContributionPoint
+} from './plugin-contribution-points'
 
 /** Ordered from least to most authority; each profile may carry everything below it. */
 export const PLUGIN_EXECUTION_PROFILES = [
@@ -15,14 +20,7 @@ export type PluginExecutionProfile = z.infer<typeof pluginExecutionProfileSchema
 type ExecutionSubject = {
   main?: string
   capabilities: readonly unknown[]
-  contributes: {
-    panels: readonly unknown[]
-    commands: readonly unknown[]
-    events: readonly unknown[]
-    keybindings: readonly unknown[]
-    vmRecipes: readonly unknown[]
-    agents: readonly unknown[]
-  }
+  contributes: Partial<Record<PluginContributionPoint, readonly unknown[]>>
 }
 
 function rank(profile: PluginExecutionProfile): number {
@@ -38,23 +36,17 @@ export function pluginExecutionAllows(
 
 /** Least profile that can run what a manifest declares; v1 manifests use this as their profile. */
 export function derivePluginExecutionProfile(manifest: ExecutionSubject): PluginExecutionProfile {
-  const c = manifest.contributes
-  if (manifest.main !== undefined || c.events.length > 0) {
+  if (manifest.main !== undefined) {
     return 'trusted-worker'
   }
-  if (c.panels.length > 0) {
-    return 'sandboxed-ui'
+  let required: PluginExecutionProfile = manifest.capabilities.length > 0 ? 'instructional' : 'data'
+  for (const point of PLUGIN_CONTRIBUTION_POINTS) {
+    const profile = PLUGIN_CONTRIBUTION_POINT_POLICY[point].execution
+    if ((manifest.contributes[point]?.length ?? 0) > 0 && rank(profile) > rank(required)) {
+      required = profile
+    }
   }
-  if (
-    c.commands.length > 0 ||
-    c.keybindings.length > 0 ||
-    c.vmRecipes.length > 0 ||
-    c.agents.length > 0 ||
-    manifest.capabilities.length > 0
-  ) {
-    return 'instructional'
-  }
-  return 'data'
+  return required
 }
 
 export function pluginExecutionProfile(

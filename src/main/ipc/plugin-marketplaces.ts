@@ -1,3 +1,4 @@
+import { enableIfDataPlugin } from '../plugins/plugin-one-click-enable'
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { PLUGIN_COMMIT_PATTERN } from '../../shared/plugins/plugin-install-lockfile'
@@ -16,6 +17,13 @@ export type PluginMarketplaceHandlerServices = {
   installer: PluginMarketplaceInstaller
 }
 
+/** The consent write path (applyPluginConsent), bound to the store by the caller. */
+export type PluginApproveConsent = (
+  pluginKey: string,
+  reviewedFingerprint: string,
+  originWebContentsId: number
+) => Promise<void>
+
 const sourceIdSchema = z.string().regex(PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN)
 const removeMarketplaceSchema = z.strictObject({ sourceId: sourceIdSchema })
 const refreshMarketplaceSchema = z.strictObject({ sourceId: sourceIdSchema.optional() })
@@ -25,7 +33,11 @@ const marketplacePluginSchema = z.strictObject({
 })
 const installMarketplacePluginSchema = marketplacePluginSchema.extend({
   marketplaceCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
-  resolvedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN)
+  resolvedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
+  /** Ask main to approve in the same step if the installed plugin is content only. */
+  enableIfData: z.literal(true).optional(),
+  /** The preview's consentFingerprint: one-click approves only these exact bytes. */
+  expectedFingerprint: z.string().min(1).max(256).optional()
 })
 const installedPluginSchema = z.strictObject({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
@@ -34,7 +46,8 @@ const installedPluginSchema = z.strictObject({
 export function registerPluginMarketplaceHandlers(
   pluginService: PluginService,
   services: PluginMarketplaceHandlerServices,
-  getSettings: () => GlobalSettings
+  getSettings: () => GlobalSettings,
+  approveConsent: PluginApproveConsent
 ): void {
   // Why cached only: this runs on every file open, which must never wait on a catalog fetch.
   ipcMain.handle('plugins:suggestForFileType', async (_event, fileType: unknown) => {
@@ -70,16 +83,34 @@ export function registerPluginMarketplaceHandlers(
     const parsed = marketplacePluginSchema.parse(args)
     return services.installer.preview(parsed.marketplaceSourceId, parsed.pluginKey)
   })
-  ipcMain.handle('plugins:installMarketplacePlugin', async (_event, args: unknown) => {
-    const result = await services.installer.install(installMarketplacePluginSchema.parse(args))
-    if (result.ok) {
-      await pluginService.refresh()
+  ipcMain.handle('plugins:installMarketplacePlugin', async (event, args: unknown) => {
+    const { enableIfData, expectedFingerprint, ...identity } =
+      installMarketplacePluginSchema.parse(args)
+    const result = await services.installer.install(identity)
+    if (!result.ok) {
+      return result
     }
-    return result
+    await pluginService.refresh()
+    if (!enableIfData) {
+      return result
+    }
+    const { needsReview } = await enableIfDataPlugin({
+      pluginKey: result.pluginKey,
+      installedFingerprint: result.consentFingerprint,
+      ...(expectedFingerprint ? { expectedFingerprint } : {}),
+      findValidPlugin: (key) => pluginService.findValidPlugin(key),
+      approve: (pluginKey, reviewedFingerprint) =>
+        approveConsent(pluginKey, reviewedFingerprint, event.sender.id)
+    })
+    return { ...result, needsReview }
   })
   ipcMain.handle('plugins:previewMarketplaceUpdate', async (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)
     return services.installer.previewInstalledUpdate(pluginKey)
+  })
+  ipcMain.handle('plugins:getRollbackVersion', (_event, args: unknown) => {
+    const { pluginKey } = installedPluginSchema.parse(args)
+    return services.installer.rollbackVersion(pluginKey)
   })
   ipcMain.handle('plugins:rollbackMarketplacePlugin', async (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)

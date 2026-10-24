@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
 import { derivePluginExecutionProfile } from './plugin-execution-profile'
 import { parsePluginManifest } from './plugin-manifest'
 
@@ -10,8 +11,7 @@ function manifestInput(): Record<string, unknown> {
     publisher: 'samples',
     name: 'Demo',
     version: '1.2.0',
-    engines: { orca: '>=1.4.0' },
-    pluginApi: 1
+    engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` }
   }
 }
 
@@ -51,7 +51,9 @@ describe('execution profiles', () => {
   })
 
   it('keeps v1 manifests valid without a declared profile', () => {
-    expect(parsePluginManifest({ ...manifestInput(), manifestVersion: 1 })).toMatchObject({
+    expect(
+      parsePluginManifest({ ...manifestInput(), manifestVersion: 1, pluginApi: 1 })
+    ).toMatchObject({
       ok: true
     })
   })

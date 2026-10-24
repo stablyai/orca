@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { PLUGIN_SCHEMA_NEWEST_SINCE } from '../../shared/plugins/plugin-host-version'
 import { expect, it } from 'vitest'
 import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
 import { PluginContentVerifier } from './plugin-content-integrity'
@@ -10,7 +11,7 @@ const root = join(process.cwd(), 'examples', 'plugins', 'orca-gleam-syntax')
 it('ships an installable Gleam syntax pack whose grammar loads', async () => {
   const inspection = await inspectPluginInstallTree({
     rootDir: root,
-    hostVersion: '1.4.0',
+    hostVersion: PLUGIN_SCHEMA_NEWEST_SINCE,
     expectedPluginKey: 'stablyai.orca-gleam-syntax'
   })
   expect(inspection).toMatchObject({ ok: true })

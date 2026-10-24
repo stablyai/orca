@@ -10,6 +10,7 @@ import {
   satisfiesOrcaEngineRange,
   type PluginManifest
 } from '../../shared/plugins/plugin-manifest'
+import { pluginManifestCompatibilityError } from '../../shared/plugins/plugin-manifest-compatibility'
 import {
   fingerprintPluginConsent,
   hasInstructionalPluginContributions,
@@ -104,7 +105,8 @@ async function readManifestDir(
   }
   const parsed = parsePluginManifest(raw)
   if (!parsed.ok) {
-    return { rootDir, error: `invalid manifest: ${parsed.error}`, isDev }
+    const incompatible = pluginManifestCompatibilityError(raw, hostVersion)
+    return { rootDir, error: incompatible ?? `invalid manifest: ${parsed.error}`, isDev }
   }
   const manifest = parsed.manifest
   const pluginKey = qualifiedPluginKey(manifest)

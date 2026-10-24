@@ -1,4 +1,5 @@
 import type { KeybindingActionId, PluginKeybindingActionId } from '../keybindings'
+import { PLUGIN_SCHEMA_SINCE_V1 } from './plugin-schema-field-docs'
 
 /** Built-in actions with a renderer-owned command handler. Keep this closed so
  * declarative aliases cannot target component-private shortcut implementations. */
@@ -21,6 +22,25 @@ export const PLUGIN_COMMAND_ALIAS_ACTION_IDS = [
 ] as const satisfies readonly KeybindingActionId[]
 
 export type PluginCommandAliasActionId = (typeof PLUGIN_COMMAND_ALIAS_ACTION_IDS)[number]
+
+/** The release each action arrived in; engines.orca must cover every one a plugin uses. */
+export const PLUGIN_COMMAND_ACTION_SINCE: Record<PluginCommandAliasActionId, string> = {
+  'worktree.history.back': PLUGIN_SCHEMA_SINCE_V1,
+  'worktree.history.forward': PLUGIN_SCHEMA_SINCE_V1,
+  'sidebar.left.toggle': PLUGIN_SCHEMA_SINCE_V1,
+  'sidebar.sleepingWorkspaces.toggle': PLUGIN_SCHEMA_SINCE_V1,
+  'floatingWorkspace.maximize': PLUGIN_SCHEMA_SINCE_V1,
+  'tab.rename': PLUGIN_SCHEMA_SINCE_V1,
+  'workspace.rename': PLUGIN_SCHEMA_SINCE_V1,
+  'workspace.openBoard': PLUGIN_SCHEMA_SINCE_V1,
+  'view.tasks': PLUGIN_SCHEMA_SINCE_V1,
+  'sidebar.right.toggle': PLUGIN_SCHEMA_SINCE_V1,
+  'sidebar.explorer.toggle': PLUGIN_SCHEMA_SINCE_V1,
+  'sidebar.search.toggle': PLUGIN_SCHEMA_SINCE_V1,
+  'sidebar.sourceControl.toggle': PLUGIN_SCHEMA_SINCE_V1,
+  'sidebar.checks.toggle': PLUGIN_SCHEMA_SINCE_V1,
+  'sidebar.ports.toggle': PLUGIN_SCHEMA_SINCE_V1
+}
 
 const PLUGIN_COMMAND_ALIAS_ACTION_ID_SET = new Set<string>(PLUGIN_COMMAND_ALIAS_ACTION_IDS)
 

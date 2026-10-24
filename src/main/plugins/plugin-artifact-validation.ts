@@ -7,6 +7,8 @@ import {
   PLUGIN_SYNTAX_GRAMMAR_MAX_BYTES
 } from '../../shared/plugins/plugin-syntax-artifact'
 import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-recipe-artifact'
+import { PLUGIN_IMAGE_RULES } from '../../shared/plugins/plugin-image-fields'
+import { validatePluginImageArtifacts } from './plugin-image-artifact-validation'
 
 export type PluginArtifactValidationResult = { ok: true } | { ok: false; error: string }
 
@@ -34,6 +36,14 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
   const c = manifest.contributes
   return [
     ...declaredFile('icon', manifest.icon, PLUGIN_ICON_MAX_BYTES),
+    ...(manifest.manifestVersion === 2
+      ? [
+          ...declaredFile('cover', manifest.cover?.path, PLUGIN_IMAGE_RULES.cover.maxBytes),
+          ...(manifest.screenshots ?? []).flatMap((shot) =>
+            declaredFile('screenshot', shot.path, PLUGIN_IMAGE_RULES.screenshot.maxBytes)
+          )
+        ]
+      : []),
     ...declaredFile('worker entry', manifest.main, PLUGIN_WORKER_ENTRY_MAX_BYTES),
     ...c.panels.flatMap((panel) =>
       declaredFile(`panel "${panel.id}" entry`, panel.entry, PLUGIN_PANEL_ENTRY_MAX_BYTES)
@@ -85,6 +95,14 @@ export async function readContainedPluginArtifactText(
   relativePath: string,
   maxBytes: number
 ): Promise<string> {
+  return (await readContainedPluginArtifactBytes(rootDir, relativePath, maxBytes)).toString('utf8')
+}
+
+export async function readContainedPluginArtifactBytes(
+  rootDir: string,
+  relativePath: string,
+  maxBytes: number
+): Promise<Buffer> {
   const artifact = await resolveContainedPluginArtifact(rootDir, relativePath, maxBytes)
   const chunks: Buffer[] = []
   let totalBytes = 0
@@ -96,7 +114,7 @@ export async function readContainedPluginArtifactText(
     }
     chunks.push(bytes)
   }
-  return Buffer.concat(chunks, totalBytes).toString('utf8')
+  return Buffer.concat(chunks, totalBytes)
 }
 
 async function resolvePathFromRealRoot(
@@ -173,6 +191,14 @@ export async function validatePluginInstallContent(
   rootDir: string,
   manifest: PluginManifest
 ): Promise<PluginArtifactValidationResult> {
+  const images = await validatePluginImageArtifacts(
+    rootDir,
+    manifest,
+    readContainedPluginArtifactBytes
+  )
+  if (!images.ok) {
+    return images
+  }
   const vmRecipeIds = new Set<string>()
   for (const contribution of manifest.contributes.vmRecipes) {
     try {
