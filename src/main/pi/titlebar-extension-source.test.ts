@@ -766,4 +766,13 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(harness.lastTitle()).toBe(IDLE_TITLE)
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it.each([{ kind: 'omp' as const }, { processTitle: 'omp' }])(
+    'leaves OMP its native startup title so readiness waits out its setup wizard: %j',
+    async (options) => {
+      const harness = createHarness(options)
+      await harness.callHook('session_start', { reason: 'startup' })
+      expect(harness.titles).toEqual([])
+    }
+  )
 })

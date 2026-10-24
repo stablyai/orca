@@ -253,9 +253,11 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     "  on('session_start', async (_event, ctx) => {",
     '    clearOwnedTimers()',
     '    resetPromptState()',
-    '    // Why: Pi forks that brand their own title never show the `π - ` rest title Orca reads',
-    '    // as launch readiness, and nothing repaints it before the first turn.',
-    '    paintTitle(resolvePainter(ctx), () => getBaseTitle(pi))',
+    // Why: branded Pi forks never title `π - ` before the first turn; OMP keeps its native `π >`
+    // so readiness still waits out its setup wizard, which opens after session_start.
+    ...(kind === 'pi'
+      ? ['    if (!isOmpRuntime()) paintTitle(resolvePainter(ctx), () => getBaseTitle(pi))']
+      : []),
     '  })',
     '',
     '  // Why: modern Pi emits agent_end mid-run and only settle later, so settlement is the',
