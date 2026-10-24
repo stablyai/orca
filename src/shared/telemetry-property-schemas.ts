@@ -17,6 +17,7 @@ export const AGENT_KIND_VALUES = [
   'opencode',
   'opencode2',
   'mimo-code',
+  'minimax-code',
   'pi',
   'omp',
   'prime-agent',

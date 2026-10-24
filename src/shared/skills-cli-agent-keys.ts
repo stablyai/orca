@@ -22,6 +22,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   opencode: 'opencode',
   opencode2: 'opencode',
   'mimo-code': null,
+  // Why: the community skills CLI has no MiniMax Code target key yet.
+  'minimax-code': null,
   pi: 'pi',
   omp: null,
   'prime-agent': null,

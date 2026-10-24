@@ -10,6 +10,7 @@ export type TuiAgent =
   | 'opencode' // OpenCode
   | 'opencode2' // OpenCode 2 beta
   | 'mimo-code'
+  | 'minimax-code' // MiniMax Code
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)
   | 'qoder' // Qoder CLI

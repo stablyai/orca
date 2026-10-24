@@ -69,6 +69,13 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://mimo.xiaomi.com/coder'
     },
     {
+      id: 'minimax-code',
+      label: translate('auto.lib.agent.catalog.minimax_code_label', 'MiniMax Code'),
+      cmd: 'mcode',
+      faviconDomain: 'agent.minimax.io',
+      homepageUrl: 'https://agent.minimax.io/download'
+    },
+    {
       id: 'ante',
       label: translate('auto.lib.agent.catalog.da41abbdd4', 'Ante'),
       cmd: 'ante',

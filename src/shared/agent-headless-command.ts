@@ -6,6 +6,7 @@ import { isMuseHeadlessOneShotCommand } from './muse-headless-command'
 import { isDsbHeadlessOneShotCommand } from './dsb-headless-command'
 import { isZCodeHeadlessOneShotCommand } from './zcode-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
+import { isMiniMaxCodeNonInteractiveCommand } from './minimax-code-non-interactive-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TerminalAgent } from './terminal-agent'
 
@@ -24,6 +25,7 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   codebuddy: isCodebuddyNonInteractiveCommand,
   trae: isPrintModeHeadlessOneShotCommand,
   'prime-agent': isPrimeAgentHeadlessOneShotCommand,
+  'minimax-code': isMiniMaxCodeNonInteractiveCommand,
   ante: isAnteHeadlessOneShotCommand,
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,

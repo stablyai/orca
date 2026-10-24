@@ -34,5 +34,11 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
     pattern: /(?:^|\/)node_modules\/@deepseek-ai\/dsh\/lib\/bin\.js$/,
     agent: 'dsh',
     processName: 'dsh'
+  },
+  // Why: the public and internal npm shims launch the package-root cli.js under Node.
+  {
+    pattern: /(?:^|\/)node_modules\/@(?:minimax-ai|minimax)\/code\/cli\.js$/,
+    agent: 'minimax-code',
+    processName: 'minimax-code'
   }
 ]
