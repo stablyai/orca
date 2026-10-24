@@ -112,11 +112,8 @@ jobs:
       head_sha: ${{ steps.freshness.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
     runs-on: blacksmith-6vcpu-macos-15
-    # Why 150: it must exceed the worst case the retry budgets below can produce
-    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
-    # the job is killed mid-retry and no cleanup step runs at all. A typical run
-    # is far shorter — this is the notary queue's tail, not its median.
-    timeout-minutes: 150
+    # Includes the 180-minute cold runtime build and the existing packaging retry budget.
+    timeout-minutes: 360
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
@@ -195,8 +192,8 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
-      # Why: packaging bundles the pinned Node into the macOS terminal host. Keyed on the pin alone
-      # with no restore-keys, so a pin bump starts empty instead of carrying old archives forward.
+      # Why: packaging bundles the patched Node into the terminal host. Pin and patch changes
+      # start a fresh cache; only completed artifacts and verified archives are retained.
       - name: Locate the pinned Node runtime cache
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
@@ -207,7 +204,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/orca-node-runtime
-          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts', 'config/node-runtime-patches/**', 'config/scripts/build-darwin-terminal-node.mjs', 'config/scripts/pinned-node-downloads.mjs', 'config/scripts/update-node-runtime-pin.mjs', 'config/scripts/macos-terminal-host-bundle.cjs') }}
 
       - name: Cache electron-builder downloads
         if: steps.freshness.outputs.should_build == 'true'
@@ -231,6 +228,14 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
+      - name: Build and verify the patched terminal runtimes
+        if: steps.freshness.outputs.should_build == 'true'
+        timeout-minutes: 180
+        run: |
+          pnpm run build:packages
+          ORCA_BACKGROUND_LAUNCH=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/verify-darwin-terminal-node.mjs --arch=arm64
+          ORCA_BACKGROUND_LAUNCH=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/verify-darwin-terminal-node.mjs --arch=x64
+
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
@@ -248,12 +253,23 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Why: App tokens last one hour, and the cold runtime build alone can outlast that.
+      - name: Re-mint daily repo token for versioning
+        id: app_token_version
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-daily
+
       - name: Compute daily version
         id: daily
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_TOKEN: ${{ steps.app_token_version.outputs.token }}
           MAIN_REPO_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -391,7 +407,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_DAILY=1 node config/scripts/build-mac-notarization-overlap.mjs --publish always; else ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_DAILY=1 node config/scripts/build-mac-notarization-overlap.mjs --publish always; else ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
         env:
           # Why: electron-builder's github publisher targets the repo named in the
           # config; the token must therefore carry write access to orca-daily.

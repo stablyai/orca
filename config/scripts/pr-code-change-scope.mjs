@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { isDarwinTerminalNodeSource } from './pr-darwin-terminal-node-route.mjs'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
 import {
   isCloudTestRunnerInput,
@@ -37,6 +38,7 @@ export const PR_CHECK_JOBS = [
   'managed_hook_node18',
   'package',
   'package_windows',
+  'darwin_terminal_node',
   'layout_oracle',
   'dependency_isolation'
 ]
@@ -609,6 +611,8 @@ function jobDetector(job) {
       return (files) => files.some(isLayoutOracleSource)
     case 'dependency_isolation':
       return (files) => files.some((file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES))
+    case 'darwin_terminal_node':
+      return (files) => files.some(isDarwinTerminalNodeSource)
     default:
       return () => true
   }

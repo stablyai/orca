@@ -23,6 +23,7 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'agent_token_usage',
   'app_starred_orca',
   'daemon_adopted',
+  'daemon_async_io_health',
   'daemon_audit_eligibility',
   'daemon_pty_cwd_denied',
   'daemon_pty_cwd_readable',
