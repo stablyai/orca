@@ -1,5 +1,8 @@
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { collectAgentPaneConversations } from '@/lib/ai-vault-tab-title-requests'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
 
@@ -22,9 +25,25 @@ export function createTerminalTabAppearanceActions(
         scheduleRuntimeGraphSync()
         return { tabsByWorktree: next }
       })
-      const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
+      const currentState = get()
+      const item = findRenamableUnifiedTab(currentState.unifiedTabsByWorktree, tabId)
       if (item) {
-        get().setTabCustomLabel(item.id, title, opts)
+        currentState.setTabCustomLabel(item.id, title, opts)
+      }
+      const sessionId =
+        (item?.contentType === 'agent-session' ? item.entityId : null) ??
+        item?.aiVaultTitle?.sessionId ??
+        Object.values(currentState.tabsByWorktree)
+          .flat()
+          .find((t) => t.id === tabId)?.aiVaultTitle?.sessionId ??
+        collectAgentPaneConversations(
+          currentState,
+          (agent): agent is AgentType => Boolean(agent)
+        ).find((c) => c.tabId === tabId)?.providerSession.id
+      if (sessionId) {
+        callRuntimeRpc({ kind: 'local' }, 'aiVault.renameSession', { sessionId, title }).catch(
+          () => {}
+        )
       }
     },
     setTabColor: (tabId, color, opts) => {

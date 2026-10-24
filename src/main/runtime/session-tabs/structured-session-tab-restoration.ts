@@ -169,12 +169,14 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       }
       return
     }
+    const customTitle = this.getSessionCustomTitle(input.sessionId)
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: defaultAgentChatLabel(input.agent),
+      title: customTitle ?? defaultAgentChatLabel(input.agent),
       sessionId: input.sessionId,
       agent: input.agent,
+      ...(customTitle ? { customTitle } : {}),
       isActive: input.activate
     }
     const tabs = [...(existing?.tabs ?? [])].map((candidate) => ({

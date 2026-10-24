@@ -242,6 +242,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       paired: boolean
       selectIfNoActiveTab: boolean
       viewMode?: 'terminal' | 'chat'
+      customTitle?: string
+      providerSessionId?: string
+      launchAgent?: TuiAgent
       /** Resolved agent launch command, kept so a settle over a bare renderer
        *  PTY can still deliver the launch instead of succeeding silently (STA-3214). */
       startupCommand?: string
@@ -333,6 +336,12 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       pendingRegistration: boolean
     }
   >()
+
+  // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
+  protected readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
+
+  // Why: a waiter can reserve an older row while a newer row advances the sequence watermark.
+  protected readonly pointedMessageIdsByHandle = new Map<string, Set<string>>()
 
   protected readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
     this.repointPendingMessagesForHandle(handle)

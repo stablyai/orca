@@ -114,7 +114,12 @@ export function useAiVaultSessionLaunchActions({
       void prepareStartup(targetId.worktreeId)
         .then((startup) =>
           launchAiVaultSessionAndReveal(
-            { agent: session.agent, worktreeId: targetId.worktreeId, ...startup },
+            {
+              agent: session.agent,
+              worktreeId: targetId.worktreeId,
+              customTitle: session.customTitle ?? session.title ?? null,
+              ...startup
+            },
             describeFailure
           )
         )

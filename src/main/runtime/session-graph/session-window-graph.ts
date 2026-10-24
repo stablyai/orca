@@ -1,5 +1,6 @@
 /* eslint-disable unicorn/no-useless-spread */
 import { OrcaRuntimeWithAttachWindow } from './session-graph-promotion'
+import { syncTabCustomTitles } from './session-window-graph-titles'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeSyncedTab,
@@ -280,6 +281,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     this.leaves = nextLeaves
     this.rebuildLeafPtyIndex()
     this.reconcilePtyIncarnationHandles()
+    syncTabCustomTitles(graph.tabs, previousTabs, (tabId, title) =>
+      this.rememberTerminalSessionTitle(tabId, undefined, title)
+    )
     // Why: the emitted client payload is a function of the stored snapshot AND
     // the tab/leaf graph (handles/titles/connected resolve from leaf state), so
     // a graph-only change — e.g. a restored leaf binding its ptyId while the

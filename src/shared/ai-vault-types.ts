@@ -117,6 +117,7 @@ export type AiVaultSession = {
   agent: AiVaultAgent
   sessionId: string
   title: string
+  customTitle?: string | null
   cwd: string | null
   /** The host's spellings of `cwd` under a symlinked scope path. Scope matching only; resume reads `cwd`. */
   cwdAliases?: string[]

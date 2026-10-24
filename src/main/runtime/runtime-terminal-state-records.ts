@@ -65,6 +65,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   tabId?: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
   paneKey?: string | null
+  /** Provider conversation id for this PTY, so a rename can be stored under the session alias. */
+  providerSessionId?: string | null
   /**
    * Window-owned builds only (L80). `graphSequence` when `paneKey` was last written. A surface
    * recorded since the last graph statement has not yet been offered one that could contradict
@@ -112,6 +114,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
+  /** Set only by a user rename. Absent or null leaves the live OSC title in charge. */
+  customTitle?: string | null
   title: string | null
   titleUpdatedAt: number | null
   /** The name a rename gave this terminal: display only, never title evidence (#20626). */

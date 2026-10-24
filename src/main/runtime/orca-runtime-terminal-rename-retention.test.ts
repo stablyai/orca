@@ -12,6 +12,8 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
+import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { bindPaneFirst, committingSpawn } from './bind-first-pane.test-fixture'
 
@@ -97,6 +99,105 @@ describe('terminal rename before renderer graph hydration', () => {
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(runtimeStore.setWorkspaceSession).not.toHaveBeenCalled()
   })
+
+  it('stores the session alias while a desktop rename notifier is attached', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const rows: AgentStatusIpcPayload[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture store implements RuntimeStore; its mock typing drops callable signatures.
+    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore, undefined, {
+      getAgentStatusSnapshot: () => rows
+    })
+    runtime.setNotifier(notifier(() => {}))
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: 'alias-pty' })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    rows.push({
+      state: 'working',
+      prompt: '',
+      paneKey: created.paneKey ?? 'pane-key',
+      tabId: 'host-tab',
+      terminalHandle: created.handle,
+      connectionId: null,
+      receivedAt: 1,
+      stateStartedAt: 1,
+      providerSession: { key: 'session_id', id: 'sess-alias' }
+    })
+
+    await runtime.renameTerminal(created.handle, 'Alias')
+
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe('Alias')
+    expect(getSession().sessionCustomTitles?.['sess-alias']).toBe('Alias')
+    await runtime.renameTerminal(created.handle, null)
+    expect(getSession().sessionCustomTitles?.['sess-alias']).toBeUndefined()
+  })
+
+  it('stores the session alias for a restored PTY with a legacy numeric paneKey when leaves are not mounted', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    session.tabsByWorktree[TEST_WORKTREE_ID][0].ptyId = 'restored-pty'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const rows: AgentStatusIpcPayload[] = [
+      {
+        state: 'done',
+        prompt: '',
+        paneKey: 'host-tab:1',
+        connectionId: null,
+        receivedAt: 1,
+        stateStartedAt: 1,
+        providerSession: { key: 'session_id', id: 'sess-legacy-numeric' }
+      }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture store implements RuntimeStore; its mock typing drops callable signatures.
+    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore, undefined, {
+      getAgentStatusSnapshot: () => rows
+    })
+    runtime.setNotifier(notifier(() => {}))
+    const pty = runtime['recordPtyWorktree']('restored-pty', TEST_WORKTREE_ID, {
+      connected: true
+    })
+    const handle = runtime['issuePtyHandle'](pty)
+
+    await runtime.renameTerminal(handle, 'Immediate History Name')
+
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(
+      'Immediate History Name'
+    )
+    expect(getSession().sessionCustomTitles?.['sess-legacy-numeric']).toBe('Immediate History Name')
+    expect(runtime.getSessionCustomTitle('sess-legacy-numeric')).toBe('Immediate History Name')
+  })
+
+  it('restores a stored session title onto a resumed terminal that has none', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      sessionCustomTitles: { 'sess-kept': 'Kept name' }
+    })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture store implements RuntimeStore; its mock typing drops callable signatures.
+    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: 'resume-pty' })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      sessionId: 'serve-not-provider',
+      resumeProviderSession: { key: 'session_id', id: 'sess-kept' }
+    })
+
+    expect(created.title).toBe('Kept name')
+    expect(runtime['ptysById'].get('resume-pty')?.customTitle).toBe('Kept name')
+    expect(runtime['ptysById'].get('resume-pty')?.providerSessionId).toBe('sess-kept')
+  })
 })
 
 // The name is display only (#20626): every reader that shows the terminal still shows it.
@@ -125,6 +226,28 @@ describe('terminal rename display', () => {
     expect(notifier.revealTerminalSession.mock.calls.at(-1)?.[1]).toMatchObject({
       title: 'Review worker'
     })
+  })
+
+  it('does not store a caller title as a manual title on a background terminal', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: 'background-pty' })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      presentation: 'background',
+      title: 'Worker label',
+      sessionId: 'serve-not-provider'
+    })
+    const pty = runtime['ptysById'].get('background-pty')
+    expect(pty?.customTitle ?? null).toBeNull()
+    expect(pty?.manualTitle ?? null).toBeNull()
+    expect(pty?.providerSessionId ?? null).toBeNull()
   })
 
   it('shows an orphan terminal under its new name', async () => {
@@ -197,21 +320,22 @@ describe('terminal rename display', () => {
   })
 })
 
-describe('terminal view rename characterization', () => {
-  function notifier(renameTerminal: RuntimeNotifier['renameTerminal']): RuntimeNotifier {
-    return {
-      worktreesChanged() {},
-      reposChanged() {},
-      activateWorktree() {},
-      createTerminal() {},
-      splitTerminal() {},
-      renameTerminal,
-      focusTerminal() {},
-      closeTerminal() {},
-      terminalFitOverrideChanged() {},
-      terminalDriverChanged() {}
-    }
+function notifier(renameTerminal: RuntimeNotifier['renameTerminal']): RuntimeNotifier {
+  return {
+    worktreesChanged() {},
+    reposChanged() {},
+    activateWorktree() {},
+    createTerminal() {},
+    splitTerminal() {},
+    renameTerminal,
+    focusTerminal() {},
+    closeTerminal() {},
+    terminalFitOverrideChanged() {},
+    terminalDriverChanged() {}
   }
+}
+
+describe('terminal view rename characterization', () => {
   it('keeps rename persistence before the current notifier with its own receiver', async () => {
     // Switch-on, main's layout says which tab holds the terminal; that layout lives in a store.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rename path reads only the session bindPaneFirst adds to this store.
@@ -300,5 +424,52 @@ describe('terminal query erased boundary regressions', () => {
     runtime.providerReads.mockClear()
     await expect(runtime.remove('ssh-host')).rejects.toThrow('PTY provider unavailable')
     expect(runtime.providerReads).not.toHaveBeenCalled()
+  })
+
+  it('restores non-manual fallback title when clearing manual terminal title', () => {
+    const runtime = new OrcaRuntimeService(null)
+    const worktreeId = 'wt-1'
+    const tabId = 'tab-1'
+    runtime['tabs'].set(tabId, {
+      tabId,
+      worktreeId,
+      title: 'Original Title',
+      customTitle: null,
+      activeLeafId: null,
+      layout: null
+    })
+    const terminalTab: RuntimeMobileSessionTerminalTab = {
+      id: 'mob-tab-1',
+      type: 'terminal',
+      parentTabId: tabId,
+      leafId: 'leaf-1',
+      title: 'Original Title',
+      customTitle: null,
+      isActive: false
+    }
+    runtime['mobileSessionTabsByWorktree'].set(worktreeId, {
+      worktree: worktreeId,
+      tabs: [terminalTab],
+      publicationEpoch: 'epoch',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: 'terminal'
+    })
+
+    runtime['persistHeadlessTerminalTitle'](worktreeId, tabId, 'Custom Title')
+    expect(runtime['tabs'].get(tabId)?.title).toBe('Custom Title')
+    expect(runtime['tabs'].get(tabId)?.customTitle).toBe('Custom Title')
+    const renamedSnapshot = runtime['mobileSessionTabsByWorktree'].get(worktreeId)
+    expect(renamedSnapshot?.snapshotVersion).toBe(2)
+    const renamedTab = renamedSnapshot?.tabs[0]
+    expect(renamedTab?.type === 'terminal' && renamedTab.title).toBe('Custom Title')
+
+    runtime['persistHeadlessTerminalTitle'](worktreeId, tabId, null)
+    expect(runtime['tabs'].get(tabId)?.customTitle).toBeNull()
+    expect(runtime['tabs'].get(tabId)?.title).toBe('Terminal')
+    expect(runtime['mobileSessionTabsByWorktree'].get(worktreeId)?.snapshotVersion).toBe(3)
+    const clearedTab = runtime['mobileSessionTabsByWorktree'].get(worktreeId)?.tabs[0]
+    expect(clearedTab?.type === 'terminal' && clearedTab.title).toBe('Terminal')
   })
 })

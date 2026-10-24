@@ -118,6 +118,8 @@ export async function syncRuntimeGraph(): Promise<void> {
       tabId: registeredTab.tabId,
       worktreeId: registeredTab.worktreeId,
       title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
+      ...(tab.customTitle?.trim() ? { customTitle: tab.customTitle.trim() } : {}),
+      ...(tab.aiVaultTitle ? { aiVaultTitle: tab.aiVaultTitle } : {}),
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
@@ -197,6 +199,7 @@ export async function syncRuntimeGraph(): Promise<void> {
         tabId: tab.id,
         worktreeId,
         title,
+        ...(tab.customTitle?.trim() ? { customTitle: tab.customTitle.trim() } : {}),
         activeLeafId:
           savedActiveLeafId && publishedLeafIds.has(savedActiveLeafId)
             ? savedActiveLeafId

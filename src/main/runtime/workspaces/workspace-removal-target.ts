@@ -240,49 +240,91 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     if (mainRename) {
       return mainRename
     }
+    const normalizedTitle = title?.trim() || null
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       // Why: not pty.title — that is the process's own title evidence, and a name there reads as
       // the shell taking the pane back (#20626).
-      pty.pty.manualTitle = title?.trim() || null
+      pty.pty.customTitle = normalizedTitle
+      pty.pty.manualTitle = normalizedTitle
       const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
+      const layoutTabId =
+        recordedTabId() ??
+        pty.pty.tabId ??
+        this.resolveRealTabIdForPty(pty.pty.ptyId, pty.pty.worktreeId, handle)
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN && layoutTabId && !pty.pty.tabId) {
+        pty.pty.tabId = layoutTabId
+      }
+      const tabId = layoutTabId ?? pty.record.tabId
+      this.rememberManualTerminalTitle(tabId, normalizedTitle)
       // Why: without a renderer the rename only lived on the live pty and was
       // lost on restart. Persist customTitle so a headless rebuild keeps it.
-      const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
-      if (tabIdForTitle) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabIdForTitle, title)
+      if (!this.notifier?.renameTerminal && layoutTabId) {
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, layoutTabId, normalizedTitle)
         // Why: paired desktops rank their own saved-session title above the live one, so the
         // name has to be published as manual or a resumed session hides it (#29975).
-        const customTitle = title?.trim() || null
-        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, tabIdForTitle, {
-          customTitle,
+        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, layoutTabId, {
+          customTitle: normalizedTitle,
           // Why: a name set while the pane slept lives in the snapshot title; a reset must drop it.
-          ...(customTitle === null
+          ...(normalizedTitle === null
             ? {
-                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, tabIdForTitle)
+                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, layoutTabId)
               }
             : {})
         })
       }
+      // Why: a window notifier only renames the open tab. The session alias still
+      // has to be stored, or Agent History loses the name after the tab closes.
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
-          this.notifier?.renameTerminal(leaf.tabId, title)
-          return { handle, tabId: leaf.tabId, title }
+          this.rememberManualTerminalTitle(leaf.tabId, normalizedTitle)
+          if (this.notifier?.renameTerminal) {
+            this.persistHeadlessTerminalTitle(pty.pty.worktreeId, leaf.tabId, normalizedTitle)
+          }
+          this.rememberTerminalSessionTitle(leaf.tabId, handle, normalizedTitle)
+          this.notifier?.renameTerminal(leaf.tabId, normalizedTitle)
+          return { handle, tabId: leaf.tabId, title: normalizedTitle }
         }
       }
-      const tabId = recordedTabId() ?? pty.record.tabId
       // A notifier can exist before its pane graph; retain the rename on the known tab.
       if (this.notifier?.renameTerminal && tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)
-        this.notifier.renameTerminal(tabId, title)
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, normalizedTitle)
+        this.rememberTerminalSessionTitle(tabId, handle, normalizedTitle)
+        this.notifier.renameTerminal(tabId, normalizedTitle)
+      } else {
+        this.rememberTerminalSessionTitle(tabId, handle, normalizedTitle)
       }
-      return { handle, tabId, title }
+      return { handle, tabId, title: normalizedTitle }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.renameTerminal(leaf.tabId, title)
-    return { handle, tabId: leaf.tabId, title }
+    const boundPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : null
+    if (boundPty) {
+      boundPty.customTitle = normalizedTitle
+      boundPty.manualTitle = normalizedTitle
+      this.touchMobileSessionSnapshotsForPty(boundPty.ptyId)
+    }
+    this.rememberManualTerminalTitle(leaf.tabId, normalizedTitle)
+    this.persistHeadlessTerminalTitle(leaf.worktreeId, leaf.tabId, normalizedTitle)
+    this.rememberTerminalSessionTitle(leaf.tabId, handle, normalizedTitle)
+    this.notifier?.renameTerminal(leaf.tabId, normalizedTitle)
+    this.touchMobileSessionTabsForWorktree(leaf.worktreeId, { immediate: true })
+    return { handle, tabId: leaf.tabId, title: normalizedTitle }
+  }
+
+  protected rememberManualTerminalTitle(tabId: string | null, title: string | null): void {
+    if (!tabId) {
+      return
+    }
+    const inMemoryTab = this.tabs.get(tabId)
+    if (!inMemoryTab) {
+      return
+    }
+    inMemoryTab.customTitle = title
+    if (title !== null) {
+      inMemoryTab.title = title
+    }
   }
 
   /** Names one pane of a split; the tab's own name is untouched. */

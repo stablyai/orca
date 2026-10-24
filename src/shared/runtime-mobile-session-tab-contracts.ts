@@ -110,6 +110,7 @@ export type RuntimeMobileSessionAgentTab = {
   /** An agent the host registered. Beyond Claude and Codex, published only to clients advertising
    *  the registered-agents capability. */
   agent: StructuredAgentId
+  customTitle?: string | null
   /** The host's structured status row for this chat. Optional: old hosts never send it. */
   chatStatus?: RuntimeMobileSessionAgentTabStatus
   color?: string | null

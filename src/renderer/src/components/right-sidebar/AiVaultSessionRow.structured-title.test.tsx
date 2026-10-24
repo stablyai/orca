@@ -210,6 +210,14 @@ describe('native chat names in Vault rows', () => {
     }
   )
 
+  it('shows the persisted customTitle when the tab is closed even if the host feed published a conversationName', async () => {
+    useAppStore.setState({ unifiedTabsByWorktree: {} })
+    await renderRow({ ...row(), customTitle: 'Persisted alias' })
+    publish('local', 'Explain the parser')
+    expect(screen.getByText('Persisted alias')).toBeTruthy()
+    expect(screen.queryByText('Explain the parser')).toBeNull()
+  })
+
   it.each(['opencode', 'opencode2', 'grok', 'omp', 'pi'] as const)(
     'keeps the CLI title on a %s chat row, as its terminal conversations do',
     async (agent) => {

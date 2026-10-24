@@ -17,9 +17,13 @@ import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
-import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
+import {
+  buildProjectedMobileTerminalClientTab,
+  finalizeRuntimeMobileSessionTabsResult
+} from './runtime-mobile-session-result-finalization'
 import { withStructuredChatStatus } from './runtime-mobile-structured-tab-status'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
+import { resolveManualTerminalTitle } from './manual-terminal-title'
 import {
   getLatestAgentCandidateTitle,
   getLeafDisplayRecord,
@@ -183,10 +187,21 @@ export function projectRuntimeMobileSessionTabs(
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
     const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
-    const agentTitle = normalizeCompatibleAgentTitleForOwner(liveTitle, ownerAgent, ownerOptions)
+    // Why: agents repaint their title constantly, so a user's rename must outrank it.
+    const manualTitle = resolveManualTerminalTitle(liveLeafPty ?? pty, syncedTab, tab)
+    const normalizedLiveTitle = normalizeCompatibleAgentTitleForOwner(
+      liveTitle,
+      ownerAgent,
+      ownerOptions
+    )
     // Why: the desktop's ranking over main's fresher live title; the window sends a generated
     // name only while the desktop shows it, so it is passed as enabled.
-    const title = resolveTerminalTabTitle({ ...tab, title: agentTitle }, true, agentTitle)
+    const desktopTitle = resolveTerminalTabTitle(
+      { ...tab, title: normalizedLiveTitle },
+      true,
+      normalizedLiveTitle
+    )
+    const title = manualTitle ?? desktopTitle
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
     const rendererStatusAgent =
@@ -293,34 +308,27 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
-    tabs.push({
-      type: 'terminal',
-      id: tab.id,
-      parentTabId: tab.parentTabId,
-      leafId: tab.leafId,
-      title,
-      ...(tab.customTitle !== undefined ? { customTitle: tab.customTitle } : {}),
-      ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
-      // Bind identity to the handle's live owner, never a stale persisted surface.
-      ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
-      ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
-      ...(launchAgent ? { launchAgent } : {}),
-      ...clientAgentStatus,
-      ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
-      ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
-      ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
-      ...(tab.color != null ? { color: tab.color } : {}),
-      ...(tab.isPinned ? { isPinned: true } : {}),
-      ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
-      ...(tab.launchDraft ? { launchDraft: tab.launchDraft } : {}),
-      ...(tab.launchDraftCreatedAt !== undefined
-        ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
-        : {}),
-      isActive: tab.isActive,
-      ...(terminalHandle
-        ? { status: 'ready' as const, terminal: terminalHandle }
-        : { status: 'pending-handle' as const, terminal: null })
-    })
+    tabs.push(
+      buildProjectedMobileTerminalClientTab({
+        tab,
+        title,
+        normalizedLiveTitle,
+        liveTitleEvidence,
+        manualTitle,
+        syncedTabCustomTitle: syncedTab?.customTitle,
+        providerSessionIds: [
+          (liveLeafPty ?? pty)?.providerSessionId,
+          projectedStatusEntry?.providerSession?.id ?? hookProviderSession?.id,
+          retainedAgentStatus?.providerSession?.id ?? syncedTab?.aiVaultTitle?.sessionId
+        ],
+        getSessionCustomTitle: host.getSessionCustomTitle,
+        incarnationId: terminalPty?.incarnationId,
+        launchAgent,
+        clientAgentStatus,
+        turnCompletedAt,
+        terminalHandle
+      })
+    )
   }
   return finalizeRuntimeMobileSessionTabsResult({ snapshot, tabs }, host)
 }

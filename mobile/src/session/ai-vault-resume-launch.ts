@@ -78,15 +78,17 @@ export type MobileAiVaultResumeLaunch = {
   launchAgent?: TuiAgent
   /** The conversation the typed command resumes, so the host can name it before the agent does. */
   resumeProviderSession?: AgentProviderSessionMetadata
+  title?: string | null
 }
 
 export function buildMobileAiVaultResumeLaunch(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
-    Partial<Pick<AiVaultSession, 'filePath'>>
+    Partial<Pick<AiVaultSession, 'filePath' | 'customTitle' | 'title'>>
   hostPlatform: NodeJS.Platform
   hostTerminalWindowsShell?: string | null
   settings?: MobileAiVaultResumeSettings | null
 }): MobileAiVaultResumeLaunch {
+  const title = args.session.customTitle || args.session.title || null
   const shell =
     args.hostPlatform === 'win32'
       ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
@@ -140,7 +142,8 @@ export function buildMobileAiVaultResumeLaunch(args: {
         ...realHomeCodexResumeEnvDeletion(args.session),
         launchConfig: startupPlan.launchConfig,
         launchAgent: startupPlan.agent,
-        ...(resumeProviderSession ? { resumeProviderSession } : {})
+        ...(resumeProviderSession ? { resumeProviderSession } : {}),
+        title
       }
     }
   }
@@ -151,7 +154,8 @@ export function buildMobileAiVaultResumeLaunch(args: {
       hostTerminalWindowsShell: args.hostTerminalWindowsShell,
       commandOverride
     }),
-    ...realHomeCodexResumeEnvDeletion(args.session)
+    ...realHomeCodexResumeEnvDeletion(args.session),
+    title
   }
 }
 
@@ -200,6 +204,7 @@ export async function resumeAiVaultSessionInTerminal(
       ...(launch.resumeProviderSession
         ? { resumeProviderSession: launch.resumeProviderSession }
         : {}),
+      ...(launch.title ? { title: launch.title } : {}),
       ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
       activate: false,
       select: true,

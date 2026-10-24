@@ -193,6 +193,15 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
     if (pty) {
       pty.runtimeSessionOwned = true
+      if (pending.customTitle && pty.customTitle === undefined) {
+        pty.customTitle = pending.customTitle
+      }
+      if (pending.providerSessionId && !pty.providerSessionId) {
+        pty.providerSessionId = pending.providerSessionId
+      }
+      if (pending.launchAgent && !pty.launchAgent) {
+        pty.launchAgent = pending.launchAgent
+      }
       if (pending.paired) {
         this.setPairedRendererSessionOwnership(pty.ptyId, true)
       }

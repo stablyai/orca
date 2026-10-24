@@ -1,4 +1,8 @@
 import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
+import {
+  projectHeadlessClientBrowserTab,
+  projectHeadlessServerBrowserTab
+} from './headless-browser-tab-projection'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsResult,
@@ -28,6 +32,11 @@ import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 
 export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
+  abstract readLiveTerminalCustomTitle(args: {
+    tabId?: string
+    terminalHandle?: string
+  }): string | null
+
   // Why: headless serve backs browser panes with offscreen WebContents that live
   // only in the BrowserManager, never in a renderer graph. Without surfacing them
   // as session tabs, a session.tabs snapshot (e.g. on terminal open) prunes the
@@ -44,47 +53,18 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
             ...this.serveBrowserTabs.listUnstarted(worktreeId)
           ]
         : []
-    const publishedServerTabs = serverTabs.map((tab) => {
-      const persistedProps = this.getPersistedUnifiedSessionTabProps(
-        worktreeId,
-        this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
+    const publishedServerTabs = serverTabs.map((tab) =>
+      projectHeadlessServerBrowserTab(
+        tab,
+        this.getPersistedUnifiedSessionTabProps(
+          worktreeId,
+          this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
+        )
       )
-      return {
-        type: 'browser' as const,
-        // Why: an offscreen page has no separate workspace identity, so the page id
-        // is its own workspace id (matches the server's browserWorkspaceId fallback).
-        id: tab.browserPageId,
-        title: tab.title || tab.url || 'Browser',
-        browserWorkspaceId: tab.browserPageId,
-        browserPageId: tab.browserPageId,
-        url: tab.url || 'about:blank',
-        loading: false,
-        canGoBack: false,
-        canGoForward: false,
-        loadError: tab.loadError ?? undefined,
-        certificateFailure: tab.certificateFailure ?? undefined,
-        ...(persistedProps ? { color: persistedProps.color } : {}),
-        ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
-        isActive: tab.active === true
-      }
-    })
+    )
     const publishedClientTabs = getRuntimeBrowserPageRegistry(this)
       .listPages(worktreeId)
-      .map((page) => ({
-        type: 'browser' as const,
-        id: page.browserPageId,
-        title: page.title || page.url || 'Browser',
-        browserWorkspaceId: page.browserPageId,
-        browserPageId: page.browserPageId,
-        browserProfileId: page.browserProfileId,
-        executionHostKey: page.executionHostKey,
-        placement: page.placement,
-        url: page.url,
-        loading: page.loading,
-        canGoBack: page.canGoBack,
-        canGoForward: page.canGoForward,
-        isActive: page.active
-      }))
+      .map(projectHeadlessClientBrowserTab)
     return [...publishedServerTabs, ...publishedClientTabs]
   }
 
@@ -173,6 +153,15 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
 
   /** The desktop renderer's close intent: it already guarded, removed and killed; this only reports. */
   async closeTerminalSurfaceFromRenderer({ worktreeId, target, reason }: RendererTerminalClose) {
+    if (target.kind === 'tab') {
+      const customTitle =
+        this.tabs.get(target.tabId)?.customTitle?.trim() ||
+        this.readLiveTerminalCustomTitle({ tabId: target.tabId }) ||
+        null
+      if (customTitle) {
+        this.rememberTerminalSessionTitle(target.tabId, undefined, customTitle)
+      }
+    }
     const options = { allowMissing: true, force: true, closedByLayoutOwner: true, reason }
     await this.closeTerminalSurface(worktreeId, target, options)
   }

@@ -34,6 +34,7 @@ import {
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from '../../../../shared/rpc-contract/ai-vault-params'
+import { z } from 'zod'
 export { AiVaultListSessionsParams, AiVaultPrepareSessionResumeParams, AiVaultSessionTitlesParams }
 
 export const AI_VAULT_METHODS = [
@@ -118,6 +119,31 @@ export const AI_VAULT_METHODS = [
       const projected = projectStructuredAiVaultSessions(result, (agent) =>
         clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent)
       )
+      projected.sessions = projected.sessions.map((session) => {
+        const agentSessionId = `${session.agent}:${session.sessionId}`
+        const bareSessionId = session.sessionId.includes(':')
+          ? session.sessionId.split(':').pop()!
+          : session.sessionId
+        const customTitle =
+          runtime.getSessionCustomTitle?.(session.sessionId) ??
+          runtime.getSessionCustomTitle?.(session.id) ??
+          runtime.getSessionCustomTitle?.(agentSessionId) ??
+          runtime.getSessionCustomTitle?.(bareSessionId) ??
+          (session.structuredSession
+            ? runtime.getSessionCustomTitle?.(session.structuredSession.sessionId)
+            : null)
+        if (!customTitle) {
+          return session
+        }
+        if (session.structuredSession) {
+          runtime.setSessionCustomTitle?.(session.structuredSession.sessionId, customTitle)
+        }
+        return {
+          ...session,
+          title: customTitle,
+          customTitle
+        }
+      })
       return conditionalAiVaultListResult(
         params.executionHostId
           ? restampAiVaultListResult(projected, params.executionHostId)
@@ -125,6 +151,18 @@ export const AI_VAULT_METHODS = [
         params.unlimited ? undefined : params.afterFingerprint,
         params.force
       )
+    }
+  }),
+  defineMethod({
+    name: 'aiVault.renameSession',
+    permission: 'workspace',
+    params: z.object({
+      sessionId: z.string().min(1),
+      title: z.string().nullable()
+    }),
+    handler: async (params, { runtime }) => {
+      runtime.setSessionCustomTitle(params.sessionId, params.title || null)
+      return { ok: true }
     }
   }),
   defineMethod({

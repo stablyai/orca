@@ -25,8 +25,9 @@ export function useAiVaultSessionDisplayTitle(session: AiVaultSession): string {
       ? tab.customLabel
       : undefined
   })
+  const userCustomTitle = customLabel?.trim() || session.customTitle?.trim() || null
   const conversationName = useStructuredConversationName(session.executionHostId, owner?.sessionId)
   return owner
-    ? structuredChatDisplayName(customLabel, conversationName, session.title)
-    : session.title
+    ? structuredChatDisplayName(userCustomTitle, conversationName, session.title)
+    : userCustomTitle || session.title
 }

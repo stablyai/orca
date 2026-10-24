@@ -75,6 +75,17 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     [worktrees, worktreeId]
   )
   const activeWorktreePath = activeWorktree?.path ?? null
+  const hasActiveWorktree = activeWorktree !== null
+  const workspaceScopePathsKey = useMemo(
+    () => deriveMobileAiVaultScopePaths('workspace', activeWorktree, worktrees).join('\0'),
+    [activeWorktree, worktrees]
+  )
+  const projectScopePathsKey = useMemo(
+    () => deriveMobileAiVaultScopePaths('project', activeWorktree, worktrees).join('\0'),
+    [activeWorktree, worktrees]
+  )
+  const scopeContextRef = useRef({ activeWorktree, worktrees })
+  scopeContextRef.current = { activeWorktree, worktrees }
   // Why: the host union only widens, so the screen narrows by these cwd
   // path-prefixes for the current scope (empty for 'all'). Same derivation the
   // RPC scopePaths use, reused client-side for the actual narrowing.
@@ -127,14 +138,19 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         // worktree list has loaded, hold loading rather than firing an unscoped
         // fetch that would briefly show unrelated host history. Once loaded we
         // proceed even if the worktree isn't found, to avoid a stuck spinner.
-        if (options.scope !== 'all' && !activeWorktree && !worktreesLoaded) {
+        if (options.scope !== 'all' && !hasActiveWorktree && !worktreesLoaded) {
           if (isCurrent()) {
             setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
           }
           return
         }
 
-        const scopePaths = deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
+        const latestContext = scopeContextRef.current
+        const scopePaths = deriveMobileAiVaultScopePaths(
+          options.scope,
+          latestContext.activeWorktree,
+          latestContext.worktrees
+        )
         const reply = await agentHistorySessionScan.request(client, {
           limit: MOBILE_AI_VAULT_SESSION_LIMIT,
           force: options.force,
@@ -163,7 +179,16 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         setScreenState({ kind: 'error', message })
       }
     },
-    [activeWorktree, client, clientGeneration, connState, hostId, worktrees, worktreesLoaded]
+    [
+      client,
+      clientGeneration,
+      connState,
+      hasActiveWorktree,
+      hostId,
+      projectScopePathsKey,
+      workspaceScopePathsKey,
+      worktreesLoaded
+    ]
   )
 
   // Initial + reconnect load. Why: scope switches reuse the host's 15s cache

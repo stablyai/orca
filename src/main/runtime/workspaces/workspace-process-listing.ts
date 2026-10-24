@@ -126,7 +126,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
       }),
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
-      getSummary
+      getSummary,
+      getSessionCustomTitle: (sessionId) => this.getSessionCustomTitle(sessionId),
+      getTabCustomTitle: (tabId) => this.tabs.get(tabId)?.customTitle?.trim() || null
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)

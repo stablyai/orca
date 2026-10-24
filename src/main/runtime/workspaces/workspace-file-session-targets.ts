@@ -1,7 +1,7 @@
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
-import { RuntimeHeadlessTabGroups } from '../session-tabs/headless-tab-group-moves'
+import { RuntimeWorkspaceSessionCustomTitles } from './workspace-session-custom-titles'
 import type {
   BrowserTabInfo,
   RuntimeMarkdownReadTabResult,
@@ -19,6 +19,7 @@ import {
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
+import { getLatestLeafTitle, getLeafDisplayRecord } from '../runtime-worktree-status-projection'
 import {
   readMarkdownTabFromDisk,
   saveMarkdownTabToDisk,
@@ -28,7 +29,7 @@ import {
 import { createMarkdownTabDiskHost } from '../markdown-tab-disk-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
-export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeHeadlessTabGroups {
+export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeWorkspaceSessionCustomTitles {
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
   protected abstract resolveMobileMarkdownWorktreeId(
     ...args: Parameters<
@@ -64,6 +65,47 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     tabId: string,
     title: string | null
   ): void {
+    const normalizedTitle = title?.trim() || null
+    let fallbackTitle: string | null = null
+    if (normalizedTitle === null) {
+      for (const leaf of this.leaves.values()) {
+        if (leaf.tabId === tabId) {
+          const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+          fallbackTitle = getLatestLeafTitle(getLeafDisplayRecord(leaf), null) ?? pty?.title ?? null
+          break
+        }
+      }
+    }
+    const inMemoryTab = this.tabs.get(tabId)
+    if (inMemoryTab) {
+      inMemoryTab.customTitle = normalizedTitle
+      inMemoryTab.title = normalizedTitle ?? fallbackTitle ?? 'Terminal'
+    }
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (snapshot) {
+      const tabs = snapshot.tabs.map((tab) => {
+        if (tab.type === 'terminal' && tab.parentTabId === tabId) {
+          return {
+            ...tab,
+            customTitle: normalizedTitle,
+            title: normalizedTitle ?? fallbackTitle ?? 'Terminal'
+          }
+        }
+        if (tab.type === 'agent-session' && tab.id === tabId) {
+          return {
+            ...tab,
+            customTitle: normalizedTitle,
+            ...(normalizedTitle ? { title: normalizedTitle } : {})
+          }
+        }
+        return tab
+      })
+      this.storeMobileSessionSnapshot(worktreeId, {
+        ...snapshot,
+        snapshotVersion: snapshot.snapshotVersion + 1,
+        tabs
+      })
+    }
     this.updateHeadlessWorkspaceContent(worktreeId, (session) => {
       const tabs = session.tabsByWorktree[worktreeId]
       if (!tabs?.some((tab) => tab.id === tabId)) {
@@ -73,10 +115,24 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
         ...session,
         tabsByWorktree: {
           ...session.tabsByWorktree,
-          [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
+          [worktreeId]: tabs.map((tab) =>
+            tab.id === tabId
+              ? {
+                  ...tab,
+                  customTitle: normalizedTitle,
+                  ...(normalizedTitle === null && fallbackTitle !== null
+                    ? { title: fallbackTitle }
+                    : {})
+                }
+              : tab
+          )
         }
       }
     })
+    const sessionId = this.resolveSessionIdForTab(tabId)
+    if (sessionId) {
+      this.setSessionCustomTitle(sessionId, normalizedTitle)
+    }
   }
 
   private updateHeadlessWorkspaceContent(

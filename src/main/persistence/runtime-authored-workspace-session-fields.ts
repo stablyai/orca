@@ -88,6 +88,15 @@ export function preserveRuntimeAuthoredWorkspaceSessionFields(
       closedTerminalTabTombstonesByTabId: prior.closedTerminalTabTombstonesByTabId
     }
   }
+  if (
+    next.sessionCustomTitles === undefined &&
+    prior?.sessionCustomTitles !== undefined
+  ) {
+    result = {
+      ...result,
+      sessionCustomTitles: prior.sessionCustomTitles
+    }
+  }
   // Why union: persist snapshots omit this write-once map (empty Zustand slice, omit-when-empty
   // payload). Treating omission as "never applied" re-spawns default terminals on every attach.
   result = keepPtyIncarnationsForUnchangedBindings(result, prior)

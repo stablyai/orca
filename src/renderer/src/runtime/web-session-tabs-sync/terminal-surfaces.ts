@@ -144,7 +144,7 @@ export function buildMirroredAgentTabs(
         label: tab.title?.trim() || defaultAgentChatLabel(tab.agent),
         // Why: a manual rename lives only on the client; re-nulling it here made
         // every host snapshot silently discard the user's title.
-        customLabel: existing?.customLabel ?? null,
+        customLabel: existing?.customLabel ?? tab.customTitle ?? null,
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,

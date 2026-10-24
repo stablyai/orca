@@ -142,6 +142,10 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'notRepoScoped',
     onTransfer: 'notTransferred'
   },
+  sessionCustomTitles: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
+  },
   // As closed-tab records: removing the workspace's session rows prunes them by worktreeId, and the
   // terminals they name never move with a project.
   closedTerminalPanesByPaneKey: {

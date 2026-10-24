@@ -56,6 +56,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   terminalTopologyRevisionByRepoId: true,
   terminalSurfaceTombstonesByPaneKey: true,
   closedTerminalTabTombstonesByTabId: true,
+  sessionCustomTitles: true,
   closedTerminalPanesByPaneKey: true
 } satisfies Record<keyof WorkspaceSessionState, true>
 
