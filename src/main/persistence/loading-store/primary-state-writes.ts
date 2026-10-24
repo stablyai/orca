@@ -93,13 +93,16 @@ export class PrimaryStateWriteOperations {
         }
       } catch (error) {
         if (profileStateWriterFailureOutcome(error) !== 'indeterminate') {
-          if (mutation.rollback) {
-            try {
+          try {
+            if (mutation.rollback) {
               this.runAdmittedMutationCallback('rollback', mutation.rollback)
-            } catch (rollbackError) {
-              await stopAfterFailedPrimaryStateMutation(runtime, rollbackError)
-              throw rollbackError
+            } else {
+              // Unscheduled getter edits need publication even when there is nothing to restore.
+              notifyWorkspaceSessionOperationEnded(runtime, null)
             }
+          } catch (recoveryError) {
+            await stopAfterFailedPrimaryStateMutation(runtime, recoveryError)
+            throw recoveryError
           }
         }
         throw error

@@ -168,6 +168,41 @@ export function registerProfileStatePtyRetirementFinalizationTests(): void {
     })
   })
 
+  it('publishes a failed matching binding before the final flush closes its writer', async () => {
+    const { store, authority, readState } = await createWorkerMaintenanceFixture()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await store.persistPtyBinding(binding)
+    store.updateSettings({ theme: 'dark' })
+    const initialActiveTabId = store.getWorkspaceSession().activeTabId
+    const started = maintenanceBarrier()
+    const release = maintenanceBarrier()
+    const failure = new ProfileStateWriterError('test-write', 'disk refused', 'known-failure')
+    vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async () => {
+      started.resolve()
+      await release.promise
+      throw failure
+    })
+    const close = vi.spyOn(authority, 'close')
+    const published: unknown[] = []
+    store.onWorkspaceSessionWritten(() => {
+      const session = store.getWorkspaceSession()
+      published.push(session.activeTabId)
+      expect(close).not.toHaveBeenCalled()
+      if (session.activeTabId === 'newer-active-tab') {
+        assertNewSnapshotsRefused(store)
+      }
+    })
+    const rejected = expect(store.persistPtyBinding(binding)).rejects.toBe(failure)
+    await started.promise
+    store.getWorkspaceSession().activeTabId = 'newer-active-tab'
+    const final = store.flushFinalOrThrowAsync()
+    release.resolve()
+    await Promise.all([rejected, final])
+    expect(published).toEqual([initialActiveTabId, 'newer-active-tab'])
+    expect(close).toHaveBeenCalledOnce()
+    expect(readState().workspaceSession.activeTabId).toBe('newer-active-tab')
+  })
+
   it('rejects an already admitted final flush after a queued callback partially mutates then throws', async () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     vi.spyOn(console, 'error').mockImplementation(() => {})

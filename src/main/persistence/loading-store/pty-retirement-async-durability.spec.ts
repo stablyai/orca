@@ -48,6 +48,7 @@ export function registerPtyRetirementAsyncDurabilityTests(): void {
   describe.each([undefined, 'retirement-ssh'])(
     'durable PTY retirement on host %s',
     (connectionId) => {
+      const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
       it('waits for an already removed in-memory pane to reach SQLite', async () => {
         const { authority, retire, removeInMemory, persistedLayout } =
           await retirementFixture(connectionId)
@@ -71,14 +72,20 @@ export function registerPtyRetirementAsyncDurabilityTests(): void {
       })
 
       it('rejects when a pending removal cannot reach SQLite and retains it for retry', async () => {
-        const { authority, retire, removeInMemory, persistedLayout } =
+        const { store, authority, retire, removeInMemory, persistedLayout } =
           await retirementFixture(connectionId)
         vi.spyOn(console, 'error').mockImplementation(() => {})
         removeInMemory()
+        const published: unknown[] = []
+        store.onWorkspaceSessionWritten((host) => {
+          published.push([host, store.getWorkspaceSession(hostId).activeTabId])
+        })
+        const initialActiveTabId = store.getWorkspaceSession(hostId).activeTabId
         const gate = authority.pause()
         const rejected = expect(retire()).rejects.toThrow('retirement disk refused')
         try {
           await Promise.race([gate.started.promise, rejected])
+          store.getWorkspaceSession(hostId).activeTabId = 'newer-unscheduled-tab'
           gate.finish.reject(
             new ProfileStateWriterError(
               'test-disk-failure',
@@ -90,6 +97,10 @@ export function registerPtyRetirementAsyncDurabilityTests(): void {
         } finally {
           gate.finish.resolve()
         }
+        expect(published).toEqual([
+          [null, initialActiveTabId],
+          [null, 'newer-unscheduled-tab']
+        ])
         expect(persistedLayout()?.ptyIdsByLeafId).toEqual({ [binding.leafId]: binding.ptyId })
         await expect(retire()).resolves.toBe(true)
         expect(persistedLayout()).toBeUndefined()
