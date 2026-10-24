@@ -164,7 +164,8 @@ async function scanForwardPage(args: {
     autoClose: false
   })
   let absoluteOffset = args.startOffset
-  for await (const rawChunk of stream) {
+  // An early return must not destroy the stream: that closes the shared handle the boundary check still reads.
+  for await (const rawChunk of stream.iterator({ destroyOnReturn: false })) {
     const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
     let segmentStart = 0
     let newline = chunk.indexOf(0x0a)

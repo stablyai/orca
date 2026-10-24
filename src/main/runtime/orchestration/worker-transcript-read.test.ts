@@ -79,6 +79,45 @@ describe('worker transcript reads', () => {
     })
   })
 
+  it('pages forward through every record when a page fills before the end of the file', async () => {
+    await writeFile(transcriptPath, `${codexMessage('zero', 'start')}\n`)
+    const initial = await readWorkerTranscript({
+      agent: 'codex',
+      sessionId: 'session-exact',
+      transcriptPath,
+      limit: 1
+    })
+    if (!initial.ok) {
+      throw new Error('Expected the initial transcript page')
+    }
+    const ids = Array.from({ length: 7 }, (_, index) => `forward-${index}`)
+    await appendFile(transcriptPath, ids.map((id) => `${codexMessage(id, id)}\n`).join(''))
+
+    const seen: string[] = []
+    let cursor = initial
+    for (let page = 0; page < ids.length; page++) {
+      const next = await readWorkerTranscript({
+        agent: 'codex',
+        sessionId: 'session-exact',
+        transcriptPath,
+        offset: cursor.nextOffset,
+        expectedSourceFingerprint: cursor.sourceFingerprint,
+        expectedBoundaryCheckpoint: cursor.boundaryCheckpoint,
+        limit: 2
+      })
+      if (!next.ok) {
+        throw new Error(`Expected forward page ${page}, got ${next.reason}`)
+      }
+      seen.push(...next.messages.map((message) => message.id))
+      cursor = next
+      if (!next.limited) {
+        break
+      }
+    }
+
+    expect(seen).toEqual(ids)
+  })
+
   it.each([
     ['equal-size', 0],
     ['larger', 64]
