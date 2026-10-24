@@ -36,6 +36,7 @@ export function launchNewTabPromptThroughHost(
     /** What is pasted, which can differ from the prompt the user wrote. */
     pasteContent: string
     submit: boolean
+    hostPlatform?: NodeJS.Platform
     onPromptDelivered?: () => void
     onPromptDeliveryUnconfirmed?: () => void
   }
@@ -43,7 +44,7 @@ export function launchNewTabPromptThroughHost(
   tabId: string
   promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }>
 } {
-  const { pasteContent, submit, onPromptDelivered, onPromptDeliveryUnconfirmed, ...launch } = args
+  const { pasteContent, submit, hostPlatform, onPromptDelivered, onPromptDeliveryUnconfirmed, ...launch } = args
   const { tabId, started } = launchAgentThroughHost(launch)
   const pasted = pasteAgentLaunchPromptOnceReady({
     worktreeId: args.worktreeId,
@@ -52,6 +53,7 @@ export function launchNewTabPromptThroughHost(
     content: pasteContent,
     submit,
     prompt: args.prompt,
+    ...(hostPlatform ? { hostPlatform } : {}),
     launchPty: started,
     ...(onPromptDelivered ? { onPromptDelivered } : {}),
     ...(onPromptDeliveryUnconfirmed ? { onPromptDeliveryUnconfirmed } : {})

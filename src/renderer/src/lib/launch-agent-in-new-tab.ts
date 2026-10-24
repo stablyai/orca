@@ -274,6 +274,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
       pasteContent: pasteDraftAfterLaunch,
       submit: submitPastedPrompt,
+      hostPlatform: resolvedLaunchPlatform,
       ...(onPromptDelivered ? { onPromptDelivered } : {}),
       ...(onPromptDeliveryUnconfirmed ? { onPromptDeliveryUnconfirmed } : {})
     })
@@ -327,6 +328,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       content: pasteDraftAfterLaunch,
       submit: submitPastedPrompt,
       prompt: trimmedPrompt,
+      hostPlatform: resolvedLaunchPlatform,
       ...(onPromptDelivered ? { onPromptDelivered } : {}),
       ...(onPromptDeliveryUnconfirmed ? { onPromptDeliveryUnconfirmed } : {})
     })
