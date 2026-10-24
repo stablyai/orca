@@ -207,6 +207,14 @@ it('names a workspace the store does not know by its id, with the kind the host 
   expect(chatBox('lost').getAttribute('aria-label')).toContain('in folder:missing-folder')
 })
 
+it('names a git worktree the store does not know by its folder, not its repo-qualified id', () => {
+  render({ candidates: [candidate('lost', worktree('blobfish-2'))] })
+
+  expect(nodeBox('blobfish-2')).not.toBeNull()
+  expect(chatBox('lost').getAttribute('aria-label')).toContain('in blobfish-2')
+  expect(container.textContent).not.toContain('repo-1::')
+})
+
 // Its project is unknown too: a nameless "Select all chats in " checkbox would help no one.
 it('gives workspaces the store cannot place no project node', () => {
   const unknown: ResumeCandidate = {

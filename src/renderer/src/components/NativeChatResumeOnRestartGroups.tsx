@@ -9,6 +9,7 @@ import {
   resolveWorktreeDisplayName
 } from '@/lib/worktree-default-display-name'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
+import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -57,7 +58,8 @@ export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
  * level shows only when the machine is not obvious (a remote host, or chats on more than one), and
  * then it is what names the host, so no workspace repeats it.
  *
- * A workspace the store does not know yet (host connecting, or deleted) is named by its id.
+ * A workspace the store does not know yet (host connecting, or deleted) is named by its folder, the
+ * name its id carries.
  */
 
 /** A group node: its row, then (while open) what is under it. */
@@ -124,7 +126,10 @@ function WorkspaceNode({
   const kind = first ? resumeWorkspaceKind(first) : 'git-worktree'
   // Kind comes from the host's record, never from a name.
   const KindGlyph = kind === 'folder' ? Folder : GitBranch
-  const name = (worktree && resolveWorktreeDisplayName(worktree)) || group.workspaceId
+  const name =
+    (worktree && resolveWorktreeDisplayName(worktree)) ||
+    getWorktreePathBasenameFromId(group.workspaceId) ||
+    group.workspaceId
   const branch = worktree && kind === 'git-worktree' ? resolveWorktreeBranchLabel(worktree) : ''
   return (
     <GroupNode
