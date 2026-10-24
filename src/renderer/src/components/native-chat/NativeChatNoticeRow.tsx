@@ -131,8 +131,7 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
-  // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
-  // agent. Outside a chat that knows its machine it keeps the host's own words.
+  // Name Orca and its host as the stop cause; without host context, preserve the original words.
   const { orcaStop } = block
   const { hostLabel, remoteHost, continueAvailable } = orcaStopView
   // A paired server with no name to show is still a remote server; its id is not a name.

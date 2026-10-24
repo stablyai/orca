@@ -112,7 +112,7 @@ describe('BrowserClientDownloadTransferStore', () => {
     expect(commit).toEqual({
       workspaceRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/report (1).pdf`
     })
-    // Why: the loser's fully transferred bytes must survive the retry, not be released.
+    // Preserve fully transferred bytes when retrying a lost destination-name race.
     expect(removed).toEqual([])
   })
 

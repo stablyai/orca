@@ -93,12 +93,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     await this.worktreeBaseReconciliation.reconcile(args)
   }
 
-  /**
-   * Probe how far the worktree's HEAD is behind its tracking remote. Returns
-   * null when the probe cannot establish a signal (no default base ref, or
-   * git failure). Dispatch treats null as "unknown — proceed" (§3.1); only
-   * knowing-and-stale refuses.
-   */
+  /** Null means unknown HEAD drift and permits dispatch; only confirmed staleness refuses (§3.1). */
   async probeWorktreeDrift(worktreeSelector: string): Promise<{
     base: string
     behind: number

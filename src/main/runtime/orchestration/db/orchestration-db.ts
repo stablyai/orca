@@ -17,15 +17,10 @@ import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispa
 class OrchestrationDbCore {
   db: Database.Database
 
-  // Why: the orchestration DB is created lazily for ALL users, but only the
-  // small minority who dispatch work ever have dispatch_contexts rows. The
-  // renderer graph publish rebuilds orchestration context on every 16ms tick
-  // (buildAgentOrchestrationByPaneKey), issuing 2 queries per terminal. Cache
-  // emptiness so the non-orchestration majority short-circuits the whole
-  // per-terminal fan-out. Only createDispatchContext flips this false→true.
+  // Cache Dispatch emptiness to skip per-terminal queries on 16ms graph ticks for users without orchestration.
   hasAnyDispatchContextsCache: boolean | undefined
   localMutationCallerFingerprint: string | undefined
-  // Why: in memory only; the re-armed rows themselves are what restart recovery reads.
+  // Restart recovery reads durable re-armed rows; only the post-transaction notification queue is in memory.
   pendingMailHandBacks: MailHandBack[] = []
   /** The runtime's wake for mail a settlement handed to a Run, called once the transaction ends. */
   mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
@@ -55,7 +50,7 @@ export type OrchestrationDb = OrchestrationDbCore & OrchestrationDbMethods
 
 attachOrchestrationDbMethods(OrchestrationDbCore)
 
-// Why: attach adds methods on the prototype; oxlint forbids class/interface merging, so the construct type is asserted.
+// Prototype installation supplies the methods modeled by this construct type.
 export const OrchestrationDb = OrchestrationDbCore as new (
   dbPath: (string & {}) | ':memory:'
 ) => OrchestrationDb

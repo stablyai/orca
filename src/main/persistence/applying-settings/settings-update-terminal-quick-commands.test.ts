@@ -27,7 +27,6 @@ function makeOperations(): SettingsMutationOperations {
   }
 }
 
-// The largest prompt of one repeated character the message bound admits.
 function promptAtLimit(character: string): string {
   const overhead = getTerminalQuickCommandPromptMessageBytes('')
   const perCharacter = getTerminalQuickCommandPromptMessageBytes(character) - overhead
@@ -47,7 +46,6 @@ function agentCommand(id: string, prompt: string): TerminalQuickCommand {
   }
 }
 
-// Local saves and paired saves both reach the store here, so this is the one place the bound holds.
 describe('updateSettings terminalQuickCommands', () => {
   it('stores a prompt at the limit whole', () => {
     const prompt = promptAtLimit('x')
@@ -73,7 +71,6 @@ describe('updateSettings terminalQuickCommands', () => {
   })
 
   it('refuses a list too large for one paired reply', () => {
-    // Forty prompts at the limit total about 10 MB of JSON.
     const commands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) =>
       agentCommand(`c${index}`, promptAtLimit('界'))
     )
@@ -85,7 +82,7 @@ describe('updateSettings terminalQuickCommands', () => {
 })
 
 describe('the quick-command storage bound against every prompt limit on the run path', () => {
-  // The worst character for each limit: a C0 control escapes to 6 bytes of JSON, CJK is 3 of UTF-8.
+  // Control characters expand to six JSON bytes; CJK stresses the UTF-8 limit.
   const worstForJson = promptAtLimit('\u0001')
   const worstForUtf8 = promptAtLimit('界')
 

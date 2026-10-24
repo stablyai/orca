@@ -1,4 +1,3 @@
-// Parser, capture, and formatting rules shared by every shortcut surface.
 import { describe, expect, it } from 'vitest'
 import {
   formatKeybindingList,
@@ -144,12 +143,11 @@ describe('keybindings', () => {
   })
 
   it('binds F7 / Shift+F7 for diff-change navigation and matches their events', () => {
-    // Opt-in actions accept bare / Shift-only function keys...
     expect(normalizeKeybindingListForAction('editor.nextChange', 'F7')).toEqual(['F7'])
     expect(normalizeKeybindingListForAction('editor.previousChange', 'Shift+F7')).toEqual([
       'Shift+F7'
     ])
-    // ...but they stay unsafe for actions that do not opt in.
+    // Keep bare/Shift function keys unsafe for actions that did not opt in.
     expect(normalizeKeybinding('F7')).toMatchObject({ ok: false })
     expect(normalizeKeybinding('Shift+F7')).toMatchObject({ ok: false })
 

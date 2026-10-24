@@ -1,8 +1,4 @@
-/**
- * Runs `orcad --reclaim-stale-lock` from a managed host's active slot, for a start refused because
- * its instance lock may belong to another machine sharing the home (#32177). The slot's own build
- * gathers the evidence and clears the lock; this client only relays the user's confirmation.
- */
+// Let the active slot gather lock evidence and apply nonce-pinned confirmation; clients only relay it.
 import { z } from 'zod'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
@@ -36,7 +32,7 @@ import { errorMessage } from '../../../shared/error-message'
 
 const ReclaimStatusSchema = z.enum(['none', 'eligible', 'refused', 'reclaimed'])
 
-// Why a string: a newer orcad's status must read as no answer, not as an unparseable reply.
+// Unknown newer statuses map to no-answer rather than failing reply parsing.
 const ReclaimAnswerSchema = z.object({
   status: z.string(),
   lockPath: z.string(),
@@ -62,7 +58,7 @@ type ReclaimAnswer = Omit<z.infer<typeof ReclaimAnswerSchema>, 'status'> & {
 
 type SlotReclaim =
   | { status: 'answered'; answer: ReclaimAnswer }
-  /** `unpinned`: the slot has the reclaim but not `--expect-nonce`, so only a person may run it. */
+  /** Slots without nonce pinning require manual reclamation. */
   | { status: 'unsupported' | 'unpinned' | 'no-answer' | 'busy'; message: string }
 
 export function runManagedOrcadStaleLockReclaim(
@@ -72,12 +68,11 @@ export function runManagedOrcadStaleLockReclaim(
 ): Promise<OrcadManagedStaleLockReclaimResult> {
   return withManagedOrcadLifecycle(userDataPath, selector, async ({ environment, deployment }) => {
     const context = await resolveLinkedOrcadContext(environment, deployment)
-    // Only Linux starts refuse a lock another machine may hold; elsewhere the slot has no such lock.
     if (context.host.os !== 'linux') {
       return unsupported('This host’s Orca server has no stale-lock recovery.')
     }
     const slot = managedOrcadSlot(context, deployment.remotePort)
-    // Serialized with launches, so a wake never reads the lock while it is being cleared.
+    // Serialize reclamation with launch so wake cannot race lock removal.
     const ran = await withOrcadActivationLock(
       slot,
       () => runOnActiveSlot(slot, request),
@@ -112,7 +107,7 @@ export function runManagedOrcadStaleLockReclaim(
   })
 }
 
-/** Why the server did not start again, or null; never throws, since the lock is already gone. */
+/** Preserve successful reclamation even if restart fails; return the restart warning. */
 async function restartAfterReclaim(
   userDataPath: string,
   environmentId: string,
@@ -125,11 +120,10 @@ async function restartAfterReclaim(
         ? wake.reason
         : `The lock was cleared, but this host’s Orca server did not start (${wake.outcome}); reconnect to start it.`
     }
-    // The server runs now; a forward that fails to follow it is the next connect's to rebuild.
     await followLaunchedServerPort(userDataPath, environmentId)
     return null
   } catch (error) {
-    // A lost result would leave the caller's reconnect and note clearing undone.
+    // Still return a result so callers can reconnect and clear stale notes.
     return `The lock was cleared, but this host’s Orca server did not start: ${errorMessage(error)}`
   }
 }
@@ -138,7 +132,7 @@ async function runOnActiveSlot(
   slot: OrcadSlotOptions,
   request: OrcadManagedStaleLockReclaimRequest
 ): Promise<SlotReclaim> {
-  // Re-read under the fence: another client may have changed the active slot.
+  // Another client may change the active slot while this one waits for the lock.
   const active = (await readOrcadActivationRecord(slot)).active
   if (!active) {
     return { status: 'unsupported', message: 'This host has no activated Orca server.' }
@@ -146,12 +140,10 @@ async function runOnActiveSlot(
   const slotDir = orcadSlotDir(slot, active)
   const entry = joinRemotePath(slot.host, slotDir, ORCAD_LAUNCHER_FILENAME)
   const bundle = joinRemotePath(slot.host, slotDir, ORCAD_SERVER_ENTRY_FILENAME)
-  // The confirmation clears only the record the user approved, never one written since.
   const confirm = request.yes
     ? ` ${ORCAD_STALE_LOCK_EXPECT_NONCE_FLAG} ${quotePosixShell(request.expectNonce)} --yes`
     : ''
-  // Why first: an orcad without the flag would ignore it and start serving in the foreground, and
-  // one without the nonce pin could clear a lock written after the check.
+  // Check support first: old slots might start serving or reclaim an unapproved replacement lock.
   const command =
     `if grep -qF -- ${quotePosixShell(ORCAD_STALE_LOCK_EXPECT_NONCE_FLAG)} ${quotePosixShell(bundle)} 2>/dev/null; then ` +
     `${selectOrcadSlotRuntimeCommand(slot.host, slotDir, '')} && ` +
@@ -163,7 +155,7 @@ async function runOnActiveSlot(
   try {
     output = await execOrcadRemote(slot, command)
   } catch (error) {
-    // Every status but `reclaimed` exits non-zero and still prints its answer.
+    // Non-reclaimed outcomes exit nonzero but still print structured replies.
     if (!isSshCommandExitError(error)) {
       throw error
     }
@@ -180,7 +172,6 @@ async function runOnActiveSlot(
     }
   }
   const answer = parseReclaimAnswer(output)
-  // The slot supports the command, so this is no reason to delete the lock by hand.
   return answer
     ? { status: 'answered', answer }
     : {

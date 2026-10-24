@@ -14,13 +14,7 @@ export function isNativeChatFileCountPath(path: string): boolean {
   return FILE_COUNT_PATH.test(path)
 }
 
-/** A move is appended to the patch body as prose rather than a header field, on
- *  every lane that carries the body as text. Left in place it renders as a
- *  numbered line of the file it moved.
- *
- *  Anchored to the start of the final line: unanchored, a row whose own content
- *  mentions a move was cut in half and the file it names claimed as a rename
- *  that never happened. */
+/** Strip only final-line Moved to prose. Unanchored matching truncates literal file content and invents renames. */
 const MOVE_MARKER = /(?:^|\n)Moved to: (.+)$/
 
 export function splitMoveMarker(patch: string): { body: string; movedTo: string | null } {
@@ -53,19 +47,12 @@ export function editFilesFromPatchText(
     // A file count cannot name a card, regardless of the patch contents.
     return null
   }
-  // The body carries its own marker when the journal clipped it. Read as
-  // content it becomes a numbered line of the file, and the rows that follow
-  // are reported complete.
+  // Strip journal truncation markers so they cannot become numbered content or imply a complete patch.
   const bounded = stripBoundedTextMarker(patchText)
   const moved = splitMoveMarker(bounded.text)
-  // One card per file the patch touches: run together, the later files' rows
-  // and gutter numbers sit under the first file's name.
+  // Separate files into cards so later rows never inherit the first file’s name.
   const split = unifiedPatchSections(moved.body)
-  // A patch that names one file is the file the call is reporting on, so the
-  // call's own path wins — it is the provider's, where the header's is relative
-  // to the patch. A patch naming several has no one path, and a rename's
-  // destination is only ever in the header. Sections that name nothing are
-  // preamble and must not change that count.
+  // Caller path wins for single-file patches; multiple files/rename destinations require headers. Ignore unnamed preambles when counting files.
   const namedSections = split.sections.filter((section) => section.path !== null).length
   const named = (section: UnifiedPatchSection): string =>
     (namedSections <= 1 && section.oldPath === null

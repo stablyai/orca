@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 
-// Reference implementation: the old eager rolling-string append the buffer
-// replaced. read() must stay byte-identical to this for any chunk sequence.
+// Compare against the old eager append to preserve exact UTF-16 output for every chunk sequence.
 function referenceAppend(previous: string | undefined, data: string): string {
   if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
     return data.slice(-RECENT_PTY_OUTPUT_LIMIT)
@@ -58,7 +57,6 @@ describe('RecentPtyOutputBuffer', () => {
 
   it('trims exactly at a chunk boundary when the cap is crossed', () => {
     const half = 'a'.repeat(RECENT_PTY_OUTPUT_LIMIT / 2)
-    // Third half-cap chunk should evict the first chunk entirely.
     const chunks = [half, 'b'.repeat(RECENT_PTY_OUTPUT_LIMIT / 2), 'c'.repeat(half.length)]
     const tail = bufferTail(chunks)
     expect(tail.length).toBe(RECENT_PTY_OUTPUT_LIMIT)
@@ -78,9 +76,7 @@ describe('RecentPtyOutputBuffer', () => {
     const oversized = `${'z'.repeat(RECENT_PTY_OUTPUT_LIMIT)}${'w'.repeat(100)}`
     expect(bufferTail([oversized])).toBe(oversized.slice(-RECENT_PTY_OUTPUT_LIMIT))
     expectEquivalent([oversized])
-    // An oversized chunk must also discard everything buffered before it.
     expectEquivalent(['earlier output', oversized, 'later'])
-    // Exactly cap-sized hits the old fast path too.
     expectEquivalent(['before', 'q'.repeat(RECENT_PTY_OUTPUT_LIMIT)])
   })
 
@@ -94,14 +90,12 @@ describe('RecentPtyOutputBuffer', () => {
   })
 
   it('matches the old UTF-16 slice behavior for multi-byte content at the boundary', () => {
-    // JS string .slice counts UTF-16 code units, so trimming can split a
-    // surrogate pair; the buffer must reproduce that split exactly.
-    const emoji = '\u{1f600}' // 2 code units
+    // Preserve legacy UTF-16 slicing, including split surrogate pairs.
+    const emoji = '\u{1f600}'
     const filler = 'f'.repeat(RECENT_PTY_OUTPUT_LIMIT - 1)
     const chunks = [emoji.repeat(3), filler]
     const tail = bufferTail(chunks)
     expect(tail).toBe(referenceTail(chunks))
-    // The old code left a lone trailing low surrogate at the front.
     expect(tail.charCodeAt(0)).toBe(0xde00)
     expectEquivalent(['多字节内容', emoji.repeat(2000), filler, emoji])
   })
@@ -122,7 +116,6 @@ describe('RecentPtyOutputBuffer', () => {
     const buffer = new RecentPtyOutputBuffer()
     const fill = 'f'.repeat(RECENT_PTY_OUTPUT_LIMIT)
     buffer.append(fill)
-    // Collapse to a single cap-sized head chunk, the reviewer's scenario.
     expect(buffer.read()).toBe(fill)
 
     const appendCount = 1000
@@ -134,8 +127,7 @@ describe('RecentPtyOutputBuffer', () => {
       reference = referenceAppend(reference, chunk)
     }
 
-    // Every append now trims one code unit off the full head; none of them
-    // may allocate a head substring — the trim must be a deferred offset.
+    // Small trims must defer an offset instead of allocating a head substring on every append.
     const sliceSpy = vi.spyOn(String.prototype, 'slice')
     try {
       for (const chunk of smallChunks) {
@@ -171,8 +163,7 @@ describe('RecentPtyOutputBuffer', () => {
     buffer.append('suffix.txt')
     expect(buffer.retainedChunks().chunks).toEqual(['wrote /tmp/a.json', 'suffix.txt'])
     expect(buffer.read()).toBe('wrote /tmp/a.jsonsuffix.txt')
-    // read() must not collapse the chunk array before compact(): boundaries
-    // survive a read so the backfill can still replay original chunks.
+    // Keep original chunk boundaries until compact so candidate backfill replays the same input.
     expect(buffer.retainedChunks().chunks).toEqual(['wrote /tmp/a.json', 'suffix.txt'])
   })
 
@@ -183,8 +174,6 @@ describe('RecentPtyOutputBuffer', () => {
     buffer.append('bbbbbbbbbb')
     buffer.append('cc')
     const { chunks, headChunkIsPartial } = buffer.retainedChunks()
-    // The head chunk is intact (its original text, trimmed prefix included)
-    // so candidate backfill sees the same input the eager extractor saw.
     expect(chunks).toEqual([head, 'bbbbbbbbbb', 'cc'])
     expect(headChunkIsPartial).toBe(false)
     expect(buffer.read()).toBe(`${'a'.repeat(RECENT_PTY_OUTPUT_LIMIT - 12)}bbbbbbbbbbcc`)
@@ -196,12 +185,10 @@ describe('RecentPtyOutputBuffer', () => {
     expect(buffer.retainedChunks().headChunkIsPartial).toBe(true)
     buffer.append('tail')
     expect(buffer.retainedChunks().headChunkIsPartial).toBe(true)
-    // Once the partial head chunk is fully evicted the flag clears.
     buffer.append('w'.repeat(RECENT_PTY_OUTPUT_LIMIT - 1))
     const { chunks, headChunkIsPartial } = buffer.retainedChunks()
     expect(headChunkIsPartial).toBe(false)
     expect(chunks).toEqual(['tail', 'w'.repeat(RECENT_PTY_OUTPUT_LIMIT - 1)])
-    // An exactly cap-sized append is stored whole, not partial.
     const exact = new RecentPtyOutputBuffer()
     exact.append('q'.repeat(RECENT_PTY_OUTPUT_LIMIT))
     expect(exact.retainedChunks().headChunkIsPartial).toBe(false)
@@ -218,7 +205,6 @@ describe('RecentPtyOutputBuffer', () => {
     buffer.compact()
     expect(buffer.retainedChunks().chunks).toEqual([reference])
     expect(buffer.read()).toBe(reference)
-    // After compact, a read re-collapses fragmentation from later appends.
     buffer.append('after')
     reference = referenceAppend(reference, 'after')
     expect(buffer.read()).toBe(reference)
@@ -261,8 +247,7 @@ describe('RecentPtyOutputBuffer', () => {
 })
 
 describe('configurable limit', () => {
-  // Why: a hardcoded RECENT_PTY_OUTPUT_LIMIT left in one arithmetic branch silently
-  // under-retained for any caller passing a different limit (the relay passes 100KB).
+  // Custom retention limits must apply in every branch; relay uses a different window.
   it('retains exactly the configured limit across many chunks', () => {
     const limit = 1000
     const buffer = new RecentPtyOutputBuffer({ preserveChunkBoundaries: false, limit })

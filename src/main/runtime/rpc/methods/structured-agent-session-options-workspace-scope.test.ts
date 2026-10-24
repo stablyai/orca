@@ -1,7 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// A chat at rest in a repo whose own config may pick its model: a client that takes an answer naming
-// no model gets the folder's answer, while one that needs a model keeps the account default and
-// every other part of the read, never a refusal.
+// At-rest repo config can determine model: clients accepting omission get repo defaults; others keep account model and the remaining catalog, never refusal.
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -81,7 +79,7 @@ async function chatAtRest(repoConfig: {
     await writeFile(join(repo, '.codex', 'config.toml'), 'model_reasoning_effort = "high"\n')
   }
   const store = new AgentModelCatalogStore()
-  // Not inline: this base's listing still requires the tier map that main has since dropped.
+  // Keep this base's required tier map until its listing contract changes.
   const listing = {
     models: [
       {

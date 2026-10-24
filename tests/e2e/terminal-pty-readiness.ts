@@ -67,9 +67,12 @@ export async function waitForPtyPaneMounted(
     .toBe(true)
 }
 
-function encodedMarkerCommand(marker: string): string {
+function encodedMarkerCommand(
+  marker: string,
+  nodeCommand: (args: readonly string[]) => string
+): string {
   const encoded = Buffer.from(marker, 'utf8').toString('base64')
-  return `${nodeTerminalCommand([
+  return `${nodeCommand([
     '-e',
     `console.log(Buffer.from('${encoded}', 'base64').toString('utf8'))`
   ])}\r`
@@ -78,7 +81,8 @@ function encodedMarkerCommand(marker: string): string {
 export async function waitForPtyShellEcho(
   page: Page,
   ptyId: string,
-  timeoutMs: number
+  timeoutMs: number,
+  nodeCommand: (args: readonly string[]) => string = nodeTerminalCommand
 ): Promise<void> {
   const marker = `ORCA_PTY_READY_${randomUUID()}`
   const deadline = Date.now() + timeoutMs
@@ -86,7 +90,9 @@ export async function waitForPtyShellEcho(
   while (Date.now() < deadline) {
     // Why: terminal scrollback includes command echo. Encode the marker inside
     // the node snippet so seeing the plain marker proves the shell executed it.
-    for (const input of buildFreshShellProbeInputSequence(encodedMarkerCommand(marker))) {
+    for (const input of buildFreshShellProbeInputSequence(
+      encodedMarkerCommand(marker, nodeCommand)
+    )) {
       await sendToTerminal(page, ptyId, input)
     }
 

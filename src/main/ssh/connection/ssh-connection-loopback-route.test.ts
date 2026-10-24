@@ -35,7 +35,7 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
     await importOriginal()
   )
 )
-// Why the gate is forced on: it is platform-gated to win32 and covered in its own suite; this suite is the lifecycle.
+// Force the Windows-gated route on here to exercise lifecycle; its own suite covers selection.
 vi.mock('../system-transport/system-ssh-loopback-route', () => ({
   shouldUseSystemSshLoopbackRoute: () => true,
   startSystemSshLoopbackRoute: startRouteMock

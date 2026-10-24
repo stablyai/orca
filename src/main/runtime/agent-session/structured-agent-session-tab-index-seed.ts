@@ -1,6 +1,4 @@
-// A profile saved before the store kept a tab index restores its chats from the profile's own tabs.
-// Those chats are recorded once, all together: an index written part way would read as complete at
-// the next launch and drop the rest. With an index present, every restored chat is already listed.
+// Seed legacy restored chats in one transaction: a partial index would read complete on next launch and lose the remaining tabs.
 
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { Tab } from '../../../shared/tab-types'
@@ -39,12 +37,7 @@ export async function seedStructuredAgentSessionTabIndex(
   }
 }
 
-/**
- * The changes, by worktree, that make a windowless host's saved chat tabs match the index once it is
- * seeded. A restored chat with no saved tab gets one: its layout predates saved chat tabs. A saved
- * tab the index omits outlived its close (the process died between the index commit and the layout
- * save, or an older build closed it) and goes; that holds only while both records exist.
- */
+/** Match windowless saved tabs to the index: add legacy missing tabs and remove closed leftovers only while both records exist. */
 export function chatTabChangesMatchingIndex(
   savedTabsByWorktree: Record<string, readonly Tab[]>,
   restored: readonly ({ worktreeId: string } & Extract<ChatTabChange, { open: unknown }>)[],

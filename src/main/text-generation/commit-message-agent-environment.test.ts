@@ -125,9 +125,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     })
   })
 
-  // Why (#STA-4422): launch prep throws when the managed home is unreadable.
-  // Falling through to an env would run the headless commit agent on the user's
-  // real ~/.codex while the UI shows the managed account selected.
+  // STA-4422: failed managed-home preparation must not fall through to the user's real account while UI shows a managed account.
   it('fails commit generation instead of building a system-account env when the managed home is unreadable', async () => {
     process.env.CODEX_HOME = '/home/me/.config/codex'
     delete process.env.ORCA_CODEX_HOME

@@ -4,11 +4,7 @@ import {
   PANEL_MESSAGE_RATE_LIMIT
 } from './plugin-panel-bridge'
 
-/**
- * Per-plugin bridge budgets: message size cap and a sliding-window rate
- * limit. Pure (caller supplies the clock) so both the renderer bridge host
- * and tests exercise identical decisions.
- */
+/** Share clock-injected per-plugin size/rate decisions between renderer bridge and tests. */
 
 export type PanelMessageBudget = {
   readonly maxBytes?: number
@@ -30,8 +26,7 @@ export function createPanelMessageBudget(
         timestamps.shift()
       }
       const rateLimited = timestamps.length >= maxMessages
-      // Oversized and malformed traffic still spends rate budget; otherwise
-      // it can force unbounded size-estimation work for free.
+      // Malformed/oversized messages still spend rate budget to bound size-estimation work.
       if (rateLimited) {
         return 'rate_limited'
       }
@@ -44,12 +39,7 @@ export function createPanelMessageBudget(
   }
 }
 
-/**
- * Reserved liveness lane, size-bounded only. A per-window count here would be
- * spent by the panel's own pongs and would then drop the next genuine reply —
- * the exact starvation this lane exists to prevent. Rate is still bounded
- * because the caller also charges every pong to the data budget.
- */
+/** Keep liveness size-only so pongs cannot spend a count budget and starve replies; callers also charge the data budget. */
 export function createPanelControlMessageBudget(): PanelMessageBudget {
   return {
     maxBytes: PANEL_CONTROL_MESSAGE_MAX_BYTES,
@@ -61,19 +51,14 @@ export function createPanelControlMessageBudget(): PanelMessageBudget {
 const textEncoder = new TextEncoder()
 
 function utf8Bytes(value: string, stopAfter: number): number {
-  // UTF-8 is never shorter than the JS code-unit count, so avoid allocating
-  // a large encoded copy once the cap is already proven exceeded.
+  // UTF-8 bytes cannot undercut code-unit count; avoid encoding a string already proven oversized.
   if (value.length > stopAfter) {
     return stopAfter + 1
   }
   return textEncoder.encode(value).byteLength
 }
 
-/**
- * Bounded byte estimate for values accepted by structured clone. It counts
- * strings as UTF-8 and binary backing stores by byteLength, handles cycles,
- * and stops walking as soon as the host cap is exceeded.
- */
+/** Bound cloneable-message size by UTF-8 strings/backing bytes, handling cycles and stopping once the cap is exceeded. */
 export function structuredCloneMessageBytes(
   data: unknown,
   stopAfter = PANEL_MESSAGE_MAX_BYTES

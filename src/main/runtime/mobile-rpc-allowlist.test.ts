@@ -5,8 +5,7 @@ import { ALL_RPC_METHODS } from './rpc/methods'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
 const MOBILE_DYNAMIC_RPC_METHODS = [
-  // Why: computed sendRequest method names do not appear as literals in the
-  // mobile source scan below, but still must stay mobile-authorized.
+  // Computed sendRequest names evade the literal source scan.
   'accounts.selectClaude',
   'accounts.selectCodex',
   'accounts.selectCodexForTarget',
@@ -16,10 +15,7 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'github.updatePRState',
   'gitlab.updateIssue',
   'gitlab.updateMR',
-  // PR-sidebar reads/mutations: the mobile github-pr-rpc/mutations wrappers pass
-  // the method name as a positional arg to sendGithubPrRead/sendMutation, so the
-  // literal sendRequest('...') scan below cannot see them. List them here so the
-  // allowlist + registration are still enforced.
+  // GitHub wrappers pass names positionally, outside the literal sendRequest scan.
   'github.repoSlug',
   'github.prForBranch',
   'github.workItemDetails',
@@ -46,7 +42,7 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'agentSession.release'
 ]
 
-// Why: only a page built with ORCA_SIDEBAR_INPUTS=main calls these, and only such a host serves them.
+// These methods require both client and host built with ORCA_SIDEBAR_INPUTS=main.
 const MOBILE_SIDEBAR_INPUTS_RPC_METHODS = [
   'sidebarInputs.read',
   'sidebarInputs.repoIcons',
@@ -54,8 +50,7 @@ const MOBILE_SIDEBAR_INPUTS_RPC_METHODS = [
 ]
 
 const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
-  // Why: shared-control unsubscribe methods are sent from generated cleanup
-  // paths, so literal mobile source scanning cannot discover every one.
+  // Generated cleanup paths evade the literal source scan.
   'accounts.unsubscribe',
   'browser.screencast.unsubscribe',
   'notifications.unsubscribe',
@@ -143,8 +138,6 @@ describe('mobile RPC allowlist', () => {
   })
 
   it('allows every RPC method used by the mobile app', () => {
-    // Why: mobile-scoped runtime tokens are checked before dispatch. A mobile
-    // feature can compile and still fail at runtime if its method is missing here.
     const allowed = mobileRpcAllowlist()
     const missing = mobileRpcMethods().filter((method) => !allowed.has(method))
 
@@ -152,8 +145,6 @@ describe('mobile RPC allowlist', () => {
   })
 
   it('registers every RPC method used by the mobile app', () => {
-    // Why: the allowlist check runs before dispatch, but an allowlisted mobile
-    // method still fails at runtime if it was never added to ALL_RPC_METHODS.
     const registered = registeredRuntimeMethods()
     const missing = mobileRpcMethods().filter((method) => !registered.has(method))
 

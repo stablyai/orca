@@ -168,9 +168,7 @@ export function appendOrderedGroups(
             )
           }
         }
-        // Why: surface in-progress creates at the top of their own repo so the
-        // new workspace appears where it will land, not flashed to the very top
-        // of the sidebar.
+        // Place in-progress creates atop their own repo so the workspace appears where it will land.
         for (const repoId of repoIds) {
           for (const creation of pendingByRepo.get(repoId) ?? []) {
             result.push(buildPendingCreationRow(creation, repoMap))

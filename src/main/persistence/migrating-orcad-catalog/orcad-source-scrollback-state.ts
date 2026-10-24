@@ -40,7 +40,7 @@ export function hasDuplicateOrcadMigrationScrollbackDescriptors(
 export function projectOrcadMigrationSessionScrollback(
   session: WorkspaceSessionState,
   storage?: TerminalScrollbackSnapshotStorage,
-  /** "Move anyway": a pane's history that can't move stays on this desktop; the pane still moves. */
+  /** "Move anyway" can retain untransferable history while moving its pane. */
   leaveBehind = false
 ): ProjectedOrcadMigrationScrollback {
   const projected = structuredClone(session)
@@ -102,7 +102,7 @@ export function projectOrcadMigrationSessionScrollback(
       delete layout.scrollbackRefsByLeafId
     }
   }
-  // Both inline homes ride the snapshot channel; inlined, a few big panes overflow the manifest cap.
+  // Route both inline stores through snapshots; a few large panes would overflow the manifest.
   delete projected.localOnlyScrollbackByTabId
   if (
     snapshots.length > MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS ||
@@ -122,7 +122,7 @@ export function readOrcadMigrationSourceScrollbackChunk(args: {
   offset: number
   length: number
   storage?: TerminalScrollbackSnapshotStorage
-  /** Kept on disk for an export in flight, so a tab closed mid-transfer still reads from storage. */
+  /** Pending exports can read retained files even after their tabs close. */
   retained?: boolean
 }): { bytesBase64: string; totalBytes: number; eof: boolean } {
   const bytes = findSnapshotBytes(args.state, args.descriptor, args.storage, args.retained)

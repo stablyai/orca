@@ -29,8 +29,7 @@ export function openAnnotationLocation(params: {
   const { absolutePath, relativePath } = resolvedPath
   const language = detectLanguage(relativePath)
 
-  // Why: reuse the shared activation path so an annotation jump lands in the
-  // same history stack as sidebar, palette, and terminal-link navigation.
+  // Use shared activation so annotation jumps join sidebar, palette and terminal-link navigation history.
   activateAndRevealWorktree(worktreeId, { providesInitialSurface: true, executionHostId })
 
   const fileId = store.openFile(

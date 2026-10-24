@@ -195,8 +195,7 @@ describe('agent process recognition', () => {
     })
     expect(isExpectedAgentProcess('/Users/dev/.ante/bin/ante', 'ante')).toBe(true)
     expect(isRecognizedAgentType('ante')).toBe(true)
-    // Why: 'ante' is a common token in directory and binary names; only the
-    // exact normalized basename may classify as the agent.
+    // Ante occurs in ordinary names; require its exact normalized basename.
     expect(recognizeAgentProcess('ante-obsidian')).toBeNull()
     expect(recognizeAgentProcess('antechamber')).toBeNull()
     expect(isExpectedAgentProcess('ante-obsidian', 'ante')).toBe(false)
@@ -282,9 +281,7 @@ describe('agent process recognition', () => {
   })
 
   it('recognizes Muse by its versioned muse-bin sibling binary', () => {
-    // Why: the `muse` launcher execs `muse-bin-<version>` (a 242MB sibling),
-    // so the live foreground process carries the versioned name — truncated
-    // to `muse-bin-1.0.3-R` in macOS comm output (verified on-device).
+    // Muse execs muse-bin-VERSION; macOS comm truncates it to muse-bin-1.0.3-R (verified on-device).
     expect(recognizeAgentProcess('muse-bin-1.0.3-R2198.1')).toEqual({
       agent: 'muse',
       processName: 'muse-bin-1.0.3-r2198.1'
@@ -304,26 +301,21 @@ describe('agent process recognition', () => {
     expect(
       recognizeAgentProcessFromCommandLine('muse exec --json "review this" > result.jsonl')
     ).toBeNull()
-    // Why: a bare `exec` token dispatches as the subcommand even past `--`
-    // (verified: `muse -- resume` still resumes), so this errors instead of
-    // hosting a pane — never an interactive agent.
+    // Muse dispatches bare exec even after --; it errors rather than hosting a TUI.
     expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
-    // Why: a whole-prompt `muse 'exec'` takes the exec missing-prompt error
-    // path, not a TUI, so filtering it is correct.
+    // A whole-prompt exec still takes the missing-prompt error path.
     expect(recognizeAgentProcessFromCommandLine("muse 'exec'")).toBeNull()
     // Why: `muse resume` reopens the interactive TUI, so it still hosts a live session.
     expect(recognizeAgentProcessFromCommandLine('muse resume')).toEqual({
       agent: 'muse',
       processName: 'muse'
     })
-    // Why: `muse -- resume` still dispatches to the resume subcommand (verified
-    // against muse 1.0.3), which reopens the interactive TUI.
+    // Muse1.0.3 still dispatches resume after -- into the interactive TUI.
     expect(recognizeAgentProcessFromCommandLine('muse -- resume')).toEqual({
       agent: 'muse',
       processName: 'muse'
     })
-    // Why: the prompt is one quoted argv, so it never equals the bare `exec`
-    // token — this is the interactive pane Orca itself launches.
+    // One quoted prompt argv never equals the bare exec subcommand.
     expect(recognizeAgentProcessFromCommandLine('muse -- "exec the release notes"')).toEqual({
       agent: 'muse',
       processName: 'muse'
@@ -488,8 +480,7 @@ describe('agent process recognition', () => {
       agent: 'prime-agent',
       processName: 'prime-agent'
     })
-    // Why: the CLI only parses `--mode <value>` as separate tokens, so `--mode=json`
-    // is ignored by it and still starts the interactive mode.
+    // This CLI parses only --mode VALUE; joined --mode=json is ignored and remains interactive.
     expect(recognizeAgentProcessFromCommandLine('prime-agent --mode=json')).toEqual({
       agent: 'prime-agent',
       processName: 'prime-agent'
@@ -620,8 +611,7 @@ describe('agent process recognition', () => {
         '/Users/dev/.local/bin/muse-bin-1.3.0-R3401.1 exec --session-id abc "hi"'
       )
     ).toBeNull()
-    // Why: `exec` past any position is never the TUI — `muse exec` dispatches headless
-    // while `muse <flags> exec` fails fast with an arg error (verified on Muse 1.3.0).
+    // Muse1.3.0 exec is headless; exec after flags/-- fails fast instead of hosting a TUI.
     expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('muse --yolo exec "hi"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('muse -- yolo')).toEqual({

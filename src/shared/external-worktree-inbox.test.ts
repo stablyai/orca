@@ -176,8 +176,7 @@ describe('external worktree inbox', () => {
   })
 
   it('lists hidden agent scratch among importable worktrees so recovery stays reachable', () => {
-    // Why: the visibility toggle can never reveal scratch (#9388), so if no list
-    // offers it for per-path import, a hidden scratch worktree is lost for good (#10324).
+    // Scratch cannot be revealed by the visibility toggle (#9388); per-path import preserves recovery (#10324).
     const hiddenScratch = detectedWorktree({
       id: 'hidden-scratch',
       path: '/repo/.claude/worktrees/scratch-1',
@@ -193,7 +192,7 @@ describe('external worktree inbox', () => {
     ])
 
     expect(getHiddenImportableExternalWorktrees(detected)).toEqual([hiddenScratch, hiddenExternal])
-    // Why: scratch stays out of discovery counts even though the dialog controls it.
+    // Scratch remains outside discovery counts despite dialog control.
     expect(getHiddenExternalWorktrees(detected)).toEqual([hiddenExternal])
   })
 

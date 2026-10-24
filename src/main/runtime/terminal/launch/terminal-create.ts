@@ -28,8 +28,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       dependencies.setPairedViewerColors(callerColors)
     }
     const presentation = dependencies.resolveTerminalPresentation(opts)
-    // Why: this process starts every terminal it can place, so a slow window only delays showing
-    // it; a window-made create that timed out here still ran later, and a retry duplicated it.
+    // Start host-placeable terminals here; timing out a window-made start still ran it later and retries duplicated it.
     if (worktreeSelector !== undefined) {
       const { ptyController } = this
       if (!ptyController?.spawn) {
@@ -44,8 +43,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         launchOpts.targetGroupId ??
         this.mobileSessionTabsByWorktree.get(workspace.id)?.activeGroupId ??
         session?.activeGroupIdByWorktree?.[workspace.id]
-      // A workspace not shown since launch has no measured group; with at most one group, its tab
-      // opens in a lone group, which every workspace sizes alike.
+      // Unshown workspaces have no measured group; a single group can use the common workspace geometry.
       const singleGroup =
         (session?.tabGroups?.[workspace.id]?.length ?? 0) <= 1
           ? this.singleGroupWorkspaceGridSize

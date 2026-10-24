@@ -37,7 +37,6 @@ afterEach(() => {
   }
 })
 
-/** A profile with a backup at revision 1, then newer saves to two sections at revision 2. */
 async function profileWithNewerSaves(extra: Record<string, unknown> = {}) {
   const root = mkdtempSync(join(tmpdir(), 'orca-section-repair-'))
   roots.push(root)

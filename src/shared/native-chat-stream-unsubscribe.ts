@@ -1,16 +1,12 @@
-// Why: the runtime keys a native-chat transcript fs-watcher by the client's cleanup token
-// (`agent:sessionId` when none is sent). A subscribing client must echo that exact token on
-// `nativeChat.unsubscribe` so the watcher is closed when the chat view toggles off (not just on
-// socket close) — otherwise watchers leak per session-switch. Centralizing the key shape keeps the
-// token from drifting between the web runtime client and mobile.
+// Echo the exact subscription cleanup token on unsubscribe or fs-watchers leak until socket close across view/session switches.
+// Share token construction across web/mobile; legacy fallback is agent:sessionId.
 
 export type NativeChatUnsubscribeRpc = {
   method: 'nativeChat.unsubscribe'
   params: { subscriptionId: string }
 }
 
-/** The cleanup token the server keys the transcript watcher under. An `instance` makes it one
- *  subscription's own, so two views of the same chat on one connection never evict each other. */
+/** instance isolates concurrent views of the same chat on one connection so teardown cannot evict another subscription. */
 export function buildNativeChatSubscriptionId(
   agent: string,
   sessionId: string,

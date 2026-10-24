@@ -1,9 +1,6 @@
 import { decodeGitCQuotedPath } from './git-cquoted-path'
 import type { GitWorktreeInfo } from './worktree/types'
 
-/**
- * Parse the porcelain output of `git worktree list --porcelain`.
- */
 export function parseWorktreeList(
   output: string,
   options: { nulDelimited?: boolean } = {}
@@ -42,7 +39,7 @@ export function parseWorktreeList(
         const rawReason = line.slice('locked'.length).trim()
         lockReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
       } else if (line === 'prunable' || line.startsWith('prunable ')) {
-        // Why: Git ≥2.36 flags registrations whose directory is gone; ignoring it shows the stale worktree as live (#8389).
+        // Git 2.31+ marks missing-directory registrations; ignoring prunable shows stale worktrees as live (#8389).
         prunable = true
         const rawReason = line.slice('prunable'.length).trim()
         prunableReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)

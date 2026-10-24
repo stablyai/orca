@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// Why: a read-only tab renders raw Monaco source on the shared model whatever its file type, so it
-// must show a writable view's unsaved edits (one record), never push disk text over them.
+// Read-only raw Monaco views share writable records; show their unsaved edits without pushing older disk text over them.
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { useAppStore } from '@/store'
@@ -31,7 +30,7 @@ afterEach(() => {
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
-  // A resolved local owner, so both tabs map to one model URI.
+  // Seed a resolved local owner so both tabs share one model URI.
   useAppStore.setState({
     worktreesByRepo: {
       'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
@@ -51,13 +50,12 @@ it.each(['/repo/notes.md', '/repo/data.csv', '/repo/log.jsonl'])(
       openFiles: [...s.openFiles, tab('read-only', filePath, { readOnly: true })]
     }))
 
-    // Views of one file share a record: the read-only view joins it and shows the unsaved edits.
     const state = useAppStore.getState()
     expect(state.openFiles.find((file) => file.id === 'read-only')?.isDirty).toBe(true)
     expect(state.editorDrafts['read-only']).toBe('unsaved edits')
     expect(state.editorBufferIdOf['read-only']).toBe(state.editorBufferIdOf.writable)
 
-    // The shared model holds the unsaved edits; whatever the read-only view pushes keeps them.
+    // A read-only mount must preserve the unsaved text already held by the shared model.
     const model = monaco.editor.createModel(
       'unsaved edits',
       'plaintext',

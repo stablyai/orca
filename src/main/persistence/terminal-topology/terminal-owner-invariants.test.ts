@@ -7,7 +7,6 @@ import { findTerminalBindingConflict } from '../../../shared/workspace-layout/te
 
 const WT = 'repo-1::/tmp/wt'
 
-/** One single-leaf tab per entry: [tabId, leafId, ptyId, incarnationId?]. */
 function partition(
   hostId: ExecutionHostId,
   tabs: [string, string, string, string?][]
@@ -56,7 +55,7 @@ const bind = (tabId: string, leafId: string, ptyId: string, incarnationId?: stri
 })
 
 describe('findTerminalBindingConflict', () => {
-  // STA-9417: the activation sweep bound the setup PTY to a second, minted leaf.
+  // STA-9417: startup adopted an already-bound setup PTY into a second leaf.
   it('finds a terminal another tab already binds, naming its leaf', () => {
     const conflict = findTerminalBindingConflict(
       bind('tab-b', TEST_LEAF_2, 'pty-1', 'i1'),
@@ -94,7 +93,7 @@ describe('findTerminalBindingConflict', () => {
     ).toBeNull()
   })
 
-  // STA-9259: the moved pane's reattach bound the same leaf id under a second tab.
+  // STA-9259: moved leaves must not bind under both source and destination tabs.
   it('finds a leaf id another tab already holds', () => {
     const conflict = findTerminalBindingConflict(bind('tab-b', TEST_LEAF_1, 'pty-9'), 'local', [
       partition('local', [['tab-a', TEST_LEAF_1, 'pty-1']])
@@ -120,7 +119,6 @@ describe('findTerminalBindingConflict', () => {
     expect(conflict?.owner).toMatchObject({ hostId: 'ssh:ssh-1', leafId: TEST_LEAF_1 })
   })
 
-  // The relay reattach still binds an SSH pane into `local` under the same tab id.
   it('treats the same tab:leaf in two partitions as one surface', () => {
     const ptyId = 'ssh:ssh-1@@relay-1'
     expect(
@@ -139,7 +137,7 @@ describe('findTerminalBindingConflict', () => {
     expect(conflict?.reason).toBe('leaf_in_other_tab_on_other_host')
   })
 
-  // Relay ids like `pty-1` repeat after a relay restart, so the id alone is not one terminal.
+  // Relay IDs repeat after restart; equality needs incarnation proof too.
   it('does not match a repeating relay id without both incarnations', () => {
     const ptyId = 'ssh:ssh-1@@pty-1'
     const saved = [partition('ssh:ssh-1', [['tab-a', TEST_LEAF_1, ptyId]])]

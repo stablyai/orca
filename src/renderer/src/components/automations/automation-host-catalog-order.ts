@@ -1,12 +1,6 @@
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 
-/**
- * The one deterministic catalog order, shared by the picker and the All-hosts
- * grouped list so responses arriving out of order never reflow the page.
- *
- * Sort fields are precomputed once per rebuild and a single `Intl.Collator` is
- * constructed per call — never one per comparison.
- */
+/** Share deterministic picker/list ordering despite response order; precompute sort fields and build one Intl.Collator per rebuild. */
 
 export type AutomationHostCatalogOrderOptions = {
   /** Injectable so tests can prove exactly one collator is built per rebuild. */

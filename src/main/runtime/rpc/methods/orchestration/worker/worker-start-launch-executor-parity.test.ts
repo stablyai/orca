@@ -1,8 +1,4 @@
-/**
- * A fresh worker starts through the shared launch executor, and its durable dispatch records must
- * read exactly as they did when the placement sequenced the launch itself: the same effects, the
- * same stage rows in the same order, one host question, and a refused chat that fails the start.
- */
+/** Shared-executor starts must preserve durable effects/stage order, ask host support once and fail refused chats. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {

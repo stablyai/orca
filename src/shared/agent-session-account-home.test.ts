@@ -16,8 +16,7 @@ describe('agent session account home', () => {
     ).toBe('{"variable":"CODEX_HOME","path":"/home/dev/.codex"}')
   })
 
-  // Whether the variable is the record's own agent's is decided when its agent would start, since
-  // it becomes the child's environment (structured-agent-session-drivability.test.ts).
+  // Validate agent-specific env ownership at launch, when this binding becomes the child environment.
   it('reads any well-formed variable, and sets aside one that is not a variable name', () => {
     const record = encodeAgentSessionRecord(agentSessionRecordFixture())
     const withVariable = (variable: string) =>

@@ -27,10 +27,7 @@ export type BrowserLoadFailureDescription = {
   errorName: string | null
 }
 
-/**
- * How the page reaches the network: directly, or through the workspace's SSH host and whether that
- * host is connected. Null when the caller can't tell (mobile, client-hosted pages).
- */
+/** Direct or workspace-SSH route with host connectivity; null when mobile/client-hosted callers cannot tell. */
 export type BrowserLoadFailureRoute = { routed: false } | { routed: true; routeConnected: boolean }
 
 export const BROWSER_LOAD_FAILURE_COPY = {

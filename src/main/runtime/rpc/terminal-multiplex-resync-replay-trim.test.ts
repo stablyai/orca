@@ -14,12 +14,8 @@ import {
   encodeTerminalStreamJson
 } from '../../../shared/terminal-stream-protocol'
 
-// An untagged SnapshotRequest is the client's frame-drop resync: its reply
-// resets the client terminal to the snapshot's output high-water. Output
-// buffered while the snapshot serialized is already inside that snapshot up to
-// its seq, so replaying the covered bytes afterward renders the recovered tail
-// twice. A tagged (requestId) snapshot feeds a side consumer instead — the
-// live view still needs every buffered chunk, so that replay must stay whole.
+// Untagged resync resets live high-water, so trim buffered bytes covered by its seq or render them twice.
+// Tagged requestId snapshots feed side consumers; live view still needs every buffered chunk.
 
 type OutputMeta = { seq?: number; rawLength?: number }
 

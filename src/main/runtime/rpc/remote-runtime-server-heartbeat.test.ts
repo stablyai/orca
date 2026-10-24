@@ -36,19 +36,18 @@ describe('RemoteRuntimeServerHeartbeat', () => {
     expect(responsiveSocket.ping).not.toHaveBeenCalled()
     expect(deadSocket.ping).not.toHaveBeenCalled()
 
-    // Tick #1: probe #1 goes out to both.
     now += 100
     await vi.advanceTimersByTimeAsync(100)
     heartbeat.noteAlive(responsiveSocket)
 
-    // Tick #2: miss #1 is not yet evidence, so the silent socket is re-probed.
+    // First miss re-probes without reaping.
     now += 100
     await vi.advanceTimersByTimeAsync(100)
     heartbeat.noteAlive(responsiveSocket)
     expect(deadSocket.ping).toHaveBeenCalledTimes(2)
     expect(deadSocket.terminate).not.toHaveBeenCalled()
 
-    // Tick #3: miss #2 reaches the limit: consecutive silence is evidence.
+    // Consecutive silence reaches the configured limit.
     now += 100
     await vi.advanceTimersByTimeAsync(100)
 
@@ -68,14 +67,14 @@ describe('RemoteRuntimeServerHeartbeat', () => {
     heartbeat.noteAlive(socket)
     heartbeat.start(() => [socket])
     now += 100
-    await vi.advanceTimersByTimeAsync(100) // ping #1, socket pongs
+    await vi.advanceTimersByTimeAsync(100)
     heartbeat.noteAlive(socket)
 
     now += 100
-    await vi.advanceTimersByTimeAsync(100) // ping #2, socket pongs
+    await vi.advanceTimersByTimeAsync(100)
     heartbeat.noteAlive(socket)
     now += 3_600_000
-    await vi.advanceTimersByTimeAsync(100) // resumed-from-pause: re-grants a probe (ping #3), no reap
+    await vi.advanceTimersByTimeAsync(100)
 
     expect(socket.ping).toHaveBeenCalledTimes(3)
     expect(socket.terminate).not.toHaveBeenCalled()

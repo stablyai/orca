@@ -1,10 +1,6 @@
 import { mainAgentStatusEqual, type ParsedAgentStatusPayload } from './agent-status-types'
 
-/** Whether a terminal status is the same hook status with only hook-owned metadata omitted.
- *
- *  `preserveActiveTurnStamp` marks the cached hook payload as the still-open turn the OSC ping
- *  belongs to: OSC carries neither the turn stamp nor the assistant tail, so their absence must
- *  read as "omitted", not "changed", or the ping overwrites a live turn's stamp. */
+/** OSC omits hook turn stamps/assistant tails. preserveActiveTurnStamp treats those as omitted for the still-open turn, avoiding a ping overwriting live hook evidence. */
 export function terminalStatusPayloadMatchesHook(
   cachedHookPayload: ParsedAgentStatusPayload,
   terminalPayload: ParsedAgentStatusPayload,

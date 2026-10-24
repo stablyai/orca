@@ -5,7 +5,6 @@ import { HostAccountSignInFlows, type HostAccountSignInRunner } from './host-acc
 const CLAUDE_STATE = { accounts: [], activeAccountId: null }
 const PROMPT = { url: 'https://claude.com/cai/oauth/authorize?code=true', userCode: null }
 
-/** A runner whose login the test drives through the channel it was handed. */
 function controllableRunner() {
   let channel: HostAccountSignInChannel | null = null
   const finish = Promise.withResolvers<void>()
@@ -69,7 +68,6 @@ describe('HostAccountSignInFlows', () => {
     await expect(flows.wait('device-b', flowId, 0)).rejects.toThrow('no longer active')
     expect(() => flows.submitCode('device-b', flowId, 'x')).toThrow('no longer active')
     await expect(flows.cancel('device-b', flowId)).rejects.toThrow('no longer active')
-    // The starter asking again rejoins its running flow instead of starting a second login.
     expect(flows.start('device-a', 'claude').flowId).toBe(flowId)
     expect(runner.run).toHaveBeenCalledOnce()
     await flows.cancel('device-a', flowId)
@@ -91,7 +89,7 @@ describe('HostAccountSignInFlows', () => {
 
   it('reports the account a login added after it refused a late cancel', async () => {
     const flows = new HostAccountSignInFlows(async (_provider, channel) => {
-      // Codex refuses a cancel once it has written the login, and registration finishes.
+      // Once Codex commits login, cancel can be refused and registration still completes.
       await new Promise((resolve) => channel.signal.addEventListener('abort', resolve))
       return { claude: CLAUDE_STATE }
     }, 'linux')

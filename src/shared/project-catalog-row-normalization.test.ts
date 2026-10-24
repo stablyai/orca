@@ -7,8 +7,7 @@ import {
   normalizeProjectRows
 } from './project-catalog-row-normalization'
 
-// Why Reflect.set and not a cast: these fixtures deliberately violate the declared types, which is
-// the whole point — writing the bad value onto a valid row says that outright.
+// Reflect.set openly corrupts typed fixtures to model untrusted persistence/wire data without casting.
 function corrupt<T extends object>(row: T, overrides: Record<string, unknown>): T {
   for (const [key, value] of Object.entries(overrides)) {
     Reflect.set(row, key, value)
@@ -59,8 +58,7 @@ describe('normalizeProjectHostSetupRow', () => {
     expect(normalizeProjectHostSetupRow(makeSetup({ repoId })).repoId).toBe('')
   })
 
-  // Why path: `project-grouping.ts` calls `.trim()` and `parseWslUncPath()` on it during
-  // sidebar render, so the same bad row takes down the main window, not one error boundary.
+  // Sidebar grouping trims/parses path during render, so corrupt rows crash the main window.
   it.each([
     ['null', null],
     ['a number', 7]
@@ -81,8 +79,7 @@ describe('normalizeProjectHostSetupRow', () => {
     expect(normalizeProjectHostSetupRow(makeSetup({ hostId: null })).hostId).toBe('local')
   })
 
-  // Why 0: the catalog merge already reads 0 as "unknown", so it degrades instead of
-  // restamping a fake timestamp that would win min()/max() against a real one.
+  // Zero already means unknown to catalog merges; synthetic timestamps could beat real min/max evidence.
   it.each([
     ['null', null],
     ['NaN', Number.NaN],
@@ -95,8 +92,7 @@ describe('normalizeProjectHostSetupRow', () => {
     expect(normalized.updatedAt).toBe(0)
   })
 
-  // Why: these are only ever compared, never string-method'd — inventing a fallback would
-  // silently change what a corrupt row claims about itself.
+  // Compared-only unions degrade safely; invented fallbacks would change the row’s claim.
   it('leaves the setupState and setupMethod unions untouched', () => {
     const normalized = normalizeProjectHostSetupRow(
       makeSetup({ repoId: null, setupState: 'bogus', setupMethod: null })
@@ -105,8 +101,7 @@ describe('normalizeProjectHostSetupRow', () => {
     expect(normalized.setupMethod).toBeNull()
   })
 
-  // Why: `mergeProjectCompatibilityProject` and the setup projection branch on `in` /
-  // `!== undefined`, so materialising an absent optional key changes merge behaviour.
+  // Merge checks in/undefined, so adding absent optional keys changes semantics.
   it('never adds or removes an optional key', () => {
     const withoutOptionals = normalizeProjectHostSetupRow(makeSetup({ repoId: null }))
     expect('connectionId' in withoutOptionals).toBe(false)
@@ -172,8 +167,7 @@ describe('row array normalization', () => {
     expect(normalizeProjectRows(projects)).toBe(projects)
   })
 
-  // Why: TerminalPane and TabBarQuickCommandsButton use these arrays as useMemo deps, so an
-  // untouched row must keep its object identity across normalization.
+  // Preserve references used as TerminalPane/quick-command useMemo dependencies.
   it('reuses untouched rows and only reallocates the repaired one', () => {
     const setups = [
       makeSetup(),
@@ -187,8 +181,7 @@ describe('row array normalization', () => {
     expect(normalized[2]).toBe(setups[2])
   })
 
-  // Why: coercing a field must change one value, never which rows exist — setting a "changed"
-  // flag on the old selector normalizer unioned in repo-derived rows and invented phantom rows.
+  // Coercion must not change row membership; the old selector invented repo-derived rows when fields changed.
   it('preserves row count and order', () => {
     const setups = [makeSetup({ repoId: null }), makeSetup({ id: 'setup-2' })]
     expect(normalizeProjectHostSetupRows(setups).map((setup) => setup.id)).toEqual([
@@ -198,8 +191,7 @@ describe('row array normalization', () => {
   })
 
   it('treats a non-array as empty', () => {
-    // Why JSON.parse: a persisted catalog really can hold a non-array here, and parsing is how it
-    // arrives — the parameter type cannot express it.
+    // JSON models persisted non-array input the declared parameter type cannot express.
     const notAnArray: never[] = JSON.parse('null')
     expect(normalizeProjectHostSetupRows(notAnArray)).toEqual([])
     expect(normalizeProjectRows(notAnArray)).toEqual([])

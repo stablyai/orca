@@ -124,9 +124,7 @@ async function publishClientHostedPage(
   return placement
 }
 
-// Why (#10333): `orca serve` publishes a ready graph under
-// HEADLESS_RUNTIME_WINDOW_ID with no BrowserWindow behind it, so every
-// focus-requested create used to fall through to getAuthoritativeWindow().
+// #10333: serve publishes a ready graph without BrowserWindow; focus-requested creates must stay headless.
 const wireHeadlessServeRuntime = (): RuntimeService => {
   const runtime = new OrcaRuntimeService(store)
   electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
@@ -326,7 +324,6 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
   return { runtime, spawn }
 }
 
-// Why: the five #7587 mobile-create tests share one notifier factory so interface changes live in one place.
 function createMobileCreateTestNotifier(
   closeTerminal: (tabId: string, leafId?: string) => void
 ): MobileCreateTestNotifier {

@@ -8,7 +8,6 @@ import {
 } from './updater-state'
 import { UpdaterCheckFailure } from './updater-check-failure'
 
-/** Owns timer-driven checks and the shared check-launch bookkeeping. */
 export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected getAutomaticRetryInterval(): number {
     return AUTO_UPDATE_RETRY_INTERVAL_MS
@@ -16,7 +15,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
 
   protected scheduleAutomaticUpdateCheck(delayMs: number): void {
     let effectiveDelayMs = delayMs
-    // All retry-cadence callers pass exactly this constant, so keying backoff on it keeps one choke point instead of threading a flag through every schedule site.
+    // The retry constant identifies all retry-cadence callers, keeping backoff centralized.
     if (delayMs === AUTO_UPDATE_RETRY_INTERVAL_MS) {
       effectiveDelayMs = Math.min(
         AUTO_UPDATE_RETRY_INTERVAL_MS * 2 ** this.consecutiveAutomaticRetrySchedules,
@@ -28,9 +27,9 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
       clearTimeout(this.autoUpdateCheckTimer)
     }
     this.autoUpdateCheckTimer = setTimeout(() => {
-      // Why: Orca runs for days, so keep the next background check scheduled in the main process rather than tying it to relaunches or renderer lifetime.
+      // Long-running apps need main-process timers independent of renderer/relaunch lifetime.
       if (!this.runBackgroundUpdateCheck()) {
-        // Why: a deferred check reaches no outcome handler, so re-arm here or one deferral ends automatic checks for the process lifetime.
+        // Deferred checks have no outcome handler; re-arm here or automatic checks stop forever.
         this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
       }
     }, effectiveDelayMs)
@@ -52,7 +51,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     ) {
       return false
     }
-    // Why: a pinned dev jump owns the feed until it settles; a background check would repoint it mid-flight and download the wrong build.
+    // Pinned jumps own the feed until settled; background checks must not repoint their download.
     if (
       this.activeUpdateSource !== 'release' ||
       this.isPinnedBuildActive ||
@@ -68,9 +67,9 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
       this.sendStatus({ state: 'not-available' })
       return false
     }
-    // Why: set the nudge marker before any events arrive so later checks can't inherit a stale campaign id; persisted id keeps a nudge card dismissable after relaunch.
+    // Set the campaign before events; persist its ID so the card remains dismissible after relaunch.
     this.activeUpdateNudgeId = nudgeId
-    // Why: 'checking-for-update' arrives a tick later, so a second focus/resume can slip in before status flips; track launch in memory to dedupe that gap.
+    // Track launch before delayed checking events so rapid focus/resume cannot start duplicates.
     this.backgroundCheckLaunchPending = true
     this.backgroundCheckPromotedToUserInitiated = false
     const attemptId = this.beginUpdateCheckAttempt()
@@ -113,7 +112,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   }
 
   protected checkForUpdatesInBackground(): void {
-    // Why: span records only check launch (always Success), not outcome; dashboards must filter `updater.outcome === 'launched'`, not this span's success rate.
+    // This span measures launch, not check outcome; dashboards must filter updater.outcome=launched.
     void withUpdaterSpan({ stage: 'check' }, async (span) => {
       span.setAttribute('updater.outcome', 'launched')
       this.runBackgroundUpdateCheck()
@@ -128,7 +127,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     if (this.includePrereleaseActive) {
       return
     }
-    // Why: this flag makes electron-updater accept prerelease manifests; we keep the manifest-probed generic feed over the native GitHub provider because cancelled RCs can appear without assets.
+    // Allow prerelease manifests on the probed generic feed; native GitHub may select cancelled RCs without assets.
     this.enablePrereleaseManifestChecks()
     this.includePrereleaseActive = true
   }

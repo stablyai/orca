@@ -73,8 +73,7 @@ function expandSshConfigFile(
 }
 
 function appendExpandedLines(target: string[], lines: readonly string[]): void {
-  // Why: SSH config includes are user-controlled files, and a large included
-  // file can exceed the JavaScript call argument limit when spread into push.
+  // Avoid spreading user-controlled Include lines; large files can exceed JavaScript argument limits.
   for (const line of lines) {
     target.push(line)
   }

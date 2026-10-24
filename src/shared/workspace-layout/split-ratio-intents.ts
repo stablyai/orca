@@ -1,6 +1,4 @@
-// A divider's new ratio as an intent: the split it moved, by path from the root ("first.second";
-// "" the root), and its ratio. Main applies it to its own tree, so what else that tree holds stays.
-// `split` names the split the window meant; main refuses an intent whose path names another one.
+// Send divider path/ratio with split identity so main changes only the intended split in its own tree; a mismatching path must refuse.
 
 import type { TabGroupLayoutNode } from '../tab-types'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
@@ -44,7 +42,7 @@ function isSplitMeant(node: Extract<SplitTree, { type: 'split' }>, meant?: Split
   )
 }
 
-/** The splits whose ratio `after` changed from `before`, two trees of one shape. */
+/** Compare ratios of trees with the same shape. */
 export function changedSplitRatios(
   before: SplitTree,
   after: SplitTree,
@@ -61,7 +59,6 @@ export function changedSplitRatios(
   ]
 }
 
-/** Each split's ratio, as intents. */
 export function allSplitRatios(root: SplitTree, path = ''): SplitRatioIntent[] {
   if (root.type !== 'split') {
     return []
@@ -73,7 +70,6 @@ export function allSplitRatios(root: SplitTree, path = ''): SplitRatioIntent[] {
   ]
 }
 
-/** The split at `path`, as an intent to set its ratio; null when no split is there. */
 export function splitRatioIntentAt(
   root: SplitTree,
   path: string,
@@ -135,8 +131,7 @@ function withGroupRatio(
   return child && (segment === 'first' ? { ...node, first: child } : { ...node, second: child })
 }
 
-/** `root` with each intent's split at its ratio; null when one names no split of `root`, or
- *  another split than the one it means. */
+/** Apply only when every path resolves to its intended split; null on any mismatch. */
 export function withPaneSplitRatios(
   root: TerminalPaneLayoutNode,
   ratios: readonly SplitRatioIntent[]

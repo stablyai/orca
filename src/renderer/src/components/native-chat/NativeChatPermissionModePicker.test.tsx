@@ -213,7 +213,6 @@ describe('NativeChatComposerPermissionPicker', () => {
     subscribe: () => () => {}
   })
 
-  // A host that states no mode, or an agent with none, gets no pill.
   it('renders nothing without a permission descriptor', () => {
     const { container } = render(
       <NativeChatComposerPermissionPicker surface={surface()} snapshot={[]} agent="codex" />

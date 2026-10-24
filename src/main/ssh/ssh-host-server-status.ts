@@ -1,4 +1,3 @@
-/** The latest server decision per SSH host, merged into every published connection state. */
 import type { SshManagedServerStatus } from '../../shared/ssh-types'
 
 const statuses = new Map<string, SshManagedServerStatus>()

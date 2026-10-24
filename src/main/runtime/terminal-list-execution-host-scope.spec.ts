@@ -6,9 +6,7 @@ import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 
 export function registerTerminalListExecutionHostScopeTests(): void {
-  // An agent once declared a task exited because `terminal list` came back without
-  // its worker: the worker was live on an SSH host, and nothing in the response
-  // said the listing was scoped or which host each row ran on.
+  // A scoped list must identify its hosts so omitting a live remote worker cannot be mistaken for exit.
 
   const LOCAL_WORKTREE_ID = 'repo-local::/tmp/local-worktree'
   const SSH_WORKTREE_ID = 'repo-ssh::/remote/ssh-worktree'

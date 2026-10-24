@@ -224,8 +224,7 @@ describe('selectStructuredAgentTurnActivity — which agent it answers for', () 
   })
 
   it("does not let a child's tool label suppress the provider's line for the parent", () => {
-    // The provider line is the SESSION'S OWN; a child running a tool of the same
-    // name must not make it read as a repeat and blank the indicator.
+    // Child tool labels cannot dedupe the session parent’s own provider activity line.
     expect(
       selectStructuredAgentTurnActivity([turnStart, childRunningBash], 'turn-1', {
         turnId: 'turn-1',

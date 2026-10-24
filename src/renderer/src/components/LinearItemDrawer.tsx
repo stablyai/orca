@@ -126,8 +126,7 @@ export default function LinearItemDrawer({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [issue?.id, issue?.workspaceId, providerSettings])
 
-  // Why: same pointer-events fix as GitHubItemDialog — Radix may leave
-  // pointer-events: none on body when overlays transition.
+  // Clear Radix’s stale body pointer-events after overlay transitions, as GitHubItemDialog does.
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!issue?.id) {

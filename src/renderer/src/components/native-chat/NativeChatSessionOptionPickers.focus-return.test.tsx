@@ -90,7 +90,6 @@ const fast: SessionOptionDescriptor = {
   settable: true
 }
 
-/** The picker beside a real message box, so focus has somewhere to come back to. */
 async function renderComposer(
   snapshot: SessionOptionDescriptor[],
   pickerRequest: NativeChatOptionPickerRequest | null = null
@@ -181,7 +180,6 @@ describe('session option picker focus', () => {
     expect(document.activeElement).toBe(screen.getByRole('combobox'))
   })
 
-  // Effort is the last thing set before typing; the model and the other options are not.
   it('stays open across a model, a speed and a switch pick, and closes into the message box on an effort pick', async () => {
     const messageBox = await renderComposer([model, effort, speed, fast])
     await openPicker()
@@ -268,7 +266,6 @@ describe('session option picker focus', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
-  // The pill is how the mouse closes the picker, so a press on it is not focus going elsewhere.
   it('lands focus in the message box when the pill closes the picker after a pick', async () => {
     const messageBox = await renderComposer([model, effort])
     const trigger = await openPicker()
@@ -331,7 +328,6 @@ describe('session option picker focus', () => {
     expect(document.activeElement).toBe(screen.getByRole('combobox'))
   })
 
-  // The pill already shows its values; a tooltip there only covers the picker it opens.
   it('shows a tooltip on the pill only for what the pill cannot show', async () => {
     await renderComposer([model, effort])
     fireEvent.pointerMove(pill(), { pointerType: 'mouse' })

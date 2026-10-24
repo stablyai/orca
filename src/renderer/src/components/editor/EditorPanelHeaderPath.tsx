@@ -42,7 +42,6 @@ export function EditorPanelHeaderPath({
   const headerCopyState = getEditorHeaderCopyState(activeFile)
   const displayPath = splitPathForDisplay(headerCopyState.pathLabel)
   const canCopyHeaderPath = headerCopyState.copyText !== null
-  // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
   const isVirtualEditorTab = isVirtualEditorFile(activeFile)
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
   const {
@@ -82,8 +81,7 @@ export function EditorPanelHeaderPath({
               { value0: currentFileName }
             )}
             defaultValue={currentFileName}
-            // Why: the field spans the header rather than sizing to the name —
-            // a long path is exactly when the rename field needs the room.
+            // Long paths need the full header width while renaming.
             className="h-6 w-full min-w-0 max-w-full rounded-md border border-accent/40 bg-input/40 px-1.5 font-mono text-xs text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-ring"
             spellCheck={false}
             onPointerDown={(event) => event.stopPropagation()}
@@ -91,8 +89,7 @@ export function EditorPanelHeaderPath({
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
-              // Why: an Enter that only confirms a CJK IME candidate must not
-              // commit the rename; wait for a non-composition Enter.
+              // IME candidate confirmation must not submit the rename.
               if (isImeCompositionKeyDown(event)) {
                 return
               }
@@ -125,9 +122,7 @@ export function EditorPanelHeaderPath({
             {translate('auto.components.editor.EditorPanelHeader.readOnlyBadge', 'Read-only')}
           </Badge>
         )}
-        {/* Why: the toast is opacity-0 rather than display-none, so leaving it
-            mounted reserves ~100px of the row from the rename field for a
-            message that cannot fire while renaming. */}
+        {/* Unmount the opacity-hidden toast during renames so it cannot reserve space the input needs. */}
         {!isRenaming && (
           <span
             className={`editor-header-copy-toast${copiedPathVisible ? ' is-visible' : ''}`}

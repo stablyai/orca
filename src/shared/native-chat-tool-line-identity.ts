@@ -4,10 +4,8 @@ import { summarizeToolInput } from './native-chat-tool-summary'
 /** How much of an anonymous result's output identifies it, so a long log is never hashed whole. */
 const RESULT_SIGNATURE_LENGTH = 160
 
-/** Each repeated provider ID needs a separate row, while unrelated rows may move freely.
- *  `bounded` (mobile): a result keeps its call's ID through output updates, and a row with no
- *  ID is keyed by a bounded summary rather than its whole serialized input, so a refetched copy
- *  of the same row keeps its identity without paying for a large payload. */
+/** Repeated provider IDs remain separate. Mobile bounded identity keeps result/call ids stable through output updates,
+ * using capped summaries for anonymous rows so refetches retain keys without hashing whole payloads. */
 export function nativeChatToolLineIdentity(
   block: NativeChatBlock,
   seen: Map<string, number>,

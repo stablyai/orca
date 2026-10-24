@@ -9,8 +9,7 @@ import {
 import { createToolInputDisplay, summarizeToolInput } from './native-chat-tool-summary'
 import type { NativeChatToolCallBlock, NativeChatToolResultBlock } from './native-chat-types'
 
-/** A tool row's verb. Desktop maps these onto `translate`; mobile renders the
- *  English record, so both surfaces read one vocabulary. */
+/** Shared desktop/mobile tool verbs; desktop translates the English record. */
 export const NATIVE_CHAT_TOOL_ROW_VERB_COPY = {
   running: 'Running',
   ran: 'Ran',
@@ -85,8 +84,7 @@ export function nativeChatToolLineLabel(
   let verb: NativeChatToolRowVerb | null = null
   let target = display.label
   let title = display.filePath ?? target
-  // Only a read or an edit targets a file. Codex names a change to several files `N files`
-  // under its Diff call, which names none to open.
+  // Only reads/edits target files; Codex Diff’s N files summary names no openable path.
   const filePath =
     (category === 'read' || category === 'fileChange') &&
     display.filePath !== null &&

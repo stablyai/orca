@@ -51,7 +51,6 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         currentRevision: this.getTerminalTopologyRevision(workspace.id)
       }
     }
-    // Refuse an unreadable session before any owner lookup, as before.
     readSession()
     const runDurableMutation = store.runDurableMutation?.bind(store)
     const worktreeConnectionId = workspace.connectionId
@@ -108,8 +107,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     return this.getMobileSessionTabsForWorktree(worktreeId)
   }
 
-  // Why: when --terminal is omitted, the CLI auto-resolves to the active
-  // terminal in the current worktree — matching browser's implicit active tab.
+  // Omitted --terminal follows the current worktree's active terminal, like browser active-tab resolution.
   async resolveActiveTerminal(
     worktreeSelector?: string,
     options: { requireUnambiguous?: boolean } = {}
@@ -121,8 +119,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       const snapshots = targetWorktreeId
         ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
         : await this.listAllMobileSessionTabs()
-      // Skipped for an identity claim for the same reason as the ready path below: the active tab
-      // is where the user last looked, which says nothing about which terminal the CALLER is.
+      // Active-tab focus cannot establish the caller's identity.
       for (const snapshot of options.requireUnambiguous ? [] : snapshots) {
         const activeTerminal = snapshot.tabs.find(
           (tab) =>
@@ -138,7 +135,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       const listed = await this.listTerminals(worktreeSelector, undefined, {
         includeVisualLayouts: false
       })
-      // Same arbitrary pick, same misattribution: refuse for callers claiming their own identity.
+      // Multiple terminals make any identity claim an arbitrary guess.
       if (options.requireUnambiguous && listed.terminals.length > 1) {
         throw new Error('no_active_terminal')
       }
@@ -154,10 +151,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       ? (await this.resolveWorktreeSelector(worktreeSelector)).id
       : null
 
-    // Prefer the tab's activeLeafId — this is the pane the user last focused.
-    //
-    // Skipped entirely for an identity claim: which pane the user last looked at says nothing
-    // about which terminal the CALLER is, so preferring it is still a guess.
+    // Prefer last-focused panes only outside identity claims.
     for (const tab of options.requireUnambiguous ? [] : this.tabs.values()) {
       if (targetWorktreeId && tab.worktreeId !== targetWorktreeId) {
         continue
@@ -172,22 +166,8 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       }
     }
 
-    // Fallback: any leaf in the target worktree.
-    //
-    // `requireUnambiguous` callers are asking "which terminal AM I" — today the implicit `--from`
-    // sender — and an arbitrary iteration-order pick answers that with someone else's pane: a bare
-    // `send --type worker_done` then settles a SIBLING's context-only dispatch, a tier that has no
-    // capability token to reject on, and every message it sends is attributed to that sibling.
-    // Refusing is the only safe answer when more than one leaf could be meant.
-    //
-    // `check` resolves through the `--terminal` scope, which still guesses, and a DISPATCHED
-    // structured worker is covered by the `ORCA_TERMINAL_HANDLE` its child is spawned with. That
-    // was once written as covering structured sessions generally, and it never did: an ordinary
-    // structured chat session is not in the worker registry, so it is spawned with no handle at
-    // all, and the guess below handed it a sibling's pane — which a destructive `check` then
-    // consumed. `requireUnambiguous` does not save it either, because with exactly one terminal
-    // pane the guess resolves. Such a child now carries `ORCA_STRUCTURED_SESSION` and the CLI
-    // refuses before reaching here (`shared/structured-session-marker.ts`).
+    // An arbitrary identity guess can attribute worker_done to a sibling and settle its tokenless dispatch.
+    // Worker children carry ORCA_TERMINAL_HANDLE; ordinary structured chats instead use ORCA_STRUCTURED_SESSION so the CLI refuses guesses even with one pane.
     const candidates: RuntimeLeafRecord[] = []
     for (const leaf of this.leaves.values()) {
       if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
@@ -208,9 +188,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     throw new Error('no_active_terminal')
   }
 
-  // Why: orchestration records the pane key as the remint-stable assignee
-  // identity at dispatch time; null (best-effort) rather than throwing so
-  // dispatch still works for handles without a resolvable pane.
+  // Dispatch uses remint-stable pane keys; unresolved handles return null so best-effort dispatch can proceed.
   getTerminalPaneKey(handle: string): string | null {
     return (
       resolveStructuredWorkerAuthority(handle, this.getOrchestrationDbIfAvailable?.() ?? null)
@@ -227,9 +205,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       this.getOrchestrationDbIfAvailable?.() ?? null
     )
     if (structured) {
-      // `resolveBareOrchestrationRecipient` routes direct mail through this. A structured worker is
-      // a recipient while this runtime owns it, running or at rest: mail to one at rest is a send,
-      // and the send starts its agent.
+      // Runtime-owned structured workers accept direct mail even at rest; sending starts their agent.
       return structured.identity.paneKey
     }
     const runtimePty = this.getLivePtyForHandle(handle)
@@ -248,9 +224,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     }
   }
 
-  // Resolve through the retained handle record, not the liveness-gated agent-status lookup: that
-  // one throws `terminal_handle_stale` once the process is gone, which is exactly when the earned
-  // death certificate has to stay readable.
+  // Retained handles keep earned death certificates readable after liveness-gated lookups become stale.
   getTerminalLivenessVerdict(handle: string): PtyLivenessVerdict | null {
     const record = this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle)
     return record?.ptyId ? this.getPtyLivenessVerdict(record.ptyId) : null

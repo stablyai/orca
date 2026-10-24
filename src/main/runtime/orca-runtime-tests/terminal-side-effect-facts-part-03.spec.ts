@@ -50,7 +50,6 @@ describe('terminal side-effect fact channel', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
 
-    // Generic status words without the Command Code banner must not arm.
     runtime.onPtyData('pty-1', '❯ Fix the spinner\r\nThinking...', 100)
     expect(batches.flatMap((batch) => batch.facts)).toEqual([])
 
@@ -86,7 +85,7 @@ describe('terminal side-effect fact channel', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
 
-    // Mirrors the renderer detector's startupCommand fast-arm: no banner needed when main saw the launch command at spawn.
+    // A known spawn command arms detection without a banner, matching the renderer.
     runtime.noteTerminalSpawnCommand('pty-1', 'command-code --trust')
     runtime.onPtyData('pty-1', '❯ Fix the spinner\r\n✻ Thinking...', 100)
 
@@ -102,7 +101,7 @@ describe('terminal side-effect fact channel', () => {
       data: 'renderer scrollback\n',
       cols: 80,
       rows: 24,
-      // Renderer xterm never saw the synthetic hook frame (no longer rides pty:data), so its serializer reports the pre-agent title.
+      // The renderer retains its old title because synthetic hook frames bypass pty:data.
       lastTitle: 'stale shell title'
     })
     runtime.setPtyController({
@@ -116,13 +115,12 @@ describe('terminal side-effect fact channel', () => {
     syncSinglePty(runtime)
 
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Claude working\x07')
-    // First live chunk kicks off renderer hydration; awaiting the snapshot below settles the seed write chain.
+    // The snapshot await settles hydration after the first live chunk.
     runtime.onPtyData('pty-1', 'plain output\n', 100)
     await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 10 })
 
     const leaves = (runtime as unknown as { leaves: Map<string, { lastOscTitle: string | null }> })
       .leaves
-    // The seed must not stomp the leaf record (worktree ps status source) back to the renderer's stale title.
     expect([...leaves.values()][0]?.lastOscTitle).toBe('⠋ Claude working')
   })
 })

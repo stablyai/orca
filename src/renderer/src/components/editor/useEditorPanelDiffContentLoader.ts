@@ -90,8 +90,7 @@ export function useEditorPanelDiffContentLoader({
           (options.externalEventGeneration === undefined ||
             registeredRead?.externalEventGeneration !== options.externalEventGeneration)
         ) {
-          // Why: forced diff reloads must not attach to a read started before
-          // the external change landed.
+          // Forced reloads must bypass deduped reads that predate external changes.
           inFlightDiffReads.delete(key)
         }
         let pending = inFlightDiffReads.get(key)

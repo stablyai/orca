@@ -135,7 +135,6 @@ describe('automation list empty state', () => {
     expect(state.recovery).toBe('update-server')
   })
 
-  // The rule the design doc calls out explicitly.
   const NOT_CONNECTED: AutomationExecutionHealth[] = [
     'disconnected',
     'connecting',

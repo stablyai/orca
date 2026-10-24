@@ -1,12 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 
-/**
- * Agents Orca can place an installed skill for.
- *
- * `null` segments mean the agent reads the canonical `.agents/skills` root at
- * that scope, so it needs no placement of its own. Ids are Orca agent ids so a
- * detected agent maps straight to a destination.
- */
+/** Null segments use canonical .agents/skills without a separate placement; IDs match detected Orca agents. */
 type SkillInstallProviderEntry = {
   id: TuiAgent
   displayName: string
@@ -17,7 +11,6 @@ type SkillInstallProviderEntry = {
 }
 
 export const SKILL_INSTALL_PROVIDERS = Object.freeze([
-  // Why: Codex reads the canonical .agents/skills root at both scopes.
   {
     id: 'codex',
     displayName: 'Codex',
@@ -31,8 +24,7 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: ['.claude', 'skills'],
     homeEnv: 'CLAUDE_CONFIG_DIR'
   },
-  // Why: Cursor and Gemini read the canonical root inside a project but keep
-  // their own home directory, so they only need a placement at global scope.
+  // Project skills use the canonical root; only global scope needs separate placement.
   {
     id: 'cursor',
     displayName: 'Cursor',
@@ -76,15 +68,12 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     globalSegments: ['.augment', 'skills'],
     workspaceSegments: ['.augment', 'skills']
   },
-  // Why: Muse reads the canonical .agents/skills root at both scopes.
   {
     id: 'muse',
     displayName: 'Muse',
     globalSegments: null,
     workspaceSegments: null
   },
-  // Why: ZCode loads user skills from `~/.zcode/skills`; project skills come from the
-  // canonical `.agents/skills` root the shared repo source already covers.
   {
     id: 'zcode',
     displayName: 'ZCode',
@@ -104,15 +93,13 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: ['.kiro', 'skills'],
     homeEnv: 'KIRO_HOME'
   },
-  // Why: the Antigravity CLI keeps user skills under its config home and
-  // project skills in the canonical root.
   {
     id: 'antigravity',
     displayName: 'Antigravity',
     globalSegments: ['.gemini', 'config', 'skills'],
     workspaceSegments: null
   },
-  // Why: OpenClaude keeps its own `.openclaude` home; it does not read Claude's folders by default.
+  // Install into OpenClaude’s own roots; native-chat skillSourceOwner uses a separate mapping.
   {
     id: 'openclaude',
     displayName: 'OpenClaude',
@@ -120,7 +107,6 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: ['.openclaude', 'skills'],
     homeEnv: 'OPENCLAUDE_CONFIG_DIR'
   },
-  // Why: every agent below reads the canonical .agents/skills root at both scopes.
   {
     id: 'autohand',
     displayName: 'Autohand Code',
@@ -292,10 +278,7 @@ export function isSkillInstallProviderId(value: string): value is SkillInstallPr
   return SKILL_INSTALL_PROVIDERS.some((provider) => provider.id === value)
 }
 
-/**
- * An explicit choice is authoritative, including agents the target may install
- * later. Removal passes no choice so it can clean every previously used root.
- */
+/** Explicit choices include agents installed later; removal omits choices to clean every previously used root. */
 export function selectedOrDetectedSkillProviders(
   detectedProviders: readonly string[],
   selectedProviders: readonly string[] | undefined

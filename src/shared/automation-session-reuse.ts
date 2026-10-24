@@ -1,7 +1,4 @@
-/**
- * Which previous run's agent a `reuseSession` automation sends its next prompt to. One rule for
- * the desktop and a headless host; each supplies its own read of the pane's status and liveness.
- */
+/** Share previous-agent reuse policy across desktop/headless hosts; callers supply pane status/liveness. */
 import type { AgentType } from './agent-status-types'
 import type { AutomationRun } from './automations-types'
 import type { TuiAgent } from './tui-agent'

@@ -1,5 +1,4 @@
-// What a non-plain editor tab shows, with the file facts a window needs to rebuild the tab's open
-// file: a diff, conflict, preview or check-details tab has no saved file record. In memory only.
+// Keep transient diff/conflict/preview/check-details file facts in memory so windows can rebuild tabs with no saved file record.
 
 import type { EditorTabView } from '../editor-tab-view-types'
 import type { LayoutEditorFile } from './workspace-layout-model'

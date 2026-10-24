@@ -1,8 +1,4 @@
-/**
- * A structured session's `/clear` lineage, read off the durable session records. `/clear` continues
- * a chat in a new session; the committed clear on the old record names the session that replaced it.
- * Derived from the records every time; nothing is rewritten at a clear.
- */
+/** Resolve /clear successors from committed durable pointers on each read; clearing rewrites no callers. */
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -35,11 +31,7 @@ export type RunningStructuredSession = {
   readonly lineage: readonly string[]
 }
 
-/**
- * Where the session running a `/clear` lineage is now. `lineage` lists every session walked, from
- * the one asked about to the running one. `unverifiable` is not being able to look — no record
- * store, a successor with no record, a corrupt chain — and never evidence the conversation ended.
- */
+/** Walked lineage and its live location; unreadable stores, missing successors and corrupt chains never prove the conversation ended. */
 export type LineageRunningSession =
   | ({ kind: 'here' } & RunningStructuredSession)
   | ({ kind: 'other-host' } & RunningStructuredSession)

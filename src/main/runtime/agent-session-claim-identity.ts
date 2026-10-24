@@ -164,8 +164,7 @@ export function loadAgentSessionClaimSigner(
       }
     }
   }
-  // Why: a replaced/corrupt key could make a surviving owner look absent;
-  // refuse authority instead of silently minting an incomparable namespace.
+  // Replacing a corrupt key would make surviving ownership incomparable; refuse authority instead.
   if (key.length !== COORDINATION_KEY_BYTES) {
     throw new Error('agent_session_ownership_unknown')
   }

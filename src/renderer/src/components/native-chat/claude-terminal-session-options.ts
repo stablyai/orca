@@ -14,18 +14,15 @@ const EFFORT_ID_BY_LABEL: Record<string, string> = {
   max: 'max'
 }
 
-// Why: narrow panes elide the trailing `effort` word to an ellipsis, so the
-// level itself is the only part of the suffix we can rely on.
+// Narrow panes elide effort; retain the reported level as the reliable suffix.
 const CLAUDE_MODEL_EFFORT =
   /\bwith\s+(extra high|xhigh|medium|high|low|max)(?:\s+effort\b|\s*…|\s*$)/i
 
-// Claude's startup frame. Chat text uses an em dash rather than these box
-// characters, so a leading corner is safe proof that a row is chrome.
+// Use startup box corners to distinguish frame chrome from chat prose.
 const FRAME_TOP = '╭'
 const FRAME_BOTTOM = '╰'
 const FRAME_COLUMN = '│'
 
-/** Rows of the visible screen, ANSI-stripped and whitespace-collapsed. */
 function normalizedScreenLines(screen: string): string[] {
   return stripScrollbackAnsi(screen)
     .split('\n')
@@ -33,21 +30,15 @@ function normalizedScreenLines(screen: string): string[] {
 }
 
 function isClaudeHeaderRow(line: string): boolean {
-  // No trailing word boundary: serialization drops the gap before the version,
-  // leaving `Claude Codev2.1.220`.
+  // xterm serialization can remove the gap before the version, as in Claude Codev2.1.220.
   if (!/\bClaude Code/i.test(line)) {
     return false
   }
-  // Why: panes under ~70 columns drop the version from the frame entirely, so
-  // accept the frame corner as the alternative proof this is Claude's chrome.
-  // xterm serialization also drops cursor-positioning cells between the product
-  // name and version, producing `Claude Codev2.1.211`.
+  // Narrow frames omit version, so accept their frame corner as alternate header evidence.
   return /\bClaude Code\s*v?\d+(?:\.\d+){1,2}\b/i.test(line) || line.startsWith(FRAME_TOP)
 }
 
-/** The frame's leftmost cell on a row. Reading up to the next column border
- *  keeps the release-notes panel out: on rows whose left cell is empty the
- *  borders collide (`││`) and this yields nothing rather than the panel text. */
+/** Read only the left frame cell; colliding empty-cell borders must not expose release-panel prose. */
 function frameCell(line: string): string {
   if (line.startsWith(FRAME_COLUMN)) {
     const afterBorder = line.slice(FRAME_COLUMN.length)
@@ -58,8 +49,6 @@ function frameCell(line: string): string {
   return line.replace(/^[^A-Za-z0-9]+/, '').trim()
 }
 
-/** Whether a cell carries the metadata Claude only prints on the model row, so
- *  ordinary frame text is never mistaken for a model. */
 function isModelDescriptorCell(cell: string): boolean {
   return cell.includes('·') || CLAUDE_MODEL_EFFORT.test(cell)
 }
@@ -73,12 +62,7 @@ function isWorkingDirectoryCell(cell: string): boolean {
   )
 }
 
-/**
- * Claude prints the model descriptor near the bottom of its startup frame, with
- * the welcome art and the release-notes panel in between — it is not adjacent to
- * the version row. Search the frame from the bottom up so the panel's own text
- * can never win over the descriptor.
- */
+/** Search the bounded startup frame from bottom up so model metadata wins over release-panel text. */
 function claudeModelDescriptorCell(lines: string[], headerIndex: number): string | null {
   const frameBottom = lines.findIndex(
     (line, index) => index > headerIndex && line.startsWith(FRAME_BOTTOM)
@@ -100,12 +84,7 @@ function claudeModelDescriptorCell(lines: string[], headerIndex: number): string
   return frameBottom > 0 ? modelRowAboveWorkingDirectory(lines, headerIndex, frameBottom) : null
 }
 
-/**
- * A model with no effort control whose billing wrapped away — `Haiku 4.5` on a
- * narrow pane — leaves a bare name that no metadata identifies. Claude always
- * closes the frame with the working directory, and prints at most the
- * descriptor plus a wrapped billing line above it, so walk up from there.
- */
+/** Bare models with wrapped billing lack metadata; find them within two rows above the frame’s working directory. */
 function modelRowAboveWorkingDirectory(
   lines: string[],
   headerIndex: number,
@@ -134,7 +113,6 @@ function modelRowAboveWorkingDirectory(
   return /^API Usage Billing$/i.test(cell) ? null : cell
 }
 
-/** The displayed model name, without the effort suffix or billing tail. */
 function parseClaudeModelName(cell: string): string | null {
   // split always yields a non-empty first segment for a non-empty cell.
   const beforeBilling = cell.split('·')[0]!
@@ -149,14 +127,7 @@ function modelNameTokens(value: string): string[] {
   return value.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
 }
 
-/**
- * Whether a catalog label names the model the frame reported. The frame prints
- * the resolved model ("Opus 5 (1M context)") while labels name the alias
- * ("Opus (1M context)"), so the family has to lead as a whole word and the
- * label's remaining tokens have to appear in order. Requiring a whole word is
- * what keeps `company/my-haiku-v2` and `opus-internal-v3` out of the catalog;
- * requiring the rest is what stops `Sonnet` from claiming the 1M-context row.
- */
+/** Match a whole leading family and ordered variant tokens, allowing inserted versions without claiming vendor slugs or other context sizes. */
 function labelNamesReportedModel(reportedModel: string, label: string): boolean {
   const labelTokens = modelNameTokens(label)
   const family = labelTokens[0]
@@ -179,8 +150,7 @@ function labelNamesReportedModel(reportedModel: string, label: string): boolean 
   return true
 }
 
-/** The most specific catalog entry naming this model, preferring the host's
- *  discovered list so variants like `opus[1m]` win over the seed family. */
+/** Prefer the host’s specific discovered entry over seed families, including context variants. */
 function findClaudeCatalogModel(
   reportedModel: string,
   models: readonly CatalogModel[] | undefined
@@ -198,11 +168,7 @@ function findClaudeCatalogModel(
   return undefined
 }
 
-/**
- * @param models the host's live model list. Pass the discovered catalog so the
- *   reported id is one the picker actually lists; omitting it falls back to the
- *   version-neutral seed families.
- */
+/** Pass the host catalog to return listed picker ids; omission uses version-neutral seed families. */
 export function readClaudeSessionOptionsFromTerminalScreen(
   screen: string | null | undefined,
   models?: readonly CatalogModel[]

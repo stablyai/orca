@@ -13,14 +13,13 @@ export function createEditorExternalChangeTabReset(store: AppStoreApi): (event: 
     }
 
     const state = store.getState()
-    // Why no sibling expansion: views of one file share a record, so each matches by path itself.
+    // Same-record siblings match by path themselves; no separate expansion is needed.
     const matchingFiles = getOpenFilesForExternalFileChange(state.openFiles, detail, state)
     if (matchingFiles.length === 0) {
       return
     }
 
-    // Why: keep dirty drafts on external writes (data-loss half of #7265); mark changed-on-disk as backstop for tabs turned dirty during the notify debounce.
-    // Why model-level: a clean tab of a model another tab is editing shows that unsaved text.
+    // Preserve dirty model drafts, including clean sibling views; mark conflicts if typing began during notification debounce.
     const modelDirty = new Set(
       matchingFiles.filter((file) => isEditorModelDirty(state, file)).map((file) => file.id)
     )
@@ -30,7 +29,7 @@ export function createEditorExternalChangeTabReset(store: AppStoreApi): (event: 
         if (!file.isDirty) {
           continue
         }
-        // Why: skip Orca's own-save echo, which routes here bypassing the watch hook's echo verification.
+        // Controller notifications bypass watcher verification; filter the app’s own save echoes here.
         if (!hasRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)) {
           markFileChangedOnDisk(state, file, {
             connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
@@ -39,9 +38,8 @@ export function createEditorExternalChangeTabReset(store: AppStoreApi): (event: 
         }
         continue
       }
-      // Why: going clean drops the autosave timer, and a queued save then finds nothing to write.
+      // Clear dirty state to cancel autosave timers and make queued requests no-op.
       state.markFileDirty(file.id, false)
-      // Why: about to reload fresh disk content, so a stale changed-on-disk mark is resolved.
       if (file.externalMutation === 'changed') {
         state.setExternalMutation(file.id, null)
       }

@@ -17,7 +17,7 @@ const facts = (root: string, head = 'abc'): WslMovePathFacts => ({
   marker: 'nonce-1'
 })
 
-/** The desktop answers in UNC form for a real repo at `/home/dev/app`; the host in Linux form. */
+// Both probes describe the same repo using their native path spellings.
 function probes(
   host: Partial<Record<string, WslMovePathFacts | null>> = {}
 ): WslMovePreflightProbes {

@@ -59,12 +59,7 @@ function hasBranchScopedLinks(row: IdentityRow): boolean {
   return HOSTED_REVIEW_LINK_KEYS.some((key) => row[key] != null) || row.pushTarget !== undefined
 }
 
-/**
- * What a branch switch does to a workspace, decided where the scan sees it: an automatic title
- * follows the branch (and keeps its last name while the head is detached), and links scoped to the
- * old branch are cleared. Replaces the window's writer (worktree-git-identity-update.ts), which
- * P5b-2 deletes.
- */
+/** On confirmed branch switches, clear old-branch links and update automatic names; detached heads retain the last name. Replaces worktree-git-identity-update.ts. */
 export class WorkspaceGitIdentity {
   private readonly observed = new Map<HostScopedWorktreeKey, Observed>()
   private readonly detachedTitles = new Map<HostScopedWorktreeKey, string>()
@@ -77,11 +72,7 @@ export class WorkspaceGitIdentity {
       : row.displayName
   }
 
-  /**
-   * Records an applied scan's rows. `rows` are those of scans that reached a verdict (a stalled
-   * scan's stored rows read as detached); `scannedRepoKeys` are those repos, whose missing rows are
-   * gone. Returns the link clears the branch switches call for.
-   */
+  /** Record verdict-bearing scan rows/repo keys and return branch-switch link clears; stalled scans cannot confirm absence or branch identity. */
   observeScan(
     rows: readonly ScannedIdentityRow[],
     scannedRepoKeys: ReadonlySet<HostScopedRepoKey>

@@ -5,9 +5,7 @@ import {
 } from './remote-runtime-socket-liveness'
 import { SharedControlReconnectScheduler } from './remote-runtime/control/remote-runtime-shared-control-reconnect'
 
-// Regression for #9092: after sleep a socket can still read OPEN while its path is gone, so resume
-// probes every socket at once. A miss at the probe deadline marks it suspect and re-pings; only the
-// normal 25 s keepalive window kills it, because relayed links can take longer than 8 s to reroute.
+// After sleep, probe every socket immediately; 8s misses only re-ping and the normal 25s keepalive decides death so relayed paths have time to recover (#9092).
 describe('remote runtime resume probe', () => {
   const monitors: { stop: () => void }[] = []
 

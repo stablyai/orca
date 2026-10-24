@@ -28,9 +28,7 @@ export function activateTerminalSubscribeBinaryLive(
           return
         }
         state.outputBatcher?.flush()
-        // One object for the budget and the frame it approves: the budget named
-        // `pending-output-overflow` while the send below named `renderer-mount-ready`, which is
-        // four bytes the approving number never counted.
+        // Share frame metadata with the budget; differing recovery reasons previously undercounted the frame.
         const recoveryFrame = { kind: 'resized', reason: 'renderer-mount-ready' } as const
         const recovery = await serializeStableMobileRendererSnapshot(
           runtime,
@@ -43,12 +41,12 @@ export function activateTerminalSubscribeBinaryLive(
         if (!recovery?.data.length) {
           return
         }
-        // Why: late recovery has no buffered-output gate, so only an exact renderer high-water may reset mobile without erasing live bytes.
+        // Without buffered-output gating, only exact renderer high-water can reset the client without erasing live bytes.
         if (recovery.seq !== runtime.getPtyOutputSequence(ptyId)) {
           return
         }
         runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(ptyId, recovery)
-        // Why: shipped mobile clients apply resized snapshots in place, so a blank xterm recovers without resubscribe.
+        // Shipped clients apply resized snapshots in place, recovering blank xterm without resubscribe.
         const recoveryStats = sendSnapshotFrames(state.sendFrame, {
           ...recoveryFrame,
           cols: recovery.cols,
@@ -95,7 +93,7 @@ export function activateTerminalSubscribeBinaryLive(
     state.outputBatcher?.flush()
     const eventGeneration = state.resizeGeneration + 1
     state.resizeGeneration = eventGeneration
-    // Why: xterm only re-wraps soft-wrapped lines, so a width change needs a full re-serialize+replay to rewrap restored hard-wrapped scrollback.
+    // Restored hard newlines need full reserialization/replay at the new width; xterm rewraps only soft wraps.
     const widthChanged = isMobile && event.cols !== state.lastResizeCols
     if (widthChanged) {
       state.lastResizeCols = event.cols
@@ -119,7 +117,7 @@ export function activateTerminalSubscribeBinaryLive(
             sendResizedFrame(event)
           }
         })
-        // Why: on re-stream failure, still emit the geometry-only Resized frame so the client never misses the resize.
+        // Even failed replay must report geometry.
         .catch(() => {
           if (state.closed || state.resizeGeneration !== eventGeneration) {
             return
@@ -131,7 +129,7 @@ export function activateTerminalSubscribeBinaryLive(
     sendResizedFrame(event)
   })
 
-  // Install the resize listener before draining the parked viewport, since applyLayout emits synchronously.
+  // Install before draining the parked viewport: applyLayout emits synchronously.
   if (
     clientId &&
     params.client &&
@@ -152,7 +150,6 @@ export function activateTerminalSubscribeBinaryLive(
     ).catch(() => {})
   }
 
-  // fit-override-changed for non-mobile (desktop) subscribers
   state.unsubscribeFit = !isMobile
     ? runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
         const mode =

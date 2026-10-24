@@ -162,7 +162,6 @@ function Harness(props: Props): React.JSX.Element {
           disabled={continuation.view.usageLimitContinueDisabled}
         />
       )}
-      {/* As the cut's own row shows it. */}
       {continuation.view.offeredTurnItemId === null ? null : (
         <NativeChatInterruptedContinueButton onContinue={continuation.view.continueNow} />
       )}
@@ -200,7 +199,6 @@ describe('Continue on a reply an Orca stop cut off', () => {
       sessionId: 'session-1',
       turnItemId: TURN
     })
-    // Gone once asked, and the row gets its own way on back: the journal shows what came of it.
     expect(continueButton()).toBeNull()
     expect(screen.getByTestId('offered')).toHaveTextContent('none')
   })
@@ -278,7 +276,6 @@ describe('Continue on a reply an Orca stop cut off', () => {
     fireEvent.click(continueButton()!)
     await waitFor(() => expect(continueButton()).toBeInTheDocument())
     expect(screen.getByTestId('error')).toHaveTextContent(FAILED)
-    // A retry clears the line until its own answer, which sets the same one line again.
     fireEvent.click(continueButton()!)
     expect(screen.getByTestId('error')).toHaveTextContent('none')
     await waitFor(() => expect(continueButton()).toBeInTheDocument())
@@ -327,7 +324,6 @@ describe('Continue on a reply an Orca stop cut off', () => {
     fireEvent.click(continueButton()!)
     await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent(FAILED))
 
-    // The journal then shows the continuation on its way: the chat is no longer on that cut.
     rerender(<Harness submissions={[{ dispatchState: 'pending' }]} />)
 
     expect(screen.getByTestId('error')).toHaveTextContent('none')

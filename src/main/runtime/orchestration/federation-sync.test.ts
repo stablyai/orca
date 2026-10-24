@@ -293,8 +293,7 @@ describe('federation relay acknowledgments', () => {
     await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
 
     expect(getPersistedRemoteRuntimeEpoch()).toBe('remote_epoch_2')
-    // The restart dropped the old epoch's answers, so the next resolve re-probes once and
-    // then serves the new epoch from cache.
+    // A new runtime epoch invalidates the old probe cache, then caches its own result.
     const probe = vi.fn().mockResolvedValue({
       runtimeId: 'remote_epoch_2',
       capabilities: [ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY]

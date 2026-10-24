@@ -1,6 +1,4 @@
-// Windows-only, at-most-daily `wsl_usage_snapshot`. Cost per send: one native registry read,
-// one `reg.exe` Lxss query, and a `wsl --list --running` only when no confirmed running list is
-// cached yet and a user distro exists. Nothing is gathered while telemetry is off.
+// Windows-only daily usage; gather registry/WSL state only while transmission is enabled. Reuse confirmed running distros, otherwise share one probe when user distros exist.
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Store } from '../persistence'
@@ -29,7 +27,7 @@ import {
 } from './wsl-usage-snapshot'
 
 export const WSL_USAGE_SNAPSHOT_INTERVAL_MS = 24 * 60 * 60 * 1000
-// Only a timestamp compare per tick; the gather runs at most once per interval.
+// Hourly ticks compare time only; gathering stays at most daily.
 const RECHECK_MS = 60 * 60 * 1000
 const STAMP_FILE = 'wsl-usage-telemetry.json'
 const WSL_MSI_KEY = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Lxss\\MSI'
@@ -67,7 +65,7 @@ export function collectWslProjects(
         resolveLocalWorkspaceRuntime(store, repo, repo.path)
       )
       if (project) {
-        // `wsl.exe` lists the default distro first; naming it keeps distinct-distro counts honest.
+        // Resolve null distro to the default so distinct counts do not invent another distro.
         projects.push({ ...project, distro: project.distro ?? defaultDistro })
       }
       continue
@@ -220,7 +218,7 @@ export class WslUsageReporter {
     if ((this.deps.platform ?? process.platform) !== 'win32' || this.running) {
       return false
     }
-    // Why before gathering: an opted-out install pays no registry or wsl.exe read at all.
+    // Gate before gathering so opted-out installs pay no registry/wsl.exe read.
     if (!(this.deps.telemetryEnabled ?? isTelemetryEnabled)()) {
       return false
     }
@@ -235,7 +233,7 @@ export class WslUsageReporter {
       if (elapsed >= 0 && elapsed < WSL_USAGE_SNAPSHOT_INTERVAL_MS) {
         return false
       }
-      // Stamp the attempt before gathering: a failing gather or dropped send must not re-pay hourly.
+      // Stamp attempts before gathering so failed/dropped sends do not repeat the cost hourly.
       this.lastSentAt = now
       await writeFile(this.stampFile, JSON.stringify({ lastSentAt: now })).catch(() => {})
       const input = await (

@@ -33,8 +33,7 @@ export type RemoteBrowserContextMenu = {
 export const REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID = 'remote-browser-find-unavailable'
 
 export type RemoteBrowserPaneNotice = {
-  // Identifies a notice that can be re-raised or retracted by whoever set it; an unidentified
-  // notice is a one-off.
+  // An ID lets the owner deduplicate and retract its notice.
   id?: string
   kind: 'direct' | 'consequence'
   text: string
@@ -57,8 +56,6 @@ export type PendingRemoteBrowserWheel = {
 export const WHEEL_DELTA_LINE = 1
 export const WHEEL_DELTA_PAGE = 2
 
-// The pane-owned effects the stream lifecycle calls back into: frame paint, viewport measurement,
-// and the store/tab-close decision for a page that is gone.
 export type RemoteBrowserStreamBridge = {
   applyTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
   clearFrame: () => void
@@ -151,11 +148,7 @@ export function readRemoteCssViewportSize(result: unknown): RemoteBrowserViewpor
   }
 }
 
-// Why: one runtime screencast is shared, and any later subscriber can re-emulate the page at
-// its own size without notifying this pane. The cached CSS viewport — and this pane's own
-// requested size — only describe the page while frames still report the size we asked for;
-// once someone else owns the viewport, the per-frame device size is the only accurate basis
-// for pointer mapping. Same guard covers our own resize before the restart lands.
+// A later screencast subscriber can resize the shared page; trust per-frame dimensions once they diverge from our requested viewport, including during resize.
 export function resolveRemoteBrowserCssViewport(input: {
   cssViewportSize: RemoteBrowserViewportSize | null
   requestedViewportSize: RemoteBrowserViewportSize | null
@@ -189,8 +182,7 @@ export function resolveRemoteBrowserCssViewport(input: {
   }
 }
 
-// Why the image's own box and not the pane's: the frame is letterboxed inside the pane, so only
-// the rect it is drawn in says which page pixel sits under the pointer.
+// Map through the letterboxed image rect; pane coordinates do not identify the drawn page pixel.
 export function mapRemoteBrowserClientPoint(input: {
   clientX: number
   clientY: number

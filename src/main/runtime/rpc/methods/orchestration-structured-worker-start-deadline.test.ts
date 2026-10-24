@@ -1,5 +1,4 @@
-// A structured worker's setup gate and its preamble's wait for the agent share one deadline: the
-// caller's timeout. Waiting the full timeout again after a slow setup outlasts the client's limit.
+// Setup and preamble readiness share the caller's deadline; a slow setup must not buy another full timeout.
 
 import { afterEach, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'

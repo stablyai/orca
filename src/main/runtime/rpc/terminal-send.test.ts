@@ -872,8 +872,7 @@ describe('terminal send RPC', () => {
     expect(response.result).toEqual({ restored: true })
     expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1')
   })
-  // Why: mobile gates reply forwarding on this static capability; removing it
-  // would silently re-break mobile query answering against current hosts.
+  // Mobile gates query replies on this static capability; removing it breaks forwarding to current hosts.
   it('advertises query-reply input support to mobile clients', () => {
     expect(RUNTIME_CAPABILITIES).toContain(TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY)
   })

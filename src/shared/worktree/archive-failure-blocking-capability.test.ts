@@ -4,9 +4,7 @@ import {
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY
 } from '../protocol-version'
 
-// Why (#19334): the reporter's integration (Harbour) keeps its teardown ownership evidence inside
-// the checkout, so it must know *before* removing anything whether this host refuses to delete on a
-// failed archive hook. It cannot probe for that — probing means risking the data loss.
+// Callers keeping teardown evidence in the checkout must know the hook gate exists without risking deletion to probe it (#19334).
 describe('worktree.archive-failure-blocking.v1', () => {
   it('uses the id the reporting integration already codes against', () => {
     expect(WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY).toBe(

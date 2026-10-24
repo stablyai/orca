@@ -14,8 +14,7 @@ const EMPTY_EDITOR_PANEL_DRAFTS = Object.freeze({}) as Record<string, string>
 export function createEditorPanelDraftSelector(
   activeFile: OpenFile | null
 ): EditorPanelDraftSelector {
-  // Why: previews and conflict review can render a related file, but drafts
-  // from every other panel must not wake this editor on each keystroke.
+  // Include related preview/conflict files without subscribing this editor to unrelated panels’ typing.
   const fileIds = activeFile
     ? [
         activeFile.id,
@@ -29,7 +28,7 @@ export function createEditorPanelDraftSelector(
           joinPath(activeFile.filePath, entry.path)
         )
       : []
-  // Why: an overview file shows under its record's view id (a server file's is not its path).
+  // Resolve overview drafts through record view IDs; server file IDs need not equal paths.
   const selectedFileIds = (state: EditorDraftState): string[] =>
     overviewPaths.length === 0 || !activeFile
       ? fileIds
@@ -47,9 +46,7 @@ export function createEditorPanelDraftSelector(
   let previousSelection = EMPTY_EDITOR_PANEL_DRAFTS
 
   return (state) => {
-    // Why: every Zustand write reruns the selector. The slice identity guard
-    // keeps unrelated terminal/status traffic allocation-free; overview ids
-    // also move with the tabs and record views they resolve through.
+    // Guard slice identities so terminal/status writes allocate nothing; overview IDs also depend on current tabs and record views.
     if (
       previousDrafts === state.editorDrafts &&
       (overviewPaths.length === 0 ||

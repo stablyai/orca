@@ -1,8 +1,4 @@
-/**
- * Whether a launch can start `agent` on the model and effort its caller named, by the same catalog
- * the launch itself applies. One rule for every caller that takes `--model`/`--effort`, so an
- * orchestration worker and a plain CLI launch refuse the same requests with the same words.
- */
+/** Use the launch catalog for every caller's model/effort validation so CLI and orchestration refusals agree. */
 
 import type { AgentLaunchPreferences } from './agent-session-host-authority'
 import { findCatalogModel, findCatalogOption } from './agent-session-option-catalog'

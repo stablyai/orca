@@ -14,9 +14,7 @@ function named(label: string): string {
   )
 }
 
-/** What an offered chat was doing when Orca went away, read from the offer's own stop-time
- *  snapshot. Null when the host sent none — an older host, or an offer recorded by a build that
- *  captured no snapshot — which the dialog's own wording already covers. */
+/** Read the host’s stop-time snapshot; older hosts/offers may omit it, so return null for caller fallback copy. */
 export function resumeActivityLabel(
   activity: AgentSessionRestartActivity | undefined
 ): ResumeActivityLabel | null {
@@ -25,8 +23,7 @@ export function resumeActivityLabel(
   }
   const parts: string[] = []
   const [prompt] = activity.prompts
-  // The headline is the main agent's own recorded state: blocked names the prompt it was waiting
-  // on, working was a reply in progress, done says nothing — its children speak below.
+  // Describe the lead’s recorded state; completed leads leave the activity description to their children.
   if (activity.state === 'blocked' && prompt) {
     parts.push(
       prompt.kind === 'approval'
@@ -69,7 +66,6 @@ export function resumeActivityLabel(
       )
     )
   }
-  // Shells, monitors and workflows alone are what the sidebar labels monitoring.
   if (watches.length === 1 && onlyWatch) {
     parts.push(
       translate(

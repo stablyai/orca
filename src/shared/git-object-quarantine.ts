@@ -4,12 +4,7 @@ import { isWindowsAbsolutePathLike } from './cross-platform-path'
 import { isDefinitiveAbsence } from './definitive-filesystem-absence'
 import { removeTree } from './windows-transient-lock-removal'
 
-/**
- * Runs a Git command whose object writes are throwaway (`merge-tree --write-tree`
- * only wants its stdout) against a scratch object directory, so nothing it
- * writes lands in the repository's real object store as unreachable loose
- * objects. Reads still see every real object through the alternates variable.
- */
+/** Run throwaway merge-tree object writes in a scratch store; alternates retain access to real objects without leaving unreachable loose objects. */
 
 export type GitObjectQuarantineEnv = {
   GIT_OBJECT_DIRECTORY: string
@@ -29,9 +24,7 @@ export type GitObjectQuarantine = {
   run: <T>(command: (env: GitObjectQuarantineEnv | undefined) => Promise<T>) => Promise<T>
 }
 
-// Why inside `objects/` with a `tmp_objdir` prefix: that is where Git puts its own
-// quarantine dirs, it is on the Git host for native, WSL and SSH alike, and
-// `git gc` (2.35+) expires stale `tmp_*` dirs too.
+// Put tmp_objdir scratch stores inside objects on native/WSL/SSH hosts, matching Git quarantine layout and 2.35+ gc expiry.
 export const GIT_OBJECT_QUARANTINE_DIR_PREFIX = 'tmp_objdir-orca-merge-tree-'
 
 /** Decided by path syntax, not by platform: a Windows main process drives WSL Git. */
@@ -48,10 +41,7 @@ function quoteAlternate(path: string, windowsGit: boolean): string {
   return `"${path.replace(/[\\"]/g, (char) => `\\${char}`)}"`
 }
 
-/**
- * Which inherited object-store variables a quarantine can mirror, as `GitObjectsDirectory` fields;
- * undefined when it cannot: an inherited GIT_OBJECT_DIRECTORY is the store Git reads and writes.
- */
+/** Mirror inherited object-store variables when safe; inherited GIT_OBJECT_DIRECTORY is Git’s primary read/write store. */
 export function inheritedObjectStore(
   env: Record<string, string | undefined>
 ): Pick<GitObjectsDirectory, 'inheritedAlternates'> | undefined {
@@ -62,11 +52,7 @@ export function inheritedObjectStore(
   return alternates ? { inheritedAlternates: alternates } : {}
 }
 
-/**
- * The alternates for a quarantined run, or undefined to run unquarantined. Inherited value first,
- * as Git's own temporary object dirs append. A real store with its own alternates is not
- * quarantined: as an alternate instead of the primary, its chain would link one level deeper.
- */
+/** Append the real store after inherited alternates, like Git temp stores. Refuse stores with their own alternates to avoid deepening the chain. */
 async function quarantineAlternates(objects: GitObjectsDirectory): Promise<string | undefined> {
   const alternatesFile = pathApiForGitPath(objects.hostPath).join(
     objects.hostPath,
@@ -87,32 +73,28 @@ async function quarantineAlternates(objects: GitObjectsDirectory): Promise<strin
     : realStore
 }
 
-/**
- * A partial clone fetches missing blobs on demand, and Git files that download
- * as a pack in the scratch dir. Keep those packs so the next check does not
- * download the same blobs again; merge-tree's own writes are loose objects.
- */
+/** Retain partial-clone fetch packs so future checks do not redownload blobs; merge-tree’s throwaway writes are loose objects. */
 async function keepFetchedPacks(scratchHostPath: string, objectsHostPath: string): Promise<void> {
   const path = pathApiForGitPath(objectsHostPath)
   const scratchPackDir = path.join(scratchHostPath, 'pack')
-  // Why `pack-` only: Git's in-progress `tmp_pack_*` files are not usable packs.
+  // Ignore in-progress tmp_pack files; only pack- files are usable.
   const files = (await readdir(scratchPackDir).catch(() => [])).filter((file) =>
     file.startsWith('pack-')
   )
-  // Why `.idx` last: Git finds a pack through its index, so the rest must be in place first.
+  // Move .idx last because Git discovers packs through their indexes.
   const ordered = [
     ...files.filter((file) => !file.endsWith('.idx')),
     ...files.filter((file) => file.endsWith('.idx'))
   ]
   for (const file of ordered) {
     const target = path.join(objectsHostPath, 'pack', file)
-    // Why skip: pack names are content hashes, and Git also leaves an existing file in place.
+    // Content-hashed pack names can reuse existing files, as Git does.
     const exists = await lstat(target).then(
       () => true,
       () => false
     )
     if (!exists) {
-      // Why no per-file catch: stopping at the first failure keeps an index from landing without its pack.
+      // Stop on the first failure so no index lands without its pack.
       await rename(path.join(scratchPackDir, file), target)
     }
   }
@@ -140,7 +122,7 @@ export function createGitObjectQuarantine(
         ).catch(() => undefined)
       }
       if (!objects || alternates === undefined || !scratchHostPath) {
-        // Why: bookkeeping must not block the user's action; run unquarantined.
+        // Bookkeeping failure must not block the user’s command; fall back unquarantined.
         return command(undefined)
       }
       try {
@@ -156,7 +138,7 @@ export function createGitObjectQuarantine(
           console.warn('[git-object-quarantine] could not keep a fetched pack', error)
         })
         await removeTree(scratchHostPath).catch((error: unknown) => {
-          // Why: quarantined only once this host's Git ran --write-tree (2.38+), whose gc prunes `tmp_*`.
+          // Quarantine starts only after --write-tree support (2.38+), whose gc can prune leftover tmp_* dirs.
           console.warn(
             '[git-object-quarantine] could not remove scratch dir',
             scratchHostPath,

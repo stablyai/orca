@@ -1,5 +1,4 @@
-// Re-arming the prepared-checkout pool is a full `reset --hard`. Firing it before the create's
-// terminals are launched puts that checkout in front of the startup agent's first git reads.
+// Rearm resets the prepared pool with reset --hard; launching terminals first keeps startup agent Git reads ahead of that mutation.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({

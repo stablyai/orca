@@ -53,7 +53,6 @@ const pairingCode = encodePairingOffer({
   pairedDeviceId: 'paired-desktop'
 })
 
-/** A manifest whose JSON is exactly `bytes` long. */
 function manifestOfBytes(bytes: number): OrcadMigrationManifest {
   const withLabel = (targetLabel: string): OrcadMigrationManifest => ({
     version: ORCAD_MIGRATION_MANIFEST_VERSION,

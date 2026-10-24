@@ -648,9 +648,7 @@ describe('agentSubagentsEqual', () => {
   })
 })
 
-// Why: the per-source hook normalizers construct these literals and validate them
-// directly. This pins that the direct path stays identical to the JSON round trip
-// they used to take, including where stringify would have altered the payload.
+// Pin direct normalizer parity with the former JSON round trip, including values stringify alters.
 describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
   const CASES: Record<string, unknown>[] = [
     {
@@ -730,12 +728,11 @@ describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
 })
 
 describe('WellKnownAgentType', () => {
-  // Compile-time proof the union is derived from TuiAgent rather than hand-copied:
-  // a literal list that misses any launchable agent id fails to typecheck here.
+  // Derive the union from TuiAgent so new launchable IDs cannot drift beyond a hand-copied list.
   const widenTuiAgent = (agent: TuiAgent): WellKnownAgentType => agent
 
   it('covers every TuiAgent id plus the unknown sentinel', () => {
-    // ids the previous 22-member hand-written union had drifted past
+    // Previously missing launchable IDs.
     const formerlyMissing: WellKnownAgentType[] = [
       'qwen-code',
       'mistral-vibe',

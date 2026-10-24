@@ -10,17 +10,7 @@ import {
   terminatePtyJob
 } from './windows-pty-job'
 
-/**
- * The unit tests pin the contract; this pins the thing the contract is for.
- *
- * A grandchild spawned `detached` leaves the pane's console and reparents, so
- * neither `GetConsoleProcessList` nor a parent-pid walk can see it. That is the
- * process that outlived its pane and held the worktree directory open
- * (#9045, #10475, #10897). Job membership is the only mechanism that finds it,
- * so the assertion below is the whole justification for the node-pty patch.
- *
- * Runs only on win32; skipped elsewhere.
- */
+/** Real Windows jobs must find detached/reparented grandchildren that console/PID walks miss (#9045/#10475/#10897). */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -98,8 +88,7 @@ describeOnWindows('ConPTY job ownership', () => {
   }
 
   it('reports this build as able to own pty trees', () => {
-    // A node-pty rebuilt from unpatched sources would silently fall back to the
-    // old probe, so every assertion below would pass vacuously.
+    // Require patched job support or fallback would let ownership assertions pass vacuously.
     expect(isPtyJobOwnershipAvailable()).toBe(true)
   })
 
@@ -143,10 +132,7 @@ describeOnWindows('ConPTY job ownership', () => {
   }, 60_000)
 
   it('leaves a backgrounded process alone when the shell exits cleanly', async () => {
-    // The job must make an EXPLICIT teardown exact without redefining what a
-    // clean exit means. Measured: with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE set,
-    // typing `exit` reaped a detached server that survived before the patch --
-    // a behaviour change nobody asked for. This pins the absence of that flag.
+    // Explicit teardown must kill descendants while clean shell exit preserves background servers.
     const { proc, grandchildPid } = await spawnShellWithDetachedGrandchild()
 
     const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
@@ -163,13 +149,7 @@ describeOnWindows('ConPTY job ownership', () => {
   }, 60_000)
 
   it('still starts a backgrounded child from inside the job', async () => {
-    // Scope note: `start /b` uses CREATE_NEW_CONSOLE, not
-    // CREATE_BREAKAWAY_FROM_JOB, so this does NOT prove the BREAKAWAY_OK flag
-    // is doing its job -- it proves job membership does not block ordinary
-    // backgrounding. The flag itself rests on the Win32 contract (a job lacking
-    // JOB_OBJECT_LIMIT_BREAKAWAY_OK denies breakaway with ERROR_ACCESS_DENIED
-    // regardless of its other limits) and is not covered by a test here.
-    // Covering it needs a helper that passes the flag to CreateProcess.
+    // start /b proves ordinary backgrounding, not CREATE_BREAKAWAY_FROM_JOB rejection; that flag needs a dedicated native helper.
     const nodePty = await import('node-pty')
     const marker = join(mkdtempSync(join(tmpdir(), 'orca-breakaway-')), 'marker.txt')
     const proc = nodePty.spawn('cmd.exe', [], {
@@ -193,10 +173,7 @@ describeOnWindows('ConPTY job ownership', () => {
   }, 60_000)
 
   it('stops answering once the tree is gone, rather than claiming it is empty', async () => {
-    // Measured, not assumed: node-pty drops its handle record and closes the
-    // job when the shell exits, so a dead tree is unverifiable here rather than
-    // observably empty. Callers must not read null as proof of death -- the
-    // verdict vocabulary in docs/reference/ssh-execution-boundary.md applies.
+    // Shell exit closes the job; null remains unverifiable, never evidence of tree death.
     const { proc } = await spawnShellWithDetachedGrandchild()
     terminatePtyJob(proc)
     await sleep(1_500)

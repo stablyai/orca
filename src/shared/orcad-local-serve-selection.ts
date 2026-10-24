@@ -1,8 +1,4 @@
-/**
- * The contract between `orca serve` (CLI) and the app-side entry that decides whether this
- * machine can serve on orcad. The CLI never loads that logic: it runs the packaged app's
- * `out/main/<ORCAD_LOCAL_SERVE_SELECTION_ENTRY>.js` under ELECTRON_RUN_AS_NODE and reads one line.
- */
+/** The CLI runs the packaged selection entry under ELECTRON_RUN_AS_NODE and reads one line, avoiding app-side imports. */
 export const SERVE_RUNTIME_ENV = 'ORCA_SERVE_RUNTIME'
 /** `ORCA_SERVE_RUNTIME=electron` keeps `orca serve` on Electron; orcad is the default. */
 export const SERVE_RUNTIME_ELECTRON = 'electron'

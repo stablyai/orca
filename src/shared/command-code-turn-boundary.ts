@@ -46,8 +46,7 @@ export function isCommandCodeNewTurnWhileWorking({
     return false
   }
 
-  // Main-process hooks can require explicit prompt evidence; renderer IPC does
-  // not carry the flag yet, so a prompt text change is enough there.
+  // Main hooks may require explicit prompt evidence; renderer IPC lacks that flag and uses changed prompt text.
   if (hasExplicitPrompt === false) {
     return false
   }

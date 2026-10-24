@@ -311,8 +311,7 @@ describe('orchestration worker-start prompt contract', () => {
 
     await vi.runAllTimersAsync()
     const response = await pending
-    // Codex supports turn-start observation and no turn started, so ready would be a lie: the
-    // paste can sit unsent in the composer while the receipt looks like a healthy dispatch.
+    // If Codex turn observation sees no start, accepted paste may still be unsent; never claim ready.
     expect(response).toMatchObject({
       ok: true,
       result: {
@@ -342,8 +341,7 @@ describe('orchestration worker-start prompt contract', () => {
     expect(persisted.getDispatchContextById(dispatchId)).toMatchObject({
       status: 'pending',
       last_failure: null,
-      // Lifecycle stays open so a worker that recovers can still report; worker-report
-      // settlement reconnects a start_unknown worker through 'ready'.
+      // Keep lifecycle open for recovery reports; report settlement moves start_unknown through ready.
       capability_revoked_at: null
     })
     expect(persisted.getWorkerDispatch(dispatchId)).toMatchObject({

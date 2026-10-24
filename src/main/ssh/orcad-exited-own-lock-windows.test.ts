@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 
-// The host script's own checks are covered against the real script; here only the client's part.
+// Host-script checks run separately against the real script; these cases cover client interpretation.
 const remote = vi.hoisted((): { commands: string[]; reply: string } => ({
   commands: [],
   reply: ''

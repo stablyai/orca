@@ -75,7 +75,6 @@ describe('orcad terminal census', () => {
   })
 
   it('counts terminals a degraded daemon left running in orcad itself', async () => {
-    // Empty daemon, one in-process agent: a restart would kill it, so the census must not read 0.
     await expect(
       collectOrcadTerminalCensus(
         100,

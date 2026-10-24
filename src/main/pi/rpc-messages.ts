@@ -97,7 +97,7 @@ export class PiRpcMessages {
         const item = this.key(index, channel)
         const text = channel === 'assistant' ? block.text : block.thinking
         if (text !== undefined) {
-          // A snapshot without deltas still opens the same message row.
+          // Snapshot-only messages must open the same journal row as streamed deltas.
           if (!this.text.has(item) && text) {
             events.push({ type: 'text.delta', item: { id: item }, channel, text })
           }

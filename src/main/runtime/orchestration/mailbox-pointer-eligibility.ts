@@ -25,19 +25,8 @@ export function hasUnfilteredOrchestrationWaiter(
   return false
 }
 
-/**
- * The rows a pointer may carry right now.
- *
- * Both delivery lanes — bytes into a PTY, a turn into a structured session — select their batch
- * identically and differ only in what they do with it, so the selection lives here rather than
- * being kept in step in two copies. An unfiltered waiter owns the whole mailbox and yields an
- * empty batch: a caller blocked in `check --wait` preempts pointer delivery entirely.
- *
- * Type exclusion is exact in SQL and no post-filter is owed. The unfiltered case returns above, so
- * every remaining waiter contributes a concrete type list, and `messages.type` is TEXT with no
- * NOCASE collation — `NOT IN` is the same byte-exact test JS would repeat. Selection is synchronous
- * throughout, so no waiter can register partway through it either.
- */
+/** Both delivery lanes share this synchronous SQL selection; unfiltered waiters preempt all pointers.
+ * Concrete waiter types are excluded byte-exactly in SQL; no JavaScript post-filter is needed. */
 export function selectOrchestrationPointerBatch(input: {
   db: OrchestrationDb
   mailboxHandle: string

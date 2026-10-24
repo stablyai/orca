@@ -342,7 +342,6 @@ it.each(['success', 'new-exit', 'old-exit'] as const)(
       const resolve = () =>
         runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The failed start withdrew the tab from main's layout: there is no such pane any more.
         expect.soft(resolve).toThrow('terminal_not_found')
       } else {
         expect.soft(resolve().connected).toBe(false)

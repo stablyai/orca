@@ -13,12 +13,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
 
-/**
- * Builds the dashboard snapshot directly from the live renderer store for the
- * in-window screen popover. The pop-out window can't read this store, so it
- * relays a serialized snapshot instead (useDashboardSnapshot); in-window there
- * is no relay, so we derive it here from the same builder the bridge uses.
- */
+/** Build in-window snapshots from the store; pop-out windows instead receive the bridge’s serialized version of the same builder. */
 export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const rowsCacheRef = useRef<ReturnType<typeof createWorktreeAgentRowsCache>>(undefined!)
   rowsCacheRef.current ??= createWorktreeAgentRowsCache()
@@ -41,17 +36,9 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   // Why: controls idle visibility and gates generated conversation names.
   const settings = useAppStore((s) => s.settings)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
-  // Why: each card carries the host-input profile its preview terminal keys
-  // against, so the drawer must watch every slice that resolves an execution
-  // host — exactly the set useDashboardPopoutBridge republishes on. Agent
-  // activity alone cannot heal these: a board whose agents are idle never
-  // rebuilds, so an SSH handshake or host swap would leave the preview encoding
-  // bytes for the host the pty used to run on. All are low-frequency (each
-  // writer bails out when nothing changed) next to agentStatusByPaneKey, which
-  // already rebuilds this memo on every status ping.
+  // Watch every host-profile input like the pop-out bridge; an idle board has no later status event to repair stale byte routing.
   const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
-  // Why: a folder workspace is not a git worktree — its host resolves through
-  // these two instead of worktreesByRepo.
+  // Folder workspace host resolution uses these slices instead of git-worktree rows.
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const projectGroups = useAppStore((s) => s.projectGroups)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
@@ -68,8 +55,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const remoteDetectedAgentIds = useAppStore((s) => s.remoteDetectedAgentIds)
   const runtimeDetectedAgentIds = useAppStore((s) => s.runtimeDetectedAgentIds)
-  // Why: freshness can flip a bucket without any backing map changing; the epoch
-  // ticks on the freshness boundary so the memo re-derives stale-decayed cards.
+  // Freshness can change buckets without map writes; the epoch invalidates stale-decay memos.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   // Why: launch options read only this view, so any route input change rebuilds them.
   const launchRouteStore = useAppStore(selectAgentLaunchRouteView)
@@ -86,8 +72,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const chatProgramFactsVersion = useChatProgramFactsVersion()
 
   return useMemo(
-    // Why: Date.now() is read inside the memo (not a dep) so stale-decay
-    // recalculates whenever agentStatusEpoch ticks, matching useDashboardData.
+    // Read the clock when the freshness epoch invalidates this memo, matching row derivation.
     () =>
       buildDashboardSnapshot(
         {
@@ -122,14 +107,11 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           detectedAgentIds,
           remoteDetectedAgentIds,
           runtimeDetectedAgentIds,
-          // Why: read non-reactively — resolveWindowsShiftEnterEncoding takes
-          // launch identity but never routes on it, so subscribing would only
-          // rebuild the board. Matches the bridge's republish gate.
+          // Read launch identity non-reactively because Shift+Enter routing does not depend on it; match the bridge gate.
           agentLaunchConfigByPaneKey: useAppStore.getState().agentLaunchConfigByPaneKey
         },
         Date.now(),
-        // Why: unchanged worktrees reuse their row pipeline; card assembly still runs
-        // fresh against the review/host/status slices this memo subscribes to.
+        // Reuse unchanged worktree rows while assembling cards fresh from current review/host/status slices.
         { rowsCache: rowsCacheRef.current, rowsGeneration: agentStatusEpoch, launchRouteStore }
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps

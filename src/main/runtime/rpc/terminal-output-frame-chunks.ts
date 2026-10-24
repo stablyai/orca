@@ -70,16 +70,14 @@ export function* iterateTerminalOutputFrameChunks(
     return
   }
   const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
-  // Unreachable past the OutputSpan branch above (rawLength === data.length there), but kept
-  // as defence in depth: it is the only shape that can carry a seq the chunk offsets can't map.
+  // Defense in depth for unmappable seq: OutputSpan currently handles all mismatched raw lengths before this branch.
   const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta?.seq === 'number'
   const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
   let chunkStart = 0
   let chunkBytes = 0
   let delayedChunk: { text: string; seq?: number } | null = null
 
-  // Why two offsets instead of an accumulator: the emitted text is always the contiguous
-  // substring from chunkStart to end. Keep the legacy addition order for unsafe sequence values.
+  // Emit contiguous substrings; retain legacy addition order for unsafe sequence values.
   const takeChunk = (end: number): { text: string; seq?: number } => {
     const text = data.slice(chunkStart, end)
     const current = {
@@ -109,8 +107,7 @@ export function* iterateTerminalOutputFrameChunks(
       partBytes = 4
       width = 2
     }
-    // Why chunkBytes > 0: keeps a code point wider than the whole cap in its own frame
-    // instead of splitting an empty one forever.
+    // A code point wider than the cap must occupy one frame; splitting an empty chunk would loop forever.
     if (chunkBytes > 0 && chunkBytes + partBytes > TERMINAL_STREAM_CHUNK_BYTES) {
       const nextChunk = takeChunk(index)
       if (shouldDelayFinalSeq) {
@@ -135,7 +132,7 @@ export function* iterateTerminalOutputFrameChunks(
   // A split always advances past its boundary, so the tail after the loop is never empty.
   const finalChunk = takeChunk(data.length)
   if (shouldDelayFinalSeq) {
-    // Why: only the final frame can safely carry the high-water mark when rawLength can't map back to UTF-16 offsets.
+    // Unmappable raw lengths may carry high-water only on the final frame.
     if (delayedChunk) {
       yield {
         bytes: encodeTerminalStreamText(delayedChunk.text),

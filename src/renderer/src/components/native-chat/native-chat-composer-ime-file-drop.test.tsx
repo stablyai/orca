@@ -42,8 +42,7 @@ vi.mock('@/store', () => {
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
-// Real notice strings, so a copy of the wording here cannot outlive the string
-// users actually read, and a newly added export cannot go missing from the mock.
+// Retain production notices and exports so mocks cannot hide stale wording or new behavior.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
   resolveNativeChatAttachmentHost: () => testState.executionHostId,

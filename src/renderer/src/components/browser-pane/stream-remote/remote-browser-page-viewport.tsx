@@ -195,23 +195,17 @@ export function RemoteBrowserPageViewport({
           }}
         />
       ) : null}
-      {/* Why the reconnect control also opens this toast: the control renders inside it, so
-          gating the toast on the message alone made an empty message ('' from a host that failed
-          with no text) swallow the user's only way back — the original stranding bug, reachable
-          through three sites that forward host-supplied text into `stopped`. */}
+      {/* Render the toast for Reconnect even when a host failure supplies no message; the control lives inside it. */}
       {remoteError || canReconnectRemoteBrowserStream(streamStatus) ? (
         <div
           data-testid="remote-browser-stream-error"
           role="status"
           aria-live="polite"
-          // Why z-30: the load-failure overlay is a z-20 full-pane sheet, so without this the
-          // Reconnect control renders beneath it and silently swallows every click — the user's
-          // only way back, present but unusable, whenever the page also failed to load.
+          // Keep Reconnect above the z-20 load-failure sheet so it remains clickable.
           className="absolute bottom-4 left-1/2 z-30 flex max-w-md -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
         >
           <span>{remoteError}</span>
-          {/* Why: the runtime refuses server screencast for a client-placed page, so reconnecting
-              can never render it here. A new server-placed page is the only way through. */}
+          {/* Client-placed pages refuse server screencasts; only a new server-placed page can render here. */}
           {remotePageHandle?.placement?.kind === 'client' ? (
             <ReopenBrowserPageOnServerButton
               environmentId={remotePageHandle.environmentId}

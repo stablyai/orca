@@ -191,7 +191,6 @@ describe('plan digest', () => {
     const first = await buildBundledSkillPlan(input)
     const second = await buildBundledSkillPlan(input)
     expect(second.plan).toEqual(first.plan)
-    // Generated ids and times are made at execute time, never planned.
     expect(JSON.stringify(first.plan)).not.toMatch(/orca-(?:stage|old)-|\d{4}-\d{2}-\d{2}T/u)
 
     await writeFile(join(home.shared, 'SKILL.md'), NEW_TEXT)

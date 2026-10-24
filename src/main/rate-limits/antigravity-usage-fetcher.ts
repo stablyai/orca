@@ -29,22 +29,14 @@ const FAILURE_REASONS: Partial<Record<UsageRateLimitFailureKind, string>> = {
 const UNSUPPORTED_USAGE_COMMAND_REASON =
   'Antigravity usage is not available. This version of the Antigravity CLI answers `/usage` as a prompt instead of a command, so Orca stopped asking rather than spend quota on it. Update `agy` and restart Orca.'
 
-/**
- * Latched once agy answers the quota read with a model turn.
- *
- * Why latch instead of retrying: the evidence that this agy cannot answer `/usage` is the same
- * event that spends a turn of the user's quota. Retrying on a cadence would keep paying for the
- * same discovery, so the probe is abandoned for the rest of the process's life.
- */
+/** Latch billed-turn evidence for process lifetime; retrying would keep spending quota on the same unsupported read. */
 let usageCommandUnsupported = false
 
-/** Clears the unsupported latch. Tests only — a live process has no way back. */
 export function resetAntigravityUsageSupportForTests(): void {
   usageCommandUnsupported = false
 }
 
 export type AntigravityUsageDependencies = {
-  /** Injected so tests exercise the classification without spawning agy. */
   runCommand?: typeof runProcess
   resolveCommand?: typeof resolveCommandOnLocalPath
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
@@ -67,9 +59,7 @@ function unavailable(
     weekly: null,
     updatedAt: now,
     error: message,
-    // Why 'unavailable' and not 'error' for every failure: an absent CLI or a signed-out account is
-    // a state the user can act on, and the status bar renders it as guidance rather than as a
-    // refresh that keeps failing (#7809, #14227).
+    // Missing CLI/auth are actionable guidance states, not repeated refresh errors (#7809, #14227).
     status: 'unavailable',
     usageMetadata: { source: 'cli', attemptedSources: ['cli'], failureKind }
   }
@@ -95,19 +85,8 @@ function failed(
   }
 }
 
-/**
- * Reads Antigravity quota from the Antigravity CLI itself.
- *
- * Why the CLI and not the Gemini mirror it replaces: Orca used to publish a *successful* Gemini
- * `retrieveUserQuota` read under the Antigravity provider id. That reported Gemini CLI per-model
- * buckets on a 60-minute window, so Antigravity's real pools ("Gemini Models" and "Claude and GPT
- * models", each weekly) were never shown and the weekly limit was always null (#9122, #22511). It
- * also made the segment depend on an installed `@google/gemini-cli` for token refresh, which an
- * Antigravity user has no reason to have.
- *
- * This runs on whichever machine owns execution; the caller is responsible for not asking a local
- * agy about a remote workspace's quota.
- */
+/** Read the executing host's agy quota; callers must route remote workspaces to their owner.
+ * Gemini retrieveUserQuota describes different buckets/windows and cannot represent Antigravity weekly pools (#9122, #22511). */
 export async function fetchAntigravityRateLimits(
   options: FetchAntigravityRateLimitsOptions = {}
 ): Promise<ProviderRateLimits> {
@@ -120,8 +99,7 @@ export async function fetchAntigravityRateLimits(
   const platform = options.platform ?? process.platform
   const resolveEnvironment = options.resolveEnvironment ?? (() => resolveLoginShellEnvironment())
 
-  // Why the login shell's env: agy installs to ~/.local/bin, which is on the user's PATH but not on
-  // the PATH an Electron app inherits from the window server or a desktop launcher.
+  // GUI-launched Electron PATH often omits agy's ~/.local/bin.
   const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
   const command = antigravityCommandName()
   const program = await resolve(command, { platform, env })
@@ -184,8 +162,7 @@ export async function fetchAntigravityRateLimits(
   }
 
   const reading = parseAntigravityUsageStdout(result.stdout)
-  // Why the successful read is checked first: a real reading can never be evidence of a prompt, so
-  // ordering it ahead of the turn check makes a false latch impossible.
+  // Valid quota readings must not accidentally trip the billed-turn latch.
   if (!reading && stdoutShowsModelTurn(result.stdout)) {
     usageCommandUnsupported = true
     return unavailable(UNSUPPORTED_USAGE_COMMAND_REASON, 'usage-unavailable', now())
@@ -209,8 +186,7 @@ export async function fetchAntigravityRateLimits(
     }
   }
   if (!reading) {
-    // Why a non-zero exit is reported only here: `runProcess` treats the exit code as data, and a
-    // signed-out read is classified above, so the code only adds detail once the payload is missing.
+    // Auth is classified earlier; include nonzero exit detail only when quota payload is missing.
     const exitDetail = result.code === 0 || result.code === null ? '' : ` (exit ${result.code})`
     return failed(
       `Antigravity usage is not available. The Antigravity CLI did not report a quota${exitDetail}.`,

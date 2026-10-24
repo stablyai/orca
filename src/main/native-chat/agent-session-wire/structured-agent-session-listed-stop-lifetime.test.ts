@@ -1,5 +1,4 @@
-// A Stop of the listed background helpers acts only on the lifetimes it captured: a helper that
-// restarts under the same id, or appears refused while the Stop runs, is not this Stop's to end.
+// Stop owns captured helper lifetimes only; restarted or newly refused helpers under the same ID are outside its authority.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

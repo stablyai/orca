@@ -98,8 +98,7 @@ describe('BrowserPaneOverlayLayer', () => {
 
   afterEach(() => {
     cleanup()
-    // The row store is module-level, so a leftover row would render an extra pane in every
-    // sibling test.
+    // Clear the module-level row store so sibling tests cannot inherit extra panes.
     clearClientHostedBrowserRowSelection()
     applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [] })
   })
@@ -416,8 +415,7 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="false"')
   })
 
-  // STA-7435: a background-opened page's admission starts its guest; once released (first load
-  // settled) the slot must fall back to the normal rules instead of staying laid out forever.
+  // After background admission ends, return to normal parking rules instead of retaining layout forever.
   it('mounts an admitted page in a hidden worktree and parks it once the admission ends', () => {
     admitBrowserPageMount('page-b')
     try {
@@ -449,9 +447,7 @@ describe('BrowserPaneOverlayLayer', () => {
     }
   })
 
-  // Why the style and not just mountedness: paintability drives the slot's `display`, and
-  // display:none is the exact park that stops Chromium producing frames. A mounted pane inside a
-  // display:none slot still goes dark, so mount assertions alone cannot see this regression.
+  // Assert display, not just mounting: display:none stops Chromium frames even on a mounted pane.
   it('paints the slot of a remotely viewed inactive browser pane', () => {
     expect(slotDisplay('browser-b')).toBe('none')
 
@@ -461,10 +457,7 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(slotDisplay('browser-b')).toBe('flex')
   })
 
-  // Why DOM order and not just presence: the host-row pane carries no guest and paints over
-  // whichever webview the group was showing. Both siblings are absolutely positioned onto the same
-  // anchor, so the only thing putting it on top is being last — a reorder is invisible to every
-  // other assertion here and would bury it under a guest.
+  // The host-row pane shares an absolute anchor with guests; only last-in-DOM order keeps it visible above them.
   it('renders the client-hosted host-row pane after every browser slot', () => {
     applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [HOST_ROW] })
     selectClientHostedBrowserRow({

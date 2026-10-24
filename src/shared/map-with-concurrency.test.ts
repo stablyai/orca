@@ -54,7 +54,6 @@ describe('mapWithConcurrency', () => {
       inFlight -= 1
     })
     expect(peak).toBeLessThanOrEqual(8)
-    // With 50 items and limit 8, the pool should actually saturate.
     expect(peak).toBe(8)
   })
 

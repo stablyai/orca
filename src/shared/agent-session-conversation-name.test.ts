@@ -62,8 +62,7 @@ describe('normalizeAgentSessionConversationName hostile text', () => {
 
     const normalized = normalizeAgentSessionConversationName(name)
 
-    // A raw slice would leave the emoji's lone high surrogate, which renders as
-    // U+FFFD on every surface that shows the name.
+    // A raw slice strands the emoji's high surrogate, rendered as U+FFFD.
     expect(normalized).toBe('a'.repeat(AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH - 1))
     expect(normalized).not.toContain('\uFFFD')
   })
@@ -76,9 +75,7 @@ describe('normalizeAgentSessionConversationName hostile text', () => {
 })
 
 describe('normalizeAgentSessionConversationName joiners', () => {
-  // U+200C/U+200D carry meaning: stripping them as "format characters" splits a
-  // family emoji into three people and breaks Persian and Hindi orthography.
-  // The naming prompt asks for the user's own language, so this is normal input.
+  // Preserve U+200C/U+200D: stripping them breaks family emoji and Persian/Hindi orthography in user-language names.
   const ZWJ = '\u200D'
   const ZWNJ = '\u200C'
 
@@ -92,7 +89,6 @@ describe('normalizeAgentSessionConversationName joiners', () => {
     expect(normalizeAgentSessionConversationName(name)).toBe(name)
   })
 
-  // Kept from the hardening: allowing the joiners must not readmit these.
   it.each([
     ['bidi override', 'Fix\u202Egnp.exe probe', 'Fix gnp.exe probe'],
     ['isolate pair', 'Fix\u2066the\u2069 probe', 'Fix the probe'],
@@ -105,8 +101,7 @@ describe('normalizeAgentSessionConversationName joiners', () => {
     expect(normalizeAgentSessionConversationName(name)).toBe(expected)
   })
 
-  // Each row is a `\p{Cf}` run the hand-written enumeration this replaces let
-  // through, so the name normalized to a non-empty label that renders as nothing.
+  // These Cf runs escaped the old enumeration and produced nonempty labels that rendered invisibly.
   it.each([
     ['invisible maths operators', '\u2061\u2062\u2063\u2064'],
     ['tag characters', '\u{E0020}\u{E0041}\u{E007F}'],
@@ -116,8 +111,7 @@ describe('normalizeAgentSessionConversationName joiners', () => {
     ['Arabic number signs', '\u0600\u0601\u06DD'],
     ['the joiners themselves', `${ZWNJ}${ZWJ}`],
     ['a bidi and zero-width mix', '\u202E\u200B\u2060'],
-    // A joiner survives the collapsing run, so it splits that run in two and
-    // each half becomes its own space; the guard has to read the spaces too.
+    // Surviving joiners split collapsed runs; the blank-label guard must also consume the resulting spaces.
     ['joiners split by a tab', `${ZWJ}\t${ZWJ}`],
     ['joiners split by a newline', `${ZWJ}\n${ZWJ}`],
     ['joiners split by a byte order mark', `${ZWJ}\uFEFF${ZWJ}`],
@@ -131,8 +125,7 @@ describe('normalizeAgentSessionConversationName joiners', () => {
   })
 
   it('drops a tag-character payload hidden after a real title', () => {
-    // Tag characters mirror ASCII, so this run decodes to readable text that no
-    // surface draws — it reached the user's own Codex history via thread/name/set.
+    // Invisible tag characters encode readable ASCII; this payload reached real Codex history through thread/name/set.
     const hidden = Array.from('ransom', (c) =>
       String.fromCodePoint(0xe0000 + c.charCodeAt(0))
     ).join('')

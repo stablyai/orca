@@ -11,8 +11,7 @@ import { buildNativeChatTaskListRows } from '../../../../shared/native-chat-task
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 
-/** An opened run's members in order, each one line until opened. Mounted only while the
- *  run is open, so a collapsed run pays for none of the diffing and pairing done here. */
+/** Mount only while expanded so collapsed runs avoid member pairing and diff work. */
 export function NativeChatToolRunMemberList({
   blocks,
   headerBlocks,

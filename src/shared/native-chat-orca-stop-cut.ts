@@ -1,7 +1,4 @@
-// A reply cut off because the Orca running the chat stopped (an update, a quit, a crash), as the
-// host's row about it says, and whether the chat is still sitting on that cut. Derived from the
-// journal each time, never stored: the client shows Continue from it, and the host re-checks it
-// under the session lock before Continue sends anything.
+// Derive Orca-stop cuts from the journal for Continue; never store them. Host rechecks under the session lock before sending.
 
 import { readAgentSessionOrcaStop, type AgentSessionOrcaStopCause } from './agent-session-orca-stop'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
@@ -12,9 +9,7 @@ import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
 import { structuredAgentSessionCommandTurnItemIds } from './structured-agent-session-command-entry'
 import { isStructuredAgentSessionNonRequestRow } from './structured-agent-session-latest-request'
 
-/** The row a quit or update writes for the turn it cut, keyed by the child the quit stopped, so a
- *  retried stop of that child writes no second row. The prefix is one older clients already read
- *  as explaining a cut turn, so they add no row of their own beside it. */
+/** Key shutdown rows by stopped child to dedupe retries. Keep the legacy cut-explanation prefix so older clients add no duplicate notice. */
 export function orcaShutdownRowClientMessageId(
   sessionId: string,
   fence: number,
@@ -35,11 +30,7 @@ export type NativeChatOrcaStopCut = {
   cause: AgentSessionOrcaStopCause
 }
 
-/**
- * The latest root turn, when nothing was sent since: no request after it, and no send still on its
- * way. A steer into that turn or a conversation command asks for nothing new
- * (`isStructuredAgentSessionNonRequestRow`). Null otherwise.
- */
+/** Latest root turn only if no later request or in-flight send exists; steers/conversation commands do not count as new requests. */
 export function latestNativeChatTurnSinceRequest(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]

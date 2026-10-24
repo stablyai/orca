@@ -1,8 +1,4 @@
-/**
- * The controller is where a rebuilt catalog meets the cache: it must advance
- * generations before fetching, forget hosts the catalog dropped, and leave an
- * unreachable authority alone instead of dialling it.
- */
+/** Advance generations before fetch, evict removed hosts, and leave unreachable authorities undialed. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -170,9 +166,7 @@ describe('automation host query controller', () => {
     controller.dispose()
   })
 
-  // The ordinary startup shape: SSH hydration re-applies the catalog while the
-  // four-slot pool still holds a queue, and the hosts in that queue are the ones
-  // that would otherwise sit at `loading` with no request and no Retry.
+  // Startup hydration may reapply the catalog with work still queued; cancelled entries must refetch rather than remain loading forever.
   it('re-fetches hosts whose queued work a second catalog apply cancelled', async () => {
     const gates: ((value: ScopedAutomationList) => void)[] = []
     const queried: string[] = []
@@ -206,8 +200,7 @@ describe('automation host query controller', () => {
     controller.dispose()
   })
 
-  // Design doc: a manual All-host refresh bypasses TTL but leaves hosts already
-  // known to fail to their own Retry rather than dialling them again.
+  // Manual refresh bypasses TTL; permanently failed hosts retain their own Retry without automatic redial.
   it('does not re-enqueue a permanently failed host on a manual refresh', async () => {
     const listScoped = vi.fn(() => Promise.reject(new Error('permission_denied')))
     const { cache, controller } = createController(listScoped)
@@ -221,8 +214,7 @@ describe('automation host query controller', () => {
     controller.dispose()
   })
 
-  // doc:321 — a same-id re-adoption moves the registration generation and nothing
-  // else, so rows fetched under the old one must not survive the applied catalog.
+  // Same-ID re-adoption changes registration generation while preserving display identity; old rows must be discarded (doc:321).
   it('re-fetches a host re-adopted under a new registration inside the TTL', async () => {
     // One row per registration, so a cached row names the incarnation it came from.
     const listScoped = vi.fn((_authority, selector) =>

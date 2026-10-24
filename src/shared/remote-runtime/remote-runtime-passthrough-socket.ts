@@ -27,11 +27,7 @@ export type RemoteRuntimePassthroughCallbacks = {
   onClose: (error: RemoteRuntimeClientError) => void
 }
 
-/**
- * An authenticated E2EE socket that carries any number of requests and streams and hands every
- * decrypted frame back untouched. Why not the subscription transport: it owns one request id per
- * socket and fails on any other, while a relay forwards whatever its client multiplexes.
- */
+/** Relay E2EE frames for arbitrary multiplexed request IDs; subscription sockets own one ID and reject others. */
 export function openRemoteRuntimePassthroughSocket(
   connection: PairedRuntimeConnection,
   clientCapabilities: readonly RuntimeCapability[],

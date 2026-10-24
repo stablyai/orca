@@ -4,7 +4,7 @@ import type { ExecutionHostId } from './execution-host'
 /** A host that runs part of a workspace: this desktop's main, or a paired server. */
 export type WorkspaceSleepHost = { kind: 'self' } | { kind: 'environment'; environmentId: string }
 
-/** One workspace to sleep, with the hosts its window resolved for its terminals and chats. */
+/** A workspace and the terminal/chat hosts resolved by its window. */
 export type WorkspaceSleepTarget = {
   worktreeId: string
   terminalHost: WorkspaceSleepHost
@@ -36,7 +36,7 @@ export type WorkspaceSleepOutcome = {
   receipts: WorkspaceChatStopReceipt[]
 }
 
-/** What the window follows of a sleep main runs, whoever asked for it. */
+/** Window notifications for main-owned sleep, regardless of requester. */
 export type WorkspaceSleepNotice =
   | { worktreeId: string; phase: 'started'; projectMovePauseId?: string }
   | {
@@ -52,10 +52,7 @@ export type WorkspaceSleepNotice =
   /** A phone or CLI's sleep that did not fully succeed; the window shows its own Sleep's toast. */
   | { worktreeId: string; phase: 'failed'; outcome: WorkspaceSleepOutcome }
 
-/**
- * A record a workspace sleep left, which main alone resumes: a pane-owned capture (#11598) or an
- * older window capture of a still-running agent. Completed-agent hibernation is the window's own.
- */
+/** Main resumes pane-owned sleep captures and legacy running-agent captures; the window owns completed-agent hibernation. */
 export function isWorkspaceSleepRecord(record: SleepingAgentSessionRecord): boolean {
   return (
     record.origin === 'worktree-sleep' &&
@@ -63,10 +60,7 @@ export function isWorkspaceSleepRecord(record: SleepingAgentSessionRecord): bool
   )
 }
 
-/**
- * Whether a phone's open needs a window to wake this workspace: a slept pane that is neither a
- * workspace sleep's (main resumes it) nor a running agent's own resume record nor a tab-open one.
- */
+/** Whether phone open needs a window: main cannot resume window-owned hibernation records. */
 export function hasWindowOnlyWakeRecord(
   records: Readonly<Record<string, SleepingAgentSessionRecord>> | undefined,
   worktreeId: string
@@ -77,10 +71,7 @@ export function hasWindowOnlyWakeRecord(
   return hasSleptAgentToWake(Object.fromEntries(windowWoken), worktreeId)
 }
 
-/**
- * What a phone's open of a workspace woke: main resumes a sleep's running agents itself, a window
- * wakes its own hibernation, and a headless host without a window cannot wake that.
- */
+/** Main wakes sleep captures; a window wakes its hibernation. A headless host cannot wake the latter. */
 export function phoneWakeReport(
   records: Readonly<Record<string, SleepingAgentSessionRecord>> | undefined,
   worktreeId: string,

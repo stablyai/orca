@@ -167,7 +167,6 @@ export async function buildExecutionHostAgentStartupPlan(
   return plan
 }
 
-/** `buildExecutionHostAgentStartupPlan` for a caller that delivers an uncarried prompt itself. */
 export async function planExecutionHostStartupWithPromptCandidate(
   options: StartupScope & {
     prompt: string

@@ -1,9 +1,6 @@
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
 import type { ResumeRun, ResumeRunHostStatus } from './native-chat-resume-run'
 
-/** Only current host failures create attention obligations after a run. */
-
-/** Where one chat of the run stands, as the leading icon shows it in place of the checkbox. */
 export type ResumeRunRowStatus =
   | { kind: 'in-flight'; startedAt: number; phase: 'starting' | 'ready' | null }
   | { kind: 'resumed' }
@@ -30,7 +27,6 @@ export type ResumeRunView = {
   }>
 }
 
-// What needs the user first, then what is still moving, then what is done.
 const ORDER: Record<Category, number> = { attention: 0, 'in-progress': 1, resumed: 2, other: 3 }
 
 export function resumeRunView(

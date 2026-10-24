@@ -168,9 +168,7 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
     this.deliver(() => this.options.callbacks.onBinary?.(plaintext))
   }
 
-  // Why: `handleFrame` runs straight off the ws 'message' emitter, so a consumer throw becomes an
-  // uncaught exception that kills the process. The request router already routes one to
-  // `finishError`; mirror that here rather than leaving the subscription path unguarded.
+  // ws invokes this directly; route consumer throws to finishError instead of crashing the process.
   private deliver(emit: () => void): void {
     try {
       emit()

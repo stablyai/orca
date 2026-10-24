@@ -63,8 +63,7 @@ describe('orchestration RPC methods', () => {
 
     it('sends a message', async () => {
       setup()
-      // Why: send notifies arrival so already-idle recipients get push-on-idle
-      // delivery without waiting for a status transition (#12536).
+      // Notify idle recipients on send so delivery does not wait for a status transition (#12536).
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const result = (await call('orchestration.send', {
         from: 'term_coord',
@@ -606,7 +605,7 @@ describe('orchestration RPC methods', () => {
       const task = db.createTask({ spec: 'lock-release work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
 
-      // Why: waiter notification must observe the settled Dispatch, not stale lifecycle state.
+      // Waiter notification must observe the committed Dispatch lifecycle.
       vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {
         expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
       })
@@ -627,7 +626,6 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
       expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
-      // Lock released — a new dispatch to the same terminal must succeed.
       const t2 = db.createTask({ spec: 'follow-up work' })
       expect(() => createRootDispatch(db, t2.id, 'term_worker')).not.toThrow()
     })

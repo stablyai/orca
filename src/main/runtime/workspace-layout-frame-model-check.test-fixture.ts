@@ -1,5 +1,4 @@
-// Installs main's model check on every layout records frame for one test's life, and freezes each
-// partition model handed to a reader so a reader that mutates the shared model throws.
+// Check every layout frame and freeze partition models so accidental shared-model mutation throws.
 
 import { layoutFrameModelErrors } from './workspace-layout-frame-model-check'
 import {

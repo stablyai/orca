@@ -32,30 +32,81 @@ async function terminalLinkPoint(
   tabId: string,
   link: string
 ): Promise<{ x: number; y: number }> {
-  return page.evaluate(
-    ({ tabId, link }) => {
-      const pane = window.__paneManagers?.get(tabId)?.getActivePane?.()
-      const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
-      const cell = pane?.terminal.dimensions?.css.cell
-      if (!pane || !screen || !cell?.width || !cell.height) {
-        throw new Error('terminal screen unavailable')
-      }
-      const buffer = pane.terminal.buffer.active
-      for (let row = pane.terminal.rows - 1; row >= 0; row -= 1) {
-        const text = buffer.getLine(buffer.viewportY + row)?.translateToString(false) ?? ''
-        const column = text.indexOf(link)
-        if (column !== -1) {
-          const rect = screen.getBoundingClientRect()
-          return {
-            x: rect.left + (column + link.length / 2) * cell.width,
-            y: rect.top + (row + 0.5) * cell.height
+  const readPoint = () =>
+    page.evaluate(
+      ({ tabId, link }) => {
+        const pane = window.__paneManagers?.get(tabId)?.getActivePane?.()
+        const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+        if (!pane || !screen) {
+          return null
+        }
+        // A browser split can resize the container before xterm fits and paints its new grid.
+        const proposed = pane.fitAddon.proposeDimensions()
+        if (
+          !proposed ||
+          pane.terminal.cols !== proposed.cols ||
+          pane.terminal.rows !== proposed.rows
+        ) {
+          return null
+        }
+        const buffer = pane.terminal.buffer.active
+        const renderedRows = screen.querySelector('.xterm-rows')
+        for (const [row, renderedRow] of Array.from(
+          Array.from(renderedRows?.children ?? []).entries()
+        ).toReversed()) {
+          const column = renderedRow.textContent?.indexOf(link) ?? -1
+          const current = buffer.getLine(buffer.viewportY + row)?.translateToString(false) ?? ''
+          if (column < 0 || current.indexOf(link) !== column) {
+            continue
+          }
+          let offset = column + Math.floor(link.length / 2)
+          const walker = document.createTreeWalker(renderedRow, NodeFilter.SHOW_TEXT)
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const length = node.textContent?.length ?? 0
+            if (offset >= length) {
+              offset -= length
+              continue
+            }
+            const range = document.createRange()
+            range.setStart(node, offset)
+            range.setEnd(node, offset + 1)
+            const rect = range.getBoundingClientRect()
+            if (rect.width > 0 && rect.height > 0) {
+              return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+            }
           }
         }
-      }
-      throw new Error(`terminal link ${link} not on screen`)
-    },
-    { tabId, link }
-  )
+        if (renderedRows) {
+          return null
+        }
+        const rect = screen.getBoundingClientRect()
+        if (rect.width <= 0 || rect.height <= 0) {
+          return null
+        }
+        const cell = {
+          width: rect.width / pane.terminal.cols,
+          height: rect.height / pane.terminal.rows
+        }
+        for (let row = pane.terminal.rows - 1; row >= 0; row -= 1) {
+          const text = buffer.getLine(buffer.viewportY + row)?.translateToString(false) ?? ''
+          const column = text.indexOf(link)
+          if (column !== -1) {
+            return {
+              x: rect.left + (column + link.length / 2) * cell.width,
+              y: rect.top + (row + 0.5) * cell.height
+            }
+          }
+        }
+        return null
+      },
+      { tabId, link }
+    )
+  await expect.poll(readPoint, { message: `terminal link ${link} never rendered` }).not.toBeNull()
+  const point = await readPoint()
+  if (!point) {
+    throw new Error(`terminal link ${link} disappeared before activation`)
+  }
+  return point
 }
 
 /** Prints origin+path as one link; split apart so the typed command never shows the whole URL. */

@@ -1,8 +1,5 @@
 import { reserveNotificationCooldown } from '../../../shared/notification-burst-cooldown'
-// Why: the out-of-band leg of the mobile notification fan-out. Every event that
-// already went to connected sockets is offered to the push gateway so a phone
-// with Orca closed still hears about it. Fire-and-forget by construction: the
-// socket fan-out must never wait on, or fail because of, a push.
+// Send background push after socket fan-out without making sockets wait or fail on gateway results.
 import {
   MOBILE_PUSH_SOURCES,
   type MobilePushAgentState,
@@ -13,8 +10,7 @@ import type { PushGatewayClient, PushSendNotification } from './push-gateway-cli
 import { PushOutcomeCounters } from './push-outcome-counters'
 
 const PUSH_RETRY_DELAY_MS = 2_000
-// The gateway rejects a whole request above this, so a host with more paired
-// phones fans out across several sends rather than starving the extras.
+// Split requests at the gateway's per-send limit so extra paired phones still receive notifications.
 const MAX_REGISTRATIONS_PER_SEND = 20
 const PUSH_TITLE_MAX_LENGTH = 80
 const PUSH_BODY_MAX_LENGTH = 180
@@ -235,8 +231,7 @@ export class PushDispatcher {
         return
       }
       this.outcomes.record(result.reason)
-      // Only a transport-level miss is worth repeating; a gateway that refused
-      // this payload will refuse the identical retry.
+      // Retry transport misses once; an identical refused payload will be refused again.
       if (attempt === 0 && result.reason === 'unreachable') {
         this.scheduleRetry(() => {
           void this.deliver(targets, notification, attempt + 1)

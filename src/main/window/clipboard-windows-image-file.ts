@@ -72,7 +72,7 @@ function hasAtMostOneShellItem(value: Buffer): boolean {
   if (value.byteLength === 0) {
     return true
   }
-  // Why: Explorer's FileNameW exposes only the first path even when its CIDA has multiple items.
+  // Explorer FileNameW lists only the first path; require single-item CIDA.
   return value.byteLength >= 12 && value.readUInt32LE(0) === 1
 }
 
@@ -180,7 +180,7 @@ export async function readWindowsClipboardImageFileAsPng(
 
   let handle: ClipboardImageFileHandle
   try {
-    // Why: one handle keeps validation and the bounded read on the same file if its path changes.
+    // Validate and read through one handle so path replacement cannot swap the file.
     handle = await openFile(filePath)
   } catch {
     return null
@@ -213,7 +213,7 @@ export async function readWindowsClipboardImageFileAsPng(
   if (!encodedDimensions) {
     return null
   }
-  // Why: reject pixel bombs from metadata before NativeImage allocates decoded pixels.
+  // Check encoded dimensions before NativeImage allocates a pixel bomb.
   assertClipboardImageDimensionsWithinLimit(encodedDimensions)
 
   let image: NativeImage
