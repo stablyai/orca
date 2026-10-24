@@ -29,6 +29,7 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
+import { resubmitLaunchPromptUntilTurnStart } from './launch-prompt-submit-retry'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
 
@@ -172,10 +173,31 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       }
       options.onSubmitWritten?.()
     }
-    const submits =
+    let submits =
       options.composerReady && !submitWithPaste
         ? 1 + (await this.resubmitAgentPromptAfterRetryDelay(ptyId, generation, options))
         : 1
+    if (options.composerReady && !submitWithPaste) {
+      // Why: a fresh launch's composer signal can precede the TUI's own submit readiness.
+      const agent = this.getPtyAgent(ptyId)
+      const retry = agent ? TUI_AGENT_CONFIG[agent].submitRetryUntilTurnStart : undefined
+      if (retry) {
+        submits += await resubmitLaunchPromptUntilTurnStart({
+          policy: retry,
+          baseline,
+          readActivity: () => this.getAgentPromptActivity(handle, ptyId),
+          writeSubmit: () =>
+            this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind) === true,
+          beforeResubmit: async () => {
+            assertAgentPromptRequestActive(options.signal)
+            this.assertAgentPromptGeneration(ptyId, generation)
+            await options.beforeWrite?.(ptyId)
+          },
+          ...(options.suffixFailureError ? { failureError: options.suffixFailureError } : {}),
+          ...(options.signal ? { signal: options.signal } : {})
+        })
+      }
+    }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({

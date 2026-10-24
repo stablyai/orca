@@ -70,10 +70,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadyTimeoutMs: 20_000,
     submitRetryDelayMs: 1200
   },
-  autohand: {
-    detectCmd: 'autohand',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  autohand: { detectCmd: 'autohand', promptInjectionMode: 'stdin-after-start' },
   ante: {
     detectCmd: 'ante',
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
@@ -328,7 +325,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     expectedProcess: 'dsh',
     promptInjectionMode: 'stdin-after-start',
     // The whale intro keeps repainting behind the ready composer.
-    draftPasteReadySignal: 'dsh-composer-prompt'
+    draftPasteReadySignal: 'dsh-composer-prompt',
+    // Why: the launchpad draws its `❯` before the startup session is live; Enter in that window is
+    // refused with "still starting — press Enter once it is ready" and the draft stays. Measured on
+    // dsh-tui 0.17.0 / dsh 0.2.1-rc.2: Enter at +50…800 ms after the glyph is dropped, +1000…1300 ms
+    // submits. Retry until the turn starts rather than sleep a fixed guess; the budget covers a cold
+    // session open (kernel / model catalog) several times over.
+    submitRetryUntilTurnStart: { intervalMs: 500, attempts: 10 }
   },
   zcode: {
     detectCmd: 'zcode',

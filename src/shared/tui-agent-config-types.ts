@@ -53,6 +53,13 @@ export type TuiAgentConfig = {
   composerReadyCaptures?: readonly string[]
   /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
   submitRetryDelayMs?: number
+  /**
+   * For agents whose startup screen drops Enter instead of submitting (dsh's launchpad paints its
+   * composer before its session is live and tells the user to press Enter later): after a launch
+   * prompt's Enter, retry Enter at this interval until a turn start is observed, at most this many
+   * times. Only Enter is repeated; the prompt is never pasted twice.
+   */
+  submitRetryUntilTurnStart?: { intervalMs: number; attempts: number }
   /** Extra ms per logical prompt line before Enter, for TUIs that expand multiline paste slowly (antigravity). */
   submitLineSettleMsPerLine?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */

@@ -1,0 +1,64 @@
+import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
+import {
+  isAgentPromptStalledError,
+  verifyAgentPromptSubmission
+} from '../../agent-prompt-submission-verification'
+
+export type LaunchPromptSubmitRetryPolicy = { intervalMs: number; attempts: number }
+
+/**
+ * A launch's composer signal can arrive before the TUI can accept Enter: dsh's launchpad paints
+ * its `❯` while its startup session is still opening, refuses Enter with "still starting", and
+ * keeps the draft. Repeat only Enter until a turn start is observed — the text is already in the
+ * composer, so pasting again would be a second turn. Returns the extra submits written.
+ */
+export async function resubmitLaunchPromptUntilTurnStart(args: {
+  policy: LaunchPromptSubmitRetryPolicy
+  baseline: AgentPromptActivity
+  readActivity: () => AgentPromptActivity
+  writeSubmit: () => boolean
+  /** Re-proves the pane still owns the prompt before another Enter (generation plus write guard). */
+  beforeResubmit: () => Promise<void>
+  failureError?: string
+  signal?: AbortSignal
+}): Promise<number> {
+  let resubmits = 0
+  for (;;) {
+    const observation = await observeTurnStart(args)
+    if (observation !== 'waiting' || resubmits >= args.policy.attempts) {
+      return resubmits
+    }
+    await args.beforeResubmit()
+    if (!args.writeSubmit()) {
+      throw new Error(args.failureError ?? 'terminal_not_writable')
+    }
+    resubmits += 1
+  }
+}
+
+/** A turn start proves Enter landed; a dialog stops the retries rather than typing into it. */
+async function observeTurnStart(args: {
+  policy: LaunchPromptSubmitRetryPolicy
+  baseline: AgentPromptActivity
+  readActivity: () => AgentPromptActivity
+  signal?: AbortSignal
+}): Promise<'started' | 'waiting' | 'blocked'> {
+  try {
+    await verifyAgentPromptSubmission({
+      baseline: args.baseline,
+      readActivity: args.readActivity,
+      allowOutputEvidence: false,
+      timeoutMs: args.policy.intervalMs,
+      ...(args.signal ? { signal: args.signal } : {})
+    })
+    return 'started'
+  } catch (error) {
+    if (isAgentPromptStalledError(error)) {
+      return 'waiting'
+    }
+    if (error instanceof Error && error.message === 'agent_prompt_blocked') {
+      return 'blocked'
+    }
+    throw error
+  }
+}
