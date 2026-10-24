@@ -4,8 +4,7 @@ import type { AgentTurnOutcome } from '../../../../shared/agent-turn-outcome'
 import {
   buildActivityThreadGroups,
   getActivityThreadGroup,
-  activityThreadMatchesSearchQuery,
-  getThreadSearchTextComputeCount
+  activityThreadMatchesSearchQuery
 } from './activity-thread-grouping'
 import { activityThreadStatusId, activityThreadRowCopy } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
@@ -204,29 +203,20 @@ import { formatShortTimeAgo } from '@/lib/short-time-ago'
     }
   }
 
-  describe('activity thread search text cache', () => {
-    it('builds a thread searchable text once per thread identity across keystrokes', () => {
-      const thread = makeThread('tab-1:leaf-1', 'Refactor billing pipeline')
-      const before = getThreadSearchTextComputeCount()
-      // Simulate typing a query letter by letter against the same thread objects.
-      for (const searchQuery of ['r', 're', 'ref', 'refa', 'refac']) {
-        expect(activityThreadMatchesSearchQuery({ thread, searchQuery })).toBe(true)
-      }
-      expect(getThreadSearchTextComputeCount() - before).toBe(1)
-    })
-
-    it('recomputes when thread data changes (new thread identity)', () => {
-      const before = getThreadSearchTextComputeCount()
+  describe('activity thread search', () => {
+    it('searches rebuilt thread data when the pane key stays the same', () => {
       const first = makeThread('tab-1:leaf-1', 'First title')
       const rebuilt = makeThread('tab-1:leaf-1', 'Second title')
       expect(activityThreadMatchesSearchQuery({ thread: first, searchQuery: 'first' })).toBe(true)
       expect(activityThreadMatchesSearchQuery({ thread: rebuilt, searchQuery: 'second' })).toBe(
         true
       )
-      expect(getThreadSearchTextComputeCount() - before).toBe(2)
+      expect(activityThreadMatchesSearchQuery({ thread: rebuilt, searchQuery: 'first' })).toBe(
+        false
+      )
     })
 
-    it('keeps match semantics: state labels, workspace, and previews still match', () => {
+    it('matches workspace text and accepts an empty query', () => {
       const thread = makeThread('tab-1:leaf-1', 'My task')
       expect(activityThreadMatchesSearchQuery({ thread, searchQuery: 'feature' })).toBe(true)
       expect(activityThreadMatchesSearchQuery({ thread, searchQuery: 'zzz-no-match' })).toBe(false)

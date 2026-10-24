@@ -179,7 +179,6 @@ describe.each([
   )
 })
 
-// BUG-23: the relaunch proves a lock its own quit left only while the token is still recorded.
 describe('the install lock token', () => {
   const host = getRemoteHostPlatform('linux-x64')
   const install = (): Promise<void> =>

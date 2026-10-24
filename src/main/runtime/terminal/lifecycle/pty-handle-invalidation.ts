@@ -12,6 +12,15 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
 
   protected abstract rejectWaitersForHandle(handle: string, code: string): void
 
+  protected retirePredecessorPtyExitEvidence(pty: RuntimePtyWorktreeRecord): void {
+    pty.lastExitCode = null
+    pty.lastExitCause = null
+    for (const leaf of this.getLeavesForPty(pty.ptyId)) {
+      leaf.lastExitCode = null
+      leaf.lastExitCause = null
+    }
+  }
+
   protected invalidateAllHandlesForPty(ptyId: string, preserveHandle?: string): Set<string> {
     const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
     const preallocatedHandle = this.handleByPtyId.get(ptyId)
@@ -158,6 +167,9 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
         this.invalidateAllHandlesForPty(ptyId),
         true
       )
+      if (incarnationId) {
+        this.retirePredecessorPtyExitEvidence(existingPty)
+      }
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.stopRequestedPtyIds.delete(ptyId)

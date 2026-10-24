@@ -83,7 +83,6 @@ function registerPage(pageId: string, guest: Record<string, unknown>): void {
   })
 }
 
-/** The production resolver's shape: read the registry now, not when the request was made. */
 function resolveFromRegistry(pageId: string): () => Electron.WebContents | null {
   return () => browserManager.getAuthorizedGuest(pageId, rendererWebContentsId)
 }
@@ -120,15 +119,11 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     )
   })
 
-  // Why this is the case that matters: a cross-process navigation re-registers the same page id
-  // with a new WebContents and leaves the retired one alive, so a bridge op that resolved its
-  // guest when the request arrived would inject into a page nobody is looking at — and the
-  // annotation badges would stop tracking the document on screen.
+  // Navigation can replace the registered guest while its old WebContents remains alive.
   it('injects into the guest the page has when a queued op finally runs, not the one it was asked with', async () => {
     const { guest: firstGuest } = makeGuest(5101)
     let releaseFirstInjection = (): void => {}
-    // One shared gate for every call, so a wrongly-routed second injection still settles and the
-    // test fails on where it landed rather than on a timeout.
+    // Share the gate so misrouted injections settle and fail on the target, not a timeout.
     const firstInjectionGate = new Promise<void>((resolve) => {
       releaseFirstInjection = () => resolve()
     })
@@ -142,8 +137,6 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     )
     await flushViewportOps()
 
-    // A second request arrives while the first still holds the chain — at this moment the page is
-    // still on the first guest, which is the guest a request-time resolution would capture.
     const secondDone = browserManager.setAnnotationViewportBridge(
       'tab-swap',
       BRIDGE_OPTIONS,
@@ -151,7 +144,6 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     )
     await flushViewportOps()
 
-    // Only now does the page swap renderer processes, while the second op is still queued.
     const { guest: secondGuest } = makeGuest(5102)
     registerPage('tab-swap', secondGuest)
 
@@ -318,8 +310,7 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     expect(browserManager.getGuestWebContentsId('tab-closed-queue')).toBeNull()
   })
 
-  // Why this is the resolver's cleanup and not the bridge's: the authority that reads the registry
-  // is the one that can see the guest is gone. The bridge only reports the refusal.
+  // The registry resolver owns stale-guest cleanup; the bridge only reports refusal.
   it('refuses when its guest died while the op was queued, and the resolver drops the registration', async () => {
     const { guest } = makeGuest(5103)
     registerPage('tab-dies', guest)
@@ -334,14 +325,9 @@ describe('browserManager.setAnnotationViewportBridge', () => {
       )
     ).resolves.toBe(false)
 
-    // Why assert the registry and not just the answer: a stale guest has to clear every per-tab
-    // entry, or the page keeps a dead WebContents id that later ops resolve against.
     expect(browserManager.getGuestWebContentsId('tab-dies')).toBeNull()
   })
 
-  // Why this one exists: an unresolved guest is not the same as a dead one. A request addressed by
-  // the wrong renderer names a page that is alive and on screen, and answering it with teardown
-  // would cancel that page's in-flight downloads and grabs over a misaddressed message.
   it('refuses a request from the wrong renderer without tearing down the healthy page it named', async () => {
     const { guest } = makeGuest(5105)
     registerPage('tab-mismatch', guest)
@@ -373,8 +359,6 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     expect(guest.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled()
   })
 
-  // Why: a document page owns no browsing state, so treating its refusal as a stale page would run
-  // teardown against an id the browsing registry never held.
   it('does not run page teardown when a document page resolves to nothing', async () => {
     const unregisterGuest = vi.spyOn(browserManager, 'unregisterGuest')
 

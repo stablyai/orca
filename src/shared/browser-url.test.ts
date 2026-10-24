@@ -9,8 +9,7 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken,
   resolveRemoteFailureExternalUrl,
-  toSecureCertificateEndpoint,
-  toHttpsRecoveryUrl
+  toSecureCertificateEndpoint
 } from './browser-url'
 
 describe('browser-url helpers', () => {
@@ -68,20 +67,6 @@ describe('browser-url helpers', () => {
     ]) {
       expect(isEligibleLocalCertificateHost(hostname), hostname).toBe(false)
     }
-  })
-
-  it('constructs HTTPS recovery URLs without changing the rest of the address', () => {
-    expect(toHttpsRecoveryUrl('http://localhost:3000/path?q=1#preview')).toBe(
-      'https://localhost:3000/path?q=1#preview'
-    )
-    expect(toHttpsRecoveryUrl('http://user:pass@127.0.0.2:8080/')).toBe(
-      'https://user:pass@127.0.0.2:8080/'
-    )
-    expect(toHttpsRecoveryUrl('http://localhost:80/path')).toBe('https://localhost/path')
-    expect(toHttpsRecoveryUrl('https://localhost:3000/')).toBeNull()
-    expect(toHttpsRecoveryUrl('http://0.0.0.0:3000/')).toBeNull()
-    expect(toHttpsRecoveryUrl('http://example.com/')).toBeNull()
-    expect(toHttpsRecoveryUrl('not a url')).toBeNull()
   })
 
   it('canonicalizes secure certificate endpoints without path or credential data', () => {

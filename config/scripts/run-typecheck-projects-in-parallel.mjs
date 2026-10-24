@@ -5,6 +5,7 @@ import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { readPinnedBunVersion, resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
+import { resolveTsrsTypecheckCommand, supportsTsrs } from './tsrs-typecheck-compiler.mjs'
 
 const BYTES_PER_GIB = 1024 ** 3
 
@@ -76,14 +77,14 @@ export const BUN_TYPESCRIPT_VERSION = '7.0.2'
 
 export function parseTypecheckOptions(args) {
   const options = {
-    compiler: 'bun',
+    compiler: 'auto',
     bunConcurrency: 2,
     bunThreads: 4,
     projects: TYPECHECK_PROJECTS
   }
   const selected = []
   for (const argument of args) {
-    if (/^--compiler=(bun|native)$/.test(argument)) {
+    if (/^--compiler=(auto|tsrs|bun|native)$/.test(argument)) {
       options.compiler = argument.slice('--compiler='.length)
     } else if (argument.startsWith('--bun-concurrency=')) {
       options.bunConcurrency = Number(argument.slice('--bun-concurrency='.length))
@@ -111,12 +112,17 @@ export function parseTypecheckOptions(args) {
   return options
 }
 
-/**
- * Bun is the default: on the node project it uses ~1/3 of tsc's CPU and ~2 GB instead of
- * ~16 GB, and tsc's incremental cache rarely survives an edit to an export.
- */
-export function selectTypecheckCompiler(compiler, { root, resolveBunExecutable }) {
-  if (compiler === 'native') {
+export function selectTypecheckCompiler(
+  compiler,
+  { root, resolveBunExecutable, platform = process.platform, arch = process.arch }
+) {
+  if (compiler === 'auto') {
+    compiler = supportsTsrs(platform, arch) ? 'tsrs' : 'bun'
+  }
+  if (compiler === 'tsrs' && !supportsTsrs(platform, arch)) {
+    throw new Error(`tsrs is unavailable on ${platform}/${arch}; use --compiler=bun.`)
+  }
+  if (compiler === 'native' || compiler === 'tsrs') {
     return { compiler }
   }
   const bunExecutable = resolveBunExecutable(root)
@@ -130,15 +136,25 @@ export function selectTypecheckCompiler(compiler, { root, resolveBunExecutable }
 
 export function typecheckBatches(projects, { compiler, bunConcurrency, memoryBytes, parallelism }) {
   return planTypecheckBatches(
-    compiler === 'bun' ? projects.map((project) => ({ ...project, heapGib: 4 })) : projects,
+    compiler === 'native'
+      ? projects
+      : projects.map((project) => ({ ...project, heapGib: compiler === 'tsrs' ? 7 : 4 })),
     {
       budgetGib: admissibleHeapGib(memoryBytes),
-      parallelism: compiler === 'bun' ? Math.min(parallelism, bunConcurrency) : parallelism
+      parallelism:
+        compiler === 'bun'
+          ? Math.min(parallelism, bunConcurrency)
+          : compiler === 'tsrs'
+            ? Math.min(parallelism, 2)
+            : parallelism
     }
   )
 }
 
 export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }) {
+  if (compiler === 'tsrs') {
+    return resolveTsrsTypecheckCommand(config, root)
+  }
   const installedCompiler = resolveProjectCompilerInfo(config, root)
   if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
     throw new Error(
@@ -186,8 +202,8 @@ export async function runTypecheckProjects({
   parallelism = availableParallelism()
 } = {}) {
   const batches = typecheckBatches(projects, { compiler, bunConcurrency, memoryBytes, parallelism })
-  if (compiler === 'bun') {
-    // Equal Bun reservations let a freed slot start the next project without waiting for peers.
+  if (compiler === 'bun' || compiler === 'tsrs') {
+    // Keep a freed compiler slot busy while its peer finishes.
     const pending = batches.flat()
     const failures = []
     let next = 0

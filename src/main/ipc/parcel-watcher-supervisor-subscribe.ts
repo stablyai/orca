@@ -97,15 +97,11 @@ export function subscribeThroughWatcherSupervisor({
       )
     )
   }
-  // Why: a symlinked or differently-cased root is unwatchable on Linux
-  // (IN_ONLYDIR) and misreported on macOS (FSEvents canonicalizes). Watch the
-  // resolved directory, then restore the caller's spelling on the way out --
-  // this is the one boundary every desktop, runtime, and relay watch passes.
+  // Watch the resolved directory, then restore caller spelling for desktop/runtime/relay paths; native backends reject or canonicalize aliases.
   const { watchRoot, rewriteEventPath } = resolveWatcherRootPaths(dir)
   const callback: WatcherProcessCallback = (error, events) =>
     rawCallback(error, rewriteWatcherEvents(events, rewriteEventPath))
-  // Why: under Vitest we cannot fork a real watcher child, so exercise the
-  // subscription path in-process (against mocked @parcel/watcher) instead.
+  // Vitest mocks Parcel in-process instead of forking a watcher child.
   if (process.env.VITEST && useInProcessVitestFallback) {
     return subscribeWithInProcessWatcher(watchRoot, callback, opts, hooks)
   }

@@ -7,7 +7,16 @@ import {
   type PointerEventHandler,
   type RefObject
 } from 'react'
-import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
+import {
+  Clipboard,
+  Copy,
+  GitFork,
+  Image as ImageIcon,
+  PanelBottomClose,
+  PanelRightClose,
+  SquareTerminal,
+  X
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,15 +32,14 @@ import {
   type NativeChatCopyImage
 } from './native-chat-image-copy'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
-import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
-import { canMoveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
+import { useAppStore } from '@/store'
+import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { isEditableTarget } from '@/lib/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import type { TabSplitDirection } from '@/store/slices/tabs'
 import { AgentSessionContinuationMenuItem } from '@/components/terminal-pane/AgentSessionContinuationMenuItem'
 import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/AgentSessionContextCopyMenuItem'
 import {
@@ -67,11 +75,7 @@ type UseNativeChatContextMenuArgs = {
   actions: NativeChatContextMenuActions
   showTerminalPaneActions?: boolean
   splitShortcutLabels?: { right: string; down: string }
-  workspaceLayout?: {
-    unifiedTabId: string
-    groupId: string
-    shortcutLabels?: Partial<Record<TabSplitDirection, string>>
-  }
+  chatPane?: { tabId: string; worktreeId: string; groupId: string }
   /** A structured chat tab's Orca session ID; a chat in a terminal pane is that terminal's agent. */
   resolveOrcaSessionId?: () => Promise<string | null>
 } & NativeChatContextMenuTargetArgs
@@ -142,7 +146,7 @@ export function useNativeChatContextMenu({
   actions,
   showTerminalPaneActions = true,
   splitShortcutLabels,
-  workspaceLayout,
+  chatPane,
   resolveOrcaSessionId,
   messageListRef,
   fileLinkContext = null,
@@ -173,11 +177,8 @@ export function useNativeChatContextMenu({
     Boolean(target.quoteText ?? target.link ?? target.codeText ?? target.messageText) ||
     (target.rewindItemId !== null && rewind !== undefined)
   const hasSessionItems = onFind !== undefined || showTerminalPaneActions
-  const showWorkspaceLayout =
-    workspaceLayout !== undefined &&
-    canMoveTabToNewPaneColumn(workspaceLayout.unifiedTabId, workspaceLayout.groupId)
   const hasItems =
-    hasEditItems || hasSessionItems || showWorkspaceLayout || resolveOrcaSessionId !== undefined
+    hasEditItems || hasSessionItems || chatPane !== undefined || resolveOrcaSessionId !== undefined
 
   useEffect(() => {
     if (!enabled) {
@@ -317,21 +318,19 @@ export function useNativeChatContextMenu({
               <AgentSessionContextCopyMenuItem onSelect={actions.onCopyAgentSessionContext} />
             </>
           ) : null}
-          {workspaceLayout ? (
-            <TabWorkspaceLayoutMenuSection
-              unifiedTabId={workspaceLayout.unifiedTabId}
-              groupId={workspaceLayout.groupId}
+          {chatPane ? (
+            <StructuredChatPaneMenuItems
+              pane={chatPane}
               leadingSeparator={hasEditItems || hasSessionItems}
-              shortcutLabels={workspaceLayout.shortcutLabels}
+              splitShortcutLabels={splitShortcutLabels}
+              resolveOrcaSessionId={resolveOrcaSessionId}
             />
           ) : null}
           {showTerminalPaneActions ? (
             <NativeChatPaneMenuItems actions={actions} splitShortcutLabels={splitShortcutLabels} />
-          ) : resolveOrcaSessionId ? (
+          ) : !chatPane && resolveOrcaSessionId ? (
             <>
-              {hasEditItems || hasSessionItems || showWorkspaceLayout ? (
-                <DropdownMenuSeparator />
-              ) : null}
+              {hasEditItems || hasSessionItems ? <DropdownMenuSeparator /> : null}
               <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
             </>
           ) : null}
@@ -339,6 +338,51 @@ export function useNativeChatContextMenu({
       </DropdownMenu>
     )
   }
+}
+
+function StructuredChatPaneMenuItems({
+  pane,
+  leadingSeparator,
+  splitShortcutLabels,
+  resolveOrcaSessionId
+}: Pick<UseNativeChatContextMenuArgs, 'splitShortcutLabels' | 'resolveOrcaSessionId'> & {
+  pane: NonNullable<UseNativeChatContextMenuArgs['chatPane']>
+  leadingSeparator: boolean
+}) {
+  const actions = useStructuredChatPaneActions(pane.tabId, pane.worktreeId, pane.groupId)
+  const hasSplitPanes = useAppStore(
+    (state) => (state.groupsByWorktree[pane.worktreeId]?.length ?? 0) > 1
+  )
+  return (
+    <>
+      {leadingSeparator ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuItem onSelect={actions.onSplitRight}>
+        <PanelRightClose />
+        {translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')}
+        <DropdownMenuShortcut>{splitShortcutLabels?.right}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={actions.onSplitDown}>
+        <PanelBottomClose />
+        {translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')}
+        <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      {resolveOrcaSessionId ? (
+        <>
+          <DropdownMenuSeparator />
+          <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
+        </>
+      ) : null}
+      {hasSplitPanes && actions.canClosePane ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={actions.onClosePane}>
+            <X />
+            {actions.closeLabel}
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </>
+  )
 }
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {

@@ -1,7 +1,4 @@
-// Which bytes the branch graph gets to see. Every read here pins ONE descriptor
-// and ONE size before it starts, because a caller that walks the proven branch
-// afterwards must walk the same snapshot the proof was computed over — a second
-// read at a later size would vouch for rows nothing checked.
+// Pin one descriptor and size so ancestry proof and replay read the same append-only snapshot.
 
 import { open } from 'node:fs/promises'
 import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
@@ -32,11 +29,9 @@ export type ClaudeTranscriptBranchAncestry = {
   chain: string[]
 }
 
-/** Replay always proves from the file tail, so a caller-supplied tip has no meaning here. */
 type AncestryInput = Omit<BranchProofInput, 'tip'> & {
-  /** The ancestry walk stops here; the proof is what established it is reachable. */
   ancestryAnchorUuid: string
-  /** The FIRST record carrying each chain uuid, in file order. */
+  /** First occurrence of each chain UUID, in file order. */
   onAncestorRecord: (record: AncestryRecord, uuid: string) => void
 }
 
@@ -53,8 +48,7 @@ function createAncestryReplay(
     try {
       parsed = JSON.parse(line)
     } catch {
-      // Unreachable while the proof runs first over the same bytes — it throws on
-      // any malformed line. Kept so a future reordering degrades, not corrupts.
+      // The proof pass already rejected malformed lines in this snapshot.
       return
     }
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -63,7 +57,7 @@ function createAncestryReplay(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The parsed value is a non-array object checked above.
     const record = parsed as AncestryRecord
     const uuid = nonEmptyString(record.uuid)
-    // `delete` is the first-occurrence tie-break, not an optimisation.
+    // Deletion enforces first-occurrence identity.
     if (uuid && pending.delete(uuid)) {
       onRecord(record, uuid)
     }
@@ -83,12 +77,7 @@ export function proveClaudeTranscriptBranchFromJsonl(
 
 type PinnedTranscriptLines = () => AsyncGenerator<{ line: string; terminated: boolean }>
 
-/**
- * Run an attempt over ONE pinned snapshot: a single fd and a single `size`, so a
- * second pass cannot read bytes the first pass did not vouch for. A repair
- * appended while we read is finished once, at the larger size, by re-running the
- * WHOLE attempt — never by reading the tail at a size the graph pass never saw.
- */
+/** Retry the whole attempt once on growth; both passes must use the newly proven snapshot. */
 async function runPinnedTranscriptPasses<T>(
   transcriptPath: string,
   maxRecordBytes: number | undefined,
@@ -127,7 +116,6 @@ async function runPinnedTranscriptPasses<T>(
         if (nextSize <= size) {
           throw error
         }
-        // Finish an already-appended repair without making the caller retry.
         size = nextSize
         refreshed = true
       }
@@ -137,16 +125,7 @@ async function runPinnedTranscriptPasses<T>(
   }
 }
 
-/**
- * Prove the branch from the file's last transcript row back to the anchor, then
- * replay the anchor..tail records off the SAME pinned bytes. Two bounded passes
- * instead of one whole-file string: the graph pass retains uuid/parentUuid only,
- * and the replay pass hands each chain record to the caller once and keeps
- * nothing, so neither pass holds the transcript.
- *
- * The replay runs only after `finish()` succeeds, so a growth retry can never
- * emit a record twice.
- */
+/** Prove before replay so growth retries cannot emit records twice; retain graph identities, not bodies. */
 export async function replayClaudeTranscriptBranchAncestry(
   input: AncestryInput & { transcriptPath: string; maxRecordBytes?: number }
 ): Promise<ClaudeTranscriptBranchAncestry> {
@@ -172,7 +151,6 @@ export async function replayClaudeTranscriptBranchAncestry(
   )
 }
 
-/** The string-source twin of `replayClaudeTranscriptBranchAncestry`. */
 export function replayClaudeTranscriptBranchAncestryFromJsonl(
   input: AncestryInput & { contents: string }
 ): ClaudeTranscriptBranchAncestry {

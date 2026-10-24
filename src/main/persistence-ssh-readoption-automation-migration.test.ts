@@ -4,14 +4,7 @@ import {
   createStore as createFreshStore,
   testState
 } from './persistence-test-harness'
-/**
- * SSH re-adoption has to repair the automation with the workspace.
- *
- * `reassignSshTargetId` used to re-point only repos, worktrees, sessions and
- * setups, so a re-added host left every stored automation orphaned on the dead
- * target id and the persisted Automations host filter naming a host that no
- * longer existed. These tests drive the real Store through remove/re-add.
- */
+// Re-adoption must repair automation targets and persisted host filters alongside workspace ownership.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -129,7 +122,6 @@ function tombstone(overrides: Partial<RemovedSshTargetTombstone> = {}): RemovedS
   }
 }
 
-/** State as it looks right after the user removed the host: tombstone present, target gone. */
 function removedHostState(overrides: Record<string, unknown> = {}) {
   return {
     repos: [sshRepo()],
@@ -159,7 +151,6 @@ async function createStoreFromState(state: Record<string, unknown>) {
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
-/** Re-read whatever is on disk now — no fixture rewrite. */
 async function reloadStore() {
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
@@ -174,7 +165,6 @@ async function createSshStore(state: Record<string, unknown>) {
   return { store, ssh: new SshConnectionStore(store) }
 }
 
-/** Re-add the same host the tombstone remembers. */
 function readdDevBox(ssh: SshConnectionStore) {
   return ssh.addTarget({ label: 'Dev box', configHost: 'dev.example.com', ...IDENTITY })
 }
@@ -213,7 +203,6 @@ describe('SSH re-adoption migrates automations', () => {
       targetGeneration: added.generation
     })
     expect(store.getRepo('repo-1')?.connectionId).toBe(added.id)
-    // Enablement is the user's intent and is never rewritten by migration or re-adoption.
     expect(store.listAutomations()[0].enabled).toBe(true)
   })
 
@@ -274,7 +263,7 @@ describe('SSH re-adoption migrates automations', () => {
       createdAt: NOW,
       updatedAt: NOW
     }
-    // A folder workspace on SSH whose repo row is local: only the workspace pin names the host.
+    // Only the folder workspace pin names SSH; its repo row is local.
     const { store, ssh } = await createSshStore(
       removedHostState({
         repos: [{ ...sshRepo(), connectionId: undefined, executionHostId: 'local' } as Repo],
@@ -316,12 +305,11 @@ describe('SSH re-adoption migrates automations', () => {
 
     expect(added.generation).toBeGreaterThan(40)
     expect(store.listAutomations()[0].executionTargetGeneration).toBe(added.generation)
-    // The migrated capture must never be able to depress or collide with a later allocation.
+    // Migrated generations must not collide with later allocations.
     expect(store.allocateSshTargetGeneration()).toBeGreaterThan(added.generation!)
   })
 
   it('loads a pre-generation store and migrates it without dropping automations', async () => {
-    // No generations, no persisted filter, no counter: state written by an older build.
     const { store, ssh } = await createSshStore({
       repos: [sshRepo()],
       sshTargets: [],
@@ -361,8 +349,7 @@ describe('SSH re-adoption tombstone retention', () => {
     const { store } = await createSshStore(removedHostState())
     const { readoptOrphanedWorkspacesForTarget } =
       await import('./ssh/targets/ssh-target-readoption')
-    // Same id back with a new registration: nothing is re-pointed, so the automation
-    // still depends on the tombstone as the only evidence its host was replaced.
+    // Re-registering the same ID changes no pointers; the tombstone remains the replacement evidence.
     const target = { id: OLD_ID, label: 'Dev box', ...IDENTITY, generation: 9 }
     store.addSshTarget(target)
 

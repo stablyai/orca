@@ -23,8 +23,6 @@ import { scheduleLocalCapacityRetry } from './filesystem-watcher-local-capacity'
 import { installLocalWatcher } from './filesystem-watcher-local-install'
 import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 
-// ── Subscribe / Unsubscribe ──────────────────────────────────────────
-
 const cancelledInstallWaiters = watcherLifecycleState.cancelledLocalInstallWaiters
 
 export async function subscribeLocalWatcher(
@@ -66,7 +64,6 @@ async function subscribeWhileRemovalAllowed(
     return
   }
 
-  // Don't retry roots that already failed — avoids repeated error spam.
   if (watcherLifecycleState.unwatchableRoots.has(rootKey)) {
     rememberUnwatchableRoot(rootKey)
     return
@@ -74,7 +71,6 @@ async function subscribeWhileRemovalAllowed(
 
   const root = watcherLifecycleState.watchedRoots.get(rootKey)
 
-  // Cancel any pending grace-period teardown — a new listener arrived.
   const pendingTeardown = watcherLifecycleState.pendingTeardowns.get(rootKey)
   if (pendingTeardown) {
     clearTimeout(pendingTeardown)
@@ -98,7 +94,7 @@ async function subscribeWhileRemovalAllowed(
     const inFlight = watcherLifecycleState.inFlightLocalInstalls.get(rootKey)
     const canJoinInstall = inFlight && !inFlight.abortController.signal.aborted
     if (canJoinInstall) {
-      // Why: an unwatch may cancel an install while another renderer awaits the same root; a new live listener keeps it alive.
+      // Another renderer may keep an install alive after one listener unwatches.
       addInFlightLocalInstallListener(inFlight, sender)
       for (const listener of capacityRetryListeners) {
         addInFlightLocalInstallListener(inFlight, listener)
@@ -121,7 +117,7 @@ async function subscribeWhileRemovalAllowed(
       !watcherLifecycleState.localWatchersClosed &&
       generation === watcherLifecycleState.localWatcherLifecycleGeneration
     ) {
-      // Why: AbortSignal can't be revived; listeners arriving after cancellation wait out that generation, then own a fresh install.
+      // Aborted signals cannot revive; new listeners wait for the retired generation before installing.
       if (watcherLifecycleState.pendingLocalInstallPromises.get(rootKey) === pendingInstall) {
         watcherLifecycleState.pendingLocalInstallPromises.delete(rootKey)
       }
@@ -216,7 +212,7 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
   if (inFlight) {
     inFlight.listeners.delete(senderId)
     inFlight.cancelled = inFlight.listeners.size === 0
-    // Why: last normal disconnect must abort the pending native/forked install (same early-cancel as closeLocalWatcherForWorktreePath).
+    // Last-listener removal also aborts pending native subscription work.
     if (inFlight.cancelled) {
       inFlight.abortController.abort()
     }
@@ -229,21 +225,20 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
 
   root.listeners.delete(senderId)
 
-  // Defer teardown when the last subscriber leaves so rapid worktree switches reuse the native watcher.
+  // Grace teardown lets rapid workspace switches reuse native watchers.
   if (root.listeners.size === 0) {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
-      // Why: a cleared handle can't be refresh()ed; null it so a grace-window re-subscribe arms a fresh window.
+      // Clear retired handles so grace-window re-subscribe arms a fresh timer.
       root.batch.timer = null
     }
-    // Why: duplicate unwatch calls for a root would leak overwritten grace timers; keep just one.
+    // Duplicate unwatch calls must not overwrite and leak existing grace timers.
     if (watcherLifecycleState.pendingTeardowns.has(rootKey)) {
       return
     }
 
     const teardownTimer = setTimeout(() => {
       watcherLifecycleState.pendingTeardowns.delete(rootKey)
-      // Re-check: a new listener may have arrived during the grace period.
       const currentRoot = watcherLifecycleState.watchedRoots.get(rootKey)
       if (!currentRoot || currentRoot.listeners.size > 0) {
         return

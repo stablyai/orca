@@ -138,7 +138,7 @@ vi.mock('./updater/mac-browser-sidecar-recovery', () => ({
   describeMacUpdateBlockers: describeBrowserBlockersMock
 }))
 
-// Why: no registered serve supervisors here, so every blocker is refused as before parking existed.
+// No serve supervisors are registered, so every blocker is refused.
 vi.mock('./updater/serve-supervisor-install-park', async (importOriginal) => ({
   ...(await importOriginal<typeof ServeSupervisorInstallPark>()),
   parkServeSupervisorsForInstall: (_executable: string, blockers: number[]) => ({
@@ -235,8 +235,7 @@ describe('updater mac install handoff', () => {
       })
       autoUpdaterMock.emit('checking-for-update')
       autoUpdaterMock.emit('update-available', { version: '1.0.61' })
-      // Why: the update-available handler is now async (it awaits fetchChangelog).
-      // Flush microtasks so setAvailableVersion runs before update-downloaded fires.
+      // Let async update-available state land before emitting update-downloaded.
       await vi.advanceTimersByTimeAsync(0)
       downloadUpdate()
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
@@ -406,7 +405,6 @@ describe('updater mac install handoff', () => {
 
       expect(reportDownloaded).not.toHaveBeenCalled()
       await vi.waitFor(() => {
-        // Why: recordUpdaterLifecycle packs metadata into one console line.
         expect(warn).toHaveBeenCalledWith(
           '[updater] Deferred macOS install handoff failed {"errorType":"Error"}'
         )
@@ -432,8 +430,7 @@ describe('updater mac install handoff', () => {
       })
       autoUpdaterMock.emit('checking-for-update')
       autoUpdaterMock.emit('update-available', { version: '1.0.61' })
-      // Why: the update-available handler is now async (it awaits fetchChangelog).
-      // Flush microtasks so setAvailableVersion runs before update-downloaded fires.
+      // Let async update-available state land before emitting update-downloaded.
       await vi.advanceTimersByTimeAsync(0)
       downloadUpdate()
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })

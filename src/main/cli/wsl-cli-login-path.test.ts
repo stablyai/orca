@@ -10,9 +10,6 @@ vi.mock('../wsl/wsl-runner', () => ({
 import { WslCliInstaller, _internals } from './wsl-cli-installer'
 import { WslCliUnreachableError } from './wsl-cli-status'
 
-// #14288 / #29497: which status calls pay the login-PATH probe, and how a slow
-// distro or blocking ~/.profile is reported.
-
 const launcherPath = 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.exe'
 
 function makeHostStatus(): CliInstallStatus {
@@ -38,8 +35,6 @@ describe('WslCliInstaller login-PATH lanes', () => {
   })
 
   it('settles when wsl.exe never reports completion', async () => {
-    // Why no fake timers: the timeout is now runProcess's own, internal to the
-    // mocked runWslProcess -- there is nothing left here to advance.
     runWslProcessMock.mockResolvedValue({ code: null, stdout: '', stderr: '', timedOut: true })
     const installer = new WslCliInstaller({
       platform: 'win32',
@@ -73,8 +68,7 @@ describe('WslCliInstaller login-PATH lanes', () => {
       pathProbe: spec.script.includes(':$PATH:'),
       loginPath: spec.loginPath
     }))
-    // Why: a cold distro boots on the first call; a login probe there took half
-    // its 10s budget and timed the status check out (#29497).
+    // A login probe must not consume the cold distro's boot budget (#29497).
     expect(lanes.filter((lane) => lane.loginPath === 'preferred')).toEqual([
       { pathProbe: true, loginPath: 'preferred' }
     ])
@@ -82,12 +76,6 @@ describe('WslCliInstaller login-PATH lanes', () => {
   })
 
   it('reports PATH unknown rather than "not on PATH" without the login PATH', async () => {
-    // The `case ":$PATH:"` probe answers from the distro default PATH when the
-    // login PATH never resolved, and ~/.local/bin is never on that. Settings
-    // would then state as fact that the CLI is not on PATH while the user's
-    // own terminal finds it -- #14288 turning into a confident wrong verdict.
-    // A blocking ~/.profile must not hide the file state either: report the
-    // registration with PATH unknown (null), never "not on PATH".
     const launcher = _internals.buildWslLauncher(
       launcherPath,
       '/home/alice/.local/share/orca/orca-wsl-bridge.ps1'

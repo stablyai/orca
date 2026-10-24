@@ -46,6 +46,11 @@ export function NewWorkspaceSshConnectionField({
           )}
         </View>
         {sshGate.error ? <Text style={styles.errorInline}>{sshGate.error}</Text> : null}
+        {sshGate.needsDesktopServerRecovery ? (
+          <Text style={styles.sshSubtitle}>
+            Its server needs recovering from the desktop: Settings → SSH hosts → Recover server.
+          </Text>
+        ) : null}
       </View>
     </View>
   )

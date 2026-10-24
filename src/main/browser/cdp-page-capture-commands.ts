@@ -5,10 +5,6 @@ import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 import { readRemoteCliAdmittedPage } from './remote-cli-page-admission'
 
-/**
- * Page capture output: Electron-native Page.printToPDF (inline and ReturnAsStream),
- * the IO.read/IO.close handlers serving those PDF handles, and Page.captureScreenshot.
- */
 export class CdpPageCaptureCommands {
   private readonly pdfStreams = new CdpPdfStreamStore()
 
@@ -39,9 +35,7 @@ export class CdpPageCaptureCommands {
       const pdf = await readRemoteCliAdmittedPage(this.webContents.id, () =>
         this.webContents.printToPDF(buildPrintToPdfOptions(params))
       )
-      // Why: printToPDF can resolve after the client disconnected (or was
-      // replaced). Bail before registering a stream so its buffer isn't
-      // orphaned in pdfStreams past the disconnect's clear() until the TTL.
+      // Printing can finish after disconnect; avoid orphaning a stream after client cleanup.
       if (!this.responder.isActiveClient(client)) {
         return
       }

@@ -47,19 +47,14 @@ export type DiagnosticsApi = {
 }
 
 export type TelemetryApi = {
-  /** Fire-and-forget track. Loose IPC typing on purpose — the main-side validator enforces;
-   *  renderer sites should import `track<N>()` from lib/telemetry.ts, not reach here. */
-  telemetryTrack: (name: string, props: Record<string, unknown>) => Promise<void>
-  /** Flip the persisted opt-in preference. Subject to a per-session
-   *  consent-mutation rate limit on the main side (≤5/session). */
+  /** Use lib/telemetry.ts; true means captured/already recorded today, void is a legacy reply. */
+  telemetryTrack: (name: string, props: Record<string, unknown>) => Promise<boolean | void>
+  /** Main permits at most five consent mutations per session. */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
-  /** Diagnostic file controls (telemetry-error-tracking.md §User controls). Main does the FS/network
-   *  work and retains upload payloads so the renderer can't read or substitute arbitrary bytes. */
+  /** Main retains upload payloads so the renderer cannot read or substitute arbitrary bytes. */
   diagnostics: DiagnosticsApi
-  /** Read-only effective consent state (+ reason if disabled) — env vars are main-side state the renderer can't read directly. */
   telemetryGetConsentState: () => Promise<TelemetryConsentState>
-  /** Banner ✕ — persist `optedIn = true` silently. Separate channel from `telemetrySetOptIn`,
-   *  whose `via` derivation would wrongly fire `telemetry_opted_in`. Same per-session rate limit. */
+  /** Banner dismissal opts in without emitting telemetry_opted_in; shares the consent rate limit. */
   telemetryAcknowledgeBanner: () => Promise<void>
   stats: StatsApi
   memory: MemoryApi

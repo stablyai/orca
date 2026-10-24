@@ -46,6 +46,10 @@ export const editorSelectionCache = new Map<string, readonly ISelection[]>()
 export type PdfViewPosition = { pageNumber: number; top: number; left: number }
 export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 
+// Why: switching tabs unmounts the media element, so playback time (seconds)
+// must outlive it or the clip restarts from zero on return.
+export const mediaPlaybackPositionCache = new Map<string, number>()
+
 // Why: Diff editors need more than a numeric scroll offset to restore the same
 // working context. Monaco's diff view state also carries cursor/selection state
 // for both sides plus diff model state, which matches VS Code's restore path

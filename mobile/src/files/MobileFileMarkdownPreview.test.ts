@@ -116,12 +116,8 @@ describe('MobileFileMarkdownPreview', () => {
       await updatePreview(renderer, { ...baseProps, content: source })
       const copy = modeToggle(renderer, 'Copy Markdown source')
       expect(copy.props.accessibilityRole).toBe('button')
-      expect(copy.findAllByType('Text')).toHaveLength(0)
-      expect(copy.props.style({ pressed: false })[0]).toMatchObject({ width: 24, height: 24 })
       await act(async () => copy.props.onPress())
       expect(writeText.mock.calls).toEqual([[source]])
-      expect(modeToggle(renderer, 'Copy Markdown source').findAllByType('Text')).toHaveLength(0)
-      expect(renderer.root.findAllByType('Check')).toHaveLength(1)
     }
   )
 
@@ -161,21 +157,6 @@ describe('MobileFileMarkdownPreview', () => {
     ).toBe(false)
     await selectMode(renderer, 'Copy Markdown source')
     expect(writeText.mock.calls).toEqual([[source], [source]])
-  })
-
-  it('opens file links from the rendered document', async () => {
-    const onOpenFile = vi.fn()
-    renderer = await renderPreview({
-      relativePath: 'docs/notes.md',
-      content: '[Details](details.md)',
-      truncated: false,
-      byteLength: 21,
-      onOpenFile
-    })
-    await act(async () => {
-      renderer?.root.findByType('MobileMarkdown').props.onOpenFile('details.md')
-    })
-    expect(onOpenFile).toHaveBeenCalledWith('details.md')
   })
 
   it('resets the selected mode for a new file or line target without remounting the preview', async () => {

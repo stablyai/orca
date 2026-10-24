@@ -35,9 +35,6 @@ import {
   writeCodexTrustGrantLedgerHome
 } from './codex-trust-grant-ledger'
 
-// Why this file: the opt-out is the one path that removes Orca's entry from
-// the user's real ~/.codex, and it must leave the user's own hooks approved.
-
 let root: string
 let home: string
 let userDataDir: string
@@ -64,7 +61,7 @@ function orcaStopAt(sourcePath: string, groupIndex = 0): CodexTrustEntry {
 }
 
 beforeEach(() => {
-  // Why realpath: a symlinked temp dir (macOS /var) would give ~/.codex a second key spelling.
+  // Resolve macOS /var symlinks so the temp root adds no extra approval-key spelling.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-real-home-removal-')))
   home = join(root, 'home')
   userDataDir = join(root, 'user-data')
@@ -95,7 +92,6 @@ describe('removeRealHomeCodexHookForOptOut', () => {
 
     expect(await removeRealHomeCodexHookForOptOut([])).toBe('unavailable')
 
-    // The entry may still be there, so its trust and the ownership proof must be too.
     expect(readFileSync(hooksJsonPath(), 'utf-8')).toBe('{ not json')
     expect(readHookTrustEntries(configTomlPath()).has(computeTrustKey(entry))).toBe(true)
     expect(readCodexTrustGrantLedgerHome(join(home, '.codex'))).not.toBeNull()
@@ -207,7 +203,7 @@ describe('turning hooks off', () => {
       `${JSON.stringify({ hooks: { Stop: [{ hooks: [orcaHandler()] }] } }, null, 2)}\n`
     )
     const command = getCodexManagedHookInstallMaterial().command
-    // Why two versions: the approval came from a Codex since updated, whose answer the cache still holds.
+    // The cache retains the older Codex version that approved this hook.
     memoizeCodexHookAnswer(join(root, 'codex'), 'old', command, {
       kind: 'hashes',
       codexVersion: 'codex-cli 0.150.0',

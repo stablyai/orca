@@ -1,4 +1,4 @@
-// Serializes disconnect/remove/terminate/reset for a single SSH target so they cannot interleave.
+// Serialize target teardown operations so disconnect/remove/terminate/reset cannot interleave.
 export const targetLifecycleInFlight = new Map<string, Promise<void>>()
 
 export function runTargetLifecycle<T>(targetId: string, operation: () => Promise<T>): Promise<T> {

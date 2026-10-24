@@ -9,7 +9,6 @@ export type StructuredAgentSessionProviderOpenInput = {
   signal: AbortSignal
 }
 
-/** Protocol facts returned to the host that awaits this child's open. */
 export type StructuredAgentSessionProviderOpenResult = {
   link?: AgentSessionProviderHandleLink
   reportedOptions: AgentSessionOptionsResult['current']

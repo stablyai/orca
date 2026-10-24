@@ -8,19 +8,7 @@ import type { Repo } from '../../shared/repo-types'
 import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from './filesystem-auth'
 import { isDescendantOrEqual } from './filesystem-path-containment'
 
-/**
- * Opening any file under a Korean-named workspace failed on macOS with
- * "Access denied: path resolves outside allowed directories" (#21172).
- *
- * The file was inside the workspace the whole time. The two sides of the containment check reached
- * it through different doors: the root was registered from the file picker or from git, which spell
- * the name in NFC, while the path being read came back from the filesystem in NFD. Same name, same
- * file on APFS, different bytes — so the guard reported an escape.
- *
- * "Same file" is the load-bearing half, so it is the half that gets proven: both spellings reaching
- * one directory authorize the file, two distinct directories — which ext4 allows and APFS does not
- * — leave the unregistered one denied. A symlink stands in for the APFS fold on a byte-exact host.
- */
+/** NFC/NFD spellings must authorize only when they reach one filesystem object; model APFS folding with a symlink on byte-exact hosts (#21172). */
 
 const FOLDER = '테스트프로젝트'
 const NFC_FOLDER = FOLDER.normalize('NFC')
@@ -29,7 +17,7 @@ const NFD_FOLDER = FOLDER.normalize('NFD')
 const scratchDirs: string[] = []
 
 async function makeScratchDir(): Promise<string> {
-  // realpath first: macOS fronts the temp dir with a /var symlink of its own.
+  // Canonicalize macOS /var temp aliases before building fixtures.
   const scratch = await mkdtemp(join(await realpath(tmpdir()), 'orca-unicode-path-'))
   scratchDirs.push(scratch)
   return scratch
@@ -115,7 +103,6 @@ describe('path containment across Unicode forms', () => {
     const scratch = await makeScratchDir()
     const siblings = await makeDistinctSiblings(scratch)
     if (!siblings) {
-      // The filesystem folds the two names, so there is no second directory to reach.
       return
     }
 
@@ -126,7 +113,7 @@ describe('path containment across Unicode forms', () => {
   })
 
   it('denies a fold it cannot check against the filesystem', () => {
-    // Neither spelling exists on disk, so identity is unproven — and unproven is denied.
+    // Canonically equal names without proven on-disk identity must remain denied.
     expect(
       isDescendantOrEqual(resolve(`/repos/${NFD_FOLDER}/test.txt`), resolve(`/repos/${NFC_FOLDER}`))
     ).toBe(false)
@@ -163,7 +150,7 @@ describe('fs:readFile authorization for a Korean-named workspace', () => {
     await writeFile(file, 'hello')
 
     const store = makeStore(registered)
-    // Resolved before the assertion so a rejection lands on expect(), not on an unawaited promise.
+    // Await realpath first so assertion rejections stay handled.
     const expected = await realpath(file)
 
     await expect(

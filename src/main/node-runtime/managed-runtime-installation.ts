@@ -31,6 +31,13 @@ export type ManagedRuntimeInstallationDeps = {
 }
 
 type Run = { id: string; controller: AbortController; committed: boolean }
+
+const releaseChangeListeners = new Set<() => void>()
+/** Runs after any install or removal on this host ends, which can change what a start runs. */
+export function onManagedRuntimeReleasesChanged(listener: () => void): () => void {
+  releaseChangeListeners.add(listener)
+  return () => releaseChangeListeners.delete(listener)
+}
 type InstalledFacts = Omit<ManagedRuntimeInstallState, 'agent' | 'revision' | 'operation'>
 
 export class ManagedRuntimeInstallation {
@@ -170,6 +177,9 @@ export class ManagedRuntimeInstallation {
       patch.phase === 'succeeded' || patch.phase === 'cancelled' || patch.phase === 'failed'
     if (operation?.id === run.id && (settles || !run.controller.signal.aborted)) {
       this.state.set({ ...operation, ...patch })
+      if (settles) {
+        releaseChangeListeners.forEach((listener) => listener())
+      }
     }
   }
 

@@ -272,7 +272,6 @@ background = #1a1a1a
     })
     readFileMock.mockResolvedValue('font-family = JetBrains Mono\n')
 
-    // Why: Replace timer globals temporarily to detect any polling setup.
     const originalSetInterval = globalThis.setInterval
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setInterval = setIntervalMock as unknown as typeof setInterval

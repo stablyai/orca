@@ -1,7 +1,3 @@
-// Editing a queued card in place, through the real host, journal and drain: Save keeps the card's
-// identity, an edit lease stops automatic delivery at the card (and so at everything behind it),
-// and no lease outlives its deadline, its card, or its conversation.
-
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -190,9 +186,7 @@ describe('saving a queued card in place', () => {
     const body = { ...hostTestMessage('/compact'), command: { name: 'compact' } }
     const command = await journal().queuedMessages.insert({
       messageId: 'command-card',
-      body,
-      fingerprint: agentSessionSendBodyFingerprint(HOST_TEST_SESSION, body),
-      hostInstance: 'host'
+      body
     })
     expect(await hold(command.messageId)).toEqual({ status: 'not-editable' })
     expect(await update(command.messageId, command.fingerprint, 'text')).toMatchObject({
@@ -235,7 +229,7 @@ describe("saving a queued card's images", () => {
     expect(await update(id, base, 'caption', undefined, [image(B)])).toMatchObject({
       value: { status: 'changed' }
     })
-    // A kept image whose upload was swept never blocks a text-only fix, which keeps the images.
+    // Missing retained uploads must allow text-only edits without dropping images.
     await rm(upload(A), { recursive: true })
     expect(await update(id, fingerprint(id), 'fixed')).toMatchObject({
       value: { status: 'updated' }
@@ -288,7 +282,6 @@ describe('edit leases and automatic delivery', () => {
         ...gate()(journal())
       })
     ).toBe(true)
-    // An explicit Send still overrides, and spends the lease with the card.
     expect(await rig.sendNow(edited)).toMatchObject({ ok: true })
     expect(journal().queuedMessages.editLeases.heldIds().size).toBe(0)
   })
@@ -322,7 +315,7 @@ describe('edit leases and automatic delivery', () => {
     const before = publication()
     const touch = vi.spyOn(rig.host.collaboratorsForTests().sessions, 'touch')
     expect(await hold(id, 'renew')).toMatchObject({ status: 'held' })
-    // An open editor does not keep the agent's process from its idle stop.
+    // Editor renewal must not keep the provider process alive.
     expect(touch).not.toHaveBeenCalled()
     expect(publication()).toBe(before)
     expect(await hold(id, 'release')).toEqual({ status: 'released' })

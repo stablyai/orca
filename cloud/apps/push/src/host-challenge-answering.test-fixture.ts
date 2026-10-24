@@ -40,12 +40,6 @@ function equal(left: Uint8Array | undefined, right: Uint8Array): boolean {
   return Boolean(left && left.byteLength === right.byteLength && timingSafeEqual(left, right))
 }
 
-function uint64(value: number): Uint8Array {
-  const bytes = new Uint8Array(8)
-  new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false)
-  return bytes
-}
-
 function parseTranscript(transcript: Uint8Array): Map<string, Uint8Array> | null {
   const fields = new Map<string, Uint8Array>()
   const view = new DataView(transcript.buffer, transcript.byteOffset, transcript.byteLength)
@@ -117,8 +111,7 @@ function validateTranscript(
     ['challengeNonce', equal(fields.get('challengeNonce'), nonce)],
     ['challengeId', equal(fields.get('challengeId'), textEncoder.encode(challenge.challengeId))],
     ['hostFingerprint', equal(fields.get('hostFingerprint'), textEncoder.encode(fingerprint))],
-    ['hostPublicKey', equal(fields.get('hostPublicKey'), context.keypair.publicKey)],
-    ['issuedAt-value', issuedAt === null || uint64(issuedAt).byteLength === 8]
+    ['hostPublicKey', equal(fields.get('hostPublicKey'), context.keypair.publicKey)]
   ]
   const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
   if (failed.length === 0) return true

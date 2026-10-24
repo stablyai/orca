@@ -7,6 +7,7 @@ import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
+  waitForPageFrames,
   installShellDouble,
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
@@ -193,7 +194,11 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     const { page, errors, jsResponses } = opened
     // The header's own control, by the name a user reads; it is the sidebar's on a wide layout.
     await page.getByLabel('Tasks').first().click()
-    await page.waitForTimeout(1_500)
+    await expect
+      .poll(() => navigates(page))
+      .toEqual([
+        { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
+      ])
     expect(await navigates(page)).toEqual([
       { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
     ])
@@ -246,7 +251,11 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
     // among siblings that could have hidden a wide header rendering here.
     expect(await tasks.count()).toBe(1)
     await tasks.click()
-    await page.waitForTimeout(1_500)
+    await expect
+      .poll(() => navigates(page))
+      .toEqual([
+        { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
+      ])
     expect(await navigates(page)).toEqual([
       { v: bridgeVersion, type: 'notify', name: 'navigate', href: `${HOST_ROUTE}/tasks` }
     ])
@@ -284,7 +293,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       awaitText: 'Files'
     })
     const { page, errors } = opened
-    await page.waitForTimeout(1_000)
+    await waitForPageFrames(page)
     expect(
       await page.evaluate((name) => document.body.innerText.includes(name), SHELL_HOST.name)
     ).toBe(false)
@@ -307,7 +316,7 @@ describeRender('the sidebar hop to tasks, under the session it was opened with',
       viewport: WIDE,
       grants: [faultGrant, 'navigate', 'storage', 'externalLink', 'haptics']
     })
-    await detailOnly.page.waitForTimeout(1_000)
+    await waitForPageFrames(detailOnly.page)
     expect(await detailOnly.page.getByText('No workspace open').count()).toBe(0)
     expect(detailOnly.errors).toEqual([])
     await detailOnly.page.close()

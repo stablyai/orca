@@ -371,8 +371,7 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(300)
 
     expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
-    // Overflow is definite proof of loss, not a possibly-transient error — it
-    // invalidates the cached ref resolution unconditionally.
+    // Overflow proves event loss and must invalidate cached ref resolution.
     await setWorktreeGitStatusRefWatch(request, resolve)
     expect(resolve).toHaveBeenCalledTimes(2)
   })
@@ -386,10 +385,7 @@ describe('worktree base directory watcher', () => {
     onOverflow?.()
     await vi.advanceTimersByTimeAsync(300)
 
-    // A watcher-error burst within the 60s cooldown window collapses to one
-    // refresh (see "throttles repeated structural refreshes from watcher
-    // failures" above); overflow must not inherit that gate, since a bulk op
-    // can legitimately overflow more than once before it settles.
+    // Repeated overflows still require refresh even within the transient-error cooldown.
     expect(notifyWorktreesChanged).toHaveBeenCalledTimes(2)
   })
 
@@ -482,10 +478,8 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(300)
     await vi.advanceTimersByTimeAsync(0)
 
-    // An index rewrite cannot move HEAD, so the linked-worktree scan is skipped.
     expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
-    // Source Control still refreshes for the status churn, coalesced to one call.
     expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
     expect(notifyWorktreesChanged).not.toHaveBeenCalled()
   })
@@ -525,7 +519,7 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(0)
     vi.mocked(readGitCommonHeadIdentities).mockClear()
 
-    // reset --soft rewrites the index and appends logs/HEAD in the same burst.
+    // A combined status/reflog burst must preserve head-move notification.
     mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
@@ -570,7 +564,7 @@ describe('worktree base directory watcher', () => {
       path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'logs', 'HEAD')
     }
     emit(PROJECT_GIT_COMMON_DIR, [reflog])
-    // Second burst arrives before the debounce window elapses and resets it.
+    // A later burst must join the armed debounce rather than postponing it.
     await vi.advanceTimersByTimeAsync(100)
     emit(PROJECT_GIT_COMMON_DIR, [reflog])
     await vi.advanceTimersByTimeAsync(300)
@@ -610,8 +604,7 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
 
-    // A later reflog event diffs against the re-baselined heads, so an
-    // unchanged head is not re-reported.
+    // Structural refresh re-baselines heads, so unchanged later reflog events must not duplicate notifications.
     emit(PROJECT_GIT_COMMON_DIR, [
       {
         type: 'update',

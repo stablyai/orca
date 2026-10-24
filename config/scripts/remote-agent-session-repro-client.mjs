@@ -7,7 +7,14 @@ const require = createRequire(import.meta.url)
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const { parsePairingCode } = require(path.join(repoRoot, 'out', 'shared', 'pairing.js'))
 const { RemoteRuntimeRequestConnection } = require(
-  path.join(repoRoot, 'out', 'shared', 'remote-runtime-request-connection.js')
+  path.join(
+    repoRoot,
+    'out',
+    'shared',
+    'remote-runtime',
+    'requests',
+    'remote-runtime-request-connection.js'
+  )
 )
 
 const [pairingCode, method, rawParams, responseMode] = process.argv.slice(2)

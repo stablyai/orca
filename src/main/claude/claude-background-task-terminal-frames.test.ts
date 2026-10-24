@@ -1,8 +1,3 @@
-// What a TERMINAL background-task frame renders on its own, and what it must
-// not. A terminal frame states an outcome, so it is self-sufficient: the row map
-// enriches one, it never gates one. The deliberate hand-offs still win, and a
-// late announcement still cannot reopen work already reported finished.
-
 import { describe, expect, it } from 'vitest'
 import {
   FORWARDED_TOOL,
@@ -13,15 +8,9 @@ import {
 
 describe('claude background task terminal frames', () => {
   it('reports a failure for a task it never saw admitted', () => {
-    // The row map ENRICHES a terminal frame; it never gates one. This exact
-    // frame reached a user session whose task was never admitted, and both the
-    // typed path and the generic fallback stayed silent, so the failure was
-    // dropped on the floor.
     const { rows, items, latest, latestTwin, turnOpens } = harness()
     expect(rows.observe(ORPHAN_FAILED_NOTIFICATION)).toBe(true)
     expect(items).toHaveLength(1)
-    // The row is provider output like any other, so writing it reopens the turn
-    // the provider resumed itself rather than printing beside an idle session.
     expect(turnOpens).toHaveLength(1)
     expect(latest()).toMatchObject({
       type: 'background-task',
@@ -31,8 +20,6 @@ describe('claude background task terminal frames', () => {
       summary: 'Locate the exact screenshot session',
       parentToolUseId: 'toolu_01ASNfnDBEzt4w3ejLE12bGu'
     })
-    // The sentence carries the provider's words; the header falls back to the
-    // kind label, so one field is never drawn in two slots of the same row.
     expect(latest()?.label).toBe('')
     expect(latestTwin()).toBe('Locate the exact screenshot session')
   })
@@ -130,9 +117,6 @@ describe('claude background task terminal frames', () => {
   })
 
   it('refuses a nested child whose spawning tool was never forwarded', () => {
-    // A Task spawned inside a subagent's sidechain names a tool id that only
-    // exists in that sidechain. A top-level row for it would claim an
-    // invocation the user never saw.
     const { rows, items } = harness([])
     rows.observe({ ...START_BASH, task_id: 'nested-1', tool_use_id: 'toolu_sidechain' })
     rows.observe({
@@ -147,8 +131,6 @@ describe('claude background task terminal frames', () => {
   })
 
   it('never lets a monitor reach the timeline', () => {
-    // A monitor is Claude's own housekeeping: it runs for the life of the
-    // session and has no outcome a transcript row could report.
     const { rows, items } = harness()
     rows.observe({
       type: 'system',
@@ -170,9 +152,6 @@ describe('claude background task terminal frames', () => {
   })
 
   it('does not resurrect a task whose terminal edge arrived before its start', () => {
-    // The guard is scoped to ANNOUNCEMENTS: the terminal frame states an
-    // outcome and gets its row, and the late `task_started` that follows may
-    // not reopen work already reported finished.
     const { rows, items, keys, latest } = harness()
     expect(
       rows.observe({

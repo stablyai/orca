@@ -14,44 +14,23 @@ import {
 } from './codex-app-server-process-tree-kill'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
-// Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
-// state (hook trust hashes, the sqlite thread index). This module owns the
-// stdio JSONL transport — spawn, handshake, framing, deadline, reap — so every
-// RPC consumer (trust grant, session index heal) shares one hardened lifecycle.
-
 export type CodexAppServerInvocation = {
   command: string
   args: string[]
   cwd?: string
-  /**
-   * The resolved CLI path, used to pair the CLI with the `node` it was installed
-   * against — without it a CLI resolved out of a version-manager directory runs
-   * under whatever node leads PATH and dies on a NODE_MODULE_VERSION mismatch
-   * (stablyai/orca#10932).
-   *
-   * Required, and `null` only for a guest-side launcher (wsl.exe) where the host
-   * path means nothing. Optional would let a native builder omit it and silently
-   * skip the pairing with no type error.
-   */
+  /** Pairs the CLI with its Node runtime to avoid NODE_MODULE_VERSION mismatches; null only for guest launchers. */
   cliPath: string | null
   /** Overlay applied on top of the inherited environment (e.g. CODEX_HOME). */
   env?: Record<string, string>
-  /** Env keys stripped from the inherited environment before spawn (e.g. an inherited
-   *  CODEX_HOME, so `listCodexHooks` with no `codexHome` lists the real ~/.codex). */
+  /** Keys stripped after the overlay, e.g. CODEX_HOME when targeting the real ~/.codex. */
   envToDelete?: readonly string[]
-  /** Whole-session deadline. The codex child is stopped when it lapses. */
   timeoutMs: number
-  /** Stops the session and its child early, as the deadline would. */
   signal?: AbortSignal
-  /** Kill the whole tree while the root still lives, before ending its stdin. For a session that
-   *  lets Codex start plugin work: an unsupervised root that exits on stdin end leaves its git
-   *  children behind, and a tree kill after the root exits is refused. */
+  /** Kill unsupervised plugin trees before stdin EOF; root exit leaves children behind and blocks tree killing. */
   treeKillOnFinish?: boolean
 }
 
-/** Codex-side absence of the requested app-server RPC surface (old CLI without
- *  the app-server subcommand, or a server without the called methods).
- *  This is the ONLY error class capability caches mark unsupported. */
+/** Missing app-server subcommand or RPC method; only this class marks capability caches unsupported. */
 export class CodexAppServerUnsupportedError extends Error {
   constructor(message: string) {
     super(message)
@@ -77,8 +56,7 @@ type JsonRpcResponse = {
 }
 
 export type CodexAppServerRpc = {
-  /** `timeoutMs` bounds one call inside the session deadline, so a caller can drop it and go on;
-   *  absent or null, only the session deadline does. */
+  /** Per-call deadline within the session deadline; absent/null uses only the session deadline. */
   request: (
     method: string,
     params?: Record<string, unknown>,
@@ -91,8 +69,7 @@ const JSON_RPC_METHOD_NOT_FOUND = -32601
 const STDERR_DETAIL_MAX_CHARS = 400
 const CODEX_APP_SERVER_KILL_SITE = 'codex-app-server-session'
 
-/** Codex answering "no such method" is the only response that proves the RPC
- *  surface is absent rather than temporarily failing. */
+// Only method-not-found responses prove absence rather than a transient failure.
 export function isCodexMethodNotFoundError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) {
     return false
@@ -104,24 +81,17 @@ export function isCodexMethodNotFoundError(error: unknown): boolean {
   )
 }
 
-/**
- * Runs one short-lived `codex app-server` session over stdio JSON-RPC (JSONL):
- * spawn → initialize → initialized → body(rpc) → EOF/reap. The child is reaped
- * on every path; the session deadline stops it. On POSIX it runs under the provider
- * supervisor, so an Orca that quits or dies mid-session still stops its group.
- */
+/** Runs a bounded JSONL session; the POSIX supervisor also stops its group if Orca dies. */
 export async function runCodexAppServerSession<T>(
   invocation: CodexAppServerInvocation,
   body: (rpc: CodexAppServerRpc) => Promise<T>,
   spawnImpl: CodexAppServerSpawn = spawnCodexAppServerProcess
 ): Promise<T> {
-  // Why: a default-home grant must run against the real ~/.codex, so strip an
-  // inherited CODEX_HOME (envToDelete) after applying the overlay, not before.
+  // Strip CODEX_HOME after the overlay so default-home grants target the real ~/.codex.
   const childEnv = resolveProviderChildEnv(invocation, process.env)
   const pairedEnv = invocation.cliPath
     ? withCliRuntimeOnPath(invocation.cliPath, childEnv)
     : childEnv
-  // The Codex connection's managed process and close policy, so a session closes the same way.
   const managed = spawnManagedProviderProcess(
     { command: invocation.command, args: invocation.args, cwd: invocation.cwd },
     {
@@ -132,7 +102,7 @@ export async function runCodexAppServerSession<T>(
         spawnImpl(spec.program, [...(spec.args ?? [])], {
           env: spec.env,
           cwd: spec.cwd,
-          // The managed spec's slots, so the supervisor's group-report channel survives.
+          // Preserve the supervisor's group-report channel.
           stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
           ...(spec.detached ? { detached: true } : {})
@@ -154,21 +124,18 @@ export async function runCodexAppServerSession<T>(
     exited = true
     exitCode = exit.code
   })
-  // Why: 'error' fires instead of 'exit' when the spawn itself fails
-  // (ENOENT); surface it to every in-flight request or they wait forever.
+  // Spawn failures emit error without exit; reject requests that would otherwise hang.
   let spawnError: Error | null = null
   child.on('error', (error) => {
     spawnError = error
     exited = true
     failPending(error)
   })
-  // Why: 'close' (not 'exit') guarantees the stderr tail is complete, so an
-  // early death classifies correctly as missing-subcommand vs transient.
+  // close guarantees complete stderr for classifying missing-subcommand versus transient failure.
   child.on('close', () => {
     failPending(buildEarlyExitError())
   })
-  // Why: a child can exit between the liveness check and stdin.write(); an
-  // EPIPE must reject the RPC instead of becoming an unhandled stream error.
+  // Exit can race stdin.write(); reject RPCs on EPIPE instead of leaving an unhandled stream error.
   child.stdin.on('error', (error) => {
     failPending(error)
   })
@@ -327,8 +294,7 @@ export async function runCodexAppServerSession<T>(
       notify('initialized')
       return body({ request: requestRpc, notify })
     }
-    // Why: the timeout owns the whole callback, including time between RPCs;
-    // killing the child alone cannot settle a callback awaiting unrelated work.
+    // Killing the child cannot settle a callback awaiting unrelated work; race the whole callback.
     return await Promise.race([session(), deadlinePromise])
   } catch (error) {
     if (

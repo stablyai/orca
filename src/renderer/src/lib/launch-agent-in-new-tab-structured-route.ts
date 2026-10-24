@@ -19,7 +19,7 @@ type StructuredFromNewTab = {
 /**
  * The new-tab launcher's structured route. The owning host, this machine or a paired server,
  * admits the chat before any of it exists here, so its surface is the host's, and its "no" runs
- * the caller's own launch as a terminal unless the caller names what opens instead.
+ * the caller's launch as a terminal where its CLI is installed unless it names what opens instead.
  */
 export function launchStructuredAgentFromNewTab(args: {
   plan: AgentSessionLaunchPlan
@@ -47,6 +47,7 @@ export function launchStructuredAgentFromNewTab(args: {
     ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
     target: { worktreeId: args.worktreeId },
     ...(args.groupId ? { targetGroupId: args.groupId } : {}),
+    ...(args.onHostDeclined ? { declinedOpensCallerSurface: true as const } : {}),
     onHostDeclined: (_target, activate) => {
       if (args.onHostDeclined) {
         return args.onHostDeclined()

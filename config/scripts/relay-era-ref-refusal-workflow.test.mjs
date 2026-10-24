@@ -47,6 +47,9 @@ describe.each(refusalTargets)(
   ({ jobSteps, index, laterStep }) => {
     it('checks the ref before it builds or tags anything', () => {
       expect(index).toBeGreaterThan(0)
+      expect(jobSteps[index].if).toBeUndefined()
+      expect(jobSteps[index]['continue-on-error'] ?? false).toBe(false)
+      expect(jobSteps[index].shell).toBe('bash')
       expect(jobSteps[index - 1].uses).toMatch(/^actions\/checkout@/)
       const sparse = jobSteps[index - 1].with['sparse-checkout']
       expect(sparse?.split('\n').includes('/config/tsconfig.relay.json') ?? true).toBe(true)

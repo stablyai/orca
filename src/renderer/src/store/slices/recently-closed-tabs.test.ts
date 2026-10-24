@@ -23,7 +23,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta: vi.fn().mockResolvedValue({})
   },

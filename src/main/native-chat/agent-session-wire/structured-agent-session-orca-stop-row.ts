@@ -1,7 +1,3 @@
-// The row that says why a quit or update cut a reply: the cut turn's own explanation, in the words
-// every client already prints for a stopped agent, with the cause beside them for clients that
-// name it (`AgentSessionOrcaStop`).
-
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   AGENT_SESSION_ORCA_STOP_PRESENTATION,
@@ -29,9 +25,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 
 type OrcaStopRowJournal = Pick<AgentSessionJournal, 'snapshot' | 'appendItem'>
 
-/** The row about an owner gone from under a turn: today's words and tone, which every client prints
- *  as it always has, and why Orca stopped when it was Orca, which a client that knows the cause names
- *  instead, muted. */
+/** Keep legacy stop wording/tone alongside the cause that newer clients render muted. */
 export function orcaStopRowBody(
   context: AgentSessionFailureWordsContext | undefined,
   orcaEnd: unknown
@@ -49,7 +43,6 @@ export function orcaStopRowBody(
   }
 }
 
-/** The root turn running as the quit stops the child: the one its stop may cut. */
 export function runningRootTurnItemId(
   journal: Pick<AgentSessionJournal, 'snapshot'>
 ): string | null {
@@ -72,17 +65,13 @@ function cutByNobody(item: AgentJournalRenderItem | undefined): boolean {
   )
 }
 
-/**
- * Once the quit's stop has settled: when the turn running at the stop now reads cut with nobody
- * asking (not finished, not a person's Stop), say why. Never throws: a row that cannot be written
- * must not keep the quit from releasing the chat.
- */
+/** Explain quit-cut turns after settlement, excluding completed/personal stops; never block quit on failure. */
 export async function recordStructuredAgentSessionShutdownCut(input: {
   journal: OrcaStopRowJournal
   sessionId: string
-  /** The stopped child's fence, which keys the row. */
+  /** Stopped-child fence keys row identity. */
   fence: number
-  /** The fence the row is written at: the lease's, which the child's end moved past `fence`. */
+  /** Current lease fence, advanced beyond the stopped child. */
   rowFence: number
   generation: string
   turnItemId: string | null

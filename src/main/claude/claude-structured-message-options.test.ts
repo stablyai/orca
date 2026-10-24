@@ -11,6 +11,7 @@ import {
 import { captureStructuredExecutionOptions } from '../native-chat/agent-session-wire/structured-agent-session-execution-options'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { ClaudeControlRequestError } from './claude-stream-json-connection'
 
 const MODELS = [
   { value: 'default', resolvedModel: 'claude-sonnet-5' },
@@ -215,6 +216,46 @@ describe('Claude accepted message choices', () => {
       })
     ).resolves.toMatchObject({ state: 'admitted' })
     expect(order).toEqual(['model:opus', 'effort:{"effortLevel":"high"}', 'prompt'])
+  })
+
+  // Host admission treats the original abort as never written.
+  it('surfaces a Stop while it applies a choice as the abort, and a refusal as a refusal', async () => {
+    let refuse = false
+    const claude = fakeClaude({
+      initModels: MODELS,
+      routes: {
+        list_models: () => MODELS,
+        set_model: () => {
+          if (refuse) {
+            throw new ClaudeControlRequestError('set_model', 'unknown model')
+          }
+          return new Promise(() => {})
+        }
+      }
+    })
+    const adapter = await acquired(claude)
+    const stop = new AbortController()
+    const dispatch = (clientMessageId: string, signal?: AbortSignal) =>
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId,
+        body: USER_MESSAGE,
+        executionOptions: { model: 'opus' },
+        fence: 7,
+        ...(signal ? { signal } : {})
+      })
+    const stopped = dispatch('stopped', stop.signal)
+    await vi.waitFor(() =>
+      expect(claude.connections[0]!.calls.some((call) => call.subtype === 'set_model')).toBe(true)
+    )
+    stop.abort(new Error('stopped while starting'))
+    await expect(stopped).rejects.toBe(stop.signal.reason)
+    refuse = true
+    await expect(dispatch('refused')).resolves.toMatchObject({
+      state: 'rejected',
+      rejection: { kind: 'providerRejected' }
+    })
+    expect(claude.connections[0]!.sent).toHaveLength(0)
   })
 
   it('restores A after an applied unanswered B and an uncorrelated old init', async () => {

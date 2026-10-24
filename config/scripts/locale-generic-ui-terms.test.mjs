@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { LOCALIZABLE_GENERIC_TERMS } from './locale-generic-ui-terms.mjs'
-import { NEVER_TRANSLATE_VALUES, repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 // Why: #12113 — repair-locale-catalog rewrote ~2000 translated values back to English because
 // generic UI words (agent, terminal, commit, repo, Continue) were treated as brands. These pin
@@ -115,8 +114,14 @@ describe('locale generic UI terms', () => {
     ).toBe('Continue')
   })
 
-  it('does not list a generic term as never-translatable', () => {
-    const pinned = [...LOCALIZABLE_GENERIC_TERMS].filter((term) => NEVER_TRANSLATE_VALUES.has(term))
-    expect(pinned).toEqual([])
+  it.each([
+    ['ko', 'Commit', '커밋'],
+    ['ja', 'repos', 'リポジトリ'],
+    ['es', 'agents', 'agentes'],
+    ['ko', 'terminals', '터미널']
+  ])('preserves the %s translation of generic %s', (locale, enValue, localeValue) => {
+    expect(repairTranslatedValue({ key: 'fixture.generic', enValue, localeValue, locale })).toBe(
+      localeValue
+    )
   })
 })

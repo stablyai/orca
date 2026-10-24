@@ -52,7 +52,7 @@ export type AntigravityCredentialIdentity = {
   email: string | null
 }
 
-// These claims label a locally stored account; they never authorize an operation.
+// Unverified claims label local accounts; they never authorize operations.
 function readIdentity(idToken: unknown): AntigravityCredentialIdentity | null {
   if (typeof idToken !== 'string') {
     return null
@@ -111,7 +111,7 @@ export function parseAntigravityNativeCredential(contents: string): AntigravityN
     throw invalidCredential()
   }
   return {
-    // Keep the exact native blob: a CLI upgrade may depend on fields Orca does not know.
+    // Preserve unknown fields for CLI compatibility.
     contents,
     authMethod: value.auth_method,
     identity: readIdentity(value.id_token ?? value.token.id_token)

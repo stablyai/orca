@@ -134,8 +134,6 @@ describe('CodexAccountService config sync', () => {
 
     await service.selectAccount('account-2')
 
-    // Each managed host account launches against its own home, so a switch must
-    // leave both credential files alone and never copy either into the mirror.
     expect(existsSync(runtimeAuthPath)).toBe(false)
     expect(readFileSync(join(firstManagedHomePath, 'auth.json'), 'utf-8')).toBe(firstAuth)
     expect(readFileSync(join(secondManagedHomePath, 'auth.json'), 'utf-8')).toBe(secondAuth)

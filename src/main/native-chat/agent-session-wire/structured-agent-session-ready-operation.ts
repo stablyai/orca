@@ -49,14 +49,13 @@ type ReadyOperationPlan<T> = Pick<
 type QueuedReadyOperation<T> =
   | { result: AgentSessionMutationResult<T> }
   | {
-      /** Null: the session has no child to run on yet, so the operation starts one outside. */
+      /** null starts a child outside serialization. */
       child: StructuredAgentSessionProviderChildIdentity | null
       readiness: StructuredAgentSessionStartReadiness | null
       start: StructuredAgentSessionStartClaim | null
       place: StructuredAgentSessionDeliveryPlace
     }
 
-/** A send or conversation command waits only when an earlier rewind needs its provider. */
 export async function runAfterRewindStart<T>(
   context: StructuredAgentSessionMutationContext,
   callerKey: string,
@@ -69,8 +68,7 @@ export async function runAfterRewindStart<T>(
   })
 }
 
-/** A ready child runs in this queue turn; a starting child, or none, releases it to wait, and a
- *  start the operation needs runs outside the queue, as the delivery loop's does. */
+/** Run ready operations in-lane; release serialization before awaiting startup/readiness. */
 export async function runWithReadyStructuredAgentSessionOperation<T>(
   context: StructuredAgentSessionMutationContext,
   callerKey: string,
@@ -110,7 +108,7 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
         if (parseAgentSessionOperationTimestamp(envelope.clientOperationId) === null) {
           return { result: await run({ ok: true, child: null }) }
         }
-        // Receipt admission owns replay and unreadable-result answers, before any start.
+        // Resolve receipt replay/unreadable results before any provider start.
         let recorded: boolean
         try {
           recorded =
@@ -298,7 +296,7 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
     }
     const ran = child
     return await context.serialize(envelope.sessionId, () =>
-      // Admission re-reads the journal here after readiness and answers a competing settlement.
+      // Re-read after readiness so competing settlement wins admission.
       run({ ok: true, child: ran, deadline, signal: authority?.signal })
     )
   } finally {

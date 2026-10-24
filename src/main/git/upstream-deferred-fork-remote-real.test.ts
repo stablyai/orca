@@ -6,12 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { getUpstreamStatus } from './upstream'
 
-// Why: on-demand remote materialization (#17828) defers `git remote add` for a
-// fork PR to first push/pull/fetch/fast-forward, so an unpublished review's
-// status must be read against a pushTarget whose remote was never created.
-// This exercises the real `rev-parse --verify --quiet` failure path -- a
-// fake/mocked git can't reproduce its exact exit-code/stderr shape, which is
-// exactly what `getPublishTargetStatus`'s missing-ref fallback depends on.
+// Real Git verifies missing-ref exit/stderr handling before a fork remote is materialized.
 describe('getUpstreamStatus with a deferred (not-yet-materialized) fork remote', () => {
   const tempPaths: string[] = []
 
@@ -37,9 +32,7 @@ describe('getUpstreamStatus with a deferred (not-yet-materialized) fork remote',
     git('commit', '-m', 'base')
     git('branch', '-M', 'contributor/fix')
 
-    // Simulates a fork-PR review worktree right after create: pushTarget
-    // metadata is persisted, but `pr-contributor-orca` was never added as a
-    // remote because materialization is deferred to first use.
+    // Persist a push target without adding its deferred remote.
     const pushTarget: GitPushTarget = {
       remoteName: 'pr-contributor-orca',
       branchName: 'contributor/fix',

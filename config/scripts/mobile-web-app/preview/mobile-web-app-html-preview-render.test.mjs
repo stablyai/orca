@@ -717,20 +717,48 @@ for (const engine of ['chromium', 'webkit']) {
         const form = await open(browser(), {
           signal: ctx.signal,
           act: async ({ frame }) => {
-            await frame?.click('#submit', { timeout: 2000 })
+            await frame.click('#submit', { timeout: 2000 })
           }
         })
+        expect(form.actError).toBeNull()
         expect(form.pixelBefore).toBe(ARTIFACT_RGB)
         expect(form.topNavigations).toBe(0)
         const blank = await open(browser(), {
           signal: ctx.signal,
           act: async ({ frame }) => {
-            await frame?.click('#blanklink', { timeout: 2000 })
+            await frame.click('#blanklink', { timeout: 2000 })
           }
         })
+        expect(blank.actError).toBeNull()
         expect(blank.pixelBefore).toBe(ARTIFACT_RGB)
         expect(blank.topNavigations).toBe(0)
         expect(blank.popups).toBe(0)
+        const allowedForm = await open(browser(), {
+          signal: ctx.signal,
+          csp: null,
+          sandbox: 'allow-forms allow-top-navigation-by-user-activation',
+          expectNavigation: 'main-frame',
+          act: async ({ frame }) => {
+            await frame.click('#submit', { timeout: 2000 })
+          }
+        })
+        expect(allowedForm.pixelBefore).toBe(ARTIFACT_RGB)
+        expect(allowedForm.actError).toBeNull()
+        expect(allowedForm.topNavigations).toBe(1)
+        const allowedBlank = await open(browser(), {
+          signal: ctx.signal,
+          csp: null,
+          sandbox: 'allow-popups allow-popups-to-escape-sandbox',
+          act: async ({ page, frame }) => {
+            await Promise.all([
+              page.waitForEvent('popup', { timeout: 10_000 }),
+              frame.click('#blanklink', { timeout: 2000 })
+            ])
+          }
+        })
+        expect(allowedBlank.pixelBefore).toBe(ARTIFACT_RGB)
+        expect(allowedBlank.actError).toBeNull()
+        expect(allowedBlank.popups).toBe(1)
       }, 180_000)
 
       // The navigation wait's sampling branch, driven once. It fires only when an arm is slow, so

@@ -1,9 +1,32 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { colors } from '../theme/mobile-theme'
 
-const fades = vi.hoisted(() => ({ stops: 0, finished: true }))
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
+
+const fades = vi.hoisted(() => {
+  const animations: {
+    target: number
+    stops: number
+    done?: (result: { finished: boolean }) => void
+  }[] = []
+  return { animations }
+})
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -13,14 +36,22 @@ vi.mock('react-native', () => ({
     Value: class {
       setValue(): void {}
     },
-    timing: () => ({
-      start: (done?: (result: { finished: boolean }) => void) => {
-        done?.({ finished: fades.finished })
-      },
-      stop: () => {
-        fades.stops += 1
+    timing: (_value: unknown, options: { toValue: number }) => {
+      const animation: {
+        target: number
+        stops: number
+        done?: (result: { finished: boolean }) => void
+      } = { target: options.toValue, stops: 0 }
+      fades.animations.push(animation)
+      return {
+        start: (done?: (result: { finished: boolean }) => void) => {
+          animation.done = done
+        },
+        stop: () => {
+          animation.stops += 1
+        }
       }
-    })
+    }
   },
   StyleSheet: {
     create: (styles: unknown) => styles,
@@ -78,27 +109,46 @@ describe('the frame the shell keeps over an unpainted page', () => {
     act(() => {
       tree.update(createElement(ShellPageCover, { label: 'Opening workspace', visible: false }))
     })
+    expect(cover(tree)).not.toBeNull()
+    const animation = fades.animations.at(-1)
+    if (animation?.done === undefined) {
+      throw new Error('fade never started')
+    }
+    expect(animation.target).toBe(0)
+    act(() => animation.done?.({ finished: true }))
     expect(cover(tree)).toBeNull()
   })
 
-  it('stays out of the way when a fade is cut short rather than staying opaque', () => {
-    // A platform that stops the fade reports `finished: false`; the cover keeps its element and
-    // its `pointerEvents: none`, which is a transparent inert layer rather than an opaque one.
-    fades.finished = false
+  it('keeps an interrupted fade inert while targeting zero opacity', () => {
     const tree = render(true)
-    act(() => {
+    act(() =>
       tree.update(createElement(ShellPageCover, { label: 'Opening workspace', visible: false }))
-    })
+    )
+    const animation = fades.animations.at(-1)
+    if (animation?.done === undefined) {
+      throw new Error('fade never started')
+    }
+    expect(animation.target).toBe(0)
+    act(() => animation.done?.({ finished: false }))
     expect(cover(tree)?.props.pointerEvents).toBe('none')
-    fades.finished = true
   })
 
-  it('stops a fade in flight when the view unmounts', () => {
-    const before = fades.stops
-    const tree = render(false)
-    act(() => {
-      tree.unmount()
-    })
-    expect(fades.stops).toBeGreaterThan(before)
+  it('stops the pending fade when its view unmounts', () => {
+    const tree = render(true)
+    act(() =>
+      tree.update(createElement(ShellPageCover, { label: 'Opening workspace', visible: false }))
+    )
+    const animation = fades.animations.at(-1)
+    if (animation?.done === undefined) {
+      throw new Error('fade never started')
+    }
+    const before = animation.stops
+    act(() => tree.unmount())
+    expect(animation.stops).toBe(before + 1)
   })
+})
+
+afterEach(() => {
+  unmountRenderers()
+  fades.animations.length = 0
 })

@@ -215,7 +215,7 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     const html = renderAgentMenuItems()
 
-    expect(html).toContain('reach this workspace')
+    expect(html).toContain('list terminal agents for this workspace')
     expect(html).not.toContain('No agents detected')
   })
 

@@ -5,7 +5,10 @@ import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime-core
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { installExternalConversations } from './external-conversations-install'
 import {
+  fakeLauncher,
   fakeLinkStore,
+  fakeTerminal,
+  launchResult,
   PANE,
   SESSION,
   sessionRow,
@@ -46,7 +49,8 @@ function runtime() {
       }
     },
     subscribeAgentProviderSessionChangesFn: null,
-    getAgentStatusRowsForPane: (): AgentStatusIpcPayload[] => []
+    getAgentStatusRowsForPane: (): AgentStatusIpcPayload[] => [],
+    agentTransitions: { latestRow: vi.fn(() => null), subscribe: vi.fn(() => () => {}) }
   }
 }
 
@@ -59,7 +63,6 @@ describe('installExternalConversations', () => {
     const folders = vi.spyOn(store, 'getFolderWorkspaces')
     const rows = vi.spyOn(host, 'getAgentStatusRowsForPane')
     const connectors = installExternalConversations(store, host)
-    // Nothing is read until the host's first `current()`.
     expect(getSettings).not.toHaveBeenCalled()
     expect(connectors.current()).toBeNull()
     update({ experimentalConnectors: false })
@@ -71,6 +74,7 @@ describe('installExternalConversations', () => {
     expect(meta).not.toHaveBeenCalled()
     expect(folders).not.toHaveBeenCalled()
     expect(rows).not.toHaveBeenCalled()
+    expect(host.agentTransitions.subscribe).not.toHaveBeenCalled()
   })
 
   it('builds the seam on first use when the setting is already on', () => {
@@ -96,6 +100,44 @@ describe('installExternalConversations', () => {
     expect(second?.signal.aborted).toBe(false)
     expect(listeners.size).toBe(1)
     expect(host.lifecycle.size).toBe(1)
+  })
+
+  it('leaves a delivery still running across a disable and re-enable to its owner', async () => {
+    const { store, update } = fakeStore({ experimentalConnectors: true })
+    const host = runtime()
+    const db = host.getOrchestrationDb()
+    const connectors = installExternalConversations(store, host)
+    let release = (): void => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { launcher, launch } = fakeLauncher(async () => {
+      await held
+      return launchResult('handed-to-terminal')
+    })
+    const conversation = { launcher, terminal: fakeTerminal().terminal }
+    const key = { source: 'dev', externalId: 'thread' } as const
+    const input = {
+      agent: 'claude',
+      target: { kind: 'existing' as const, worktree: `id:${WORKTREE}` },
+      prompt: 'hi'
+    }
+    const live = connectors.current()?.start(conversation, key, 'd1', input)
+    await vi.waitFor(() => expect(launch).toHaveBeenCalledTimes(1))
+
+    update({ experimentalConnectors: false })
+    update({ experimentalConnectors: true })
+    const retry = connectors.current()?.start(conversation, key, 'd1', input)
+    const requestId = JSON.stringify(['thread', 'd1'])
+    expect(db.getMutationReceipt('connector:dev', requestId)?.state).toBe('pending')
+
+    release()
+    const [first, second] = await Promise.all([live, retry])
+    expect(second?.initial).toEqual(first?.initial)
+    expect(db.getMutationReceipt('connector:dev', requestId)?.receipt).toBe(
+      JSON.stringify(first?.initial)
+    )
+    expect(launch).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the seam through unrelated settings changes', () => {
@@ -131,7 +173,6 @@ describe('installExternalConversations', () => {
         return () => reports.delete(listener)
       }
     }
-    // What each runtime host does at startup, before any connector call.
     const connectors = installExternalConversations(store, host)
     connectors.current()
     const cleared = { ...SESSION, id: 'claude-session-after-clear' }

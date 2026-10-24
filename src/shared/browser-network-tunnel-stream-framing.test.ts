@@ -27,19 +27,20 @@ describe('browser network tunnel stream framing', () => {
     expect(errors).toEqual([])
   })
 
-  it('fails closed on oversized or empty frames', () => {
-    const oversizedError = vi.fn()
-    const oversized = new Uint8Array(4)
-    new DataView(oversized.buffer).setUint32(0, 2 * 1024 * 1024, false)
-    const oversizedDecoder = new BrowserNetworkTunnelStreamFrameDecoder(() => {}, oversizedError)
-    const emptyError = vi.fn()
-    const emptyDecoder = new BrowserNetworkTunnelStreamFrameDecoder(() => {}, emptyError)
+  it.each([0, 2 * 1024 * 1024])('stays closed after rejecting a %i-byte frame', (length) => {
+    const onFrame = vi.fn()
+    const onError = vi.fn()
+    const header = new Uint8Array(4)
+    new DataView(header.buffer).setUint32(0, length, false)
+    const decoder = new BrowserNetworkTunnelStreamFrameDecoder(onFrame, onError)
 
-    oversizedDecoder.feed(oversized)
-    emptyDecoder.feed(new Uint8Array([0, 0, 0, 0]))
+    decoder.feed(header)
+    decoder.feed(encodeBrowserNetworkTunnelStreamFrame(new Uint8Array([1])))
 
-    expect(oversizedError).toHaveBeenCalledOnce()
-    expect(emptyError).toHaveBeenCalledOnce()
+    expect(onFrame).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: 'browser_tunnel_stream_frame_invalid' })
+    )
   })
 
   it('fails the stream when a frame consumer rejects input', () => {

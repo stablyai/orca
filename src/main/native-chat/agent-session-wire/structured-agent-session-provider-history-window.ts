@@ -1,5 +1,4 @@
-// What the provider recorded after the journal's last committed item, sampled before an attach
-// acquires a new child: once one is running, an absent prompt no longer proves non-delivery.
+// Sample before acquiring a child; once running, absent prompts cannot prove non-delivery.
 
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -22,7 +21,6 @@ export async function readProviderHistoryWindow(input: {
   } catch {
     return null
   }
-  // A lease that was already live may belong to a provider child this process
-  // has not indexed yet. Preserve the safe unknown outcome in that case.
+  // An already-live lease may belong to an unindexed child; retain uncertainty.
   return history && input.ownerAlreadyAdmitted ? { ...history, turnInFlight: true } : history
 }

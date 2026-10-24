@@ -42,8 +42,6 @@ function scanResult(scannedAt: string): AiVaultListResult {
   return { sessions: [], issues: [], scannedAt }
 }
 
-// A scan whose resolution the test controls, so an invalidation can be injected
-// mid-flight.
 function deferredScan(): { resolve: (value: AiVaultListResult) => void } {
   let resolveFn: (value: AiVaultListResult) => void = () => {}
   scanAiVaultSessionsInService.mockReturnValueOnce(
@@ -71,19 +69,14 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
   })
 
   it('does not let a scan that started before an invalidation repopulate the cache', async () => {
-    // Scan A starts and is still in flight.
     const scanA = deferredScan()
     const inFlight = listAiVaultSessions()
 
-    // A delete invalidates the cache while A is running.
     invalidateAiVaultSessionListCache()
 
-    // A now resolves with a pre-delete result.
     scanA.resolve(scanResult('scan-A'))
     await inFlight
 
-    // A non-force list must re-scan (cache empty) rather than serve A's stale
-    // result — proof A's late .then() did not repopulate the cache.
     scanAiVaultSessionsInService.mockResolvedValueOnce(scanResult('scan-B'))
     const next = await listAiVaultSessions()
 
@@ -96,7 +89,6 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     const request = { limit: 1000, scopePaths: ['/project'] }
     const first = await listAiVaultSessions(request)
 
-    // A repeat request reuses the same scan entry and its scan ID.
     const cached = await listAiVaultSessions(request)
 
     expect(cached.scannedAt).toBe('scan-A')
@@ -188,7 +180,7 @@ describe('listAiVaultSessions symlinked scope', () => {
     expect(listed.sessions.find((entry) => entry.id === 'codex:s1')?.cwdAliases).toEqual([
       linkedRepo
     ])
-    // A cache hit at depth 1 keeps one out-of-scope row; the aliased row must count as in scope.
+    // The aliased row counts in scope, leaving only one out-of-scope row at depth 1.
     const cached = await listAiVaultSessions({ limit: 1, scopePaths: [linkedRepo] })
     expect(cached.sessions.map((entry) => entry.id)).toEqual(['codex:newer-1', 'codex:s1'])
   })

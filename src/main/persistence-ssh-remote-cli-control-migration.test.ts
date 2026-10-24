@@ -57,7 +57,7 @@ async function reopenStore(): Promise<ReturnType<typeof createStore>> {
   return createStore()
 }
 
-// The orcad serve host persists its SSH targets through this same Store load path.
+// The orcad serve host uses the same SSH-target loading path.
 describe("pinning existing hosts' orca CLI control switch on upgrade", () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -112,7 +112,7 @@ describe("pinning existing hosts' orca CLI control switch on upgrade", () => {
   })
 
   it('does not re-run after a downgrade wrote an absent switch alongside the marker', async () => {
-    // An older build keeps unknown settings keys, so the marker survives its saves.
+    // Older builds preserve unknown migration markers when saving settings.
     writeProfile([host('added-by-older-build')], {
       sshRemoteCliControlExistingHostsMigrated: true
     })

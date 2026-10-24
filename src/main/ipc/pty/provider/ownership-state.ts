@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 
-// Why: post-spawn write/resize/kill calls carry only the PTY ID; map it to the host that runs it so ops route to the right provider.
+// Later write/resize/kill requests carry only PTY ID; preserve its execution host for routing.
 export const ptyOwnership = new Map<string, ExecutionHostId>()
 export const ptyIncarnationById = new Map<string, string>()
 
@@ -22,7 +22,6 @@ export function setPtyOwnership(id: string, hostId: ExecutionHostId): void {
   ptyOwnership.set(id, hostId)
 }
 
-/** An adopted PTY keeps the host already recorded for its id. */
 export function setAdoptedPtyOwnership(id: string): void {
   ptyOwnership.set(id, ptyOwnership.get(id) ?? LOCAL_EXECUTION_HOST_ID)
 }

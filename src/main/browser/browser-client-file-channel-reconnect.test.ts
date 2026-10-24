@@ -93,7 +93,6 @@ describe('browser file channel reconnect degradation', () => {
     attempts[1]!.callbacks.onResponse(readyResponse({ fileChannel: true }))
     await vi.waitFor(() => expect(lease.fileChannelNegotiated).toBe(true))
 
-    // Why: the superseded connection's late failure must never fence the lease that replaced it.
     attempts[0]!.callbacks.onError(new RemoteRuntimeClientError('bad_request', 'superseded'))
     await flushMicrotasks()
 

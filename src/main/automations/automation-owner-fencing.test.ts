@@ -5,12 +5,6 @@ import {
   testState
 } from '../persistence-test-harness'
 import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
-/**
- * The desktop authority's end of the scoped-list and owner-fenced contracts:
- * a parameterless read still answers with everything it stores, a scoped read is
- * qualified per row, and no mutation or dispatch may cross an incarnation
- * boundary — including one that a client silently declines to name.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -210,8 +204,6 @@ describe('owner-fenced mutations', () => {
     expect(store.listAutomations().find((entry) => entry.id === 'ssh-1-a')?.enabled).toBe(true)
   })
 
-  // Optional on the wire is not unenforced: a caller that names no host may not
-  // mutate a record fenced to an SSH registration.
   it('refuses an ownerless mutation of a generation-bearing SSH record', async () => {
     const store = await createStore()
     const required = expect.objectContaining({
@@ -273,10 +265,6 @@ describe('owner-fenced mutations', () => {
   })
 })
 
-/**
- * A client with no target registry of its own reads the owner, then acts on it.
- * The projection is what makes the fence satisfiable off-host rather than a wall.
- */
 describe('projected owner precondition', () => {
   it('reuses the complete projection until automation state changes', async () => {
     const store = await createStore()
@@ -291,7 +279,7 @@ describe('projected owner precondition', () => {
     const store = await createStore()
     expect(store.automationOwnerPrecondition('ssh-1-a')).toEqual(OWNED_SSH)
     expect(store.automationOwnerPrecondition('local-1')).toEqual({ selector: { kind: 'self' } })
-    // The orphan issue is diagnosis, not identity, so it stays out of the precondition.
+    // Orphan diagnoses are not part of the owner identity.
     expect(store.automationOwnerPrecondition('orphan-1')).toEqual({
       selector: { kind: 'orphan' }
     })
@@ -309,7 +297,6 @@ describe('projected owner precondition', () => {
     ).toBe(false)
   })
 
-  // Execute is refused whatever the caller names: an orphan has no host to run on.
   it('does not let an orphan precondition unlock a dispatch', async () => {
     const store = await createStore()
     const owner = store.automationOwnerPrecondition('orphan-1')!

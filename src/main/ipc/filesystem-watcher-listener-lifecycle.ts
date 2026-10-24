@@ -13,7 +13,7 @@ import { captureWatcherSenderLifetime } from './filesystem-watcher-sender-lifeti
 
 export function rememberUnwatchableRoot(rootKey: string): void {
   const { unwatchableRoots } = watcherLifecycleState
-  // Why: deleted worktrees churn through unique paths; cap the set so retry suppression stays useful without retaining every failed path.
+  // Bound failed-path history as deleted worktrees churn through unique roots.
   unwatchableRoots.delete(rootKey)
   unwatchableRoots.add(rootKey)
   while (unwatchableRoots.size > UNWATCHABLE_ROOT_CACHE_MAX) {
@@ -52,7 +52,7 @@ export function trackDetachedLocalUnsubscribe(rootKey: string, root: WatchedRoot
     })
   watcherLifecycleState.pendingLocalUnsubscribes.add(unsubscribePromise)
   rootUnsubscribes.add(unsubscribePromise)
-  // Why: swallow here to avoid unhandled rejections, but keep the original promise rejected so later destructive cleanup can fail closed.
+  // Handle background rejection while preserving failure for destructive cleanup.
   void unsubscribePromise.catch((error: unknown) => {
     if (!watcherLifecycleState.abandonedLocalUnsubscribes.has(unsubscribePromise)) {
       retainLocalWatcherPhysicalFailure(rootKey, error)
@@ -62,7 +62,7 @@ export function trackDetachedLocalUnsubscribe(rootKey: string, root: WatchedRoot
   return unsubscribePromise
 }
 
-/** Mark unsubscribes whose drain timed out so their late failures stay out of failedLocalUnsubscribes. */
+/** Exclude late timed-out drain failures from later removal attempts. */
 export function abandonLocalUnsubscribes(promises: Iterable<Promise<void>>): void {
   for (const promise of promises) {
     watcherLifecycleState.abandonedLocalUnsubscribes.add(promise)
@@ -86,7 +86,6 @@ function cleanupInFlightLocalInstallsForSender(senderId: number): void {
     token.listeners.delete(senderId)
     if (token.listeners.size === 0) {
       token.cancelled = true
-      // Why: abort so a pending native/forked subscription stops early (matches closeLocalWatcherForWorktreePath / closeAllWatchers).
       token.abortController.abort()
     }
   }
@@ -136,7 +135,7 @@ export function addCancelledInstallWaiter(
   return token
 }
 
-/** Removes the waiter and reports whether it was still `token`'s, i.e. not withdrawn meanwhile. */
+/** Remove only a waiter still owned by this token. */
 export function takeCancelledInstallWaiter(
   waitersByKey: CancelledInstallWaiters,
   key: string,
@@ -185,7 +184,6 @@ function cleanupLocalWatchersForSender(senderId: number): void {
     }
     watchedRoot.listeners.delete(senderId)
     if (watchedRoot.listeners.size === 0) {
-      // Cancel any pending grace-period teardown for this root.
       const pending = watcherLifecycleState.pendingTeardowns.get(key)
       if (pending) {
         clearTimeout(pending)

@@ -10,7 +10,6 @@ import {
   claudeOpened
 } from './claude-structured-session-test-support'
 
-/** A resumed owner that completed one turn (`a4`) and then saw the next turn's prompt. */
 async function ownerMidSecondTurn(persisted: unknown[]) {
   const claude = fakeClaude()
   const adapter = adapterFor(
@@ -100,7 +99,6 @@ describe('Claude resume point is the last completed turn on every exit path', ()
     const persisted: unknown[] = []
     const { adapter, frame } = await ownerMidSecondTurn(persisted)
     frame({ type: 'assistant', uuid: 'a5' })
-    // Claude's transcript chains these after a reply; the live stream never adopts them.
     frame({ type: 'system', subtype: 'stop_hook_summary', uuid: 'a5-hook-summary' })
     frame({ type: 'attachment', uuid: 'a5-attachment' })
     frame({ type: 'result', subtype: 'success', uuid: 'a5-result' })

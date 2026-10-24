@@ -6,9 +6,6 @@ import type { AutomationRunCompletionObservation } from './run-completion-watche
 const HANDLE = 'terminal-1'
 const RUNTIME_TUI_IDLE_TIMEOUT_MS = 5 * 60 * 1000
 
-/** The three shapes the runtime satisfies tui-idle from. `lastAgentStatus` is the
- *  sticky pty record, `paneTitle` the leaf branch's inlined title read, `preview`
- *  the ready-shell-prompt match. All three are level, none require an edge. */
 type FakePane = {
   lastAgentStatus: 'idle' | 'working' | 'permission' | null
   paneTitle: string | null
@@ -31,8 +28,6 @@ function createFakeRuntime(initial: Partial<FakePane>) {
   const waiters = new Set<FakeWaiter>()
   let waitCalls = 0
 
-  // Mirrors the runtime's tui-idle satisfaction: sticky status, idle title, or a
-  // ready shell prompt — whichever is true at the instant of the read.
   const satisfiedNow = (): boolean =>
     pane.lastAgentStatus === 'idle' ||
     (pane.paneTitle?.toLowerCase().includes('idle') ?? false) ||
@@ -188,7 +183,7 @@ describe('createRuntimeAutomationRunTerminalObserver', () => {
     await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000 + RUNTIME_TUI_IDLE_TIMEOUT_MS)
     expect(run.settled[0]?.status).toBe('dispatch_failed')
     expect(run.settled[0]?.error).toContain('without a completion signal')
-    // 6h of 5-minute waits, not an unbounded re-arm.
+    // Six hours allow 72 five-minute waits plus the initial probe.
     expect(runtime.waitCalls()).toBeLessThanOrEqual(80)
     await run.promise
   })

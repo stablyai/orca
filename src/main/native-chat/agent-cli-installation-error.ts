@@ -7,7 +7,6 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { AgentSessionPreSpawnError } from './agent-session-wire/structured-agent-session-adapter'
 import { findInErrorChain } from '../provider-process/provider-error-chain'
 
-/** A chat launch refused before spawning: the agent's binary is older than its chats need. */
 export class AgentCliInstallationError extends AgentSessionPreSpawnError {
   readonly installation: AgentCliInstallationProblem
 

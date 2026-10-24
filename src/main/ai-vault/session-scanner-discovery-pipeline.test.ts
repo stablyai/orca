@@ -73,7 +73,6 @@ describe('fresh discovery pipeline', () => {
     await expect(discovery).rejects.toSatisfy(isAiVaultScanCancelledError)
     expect(issues).toEqual([])
     expect(stats).toBeLessThan(60)
-    // The next uncancelled scan sees every file.
     fsMocks.stat.mockImplementation(fs.stat)
     expect((await scan()).files).toHaveLength(60)
   })

@@ -18,6 +18,10 @@ import {
   BrowserNetworkTunnelAttachParams
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
+import {
+  BundledSkillExecuteRequestSchema,
+  BundledSkillPlanRequestSchema
+} from '../bundled-skill-plan'
 import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import {
   DesktopBrowserBridgeAttachParams,
@@ -173,7 +177,14 @@ import {
   SetValue,
   TypeText
 } from './computer-schemas-params'
-import { ConnectorSend, ConnectorStart } from './connector-params'
+import {
+  ConnectorAnswer,
+  ConnectorCancel,
+  ConnectorPendingPrompt,
+  ConnectorSend,
+  ConnectorStart,
+  ConnectorWatch
+} from './connector-params'
 import {
   AttachParams as AttachParamsOfEmulatorParams,
   AxParams,
@@ -890,8 +901,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.scroll': ScrollOfComputerSchemasParams,
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
+  'connector.answer': ConnectorAnswer,
+  'connector.cancel': ConnectorCancel,
+  'connector.pendingPrompt': ConnectorPendingPrompt,
   'connector.send': ConnectorSend,
   'connector.start': ConnectorStart,
+  'connector.watch': ConnectorWatch,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,
@@ -1322,10 +1337,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'skills.commitUpload': SkillUploadCommitRequestSchema,
   'skills.delete': SkillDeleteRequestSchema,
   'skills.discover': SkillsDiscoverParams,
+  'skills.executeBundledOrca': BundledSkillExecuteRequestSchema,
   'skills.getInstallProgress': SkillsGetInstallProgressParams,
   'skills.install': SkillInstallRequestSchema,
   'skills.installBundle': SkillBundleInstallRequestSchema,
   'skills.listManagedInstalls': null,
+  'skills.planBundledOrca': BundledSkillPlanRequestSchema,
   'skills.previewDelete': SkillDeleteRequestSchema,
   'skills.previewInstall': SkillInstallPreviewRequestSchema,
   'skills.removeInstall': SkillRemoveRequestSchema,

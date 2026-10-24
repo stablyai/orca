@@ -1,7 +1,3 @@
-// A turn an exited agent left running, whose settlement write failed, is settled by the next open of
-// the conversation, not only by the next send: a reader reopening a chat the idle sweep closed, or
-// reading it before the restart restore reaches it.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
@@ -29,8 +25,7 @@ afterEach(async () => {
   await rig.dispose()
 })
 
-/** A turn in flight whose agent exits, and whose exit settlement the journal refuses: by default
- *  also the retry that recording the exit queues, so only an open is left to settle it. */
+/** Refuse exit settlement and its retry so only conversation reopen can settle the old work. */
 async function exitWithUnwrittenSettlement(refusedWrites = 2): Promise<void> {
   await foundRestTestChat(rig)
   const open = rig.host.collaboratorsForTests().sessions.get(SESSION)!
@@ -95,7 +90,7 @@ describe('a turn its gone agent left running', () => {
     await rig.host.subscribe({ id: 'reader', sessionId: SESSION, emit: reader.emit })
 
     expect(await workingTurnState()).toBe('interrupted')
-    // The death evidence is Orca's log text: the row says only that the provider stopped.
+    // Internal death diagnostics must not reach transcript readers.
     expect(JSON.stringify(reader.events)).toContain(
       'Codex stopped while this response was in progress. You can continue in this conversation.'
     )
@@ -107,7 +102,6 @@ describe('a turn its gone agent left running', () => {
     await rig.restart()
     setStructuredAgentSessionHost(rig.host)
 
-    // The client's read opens the chat first; the restore then finds it open and skips it.
     expect(await workingTurnState()).toBe('interrupted')
     await rig.host.restoreReadableSessions([SESSION])
     expect(await workingTurnState()).toBe('interrupted')

@@ -1,4 +1,3 @@
-// Restores after a failed worktree removal must not resurrect unwatched windows or lose a newer removal's owners.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWatcherSender, fireWatcherSenderEvent } from './filesystem-watcher-test-sender'
 
@@ -39,7 +38,6 @@ describe('watcher restore after a failed worktree removal', () => {
   const handlers: Record<string, Handler> = {}
   const deferred: (() => void)[] = []
   let deferSubscribe = false
-  // A wedged watcher child ignores abort until it finally answers.
   let wedged = false
   const coordinator = createRuntimeFileWatcherRemoval({
     closeFileExplorerWatchersForPath: async () => {},
@@ -135,7 +133,7 @@ describe('watcher restore after a failed worktree removal', () => {
     await handlers['fs:watchWorktree']({ sender: second }, args)
     const firstRemoval = await coordinator.acquire(args.worktreePath)
 
-    // The first restore is mid-way through re-subscribing window 1 when the retry starts.
+    // Retry removal while the first restore is re-subscribing window 1.
     deferSubscribe = true
     const firstRestore = firstRemoval.finish(false)
     await settle()
@@ -156,7 +154,7 @@ describe('watcher restore after a failed worktree removal', () => {
   it('keeps a window that reloads (same id) while overlapping restores run', async () => {
     const first = createWatcherSender(1)
     const second = createWatcherSender(2)
-    // Window 3 keeps the first restore's snapshot non-empty after window 2's old page is cleaned up.
+    // A third owner keeps the old snapshot nonempty after window 2 reloads.
     const third = createWatcherSender(3)
     for (const sender of [first, second, third]) {
       await handlers['fs:watchWorktree']({ sender }, args)
@@ -166,7 +164,7 @@ describe('watcher restore after a failed worktree removal', () => {
     deferSubscribe = true
     const firstRestore = firstRemoval.finish(false)
     await settle()
-    // The first restore captured window 2's old lifetime; the reloaded page watches again.
+    // Reload preserves window ID but creates a new watch lifetime.
     fireWatcherSenderEvent(second, 'did-navigate')
     const rewatch = Promise.resolve(handlers['fs:watchWorktree']({ sender: second }, args))
     await settle()
@@ -192,7 +190,7 @@ describe('watcher restore after a failed worktree removal', () => {
     await settle()
     handlers['fs:unwatchWorktree']({ sender }, args)
     await settle()
-    // The re-watch can't join the aborted install, so it waits for it in no listener map.
+    // Re-watch waits outside listener maps until the aborted install retires.
     deferSubscribe = false
     const second = Promise.resolve(handlers['fs:watchWorktree']({ sender }, args))
     await settle()

@@ -30,12 +30,7 @@ function settleChild(child: ChildProcess, stdout: string): void {
   child.emit('close', 0, null)
 }
 
-/**
- * The contract the star check depends on after #18234: a `gh` that never exits
- * is killed at the deadline, and the kill reaches the whole chain. On the
- * reporter's box `gh` was a shell wrapper calling `mise x gh`, so signalling
- * only the direct child left the rest of the chain running under init.
- */
+// gh may be a shim chain; the deadline must kill descendants as well as the wrapper.
 describe('gh exec deadline', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -53,8 +48,6 @@ describe('gh exec deadline', () => {
     'signals the whole process group, not just the child, when gh never exits',
     async () => {
       const child = mockChild()
-      // Why never emitting exit: this is exactly the stuck child from #18234 —
-      // spawned, spinning, and never reporting an exit.
       spawnMock.mockReturnValue(child)
 
       const pending = ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], {
@@ -63,8 +56,7 @@ describe('gh exec deadline', () => {
       const rejection = expect(pending).rejects.toThrow('timed out')
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
 
-      // The child must be its own group leader, or the signal below would go to
-      // whatever group it inherited — Orca's own.
+      // A detached group keeps cleanup signals from reaching Orca's own process group.
       expect(spawnMock.mock.calls[0][2].detached).toBe(true)
       expect(processKillMock).not.toHaveBeenCalled()
 

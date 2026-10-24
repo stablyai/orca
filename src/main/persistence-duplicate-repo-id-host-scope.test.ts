@@ -4,12 +4,7 @@ import {
   createStore as createFreshStore,
   testState
 } from './persistence-test-harness'
-/**
- * The same repo id may be registered on two execution hosts (see `removeProjectForHost`).
- * Every deletion that resolves a *row* must therefore delete only that row, never the sibling
- * host's registration. Since #11994 those deletions fan out to every paired device, so a
- * cross-host over-delete is no longer local.
- */
+// Repo IDs can repeat across execution hosts; row deletion must preserve sibling registrations.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -65,8 +60,7 @@ async function createStoreFromState(state: Record<string, unknown>) {
   }
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
-  // Why here: userData resolves through AppEnvironment, and this must point at this
-  // file's temp dir rather than the global fake's shared one, after resetModules.
+  // resetModules replaces AppEnvironment; reinstall this test’s userData path before initializing.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
@@ -76,7 +70,6 @@ function createStoreWithDuplicateRepoId() {
   return createStoreFromState({ repos: duplicateIdRepos() })
 }
 
-/** A persisted local setup pointing at a repo id that only exists on ssh:ssh-1. */
 function staleLocalSetupState() {
   const project: Project = {
     id: 'project-dup',
@@ -127,7 +120,6 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
   it.each(['git', 'folder'] as const)(
     'removing the local %s row keeps the other host row and its metadata',
     async (kind) => {
-      // A stale renderer catalog once sent id-only removal when it could not see the SSH twin (#13071).
       const store = await createStoreFromState({
         repos: duplicateIdRepos().map((repo) => ({ ...repo, kind }))
       })
@@ -187,9 +179,7 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
   })
 
   it('deleteProjectHostSetup drops only the row it reports, never the sibling host', async () => {
-    // Repo-derived setups reuse the repo id, so a duplicated id yields two setups with the
-    // same setup id and the lookup can only resolve one. Whichever it resolves, the other
-    // host's registration must survive.
+    // Duplicate repo IDs also duplicate derived setup IDs; only the resolved host row may be deleted.
     const store = await createStoreWithDuplicateRepoId()
 
     const result = store.deleteProjectHostSetup({ setupId: 'dup' })
@@ -249,8 +239,7 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
   })
 
   it('setResolvedRepoGitUsername writes only the probed host row', async () => {
-    // Enrichment resolves per repo *location*, so the write must land on the row it probed; an
-    // id-only lookup would stamp the sibling host's username and host-scoped hydration cache.
+    // Enrichment must update the probed location, including its host-scoped hydration cache.
     const store = await createStoreFromState({
       repos: [
         {
@@ -286,8 +275,7 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
   })
 
   it('a stale local setup for an id that only exists on ssh never deletes the ssh row', async () => {
-    // Two mechanisms must each hold this line: load-time projection drops the stale setup, and
-    // deleteProjectHostSetup resolves the repo by (repoId, setup.hostId) with no sibling fallback.
+    // Both load-time projection and host-scoped deletion must reject a stale setup’s sibling fallback.
     const { setupId, ...state } = staleLocalSetupState()
     const store = await createStoreFromState(state)
 

@@ -35,7 +35,6 @@ function failAfter(replies: readonly string[], confirmed = false): Error {
   return error
 }
 
-// The liveness probe runs through the same exec, so its termination is covered like any other step.
 function collectVersions(): Promise<void> {
   return gcOldRemoteInstallVersions(conn, ORCAD_INSTALL_MODEL, home, currentDir, host, {
     isDirLive: async (dir) => (await execCommand(conn, `liveness ${dir}`)).trim() !== 'DEAD'

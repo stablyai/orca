@@ -1,11 +1,5 @@
-// Everything a client can ask a session to do: send a turn, cancel one, answer a prompt, change an
-// option, read the options back.
-//
-// They share one shape — admit the envelope against the lease, run a plan, publish the journal — so
-// they share one path here rather than five copies in the host. The host keeps attach and teardown.
-// Each opens the conversation first. A send, a Stop and an option pick are conversation writes,
-// admitted without the writer lease; the delivery loop starts the provider child a send needs, and
-// an operation only the provider can perform starts it before admission.
+// Share mutation admission/planning/publication. Conversation writes need no child lease;
+// provider-only effects start their child before admission, sends start through delivery.
 
 import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat-usage-limit-cut'
 import { refuse } from '../../../shared/agent-session-wire'
@@ -71,18 +65,12 @@ export function sendStructuredAgentSessionTurn(
     body: AgentJournalMessageItem
     retryUnknown?: true
     delivery?: 'queue-if-active'
-    /** Host-local: whether the sending client can manage an image card. */
     queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     usageLimitContinuationOfTurnItemId?: string
-    /** Host-local, set only by the client-facing `agentSession.send` RPC (the
-     *  renderer's launch prompt included): recorded as the submission's `client`
-     *  origin, so a restart or a close keeps it as a card if it never reached the
-     *  agent. Orchestration mail, a restart continuation and `agent.launch`'s host-sent
-     *  prompt never set it. */
+    /** Client send RPCs set origin=client for recovery; host mail/continuations/launch sends omit it. */
     userSend?: true
-    /** Host-local, never on the wire: a person's message the host sends for them, such as a
-     *  launch's first prompt. `userSend` is always one; another agent's message carries `from`. */
+    /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
     beforeRun?: () => void
   },
@@ -157,7 +145,7 @@ export function cancelStructuredAgentSessionTurn(
             sessionId,
             targets.map((target) => target.providerId)
           ),
-        // Untargeted, with work no record lists: the idle sweep's stop ends it with the agent.
+        // At rest, Stop all can end unlisted work with its agent.
         ...(params.taskId === undefined
           ? {
               unlisted: {
@@ -175,10 +163,15 @@ export function cancelStructuredAgentSessionTurn(
   const stoppedPrePrompt =
     !prompt && params.turnId === undefined
       ? abortProviderWaitForStop(context, caller, params.envelope, plan)
-      : false
-  // A card's Cancel stops whatever the chat has in flight, as the Stop button does; it reaches the
-  // Stop only for a card the live turn raised (`cancelStructuredAgentSessionPrompt`).
-  const stopped = prompt ? { envelope: params.envelope } : { ...params, stoppedPrePrompt }
+      : null
+  // Only live-turn prompt Cancel reaches chat Stop; it shares the untargeted Stop path.
+  const stopped = prompt
+    ? { envelope: params.envelope }
+    : {
+        ...params,
+        stoppedPrePrompt: stoppedPrePrompt?.reached === true,
+        stoppedSend: stoppedPrePrompt?.handedOver === true
+      }
   return mutateWithChatStop(context, caller, stopped, plan, (ctx, stop) =>
     prompt
       ? cancelStructuredAgentSessionPrompt(
@@ -190,16 +183,13 @@ export function cancelStructuredAgentSessionTurn(
   )
 }
 
-/** A Stop must not wait behind a start the provider may never answer: the start the session's
- *  queue is waiting on stops now, as a close's does, and the Stop's own step then finds no child.
- *  Only a Stop admission would run now; one naming a turn is about a child already gone, so it
- *  leaves a newer start alone. */
+/** Abort unnamed Stop’s startup waits immediately; named stale turns must leave newer starts alone. */
 function abortProviderWaitForStop(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,
   plan: MutationPlan<AgentSessionCancelResult>
-): boolean {
+): { reached: boolean; handedOver: boolean } | null {
   const { store } = context.deps
   if (
     !agentSessionMutationAdmitsNow({
@@ -210,7 +200,7 @@ function abortProviderWaitForStop(
       now: context.now
     })
   ) {
-    return false
+    return null
   }
   return context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
 }
@@ -275,8 +265,7 @@ export async function changeStructuredAgentSessionThreadGoal(
   )
 }
 
-/** The host's thin mutation surface. Each call re-reads the context, so a session
- *  map or fence that moves between calls is never captured by a stale closure. */
+/** Resolve context per call so moved maps/fences cannot become stale closures. */
 export function structuredAgentSessionMutationDelegates(
   context: () => StructuredAgentSessionMutationContext
 ) {
@@ -297,7 +286,7 @@ export function structuredAgentSessionMutationDelegates(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof changeStructuredAgentSessionThreadGoal>[2]
     ) => changeStructuredAgentSessionThreadGoal(context(), caller, params),
-    // The RPC handler always names its client's reader; only in-process callers omit it.
+    // Only in-process readers omit client identity.
     readOptions: (
       sessionId: string,
       reader: StructuredAgentSessionOptionsReader = IN_PROCESS_OPTIONS_READER

@@ -14,6 +14,7 @@ import { resolveOrchestrationParty } from '../../../../orchestration/orchestrati
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
+import { replyToRemoteRunHome } from './reply-remote'
 import {
   ReplyParams,
   InboxParams,
@@ -35,7 +36,8 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         runtime,
         legacyCoordinatorRunId,
         recordMutationReceipt,
-        replayedMutationReceipt
+        replayedMutationReceipt,
+        signal
       }
     ) => {
       const replayNudge = readMutationReplayNudge(replayedMutationReceipt)
@@ -138,6 +140,9 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         )
       }
 
+      if (db.getRun(original.run_id)?.home_database === 'remote') {
+        return await replyToRemoteRunHome({ runtime, db, original, params, signal })
+      }
       const recipient = resolveReplyRecipient({
         runtime,
         db,

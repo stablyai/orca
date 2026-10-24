@@ -17,6 +17,7 @@ import {
 } from './git-merge-tree-capability'
 import {
   branchHasNoUnmergedChangesOnAnyTarget,
+  refreshBranchCleanupTargetRefs,
   type GitBranchCleanupExec
 } from './git-branch-cleanup'
 import { GitCapabilityCache } from './git-capability-cache'
@@ -404,6 +405,25 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         isUnsupportedMergeTreeMergeBaseError
       )
       await expect(runGit([...legacyArgs, head, head])).resolves.toBeDefined()
+    }
+  })
+
+  it('refreshes a cleanup base with maintenance disabled and an explicit refspec', async () => {
+    const branch = 'compat-cleanup-source'
+    const remote = 'compat-cleanup'
+    const target = `refs/remotes/${remote}/${branch}`
+    await runGit(['branch', branch, 'HEAD'])
+    await runGit(['remote', 'add', remote, '.'])
+    try {
+      await expect(
+        refreshBranchCleanupTargetRefs((args) => runGit(args), [target])
+      ).resolves.toEqual([target])
+      expect((await runGit(['rev-parse', target])).stdout).toBe(
+        (await runGit(['rev-parse', branch])).stdout
+      )
+    } finally {
+      await runGit(['remote', 'remove', remote])
+      await runGit(['branch', '-D', branch])
     }
   })
 

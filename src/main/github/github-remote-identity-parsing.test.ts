@@ -28,8 +28,7 @@ describe('parseGitHubRemoteIdentity', () => {
   })
 
   it('preserves a custom port on a GHES https remote', () => {
-    // The port IS the Enterprise web/API endpoint, so gh must target
-    // ghe.acme.com:8443, not the portless hostname.
+    // HTTPS ports identify the Enterprise API endpoint.
     expect(parseGitHubRemoteIdentity('https://ghe.acme.com:8443/team/orca.git')).toEqual({
       host: 'ghe.acme.com:8443',
       owner: 'team',
@@ -46,7 +45,6 @@ describe('parseGitHubRemoteIdentity', () => {
   })
 
   it('drops the default https port so github.com stays bare', () => {
-    // WHATWG URL omits default ports, so :443 never leaks into the host.
     expect(parseGitHubRemoteIdentity('https://github.com:443/team/orca.git')?.host).toBe(
       'github.com'
     )
@@ -59,7 +57,7 @@ describe('parseGitHubRemoteIdentity', () => {
   })
 
   it('normalizes ssh.github.com:443 (SSH-over-HTTPS) to github.com without a port', () => {
-    // :443 here is the ssh transport port, not an endpoint — it must not survive.
+    // SSH ports select transport rather than the API endpoint.
     expect(parseGitHubRemoteIdentity('ssh://git@ssh.github.com:443/team/orca.git')).toEqual({
       host: 'github.com',
       owner: 'team',
@@ -68,7 +66,6 @@ describe('parseGitHubRemoteIdentity', () => {
   })
 
   it('drops a custom ssh transport port on a GHES ssh remote', () => {
-    // ssh://…:2222 is a transport port; gh routes by hostname, so keep only the host.
     expect(parseGitHubRemoteIdentity('ssh://git@ghe.acme.com:2222/team/orca.git')?.host).toBe(
       'ghe.acme.com'
     )
@@ -103,8 +100,6 @@ describe('parseGitHubOwnerRepo', () => {
   })
 
   it('returns null for a custom-port GHES remote (not github.com)', () => {
-    // GHES is handled by the enterprise resolver, not the github.com fast path,
-    // and the port must not make a github.com remote look like GHES either.
     expect(parseGitHubOwnerRepo('https://ghe.acme.com:8443/team/orca.git')).toBeNull()
   })
 

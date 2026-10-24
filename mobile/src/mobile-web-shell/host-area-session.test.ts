@@ -75,7 +75,7 @@ function wideStateFor(routes: MobileWebPageRoute[] | null, pathname = HOST_ROUTE
 }
 
 describe('the page declaring it can own the host area', () => {
-  it('is a manifest field the desktop may write and an old phone reads past', () => {
+  it('accepts a true ownership declaration from the desktop and refuses false', () => {
     const [host] = desktopRoutes(true)
     expect(MobileWebBundleRouteSchema.safeParse(host).success).toBe(true)
     // `true` only: a desktop writing `false` is writing a field with no meaning.

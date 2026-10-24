@@ -56,6 +56,7 @@ export function MobileSessionActiveContent({
     sendingDiffCommentIds,
     updateMarkdownLocalContent,
     copyMarkdownLocalContent,
+    copyMarkdownPath,
     discardMarkdownLocalContent,
     saveMarkdownTab,
     setTerminalWebViewRef,
@@ -124,6 +125,7 @@ export function MobileSessionActiveContent({
         onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
         onSave={() => void saveMarkdownTab(activeMarkdownTab)}
         onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
+        onCopyPath={() => void copyMarkdownPath(activeMarkdownTab)}
         onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
         keyboardLift={keyboardLift}
       />

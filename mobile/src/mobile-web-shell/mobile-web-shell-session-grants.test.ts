@@ -33,20 +33,19 @@ describe('falling back to the cached generation after a failed download', () => 
   })
 
   it('opens it under its own grants, not the ones the newer manifest declared', () => {
-    const step = run(
-      afterCacheRead(cachedOnlyNavigate).session,
-      { type: 'manifest-read', manifest: manifestWithClipboard },
-      { type: 'download-failed', cause: LINK_LOST }
-    )
+    const fetching = run(afterCacheRead(cachedOnlyNavigate).session, {
+      type: 'manifest-read',
+      manifest: manifestWithClipboard
+    })
+    expect([...fetching.session.routeGrants]).toEqual(['navigate', 'native.storage.read'])
+    const step = run(fetching.session, { type: 'download-failed', cause: LINK_LOST })
     expect(step.session.state.kind).toBe('activating')
     expect([...step.session.routeGrants]).toEqual(['navigate', 'native.storage.read'])
     expect(step.session.routeGrants).not.toContain('native.clipboard.read')
   })
 
   it('carries a verb declared in the manifest through to the session grants', () => {
-    // The whole path a verb takes before a page can call one: the desktop's manifest contract
-    // admits the name, the phone's reader keeps it, and the route policy grants it because this
-    // build implements it.
+    // Project manifest facts through the actual reducer and route policy.
     const step = run(afterCacheRead(null).session, {
       type: 'manifest-read',
       manifest: manifestFacts({

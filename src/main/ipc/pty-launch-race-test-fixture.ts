@@ -46,7 +46,6 @@ type LaunchRaceRuntimeBase = Record<
   Mock
 >
 
-/** The two spawn lanes: the window's `pty:spawn` IPC and the host's runtime controller. */
 export type LaunchRaceLane = 'ipc' | 'runtime'
 export const LAUNCH_RACE_LANES: LaunchRaceLane[] = ['ipc', 'runtime']
 
@@ -121,7 +120,6 @@ export function createLaunchRaceRuntime<T extends object = Record<never, never>>
   return Object.assign(base, overrides)
 }
 
-/** Registers both lanes against one runtime, as main does. */
 export function registerLaunchRaceLanes(args: {
   handlers: IpcHandlerMap
   mainWindow: unknown
@@ -163,7 +161,6 @@ export function gatedClaudeAuth() {
   return { prepareClaudeAuth, release }
 }
 
-/** The host's worktree spawn lock for a slept worktree: refuses only the spawns that ask it to. */
 export function sleptWorktreeLock() {
   let refuse!: () => void
   const refusal = new Promise<void>((resolve) => {
@@ -181,7 +178,6 @@ export function sleptWorktreeLock() {
   return { acquireWorktreeTerminalSpawn, refuse }
 }
 
-/** Evaluates the same queued binding input against mutable topology, recording admitted arguments. */
 export function createPaneBindingStore() {
   let session = getDefaultWorkspaceSession()
   const bindingWrites = vi.fn((_binding: PersistPtyBindingArgs) => true)

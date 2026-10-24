@@ -1,7 +1,5 @@
 import { createPaneBindingStore } from './pty-launch-race-test-fixture'
-// Test-only: one real OrcaRuntimeService wired into the real pty handlers, so both launch lanes
-// reach the same fake provider. Window lane: pty:spawn. Host lane: createTerminal / createAgentSession
-// through the runtime controller registerPtyHandlers installs. Suites still declare the IPC vi.mock block.
+// Real runtime and IPC handlers share one fake provider; suites declare their own hoisted module mocks.
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { registerPtyHandlers } from './pty/register-handlers'
@@ -29,7 +27,6 @@ const ORIGINAL_PLATFORM = process.platform
 const savedEnv = new Map<string, string | undefined>()
 let remoteSpawns = 0
 
-/** Main's process.platform for a case; Windows also gets the env and .exe probes its shells read. */
 export function setMainPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   if (platform !== 'win32') {
@@ -64,7 +61,6 @@ export function restoreMainPlatform(): void {
   savedEnv.clear()
 }
 
-/** Settings both lanes read on main's current OS; the default shell is stored trimmed, as settings load leaves it. */
 function parityMainSettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     // Windows hides the default-shell setting and defaults it to ''.
@@ -76,7 +72,7 @@ function parityMainSettings(overrides: Record<string, unknown> = {}): Record<str
     agentCmdOverrides: {},
     agentDefaultArgs: {},
     agentDefaultEnv: {},
-    // Why off: a fresh agent launch would otherwise write workspace trust into the agent's home.
+    // Avoid writing trust state into real agent homes during launch preparation.
     agentWorkspaceTrustEnabled: false,
     ...overrides
   }
@@ -131,14 +127,12 @@ type ScopeResolver = {
 export type ParityLanes = {
   store: ReturnType<typeof createPaneBindingStore>
   runtime: OrcaRuntimeService
-  /** The local daemon provider's spawn mock. */
   provider: Mock
   persistPtyBinding: Mock
   reveal: Mock
   spawnWindow: (request: Record<string, unknown>) => Promise<unknown>
 }
 
-/** Wires one runtime + handlers for a workspace (its saved project runtime included). */
 export function startParityLanes(
   suite: Pick<PtyIpcSuiteFixtures, 'handlers' | 'mainWindow' | 'installDaemonTestProvider'>,
   args: {
@@ -151,7 +145,7 @@ export function startParityLanes(
   const bindingStore = createPaneBindingStore()
   const persistPtyBinding = bindingStore.bindingWrites
   const { repo: scopeRepo, folderWorkspace } = launchScope(args.workspace)
-  // A folder's contained repo is saved too, so the host can borrow its runtime if it would.
+  // Persist a folder's contained repo too so runtime borrowing is exercised.
   const repo =
     scopeRepo ??
     (args.workspace.repoPath
@@ -183,7 +177,7 @@ export function startParityLanes(
     if (args.spawnError) {
       throw args.spawnError
     }
-    // A fresh id per spawn, so one case's hidden mark never reads into the next.
+    // Unique IDs keep hidden marks from leaking across cases.
     return {
       id: options.sessionId ?? `remote-pty-${++remoteSpawns}`,
       startupCwdSource: 'request' as const
@@ -241,13 +235,9 @@ const PROVIDER_FACT_KEYS = [
   'startupCommandDelivery'
 ] as const
 
-// The agent and caller env keys the tables save; their values must reach the provider.
 const CASE_ENV_KEYS = ['A', 'CUSTOM_FLAG']
 
-/**
- * The launch facts the plan names at the provider boundary: `orcaEnv` lists identity keys present,
- * `env` the case's own env values, `hidden` whether main marked the PTY hidden before a view.
- */
+/** Capture provider identity, requested environment and pre-view hidden state at the spawn boundary. */
 export async function providerFacts(provider: Mock): Promise<Record<string, unknown>> {
   const options = recordOf(provider.mock.calls.at(-1)?.[0])
   const env = recordOf(options.env)

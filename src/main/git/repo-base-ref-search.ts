@@ -31,14 +31,10 @@ function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean):
   return excludesRemoteHead ? baseCount : baseCount + REF_SEARCH_LEGACY_HEADROOM
 }
 
-/** Build excludes for the symbolic `<remote>/HEAD` slot without hiding
- * nested branch names such as `<remote>/feature/HEAD`. */
+/** Exclude direct remote HEAD slots while preserving nested branch names ending in HEAD. */
 function getRemoteHeadExcludes(remoteNames: readonly string[] | undefined): string[] {
   if (remoteNames && remoteNames.length > 0) {
-    // A single-component wildcard covers the overwhelmingly common remote
-    // shape. Keep exact excludes only for slash-containing remote names, where
-    // that wildcard cannot reach the direct `<remote>/HEAD` slot without also
-    // hiding legal nested branches such as `<remote>/feature/HEAD`.
+    // Ordinary remotes share a wildcard; slash-containing remotes need exact excludes.
     const slashRemotes = [...new Set(remoteNames)].filter(
       (remote) => remote.includes('/') && isSafeGitRefName(`refs/remotes/${remote}/HEAD`)
     )
@@ -47,8 +43,7 @@ function getRemoteHeadExcludes(remoteNames: readonly string[] | undefined): stri
       ...slashRemotes.map((remote) => `--exclude=refs/remotes/${remote}/HEAD`)
     ]
   }
-  // `*` does not cross `/`, unlike `**`; this keeps unknown nested remotes
-  // eligible for the parser's branch-name matching.
+  // * does not cross slashes, so unknown nested remotes remain eligible.
   return ['--exclude=refs/remotes/*/HEAD']
 }
 
@@ -63,8 +58,7 @@ export function buildSearchBaseRefsArgv(
   } = {}
 ): string[] {
   const excludeRemoteHead = options.excludeRemoteHead ?? true
-  // A caller may ask for more rows than the retained-result cap. Keep that
-  // request useful while bounding the Git command to the safe probe window.
+  // Bound the Git scan even when the caller asks for more retained rows.
   const boundedScanLimit = clampRepoSearchRefsScanLimit(limit)
   const candidateCount = getRefSearchCandidateCount(boundedScanLimit, excludeRemoteHead)
   const base = [

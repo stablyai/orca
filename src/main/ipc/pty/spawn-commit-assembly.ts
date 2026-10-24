@@ -32,7 +32,6 @@ import { reportRuntimeResumeOutcome } from './runtime/spawn-commit-response'
 import { savePtySpawnPaneBinding, type PtySpawnPaneBinding } from './spawn-commit-binding'
 import { publishCommittedPtySpawn, type PtySpawnPaneKeyAliases } from './spawn-commit-publication'
 
-/** Spawn state both lanes carry; the commit reads it and settles the slots it owns. */
 export type PtySpawnCommitState = {
   deps: {
     runtime?: OrcaRuntimeService
@@ -75,13 +74,11 @@ export type PtySpawnCommitState = {
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   launchCommand: string | undefined
   preSpawnHiddenMarkId: string | null
-  /** Window-only slots; the host lane has none of them. */
   replacedPaneOwner?: ReplacedPaneOwner | null
   agentTeamsLeaderHandle?: string | null
   exitedBeforeRegistration?: boolean
 }
 
-/** What a lane knows about its started process, as data. Only the last three select behavior. */
 export type PtySpawnCommitInput<Reply extends PtySpawnResult> = {
   state: PtySpawnCommitState
   nativeWindowsConptySpawn: boolean
@@ -104,16 +101,13 @@ export type PtySpawnCommitInput<Reply extends PtySpawnResult> = {
   paneKeyAliases?: PtySpawnPaneKeyAliases
   memorySessionId: string | null
   resumeArgvDropped: boolean
-  /** TEMPORARY (rows 14-18): the window reports its base env, the host its assembled env. */
+  /** Window reports base environment; host reports its assembled environment. */
   codexLaunchEnv: Record<string, string> | undefined
   initiallyHidden: boolean
-  /** TEMPORARY (attachment-derived delivery lane): the renderer-scoped mark is refreshed here;
-   *  the runtime-owned one is marked by the host runner after this commit resolves. */
+  /** Renderer-scoped marks refresh here; runtime-owned marks refresh after commit. */
   hiddenDelivery: 'renderer-scoped' | 'runtime-owned'
-  /** TEMPORARY (C6): 'drain' returns an exit during start as the drained result and settles the
-   *  pending registration here; 'throw' rejects and leaves that to the runner. */
+  /** Drain returns early exit and settles registration; throw leaves cleanup to the runner. */
   earlyExit: 'drain' | 'throw'
-  /** TEMPORARY (C6): what joiners of this pane's spawn receive, and what the lane replies. */
   joinPayload: { reservation: PaneSpawnReservationResult; reply: Reply }
 }
 
@@ -164,7 +158,7 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
       result.id,
       registration.worktreeId,
       null,
-      // Why: pass validated pane identity so a throttled mobile create publishes its surface main-side instead of destroying the live PTY (#7587); bound the untrusted tabId.
+      // Validate pane identity so throttled mobile creation retains its live PTY surface (#7587).
       typeof tabId === 'string' &&
         isValidTerminalTabId(tabId) &&
         tabId.length <= 512 &&
@@ -206,7 +200,7 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
       )
     }
   } else if (input.earlyExit === 'throw') {
-    // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
+    // Worktree-less PTYs have no later surface-registration step to clear admission.
     runtime?.cancelPendingPtyRegistration?.(
       result.id,
       result.incarnationId,
@@ -225,7 +219,6 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
   return publishCommittedPtySpawn(input)
 }
 
-/** An adopted claim attaches to a live owner: it publishes the owner's surface, not a new pane. */
 function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
   input: PtySpawnCommitInput<Reply>,
   adopted: AgentSessionClaimedSpawnResult,
@@ -234,7 +227,7 @@ function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
   const { state } = input
   const { result } = state
   const runtime = state.deps.runtime
-  // Why: an adopted reply can omit isReattach; derive it once so the size commit and the reservation agree.
+  // Adoption proves attach even without the reply flag; size commit and joiners must agree.
   const adoptedResult = { ...result, isReattach: true }
   const { surface } = adopted.owner
   const rejectedRegistration = registerPersistedPtySpawn(

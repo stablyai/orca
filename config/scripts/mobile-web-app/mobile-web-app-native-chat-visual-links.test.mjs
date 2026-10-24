@@ -17,7 +17,7 @@ const bundles = mobileWebAppDependenciesPresent()
 const describeEngines = bundles ? describe : describe.skip
 
 const THEME = { colorScheme: 'light', tokens: {} }
-// Short so a real escape is reported quickly; the shipped wait is the same mechanism, longer.
+// The same host timeout mechanism, advanced by the browser clock.
 const PONG_TIMEOUT_MS = 300
 const VISUAL =
   '<style>section{height:900px}section:target{outline:1px solid}</style>' +
@@ -31,6 +31,7 @@ const BRIDGE =
 const browsers = {}
 let shellServer = null
 let shellOrigin = null
+let pongType = null
 let buildNativeChatVisualDocument = null
 let buildMobileNativeChatVisualHostDocument = null
 
@@ -40,7 +41,7 @@ beforeAll(async () => {
   }
   // Imported behind the gate: transforming a mobile/ module reads mobile/tsconfig.json, which
   // extends a package the root-only unit shards do not install (see the session-dictation check).
-  ;({ buildNativeChatVisualDocument } =
+  ;({ buildNativeChatVisualDocument, NATIVE_CHAT_VISUAL_PONG_TYPE: pongType } =
     await import('../../../src/shared/native-chat-visual-shell'))
   ;({ buildMobileNativeChatVisualHostDocument } =
     await import('../../../mobile/src/session/mobile-native-chat-visual-host-document'))
@@ -79,6 +80,8 @@ async function visualFrame(page) {
 /** The native host page with one visual, as the WebView loads it (no URL of its own). */
 async function openNativeHost(browser, html = VISUAL) {
   const page = await browser.newPage()
+  await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') })
+  await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'))
   const visualDocument = buildNativeChatVisualDocument({ html, channel: 'c1', theme: THEME })
   const host = buildMobileNativeChatVisualHostDocument({
     visualDocument,
@@ -88,7 +91,20 @@ async function openNativeHost(browser, html = VISUAL) {
     mode: 'fullscreen',
     pongTimeoutMs: PONG_TIMEOUT_MS
   })
-  await page.setContent(host.replace('<head>\n', `<head>\n${BRIDGE}\n`))
+  const recorder = `<script>
+window.visualLoads = 0;
+window.visualPongs = [];
+document.addEventListener('load', function(event) {
+  if (event.target.tagName === 'IFRAME') window.visualLoads += 1;
+}, true);
+window.addEventListener('message', function(event) {
+  var frame = document.querySelector('iframe');
+  if (frame && event.source === frame.contentWindow && event.data && event.data.type === ${JSON.stringify(pongType)}) {
+    window.visualPongs.push(event.data.id);
+  }
+});
+</script>`
+  await page.setContent(host.replace('<head>\n', `<head>\n${BRIDGE}\n${recorder}\n`))
   const frame = await visualFrame(page)
   await expect
     .poll(() => frame.evaluate(() => typeof window.marker).catch(() => null))
@@ -99,8 +115,26 @@ async function openNativeHost(browser, html = VISUAL) {
 const escaped = (page) =>
   page.evaluate(() => window.sent.some((message) => message.kind === 'escaped'))
 
-/** Longer than the host waits for an answer, so a missing one would have been reported. */
-const outlastTheAnswer = (page) => page.waitForTimeout(PONG_TIMEOUT_MS * 3)
+async function outlastTheAnswer(page) {
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const channel = new MessageChannel()
+        channel.port1.onmessage = () => {
+          channel.port1.close()
+          channel.port2.close()
+          resolve()
+        }
+        channel.port2.postMessage(null)
+      })
+  )
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.visualLoads < 2 || window.visualPongs.includes(window.visualLoads))
+    )
+    .toBe(true)
+  await page.clock.runFor(PONG_TIMEOUT_MS * 3)
+}
 
 for (const engine of ['chromium', 'webkit']) {
   describeEngines(
@@ -113,6 +147,45 @@ for (const engine of ['chromium', 'webkit']) {
         }
         return one
       }
+
+      it.each(['let', 'const', 'var', 'function'])(
+        'renders a visual declaring %s open',
+        async (kind) => {
+          const declaration =
+            kind === 'function' ? 'function open() { return 6 }' : `${kind} open = 6`
+          const html = `${VISUAL}<p id="rendered"></p><script>${declaration};
+document.getElementById('rendered').textContent = String(typeof open === 'function' ? open() : open)
+</script>`
+          const { page, frame } = await openNativeHost(browser(), html)
+          try {
+            await expect.poll(() => frame.textContent('#rendered')).toBe('6')
+          } finally {
+            await page.close()
+          }
+        }
+      )
+
+      it('blocks popups even when a visual restores the native open function', async () => {
+        const context = await browser().newContext()
+        try {
+          await context.addInitScript(() => {
+            window.originalOpen = window.open
+          })
+          const html = `${VISUAL}<button id="popup" onclick="this.dataset.blocked = String(window.open('about:blank', '_blank') === null)">Open</button>`
+          const { frame } = await openNativeHost(context, html)
+          expect(
+            await frame.evaluate(() => {
+              window.open = window.originalOpen
+              return window.open === window.originalOpen
+            })
+          ).toBe(true)
+          await frame.click('#popup')
+          expect(await frame.getAttribute('#popup', 'data-blocked')).toBe('true')
+          expect(context.pages()).toHaveLength(1)
+        } finally {
+          await context.close()
+        }
+      })
 
       it('moves within the visual in the app, and the host keeps it', async () => {
         const { page, frame } = await openNativeHost(browser())
@@ -155,6 +228,8 @@ for (const engine of ['chromium', 'webkit']) {
         ]) {
           const { page, frame } = await openNativeHost(browser())
           await frame.evaluate(leave).catch(() => {})
+          await expect.poll(() => page.evaluate(() => window.visualLoads)).toBeGreaterThan(1)
+          await page.clock.runFor(PONG_TIMEOUT_MS + 1)
           await expect.poll(() => escaped(page)).toBe(true)
           expect(await page.evaluate(() => document.querySelector('iframe'))).toBeNull()
           await page.close()
@@ -165,8 +240,9 @@ for (const engine of ['chromium', 'webkit']) {
         const { page, frame } = await openNativeHost(browser())
         const marker = await frame.evaluate(() => window.marker)
         await frame.evaluate(() => location.reload()).catch(() => {})
-        await outlastTheAnswer(page)
         await expect.poll(() => frame.evaluate(() => window.marker)).not.toBe(marker)
+        await expect.poll(() => page.evaluate(() => window.visualLoads)).toBeGreaterThan(1)
+        await outlastTheAnswer(page)
         expect(await escaped(page)).toBe(false)
         await page.close()
       })

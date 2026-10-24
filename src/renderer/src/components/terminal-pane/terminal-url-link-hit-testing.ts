@@ -14,6 +14,7 @@ import { terminalLogicalLinkHasOscLink } from './terminal-osc-link-cells'
 import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import {
   buildHttpLinkActions,
+  httpLinkDirectClickDestination,
   openRoutedHttpLink,
   type HttpLinkActionDestinations,
   type HttpLinkDestination,
@@ -72,9 +73,9 @@ export function handleTerminalHttpLink(
   deps: UrlLinkHitTestDeps
 ): boolean {
   if (isTerminalHttpLinkActivation(event)) {
-    const forceDestination = event?.shiftKey
-      ? (deps.actionDestinations?.alternate ?? deps.actionDestinations?.primary)
-      : deps.actionDestinations?.primary
+    const forceDestination =
+      deps.actionDestinations &&
+      httpLinkDirectClickDestination(deps.actionDestinations, Boolean(event?.shiftKey))
     openRoutedHttpLink(url, {
       ...deps,
       modifierHeld: forceDestination ? false : Boolean(event?.shiftKey),

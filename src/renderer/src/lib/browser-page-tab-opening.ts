@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { findPage, findWorkspace } from '@/store/slices/browser-page-records'
 import { redactKagiSessionToken } from '../../../shared/browser-url'
 import { resolveBrowserSourceUnifiedTab } from './browser-workspace-source-resolution'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 
 /** Opens `url` in a new Orca browser tab right after the page's tab, in the page's own profile. */
 export function openUrlInTabBesideBrowserPage(args: {
@@ -9,7 +10,7 @@ export function openUrlInTabBesideBrowserPage(args: {
   worktreeId: string
   url: string
   activate: boolean
-}): void {
+}): string | null {
   const { sourcePageId, worktreeId, url, activate } = args
   const store = useAppStore.getState()
   const sourcePage = findPage(store.browserPagesByWorkspace, sourcePageId)
@@ -18,7 +19,7 @@ export function openUrlInTabBesideBrowserPage(args: {
     ? findWorkspace(store.browserTabsByWorktree, sourcePage.workspaceId)
     : null
   const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(store, sourcePageId, worktreeId)
-  store.createBrowserTab(worktreeId, url, {
+  const created = store.createBrowserTab(worktreeId, url, {
     // Why: a Kagi private-session search URL carries a token; only the stored URL is redacted.
     title: redactKagiSessionToken(url),
     activate,
@@ -33,4 +34,9 @@ export function openUrlInTabBesideBrowserPage(args: {
         }
       : {})
   })
+  // Why: keyboard focus follows a foreground tab, so Cmd/Ctrl+W closes it instead of its opener.
+  if (activate && created.activePageId) {
+    requestBrowserFocus({ pageId: created.activePageId, target: 'webview' })
+  }
+  return created.activePageId ?? null
 }

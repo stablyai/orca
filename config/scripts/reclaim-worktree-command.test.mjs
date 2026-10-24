@@ -56,6 +56,7 @@ it('does not interpret piped input as approval', async () => {
   const reclaim = vi.fn().mockResolvedValue({ completed: true })
   await runReclaimCommand([], { ...streams, reclaim })
   expect(reclaim).toHaveBeenCalledTimes(1)
+  expect(reclaim.mock.calls[0][0].apply).toBe(false)
   expect(streams.text()).not.toContain('[y/N]')
 })
 

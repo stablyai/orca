@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
+import { createVitestZodBundle } from './vitest-zod-bundle.mjs'
 import {
   checkBunVersion,
   probeBunVersion,
@@ -18,7 +19,9 @@ if (bunCheck.message) {
 if (!bunCheck.ok) {
   process.exitCode = 1
 } else {
+  let zodBundle
   try {
+    zodBundle = createVitestZodBundle(root)
     const result = runProcessSync({
       program: pinnedBun ?? 'bun',
       args: ['--bun', resolve(root, 'node_modules/vitest/vitest.mjs'), ...process.argv.slice(2)],
@@ -27,7 +30,8 @@ if (!bunCheck.ok) {
         ...process.env,
         ORCA_BACKGROUND_LAUNCH: '1',
         ORCA_TEST_NODE_EXECUTABLE: process.execPath,
-        ORCA_TEST_NODE_VERSION: process.versions.node
+        ORCA_TEST_NODE_VERSION: process.versions.node,
+        ORCA_UNIT_ZOD_BUNDLE: zodBundle.path
       },
       stdio: 'inherit',
       timeoutMs: null
@@ -35,7 +39,13 @@ if (!bunCheck.ok) {
 
     process.exitCode = result.code ?? 1
   } catch (error) {
-    console.error('Could not start Vitest. Install the Bun version in config/.bun-version.', error)
+    console.error('Could not prepare or start Vitest:', error)
     process.exitCode = 1
+  } finally {
+    try {
+      zodBundle?.cleanup()
+    } catch (error) {
+      console.warn('Could not remove the temporary Vitest Zod bundle:', error)
+    }
   }
 }

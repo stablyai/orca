@@ -18,6 +18,7 @@ import { useMobileNativeChatReadability } from './use-mobile-native-chat-readabi
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { isMobileNativeChatAgentConfirmed } from './mobile-native-chat-eligibility'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 
@@ -90,7 +91,9 @@ export function useMobileSessionNativeChatDictation(
       ? connState === 'connected'
         ? null
         : 'disconnected'
-      : nativeChatInputLockReason
+      : // Why: a chat only this phone remembers may sit on a bare shell; never type into it.
+        (nativeChatInputLockReason ??
+        (isMobileNativeChatAgentConfirmed(activeSessionTab) ? null : 'waiting'))
   const routeKey = nativeChatScopeKey ?? `${hostId}\0${worktreeId}`
   const getSendCompletionGeneration = useMobileSendCompletionGeneration({
     onBlur: resetLiveInputFocus,
@@ -117,9 +120,10 @@ export function useMobileSessionNativeChatDictation(
     [setShowDictationSetup, showToast]
   )
 
+  const dictationTargetReady = showNativeChat ? connState === 'connected' : canSend
   const dictation = useMobileDictation({
     client,
-    enabled: canSend && dictationEnabled,
+    enabled: dictationTargetReady && dictationEnabled,
     onTranscript: (text) => {
       // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
       if (showNativeChatRef.current) {

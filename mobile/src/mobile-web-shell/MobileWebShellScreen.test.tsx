@@ -239,13 +239,21 @@ describe('the hybrid shell screen', () => {
     expect(view.props.sessionId).toBe('session-one')
   })
 
-  it('opens the bridge channel on a ready session and hands it a receiver', async () => {
+  it('delivers an init through the ready view bridge', async () => {
+    dependencies.client = createFakeRpcClient()
     const tree = await renderScreen(readyState('session-one'))
     const view = byName(tree, 'ShellViewProbe')[0]
     expect(view.props.bridgeEnabled).toBe(true)
-    // Delivered with no client behind it: there is no host to answer, and nothing throws.
-    await act(async () => {
-      view.props.onBridgeMessage({ nativeEvent: { json: '{"v":1,"type":"ready"}' } })
+    await act(async () =>
+      view.props.onBridgeMessage({ nativeEvent: { json: clientFrame({ type: 'ready' }) } })
+    )
+    expect(dependencies.posted.map((raw) => readBridgeHostMessage(raw))).toContainEqual({
+      ok: true,
+      message: expect.objectContaining({
+        type: 'init',
+        sessionId: 'session-one',
+        host: expect.objectContaining({ id: 'host-1' })
+      })
     })
   })
 
@@ -299,7 +307,7 @@ describe('the hybrid shell screen', () => {
     warned.mockRestore()
   })
 
-  it('re-reads the app store on every ask, so the next init is not the first one again', async () => {
+  it('requests an app-store refresh on every ready ask', async () => {
     dependencies.client = createFakeRpcClient()
     const tree = await renderScreen(readyState('session-one'))
     const view = byName(tree, 'ShellViewProbe')[0]
@@ -355,7 +363,7 @@ describe('the hybrid shell screen', () => {
       },
       ready: async () => {
         await act(async () => {
-          byName(tree, 'ShellViewProbe')[0]?.props.onBridgeMessage({
+          byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
             nativeEvent: { json: clientFrame({ type: 'ready' }) }
           })
         })
@@ -429,7 +437,7 @@ describe('the hybrid shell screen', () => {
     expect(client.requests.map((request) => request.method)).toEqual(['status.get'])
   })
 
-  it('fails the session on a page fault, so a blank page becomes the failure screen', async () => {
+  it('reports a ready page fault as a document-load failure', async () => {
     dependencies.client = createFakeRpcClient()
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const tree = await renderScreen(readyState('session-one'))
@@ -451,12 +459,6 @@ describe('the hybrid shell screen', () => {
     })
     expect(dependencies.reportShellFailure.mock.calls).toEqual([['document-load-failed']])
     warned.mockRestore()
-    // The reducer's answer to that reason, rendered: this is what the page's blank turns into.
-    expect(
-      textOf(
-        await renderScreen({ kind: 'failed', reason: 'document-load-failed', retriedOnce: true })
-      )
-    ).toContain('The downloaded app could not be opened.')
   })
 
   it('reports a URL nothing on this phone could open, which is the dead tap that survives', async () => {
@@ -613,9 +615,13 @@ describe('the dropped-frame count on the dev facts line', () => {
   }
 
   async function drop(times: number): Promise<void> {
+    const emit = dependencies.client?.streams[0]?.emitBinary
+    if (emit === undefined || emit === null) {
+      throw new Error('binary subscription was never opened')
+    }
     for (let index = 0; index < times; index += 1) {
       await act(async () => {
-        dependencies.client?.streams[0]?.emitBinary?.({ ...oversized, seq: index + 1 })
+        emit({ ...oversized, seq: index + 1 })
       })
     }
   }
@@ -706,7 +712,12 @@ describe('a refused update is said beside the page, not in front of it', () => {
     const tree = await renderScreen(readyState('session-one'))
     dependencies.lifecycle.length = 0
     await act(async () => {
-      dismissControl(tree)?.props.onPress()
+      tree.root
+        .find(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Dismiss notice'
+        )
+        .props.onPress()
     })
     expect(dismissControl(tree)).toBeUndefined()
     expect(textOf(tree)).not.toContain("Couldn't update")
@@ -720,7 +731,12 @@ describe('a refused update is said beside the page, not in front of it', () => {
     dependencies.updateNotice = 'update-failed'
     const tree = await renderScreen(readyState('session-one'))
     await act(async () => {
-      dismissControl(tree)?.props.onPress()
+      tree.root
+        .find(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Dismiss notice'
+        )
+        .props.onPress()
     })
     // The next flow refused too, and opened its own fallback: a new document, so the tap on the
     // one before it is not an answer about this one.

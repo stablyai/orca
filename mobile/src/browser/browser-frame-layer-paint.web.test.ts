@@ -5,11 +5,6 @@ import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { Image, View } from 'react-native'
 import {
-  updateBrowserImageSource,
-  updateBrowserLayerVisibility,
-  whenBrowserFrameDisplayable
-} from './browser-frame-layer-paint'
-import {
   updateBrowserImageSource as updateBrowserImageSourceOnWeb,
   updateBrowserLayerVisibility as updateBrowserLayerVisibilityOnWeb,
   whenBrowserFrameDisplayable as whenBrowserFrameDisplayableOnWeb
@@ -39,26 +34,6 @@ function mountLayer(): HTMLElement {
 const asImageRef = (node: HTMLElement) => node as unknown as Image
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same mismatch, for the layer refs the visibility writer takes.
 const asViewRef = (node: HTMLElement) => node as unknown as View
-
-describe('the native frame-path writes against an RN Web ref', () => {
-  it('throws from updateBrowserImageSource, because a DOM node has no setNativeProps', () => {
-    expect(() => updateBrowserImageSource(asImageRef(mountImageHost()), FRAME_URI)).toThrow(
-      /setNativeProps is not a function/
-    )
-  })
-
-  it('throws from updateBrowserLayerVisibility for the same reason', () => {
-    expect(() =>
-      updateBrowserLayerVisibility([asViewRef(mountLayer()), asViewRef(mountLayer())], 0)
-    ).toThrow(/setNativeProps is not a function/)
-  })
-
-  it('reports no decode of its own: the rendered Image fires onLoad natively', () => {
-    const onDisplayable = vi.fn()
-    whenBrowserFrameDisplayable(FRAME_URI, { onDisplayable, onUndecodable: vi.fn() })
-    expect(onDisplayable).not.toHaveBeenCalled()
-  })
-})
 
 describe('the web siblings', () => {
   it('paints the frame as a background-image on the element RN Web sizes', () => {

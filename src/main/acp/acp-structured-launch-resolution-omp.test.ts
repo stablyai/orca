@@ -48,7 +48,6 @@ function resolver(
 }
 
 describe('OMP ACP launch resolution', () => {
-  // OMP has no bypass flag: the chat's own mode alone decides whether Orca answers its requests.
   it("runs `omp acp` pointed at the agent directory the chat pinned, in the chat's own mode", async () => {
     for (const permissionMode of ['ask', 'full-access'] as const) {
       const launch = await resolver(ompRecord())({ identity, spawnToken: 'token', permissionMode })
@@ -66,7 +65,6 @@ describe('OMP ACP launch resolution', () => {
       ANTHROPIC_API_KEY: 'sk-test'
     }
     const launch = await resolver(ompRecord(), { launchEnv: userEnv })({ identity })
-    // Only the shared pane and hook keys, and an inherited scratch folder: this chat has none.
     expect(launch.envToDelete).toEqual([
       ...STRUCTURED_CHILD_ENV_TO_DELETE,
       NATIVE_CHAT_SCRATCH_DIR_ENV,
@@ -83,7 +81,7 @@ describe('OMP ACP launch resolution', () => {
       'darwin'
     ).env
     expect(child).toMatchObject(userEnv)
-    // A pane's identity would let OMP's Orca status extension report for this chat too.
+    // Pane identity would let the terminal extension report status for this chat.
     expect(child.ORCA_PANE_KEY).toBeUndefined()
   })
 

@@ -73,8 +73,15 @@ describe('reserve ledger writer', () => {
     expect(await row(db)).toMatchObject({ cell_id: 'c1', assignment_epoch: 5 })
 
     const bounded = new ReserveLedgerWriter(db, { queueMax: 2, log: () => undefined })
-    for (const epoch of [1, 2, 3]) bounded.enqueue({ ...HOST, cellId: 'c1', epoch })
+    const hosts = ['oldest0000000000', 'middle0000000000', 'newest0000000000']
+    for (const relayHostId of hosts) {
+      bounded.enqueue({ ...HOST, relayHostId, cellId: 'c1', epoch: 1 })
+    }
     expect(bounded.pending()).toBe(2)
+    await bounded.flush()
+    expect(await row(db, hosts[0])).toBeUndefined()
+    expect(await row(db, hosts[1])).toMatchObject({ cell_id: 'c1', assignment_epoch: 1 })
+    expect(await row(db, hosts[2])).toMatchObject({ cell_id: 'c1', assignment_epoch: 1 })
   })
 
   it('reconciles the map’s seats and never lowers an epoch', async () => {
@@ -109,6 +116,7 @@ describe('reserve ledger writer', () => {
   it('demotes a seat level with its row on another cell, which the mirror would never replace', async () => {
     const { database: db, writer } = await setup()
     writer.enqueue({ ...HOST, cellId: 'c7', epoch: 9 })
+    writer.enqueue({ ...HOST, relayHostId: 'eeeeeeeeeeeeeeee', cellId: 'c7', epoch: 9 })
     await writer.flush()
     const demoted: unknown[] = []
     const result = await reconcileReserveLedger({
@@ -121,7 +129,9 @@ describe('reserve ledger writer', () => {
       demote: (seat, found) => demoted.push({ seat: seat.cellId, row: found }),
       now: 1_000_000
     })
-    expect(result).toEqual({ upserted: 1, demoted: 1 })
+    expect(result).toEqual({ upserted: 0, demoted: 1 })
     expect(demoted).toEqual([{ seat: 'c1', row: { cellId: 'c7', epoch: 9 } }])
+    await writer.flush()
+    expect(await row(db, 'eeeeeeeeeeeeeeee')).toMatchObject({ cell_id: 'c7', assignment_epoch: 9 })
   })
 })

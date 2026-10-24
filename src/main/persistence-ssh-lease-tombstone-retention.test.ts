@@ -29,8 +29,7 @@ describe('operator-closed SSH lease tombstones', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  /** A pane whose lease froze `tab-old` before `detachTerminalPaneToTab` moved it to `tab-new`.
-   *  The binding scrub matches tab-qualified, so it cannot reach this row's binding. */
+  // Detached panes outgrow the lease’s frozen tab ID, so tab-qualified scrubbing cannot reach their binding.
   async function storeWithDetachedPaneBinding(): Promise<
     Awaited<ReturnType<typeof createStoreWithSshRemotePtyLeases>>
   > {
@@ -83,7 +82,7 @@ describe('operator-closed SSH lease tombstones', () => {
       PtyExitProof.from('exit-observed', undefined)
     )
 
-    // `isRestorablePtyBinding` still consults this row to refuse replaying that binding.
+    // The retained terminated lease must continue to refuse stale binding replay.
     expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
       expect.objectContaining({ ptyId: 'remote-pty', state: 'terminated' })
     ])
@@ -109,8 +108,7 @@ describe('operator-closed SSH lease tombstones', () => {
     ])
   })
 
-  // `expired` is never evidence the shell died, and `sweepOrphanedRelayPtys` reads these ids as its
-  // leave-alone list, so dropping one would authorize stopping a process left running on purpose.
+  // Expired leases protect intentionally running shells from orphan sweeping; expiry does not prove exit.
   it('keeps a superseded expired lease when a sibling pane is closed', async () => {
     const store = createStoreWithSshRemotePtyLeases([
       {
@@ -166,7 +164,6 @@ describe('operator-closed SSH lease tombstones', () => {
       PtyExitProof.from('exit-observed', undefined)
     )
 
-    // Other targets are untouched: the pass is scoped to the one whose bindings were just scrubbed.
     expect(store.getSshRemotePtyLeases()).toEqual([
       expect.objectContaining({ targetId: 'ssh-2', ptyId: 'other-pty' })
     ])

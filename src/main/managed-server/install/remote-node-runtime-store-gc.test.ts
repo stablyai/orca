@@ -68,7 +68,6 @@ describe('planRuntimeStoreGc', () => {
   })
 
   it('keeps a compat pin beside the default one and still keeps the previous runtime', () => {
-    // b is the default pin, c the rung B compat pin; a is the newest other (previous) runtime.
     const plan = planRuntimeStoreGc(
       inventory({ entries: all, verifiedNewestFirst: [all[0], all[1], all[2], all[3]] }),
       [sha('b'), sha('c')]
@@ -157,7 +156,6 @@ posixOnly('gcRemoteNodeRuntimeStore (real shell)', () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  // `b` is always verified last, so it is the previous pin the store keeps.
   function runtime(c: string, verified = true): string {
     const dir = join(root, 'runtimes', `node-${sha(c)}`)
     mkdirSync(join(dir, 'bin'), { recursive: true })
@@ -201,7 +199,7 @@ posixOnly('gcRemoteNodeRuntimeStore (real shell)', () => {
       expect(existsSync(join(root, 'runtimes', `node-${sha(kept)}`))).toBe(true)
     }
     expect(existsSync(join(root, 'runtimes', `node-${sha('e')}`))).toBe(false)
-    // D10 two-step: legacy dirs are reported, never deleted by this pass.
+    // Legacy version directories are diagnostics only; runtime GC must preserve them.
     expect(existsSync(join(root, 'orcad-0.1.0+aaa'))).toBe(true)
     expect(existsSync(join(root, 'relay-0.1.0+aaa'))).toBe(true)
   })

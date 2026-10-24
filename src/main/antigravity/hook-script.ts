@@ -13,8 +13,7 @@ export function getManagedScript(
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
-      // Why (#9358/#9941): inherited delayed expansion eats `!` out of the percent-expanded
-      // curl args, mangling paneKey and dropping worktreeId. `!` is legal in a Windows path.
+      // Delayed expansion corrupts literal ! characters in paths and hook coordinates.
       'setlocal DisableDelayedExpansion',
       'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
       '  echo {"decision":""}',
@@ -25,7 +24,6 @@ export function getManagedScript(
       ')',
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      // The runtime path is fixed at installation; hook payloads stay on stdin.
       'set "ELECTRON_RUN_AS_NODE=1"',
       `if not defined ORCA_AGENT_HOOK_NODE set "ORCA_AGENT_HOOK_NODE=${windowsRuntimePath.replaceAll('%', '%%')}"`,
       '"%ORCA_AGENT_HOOK_NODE%" "%~dp0antigravity-hook-post.cjs" >nul 2>nul',
@@ -44,13 +42,10 @@ export function getManagedScript(
     `    printf '${ANTIGRAVITY_PRE_TOOL_USE_DECISION}\\n'`,
     '    ;;',
     '  *)',
-    // Why: Antigravity accepts an empty JSON object for passive status hooks;
-    // only the PreToolUse gate rejects it, and that branch answers above.
     '    printf "{}\\n"',
     '    ;;',
     'esac',
-    // Why: some Antigravity events arrive without stdin but still need a
-    // status post, so the shared capture maps empty input to an object.
+    // Events without stdin still need a status post.
     ...buildPosixHookPayloadCapture('empty-object', POSIX_HOOK_JSON_STDIN),
     ...buildPosixHookSpoolLines('antigravity', 'ORCA_ANTIGRAVITY_EVENT'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -60,10 +55,7 @@ export function getManagedScript(
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
-    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
-    // command line (EDR command-line false positives). Wire body is identical.
+    // Keep large payloads off command lines to avoid EDR false positives.
     'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/antigravity" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
@@ -84,9 +76,7 @@ export function getManagedScript(
 export function getWindowsWrapperScript(eventName: string): string {
   return [
     '@echo off',
-    // Why (#9358/#9941): `!` is legal in the hooks path, and inherited delayed expansion
-    // eats it out of the percent-expanded `%~dp0` — the wrapper then misses the core and
-    // silently falls back on every event. Same reason the core disables it.
+    // Preserve literal ! characters in the percent-expanded hooks path.
     'setlocal DisableDelayedExpansion',
     `set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`,
     'set "ORCA_ANTIGRAVITY_CORE=%~dp0antigravity-hook.cmd"',
@@ -101,7 +91,6 @@ export function getWindowsWrapperScript(eventName: string): string {
     ') else (',
     '  echo {}',
     ')',
-    // Missing-core fallbacks obey the same outside-Orca stdin guard as the core.
     ...buildWindowsHookEnvironmentGuardLines(),
     'exit /b 0',
     ''

@@ -71,8 +71,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.identityChangeListeners.length = 0
     this.removeEventListener?.()
     this.removeEventListener = null
-    // Why: final checkpoints are written daemon-side (TerminalHost.dispose); here the adapter only marks sessions
-    // cleanly ended so they don't trigger false cold restores.
+    // Daemon-side teardown writes final checkpoints; adapter disposal marks history ended to prevent false restores.
     if (this.historyManager) {
       void this.historyManager
         .dispose()
@@ -85,7 +84,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     if (this.protocolVersion < CLEAN_DISCONNECT_PROTOCOL_VERSION) {
       return
     }
-    // Why: an authenticated pair cancels the adoption watchdog and lets a never-used adapter retire its empty daemon on quit.
+    // An authenticated pair cancels adoption timeout and lets even an unused adapter retire its empty daemon.
     await this.client.ensureConnected()
     this.recordAuthenticatedIdentity()
   }
@@ -122,7 +121,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     try {
       await this.client.ensureConnected()
     } catch {
-      // Nothing was asked of the daemon, so nothing can be retiring.
+      // No retirement RPC was sent; reopen this adapter's admission.
       this.reopenAfterRefusedIdleRetirement()
       return { state: 'unverifiable' }
     }
@@ -180,8 +179,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.respawnAdoptionClosed = false
   }
 
-  // Why: unlike dispose(), leave history files unclean (no endedAt) so the next launch treats them as crash-recoverable,
-  // but still write a final checkpoint so a daemon crash while Orca is closed has recovery data.
+  // Checkpoint without marking history ended so a daemon crash after app quit remains recoverable.
   async disconnectOnly(): Promise<void> {
     if (!this.disconnectOnlyPromise) {
       this.respawnAdoptionClosed = true
@@ -194,11 +192,10 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
   }
 
   protected async finishDisconnectOnly(keepHistoryShutdowns: Promise<void>[]): Promise<void> {
-    // Why: sleep shutdowns still detect recovery and kill after checkpointing; disconnecting first rejects those admitted operations.
+    // Let admitted sleep shutdowns finish recovery and kill RPCs before disconnecting their client.
     await Promise.allSettled(keepHistoryShutdowns)
     this.respawnAdoptionClosed = true
-    // Why: a final checkpoint covers sessions opened since the last tick (else cold restore finds nothing if the daemon
-    // later dies). Await it — fire-and-forget would race client.disconnect() and reject the pending getSnapshot RPCs.
+    // Await final checkpoints, including new sessions, before disconnect can reject their snapshot RPCs.
     await this.runExclusiveCheckpoint(() => this.checkpointAllSessions(), {
       rescheduleDirty: false
     })
@@ -206,7 +203,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
     this.wslDistrosBySessionId.clear()
-    // Why: the detached daemon keeps these PTYs alive for warm reattach; a leftover pause would stall shells for a failsafe window.
+    // Daemon PTYs survive disconnect; resume producers so warm reattach does not wait for a pause failsafe.
     for (const id of this.pausedProducerSessionIds) {
       this.client.notify('resumePty', { sessionId: id })
     }
@@ -216,14 +213,14 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.removeEventListener = null
     if (this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
       try {
-        // Why: only the authenticated daemon can atomically prove it's empty; a shared budget keeps this off quit's critical path.
+        // Only the authenticated daemon can prove emptiness atomically; share a short quit-time budget.
         const deadlineMs = Date.now() + 250
         if (!this.client.isConnected()) {
           await this.client.ensureConnectedWithin(Math.max(1, deadlineMs - Date.now()))
         }
         await this.client.request('shutdownIfIdle', undefined, Math.max(1, deadlineMs - Date.now()))
       } catch {
-        // An unreachable daemon falls back to event-driven retirement once its auth sockets close and it proves itself empty.
+        // Closing auth sockets still permits the daemon to retire itself once empty.
       }
     }
     this.client.disconnect()

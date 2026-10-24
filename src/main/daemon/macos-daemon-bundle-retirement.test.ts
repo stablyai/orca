@@ -13,9 +13,9 @@ import {
   retireUnusedMacDaemonCopy
 } from './macos-daemon-bundle-retirement'
 
-// What `lsof -F p +D` prints for an unused tree: nothing, exit 1.
+// An unused lsof tree prints nothing and exits 1.
 const unused: ProcessResult = { code: 1, signal: null, stdout: '', stderr: '', timedOut: false }
-// Observed on a live copy: the user's pid on stdout, and still exit 1.
+// Exit 1 alone is insufficient: live copies can still report user PIDs.
 const inUse: ProcessResult = { ...unused, stdout: 'p123\nftxt\nftxt\n' }
 const LSREGISTER =
   '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'

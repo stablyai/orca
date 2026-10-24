@@ -15,7 +15,6 @@ import type { PersistedState } from '../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../shared/constants'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../shared/onboarding-defaults'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -133,7 +132,7 @@ describe('Store', () => {
     expect(ui.setupGuideSidebarDismissed).toBe(false)
     expect(ui.setupGuideBrowserMilestoneMigrated).toBe(true)
     expect(ui.setupGuideBrowserMilestoneLegacyComplete).toBe(false)
-    // Why: brand-new profiles never saw remaining-as-default.
+    // New profiles never saw the former remaining-percentage default.
     expect(ui.usagePercentageDisplayChangeNoticeDismissed).toBe(true)
   })
 
@@ -148,7 +147,6 @@ describe('Store', () => {
       },
       ui: {
         ...persisted.ui,
-        // Why: omit the notice key so load resolves eligibility for existing profiles.
         usagePercentageDisplayChangeNoticeDismissed: undefined
       }
     })
@@ -234,7 +232,6 @@ describe('Store', () => {
 
   it('coerces non-boolean minimizeToTrayOnClose payloads to a strict boolean', async () => {
     const store = await createStore()
-    // Why: a renderer-supplied non-bool must never persist as truthy and later read as "tray-minimize on".
     store.updateSettings({ minimizeToTrayOnClose: 'true' as unknown as boolean })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
     store.updateSettings({ minimizeToTrayOnClose: 1 as unknown as boolean })
@@ -295,7 +292,7 @@ describe('Store', () => {
       store.flush()
     })
 
-    // Why: a profile opened on another OS must not rewrite the mac-only preference on flush.
+    // Preserve macOS preferences when the same profile is opened on another platform.
     await withPlatform('win32', async () => {
       const store = await createStore()
       store.updateSettings({ minimizeToTrayOnClose: true })
@@ -336,7 +333,7 @@ describe('Store', () => {
   })
 
   it('persists the existing-user onboarding backfill back to disk', async () => {
-    // Why: the upgrade-cohort backfill is derived at load; assert it round-trips through a write intact (load-time scheduleSave via loadNeedsSave, no manual flush).
+    // Rely on load’s scheduled save to prove onboarding backfill reaches disk without a manual flush.
     writeDataFile({
       schemaVersion: 1,
       ui: {}
@@ -499,7 +496,7 @@ describe('Store', () => {
   })
 
   it('recovers a close timestamp when closed onboarding omits the closedAt key', async () => {
-    // Why: a block missing `closedAt` entirely (vs explicit null) must still stay closed via outcome recovery, guarding the `'closedAt' in raw` branch.
+    // Exercise an omitted closedAt key separately from explicit null.
     writeDataFile({
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
@@ -517,7 +514,6 @@ describe('Store', () => {
   })
 
   it('does not mutate gate fields for a consistent closed-onboarding existing user', async () => {
-    // Why: the gate must be idempotent — a closed+completed user round-trips unchanged, and the backfill must not stomp closedAt with a fresh Date.now().
     const consistent = {
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
@@ -538,7 +534,6 @@ describe('Store', () => {
     store.flush()
     const persisted = readDataFile() as typeof consistent
 
-    // Flushing the loaded state preserves the persisted gate fields verbatim.
     expect(persisted.onboarding.closedAt).toBe(123)
     expect(persisted.onboarding.outcome).toBe('completed')
     expect(persisted.ui.setupGuideSidebarDismissed).toBe(true)

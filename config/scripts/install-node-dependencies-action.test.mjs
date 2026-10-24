@@ -38,6 +38,9 @@ function createFixture() {
 
   expect(run('git', ['init', '-q'], { cwd: workspace }).status).toBe(0)
   expect(
+    run('git', ['config', '--local', 'diff.mnemonicPrefix', 'false'], { cwd: workspace }).status
+  ).toBe(0)
+  expect(
     run('git', ['add', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'], {
       cwd: workspace
     }).status

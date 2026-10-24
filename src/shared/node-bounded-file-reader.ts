@@ -15,6 +15,13 @@ export class NodeFileReadTooLargeError extends Error {
   }
 }
 
+export class NodeFileNotRegularError extends Error {
+  constructor() {
+    super('Expected a regular file')
+    this.name = 'NodeFileNotRegularError'
+  }
+}
+
 export type BoundedNodeFileRead = {
   buffer: Buffer
   stats: Stats
@@ -42,7 +49,7 @@ export async function readNodeFileWithinLimit(
 ): Promise<BoundedNodeFileRead> {
   options.signal?.throwIfAborted()
   if (options.regularFileOnly && !(await stat(filePath)).isFile()) {
-    throw new Error('Expected a regular file')
+    throw new NodeFileNotRegularError()
   }
   options.signal?.throwIfAborted()
   // Nonblocking open fences replacement with a FIFO after the path check.
@@ -70,7 +77,7 @@ export async function readNodeFileHandleWithinLimit(
   const stats = await handle.stat()
   options.signal?.throwIfAborted()
   if (options.regularFileOnly && !stats.isFile()) {
-    throw new Error('Expected a regular file')
+    throw new NodeFileNotRegularError()
   }
   if (options.window) {
     validateSize(stats.size, Number.MAX_SAFE_INTEGER)
@@ -148,7 +155,7 @@ export function readNodeFileSyncWithinLimit(
   }
 
   if (options.regularFileOnly && !statSync(filePath).isFile()) {
-    throw new Error('Expected a regular file')
+    throw new NodeFileNotRegularError()
   }
   // Nonblocking open also fences replacement with a FIFO after the path check.
   const flags = options.regularFileOnly
@@ -158,7 +165,7 @@ export function readNodeFileSyncWithinLimit(
   try {
     const stats = fstatSync(descriptor)
     if (options.regularFileOnly && !stats.isFile()) {
-      throw new Error('Expected a regular file')
+      throw new NodeFileNotRegularError()
     }
     validateSize(stats.size, maxBytes)
 

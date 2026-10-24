@@ -7,8 +7,7 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
-// Why this file exists: deregistering a project used to strand every row it owned. No sweeper could
-// reach them because the missing-directory prune is gated on the repo still being registered.
+// Deregistered repos bypass missing-directory pruning, so residue needs its own sweep.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -62,7 +61,6 @@ const sessionFor = (worktreeId: string, tabId = 'tab-1') => ({
   },
   activeTabTypeByWorktree: { [worktreeId]: 'terminal' as const },
   lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
-  // The residue `profile-project-session-field-disposition` flags as leaking on repo removal.
   sleepingAgentSessionsByPaneKey: sleepingAgentFor(worktreeId, tabId)
 })
 
@@ -89,7 +87,6 @@ describe('deregistered repo residue', () => {
     seed.setWorkspaceSession(sessionFor(GONE_WORKTREE), 'local')
     seed.flush()
 
-    // Deregister by hand: the point is that a row can outlive its repo however that happened.
     const persisted = readDataFile() as PersistedState
     persisted.repos = persisted.repos.filter((repo) => repo.id !== GONE_REPO)
     writeDataFile(persisted)
@@ -144,7 +141,7 @@ describe('deregistered repo residue', () => {
     expect(store.getWorktreeMeta(remoteWorktree)).toBeDefined()
     const partition = store.getWorkspaceSession(RUNTIME_HOST)
     expect(partition.tabsByWorktree[remoteWorktree]).toHaveLength(1)
-    // Also proves the sleeping-agent fixture is well-formed, so the sweep assertions above bite.
+    // Prove the sleeping-agent fixture is valid before relying on its absence elsewhere.
     expect(Object.keys(partition.sleepingAgentSessionsByPaneKey ?? {})).toHaveLength(1)
   })
 
@@ -167,9 +164,7 @@ describe('deregistered repo residue', () => {
     })
   })
 
-  // Regression: the pane-keyed records are pruned by the worktreeId they name, not by their own key,
-  // so an orphan whose ONLY residue is a sleeping agent survived -- and re-seeded the sweep on every
-  // launch, so the store never self-cleared and every load scheduled another save.
+  // Pane-keyed values must seed the sweep even when no worktree-keyed residue remains.
   it("drops a sleeping agent that is the orphan repo's only residue, and self-clears", async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -184,19 +179,15 @@ describe('deregistered repo residue', () => {
     const store = await createStore()
     store.flush()
     expect(store.getWorkspaceSession('local').sleepingAgentSessionsByPaneKey ?? {}).toEqual({})
-    // On disk, not just in memory: if the flush had not persisted the cleanup, the next load would
-    // silently redo it and the self-clearing assertion below would pass without meaning anything.
+    // Verify disk cleanup first; otherwise the next load could repeat it and falsely appear self-clearing.
     const persisted = readDataFile() as PersistedState
     expect(persisted.workspaceSession.sleepingAgentSessionsByPaneKey ?? {}).toEqual({})
 
-    // Self-clearing: with the residue gone nothing re-seeds the orphan id, so the next launch has
-    // no work. Before the fix this stayed non-empty forever and every load scheduled another save.
     const reloaded = await createStore()
     expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
   })
 
-  // A close record names its workspace only in its value, so like a sleeping agent it must seed the
-  // sweep itself or a removed project's records wait out the TTL.
+  // Close records name workspaces only in values and must seed orphan detection themselves.
   it("drops a close record that is the orphan repo's only residue, and self-clears", async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -220,11 +211,9 @@ describe('deregistered repo residue', () => {
     expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
   })
 
-  // The session scalars are pruned by bespoke rules, not by owner key, so no owner-key loop reaches
-  // them. Each has to be able to seed the sweep on its own or an orphan named only there is stuck.
+  // Scalars must independently seed orphan detection; owner-key loops cannot reach them.
   it.each([
     { label: 'activeWorktreeId', session: { activeWorktreeId: GONE_WORKTREE } },
-    // Canonical `worktree:<id>` form, which needs unwrapping before the repo id is visible.
     {
       label: 'activeWorkspaceKey',
       session: { activeWorkspaceKey: worktreeWorkspaceKey(GONE_WORKTREE) }
@@ -252,7 +241,6 @@ describe('deregistered repo residue', () => {
     expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
   })
 
-  // Why: a sweep that dirtied every launch would rewrite the profile forever and mask real changes.
   it('leaves a profile with no orphans byte-identical across reloads', async () => {
     const seed = await createStore()
     seed.addRepo(makeRepo({ id: LIVE_REPO, path: '/workspace/live' }))

@@ -1,6 +1,3 @@
-// Regression: agent state rules releases live in the app's own release feed, and must never change
-// what the updater resolves on any path: the stable Latest feed, the RC prerelease feed, or the
-// build picker.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getVersionChannel } from '../shared/release-channel'
 import { installNetRequestFetchAdapter } from './updater-net-request.fixture'

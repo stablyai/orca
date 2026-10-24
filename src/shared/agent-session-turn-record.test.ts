@@ -204,7 +204,8 @@ describe('legacyAgentJournalTurnStatusBody', () => {
 
 describe('journalRowSchemaVersion', () => {
   it('stamps only rows that carry a turn item with the current version', () => {
-    expect(AGENT_SESSION_JOURNAL_SCHEMA_VERSION).toBe(3)
+    // The newest this build reads is the queue row's.
+    expect(AGENT_SESSION_JOURNAL_SCHEMA_VERSION).toBe(4)
     expect(journalRowSchemaVersion([agentJournalTurnBody(turn)])).toBe(3)
     expect(journalRowSchemaVersion([{ kind: 'message' }, { kind: 'status' }])).toBe(2)
     expect(journalRowSchemaVersion([])).toBe(2)

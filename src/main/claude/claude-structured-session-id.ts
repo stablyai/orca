@@ -12,7 +12,7 @@ export function claudeSessionIdForOrcaSession(
   )
 }
 
-/** The Claude conversation a rewind continues the chat in; stable, so a retried rewind names it again. */
+/** Stable across retries so a rewind always names the same conversation. */
 export function claudeSessionIdForRewind(sessionId: string, rewindOperationId: string): string {
   return stableUuid(`orca-claude:${sessionId}:rewind:${rewindOperationId}`)
 }

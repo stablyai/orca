@@ -15,7 +15,6 @@ export function installPtySpawnIpcHandler(deps: PtySpawnIpcDeps): void {
     if (startupPromise) {
       await startupPromise
     }
-    // Switch point: a visible attach-only view of a main-started pane.
     if (attachOnlyViewOf(args) && args.sessionId && args.initiallyHidden !== true) {
       return attachViewAfterHiddenStart(
         args.sessionId,

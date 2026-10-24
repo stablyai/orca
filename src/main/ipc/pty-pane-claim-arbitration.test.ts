@@ -502,7 +502,7 @@ describe('registerPtyHandlers', () => {
     })
     await Promise.resolve()
 
-    // Why: SSH can strip ORCA_PANE_KEY before spawn; tab/leaf metadata must still dedupe against runtime materialization.
+    // SSH may strip ORCA_PANE_KEY; tab/leaf identity must still deduplicate runtime materialization.
     const rendererSpawn = handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,

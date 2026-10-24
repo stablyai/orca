@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -11,7 +11,7 @@ const temporaryDirectories: string[] = []
 
 type ConcurrentCreator = {
   ready: Promise<void>
-  calling: Promise<void>
+  locked: Promise<void>
   start: () => void
   stop: () => void
   closed: Promise<void>
@@ -29,31 +29,46 @@ function runConcurrentCreator(keyFile: string): ConcurrentCreator {
     join(import.meta.dirname, '../scripts/mock-server-key-pair.ts')
   ).href
   const script = `
+    const fs = (await import('node:fs')).default
+    const { syncBuiltinESMExports } = await import('node:module')
+    const openSync = fs.openSync
+    let reportedLock = false
+    fs.openSync = (...args) => {
+      try {
+        return openSync(...args)
+      } catch (error) {
+        if (!reportedLock && args[0] === process.argv[2] + '.lock' && error.code === 'EEXIST') {
+          reportedLock = true
+          process.stdout.write('LOCKED\\n')
+        }
+        throw error
+      }
+    }
+    syncBuiltinESMExports()
     const { loadOrCreateMockServerKeyPair } = await import(process.argv[1])
     process.stdout.write('READY\\n')
     await new Promise((resolve) => process.stdin.once('data', resolve))
-    process.stdout.write('CALLING\\n')
     const keyPair = loadOrCreateMockServerKeyPair(process.argv[2], { warn() {} })
     process.stdout.write('KEY:' + Buffer.from(keyPair.secretKey).toString('base64') + '\\n')
   `
-  const child = spawn(
-    process.execPath,
-    ['--import', 'tsx', '--input-type=module', '--eval', script, moduleUrl, keyFile],
-    { stdio: ['pipe', 'pipe', 'pipe'] }
-  )
+  const child = spawnProcess({
+    program: process.execPath,
+    args: ['--import', 'tsx', '--input-type=module', '--eval', script, moduleUrl, keyFile],
+    stdio: 'pipe'
+  })
   let stdout = ''
   let stderr = ''
   let resolveReady!: () => void
   let rejectReady!: (error: Error) => void
-  let resolveCalling!: () => void
-  let rejectCalling!: (error: Error) => void
+  let resolveLocked!: () => void
+  let rejectLocked!: (error: Error) => void
   const ready = new Promise<void>((resolve, reject) => {
     resolveReady = resolve
     rejectReady = reject
   })
-  const calling = new Promise<void>((resolve, reject) => {
-    resolveCalling = resolve
-    rejectCalling = reject
+  const locked = new Promise<void>((resolve, reject) => {
+    resolveLocked = resolve
+    rejectLocked = reject
   })
   let resolveClosed!: () => void
   const closed = new Promise<void>((resolve) => {
@@ -66,8 +81,8 @@ function runConcurrentCreator(keyFile: string): ConcurrentCreator {
     if (stdout.includes('READY\n')) {
       resolveReady()
     }
-    if (stdout.includes('CALLING\n')) {
-      resolveCalling()
+    if (stdout.includes('LOCKED\n')) {
+      resolveLocked()
     }
   })
   child.stderr.on('data', (chunk) => {
@@ -76,7 +91,7 @@ function runConcurrentCreator(keyFile: string): ConcurrentCreator {
   const result = new Promise<string>((resolve, reject) => {
     child.on('error', (error) => {
       rejectReady(error)
-      rejectCalling(error)
+      rejectLocked(error)
       reject(error)
     })
     child.on('close', (code) => {
@@ -86,8 +101,8 @@ function runConcurrentCreator(keyFile: string): ConcurrentCreator {
       if (!stdout.includes('READY\n')) {
         rejectReady(error)
       }
-      if (!stdout.includes('CALLING\n')) {
-        rejectCalling(error)
+      if (!stdout.includes('LOCKED\n')) {
+        rejectLocked(error)
       }
       const key = stdout.match(/KEY:([A-Za-z0-9+/=]+)\n/)?.[1]
       if (code === 0 && key) {
@@ -100,7 +115,7 @@ function runConcurrentCreator(keyFile: string): ConcurrentCreator {
   void result.catch(() => {})
   return {
     ready,
-    calling,
+    locked,
     start: () => {
       if (!child.stdin.destroyed && !child.stdin.writableEnded) {
         child.stdin.end('go\n')
@@ -184,8 +199,8 @@ describe('mock server key persistence', () => {
     try {
       await Promise.all(creators.map((creator) => creator.ready))
       creators.forEach((creator) => creator.start())
-      await Promise.all(creators.map((creator) => creator.calling))
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await Promise.all(creators.map((creator) => creator.locked))
+      expect(readdirSync(dirname(keyFile))).toEqual(['server-key.lock'])
       rmSync(lockFile)
       parentOwnsLock = false
       const [first, second] = await Promise.all(creators.map((creator) => creator.result))

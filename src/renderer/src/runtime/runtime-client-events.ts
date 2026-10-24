@@ -91,6 +91,7 @@ function isRuntimeClientEvent(
     message.type === 'terminalSideEffects' ||
     message.type === 'sshStateChanged' ||
     message.type === 'automationsChanged' ||
+    message.type === 'browserProfilesChanged' ||
     message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||
     message.type === 'worktreeTerminalSleepState'

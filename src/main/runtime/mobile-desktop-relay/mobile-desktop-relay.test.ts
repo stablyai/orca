@@ -3,7 +3,7 @@ import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/del
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
-import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime-passthrough-socket'
+import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { MobileDesktopRelay, type RelayedPhone } from './mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
@@ -20,7 +20,7 @@ const sockets = vi.hoisted(() => {
 })
 // Holds every socket open until released, so a test can act while one is still connecting.
 const openGate = vi.hoisted(() => ({ wait: Promise.resolve() }))
-vi.mock('../../../shared/remote-runtime-passthrough-socket', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-passthrough-socket', () => ({
   openRemoteRuntimePassthroughSocket: async (
     _pairing: unknown,
     capabilities: readonly string[],

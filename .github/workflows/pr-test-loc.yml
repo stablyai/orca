@@ -19,7 +19,7 @@ jobs:
   loc:
     name: test vs non-test LoC
     # API calls and a small Node script fit the free single-CPU container runner.
-    runs-on: ubuntu-slim
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 2
     steps:
       # Why no checkout: the Files API already has per-file additions/deletions.

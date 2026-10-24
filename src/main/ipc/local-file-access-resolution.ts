@@ -23,7 +23,6 @@ const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 
 const CHAT_IMAGE_TYPE_MESSAGE = 'Access denied: a chat can only show local image files.'
 
-/** Desktop IPC's root check: the project roots plus the app-owned floating-workspace folder. */
 export async function resolveDesktopAuthorizedPath(
   targetPath: string,
   store: Store,
@@ -35,19 +34,16 @@ export async function resolveDesktopAuthorizedPath(
   })
 }
 
-/** A file the user named is used where it is; no root applies, and nothing is remembered. */
+/** User-named absolute paths require no root and grant no persistent access. */
 function resolveUserNamedLocalPath(targetPath: string): string {
-  // Why isAbsolute on the raw input: resolve() would anchor `notes.txt` or `C:notes` to main's cwd.
+  // Reject raw relative and drive-relative paths before resolve can anchor them to main's cwd.
   if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
     throw new Error(USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE)
   }
   return resolve(targetPath)
 }
 
-/**
- * A user-named path that must be an existing regular file, e.g. a notebook or a log being tailed.
- * Inside a project it resolves as the default check does, to the real file.
- */
+/** Require an existing regular user-named file; project paths retain normal canonicalization. */
 export async function resolveUserNamedRegularFile(
   targetPath: string,
   store: Store
@@ -59,23 +55,18 @@ export async function resolveUserNamedRegularFile(
   return filePath
 }
 
-// Why every previewable type but PDF: chat shows these in an <img>, which renders no PDF.
+// Chat uses img rendering; PDF previews need a different surface.
 function isChatImage(filePath: string): boolean {
   const extension = extname(filePath).toLowerCase()
   return Boolean(PREVIEWABLE_BINARY_MIME_TYPES[extension]) && extension !== '.pdf'
 }
 
-// Why the resolved path: `NUL.png\.` and `COM1.png\x\..` resolve to a device name.
+// Resolve path text first because devices can hide behind dot and parent segments.
 function isRefusedAutomaticLoadPath(filePath: string): boolean {
   return isDeviceNamespacePath(filePath) || isWindowsReservedDeviceName(filePath)
 }
 
-/**
- * A file a document references (an image, typically) beyond what the default check allows: one in
- * the document's own folder, like the common markdown-preview rule. A target outside the folder,
- * or a network share, is refused by its path text before any filesystem call; a symlink inside the
- * folder is still resolved by the folder check.
- */
+/** Allow document-local resources; reject outside-folder or network paths before filesystem access and contain symlink targets. */
 async function resolveDocumentResourcePath(
   targetPath: string,
   documentPath: string
@@ -106,12 +97,7 @@ async function resolveDocumentResourcePath(
   return realTarget
 }
 
-/**
- * An image shown in a chat transcript, whoever's turn named it: any absolute local image file,
- * typed by its real target. Transcripts load as they scroll into view, so a network share is read
- * only inside a project the user added from it (the default check); anywhere else its path text,
- * like a device path, is refused before any filesystem call.
- */
+/** Chat accepts absolute images by real target type; network shares are readable only inside registered project roots. */
 async function resolveChatImagePath(targetPath: string, store: Store): Promise<string> {
   if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
@@ -128,20 +114,17 @@ async function resolveChatImagePath(targetPath: string, store: Store): Promise<s
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   if (isNetworkSharePath(realTarget) && !isNetworkSharePath(resolvedTarget)) {
-    // Why: a local link may still lead onto a share; that is readable only inside a project.
+    // A local link can resolve onto a share; only registered project roots authorize that target.
     await resolveDesktopAuthorizedPath(realTarget, store)
   }
-  // Why the real target's type: `shot.png -> ~/.ssh/id_rsa` must not be read as an image.
+  // A .png symlink to a secret is not an image.
   if (!isChatImage(realTarget)) {
     throw new Error(CHAT_IMAGE_TYPE_MESSAGE)
   }
   return realTarget
 }
 
-/**
- * Adding a file beside a document the user opened: the target must stay inside the document's own
- * folder, symlinks included.
- */
+/** Writes beside an opened document must remain within its real folder. */
 async function resolveDocumentFolderPath(
   targetPath: string,
   documentPath: string
@@ -179,7 +162,7 @@ function isOpenedDocument(targetPath: unknown, documentPath: string): boolean {
   )
 }
 
-// Why parse: IPC input is untyped, and an unrecognised access kind must fall back to roots only.
+// Unknown IPC access kinds fall back to ordinary project-root authorization.
 function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   if (typeof access !== 'object' || access === null || !('kind' in access)) {
     return undefined
@@ -207,7 +190,6 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   return undefined
 }
 
-/** What a desktop request does with its path; each declared kind adds access to only some. */
 export type LocalRequestOperation = 'read' | 'write' | 'rename-from' | 'rename-to' | 'import-into'
 
 type KindRule = (targetPath: string) => Promise<string>
@@ -219,7 +201,7 @@ function declaredKindRule(
 ): KindRule | undefined {
   switch (fileAccess.kind) {
     case 'user-file':
-      // Why renames: resolveLocalRenamePaths declares this only for the opened document itself.
+      // Only the opened document itself receives this rename access.
       return operation !== 'import-into'
         ? async (targetPath) => resolveUserNamedLocalPath(targetPath)
         : undefined
@@ -238,17 +220,14 @@ function declaredKindRule(
   }
 }
 
-/**
- * The one resolver for desktop local file requests. A declared kind never refuses what the default
- * project check allows; its own rule only adds paths outside every project.
- */
+/** Declared access adds paths beyond project roots without refusing paths the default check allows. */
 export async function resolveLocalRequestPath(
   targetPath: string,
   access: unknown,
   store: Store,
   operation: LocalRequestOperation
 ): Promise<string> {
-  // Why the leaf is kept: a rename acts on a link itself, never on what it points to.
+  // Rename operates on link entries, not their resolved targets.
   const options = { preserveSymlink: operation === 'rename-from' || operation === 'rename-to' }
   const fileAccess = parseLocalFileAccess(access)
   const kindRule = fileAccess && declaredKindRule(fileAccess, operation, store)
@@ -258,12 +237,12 @@ export async function resolveLocalRequestPath(
   if (typeof targetPath !== 'string') {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
-  // Why device text first: a device is never a file to load, even inside a project.
+  // Device names must be refused before any automatic load, even inside projects.
   const automaticLoad = fileAccess.kind === 'document-resource' || fileAccess.kind === 'chat-image'
   if (automaticLoad && isRefusedAutomaticLoadPath(resolve(targetPath))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
-  // Why the default check refuses an outside path by its text first: no share is contacted here.
+  // The default textual root check refuses outside paths without contacting shares.
   const insideRoots = await resolveDesktopAuthorizedPath(targetPath, store, options).catch(
     () => undefined
   )
@@ -276,11 +255,7 @@ export async function resolveLocalRequestPath(
   return insideRoots
 }
 
-/**
- * Both paths of a desktop rename. Renaming the opened document (its document-folder access) follows
- * the user-file rule: the user typed the new path, so it may go anywhere, and its Undo, declared
- * from the moved file, may come back from there. Any other rename gets the default check only.
- */
+/** Opened documents may rename anywhere and undo from there; other renames keep ordinary root checks. */
 export async function resolveLocalRenamePaths(
   oldPath: string,
   newPath: string,
@@ -298,7 +273,6 @@ export async function resolveLocalRenamePaths(
   }
 }
 
-/** A desktop read/stat request; no declared access means roots only. */
 export function resolveLocalFileRequestPath(
   targetPath: string,
   access: unknown,
@@ -307,7 +281,6 @@ export function resolveLocalFileRequestPath(
   return resolveLocalRequestPath(targetPath, access, store, 'read')
 }
 
-/** A desktop save; user-file access adds the open file the user named. */
 export function resolveLocalWriteRequestPath(
   targetPath: string,
   access: unknown,

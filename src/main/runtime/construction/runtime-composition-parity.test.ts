@@ -163,6 +163,11 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Browser profiles live in Chromium sessions; orcad pages carry profile ids only.'
   },
   {
+    wiring: 'host:setManagedBrowserProfileDeleter',
+    missingOn: 'orcad',
+    reason: 'Managed profiles live in Chromium sessions; orcad has none to delete on removal.'
+  },
+  {
     wiring: 'host:setDesktopBrowserBridgeHostEnabled',
     missingOn: 'electron',
     reason: 'The desktop hosts browser pages itself; orcad enables the bridge to a desktop.'

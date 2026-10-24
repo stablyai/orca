@@ -1,5 +1,6 @@
 /** One bridge host wired to a fake client, read back through the page's own reader.
  *  Shared because the suites that exercise it are split by concern, not by fixture. */
+import { afterEach } from 'vitest'
 import {
   bridgeId,
   clientFrame,
@@ -25,6 +26,14 @@ import type { TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { PageStorageForInit } from './page-storage-keys'
 
+const hosts = new Set<BridgeHost>()
+afterEach(() => {
+  for (const host of hosts) {
+    host.dispose()
+  }
+  hosts.clear()
+})
+
 export const ID = bridgeId(1)
 export const OTHER = bridgeId(2)
 
@@ -40,6 +49,7 @@ export type Harness = {
   externalLinks: string[]
   /** Every haptic the page asked the shell to play, in order. */
   haptics: BridgeHapticsKind[]
+  nativeCalls: { verb: BridgeNativeVerb; params: unknown }[]
   /** Every text the page wrote to the pasteboard through a native verb, in order. */
   clipboardWrites: string[]
   /** One entry per `navigate-back` the host answered, in order, with what the shell did. */
@@ -112,6 +122,7 @@ export function harness(
   const navigations: string[] = []
   const externalLinks: string[] = []
   const haptics: BridgeHapticsKind[] = []
+  const nativeCalls: { verb: BridgeNativeVerb; params: unknown }[] = []
   const clipboardWrites: string[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
@@ -157,6 +168,7 @@ export function harness(
     onExternalLink: (url) => externalLinks.push(url),
     onHaptic: (kind) => haptics.push(kind),
     serveNativeVerb: (verb, params) => {
+      nativeCalls.push({ verb, params })
       if (options.serveNativeVerb !== undefined) {
         return options.serveNativeVerb(verb, params)
       }
@@ -181,6 +193,7 @@ export function harness(
     onBinaryFramesDropped: (total) => droppedBinaryFrames.push(total),
     terminalTimers: options.terminalTimers
   })
+  hosts.add(host)
   if (options.ready === true) {
     host.receive(clientFrame({ type: 'ready' }))
   }
@@ -203,6 +216,7 @@ export function harness(
     navigations,
     externalLinks,
     haptics,
+    nativeCalls,
     clipboardWrites,
     backPops,
     storageWrites,

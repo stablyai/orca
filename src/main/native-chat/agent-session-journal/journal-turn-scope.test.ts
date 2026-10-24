@@ -47,7 +47,6 @@ function turn(turnId: string, state: 'running' | 'completed'): AgentJournalItemB
   return { kind: 'turn', turnId, state, startedAt: 1 }
 }
 
-/** Builds rows against a scratch state, so the same list can be folded more than once. */
 function rows() {
   const state = createJournalReducerState('session-1', 'epoch-1')
   const built: JournalRow[] = []
@@ -75,7 +74,6 @@ function rows() {
         turnScope: scope ?? AGENT_JOURNAL_THREAD_SCOPE
       })
       if (!scope) {
-        // A row from a host that predates stated scopes.
         delete next.turnScope
       }
       push(next)
@@ -102,7 +100,7 @@ function rows() {
     },
     handover(clientMessageId: string, scope?: AgentJournalTurnScope) {
       seq += 1
-      // Built by hand: a row from an older host carries no scope, which the builder never writes.
+      // Build legacy unscoped dispatches by hand; current builders always add scope.
       push({
         kind: 'dispatch',
         clientMessageId,
@@ -129,7 +127,6 @@ describe('stated turn scope', () => {
     const { state, item } = rows()
     item(TURN_1, turn('t1', 'running'), AGENT_JOURNAL_THREAD_SCOPE)
     item(row('answer'), prose('first'), inTurn(TURN_1))
-    // A revision stating another scope only updates the content.
     item(row('answer'), prose('second'), AGENT_JOURNAL_THREAD_SCOPE)
     expect(scopeOf(state, row('answer'))).toEqual(inTurn(TURN_1))
   })
@@ -139,7 +136,6 @@ describe('stated turn scope', () => {
     item(TURN_1, turn('t1', 'running'), AGENT_JOURNAL_THREAD_SCOPE)
     submission('steer')
     submission('later')
-    // Accepted while a turn runs, but not yet delivered into it.
     expect(submissionScope(state, 'steer')).toEqual(AGENT_JOURNAL_THREAD_SCOPE)
     handover('steer', inTurn(TURN_1))
     handover('later', AGENT_JOURNAL_THREAD_SCOPE)
@@ -165,12 +161,10 @@ describe('stated turn scope', () => {
       const { items, submissions } = renderJournalState(state)
       return projectStructuredAgentSessionMessages(items, [], submissions)
     }
-    // Still waiting: drawn after everything the agent did, the command's result included.
     expect(drawn(onPhone())).toEqual(expected)
     handover('held', AGENT_JOURNAL_THREAD_SCOPE)
     expect(submissionScope(state, 'held')).toEqual(AGENT_JOURNAL_THREAD_SCOPE)
-    // Delivered: placed where it was handed over, by sequence for paging and the phone, and by
-    // timestamp for the desktop transcript.
+    // Paging/mobile use sequence; desktop transcript uses timestamp.
     expect(drawn(onPhone())).toEqual(expected)
     expect(drawn(projectNativeChatTranscriptMessages(onPhone()))).toEqual(expected)
   })

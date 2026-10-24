@@ -61,6 +61,7 @@ function pickSshEditableFields(source: SshEditableTargetInput): SshEditableTarge
     jumpHost: source.jumpHost,
     relayGracePeriodSeconds: source.relayGracePeriodSeconds,
     systemSshConnectionReuse: source.systemSshConnectionReuse,
+    systemSshProxyConnectionReuse: source.systemSshProxyConnectionReuse,
     remoteRuntime: source.remoteRuntime,
     allowRemoteCliControl: source.allowRemoteCliControl
   } satisfies Record<SshEditableTargetField, unknown>

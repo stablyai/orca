@@ -25,7 +25,7 @@ const hostSubscriptions = new WeakMap<
 export function handleWatcherHostMessage(
   message: Exclude<
     WatcherToHostMessage,
-    { op: 'subscribe-started' } | { op: 'cancel-requires-restart' }
+    { op: 'subscribe-started' } | { op: 'cancel-requires-restart' } | { op: 'delivery-health' }
   >,
   records: Map<number, WatcherProcessSubscriptionRecord>,
   pendingUnsubscribes: Map<number, PendingWatcherUnsubscribe>,
@@ -172,8 +172,7 @@ export function createHostWatcherSubscription({
         if (pendingUnsubscribes.get(record.id) !== settle) {
           return
         }
-        // Why: canary setup itself can fail, so native teardown needs an
-        // independent host deadline that exits the child and releases handles.
+        // Canary setup may fail; an independent host deadline must still release native handles.
         void terminateUnavailableChild(child).catch(() => undefined)
       }
       const timer = setTimeout(onTimeout, WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS)

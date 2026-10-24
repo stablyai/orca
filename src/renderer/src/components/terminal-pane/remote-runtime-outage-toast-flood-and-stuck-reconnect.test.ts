@@ -37,7 +37,7 @@ import {
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
 import { RuntimeRpcCallQueueOverloadError } from '../../../../shared/runtime-rpc-call-queue'
-import { withRemoteRuntimeTailscaleHint } from '../../../../shared/remote-runtime-tailscale-hint'
+import { withRemoteRuntimeTailscaleHint } from '../../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
@@ -197,7 +197,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
 
   it('sanity: the exact reported timeout+funnel toast text classifies as recoverable, so flood text must come from unclassified surfaces', async () => {
     const { isRecoverableRemoteRuntimeConnectionError, toRemoteRuntimeClientErrorLike } =
-      await import('../../../../shared/remote-runtime-client-error-classification')
+      await import('../../../../shared/remote-runtime/remote-runtime-client-error-classification')
     const rendererSide = toRemoteRuntimeClientErrorLike(
       electronIpcRejection('RemoteRuntimeClientError', TIMEOUT_WITH_TAILSCALE_HINT)
     )

@@ -1,7 +1,3 @@
-/**
- * IPC for the renderer half of a committed WSL move's desktop rewrite. Both channels answer
- * empty / refuse while the internal WSL hosts gate is closed.
- */
 import { ipcMain } from 'electron'
 import type {
   WslMovePendingRendererRewrite,
@@ -27,7 +23,6 @@ export function registerWslMoveHandlers(getUserDataPath: () => string): void {
   ipcMain.handle(
     'wslMove:recordStoreRewritten',
     (_event, request: unknown): WslMoveRecordStoreRewrittenResult => {
-      // Renderer input: anything but two strings is an unknown store.
       if (
         typeof request !== 'object' ||
         request === null ||

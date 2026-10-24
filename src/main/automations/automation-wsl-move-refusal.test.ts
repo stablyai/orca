@@ -1,7 +1,3 @@
-/**
- * A move in flight skips each run with a reason that promises a resume; once the WSL host owns the
- * project, the retained local copy goes quiet instead of writing a skip every tick.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -71,7 +67,6 @@ function attachedService(store: Store, publish = vi.fn()): AutomationService {
   return service
 }
 
-/** One scheduler pass. `nextRunAt` advancing is the signal that it finished. */
 async function evaluateAt(
   store: Store,
   service: AutomationService,
@@ -82,7 +77,7 @@ async function evaluateAt(
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
   const before = nextRunAt()
   vi.setSystemTime(new Date(when))
-  // Re-poked each try: the previous pass may still hold the re-entrancy guard while it flushes.
+  // Retry while the previous scheduler pass finishes flushing.
   await vi.waitFor(() => {
     service.setRendererReady()
     expect(nextRunAt()).toBeGreaterThan(before ?? 0)

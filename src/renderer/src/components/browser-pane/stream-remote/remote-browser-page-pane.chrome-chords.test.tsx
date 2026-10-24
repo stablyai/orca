@@ -147,7 +147,9 @@ beforeEach(() => {
   mocks.viewportRenders.current = 0
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { ui: { onFocusBrowserAddressBar: () => () => {} } }
+    value: {
+      ui: { onFocusBrowserAddressBar: () => () => {}, onShowBrowserHistory: () => () => {} }
+    }
   })
 })
 

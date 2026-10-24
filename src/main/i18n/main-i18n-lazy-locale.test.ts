@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why: main-i18n avoids bundling locale catalogs on the cold-start path.
-// English comes from translateMain() fallbacks; non-English catalogs load
-// through the backend before awaited menu/tray/dialog rendering reads them.
+// English uses fallbacks; awaited non-English catalogs must load without entering the cold-start bundle.
 
 vi.mock('electron', () => ({
   app: {
@@ -44,8 +42,7 @@ describe('main-i18n lazy locale loading', () => {
   it('lazy-loads the Spanish catalog before changeLanguage resolves', async () => {
     const locale = await setMainUiLanguage(UI_LANGUAGE_SPANISH)
     expect(locale).toBe('es')
-    // If the lazy backend had not loaded es before changeLanguage settled, these
-    // would fall back to the English defaults.
+    // Missing the awaited backend load would return English fallbacks.
     expect(translateMain('menu.file', 'File')).toBe('Archivo')
     expect(translateMain('menu.settings', 'Settings')).toBe('Ajustes')
   })

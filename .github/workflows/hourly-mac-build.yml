@@ -63,7 +63,7 @@ jobs:
   # Avoid occupying the limited Mac pool when main has not moved.
   preflight:
     if: github.repository == 'stablyai/orca'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
       should_build: ${{ steps.freshness.outputs.should_build }}
@@ -127,6 +127,7 @@ jobs:
     with:
       ref: ${{ needs.preflight.outputs.head_sha }}
       build_template: true
+      fast_runners: true
 
   build-hourly-mac:
     needs:
@@ -529,3 +530,4 @@ jobs:
       ref: ${{ needs.build-hourly-mac.outputs.head_sha }}
       version: ${{ needs.build-hourly-mac.outputs.version }}
       orcad_template: true
+      fast_release: true

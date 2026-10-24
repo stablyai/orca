@@ -57,7 +57,6 @@ describe('WSL CLI registration registry', () => {
         appVersion: reconciled.appVersion
       })
     ).resolves.toEqual([])
-    // A launcher move or app update re-probes the registered distro.
     await expect(
       getWslCliRegistrationCandidates(userDataPath, ['Ubuntu'], {
         currentTarget: 'D:\\Elsewhere\\orca.exe',
@@ -99,7 +98,6 @@ describe('WSL CLI registration registry', () => {
       [{ distro: 'Fedora', inspected: true, managed: null }],
       { now: 1_000 }
     )
-    // Unregistered unsupported distros gain the negative-inspection TTL.
     await expect(
       getWslCliRegistrationCandidates(userDataPath, ['Fedora'], {
         now: 2_000,

@@ -64,6 +64,8 @@ export type EditorFilesSlice = {
   editorBufferKeepRequest?: EditorBufferKeepRequest
   /** Drops the kept records a removal notice left behind (the notice went away). */
   releaseKeptEditorBuffers: (notice: number) => void
+  /** A write landed `content` for kept records of `viewIds`: drop one it saved, else move its baseline. */
+  settleKeptEditorBuffers: (viewIds: readonly string[], content: string, signature: string) => void
   /** Bumped when runtime revisions change, so the record middleware re-resolves identities. */
   editorBufferIdentityRevision: number
   /** Re-resolves every view's file identity after a change the store can't see (revisions). */
@@ -128,7 +130,8 @@ export type EditorFilesSlice = {
   /** Activation uses the file's workspace unless a target is supplied; global selection
    *  moves only when that workspace is active. */
   setActiveFile: (fileId: string, targetWorktreeId?: string) => void
-  markFileDirty: (fileId: string, dirty: boolean) => void
+  /** `written`: a save made disk match, so even a read-only view may mark its record clean. */
+  markFileDirty: (fileId: string, dirty: boolean, opts?: { written?: boolean }) => void
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
   /** `undefined` un-records a baseline a failed operation stamped provisionally. */
   setLastKnownDiskSignature: (fileId: string, signature: string | undefined) => void

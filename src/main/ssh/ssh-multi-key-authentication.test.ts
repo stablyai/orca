@@ -18,8 +18,16 @@ const mockExistsSync = vi.fn().mockReturnValue(false)
 const mockReadFileSync = vi.fn()
 
 vi.mock('fs', () => ({
-  existsSync: (...args: unknown[]) => mockExistsSync(...args),
-  readFileSync: (...args: unknown[]) => mockReadFileSync(...args)
+  existsSync: (...args: unknown[]) => mockExistsSync(...args)
+}))
+vi.mock('./ssh-identity-file-read', () => ({
+  readSshIdentityFileSync: (path: string) => {
+    try {
+      return { contents: mockReadFileSync(path) ?? null, problem: null }
+    } catch (error) {
+      return { contents: null, problem: String(error) }
+    }
+  }
 }))
 
 import { buildConnectConfig } from './connection/ssh-connect-config'

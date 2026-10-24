@@ -140,8 +140,6 @@ describe('computer sidecar client', () => {
     const secondChild = children[1]!
     const secondRequest = secondChild.sent[0]!
 
-    // Why: OS process events from a timed-out child can arrive after restart.
-    // They must not clear/reject the replacement child's active request.
     firstChild.emit('message', {
       id: secondRequest.id,
       ok: false,

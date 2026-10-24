@@ -45,8 +45,7 @@ function lifecycleRecorder(): {
 
 describe('codex dispatch admission', () => {
   it('admits a send queued behind a running turn and settles it when Codex echoes it', async () => {
-    // A send while a turn runs is steered into it: that turn's id back, no second
-    // `turn/started`, and the user message echoed only once the running turn reaches it.
+    // Steering joins the running turn; the echo arrives when Codex consumes the input.
     const codex = fakeCodexAppServer({
       'turn/steer': () => ({ turnId: 'turn-1' })
     })
@@ -58,14 +57,12 @@ describe('codex dispatch admission', () => {
 
     const outcome = await send(adapter, 'client-2')
 
-    // No doubt: elapsed time is not evidence, so nothing invites a Retry.
     expect(outcome).toMatchObject({ state: 'admitted' })
     expect(settlements).toEqual([])
 
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u2', clientId: 'client-2' })
 
-    // Ordinal 1, not 0: the queued send is the SECOND user message of the turn
-    // it was coalesced into, which is the key a history replay computes for it.
+    // Match the ordinal history replay assigns to the second user message.
     expect(settlements).toEqual([
       {
         sessionId: 'session-1',
@@ -90,12 +87,9 @@ describe('codex dispatch admission', () => {
     await send(adapter, 'client-1')
     await send(adapter, 'client-2')
 
-    // The echoes arrive in the opposite order to the sends.
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u2', clientId: 'client-2' })
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
 
-    // Ordinals follow the ECHO order, and each one lands on the send whose
-    // `clientId` it carried -- not on the send that was queued in that slot.
     expect(settlements).toEqual([
       {
         sessionId: 'session-1',
@@ -128,8 +122,6 @@ describe('codex dispatch admission', () => {
     startTurn(connection, 'turn-1')
     await send(adapter, 'client-1')
 
-    // A message another client sent on the same thread, and one Codex did not
-    // correlate at all. The journal ignores an id it holds no send for.
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-x', clientId: 'someone-else' })
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-y' })
 
@@ -150,7 +142,6 @@ describe('codex dispatch admission', () => {
     })
     const adapter = await acquiredCodexAdapter({ codex, settlements: [] })
 
-    // Codex's own words reach the sentence and the fact; Orca's prefix reaches neither.
     expect(await send(adapter, 'client-1')).toEqual({
       state: 'rejected',
       reason: "Codex didn't accept this message: thread not found.",

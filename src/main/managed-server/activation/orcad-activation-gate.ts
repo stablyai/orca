@@ -1,17 +1,4 @@
-/**
- * Whether a freshly launched orcad has earned the right to become the active one.
- *
- * The failure this exists to prevent is the one `docs/design/shipping-orcad.html` names
- * throughout: a deployment that reports success because a port opened. orcad answers RPC
- * from its own process, so "listening" stays true while the terminal daemon that owns every
- * terminal is dead — a green host that cannot run a single command. Activation therefore
- * reads the cross-process health payload the candidate published, not the exit code of the
- * command that started it.
- *
- * A refusal here is not a failure to deploy. The bytes are installed and the previous
- * version is still active; nothing was lost. Activating on a bad verdict is what loses
- * things.
- */
+// A listening orcad can have a dead terminal daemon; activation needs candidate identity and cross-process health.
 import type { ServeReadiness } from '../../server/serve-readiness'
 
 type OrcadActivationRejectCode =
@@ -27,30 +14,18 @@ type OrcadActivationRejectCode =
 export type OrcadActivationVerdict =
   | {
       decision: 'activate'
-      /**
-       * `pty-spawn` means a real PTY was created and torn down inside the daemon.
-       * `handshake` means the daemon answered but its spawn probe is a no-op on this
-       * platform (win32). Carried through so an activation is never recorded as proving
-       * more than it did.
-       */
+      /** pty-spawn proves creation/teardown; handshake proves contact only, as on Windows. */
       coverage: 'pty-spawn' | 'handshake'
       warnings: string[]
     }
   | { decision: 'reject'; code: OrcadActivationRejectCode; reason: string }
 
 export type OrcadActivationExpectation = {
-  /** Entry-file content hash computed from the bytes this client just uploaded. */
+  /** Entry bytes uploaded by this client, rather than a candidate's self-claimed version. */
   buildHash: string
-  /** The full content-hashed version this deploy installed. */
   fullVersion: string
 }
 
-/**
- * Gate an activation on what the candidate actually reported.
- *
- * Order matters: identity before health. A health payload from the wrong process is worse
- * than no payload, because it is green and about something else.
- */
 export function evaluateOrcadActivation(
   readiness: ServeReadiness | null,
   expected: OrcadActivationExpectation
@@ -75,9 +50,7 @@ export function evaluateOrcadActivation(
         'too old to gate on and do not activate it.'
     }
   }
-  // Why identity first: a stale orcad already holding the port would answer readiness and
-  // report its own (healthy) daemon. Activating on that record points the pointer at bytes
-  // nobody is running.
+  // Check identity before health: a healthy old process holding the port cannot vouch for the candidate.
   if (health.buildHash !== expected.buildHash) {
     return {
       decision: 'reject',
@@ -145,8 +118,7 @@ export function evaluateOrcadActivation(
     )
   }
   if (health.buildVersion !== expected.fullVersion) {
-    // Not a rejection: the hash already proved identity, and ORCA_VERSION is whatever the
-    // launch command exported. Worth saying, because a mismatch means the launch env is wrong.
+    // Matching bytes already prove identity; version mismatch diagnoses launch environment without rejecting activation.
     warnings.push(
       `The candidate reports version ${health.buildVersion} but was installed as ` +
         `${expected.fullVersion}; check ORCA_VERSION in the launch command.`

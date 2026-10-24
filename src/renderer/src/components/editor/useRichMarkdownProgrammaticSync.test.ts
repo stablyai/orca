@@ -23,10 +23,11 @@ vi.mock('./editor-stale-view-edit', () => ({
 function buildEditor(
   codec: RichMarkdownEditorCodec,
   htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext,
-  markdown: string
+  markdown: string,
+  element: HTMLElement | null = null
 ): Editor {
   return new Editor({
-    element: null,
+    element,
     extensions: createRichMarkdownExtensions({
       codec,
       htmlSuperscriptLinks: true,
@@ -217,6 +218,71 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
       hook.rerender({ content: 'pane a' })
       expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
       expect(editor.getMarkdown()).toBe('pane a')
+    } finally {
+      editor.destroy()
+    }
+  })
+})
+
+describe('useRichMarkdownProgrammaticSync undo history', () => {
+  it("never makes another view's text an undo step, so undo can't re-apply text undone there", () => {
+    const codec = createRichMarkdownEditorCodec()
+    const editor = buildEditor(
+      codec,
+      createRichMarkdownHtmlSuperscriptLinkContext({
+        sourceFilePath: '',
+        worktreeId: '',
+        worktreeRoot: null,
+        sourceOwner: { kind: 'unknown' as const }
+      }),
+      'base',
+      document.createElement('div')
+    )
+    const lastCommittedMarkdownRef = { current: 'base' }
+    const originalSourceRef = { current: 'base' }
+    const baseCanonicalRef = { current: 'base' }
+    const hook = renderHook(
+      ({ content }: { content: string }) =>
+        useRichMarkdownProgrammaticSync({
+          codec,
+          content,
+          docLinkMenuSetter: vi.fn(),
+          editor,
+          fileId: 'f1',
+          filePath: '/repo/README.md',
+          isApplyingProgrammaticUpdateRef: { current: false },
+          lastCommittedMarkdownRef,
+          onContentChangeRef: { current: vi.fn() },
+          originalSourceRef,
+          baseCanonicalRef,
+          markdownDocuments: undefined,
+          rootRef: { current: null },
+          runtimeTarget: { kind: 'local' },
+          serializeTimerRef: { current: null },
+          pendingEditEpochRef: { current: 0 },
+          slashMenuSetter: vi.fn(),
+          worktreeId: 'w1',
+          worktreeRoot: null
+        }),
+      { initialProps: { content: 'base' } }
+    )
+    try {
+      // The source view typed, then undid it; this view's undo must not bring it back.
+      hook.rerender({ content: 'base XYZ' })
+      hook.rerender({ content: 'base' })
+      editor.commands.undo()
+      expect(editor.getMarkdown()).toBe('base')
+
+      // Nor undo the source view's text out from under it.
+      hook.rerender({ content: 'base XYZ' })
+      editor.commands.undo()
+      expect(editor.getMarkdown()).toBe('base XYZ')
+
+      // This view's own edits still undo.
+      editor.commands.insertContentAt(editor.state.doc.content.size - 1, '!')
+      expect(editor.getMarkdown()).toBe('base XYZ!')
+      editor.commands.undo()
+      expect(editor.getMarkdown()).toBe('base XYZ')
     } finally {
       editor.destroy()
     }
