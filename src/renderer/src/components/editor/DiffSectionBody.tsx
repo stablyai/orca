@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useRef } from 'react'
 import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
@@ -153,14 +153,18 @@ export function DiffSectionBody({
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
         section.diffResult.isImage ? (
-          <ImageDiffViewer
-            originalContent={section.diffResult.originalContent}
-            modifiedContent={section.diffResult.modifiedContent}
-            filePath={section.path}
-            mimeType={section.diffResult.mimeType}
-            sideBySide={sideBySide}
-            layout={useIntrinsicImageHeight ? 'intrinsic' : 'fill'}
-          />
+          // Why: without a row-local boundary the chunk load hides the whole virtualized list, which
+          // then drops this overscan row, un-suspends, re-shows it, and loops into React #185.
+          <Suspense fallback={null}>
+            <ImageDiffViewer
+              originalContent={section.diffResult.originalContent}
+              modifiedContent={section.diffResult.modifiedContent}
+              filePath={section.path}
+              mimeType={section.diffResult.mimeType}
+              sideBySide={sideBySide}
+              layout={useIntrinsicImageHeight ? 'intrinsic' : 'fill'}
+            />
+          </Suspense>
         ) : (
           <div className="flex h-full items-center justify-center px-6 text-center">
             <div className="space-y-2">
