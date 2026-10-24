@@ -67,7 +67,7 @@ export function TextInputModal({
   const canSubmit = allowEmpty || value.trim().length > 0
 
   return (
-    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
+    <BottomDrawer visible={visible} seedKeyboard onClose={onCancel} onAfterClose={onAfterClose}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}

@@ -91,11 +91,12 @@ vi.mock('react-native-reanimated', () => ({
 
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
 
-function sheet(fillAvailable: boolean) {
+function sheet(fillAvailable: boolean, seedKeyboard = false) {
   return (
     <MountedBottomDrawer
       visible
       fillAvailable={fillAvailable}
+      {...(seedKeyboard ? { seedKeyboard: true } : {})}
       onClose={() => {}}
       onHidden={() => {}}
     >
@@ -104,10 +105,10 @@ function sheet(fillAvailable: boolean) {
   )
 }
 
-function render(fillAvailable: boolean): ReactTestRenderer {
+function render(fillAvailable: boolean, seedKeyboard = false): ReactTestRenderer {
   let renderer!: ReactTestRenderer
   act(() => {
-    renderer = create(sheet(fillAvailable))
+    renderer = create(sheet(fillAvailable, seedKeyboard))
   })
   return renderer
 }
@@ -148,6 +149,13 @@ describe('the drawer riding the keyboard seam', () => {
     // It still rides the keyboard's next event.
     keyboardShows(310, 0)
     expect(harness.timings).toContainEqual({ to: 310, duration: 250 })
+    act(() => renderer.unmount())
+  })
+
+  it('seeds a content-sized sheet when seedKeyboard is set and the keyboard is already up', () => {
+    harness.current = 300
+    const renderer = render(false, true)
+    expect(harness.writes).toContain(300)
     act(() => renderer.unmount())
   })
 
