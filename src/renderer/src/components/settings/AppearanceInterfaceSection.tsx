@@ -29,6 +29,7 @@ import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
 import { AppearanceThemeControl } from './AppearanceThemeControl'
+import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -53,6 +54,11 @@ export function AppearanceInterfaceSection({
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const pluginLanguagePacks = usePluginLanguagePacks()
+  const pluginIconThemes = usePluginIconThemes()
+  const iconThemeTitle = translate(
+    'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
+    'Icon theme'
+  )
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
@@ -92,6 +98,53 @@ export function AppearanceInterfaceSection({
           }
         />
       </SearchableSetting>
+
+      {pluginIconThemes.length > 0 ? (
+        <SearchableSetting
+          title={iconThemeTitle}
+          description={translate(
+            'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.description',
+            'File and folder icons from an enabled plugin.'
+          )}
+          keywords={['plugin', 'icon', 'file', 'folder']}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={iconThemeTitle}
+            control={
+              <Select
+                value={
+                  pluginIconThemes.find((theme) => theme.id === settings.pluginIconTheme)?.id ??
+                  'built-in'
+                }
+                onValueChange={(value) =>
+                  updateSettings({
+                    pluginIconTheme:
+                      pluginIconThemes.find((theme) => theme.id === value)?.id ?? null
+                  })
+                }
+              >
+                <SelectTrigger size="sm" className="min-w-[220px]" aria-label={iconThemeTitle}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="built-in">
+                    {translate(
+                      'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
+                      'Built-in'
+                    )}
+                  </SelectItem>
+                  {pluginIconThemes.map((theme) => (
+                    <SelectItem key={theme.id} value={theme.id}>
+                      {theme.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
+        </SearchableSetting>
+      ) : null}
 
       {SHOW_UI_LANGUAGE_SETTING ? (
         <SearchableSetting

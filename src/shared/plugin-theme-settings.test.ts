@@ -31,8 +31,12 @@ describe('plugin theme settings', () => {
       ]
     })
     expect(
-      normalizePluginThemeSettings({ pluginAppTheme: 'plugin:../x', themeBeforePlugin: 'neon' })
-    ).toEqual({ pluginAppTheme: null, themeBeforePlugin: null })
+      normalizePluginThemeSettings({
+        pluginAppTheme: 'plugin:../x',
+        pluginIconTheme: 'x'.repeat(10_000),
+        themeBeforePlugin: 'neon'
+      })
+    ).toEqual({ pluginAppTheme: null, pluginIconTheme: null, themeBeforePlugin: null })
     const unrelated: Partial<GlobalSettings> = { editorAutoSave: true }
     expect(normalizePluginThemeSettings(unrelated)).toEqual({})
   })
@@ -44,6 +48,7 @@ describe('plugin theme settings', () => {
           theme: 'dark',
           themeBeforePlugin: 'system',
           pluginAppTheme: 'plugin:samples.dusk/dusk',
+          pluginIconTheme: 'plugin:samples.dusk/icons',
           terminalThemeDark: 'plugin:samples.dusk/dusk',
           terminalThemeLight: 'Builtin Tango Light',
           terminalPluginPalettes: [{ id: 'plugin:samples.dusk/dusk', colors }]
@@ -54,6 +59,7 @@ describe('plugin theme settings', () => {
       pluginAppTheme: null,
       themeBeforePlugin: null,
       theme: 'system',
+      pluginIconTheme: null,
       terminalThemeDark: '',
       terminalPluginPalettes: []
     })

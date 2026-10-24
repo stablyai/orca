@@ -6,6 +6,8 @@ export type PluginAppearanceSettings = {
   pluginAppTheme?: `plugin:${string}` | null
   /** The built-in choice to return to when the plugin theme is off or removed. */
   themeBeforePlugin?: 'system' | 'dark' | 'light' | null
+  /** A plugin icon theme's id for file and folder icons; null keeps the built-in icons. */
+  pluginIconTheme?: `plugin:${string}` | null
   /** Palettes of the selected plugin terminal themes, so main, headless serve and relays
    *  resolve them without the plugin loaded. Only selected themes are kept. */
   terminalPluginPalettes?: TerminalPluginPalette[]

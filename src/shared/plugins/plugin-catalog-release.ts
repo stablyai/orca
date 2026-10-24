@@ -12,6 +12,7 @@ export const PLUGIN_CATALOG_TYPES = [
   'interface-language',
   'app-theme',
   'terminal-theme',
+  'icon-theme',
   'instructions',
   'panel',
   'worker'
@@ -67,6 +68,9 @@ export function pluginCatalogTypes(manifest: PluginManifest): PluginCatalogType[
   }
   if (c.terminalThemes.length > 0) {
     types.push('terminal-theme')
+  }
+  if (c.iconThemes.length > 0) {
+    types.push('icon-theme')
   }
   if (c.commands.length || c.keybindings.length || c.vmRecipes.length || c.agents.length) {
     types.push('instructions')

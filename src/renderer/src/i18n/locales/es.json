@@ -13107,6 +13107,13 @@
         },
         "AppearanceThemeControl": {
           "useTerminalTheme": "Usar sus colores de terminal"
+        },
+        "AppearanceInterfaceSection": {
+          "pluginIconTheme": {
+            "title": "Tema de iconos",
+            "description": "Iconos de archivos y carpetas de un plugin habilitado.",
+            "builtIn": "Integrado"
+          }
         }
       },
       "right": {

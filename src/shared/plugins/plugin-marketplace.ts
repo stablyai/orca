@@ -15,14 +15,10 @@ export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
 export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
 export const OFFICIAL_MARKETPLACE_REPOSITORY = 'orca-plugins'
 
-// Why: icon-theme and skill contributions are not supported, so a plugin declaring one fails
-// to install. Shared catalogs this build does not control still list such packs; hide them so
-// users never reach a dead install.
-export const UNSUPPORTED_MARKETPLACE_CATEGORIES: readonly string[] = [
-  'icons',
-  'icon-themes',
-  'skills'
-]
+// Why: skill contributions are not supported, so a plugin declaring one fails to install.
+// Shared catalogs this build does not control still list such packs; hide them so users never
+// reach a dead install.
+export const UNSUPPORTED_MARKETPLACE_CATEGORIES: readonly string[] = ['skills']
 
 export function isMarketplaceListingSupported(categories: readonly string[]): boolean {
   return !categories.some((category) => UNSUPPORTED_MARKETPLACE_CATEGORIES.includes(category))

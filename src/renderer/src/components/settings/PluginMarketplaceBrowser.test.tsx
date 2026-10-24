@@ -74,7 +74,8 @@ const preview: PluginMarketplaceHostInstallPreview = {
       vmRecipes: [],
       agents: [],
       themes: [],
-      terminalThemes: []
+      terminalThemes: [],
+      iconThemes: []
     },
     capabilities: [{ kind: 'workspace:read' }]
   }

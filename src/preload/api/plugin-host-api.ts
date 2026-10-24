@@ -1,3 +1,7 @@
+import type {
+  PluginIconThemeMetadata,
+  PluginIconThemeRegistration
+} from '../../shared/plugins/plugin-icon-theme-artifact'
 import type { PluginThemeRegistration } from '../../shared/plugins/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../shared/plugins/plugin-terminal-theme-artifact'
 import type {
@@ -143,6 +147,9 @@ export type PluginsApi = {
   listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
   listThemes: () => Promise<PluginThemeRegistration[]>
   listTerminalThemes: () => Promise<PluginTerminalThemeRegistration[]>
+  listIconThemes: () => Promise<PluginIconThemeMetadata[]>
+  /** One icon theme's images, read only once it is selected. */
+  loadIconTheme: (id: string) => Promise<PluginIconThemeRegistration | null>
   /** Approval is bound to the current capability and trusted-worker fingerprint. */
   consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>
   setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>

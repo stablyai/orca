@@ -5,6 +5,7 @@ import {
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
 import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
+import { PluginIconThemeRegistry } from './plugin-icon-theme-registry'
 import {
   createPluginTerminalThemeRegistry,
   createPluginThemeRegistry
@@ -26,6 +27,7 @@ export class PluginContentPackRegistry {
   readonly languagePacks: PluginLanguagePackRegistry
   readonly themes: ReturnType<typeof createPluginThemeRegistry>
   readonly terminalThemes: ReturnType<typeof createPluginTerminalThemeRegistry>
+  readonly iconThemes: PluginIconThemeRegistry
   readonly vmRecipes: PluginVmRecipeRegistry
   readonly commands: PluginCommandRegistry
   private readonly activationErrors = new Map<string, string>()
@@ -39,6 +41,7 @@ export class PluginContentPackRegistry {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
     this.themes = createPluginThemeRegistry(contentVerifier)
     this.terminalThemes = createPluginTerminalThemeRegistry(contentVerifier)
+    this.iconThemes = new PluginIconThemeRegistry(contentVerifier)
     this.vmRecipes = new PluginVmRecipeRegistry()
     this.commands = new PluginCommandRegistry()
   }
@@ -125,6 +128,7 @@ export class PluginContentPackRegistry {
       this.languagePacks,
       this.themes,
       this.terminalThemes,
+      this.iconThemes,
       this.vmRecipes,
       {
         reconcile: async (discovered, isApproved) =>

@@ -13421,6 +13421,13 @@
         },
         "AppearanceThemeControl": {
           "useTerminalTheme": "Use its terminal colors"
+        },
+        "AppearanceInterfaceSection": {
+          "pluginIconTheme": {
+            "title": "Icon theme",
+            "description": "File and folder icons from an enabled plugin.",
+            "builtIn": "Built-in"
+          }
         }
       },
       "right": {

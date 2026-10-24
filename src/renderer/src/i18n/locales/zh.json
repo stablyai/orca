@@ -13091,6 +13091,13 @@
         },
         "AppearanceThemeControl": {
           "useTerminalTheme": "使用其终端配色"
+        },
+        "AppearanceInterfaceSection": {
+          "pluginIconTheme": {
+            "title": "图标主题",
+            "description": "来自已启用插件的文件和文件夹图标。",
+            "builtIn": "内置"
+          }
         }
       },
       "right": {

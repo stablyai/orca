@@ -7,6 +7,7 @@ import {
   usePluginThemeStore,
   usePluginThemes
 } from '../store/plugin-themes'
+import { usePluginIconThemeActivation } from '../store/plugin-icon-themes'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 
@@ -22,6 +23,7 @@ export function useDocumentAppearance(): void {
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
+  usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
 
   useEffect(() => {
     if (!theme) {

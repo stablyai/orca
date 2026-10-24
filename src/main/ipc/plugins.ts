@@ -120,6 +120,14 @@ export function registerPluginHandlers(
     await pluginService.whenReady()
     return pluginService.contentPacks.terminalThemes.list()
   })
+  ipcMain.handle('plugins:listIconThemes', async () => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.iconThemes.list()
+  })
+  ipcMain.handle('plugins:loadIconTheme', async (_event, id: unknown) => {
+    await pluginService.whenReady()
+    return typeof id === 'string' ? pluginService.contentPacks.iconThemes.load(id) : null
+  })
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)

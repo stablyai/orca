@@ -74,7 +74,7 @@ describe('catalog releases', () => {
   it('rejects a release type its profile cannot run or this client cannot install', () => {
     expect(() => release({ types: ['worker'] })).toThrow('data cannot declare worker')
     expect(
-      pluginCatalogReleaseSchema.safeParse({ ...release(), types: ['icon-theme'] }).success
+      pluginCatalogReleaseSchema.safeParse({ ...release(), types: ['file-viewer'] }).success
     ).toBe(false)
   })
 

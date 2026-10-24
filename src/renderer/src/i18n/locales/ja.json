@@ -13091,6 +13091,13 @@
         },
         "AppearanceThemeControl": {
           "useTerminalTheme": "このテーマのターミナル配色を使う"
+        },
+        "AppearanceInterfaceSection": {
+          "pluginIconTheme": {
+            "title": "アイコンテーマ",
+            "description": "有効なプラグインのファイルとフォルダーのアイコンです。",
+            "builtIn": "組み込み"
+          }
         }
       },
       "right": {

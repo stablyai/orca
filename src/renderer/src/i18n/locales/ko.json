@@ -13091,6 +13091,13 @@
         },
         "AppearanceThemeControl": {
           "useTerminalTheme": "이 테마의 터미널 색상 사용"
+        },
+        "AppearanceInterfaceSection": {
+          "pluginIconTheme": {
+            "title": "아이콘 테마",
+            "description": "활성화된 플러그인의 파일 및 폴더 아이콘입니다.",
+            "builtIn": "기본 제공"
+          }
         }
       },
       "right": {

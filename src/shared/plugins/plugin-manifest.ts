@@ -4,6 +4,7 @@ import {
   PLUGIN_AGENT_PROFILE_LIMIT,
   PLUGIN_KEYBINDING_LIMIT,
   PLUGIN_LANGUAGE_PACK_LIMIT,
+  PLUGIN_ICON_THEME_LIMIT,
   PLUGIN_TERMINAL_THEME_LIMIT,
   PLUGIN_THEME_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
@@ -122,7 +123,8 @@ const pluginManifestV1Object = z.object({
       terminalThemes: z
         .array(pluginThemeContributionSchema)
         .max(PLUGIN_TERMINAL_THEME_LIMIT)
-        .default([])
+        .default([]),
+      iconThemes: z.array(pluginThemeContributionSchema).max(PLUGIN_ICON_THEME_LIMIT).default([])
     })
     .strict()
     // Why prefault: runs `{}` through the schema, so every family's own default applies.
