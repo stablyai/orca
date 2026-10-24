@@ -142,6 +142,10 @@
       "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio, which a browser does not have; this one asks the shell for it over native.audio.start|read|stop, draining the shell's ring on a timer and raising each reply as the events the engine emits directly, and taking the utterance's tail off the stop's own reply. The screen an open microphone holds awake is not in this seam at all: the device module that opens the mic takes it and gives it back on both hosts. The flow above the seam is one file on both hosts."
     },
     {
+      "file": "src/platform/speech-output.web.ts",
+      "reason": "expo-speech resolves to window.speechSynthesis on the web, and Android's WebView has none, so the chat's read-aloud button would do nothing on that shell. This one asks the shell to speak through the native.speech.speak verb, where the device's text-to-speech engine is, and reports canSpeak false when the route was not granted it so an older shell hides the button."
+    },
+    {
       "file": "src/platform/media-picker.web.ts",
       "reason": "expo-image-picker and expo-document-picker are native modules whose import runs a codegen lookup that throws in a browser, and the route manifest imports every route, so one of them in a page closure takes the whole bundle down rather than one picker. This one asks the shell through native.media.pick, reads the bytes back a chunk at a time over native.media.read because a picked image reaches 18 MiB raw against an 8 MiB reply ceiling, and releases every handle it was handed, including the ones its caller never took. The pasteboard is not here: clipboard.web.ts owns it on both platforms and reaches the same verbs for an image."
     },

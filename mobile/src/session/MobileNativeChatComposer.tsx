@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
+import { ArrowUp, Mic, Plus, Square, Volume2 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../src/shared/native-chat-turn-status'
 import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
@@ -64,6 +64,9 @@ type Props = {
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
+  onReadAloudPress?: () => void
+  readAloudActive?: boolean
+  readAloudDisabled?: boolean
   onMicPress?: () => void
   micActive?: boolean
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
@@ -95,6 +98,9 @@ export function MobileNativeChatComposer({
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
   isAttaching = false,
+  onReadAloudPress,
+  readAloudActive = false,
+  readAloudDisabled = false,
   onMicPress,
   micActive = false,
   dictationMode = 'toggle',
@@ -267,6 +273,36 @@ export function MobileNativeChatComposer({
               />
             ) : null}
             <View style={styles.actionSpacer} />
+            {onReadAloudPress ? (
+              <Pressable
+                accessibilityLabel={
+                  readAloudActive ? 'Stop reading aloud' : 'Read latest reply aloud'
+                }
+                style={({ pressed }) => [
+                  styles.ghostButton,
+                  pressed && !readAloudDisabled && styles.pressed
+                ]}
+                onPress={onReadAloudPress}
+                disabled={readAloudDisabled && !readAloudActive}
+              >
+                {readAloudActive ? (
+                  <Square
+                    pointerEvents="none"
+                    size={16}
+                    color={colors.textSecondary}
+                    strokeWidth={2.4}
+                    fill={colors.textSecondary}
+                  />
+                ) : (
+                  <Volume2
+                    pointerEvents="none"
+                    size={19}
+                    color={readAloudDisabled ? colors.textMuted : colors.textSecondary}
+                    strokeWidth={2}
+                  />
+                )}
+              </Pressable>
+            ) : null}
             {onMicPress ? (
               <Pressable
                 accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}

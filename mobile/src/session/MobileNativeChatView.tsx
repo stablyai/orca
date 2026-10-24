@@ -53,6 +53,8 @@ import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeCh
 import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatRowList } from './MobileNativeChatRowList'
 import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'
+import { useMobileNativeChatReadAloud } from './use-mobile-native-chat-read-aloud'
+import { latestReplySpeechText } from './mobile-native-chat-speech-text'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { OlderPagePhase } from './use-mobile-older-page-loader'
 
@@ -235,6 +237,14 @@ export function MobileNativeChatView({
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  const readAloud = useMobileNativeChatReadAloud()
+  const latestReplySpeech = useMemo(() => latestReplySpeechText(messages), [messages])
+  const { toggle: toggleReadAloud } = readAloud
+  const handleReadAloudPress = useCallback(() => {
+    if (latestReplySpeech) {
+      toggleReadAloud('latest-reply', latestReplySpeech)
+    }
+  }, [latestReplySpeech, toggleReadAloud])
 
   // `data` is the list source: folded transcript + synthetic streaming bubble +
   // route-owned accepted echoes. Memoize on the same deps so the
@@ -430,6 +440,9 @@ export function MobileNativeChatView({
         attachments={attachments}
         onRemoveAttachment={onRemoveAttachment}
         isAttaching={isAttaching}
+        onReadAloudPress={readAloud.canSpeak ? handleReadAloudPress : undefined}
+        readAloudActive={readAloud.speakingKey === 'latest-reply'}
+        readAloudDisabled={!latestReplySpeech}
         onMicPress={onMicPress}
         micActive={micActive}
         dictationMode={dictationMode}

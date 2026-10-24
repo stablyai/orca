@@ -177,7 +177,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.stop'
     ],
     // `native.media.name` gives a file the composer attaches its real name; an older shell lacks it
-    // and the page names the file from its type, so the attach still works.
-    optionalGrants: ['externalNavigation', 'native.media.name']
+    // and the page names the file from its type, so the attach still works. `native.speech.speak`
+    // is the chat composer's read-aloud button, which an older shell simply does not show.
+    optionalGrants: ['externalNavigation', 'native.media.name', 'native.speech.speak']
   }
 ]

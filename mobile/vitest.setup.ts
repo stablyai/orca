@@ -11,4 +11,7 @@ vi.mock('react-native-svg', () => ({
   Stop: 'Stop'
 }))
 
+// expo-speech's module reads the RN `__DEV__` global at import, which only the RN runtime defines.
+vi.mock('expo-speech', () => ({ speak: () => {}, stop: () => Promise.resolve() }))
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })

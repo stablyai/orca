@@ -47,6 +47,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.start',
   'native.audio.read',
   'native.audio.stop',
+  'native.speech.speak',
   'native.storage.read'
 ] as const
 
@@ -99,6 +100,12 @@ export const storageReadParamsSchema = z.strictObject({
 })
 export const storageReadResultSchema = z.strictObject({ value: z.string().nullable() })
 
+// One verb rather than a speak/stop pair: the session route is one grant short of the ceiling.
+// An empty text stops; a new text replaces what is speaking. The reply waits for the speech to end
+// so the page can reset its button, and `finished` is false when it was stopped or replaced.
+export const speechSpeakParamsSchema = z.strictObject({ text: z.string() })
+export const speechSpeakResultSchema = z.strictObject({ finished: z.boolean() })
+
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
     params: clipboardWriteParamsSchema,
@@ -140,6 +147,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.audio.stop': {
     params: audioStopParamsSchema,
     result: audioStopResultSchema
+  },
+  'native.speech.speak': {
+    params: speechSpeakParamsSchema,
+    result: speechSpeakResultSchema
   },
   'native.storage.read': {
     params: storageReadParamsSchema,

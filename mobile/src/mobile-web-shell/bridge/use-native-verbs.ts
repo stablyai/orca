@@ -19,6 +19,7 @@ import {
 import {
   clipboardReadResultSchema,
   clipboardWriteResultSchema,
+  speechSpeakResultSchema,
   type BridgeClipboardMime,
   type BridgeNativeVerb
 } from './bridge-native-verbs'
@@ -87,6 +88,11 @@ export type NativeVerbs = {
    *  utterance no drain came back for. `stopped` is false for a session that was not capturing,
    *  which is not a fault. */
   stopAudio: () => Promise<z.infer<typeof audioStopResultSchema>>
+  /** Whether the shell can read text aloud; an older one cannot, and the page hides the button. */
+  canSpeak: boolean
+  /** Settles when the speech ends: true when it ran to the end, false when stopped or replaced. */
+  speak: (text: string) => Promise<boolean>
+  stopSpeaking: () => Promise<void>
 }
 
 /**
@@ -229,7 +235,13 @@ export function useNativeVerbs(): NativeVerbs {
       startAudio: (sampleRate) =>
         call('native.audio.start', { sampleRate }, audioStartResultSchema),
       readAudio: (maxBytes) => call('native.audio.read', { maxBytes }, audioReadResultSchema),
-      stopAudio: () => call('native.audio.stop', {}, audioStopResultSchema)
+      stopAudio: () => call('native.audio.stop', {}, audioStopResultSchema),
+      canSpeak: has('native.speech.speak'),
+      speak: async (text) =>
+        (await call('native.speech.speak', { text }, speechSpeakResultSchema)).finished,
+      stopSpeaking: async () => {
+        await call('native.speech.speak', { text: '' }, speechSpeakResultSchema)
+      }
     }
   }, [client])
 }

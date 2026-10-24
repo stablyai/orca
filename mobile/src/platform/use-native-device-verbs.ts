@@ -6,6 +6,7 @@ import { nativeAudioDeviceEngine } from './native-audio-device'
 import { serveNativeClipboardVerb } from './native-clipboard'
 import { createNativeMediaVerbServer } from './native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device'
+import { serveNativeSpeechVerb, stopSpeakingOnDevice } from './native-speech'
 
 /** The storage read is the shell's own store, answered before this dispatcher is reached. */
 export type NativeDeviceVerb = Exclude<BridgeNativeVerb, 'native.storage.read'>
@@ -30,10 +31,14 @@ export function useNativeDeviceVerbs(
   // microphone the previous one left open is nobody's to stop but this seam's.
   const audio = useMemo(() => createNativeAudioCapture(nativeAudioDeviceEngine), [sessionId])
   useEffect(() => () => audio.dispose(), [audio])
+  useEffect(() => () => stopSpeakingOnDevice(), [sessionId])
   return useMemo(
     () => (verb, params) => {
       if (verb === 'native.clipboard.write' || verb === 'native.clipboard.read') {
         return serveNativeClipboardVerb(verb, params)
+      }
+      if (verb === 'native.speech.speak') {
+        return serveNativeSpeechVerb(params)
       }
       return verb.startsWith('native.audio.') ? audio.serve(verb, params) : serveMedia(verb, params)
     },
