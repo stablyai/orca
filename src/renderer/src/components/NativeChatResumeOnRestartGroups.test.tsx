@@ -228,20 +228,22 @@ it('disambiguates only colliding unknown folders with linear display work on ren
   const basename = vi.spyOn(worktreeIds, 'getWorktreePathBasenameFromId')
   let nameReads = 0
   const mapSet = Map.prototype.set
-  vi.spyOn(Map.prototype, 'set').mockImplementation(
-    function (this: Map<unknown, unknown>, key, value) {
-      if (typeof value?.parentPath === 'string' && value.name === 'main') {
-        const name = value.name
-        Object.defineProperty(value, 'name', {
-          get: () => {
-            nameReads++
-            return name
-          }
-        })
-      }
-      return mapSet.call(this, key, value)
+  vi.spyOn(Map.prototype, 'set').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key,
+    value
+  ) {
+    if (typeof value?.parentPath === 'string' && value.name === 'main') {
+      const name = value.name
+      Object.defineProperty(value, 'name', {
+        get: () => {
+          nameReads++
+          return name
+        }
+      })
     }
-  )
+    return mapSet.call(this, key, value)
+  })
   const operations: number[] = []
   let unknown: ResumeCandidate[] = []
   for (const size of [10, 100]) {
