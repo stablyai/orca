@@ -31,15 +31,18 @@ export function deriveFallbacks(repoGroup: ResumeRepoGroup): WorkspaceFallbacks 
   return fallbackDisplays
 }
 
-export function resolveName(
+export function resolveNames(
   worktree: Parameters<typeof resolveWorktreeDisplayName>[0] | undefined,
   fallback: WorkspaceFallback | undefined,
   workspaceId: string
-): string {
-  return (
+): { name: string; controlName: string } {
+  const name =
     (worktree && resolveWorktreeDisplayName(worktree)) ||
     fallback?.name ||
     getWorktreePathBasenameFromId(workspaceId) ||
     workspaceId
-  )
+  return {
+    name,
+    controlName: !worktree && fallback?.parentPath ? `${name} (${fallback.parentPath})` : name
+  }
 }

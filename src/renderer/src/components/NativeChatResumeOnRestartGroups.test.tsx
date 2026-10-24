@@ -268,6 +268,13 @@ it('disambiguates only colliding unknown folders with linear display work on ren
       const detail = container.querySelector(`[title="${parent}"]`)
       expect(detail?.textContent).toBe(parent)
       expect(detail?.lastElementChild?.textContent).toBe(`/workspaces/client-${index}`)
+      const label = `main (${parent})`
+      const row = itemOf(nodeBox(label))
+      expect(row.querySelector('.font-medium')?.textContent).toBe('main')
+      expect(row.querySelector('button[aria-expanded]')?.getAttribute('aria-label')).toBe(
+        `Collapse ${label}`
+      )
+      expect(chatBox(`lost-${index}`).getAttribute('aria-label')).toContain(`in ${label}`)
     }
     expect(itemOf(nodeBox('Configured')).textContent).toContain('main-branch')
     expect(itemOf(nodeBox('blobfish-2')).querySelector('[title]')).toBeNull()
@@ -275,7 +282,7 @@ it('disambiguates only colliding unknown folders with linear display work on ren
   }
   expect(operations[1]).toBeLessThanOrEqual(12 * operations[0]!)
   const collisionBoxes = container.querySelectorAll<HTMLElement>(
-    '[aria-label="Select all chats in main"]'
+    '[role="checkbox"][aria-label^="Select all chats in main ("]'
   )
   act(() => collisionBoxes[1]!.click())
   expect(onToggleSpy).toHaveBeenCalledExactlyOnceWith('lost-1', false)
@@ -284,6 +291,13 @@ it('disambiguates only colliding unknown folders with linear display work on ren
   act(() => useAppStore.setState({ worktreesByRepo: { 'repo-1': [known, hydrated] } }))
   expect(nodeBox('Resolved')).not.toBeNull()
   expect(itemOf(nodeBox('main')).querySelector('[title]')).toBeNull()
+  expect(container.querySelector('[aria-label^="Select all chats in main ("]')).toBeNull()
+  expect(
+    itemOf(nodeBox('main')).querySelector('button[aria-expanded]')?.getAttribute('aria-label')
+  ).toBe('Collapse main')
+  expect(chatBox('lost-1').getAttribute('aria-label')).toBe(
+    'Resume Codex chat "Prompt lost-1" in main'
+  )
 })
 
 // Its project is unknown too: a nameless "Select all chats in " checkbox would help no one.

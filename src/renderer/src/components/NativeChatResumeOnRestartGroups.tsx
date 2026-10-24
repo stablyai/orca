@@ -127,17 +127,17 @@ function WorkspaceNode({
   // Kind comes from the host's record, never from a name.
   const KindGlyph = kind === 'folder' ? Folder : GitBranch
   const fallback = fallbackDisplays?.get(group)
-  const name = workspaceDisplay.resolveName(worktree, fallback, group.workspaceId)
+  const { name, controlName } = workspaceDisplay.resolveNames(worktree, fallback, group.workspaceId)
   const branch = worktree && kind === 'git-worktree' ? resolveWorktreeBranchLabel(worktree) : ''
   return (
     <GroupNode
       nodeKey={`workspace:${hostId}:${group.workspaceId}`}
       depth={depth}
-      name={name}
+      name={controlName}
       checkboxLabel={translate(
         'auto.components.NativeChatResumeOnRestartModal.selectWorkspace',
         'Select all chats in {{value0}}',
-        { value0: name }
+        { value0: controlName }
       )}
       covered={coveredKeys(resumeWorkspaceCandidates(node), tree)}
       tree={tree}
@@ -166,7 +166,7 @@ function WorkspaceNode({
             <ResumeCandidateRow
               key={chat.key}
               candidate={candidate}
-              workspaceName={name}
+              workspaceName={controlName}
               listedAt={tree.listedAt}
               checked={chat.checked}
               disabled={tree.busy}
