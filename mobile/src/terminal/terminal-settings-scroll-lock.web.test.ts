@@ -3,14 +3,14 @@ import { createRequire } from 'node:module'
 import { act, createElement, createRef, type ComponentType, type RefObject } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
-import type { ScrollView } from 'react-native'
+import type { ScrollViewInstance } from 'react-native'
 import { setTerminalSettingsScrollEnabled } from './terminal-settings-scroll-lock'
 import { setTerminalSettingsScrollEnabled as setTerminalSettingsScrollEnabledOnWeb } from './terminal-settings-scroll-lock.web'
 
 /** A ref holding whatever the platform hands back, which on RN Web is the DOM node. */
-const refTo = (node: unknown): RefObject<ScrollView | null> => ({
+const refTo = (node: unknown): RefObject<ScrollViewInstance | null> => ({
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the point of these cases is that a DOM node is what the native signature receives on RN Web, which is the mismatch this sibling exists for.
-  current: node as ScrollView | null
+  current: node as ScrollViewInstance | null
 })
 
 describe('the native scroll-lock write against an RN Web ref', () => {

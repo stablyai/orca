@@ -3,8 +3,8 @@
  *
  * `canGoBack()` and `back()` disagree about time: the first reads the committed navigation state,
  * the second only adds `GO_BACK` to a queue that a later effect drains. A mock of `canGoBack` hides
- * exactly that, so this evaluates `expo-router/build/global-state/routing.js` verbatim with only
- * its externals stubbed, and the stack below is the one React Navigation would have dispatched to.
+ * exactly that, so this evaluates `expo-router/build/global-state/router.js` verbatim with only
+ * its externals stubbed, and drains the intents into the stack below.
  */
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -17,7 +17,15 @@ import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 type RoutingModule = {
   canGoBack: () => boolean
   goBack: () => void
-  routingQueue: { run: (ref: unknown) => void }
+  drain: () => void
+}
+
+type RoutingIntent = { type: string; payload: { action: { type: string } } }
+type ShippedRoutingModule = {
+  createImperativeRouter: (
+    enqueue: (intent: RoutingIntent) => void,
+    setTransitionMode: () => void
+  ) => Pick<RoutingModule, 'canGoBack' | 'goBack'>
 }
 
 type NavigationRef = {
@@ -29,11 +37,11 @@ const requireFrom = createRequire(import.meta.url)
 /** The shipped bytes, not a re-implementation: only what the module reaches outward for is stubbed. */
 function loadRoutingModule(ref: NavigationRef): RoutingModule {
   const root = dirname(requireFrom.resolve('expo-router/package.json'))
-  const source = readFileSync(join(root, 'build/global-state/routing.js'), 'utf8')
-  const loaded: { exports: Partial<RoutingModule> } = { exports: {} }
+  const source = readFileSync(join(root, 'build/global-state/router.js'), 'utf8')
+  const loaded: { exports: Partial<ShippedRoutingModule> } = { exports: {} }
   const stubs: Record<string, unknown> = {
     'expo/dom': { IS_DOM: false },
-    './router-store': { store: { navigationRef: { isReady: () => true, ...ref } } },
+    './navigationRef': { navigationRef: ref },
     '../domComponents/emitDomEvent': { emitDomGoBack: () => false }
   }
   new Function('require', 'exports', 'module', source)(
@@ -41,14 +49,27 @@ function loadRoutingModule(ref: NavigationRef): RoutingModule {
     loaded.exports,
     loaded
   )
-  const { canGoBack, goBack, routingQueue } = loaded.exports
-  // Read rather than asserted, and what it catches is an expo-router upgrade that renames or drops
-  // one of these three. A missing stub does not reach here: the module assigns its exports whatever
-  // its imports resolved to, so that failure is a `TypeError` about `navigationRef` at call time.
-  if (canGoBack === undefined || goBack === undefined || routingQueue === undefined) {
-    throw new Error('the routing module did not define canGoBack, goBack and routingQueue')
+  const { createImperativeRouter } = loaded.exports
+  if (createImperativeRouter === undefined) {
+    throw new Error('the routing module did not define createImperativeRouter')
   }
-  return { canGoBack, goBack, routingQueue }
+  const queue: RoutingIntent[] = []
+  const { canGoBack, goBack } = createImperativeRouter(
+    (intent) => queue.push(intent),
+    () => {}
+  )
+  return {
+    canGoBack,
+    goBack,
+    drain: () => {
+      for (const intent of queue.splice(0)) {
+        if (intent.type !== 'ACTION') {
+          throw new Error('expected a navigation action')
+        }
+        ref.current.dispatch(intent.payload.action)
+      }
+    }
+  }
 }
 
 /** A stack the real `GO_BACK` action pops, so a pop that was queued twice is visible as two. */
@@ -163,7 +184,7 @@ function mount(screens: string[]): Harness {
     },
     screens,
     drain: () => {
-      routing.routingQueue.run(ref)
+      routing.drain()
     },
     commitRoute: (pathname) => {
       router.pathname = pathname

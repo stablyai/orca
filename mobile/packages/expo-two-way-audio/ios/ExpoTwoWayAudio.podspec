@@ -10,7 +10,7 @@ Pod::Spec.new do |s|
   s.license        = package['license']
   s.author         = package['author']
   s.homepage       = package['homepage']
-  s.platforms      = { :ios => '13.4', :tvos => '13.4' }
+  s.platforms      = { :ios => '16.4', :tvos => '16.4' }
   s.swift_version  = '5.4'
   s.source         = { git: 'https://github.com/stablyai/orca.git' }
   s.static_framework = true

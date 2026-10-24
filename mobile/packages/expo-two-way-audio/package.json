@@ -34,9 +34,9 @@
     "expo-module": "expo-module"
   },
   "devDependencies": {
-    "@types/react": "~19.2.18",
-    "expo-module-scripts": "^55.0.2",
-    "expo-modules-core": "~55.0.26"
+    "@types/react": "~19.3.0",
+    "expo": "58.0.16",
+    "expo-module-scripts": "^56.0.3"
   },
   "peerDependencies": {
     "expo": "*",

@@ -1,4 +1,4 @@
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 
 /**
@@ -6,7 +6,7 @@ import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input
  * whatever the IME is doing. This exists to have a `.web.ts` sibling, where it does not.
  */
 export function bindTerminalTextFieldSubmit(
-  _node: TextInput | null,
+  _node: TextInputInstance | null,
   _onSubmit: () => void,
   _onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
 ): () => void {

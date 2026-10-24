@@ -1,6 +1,6 @@
+import type { ViewInstance } from 'react-native'
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
 import { useFocusEffect } from 'expo-router'
-import { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   GenerationScopedRequestOwner,
@@ -49,7 +49,7 @@ export type MobileSourceControlLoaders = {
     next: MobileBranchCompareState | ((prev: MobileBranchCompareState) => MobileBranchCompareState)
   ) => void
   mountedRef: MutableRefObject<boolean>
-  setRootRef: (node: View | null) => void
+  setRootRef: (node: ViewInstance | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
 }
 
@@ -85,7 +85,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   currentStatusIdentityRef.current = statusIdentityKey
 
   const setRootRef = useCallback(
-    (node: View | null): void => {
+    (node: ViewInstance | null): void => {
       if (node !== null) {
         mountedRef.current = true
         return

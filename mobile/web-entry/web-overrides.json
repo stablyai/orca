@@ -192,6 +192,14 @@
     {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
+    },
+    {
+      "file": "src/layout/use-fold-split.web.ts",
+      "reason": "The fold is a native reserved region the WebView cannot see: WebKit exposes no viewport segments, and the native file reads an Expo module the page does not have. This one reads the fold the shell measured over the page from `init`, already in the page's px."
+    },
+    {
+      "file": "src/session/shell-terminal-key-rail.web.ts",
+      "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
     }
   ]
 }

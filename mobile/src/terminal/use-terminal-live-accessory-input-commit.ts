@@ -1,5 +1,5 @@
+import type { TextInputInstance } from 'react-native'
 import { useCallback, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 import {
   getTerminalLiveAccessoryBytesDecision,
   getTerminalLiveAccessoryLocalEditText,
@@ -32,7 +32,7 @@ type TerminalLiveAccessoryInputCommitOptions = {
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TextInputInstance | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly onInteraction: () => void
   readonly pendingLiveInputHandleRef: RefObject<string | null>

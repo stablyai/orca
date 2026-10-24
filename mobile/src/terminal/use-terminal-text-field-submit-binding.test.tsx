@@ -1,6 +1,6 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { describe, expect, it, vi } from 'vitest'
 import { useTerminalTextFieldSubmitBinding } from './use-terminal-text-field-submit-binding'
@@ -35,7 +35,7 @@ vi.mock('./terminal-text-field-submit-binding', () => ({
 }))
 
 let submitted: string[] = []
-const field: RefObject<TextInput | null> = { current: null }
+const field: RefObject<TextInputInstance | null> = { current: null }
 
 /**
  * A caller handing the binding a fresh closure each render, which is what the command dock's two
@@ -58,7 +58,7 @@ function Harness({ value }: { readonly value: string }): null {
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the binding never reads the node; the mocked seam only records the handler it was given.
-const node = {} as TextInput
+const node = {} as TextInputInstance
 
 function reset(): void {
   submitted = []

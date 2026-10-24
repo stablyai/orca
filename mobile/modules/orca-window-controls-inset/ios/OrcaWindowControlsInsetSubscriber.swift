@@ -13,6 +13,16 @@ public class OrcaWindowControlsInsetSubscriber: ExpoAppDelegateSubscriber {
     if let window = application.delegate?.window ?? nil {
       WindowControlsInsetProbe.install(in: window)
     }
+    // Scenes create the app window after the launch callback.
+    NotificationCenter.default.addObserver(
+      forName: UIWindow.didBecomeKeyNotification, object: nil, queue: .main
+    ) { notification in
+      if let window = notification.object as? UIWindow,
+        window === UIApplication.shared.delegate?.window ?? nil
+      {
+        WindowControlsInsetProbe.install(in: window)
+      }
+    }
     return true
   }
 }
@@ -23,6 +33,7 @@ private final class WindowControlsInsetProbe: UIView {
   private var rootObservation: NSKeyValueObservation?
 
   static func install(in window: UIWindow) {
+    guard !window.subviews.contains(where: { $0 is WindowControlsInsetProbe }) else { return }
     let probe = WindowControlsInsetProbe(frame: window.bounds)
     probe.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     probe.isUserInteractionEnabled = false

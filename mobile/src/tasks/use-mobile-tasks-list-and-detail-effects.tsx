@@ -1,6 +1,6 @@
+import type { ViewInstance } from 'react-native'
 import type { ProjectLoadingActionsModel } from './use-mobile-tasks-project-loading-actions'
 import {
-  View,
   clearMobileTaskCopyFeedbackTimer,
   dropFailedGitHubRepoSlugEntries,
   useCallback,
@@ -90,7 +90,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     return () => clearTimeout(timer)
   }, [githubKind, provider, query, taskStateHydrated])
 
-  const setTaskCopyFeedbackRootRef = useCallback((node: View | null): void => {
+  const setTaskCopyFeedbackRootRef = useCallback((node: ViewInstance | null): void => {
     if (node !== null) {
       return
     }

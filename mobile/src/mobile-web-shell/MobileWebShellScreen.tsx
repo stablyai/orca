@@ -38,6 +38,8 @@ import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellW
 import { ShellDownloadProgress } from './ShellDownloadProgress'
 import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
+import { usePageFoldDivision, usePublishedFoldDivision } from './page-fold-division'
+import { usePublishedShellKeyRail, useShellKeyRail } from './terminal-key-rail'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
 
@@ -184,11 +186,14 @@ export function MobileWebShellScreen({
   // native screen, and the page lifts by the height native screens read.
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const pageInsets = pageSafeAreaInsets({ insets, topCovered: noticeShown })
+  const pageFold = usePageFoldDivision()
+  const readySessionId = state.kind === 'ready' ? state.sessionId : null
+  const keyRail = useShellKeyRail({ sessionId: readySessionId, overlay, routeGrants })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
     usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Declared before the bridge so the handler it is handed already belongs to this session: the
   // media verbs hold staged files, and a registry born after the host would outlive the page.
-  const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
+  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   // The storage read is the shell's own store rather than the device's, scoped to this host.
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
@@ -210,6 +215,8 @@ export function MobileWebShellScreen({
     route,
     safeAreaInsets: pageInsets,
     keyboardInset,
+    foldDivision: pageFold.division,
+    terminalKeyRail: keyRail.keys,
     pageRoutes,
     pageRouteGrants,
     routeGrants,
@@ -243,6 +250,7 @@ export function MobileWebShellScreen({
     onPagePainted: reportPagePainted,
     // While this is true the key below belongs to the page, not to the stack this screen sits on.
     onPageBackClaim: reportPageBackClaim,
+    onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: (param, value) => {
       onRouteParamClear?.(param, value)
     },
@@ -326,6 +334,8 @@ export function MobileWebShellScreen({
   useEffect(() => {
     publishKeyboardInset(keyboardInset)
   }, [publishKeyboardInset, keyboardInset])
+  usePublishedFoldDivision(bridge.publishFoldDivision, pageFold.division)
+  usePublishedShellKeyRail(keyRail.keys, bridge)
 
   // The navigation object rather than the router: what this takes away is this screen's own place
   // on the stack, which is a screen option, and the router has no member that says it.
@@ -392,6 +402,7 @@ export function MobileWebShellScreen({
   }
   return (
     <View
+      ref={pageFold.rootRef}
       style={[
         styles.shellRoot,
         // Edge-to-edge like a native screen: the page pads for the bars itself from the insets
@@ -416,6 +427,7 @@ export function MobileWebShellScreen({
         ref={bridge.viewRef}
         // An overlay has no cover over the screen beneath: a fresh WebView draws opaque until the page paints.
         style={[styles.shellView, overlay && pageFrame !== 'painted' && styles.unpaintedOverlay]}
+        onLayout={pageFold.onShellLayout}
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}

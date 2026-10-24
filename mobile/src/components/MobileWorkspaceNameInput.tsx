@@ -1,5 +1,5 @@
+import { type TextInputInstance, TextInput, type TextInputProps } from 'react-native'
 import { useEffect, useRef } from 'react'
-import { TextInput, type TextInputProps } from 'react-native'
 
 const MOBILE_WORKSPACE_NAME_FOCUS_DELAY_MS = 220
 
@@ -13,7 +13,7 @@ export function MobileWorkspaceNameInput({
   focusKey,
   ...props
 }: MobileWorkspaceNameInputProps) {
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<TextInputInstance>(null)
 
   useEffect(() => {
     if (!shouldAutoFocus) {

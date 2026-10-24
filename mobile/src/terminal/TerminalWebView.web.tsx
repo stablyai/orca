@@ -1,5 +1,5 @@
+import { type ViewInstance, View } from 'react-native'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { View } from 'react-native'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
@@ -26,7 +26,7 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
  */
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
-    const hostRef = useRef<View>(null)
+    const hostRef = useRef<ViewInstance>(null)
     const documentRef = useRef<TerminalWebDocument | null>(null)
     // The document reports itself ready from inside the mount call, through the seam below, so the
     // controller flushes its queue while this effect is still on the line that built the document

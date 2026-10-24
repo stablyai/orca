@@ -1,5 +1,12 @@
+import {
+  type ScrollViewInstance,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  type LayoutRectangle
+} from 'react-native'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Platform, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { colors, spacing } from '../theme/mobile-theme'
 
@@ -21,7 +28,7 @@ export function MobileQueuedMessageScrollList({
   /** Rows, given `reveal` to keep an edited row in view. */
   children: (reveal: (row: LayoutRectangle) => void) => ReactNode
 }): React.JSX.Element {
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
   const metrics = useRef<Metrics>({ offset: 0, viewport: 0, content: 0 })
   const shownIds = useRef<ReadonlySet<string>>(new Set(messageIds))
   const flashed = useRef(false)

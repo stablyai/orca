@@ -8,7 +8,11 @@ import {
 } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
-import { createBridgeClientShellSession } from './bridge-client-shell-session'
+import {
+  createBridgeClientShellSession,
+  shellSessionListeners,
+  type BridgeShellSessionListeners
+} from './bridge-client-shell-session'
 import type { BridgeShellSession } from './bridge-client-session'
 import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client-init-handshake'
 import {
@@ -23,7 +27,7 @@ import {
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
-import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import { createBridgeClientTerminalKeys } from './bridge-client-terminal-keys'
 import { createPageBackConsumers, type PageBackConsumer } from './page-back-consumers'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { readBridgeRequestFrameOptions, readBridgeRpcEnvelope } from './bridge-client-rpc-envelope'
@@ -34,8 +38,7 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
   type BridgeClientMessage,
-  type BridgeConnectionSnapshot,
-  type BridgeInitRoute
+  type BridgeConnectionSnapshot
 } from './bridge-envelope'
 
 export type { BridgeShellSession } from './bridge-client-session'
@@ -64,24 +67,14 @@ export type BridgeRpcClientOptions = {
   onDiagnostic?: (diagnostic: BridgeRpcClientDiagnostic) => void
 }
 
-export type BridgeRpcClient = RpcClient & {
-  /** Fires once `init` has landed, immediately if it already has. Mount no screen before it. */
-  onReady: (listener: () => void) => () => void
+export type BridgeRpcClient = RpcClient & BridgeShellSessionListeners & BridgeRpcClientMembers
+
+type BridgeRpcClientMembers = {
   /**
-   * Fires each time the shell rewrites a param of the screen this page is already on, which is a
-   * second `init` for the session it already holds. Never for the first one, and never for a
-   * re-sent `init` whose route is the one the page already holds — a re-asked `ready` is answered
-   * with that route and is not a request.
-   *
-   * One delivery per tap rather than one per distinct value: the shell clears the param after each
-   * delivery, so a notification tap for the pane already showing arrives as a real move and a
-   * listener that deduplicated by value would lose exactly that one.
+   * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
+   * dispose is called; `listener` takes each press. Nothing is sent to a shell without the grant.
    */
-  onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
-  /** Fires when an `init` moved the safe-area insets; the value itself is on `getShellSession`. */
-  onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
-  /** Fires when an `init` moved the keyboard height; the value itself is on `getShellSession`. */
-  onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
+  claimTerminalKeyRail: ReturnType<typeof createBridgeClientTerminalKeys>['claim']
   getShellSession: () => BridgeShellSession | null
   /**
    * Asks the shell to open a screen this page does not render. False when the shell granted no
@@ -302,9 +295,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       handshake.stop()
       shellSession.accept(message)
       back.reassert()
+      terminalKeys.reassert()
     },
     acceptState,
-    acceptBack: back.press
+    acceptBack: back.press,
+    acceptTerminalKey: (key) => terminalKeys.accept(key)
   })
 
   /** After `close` the page is not the document the shell is answering any more. */
@@ -422,6 +417,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     isClosed: () => closed,
     hasGrant
   })
+  const terminalKeys = createBridgeClientTerminalKeys(notifications.notifyTerminalKeyRailClaim)
 
   const unsubscribeFromMessages = options.onMessage(receive)
   handshake.start()
@@ -470,10 +466,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyPagePainted: notifications.notifyPagePainted,
     claimBack: back.claim,
     close,
-    onReady: shellSession.onReady,
-    onRouteUpdate: shellSession.onRouteUpdate,
-    onSafeAreaInsetsUpdate: shellSession.onSafeAreaInsetsUpdate,
-    onKeyboardInsetUpdate: shellSession.onKeyboardInsetUpdate,
+    ...shellSessionListeners(shellSession),
+    claimTerminalKeyRail: terminalKeys.claim,
     getShellSession: shellSession.current,
     clearRouteParam: (param, value) =>
       posted({

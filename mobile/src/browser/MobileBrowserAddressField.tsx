@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     height: 28
   },
   fileLabelHost: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     borderRadius: radii.input,

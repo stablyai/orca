@@ -15,9 +15,32 @@ The Node commands `pnpm rpc:diff` and `pnpm rpc:record` use a development depend
 
 - Node.js 24+
 - pnpm
-- Xcode and/or Android Studio tooling for simulator or device builds
+- Xcode 27.1+ for iOS builds, or Android Studio tooling for Android builds
+- iOS 16.4+ on iPhone or iPad (Expo SDK 58's minimum)
 - Expo Go on your phone, or a development client build when native modules are needed
 - Phone and desktop on the same LAN when testing a physical phone
+
+The app uses Expo SDK 58 and its generated scene lifecycle. After changing SDK versions or native
+modules, rebuild the development client; a JavaScript update cannot update the installed native
+runtime. Keep the React Native text-input and WebView patches when updating their packages: they
+preserve composition/dictation behavior and reject messages from embedded subframes.
+
+### iPhone Duo
+
+The iOS shell reads active reserved regions through `react-native-reserved-regions`. The provider
+replaces the app's root view and converts its local frames to window points before the sidebar and
+WebView consume them. A vertical fold can separate the workspace sidebar from the terminal; the
+terminal key rail uses only the free part of the system's side strip. The existing terminal refit
+path owns terminal resizing.
+
+The page bridge advertises these controls with the optional `terminalKeyRail` grant. Old shells and
+pages keep the bottom key row. Android keeps its existing layout policy, and older iOS versions
+report no active reserved regions. No hinge angle drives layout.
+
+Before releasing, check open/closed/book/tabletop poses, rotation and both sides of Split View on
+Duo. Preserve the host, workspace, selected tab, draft input and pending questions through each
+transition. Check keyboard occlusion, paste, repeated keys and terminal rows/columns, plus ordinary
+iPhone, iPad, Android and web regressions. A native rebuild is required for the new provider.
 
 ## Start Desktop Orca
 

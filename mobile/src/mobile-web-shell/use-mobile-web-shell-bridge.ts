@@ -10,6 +10,8 @@ import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
+import type { BridgeTerminalKeyId, BridgeTerminalKeyRail } from './bridge/bridge-terminal-key'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
 import type { BridgeSessionBack } from './bridge-host-back'
@@ -63,6 +65,12 @@ export type MobileWebShellBridgeView = {
   readonly publishSafeAreaInsets: (insets: BridgeSafeAreaInsets) => void
   /** Hands the mounted host a moved keyboard height; dropped with no host, as the insets are. */
   readonly publishKeyboardInset: (height: number) => void
+  /** Hands the mounted host a moved fold; dropped with no host, as the insets are. */
+  readonly publishFoldDivision: (division: BridgeFoldDivision | null) => void
+  /** Tells the mounted host the key rail shows or hides; dropped with no host. */
+  readonly publishTerminalKeyRail: (keys: BridgeTerminalKeyRail) => void
+  /** Hands the page one rail press. False with no host, or a page not granted the rail. */
+  readonly sendTerminalKey: (key: BridgeTerminalKeyId) => boolean
   /**
    * Hands the mounted host one Back press. False when there is no host, or when the document it
    * serves never said it takes one — the caller then leaves the key to the navigator.
@@ -89,6 +97,10 @@ export type MobileWebShellBridgeArgs = {
   safeAreaInsets: BridgeSafeAreaInsets
   /** What the first `init` of a new host carries; later moves go through `publishKeyboardInset`. */
   keyboardInset: number
+  /** What the first `init` of a new host carries; later moves go through `publishFoldDivision`. */
+  foldDivision: BridgeFoldDivision | null
+  /** What the first `init` of a new host carries; later moves go through `publishTerminalKeyRail`. */
+  terminalKeyRail: BridgeTerminalKeyRail
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
   pageRoutes: readonly string[]
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
@@ -125,6 +137,8 @@ export type MobileWebShellBridgeArgs = {
   /** The page is holding the device Back key, or has let it go. False arrives on its own for
    *  every way a document ends, so no claim outlives the page that made it. */
   onPageBackClaim: (claimed: boolean) => void
+  /** The page shows a terminal with its key row, or stopped; false again on each new document. */
+  onTerminalKeyRailClaim: (claimed: boolean) => void
   /** The page applied a one-shot route param and asks for it to be erased (ruling 34). */
   onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   /** This shell named a screen the protocol does not allow, so no session is served. */
@@ -205,6 +219,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       route: latest.route,
       safeAreaInsets: latest.safeAreaInsets,
       keyboardInset: latest.keyboardInset,
+      foldDivision: latest.foldDivision,
+      terminalKeyRail: latest.terminalKeyRail,
       pageRoutes: latest.pageRoutes,
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
@@ -240,7 +256,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onBinaryFramesDropped: (total) => argsRef.current.onBinaryFramesDropped(total),
       onPageReady: () => argsRef.current.onPageReady(),
       onPagePainted: () => argsRef.current.onPagePainted(),
-      onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed)
+      onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed),
+      onTerminalKeyRailClaim: (claimed) => argsRef.current.onTerminalKeyRailClaim(claimed)
     })
     hostRef.current = { sessionId, host }
     // The count belongs to this host, so a rebuild starts it over. Without this the screen keeps
@@ -319,6 +336,33 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
         if (mounted !== null && mounted.sessionId === sessionId) {
           mounted.host.publishKeyboardInset(height)
         }
+      },
+      [buildId, client, sessionId, snapshot]
+    ),
+    publishFoldDivision: useCallback(
+      (division: BridgeFoldDivision | null) => {
+        const mounted = hostRef.current
+        if (mounted !== null && mounted.sessionId === sessionId) {
+          mounted.host.publishFoldDivision(division)
+        }
+      },
+      [buildId, client, sessionId, snapshot]
+    ),
+    publishTerminalKeyRail: useCallback(
+      (keys: BridgeTerminalKeyRail) => {
+        const mounted = hostRef.current
+        if (mounted !== null && mounted.sessionId === sessionId) {
+          mounted.host.publishTerminalKeyRail(keys)
+        }
+      },
+      [buildId, client, sessionId, snapshot]
+    ),
+    sendTerminalKey: useCallback(
+      (key: BridgeTerminalKeyId) => {
+        const mounted = hostRef.current
+        return (
+          mounted !== null && mounted.sessionId === sessionId && mounted.host.sendTerminalKey(key)
+        )
       },
       [buildId, client, sessionId, snapshot]
     ),

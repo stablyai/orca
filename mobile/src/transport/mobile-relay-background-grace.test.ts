@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defaultCancelTimer } from './timer-scheduler'
 import {
   MobileRelayBackgroundGraceTimer,
   RELAY_BACKGROUND_GRACE_MS
@@ -14,7 +15,7 @@ describe('MobileRelayBackgroundGraceTimer', () => {
       {
         now: Date.now,
         setTimer: (handler, ms) => setTimeout(handler, ms),
-        clearTimer: (handle) => clearTimeout(handle)
+        clearTimer: defaultCancelTimer
       },
       onExpired
     )

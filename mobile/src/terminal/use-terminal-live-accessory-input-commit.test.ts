@@ -1,6 +1,6 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
@@ -60,7 +60,7 @@ function createAccessoryInputCommitHarness({
   const liveInputComposingRef: RefObject<boolean | undefined> = { current: composing }
   const sentLiveInputTextRef: RefObject<string> = { current: sentText }
   const pendingLiveInputHandleRef: RefObject<string | null> = { current: pendingHandle }
-  const liveInputRef: RefObject<TextInput | null> = { current: null }
+  const liveInputRef: RefObject<TextInputInstance | null> = { current: null }
   const liveInputTerminalHandles = new Set([activeHandle])
   const sent: string[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {

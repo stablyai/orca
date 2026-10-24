@@ -9,7 +9,7 @@ type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
 
 // The part of React Native's AppState this reads, spelled here so importers need no RN types.
 type HostAppState = {
-  currentState: string
+  currentState: string | null | undefined
   addEventListener: (type: 'change', listener: (state: string) => void) => { remove: () => void }
 }
 

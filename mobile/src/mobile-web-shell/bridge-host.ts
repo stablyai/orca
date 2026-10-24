@@ -21,6 +21,13 @@ import { createBridgeHostBack, type BridgeSessionBack } from './bridge-host-back
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
+import {
+  BRIDGE_TERMINAL_KEY_FRAME,
+  BRIDGE_TERMINAL_KEY_RAIL_GRANT,
+  type BridgeTerminalKeyId,
+  type BridgeTerminalKeyRail
+} from './bridge/bridge-terminal-key'
 import type { BridgeHostOptions } from './bridge-host-contract'
 
 // Re-exported so a caller reaches the host and what it reports through one module.
@@ -44,6 +51,15 @@ export type BridgeHost = {
   publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
   /** Hands this session a moved keyboard height over the same re-sent `init`. */
   publishKeyboardInset: (next: number) => void
+  /** Hands this session a moved fold over the same re-sent `init`. */
+  publishFoldDivision: (next: BridgeFoldDivision | null) => void
+  /** Tells this session the shell's key rail shows or hides, over the same re-sent `init`. */
+  publishTerminalKeyRail: (next: BridgeTerminalKeyRail) => void
+  /**
+   * Hands the page one press on the key rail. False when this session was not granted the rail,
+   * which is every page older than it, or when no document holds the view.
+   */
+  sendTerminalKey: (key: BridgeTerminalKeyId) => boolean
   /**
    * Hands the page one Back press. False when this document never said it takes one, which is
    * every page older than the frame; the caller then leaves the key to the navigator.
@@ -94,7 +110,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue }),
     ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
-    ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset })
+    ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
+    ...(options.foldDivision === undefined ? {} : { foldDivision: options.foldDivision }),
+    ...(options.terminalKeyRail === undefined ? {} : { terminalKeyRail: options.terminalKeyRail })
   })
   let closed = false
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
@@ -171,6 +189,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           route,
           safeAreaInsets: routes.safeAreaInsets(),
           keyboardInset: routes.keyboardInset(),
+          foldDivision: routes.foldDivision(),
+          terminalKeyRail: routes.terminalKeyRail(),
           pageRoutes,
           ...(parsedRouteGrants?.success === true
             ? { pageRouteGrants: parsedRouteGrants.data }
@@ -233,7 +253,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     granted,
     initSent: () => initSent,
     route: () => routes.current(),
-    onBackClaim: back.readClaim
+    onBackClaim: back.readClaim,
+    onTerminalKeyRailClaim: (claimed) => options.onTerminalKeyRailClaim?.(claimed)
   })
 
   /** Cancels everything the page had open. `notify` is false for the page's own `close`, which has
@@ -258,6 +279,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     if (message.type === 'ready') {
       serving = true
       back.readReady()
+      // Dropped like the Back claim: a page still showing a terminal claims again on this `init`.
+      options.onTerminalKeyRailClaim?.(false)
       // Every time it is asked, not once: the page re-asks on a backoff, and each ask is answered
       // with the route the shell holds now. That is the whole repair path for a frame that never
       // arrived (ruling 34) — nothing here waits on one, and nothing retries one.
@@ -305,6 +328,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         settleAll(false)
         serving = false
         back.drop()
+        options.onTerminalKeyRailClaim?.(false)
         return
     }
   }
@@ -343,6 +367,19 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishKeyboardInset: (next) => {
       routes.publishKeyboardInset(next, deliverable())
+    },
+    publishFoldDivision: (next) => {
+      routes.publishFoldDivision(next, deliverable())
+    },
+    publishTerminalKeyRail: (next) => {
+      routes.publishTerminalKeyRail(next, deliverable())
+    },
+    sendTerminalKey: (key) => {
+      if (!granted.includes(BRIDGE_TERMINAL_KEY_RAIL_GRANT) || !deliverable()) {
+        return false
+      }
+      send({ v: BRIDGE_PROTOCOL_VERSION, type: BRIDGE_TERMINAL_KEY_FRAME, key })
+      return true
     },
     sendBack: back.send,
     readSessionBack: back.read,

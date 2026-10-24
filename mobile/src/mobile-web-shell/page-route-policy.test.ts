@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BRIDGE_TERMINAL_KEY_RAIL_GRANT } from './bridge/bridge-terminal-key'
 import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   matchesRoutePattern,
@@ -184,6 +185,10 @@ describe('the routes this shell will render from the page', () => {
 })
 
 describe('the grants this app implements', () => {
+  it('advertises the optional terminal key rail', () => {
+    expect(MOBILE_WEB_SHELL_GRANTS).toContain(BRIDGE_TERMINAL_KEY_RAIL_GRANT)
+  })
+
   /**
    * Every grant this shell advertises, run through the schema a desktop parses a manifest with.
    *

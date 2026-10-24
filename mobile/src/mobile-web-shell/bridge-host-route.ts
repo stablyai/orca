@@ -5,6 +5,8 @@ import {
   ZERO_SAFE_AREA_INSETS,
   type BridgeSafeAreaInsets
 } from './bridge/bridge-safe-area-insets'
+import { sameFoldDivision, type BridgeFoldDivision } from './bridge/bridge-fold-division'
+import { sameTerminalKeyRail, type BridgeTerminalKeyRail } from './bridge/bridge-terminal-key'
 
 /** The screen one host is serving, which is the one field of `init` that moves under a live page. */
 export type BridgeHostRoute = {
@@ -36,6 +38,14 @@ export type BridgeHostRoute = {
   readonly keyboardInset: () => number
   /** Moves the held keyboard height on the same lane as the insets. */
   readonly publishKeyboardInset: (next: number, deliverable: boolean) => void
+  /** The fold the next `init` carries; null when none splits the page. */
+  readonly foldDivision: () => BridgeFoldDivision | null
+  /** Moves the held fold on the same lane as the insets. */
+  readonly publishFoldDivision: (next: BridgeFoldDivision | null, deliverable: boolean) => void
+  /** The keys the next `init` tells the page the shell's rail shows beside it. */
+  readonly terminalKeyRail: () => BridgeTerminalKeyRail
+  /** Moves the rail's keys on the same lane as the insets. */
+  readonly publishTerminalKeyRail: (next: BridgeTerminalKeyRail, deliverable: boolean) => void
 }
 
 /**
@@ -62,11 +72,15 @@ export function createBridgeHostRoute(args: {
   onRefused: (issue: string) => void
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  foldDivision?: BridgeFoldDivision | null
+  terminalKeyRail?: BridgeTerminalKeyRail
 }): BridgeHostRoute {
   const parsed = BridgeInitRouteSchema.safeParse(args.opened)
   let route = parsed.success && !args.refused ? parsed.data : null
   let insets = args.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS
   let keyboard = args.keyboardInset ?? 0
+  let fold = args.foldDivision ?? null
+  let rail = args.terminalKeyRail ?? []
   return {
     current: () => route,
     openIssue: () => (parsed.success ? 'unknown' : (parsed.error.issues[0]?.message ?? 'unknown')),
@@ -97,6 +111,26 @@ export function createBridgeHostRoute(args: {
         return
       }
       keyboard = next
+      if (deliverable) {
+        args.sendInit()
+      }
+    },
+    foldDivision: () => fold,
+    publishFoldDivision: (next, deliverable) => {
+      if (sameFoldDivision(fold, next)) {
+        return
+      }
+      fold = next
+      if (deliverable) {
+        args.sendInit()
+      }
+    },
+    terminalKeyRail: () => rail,
+    publishTerminalKeyRail: (next, deliverable) => {
+      if (sameTerminalKeyRail(rail, next)) {
+        return
+      }
+      rail = next
       if (deliverable) {
         args.sendInit()
       }

@@ -1,4 +1,4 @@
-import { PermissionStatus, type PermissionResponse } from 'expo-modules-core'
+import { PermissionStatus, type PermissionResponse } from 'expo'
 
 type EventSubscription = {
   remove: () => void

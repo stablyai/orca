@@ -1,4 +1,4 @@
-import type { Image, ImageLoadEvent, View } from 'react-native'
+import type { ViewInstance, ImageInstance, ImageLoadEvent } from 'react-native'
 import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
 import { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request'
 import type { FrameLayer } from './mobile-browser-frame-state'
@@ -24,8 +24,8 @@ type BrowserFramePacerDeps = {
 
 /** What one layer's `<View>` and `<Image>` hand the pacer. Stable, so binding them re-renders nothing. */
 export type BrowserFrameLayerBinding = {
-  attachView: (view: View | null) => void
-  attachImage: (image: Image | null) => void
+  attachView: (view: ViewInstance | null) => void
+  attachImage: (image: ImageInstance | null) => void
   onLoad: (event: ImageLoadEvent) => void
   onError: () => void
 }
@@ -39,8 +39,8 @@ export type BrowserFrameLayerBinding = {
  * `replace` writes over a loading layer; the new source is the one that answers.
  */
 export function createBrowserFramePacer(deps: BrowserFramePacerDeps) {
-  const views: [View | null, View | null] = [null, null]
-  const images: [Image | null, Image | null] = [null, null]
+  const views: [ViewInstance | null, ViewInstance | null] = [null, null]
+  const images: [ImageInstance | null, ImageInstance | null] = [null, null]
   const layers: [LayerState, LayerState] = [
     { uri: deps.initialUri, status: 'ready' },
     { uri: deps.initialUri, status: 'ready' }

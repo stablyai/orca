@@ -1,5 +1,5 @@
+import type { ScrollViewInstance } from 'react-native'
 import type { RefObject } from 'react'
-import type { ScrollView } from 'react-native'
 
 /**
  * Why the write is imperative at all is at the call site. This exists to have a `.web.ts` sibling:
@@ -7,7 +7,7 @@ import type { ScrollView } from 'react-native'
  * file cannot carry the split itself because expo-router reads a `.web.tsx` as a second route.
  */
 export function setTerminalSettingsScrollEnabled(
-  ref: RefObject<ScrollView | null>,
+  ref: RefObject<ScrollViewInstance | null>,
   enabled: boolean
 ): void {
   ref.current?.setNativeProps({ scrollEnabled: enabled })

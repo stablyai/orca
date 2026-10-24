@@ -1,4 +1,4 @@
-import { StyleSheet, type TextInput, type TextInputProps } from 'react-native'
+import { type TextInputInstance, StyleSheet, type TextInputProps } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 
 /** The composer's text field on both platforms: a TextInput that draws a leading skill in place. */
@@ -9,7 +9,7 @@ export type MobileNativeChatComposerFieldProps = Omit<
   value: string
   /** The skill the draft leads with, drawn highlighted in place. */
   skillToken: string | null
-  ref?: React.Ref<TextInput>
+  ref?: React.Ref<TextInputInstance>
 }
 
 /** The picked skill at the start of the draft. Same font as the text around it: on the page a copy

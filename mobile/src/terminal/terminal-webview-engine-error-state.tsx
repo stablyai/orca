@@ -94,7 +94,7 @@ export function TerminalWebViewEngineErrorOverlay({
 
 const styles = StyleSheet.create({
   errorOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,

@@ -1,5 +1,13 @@
+import {
+  type ViewInstance,
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  BackHandler
+} from 'react-native'
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -64,7 +72,7 @@ export default function PairConfirmScreen() {
     }, [cancel])
   )
 
-  const setPairConfirmRootRef = useCallback((node: View | null): void => {
+  const setPairConfirmRootRef = useCallback((node: ViewInstance | null): void => {
     if (node !== null) {
       mountedRef.current = true
       return

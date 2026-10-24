@@ -5,6 +5,8 @@ import type { BridgeRefusal } from './bridge/bridge-caps'
 import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
+import type { BridgeTerminalKeyRail } from './bridge/bridge-terminal-key'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -137,6 +139,12 @@ export type BridgeHostOptions = {
   /** The keyboard height native screens read on the shell's OS. 0 when absent; moved later with
    *  `publishKeyboardInset`. */
   keyboardInset?: number
+  /** The fold splitting the page on a partially folded device. None when absent; moved later with
+   *  `publishFoldDivision`. */
+  foldDivision?: BridgeFoldDivision | null
+  /** The keys the shell's rail shows beside the page. None when absent; moved later with
+   *  `publishTerminalKeyRail`. */
+  terminalKeyRail?: BridgeTerminalKeyRail
   /**
    * This device's identity to that host, as the native screens already send it, swapped in for the
    * page's placeholder on the way out. Read at forward time rather than captured: the host outlives
@@ -218,6 +226,9 @@ export type BridgeHostOptions = {
    * a claim outlived the page that made it.
    */
   onPageBackClaim: (claimed: boolean) => void
+  /** The page shows a terminal with its key row, or stopped; false also arrives each time a
+   *  document starts or ends, and the page claims again on the `init` that follows. */
+  onTerminalKeyRailClaim?: (claimed: boolean) => void
   /**
    * The page applied a one-shot route param and is asking for it to be erased (ruling 34), naming
    * the value it applied. The holder of that param compares before it clears: a tap that has moved

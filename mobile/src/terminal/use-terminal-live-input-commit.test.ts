@@ -1,6 +1,6 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS } from './terminal-live-preedit-mirror'
@@ -49,7 +49,7 @@ function createTerminalLiveInputCommitHarness({
   const setLiveInputCapture = (text: string): void => {
     captures.push(text)
   }
-  const liveInputRef: RefObject<TextInput | null> = { current: null }
+  const liveInputRef: RefObject<TextInputInstance | null> = { current: null }
   const liveInputTerminalHandles = new Set([activeHandle])
   const liveInputTerminalHandlesRef: RefObject<Set<string>> = {
     current: new Set([activeHandle])

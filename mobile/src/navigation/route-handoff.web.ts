@@ -28,8 +28,10 @@ type RouteHandoffOutcome = 'local' | 'handed-off' | 'refused'
  * being handed one.
  */
 type TakesHref<TMember> = TMember extends (...args: infer TArgs) => unknown
-  ? TArgs extends [RouterHref, ...unknown[]]
-    ? true
+  ? TArgs extends [infer TFirst, ...unknown[]]
+    ? RouterHref extends TFirst
+      ? true
+      : false
     : false
   : false
 

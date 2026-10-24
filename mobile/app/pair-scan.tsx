@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from 'react'
 import {
+  type ViewInstance,
   View,
   Text,
   Pressable,
@@ -7,6 +7,7 @@ import {
   Linking,
   type LayoutChangeEvent
 } from 'react-native'
+import { useState, useRef, useCallback } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
@@ -60,7 +61,7 @@ export default function PairScanScreen() {
   const mountedRef = useRef(true)
   const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
 
-  const setPairScanRootRef = useCallback((node: View | null): void => {
+  const setPairScanRootRef = useCallback((node: ViewInstance | null): void => {
     if (node !== null) {
       mountedRef.current = true
       return

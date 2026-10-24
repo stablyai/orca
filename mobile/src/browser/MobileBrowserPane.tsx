@@ -1,6 +1,6 @@
+import { type ViewInstance, AppState } from 'react-native'
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AppState, type View } from 'react-native'
 import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
@@ -123,7 +123,7 @@ export function MobileBrowserPane({
   }, [])
 
   const setRootViewRef = useCallback(
-    (node: View | null) => {
+    (node: ViewInstance | null) => {
       // Why: long-press right-click timers belong to this responder surface;
       // clearing from ref cleanup preserves the same unmount boundary.
       if (node === null) {

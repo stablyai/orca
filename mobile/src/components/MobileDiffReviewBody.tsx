@@ -92,7 +92,7 @@ export function MobileDiffReviewBody({
       ListFooterComponent={
         diffState.truncated ? (
           <Text style={styles.truncatedText}>Diff truncated for mobile preview.</Text>
-        ) : null
+        ) : undefined
       }
     />
   )

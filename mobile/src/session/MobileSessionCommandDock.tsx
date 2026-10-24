@@ -11,6 +11,8 @@ import {
 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
+import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../terminal/terminal-key-definitions'
+import { useShellTerminalKeyRail } from './shell-terminal-key-rail'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
@@ -70,11 +72,23 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     keyboardLift
   } = controller
   const accessoryBarKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const dockShown = !activeMarkdownTab && !activeFileTab && !activeBrowserTab && !showNativeChat
+  // Rail presses arrive as this row's own keys would, and the row drops the keys the rail has.
+  const railKeys: readonly string[] = useShellTerminalKeyRail(dockShown, (id) => {
+    if (id === 'paste') {
+      if (canSend) {
+        void handlePaste()
+      }
+      return
+    }
+    const key = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((definition) => definition.id === id)
+    if (key && canSend) {
+      void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
+    }
+  })
+  const dockBuiltInKeys = visibleBuiltInAccessoryKeys.filter((key) => !railKeys.includes(key.id))
   return (
-    !activeMarkdownTab &&
-    !activeFileTab &&
-    !activeBrowserTab &&
-    !showNativeChat && (
+    dockShown && (
       <View
         style={[
           styles.commandDock,
@@ -166,7 +180,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 }
               />
             </Pressable>
-            {canPaste && (
+            {canPaste && !railKeys.includes('paste') && (
               <Pressable
                 style={({ pressed }) => [
                   styles.accessoryKey,
@@ -184,7 +198,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 </Text>
               </Pressable>
             )}
-            {visibleBuiltInAccessoryKeys.map((key) => (
+            {dockBuiltInKeys.map((key) => (
               <Pressable
                 key={key.id}
                 style={({ pressed }) => [

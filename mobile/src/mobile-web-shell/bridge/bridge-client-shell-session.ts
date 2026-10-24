@@ -5,6 +5,8 @@ import {
   ZERO_SAFE_AREA_INSETS,
   type BridgeSafeAreaInsets
 } from './bridge-safe-area-insets'
+import { sameFoldDivision, type BridgeFoldDivision } from './bridge-fold-division'
+import { sameTerminalKeyRail, type BridgeTerminalKeyRail } from './bridge-terminal-key'
 import type {
   BridgeConnectionSnapshot,
   BridgeHostMessage,
@@ -25,16 +27,54 @@ export type BridgeClientShellSession = {
   current: () => BridgeShellSession | null
   /** Reads one `init`: updates or replaces the session, then fires what that change is owed. */
   accept: (message: InitMessage) => void
-  /** Fires once the session exists, immediately if it already does. */
+  /** Fires once `init` has landed, immediately if it already has. Mount no screen before it. */
   onReady: (listener: () => void) => () => void
-  /** Fires when a second `init` for the session the page holds moved its route, and never else. */
+  /**
+   * Fires each time the shell rewrites a param of the screen this page is already on, which is a
+   * second `init` for the session it already holds. Never for the first one, and never for a
+   * re-sent `init` whose route is the one the page already holds — a re-asked `ready` is answered
+   * with that route and is not a request.
+   *
+   * One delivery per tap rather than one per distinct value: the shell clears the param after each
+   * delivery, so a notification tap for the pane already showing arrives as a real move and a
+   * listener that deduplicated by value would lose exactly that one.
+   */
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
   /** Fires when an `init` moved the safe-area insets the page holds, including a replacement's. */
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
   /** Fires when an `init` moved the keyboard height the page holds, including a replacement's. */
   onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
+  /** Fires when an `init` moved the fold the page holds, including a replacement's. */
+  onFoldDivisionUpdate: (listener: (division: BridgeFoldDivision | null) => void) => () => void
+  /** Fires when an `init` moved the keys the shell's rail shows, including a replacement's. */
+  onTerminalKeyRailUpdate: (listener: (keys: BridgeTerminalKeyRail) => void) => () => void
   /** Drops the session and every listener waiting on one, which `close` is the only caller of. */
   close: () => void
+}
+
+/** The session's listeners, which the page client hands on as its own members. */
+export type BridgeShellSessionListeners = Pick<
+  BridgeClientShellSession,
+  | 'onReady'
+  | 'onRouteUpdate'
+  | 'onSafeAreaInsetsUpdate'
+  | 'onKeyboardInsetUpdate'
+  | 'onFoldDivisionUpdate'
+  | 'onTerminalKeyRailUpdate'
+>
+
+/** Picked rather than spread: the session's `accept` and `close` are the client's alone. */
+export function shellSessionListeners(
+  session: BridgeClientShellSession
+): BridgeShellSessionListeners {
+  return {
+    onReady: session.onReady,
+    onRouteUpdate: session.onRouteUpdate,
+    onSafeAreaInsetsUpdate: session.onSafeAreaInsetsUpdate,
+    onKeyboardInsetUpdate: session.onKeyboardInsetUpdate,
+    onFoldDivisionUpdate: session.onFoldDivisionUpdate,
+    onTerminalKeyRailUpdate: session.onTerminalKeyRailUpdate
+  }
 }
 
 export function createBridgeClientShellSession(args: {
@@ -48,6 +88,8 @@ export function createBridgeClientShellSession(args: {
   const routeUpdateListeners = new Set<(route: BridgeInitRoute | null) => void>()
   const insetsListeners = new Set<(insets: BridgeSafeAreaInsets) => void>()
   const keyboardListeners = new Set<(height: number) => void>()
+  const foldListeners = new Set<(division: BridgeFoldDivision | null) => void>()
+  const railListeners = new Set<(keys: BridgeTerminalKeyRail) => void>()
 
   return {
     current: () => session,
@@ -67,10 +109,23 @@ export function createBridgeClientShellSession(args: {
       const safeAreaInsets = held === null || movedInsets ? sent : held.safeAreaInsets
       const keyboardInset = message.keyboardInset ?? 0
       const movedKeyboard = held !== null && held.keyboardInset !== keyboardInset
+      const sentFold = message.foldDivision ?? null
+      const movedFold = held !== null && !sameFoldDivision(held.foldDivision, sentFold)
+      const foldDivision = held === null || movedFold ? sentFold : held.foldDivision
+      const sentRail = message.terminalKeyRail ?? []
+      const movedRail = held !== null && !sameTerminalKeyRail(held.terminalKeyRail, sentRail)
+      const terminalKeyRail = held === null || movedRail ? sentRail : held.terminalKeyRail
       session =
         update === null
-          ? { ...readShellSession(message), safeAreaInsets }
-          : { ...update, route: message.route ?? null, safeAreaInsets, keyboardInset }
+          ? { ...readShellSession(message), safeAreaInsets, foldDivision, terminalKeyRail }
+          : {
+              ...update,
+              route: message.route ?? null,
+              safeAreaInsets,
+              keyboardInset,
+              foldDivision,
+              terminalKeyRail
+            }
       // Re-primed either way, because a second `init` is also how the page recovers a cache it has
       // refused a `state` frame into: the shell rebuilt under it publishes a generation the page's
       // own is newer than, and this frame is what puts the two back in step. A pane update carries
@@ -88,6 +143,16 @@ export function createBridgeClientShellSession(args: {
       if (movedKeyboard) {
         for (const listener of keyboardListeners) {
           listener(keyboardInset)
+        }
+      }
+      if (movedFold) {
+        for (const listener of foldListeners) {
+          listener(foldDivision)
+        }
+      }
+      if (movedRail) {
+        for (const listener of railListeners) {
+          listener(terminalKeyRail)
         }
       }
       // Only a route that moved is an update. The shell answers every `ready` with the route it
@@ -128,6 +193,18 @@ export function createBridgeClientShellSession(args: {
       keyboardListeners.add(listener)
       return () => {
         keyboardListeners.delete(listener)
+      }
+    },
+    onFoldDivisionUpdate: (listener) => {
+      foldListeners.add(listener)
+      return () => {
+        foldListeners.delete(listener)
+      }
+    },
+    onTerminalKeyRailUpdate: (listener) => {
+      railListeners.add(listener)
+      return () => {
+        railListeners.delete(listener)
       }
     },
     close: () => {
