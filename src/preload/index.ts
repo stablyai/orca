@@ -26,6 +26,7 @@ import { ghApi } from './api/gh-bridge'
 import { hostedReviewApi } from './api/hosted-review-bridge'
 import { glApiBridge } from './api/gl-bridge'
 import { bitbucketApi } from './api/bitbucket-bridge'
+import { bitbucketServerApi } from './api/bitbucket-server-bridge'
 import { linearApi } from './api/linear-bridge'
 import { jiraApi } from './api/jira-bridge'
 import { starNagApi } from './api/star-nag-bridge'
@@ -123,6 +124,7 @@ const api = {
   hostedReview: hostedReviewApi,
   gl: glApiBridge,
   bitbucket: bitbucketApi,
+  bitbucketServer: bitbucketServerApi,
   linear: linearApi,
   jira: jiraApi,
   starNag: starNagApi,

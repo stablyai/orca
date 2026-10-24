@@ -43,6 +43,7 @@ export function mapBitbucketReview(pr: BitbucketPullRequestInfo): HostedReviewIn
     status: pr.status,
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
+    ...(pr.reviewDecision !== undefined ? { reviewDecision: pr.reviewDecision } : {}),
     ...(pr.headSha ? { headSha: pr.headSha } : {})
   }
 }
