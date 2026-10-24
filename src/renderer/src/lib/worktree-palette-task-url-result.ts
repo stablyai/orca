@@ -9,7 +9,8 @@ const ACCESSIBILITY_LABELS: Record<PaletteSupportingText['labelKind'], string> =
   pr: 'Pull request',
   mr: 'Merge request',
   issue: 'Linked issue',
-  port: 'Listening port'
+  port: 'Listening port',
+  repository: 'Remote repository'
 }
 
 /**

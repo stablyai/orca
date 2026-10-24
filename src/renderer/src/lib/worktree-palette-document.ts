@@ -9,6 +9,7 @@ import {
   buildWorktreeIssueEvidence,
   buildWorktreeLinkedTaskEvidence,
   buildWorktreePortEvidence,
+  buildWorktreeRepositoryEvidence,
   buildWorktreeReviewEvidence,
   type WorktreePaletteReviewSource
 } from './worktree-palette-evidence'
@@ -136,7 +137,9 @@ function buildEvidence(
       const evidence = buildWorktreeAttachmentEvidence(item)
       return evidence ? { ...evidence, id: `attachment:${getWorkspaceAttachmentKey(item)}` } : null
     }),
-    ...ports.map((port) => buildWorktreePortEvidence(port))
+    ...ports.map((port) => buildWorktreePortEvidence(port)),
+    // Why last: equally good evidence shows the earlier unit, and those say more about this workspace.
+    buildWorktreeRepositoryEvidence(repo)
   ]
   return units.filter((unit): unit is PaletteComposedEvidence => unit !== null)
 }
