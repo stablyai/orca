@@ -295,12 +295,8 @@ export async function startLocalWorker(args: {
       }
     })
   } catch (error) {
-    await tearDownFailedWorkerStart({
-      runtime,
-      structuredSession: placed?.structuredSession ?? null,
-      dispatchId: started.dispatch.id
-    })
-    return failWorkerStartWithReceipt({
+    // Settle synchronously before cleanup can race an accepted worker report.
+    const receipt = failWorkerStartWithReceipt({
       db,
       runId: run.id,
       taskId: task.id,
@@ -311,5 +307,13 @@ export async function startLocalWorker(args: {
       launch: launch.receipt,
       mode
     })
+    if (receipt.state !== 'ready') {
+      await tearDownFailedWorkerStart({
+        runtime,
+        structuredSession: placed?.structuredSession ?? null,
+        dispatchId: started.dispatch.id
+      })
+    }
+    return receipt
   }
 }

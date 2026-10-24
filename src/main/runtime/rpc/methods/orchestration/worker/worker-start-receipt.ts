@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isUnknownWorkerStartOutcome, type WorkerSetupReceipt } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
@@ -14,12 +15,51 @@ export function failWorkerStartWithReceipt(args: {
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
-}): unknown {
+}) {
+  const readSettledReceipt = () => {
+    // A settled result proves startup happened even when its prompt acknowledgement was lost.
+    const settled = args.db.getWorkerDispatch(args.dispatchId)
+    if (
+      settled?.stage === 'settled' &&
+      (settled.state === 'succeeded' || settled.state === 'failed')
+    ) {
+      const effects: unknown[] = JSON.parse(settled.effects)
+      return {
+        runId: args.runId,
+        taskId: args.taskId,
+        dispatchId: args.dispatchId,
+        state: 'ready' as const,
+        stage: settled.stage,
+        workerOutcome: settled.state,
+        setup: args.setup,
+        launch: args.launch,
+        mode: args.mode,
+        effects,
+        residualResources: []
+      }
+    }
+  }
+  const settled = readSettledReceipt()
+  if (settled) {
+    return settled
+  }
   const reason = args.error instanceof Error ? args.error.message : String(args.error)
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
-  const worker = unknown
-    ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
-    : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
+  let worker
+  try {
+    worker = unknown
+      ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
+      : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
+  } catch (error) {
+    if (error instanceof OrchestrationError && error.code === 'dispatch_inactive') {
+      // Another connection can settle the report between the initial read and the transition.
+      const raced = readSettledReceipt()
+      if (raced) {
+        return raced
+      }
+    }
+    throw error
+  }
   // Only name cleanup this start actually left behind: a terminal it created and still owns. A
   // structured session is discarded by the teardown, a pane the user typed into is theirs, and an
   // unknown outcome is not settled — none of the three has anything for `worker-release` to close.
