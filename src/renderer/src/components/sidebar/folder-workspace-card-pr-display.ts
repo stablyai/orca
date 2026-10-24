@@ -106,7 +106,12 @@ function parentPrChecksRowToCardDisplay(row: ParentPrChecksRow): WorktreeCardPrD
     title: row.title,
     ...(row.reviewState ? { state: row.reviewState } : {}),
     ...(row.reviewUrl ? { url: row.reviewUrl } : {}),
-    status: row.checkTone
+    // Why: a linked PR whose provider details haven't loaded yet (cold cache)
+    // is loading, not failing. Its checkTone is 'failure', but surfacing that
+    // as the card status would win the priority-0 sort and override siblings
+    // with genuinely passing/pending PRs. Omit the status so it keeps the
+    // lowest (neutral) sort priority, matching the pre-cache-lookup behavior.
+    ...(row.status === 'linkedDetailsUnavailable' ? {} : { status: row.checkTone })
   }
 }
 
