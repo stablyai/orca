@@ -54,6 +54,7 @@
       var pending = new Map()
       var statusEl = document.getElementById('status')
       var termsEl = document.getElementById('terms')
+      var sendEl = document.getElementById('send')
 
       function call(action, params) {
         return new Promise(function (resolve) {
@@ -94,15 +95,23 @@
           result.value.terminals.forEach(function (terminal) {
             var option = document.createElement('option')
             option.value = terminal.id
-            option.textContent = terminal.id
+            option.textContent = terminal.agent
+              ? terminal.id + ' (' + terminal.agent + ')'
+              : terminal.id
             termsEl.appendChild(option)
           })
+          termsEl.value = result.value.activeTerminalId || ''
           termsEl.hidden = result.value.terminals.length === 0
-          document.getElementById('send').hidden = result.value.terminals.length === 0
+          sendEl.hidden = result.value.terminals.length === 0
+          sendEl.disabled = termsEl.value === ''
         })
       })
 
-      document.getElementById('send').addEventListener('click', function () {
+      termsEl.addEventListener('change', function () {
+        sendEl.disabled = termsEl.value === ''
+      })
+
+      sendEl.addEventListener('click', function () {
         // Explicit terminal id — the API has no "active terminal" target.
         call('terminal.sendText', {
           terminalId: termsEl.value,

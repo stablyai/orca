@@ -17,7 +17,10 @@ export type PluginRuntimeDelegate = {
     worktreeSelector?: string,
     limit?: number,
     opts?: { includeVisualLayouts?: boolean }
-  ): Promise<{ terminals: { handle: string; title: string | null }[] }>
+  ): Promise<{
+    terminals: { handle: string; tabId: string; leafId: string; agentIdentity?: string }[]
+  }>
+  getActiveTerminalPane(worktreeId: string): { tabId: string; leafId: string } | null
   sendTerminal(
     handle: string,
     action: { text?: string; enter?: boolean },
@@ -56,9 +59,12 @@ export function bindPluginHostServices(input: {
         PLUGIN_WORKSPACE_TERMINAL_LIMIT,
         { includeVisualLayouts: false }
       )
-      return result.terminals
-        .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
-        .map((terminal) => ({ id: terminal.handle }))
+      const activePane = delegate.getActiveTerminalPane(worktreeId)
+      return result.terminals.slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT).map((terminal) => ({
+        id: terminal.handle,
+        agent: terminal.agentIdentity ?? null,
+        isActivePane: terminal.tabId === activePane?.tabId && terminal.leafId === activePane.leafId
+      }))
     },
     sendTerminalText: async (terminalId, action) => {
       const result = await delegate.sendTerminal(terminalId, action, { inputKind: 'driving' })
