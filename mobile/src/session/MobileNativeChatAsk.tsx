@@ -6,6 +6,7 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
+import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
 
 type Props = {
   prompt: AskPrompt
@@ -32,6 +33,7 @@ export function MobileNativeChatAsk({
   onCancel,
   onCollapse
 }: Props): React.JSX.Element {
+  const { scrollRef, inputRef, revealReply } = useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
@@ -152,7 +154,13 @@ export function MobileNativeChatAsk({
         </ScrollView>
       ) : null}
 
-      <ScrollView style={styles.scroll} keyboardShouldPersistTaps="always">
+      <ScrollView
+        ref={scrollRef}
+        onLayout={revealReply}
+        style={styles.scroll}
+        keyboardShouldPersistTaps="always"
+        nestedScrollEnabled
+      >
         <View style={styles.questionRow}>
           <Text style={styles.questionText}>{q.question}</Text>
           <MobileNativeChatCardHeaderAction
@@ -186,6 +194,8 @@ export function MobileNativeChatAsk({
         />
         {otherSelected ? (
           <TextInput
+            ref={inputRef}
+            onFocus={revealReply}
             style={styles.input}
             value={otherText[index]}
             onChangeText={(v) => setOther(index, v)}
@@ -283,6 +293,8 @@ function OptionRow({
 const styles = StyleSheet.create({
   card: {
     maxHeight: 380,
+    minHeight: 0,
+    flexShrink: 1,
     backgroundColor: colors.bgPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
@@ -320,7 +332,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary
   },
   scroll: {
-    paddingHorizontal: spacing.md
+    paddingHorizontal: spacing.md,
+    minHeight: 0,
+    flexShrink: 1
   },
   questionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   questionText: {
@@ -352,12 +366,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  checkCircle: {
-    borderRadius: 9
-  },
-  checkSquare: {
-    borderRadius: 4
-  },
+  checkCircle: { borderRadius: 9 },
+  checkSquare: { borderRadius: 4 },
   checkOn: {
     backgroundColor: colors.statusGreen,
     borderColor: colors.statusGreen
@@ -395,19 +405,13 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
   },
-  cancel: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm
-  },
+  cancel: { paddingVertical: spacing.sm, paddingHorizontal: spacing.sm },
   cancelText: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
     fontWeight: '600'
   },
-  progress: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
+  progress: { color: colors.textMuted, fontSize: typography.metaSize },
   next: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,

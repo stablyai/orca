@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
+import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
 import {
   formatQuestionAnswerByIndexes,
   formatQuestionAnswerWithOtherByIndexes,
@@ -29,6 +30,7 @@ export function MobileNativeChatQuestion({
   onCancel,
   onCollapse
 }: Props): React.JSX.Element {
+  const { scrollRef, inputRef, revealReply } = useMobileNativeChatReplyScroll()
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState(() => question.freeTextInput?.initialValue ?? '')
   const [sending, setSending] = useState(false)
@@ -109,7 +111,15 @@ export function MobileNativeChatQuestion({
   )
 
   return (
-    <View style={styles.card}>
+    <ScrollView
+      ref={scrollRef}
+      onLayout={revealReply}
+      testID="native-chat-question-card"
+      style={styles.card}
+      contentContainerStyle={styles.cardContent}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.header}>
         <CircleHelp size={15} color={colors.accentBlue} strokeWidth={2.2} />
         <Text style={styles.question}>{question.question}</Text>
@@ -174,8 +184,10 @@ export function MobileNativeChatQuestion({
       ) : null}
 
       {allowOther ? (
-        <View style={styles.freeTextRow}>
+        <View testID="native-chat-question-reply" style={styles.freeTextRow}>
           <TextInput
+            ref={inputRef}
+            onFocus={revealReply}
             style={mobileNativeChatInputStyles.freeInput}
             value={freeText}
             onChangeText={setFreeText}
@@ -208,7 +220,7 @@ export function MobileNativeChatQuestion({
           </Pressable>
         </View>
       ) : null}
-    </View>
+    </ScrollView>
   )
 }
 
@@ -216,12 +228,18 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
-    padding: spacing.md,
-    gap: spacing.sm,
+    maxHeight: 380,
+    flexGrow: 0,
     backgroundColor: colors.bgPanel,
     borderRadius: radii.card,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
+    borderColor: colors.borderSubtle,
+    flexShrink: 1,
+    minHeight: 0
+  },
+  cardContent: {
+    padding: spacing.md,
+    gap: spacing.sm
   },
   header: {
     flexDirection: 'row',
