@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { act, useRef, useState } from 'react'
+import { act, createRef, useRef, useState } from 'react'
+import { cleanup, render } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Terminal } from '@xterm/xterm'
@@ -8,6 +9,8 @@ import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { NativeChatPromptEditor } from '@/components/native-chat/NativeChatPromptEditor'
+import type { NativeChatComposerInput } from '@/components/native-chat/native-chat-composer-input'
 
 const state = {
   keybindings: undefined,
@@ -140,6 +143,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   act(() => root.unmount())
   terminal.dispose()
   vi.restoreAllMocks()
@@ -147,6 +151,42 @@ afterEach(() => {
 })
 
 describe('workspace list focus ownership', () => {
+  it.each(
+    ['Mac', 'Windows', 'Linux'].flatMap((platform) =>
+      ['', 'Unsent message'].map((draft) => ({ platform, draft }))
+    )
+  )(
+    'keeps cycling after a chat composer receives focus on $platform with draft "$draft"',
+    ({ platform, draft }) => {
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
+      const inputRef = createRef<NativeChatComposerInput>()
+      const view = render(
+        <NativeChatPromptEditor
+          inputRef={inputRef}
+          initialValue={draft}
+          disabled={false}
+          placeholder="Message"
+          onChange={() => {}}
+          onSelect={() => {}}
+        />
+      )
+      const composer = view.getByRole('textbox', { name: 'Message' })
+      const reachedComposer = vi.fn()
+      composer.addEventListener('keydown', reachedComposer)
+      autoFocus = () => inputRef.current?.focus()
+      const mod = getShortcutPlatform() === 'darwin' ? { metaKey: true } : { ctrlKey: true }
+      const chord = { ...mod, shiftKey: true }
+
+      press('ArrowDown', chord, textarea)
+      expect(document.activeElement).toBe(composer)
+      expect(press('ArrowDown', chord, composer).defaultPrevented).toBe(true)
+      expect(press('ArrowUp', chord, composer.querySelector('p')!).defaultPrevented).toBe(true)
+      expect(activate.mock.calls.map(([id]) => id)).toEqual(['b', 'c', 'b'])
+      expect(inputRef.current?.value).toBe(draft)
+      expect(reachedComposer).not.toHaveBeenCalled()
+    }
+  )
+
   it('keeps repeated arrows in the list across activation and rerenders', () => {
     press('ArrowDown')
     expect(document.activeElement).toBe(list)
