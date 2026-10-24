@@ -10,6 +10,8 @@ import {
   scanMode2031ReplyDecision
 } from '../../../../../shared/terminal-color-scheme-protocol'
 import { installTerminalLiveScrollbackRestore } from '@/lib/pane-manager/terminal-live-scrollback-restore'
+import { isTerminalOnAlternateScreen } from '@/lib/pane-manager/terminal-output-screen'
+import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'
 
@@ -61,18 +63,10 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
   session.liveScrollbackRestore?.dispose()
   session.liveScrollbackRestore = installTerminalLiveScrollbackRestore(session.pane.terminal)
 
-  // Why read it live: `?1049` is not a no-op when the pane is already on the
-  // target buffer — xterm still runs restoreCursor and swaps the kitty flag
-  // registers — so the replay prologue must only switch when it truly differs.
-  //
-  // Best-effort by design. xterm parses asynchronously, so this sees only
-  // PARSED writes; a `?1049` transition still queued reads stale. Draining
-  // first with a write sentinel was tried and reverted: it puts the repaint
-  // behind xterm's queue, so a wedged terminal stalls recovery, and it breaks
-  // the disposal/cancellation ordering the restore paths rely on. A stale read
-  // costs one mis-scoped buffer switch; the barrier costs the repaint.
   session.isPaneOnAlternateScreen = function (): boolean {
-    return session.pane.terminal.buffer.active.type === 'alternate'
+    // Why: replay flushes scheduled bytes first; include them without waiting for xterm to parse.
+    flushTerminalOutput(session.pane.terminal)
+    return isTerminalOnAlternateScreen(session.pane.terminal)
   }
 
   bindWritePtyOutputToXterm(session)

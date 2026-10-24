@@ -1,5 +1,6 @@
 import { writeForegroundTerminalChunk } from './pane-terminal-foreground-render-settle'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
+import { recordTerminalOutputScreen } from './terminal-output-screen'
 import { registerTerminalOutputAckCredits } from './pane-terminal-output-ack-credit'
 import {
   armTerminalWriteStallWatch,
@@ -42,6 +43,7 @@ export function writeBackgroundTerminalChunk(
     ? (): void => runGuardedWriteCompletionStep('background-on-write-failure', onWriteFailure)
     : undefined
   try {
+    recordTerminalOutputScreen(terminal, data)
     if (!runOnParsed || terminal.write.length < 2) {
       terminal.write(data)
       runOnParsed?.()
