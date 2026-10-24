@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { createBridgeDraftWriter, pageMayAccessChatDraft } from './bridge/bridge-draft-storage'
+import {
+  nativeChatDraftSession,
+  closeNativeChatDraftSession,
+  readNativeMobileChatDraft,
+  writeNativeMobileChatDraft,
+  removeStoredMobileChatDrafts
+} from '../session/mobile-native-chat-draft-native-storage'
+import { useCallback, useEffect, useState, useMemo } from 'react'
 import { loadHosts } from '../transport/host-store'
 import type { BridgeInitHost } from './bridge/bridge-envelope'
 import {
@@ -38,6 +46,7 @@ export type PageHostSnapshotView = {
   writeStorage: (key: string, value: string | null) => void
   /** One workspace key of this host, read for a host-area page that opened it in-page. */
   readWorkspaceKey: (key: string) => Promise<string | null>
+  writeDraft: (params: unknown) => Promise<{ committed: boolean }>
 }
 
 /**
@@ -54,8 +63,29 @@ export type PageHostSnapshotView = {
 export function usePageHostSnapshot(
   hostId: string,
   routePathname: string,
-  hostArea = false
+  hostArea = false,
+  sessionId?: string | null
 ): PageHostSnapshotView {
+  const checkDraft = useMemo(() => nativeChatDraftSession(sessionId ?? ''), [sessionId])
+  useEffect(
+    () => () => {
+      if (sessionId) {
+        closeNativeChatDraftSession(sessionId)
+      }
+    },
+    [sessionId]
+  )
+  const draftWriter = useMemo(
+    () =>
+      createBridgeDraftWriter({
+        mayWrite: (key) => pageMayAccessChatDraft(key, hostId, routePathname, hostArea),
+        check: checkDraft,
+        commit: writeNativeMobileChatDraft,
+        removeWorkspace: removeStoredMobileChatDrafts
+      }),
+    [hostId, routePathname, hostArea, checkDraft]
+  )
+  useEffect(() => () => draftWriter.dispose(), [draftWriter])
   const [snapshot, setSnapshot] = useState<PageHostSnapshot | null>(null)
   const [unreadable, setUnreadable] = useState(false)
 
@@ -128,13 +158,18 @@ export function usePageHostSnapshot(
 
   const readWorkspaceKey = useCallback(
     async (key: string): Promise<string | null> => {
-      if (!hostArea || !isHostWorkspaceStorageKey(key, hostId)) {
+      if (
+        !(hostArea && isHostWorkspaceStorageKey(key, hostId)) &&
+        !pageMayAccessChatDraft(key, hostId, routePathname, hostArea)
+      ) {
         throw new Error('this page may not read that key')
       }
       // The map first: every shell-side write lands there synchronously, before the store has it.
-      return readMirroredKeyOrStore(key)
+      return pageMayAccessChatDraft(key, hostId, routePathname, hostArea)
+        ? readNativeMobileChatDraft(key, checkDraft)
+        : readMirroredKeyOrStore(key)
     },
-    [hostArea, hostId]
+    [hostArea, hostId, routePathname, checkDraft]
   )
 
   return {
@@ -157,6 +192,7 @@ export function usePageHostSnapshot(
     }, [hostId, routePathname]),
     refreshStorage,
     writeStorage,
-    readWorkspaceKey
+    readWorkspaceKey,
+    writeDraft: draftWriter.write
   }
 }

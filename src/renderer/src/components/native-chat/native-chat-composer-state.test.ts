@@ -16,7 +16,10 @@ import {
 import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
-import { pickedSkillsInText } from '../../../../shared/structured-agent-session-send-mutation'
+import {
+  composerSkillOccurrences,
+  pickedSkillsInText
+} from '../../../../shared/structured-agent-session-send-mutation'
 
 const COMMANDS: SlashCommandSuggestion[] = [
   { name: 'clear' },
@@ -665,4 +668,20 @@ it('preserves known skill completion for unclassified session members only', () 
   expect(
     buildNativeChatPickerItems(classified, diskSkills, '', '/', []).map(({ kind }) => kind)
   ).toEqual(['command'])
+})
+
+it('binds composer files once per occurrence without narrowing host skill dispatch', () => {
+  const one = { name: 'review', path: '/one' }
+  const two = { name: 'review', path: '/two' }
+  const other = { name: 'build', path: '/build' }
+  expect(composerSkillOccurrences('$review', [one, two])).toEqual([{ ref: one, at: 0 }])
+  expect(composerSkillOccurrences('$review $review', [one, one, two])).toEqual([
+    { ref: one, at: 0 },
+    { ref: two, at: 8 }
+  ])
+  expect(composerSkillOccurrences('$build, $reviewer $review', [one, other])).toEqual([
+    { ref: other, at: 0 },
+    { ref: one, at: 18 }
+  ])
+  expect(pickedSkillsInText('$review', [one, two])).toEqual([one, two])
 })

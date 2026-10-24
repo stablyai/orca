@@ -52,8 +52,9 @@ export function projectQueuedImageCardHistory(
   result: AgentSessionHistoryResult,
   ctx: QueuedImageReader
 ): AgentSessionHistoryResult {
-  const page = readsQueuedImageCards(ctx) ? null : withoutImageCards(result.page)
-  return page ? { ...result, page: { ...result.page, ...page } } : result
+  const queuedImageCards = readsQueuedImageCards(ctx)
+  const page = queuedImageCards ? null : withoutImageCards(result.page)
+  return { ...result, page: { ...result.page, ...page, queuedImageCards } }
 }
 
 /** Applied before subscriber frame sizing; the host's canonical publication stays unchanged. */
@@ -61,6 +62,7 @@ export function projectQueuedImageCardPublication(
   publication: QueuePublication,
   ctx: QueuedImageReader
 ): QueuePublication {
-  const fields = readsQueuedImageCards(ctx) ? null : withoutImageCards(publication)
-  return fields ? { ...publication, ...fields } : publication
+  const queuedImageCards = readsQueuedImageCards(ctx)
+  const fields = queuedImageCards ? null : withoutImageCards(publication)
+  return { ...publication, ...fields, queuedImageCards }
 }

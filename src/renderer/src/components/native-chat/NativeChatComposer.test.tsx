@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => ({
   typeNativeChatCommand: vi.fn(),
   trackPendingSend: vi.fn(),
   setDraft: vi.fn(),
+  flushAppends: vi.fn(),
   draftScopeKeys: [] as string[],
   clearNativeChatLaunchDraft: vi.fn(),
   markNativeChatLaunchDraftAdopted: vi.fn()
@@ -101,7 +102,7 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
 vi.mock('./use-native-chat-draft', () => ({
   useNativeChatDraft: (scopeKey: string) => {
     mocks.draftScopeKeys.push(scopeKey)
-    return { draft: mocks.draft, setDraft: mocks.setDraft, flushDraftAppends: () => {} }
+    return { draft: mocks.draft, setDraft: mocks.setDraft, flushDraftAppends: mocks.flushAppends }
   }
 }))
 vi.mock('./native-chat-draft-cache', () => ({
@@ -612,7 +613,7 @@ describe('NativeChatComposer', () => {
     )
     const textarea = document.createElement('textarea')
     textarea.value = ''
-    mocks.setDraft.mockClear()
+    mocks.flushAppends.mockClear()
     mocks.flushPendingAttachments.mockClear()
 
     act(() => {
@@ -620,10 +621,9 @@ describe('NativeChatComposer', () => {
       mocks.fieldProps?.onImeSettled?.(textarea)
     })
 
-    expect(mocks.setDraft).toHaveBeenCalledOnce()
-    expect(mocks.setDraft).toHaveBeenCalledWith('')
+    expect(mocks.flushAppends).toHaveBeenCalledExactlyOnceWith('')
     expect(mocks.flushPendingAttachments).toHaveBeenCalledOnce()
-    expect(mocks.setDraft.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mocks.flushAppends.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.flushPendingAttachments.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
   })

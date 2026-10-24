@@ -1,3 +1,4 @@
+import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import {
   ActivityIndicator,
   Image,
@@ -7,7 +8,7 @@ import {
   Text,
   View
 } from 'react-native'
-import { FileText, X } from 'lucide-react-native'
+import { FileText, ImageIcon, X } from 'lucide-react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { formatPreviewByteLength } from '../files/mobile-file-preview-response'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -48,7 +49,20 @@ export function MobileNativeChatComposerAttachments({
     >
       {images.map((image) => (
         <View key={image.id} style={styles.thumb}>
-          <Image source={{ uri: image.previewUri }} style={styles.thumbImage} resizeMode="cover" />
+          {isRenderableImageUri(image.previewUri) ? (
+            <Image
+              source={{ uri: image.previewUri }}
+              style={styles.thumbImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <ImageIcon size={18} color={colors.textMuted} />
+              <Text style={styles.fileMeta} numberOfLines={1}>
+                {image.reference?.alt || image.path.split(/[\\/]/).pop() || 'Image'}
+              </Text>
+            </View>
+          )}
           {onRemoveImage ? (
             <RemoveBadge label="Remove image" onPress={() => onRemoveImage(image.id)} />
           ) : null}
@@ -106,6 +120,11 @@ const styles = StyleSheet.create({
     height: THUMB_SIZE,
     borderRadius: radii.composerItem,
     backgroundColor: colors.composerControl
+  },
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   thumbImage: {
     width: '100%',

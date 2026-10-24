@@ -1,3 +1,4 @@
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
 import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session-current-requests'
 // The structured composer's one send seam: a slash command dispatches as a
 // conversation command, and everything else goes out as an
@@ -8,6 +9,7 @@ import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-session-approval-subject'
 import {
+  composerSkillOccurrences,
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
 } from '../../../src/shared/structured-agent-session-send-mutation'
@@ -69,7 +71,8 @@ export function useMobileStructuredSendWithOutcome(args: {
   text: string,
   images?: string[],
   deadline?: number,
-  attachments?: readonly StructuredMobileSendAttachment[]
+  attachments?: readonly StructuredMobileSendAttachment[],
+  skills?: readonly AgentJournalSkillRef[]
 ) => Promise<MobileNativeChatSendOutcome> {
   const {
     accept,
@@ -92,7 +95,8 @@ export function useMobileStructuredSendWithOutcome(args: {
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      skills?: readonly AgentJournalSkillRef[]
     ): Promise<MobileNativeChatSendOutcome> => {
       const currentFence = stateRef.current.fence
       if (!client || !sessionId || !enabled || currentFence === null) {
@@ -145,7 +149,8 @@ export function useMobileStructuredSendWithOutcome(args: {
         }
       }
       const wireText = nativeChatTextWithFileReferences(text, files)
-      const body = structuredAgentSessionSendBody(wireText, imageAttachments)
+      const boundSkills = composerSkillOccurrences(text, skills ?? []).map(({ ref }) => ref)
+      const body = structuredAgentSessionSendBody(wireText, imageAttachments, boundSkills)
       if (body.blocks.length === 0) {
         return 'rejected'
       }
@@ -164,6 +169,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         expectedRuntimeFence: currentFence,
         text: wireText,
         attachments: imageAttachments,
+        ...(body.skills?.length ? { skills: body.skills } : {}),
         ...(mobileStructuredSendQueues(queueCapable, stateRef.current)
           ? { delivery: 'queue-if-active' as const }
           : {}),

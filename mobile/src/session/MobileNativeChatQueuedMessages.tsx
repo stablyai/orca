@@ -1,10 +1,15 @@
+import { DragReorderList } from '../components/DragReorderList'
+import type { DragReorderMove } from '../components/drag-reorder-positions'
 import { useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
 import { useLargeSystemText } from '../theme/use-large-system-text'
-import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
+import {
+  mobileQueuedMessageCardLine,
+  type MobileQueuedMessageCard
+} from './mobile-structured-queued-message-cards'
 import type { MobileQueuePause } from './mobile-structured-queued-message-feed'
 import type { MobileQueuedMessageEdit } from './use-mobile-structured-queued-message-controls'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
@@ -26,6 +31,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   /** Opens an editor in the card; older hosts copy its text to the composer. */
   onEdit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
+  editDisabledReason?: string
+  onMove?: (move: DragReorderMove) => Promise<boolean>
   /** The whole queue's pause: the header reads Paused, with Clear all and Resume. */
   pause?: MobileQueuePause
   onResume?: () => Promise<boolean>
@@ -42,6 +49,8 @@ export function MobileNativeChatQueuedMessages({
   onClearAll,
   onEdit,
   editor,
+  editDisabledReason,
+  onMove,
   pause,
   onResume,
   steerHeld = false
@@ -173,34 +182,48 @@ export function MobileNativeChatQueuedMessages({
             messageIds={cards.map((card) => card.messageId)}
             newestIsPersons={!cards.at(-1)?.attribution}
           >
-            {(reveal) =>
-              cards.map((card) => {
-                const busy = busyIds.has(card.messageId)
-                return (
-                  <MobileQueuedMessageCardRow
-                    key={card.messageId}
-                    card={card}
-                    editor={editor?.messageId === card.messageId ? editor : undefined}
-                    busy={busy}
-                    editBlocked={busy || editor !== undefined || !onEdit}
-                    steerHeld={steerHeld}
-                    onSend={() => void run(card.messageId, onSend)}
-                    onDelete={() => void run(card.messageId, onDelete)}
-                    onMore={() => setMenuFor(card.messageId)}
-                    onEditorLayout={reveal}
-                  />
-                )
-              })
-            }
+            {(reveal, drag) => {
+              const renderRow = (card: MobileQueuedMessageCard, handle?: React.ReactNode) => (
+                <MobileQueuedMessageCardRow
+                  key={card.messageId}
+                  card={card}
+                  dragHandle={handle}
+                  editor={editor?.messageId === card.messageId ? editor : undefined}
+                  busy={busyIds.has(card.messageId)}
+                  editBlocked={busyIds.has(card.messageId) || editor !== undefined || !onEdit}
+                  editDisabledReason={editDisabledReason}
+                  steerHeld={steerHeld}
+                  onSend={() => void run(card.messageId, onSend)}
+                  onDelete={() => void run(card.messageId, onDelete)}
+                  onMore={() => setMenuFor(card.messageId)}
+                  onEditorLayout={reveal}
+                />
+              )
+              return onMove && !editor ? (
+                <DragReorderList
+                  items={cards}
+                  itemKey={(card) => card.messageId}
+                  canMove={(card) => !card.automatic && !busyIds.has(card.messageId)}
+                  rowPresentation="plain"
+                  renderRow={renderRow}
+                  onMove={(move) => void run(move.movedId, () => onMove(move))}
+                  {...drag}
+                />
+              ) : (
+                cards.map((card) => renderRow(card))
+              )
+            }}
           </MobileQueuedMessageScrollList>
         ) : null}
       </View>
       <ActionSheetModal
         visible={menuCard !== undefined}
-        title={menuCard?.text}
+        title={menuCard && mobileQueuedMessageCardLine(menuCard)}
         actions={[
           {
             label: 'Edit message',
+            disabled: editDisabledReason !== undefined,
+            hint: editDisabledReason,
             icon: Pencil,
             // Runs once the sheet's Modal is gone, so the composer Edit fills can take focus.
             closeBeforePress: true,

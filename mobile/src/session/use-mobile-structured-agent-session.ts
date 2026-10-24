@@ -69,15 +69,12 @@ export function useMobileStructuredAgentSession(
   const queueCapable = hostSupport?.queuedMessages === true
   // A /compact waits in line only where its card renders.
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
-  const promptCancelSupported = hostSupport?.promptCancel ?? null
-  const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
-  const hostStopsConversation = hostSupport?.conversationStop ?? null
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const commandPendingRef = useRef(false)
   // Against a host that predates the quiet repeated Stop, a Stop of a turn still being stopped joins it.
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
-  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
+  const { state, stateRef, queuedMessages, queuePause, queuedImageCards, olderPages, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
 
   const mutate = useMobileStructuredAgentMutate({
@@ -241,6 +238,11 @@ export function useMobileStructuredAgentSession(
     agentWorking: isWorking,
     client,
     sessionId,
+    copyCapable: hostSupport?.queuedMessageCopyDelete === true,
+    reorderCapable: hostSupport?.queuedMessageReorder === true,
+    queuedImageCards,
+    promptPending: approvalPrompt !== null || questionPrompt !== null,
+    copyQueuedMessage: args.copyQueuedMessage,
     editCapable: hostSupport ? hostSupport.queuedMessageEdit === true : null,
     chatActive: enabled,
     enabled: enabled && connected,
@@ -256,22 +258,22 @@ export function useMobileStructuredAgentSession(
       requestMobileStructuredAgentSessionCancel({
         client,
         enabled,
-        hostAnswersRepeatedStops,
-        hostStopsConversation,
+        hostAnswersRepeatedStops: hostSupport?.quietRepeatedStop ?? null,
+        hostStopsConversation: hostSupport?.conversationStop ?? null,
         inFlight: inFlightStopsRef.current,
         onSendError,
         prompt,
-        promptCancelSupported,
+        promptCancelSupported: hostSupport?.promptCancel ?? null,
         sessionId,
         stateRef
       }),
     [
       client,
       enabled,
-      hostAnswersRepeatedStops,
-      hostStopsConversation,
+      hostSupport?.quietRepeatedStop,
+      hostSupport?.conversationStop,
       onSendError,
-      promptCancelSupported,
+      hostSupport?.promptCancel,
       sessionId,
       stateRef
     ]

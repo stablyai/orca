@@ -190,18 +190,22 @@ function NativeChatImageThumbnail({
     [readEnvironmentId]
   )
   const localSrc = useLocalImageSrc(
-    !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
+    !attachment.reference?.url && !isPending && (isNearViewport || isOpen)
+      ? attachment.path
+      : undefined,
     attachment.path,
     attachment.connectionId,
-    hostReadContext,
+    // A captured host path must never fall through to a file with the same name on this client.
+    hostEnvironmentId && attachment.reference?.path && !readEnvironmentId ? null : hostReadContext,
     // Why chat-image: a draft handed off from the host queue may carry paths a paired client chose.
     chatImageAccess()
   )
   // The clipboard thumbnail is already in this process, so it renders with no
   // round-trip; the on-disk file only wins for the full-size dialog.
-  const thumbnailSrc = attachment.previewUrl ?? localSrc
-  const fullSizeSrc = localSrc ?? attachment.previewUrl
-  const filename = attachmentLabel(attachment.path)
+  const thumbnailSrc = attachment.previewUrl ?? attachment.reference?.url ?? localSrc
+  const fullSizeSrc = localSrc ?? attachment.reference?.url ?? attachment.previewUrl
+  const filename =
+    attachment.reference?.alt ?? attachmentLabel(attachment.path || attachment.reference?.url || '')
   const pendingLabel = attachment.pendingName
     ? translate('components.native-chat.composer.uploadingFile', 'Uploading {{name}}…', {
         name: attachment.pendingName

@@ -120,7 +120,7 @@ export function useMobileSessionImageAttachments({
       : nativeChatInputLeaseReady && nativeChatAgentConfirmed,
     structuredNativeChat,
     files: nativeChatFiles.files,
-    onFilesSent: nativeChatFiles.removeFiles,
+    onFilesSent: nativeChatFiles.consumeSubmittedFiles,
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,

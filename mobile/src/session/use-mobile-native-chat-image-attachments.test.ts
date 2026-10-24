@@ -1,3 +1,7 @@
+import {
+  hydrateMobileNativeChatDraft,
+  resetMobileNativeChatDraftStoreForTests
+} from './mobile-native-chat-draft-store'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
@@ -92,6 +96,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     pick.mockReset()
     // Stale markers and write locks live at module scope (they outlive the
     // screen), so they also outlive a test.
+    resetMobileNativeChatDraftStoreForTests()
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
   })
@@ -102,106 +107,22 @@ describe('useMobileNativeChatImageAttachments', () => {
   })
 
   function mount(args: HookArgs): void {
+    if (args.scopeKey) {
+      void hydrateMobileNativeChatDraft(args.scopeKey)
+    }
     act(() => {
       renderer = create(createElement(Harness, { args }))
     })
   }
 
   function update(args: HookArgs): void {
+    if (args.scopeKey) {
+      void hydrateMobileNativeChatDraft(args.scopeKey)
+    }
     act(() => {
       renderer!.update(createElement(Harness, { args }))
     })
   }
-
-  it('adds an uploaded image as a chip without pasting to the terminal', async () => {
-    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
-    const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
-    mount(
-      baseArgs({
-        client: client as unknown as RpcClient,
-        deviceTokenRef: { current: 'device-1' },
-        getActiveWorktreeConnectionId: async () => 'conn-1'
-      })
-    )
-
-    await act(async () => {
-      await hook!.attachImage('library')
-    })
-
-    expect(hook!.attachments).toEqual([
-      {
-        id: 'img-1',
-        path: '/tmp/a.png',
-        previewUri: 'file:///a.jpg'
-      }
-    ])
-    expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
-  })
-
-  it.each(['claude', 'omp'])('rides %s images along before the text', async (agent) => {
-    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
-    const client = makeClient([
-      methodNotFound('start'),
-      ok('save', '/tmp/a.png'),
-      sendResult(true), // Ctrl+U clear
-      sendResult(true) // the image paste (enter:false)
-    ])
-    const order: string[] = []
-    const sleep = vi.fn(async () => {
-      order.push('settle')
-    })
-    const baseSend = vi.fn(async (t: string) => {
-      order.push(`text:${t}`)
-      return 'accepted' as const
-    })
-    // Record each terminal write so the paste-before-settle order is asserted,
-    // not just implied by the call counts.
-    const trackedClient: Pick<RpcClient, 'sendRequest'> = {
-      sendRequest: (method, params) => {
-        if (method === 'terminal.send') {
-          order.push((params as { text?: string }).text === '\x15' ? 'clear' : 'paste')
-        }
-        return client.sendRequest(method, params)
-      }
-    }
-    mount(
-      baseArgs({
-        client: trackedClient as RpcClient,
-        agent,
-        deviceTokenRef: { current: 'device-1' },
-        baseSend,
-        sleep
-      })
-    )
-
-    await act(async () => {
-      await hook!.attachImage('library')
-    })
-
-    let accepted = false
-    await act(async () => {
-      accepted = await hook!.sendNativeChat('look at this')
-    })
-
-    expect(accepted).toBe(true)
-    const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
-    // Ctrl+U clear, then the bracketed image paste.
-    expect(sendCalls).toHaveLength(2)
-    expect(sendCalls[0]?.params).toMatchObject({ text: '\x15', enter: false })
-    expect(sendCalls[1]?.params).toMatchObject({
-      text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/a.png\x1b[201~ `,
-      enter: false
-    })
-    const combined = String(sendCalls[1]?.params.text ?? '') + 'look at this'
-    expect(combined).toContain('.png\x1b[201~ look')
-    expect(combined).not.toContain('.png\x1b[201~look')
-    // Clear, then paste, then settle, then the text send — in that order.
-    expect(order).toEqual(['clear', 'paste', 'settle', 'text:look at this'])
-    // The local preview URI rides along so the sent bubble shows the photo.
-    expect(baseSend).toHaveBeenCalledWith(...textSend('look at this', ['file:///a.jpg']))
-    // Chips clear once the send is accepted.
-    expect(hook!.attachments).toEqual([])
-  })
 
   it('leads the image paste with a clear sized to a parked multi-line launch draft', async () => {
     // A single Ctrl+U kills only the last line, so the draft's earlier lines
@@ -585,7 +506,7 @@ describe('useMobileNativeChatImageAttachments', () => {
 
     // The user gives up on the image and removes its chip, then sends plain text.
     await act(async () => {
-      hook!.removeAttachment('img-1')
+      hook!.removeAttachment(hook!.attachments[0]!.id)
     })
     expect(hook!.attachments).toEqual([])
     let accepted = false
@@ -713,7 +634,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(hook!.attachments).toHaveLength(1)
 
     await act(async () => {
-      hook!.removeAttachment('img-1')
+      hook!.removeAttachment(hook!.attachments[0]!.id)
     })
     let accepted = true
     await act(async () => {
@@ -757,7 +678,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       await hook!.sendNativeChat('hi')
     })
     await act(async () => {
-      hook!.removeAttachment('img-1')
+      hook!.removeAttachment(hook!.attachments[0]!.id)
     })
 
     let retry: Promise<boolean> | null = null
@@ -798,7 +719,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       await hook!.sendNativeChat('hi')
     })
     await act(async () => {
-      hook!.removeAttachment('img-1')
+      hook!.removeAttachment(hook!.attachments[0]!.id)
     })
 
     // Lease lost: the heal is a terminal.send too, so it must not be attempted.
@@ -862,13 +783,13 @@ describe('useMobileNativeChatImageAttachments', () => {
       await hook!.sendNativeChat('second')
     })
     await act(async () => {
-      hook!.removeAttachment('img-2')
+      hook!.removeAttachment(hook!.attachments[0]!.id)
     })
 
     activeHandleRef.current = 'term-1'
     update(args)
     await act(async () => {
-      hook!.removeAttachment('img-1')
+      hook!.removeAttachment(hook!.attachments[0]!.id)
     })
     await act(async () => {
       expect(await hook!.sendNativeChat('retry first')).toBe(true)

@@ -57,6 +57,7 @@ function parseEntry(entry: unknown): JournalEntry[] {
   const parsed = parseStoredNativeChatComposerDraft({
     text: typeof addition.text === 'string' ? addition.text : '',
     images: Array.isArray(addition.images) ? addition.images : [],
+    document: addition.document,
     savedAt: at
   })
   return parsed
@@ -68,6 +69,10 @@ function parseEntry(entry: unknown): JournalEntry[] {
           addition: {
             text: parsed.text,
             images: parsed.images,
+            ...(parsed.document ? { document: parsed.document } : {}),
+            ...(addition.textPolicy === 'append-repeated'
+              ? { textPolicy: addition.textPolicy }
+              : {}),
             ...(addition.fromUser === true ? { fromUser: true } : {}),
             ...(typeof addition.before === 'string' ? { before: addition.before } : {}),
             ...(Array.isArray(addition.fills)

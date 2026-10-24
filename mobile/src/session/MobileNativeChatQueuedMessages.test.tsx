@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ActionSheetAction } from '../components/ActionSheetModal'
+import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 
@@ -9,6 +9,7 @@ let fontScale = 1
 vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ fontScale }),
   ActivityIndicator: 'ActivityIndicator',
+  Image: 'Image',
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -18,12 +19,25 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
+vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
+
 vi.mock('lucide-react-native', () => ({
   AlertCircle: 'AlertCircle',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
   CornerDownRight: 'CornerDownRight',
+  FileText: 'FileText',
+  Image: 'ImageIcon',
+  ImagePlus: 'ImagePlus',
   ListEnd: 'ListEnd',
   MoreHorizontal: 'MoreHorizontal',
   Pencil: 'Pencil',
@@ -48,6 +62,28 @@ function card(
     ...overrides
   }
 }
+
+it('keeps Edit disabled with an explanation until a question or approval is answered', async () => {
+  let root!: ReactTestRenderer
+  await act(async () => {
+    root = create(
+      createElement(MobileNativeChatQueuedMessages, {
+        cards: [card({ messageId: 'held' })],
+        onEdit: vi.fn(async () => true),
+        editDisabledReason: 'Answer the question or approval before editing this message.'
+      })
+    )
+  })
+  await act(async () =>
+    root.root.findByProps({ accessibilityLabel: 'More actions' }).props.onPress()
+  )
+  const actions = root.root.findByType(ActionSheetModal).props.actions
+  expect(actions[0]).toMatchObject({
+    disabled: true,
+    hint: 'Answer the question or approval before editing this message.'
+  })
+  await act(async () => root.unmount())
+})
 
 describe('MobileNativeChatQueuedMessages', () => {
   let renderer: ReactTestRenderer | null = null
@@ -121,6 +157,9 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(texts(mounted)).not.toContain('Returned')
     expect(nodeTypes(editedRow)).toEqual(expect.arrayContaining(['X', 'Check']))
     expect(nodeTypes(editedRow)).not.toContain('Pencil')
+    // A host that edits text only: no strip and no Attach.
+    expect(nodeTypes(editedRow)).not.toContain('ScrollView')
+    expect(mounted.root.findAllByProps({ accessibilityLabel: 'Attach image' })).toHaveLength(0)
     expect(nodeTypes(editedRow)).not.toContain('AlertCircle')
     expect(
       editedRow.findAll((node) => node.props.accessibilityLabel === 'Delete this queued message')
@@ -157,6 +196,20 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(nodeTypes(saveButton)).not.toContain('Check')
     expect(button('Cancel editing').props.disabled).toBe(true)
     expect(button('Edit queued message').props.editable).toBe(false)
+  })
+
+  it("shows a card's image count before Steer and names a lone image", async () => {
+    const shot = { type: 'image-ref' as const, path: '/host/tmp/shot.png' }
+    const mounted = await mount({
+      cards: [
+        card({ messageId: 'a', text: '[Image #1] ', images: [shot] }),
+        card({ messageId: 'b', images: [shot, shot] })
+      ],
+      onEdit: vi.fn(async () => true)
+    })
+    expect(texts(mounted)).toEqual(expect.arrayContaining(['shot.png', 'text of b', 1, 2]))
+    expect(mounted.root.findAllByProps({ accessibilityLabel: '2 images' })).toHaveLength(1)
+    expect(mounted.root.findAllByProps({ accessibilityLabel: 'More actions' })).toHaveLength(2)
   })
 
   it('draws a plain waiting card as one compact row with no caption', async () => {

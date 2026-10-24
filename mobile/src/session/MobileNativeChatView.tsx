@@ -106,6 +106,7 @@ type Props = ComposerTrayProps & {
    *  optimistic image bubble. */
   imagePreviewsByMessageId?: Record<string, string[]>
   /** Controlled composer text (owned by the route so dictation can write to it). */
+  draftAuthoringReady?: boolean
   composerText: string
   onComposerTextChange: (text: string) => void
   onAttachImage?: () => void
@@ -192,6 +193,7 @@ export function MobileNativeChatView({
   getComposerEditGeneration,
   pending,
   imagePreviewsByMessageId,
+  draftAuthoringReady = true,
   composerText,
   onComposerTextChange,
   onAttachImage,
@@ -419,6 +421,7 @@ export function MobileNativeChatView({
       {trayContent}
       <MobileNativeChatComposer
         structured={structuredActivityUi ? structuredComposer : null}
+        authoringReady={draftAuthoringReady}
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}

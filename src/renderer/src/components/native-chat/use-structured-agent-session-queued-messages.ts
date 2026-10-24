@@ -1,9 +1,14 @@
 // Host-held drafts as this pane acts on them: the card list, Send-now (Steer),
-// Delete, in-place Edit, the Cmd/Ctrl+Enter steer chord, and a held queue's Resume and Clear all.
+// Delete, Edit, the Cmd/Ctrl+Enter steer chord, and a held queue's Resume and Clear all.
 // Everything durable lives on the host; an open editor holds only its own typing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { extractQueuedMessageToComposer } from './structured-agent-session-queued-extract'
+import {
+  useStructuredAgentSessionQueuedReorder,
+  type QueuedMessageReorder
+} from './use-structured-agent-session-queued-reorder'
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { mapSettledWithConcurrency } from '../../../../shared/map-with-concurrency'
@@ -59,6 +64,9 @@ export type StructuredAgentSessionQueuedMessagesController = {
   remove: (messageId: string) => Promise<void>
   /** The host edits cards in place; without it a card offers no Edit. */
   editCapable: boolean
+  editReturnsToComposer?: boolean
+  editDisabledReason?: string
+  reorder?: QueuedMessageReorder
   /** The card being edited in this pane, at most one. */
   editor: QueuedMessageInlineEditor | undefined
   /** Opens the card's inline editor. */
@@ -68,7 +76,7 @@ export type StructuredAgentSessionQueuedMessagesController = {
 }
 
 /** Which control is on its way, so the button that was pressed is the one that spins. */
-export type QueuedMessagesPendingAction = 'send' | 'delete' | 'resume' | 'clear'
+export type QueuedMessagesPendingAction = 'send' | 'delete' | 'resume' | 'clear' | 'edit'
 
 const NO_SENDS: readonly StructuredAgentSessionPendingSend[] = []
 const CLEAR_DELETE_CONCURRENCY = 8
@@ -120,6 +128,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     ],
     [isWorking, sending, queuePause, queuedMessages, submissions]
   )
+  const reordered = useStructuredAgentSessionQueuedReorder(cards, args.editTransport)
   const cardsRef = useRef(cards)
   useEffect(() => {
     cardsRef.current = cards
@@ -184,13 +193,36 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   )
 
   const editing = useStructuredAgentSessionQueuedEdit({
-    transport: args.editTransport,
+    transport: {
+      ...args.editTransport,
+      capable: args.editTransport.capable && !args.editTransport.copyDeleteCapable
+    },
     messages: queuedMessages,
     cards,
     submissions,
     composerScopeKey,
     promptOpen: hasPendingPrompt
   })
+
+  const beginLegacyEdit = editing.begin
+  const edit = useCallback(
+    async (messageId: string): Promise<void> => {
+      if (hasPendingPrompt) {
+        return
+      }
+      if (!args.editTransport.copyDeleteCapable) {
+        return beginLegacyEdit(messageId)
+      }
+      await run([messageId], 'edit', () =>
+        extractQueuedMessageToComposer(
+          args.editTransport,
+          composerScopeKey,
+          queuedMessages?.find((message) => message.messageId === messageId)
+        )
+      )
+    },
+    [args.editTransport, composerScopeKey, beginLegacyEdit, hasPendingPrompt, queuedMessages, run]
+  )
 
   const steerNewest = useCallback((): boolean => {
     if (!enabled) {
@@ -270,7 +302,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   }, [admit, capturePresentation, clearCapable, run])
 
   return {
-    cards,
+    cards: reordered.cards,
+    reorder: reordered.reorder,
     queueCapable: enabled,
     clearCapable,
     pause,
@@ -280,8 +313,17 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     pending: (messageId) => inFlight.get(messageId) ?? null,
     steer,
     remove,
-    edit: editing.begin,
-    editCapable: editing.capable,
+    edit,
+    editReturnsToComposer: args.editTransport.copyDeleteCapable === true,
+    editCapable: args.editTransport.copyDeleteCapable === true || editing.capable,
+    ...(hasPendingPrompt
+      ? {
+          editDisabledReason: translate(
+            'components.native-chat.queuedMessages.editWaitForAnswer',
+            'Answer the agent’s question or approval before editing.'
+          )
+        }
+      : {}),
     editor: editing.editor,
     steerNewest
   }

@@ -19612,6 +19612,13 @@
       "visualLoading": "Loading visualization",
       "visualOpenInNewTab": "Open in new tab",
       "queuedMessages": {
+        "copyAlreadyGone": "This message was already sent or removed. Its copy is in the chat box.",
+        "copyFailed": "Couldn't save this message in the chat box. It is still queued. Try Edit again.",
+        "copyRetained": "{{notice}} A copy is in the chat box.",
+        "editWaitForAnswer": "Answer the agent’s question or approval before editing.",
+        "moveChanged": "The queue changed before this move. Try dragging the message again.",
+        "reorderHint": "Drag to reorder, or use the Up and Down arrow keys.",
+        "reorderMessage": "Reorder message",
         "behindReturnedHold": "Waiting — a message ahead needs attention",
         "steer": "Steer",
         "send": "Send",

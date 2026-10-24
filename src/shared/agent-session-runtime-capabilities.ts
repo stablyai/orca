@@ -74,6 +74,11 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // A client offers Edit only when the host advertises it; there is no copy-and-delete fallback.
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const
+// Conditional withdrawal lets a client persist its draft before removing exactly that body.
+export const AGENT_SESSION_QUEUED_MESSAGE_COPY_DELETE_RUNTIME_CAPABILITY =
+  'agent-session.queued-message-copy-delete.v1' as const
+export const AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY =
+  'agent-session.queued-message-reorder.v1' as const
 // Why: `agentSession.queuedMessageUpdate`'s params are strict, so an older host rejects `images`.
 // A host advertising this replaces a queued card's image set on Save; otherwise Save is text only.
 export const AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY =
@@ -151,6 +156,8 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_COPY_DELETE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,

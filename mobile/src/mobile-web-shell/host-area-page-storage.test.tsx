@@ -15,6 +15,7 @@ const store = vi.hoisted(() => new Map<string, string>())
 // Writes wait here until a case lands them, as a native store's queue holds them.
 const queued = vi.hoisted((): (() => void)[] => [])
 
+vi.mock('react-native', () => ({ AppState: { addEventListener: () => ({ remove: () => {} }) } }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     multiGet: async (keys: readonly string[]) => keys.map((key) => [key, store.get(key) ?? null]),

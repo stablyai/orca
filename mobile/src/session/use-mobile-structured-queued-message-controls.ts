@@ -1,3 +1,6 @@
+import type { DragReorderMove } from '../components/drag-reorder-positions'
+import type { MobileQueuedMessageCopy } from './mobile-native-chat-queued-extraction'
+import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
 // The queued-draft surface the structured session exposes: cards derived from
 // the published list and the Send-now / Delete / Edit actions. Shown whatever
 // the queue capability says: a host that does not queue sends still publishes a
@@ -50,6 +53,8 @@ export type MobileStructuredQueuedMessageControls = {
   /** Edit in the card; an older host falls back to the composer copy. */
   edit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
+  editDisabledReason?: string
+  move?: (move: DragReorderMove) => Promise<boolean>
   /** The whole queue's pause, shown above the cards; null when it sends on its own. */
   pause: MobileQueuePause
   /** Lift the queue's pause, so the waiting cards drain. */
@@ -65,6 +70,11 @@ export function useMobileStructuredQueuedMessageControls(args: {
   chatActive: boolean
   enabled: boolean
   editCapable: boolean | null
+  copyCapable?: boolean
+  reorderCapable?: boolean
+  queuedImageCards?: boolean
+  promptPending?: boolean
+  copyQueuedMessage?: MobileQueuedMessageCopy
   agentName?: string
   journalItems?: readonly AgentJournalRenderItem[]
   queuedMessages: MobileQueuedMessageFeed
@@ -90,21 +100,31 @@ export function useMobileStructuredQueuedMessageControls(args: {
     sessionKey,
     submissions
   } = args
+  const composerActions = useMobileQueuedMessageComposerActions({
+    ...args,
+    messages: queuedMessages,
+    copyCapable: args.copyCapable === true,
+    reorderCapable: args.reorderCapable === true,
+    queuedImageCards: args.queuedImageCards === true,
+    promptPending: args.promptPending === true
+  })
+  const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
   const cards = useMemo(
     () =>
-      mobileQueuedMessageCards(queuedMessages, submissions, {
+      mobileQueuedMessageCards(orderedMessages, submissions, {
         agentWorking,
         agentName: args.agentName,
         statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
           ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
           : []
       }),
-    [agentWorking, args.agentName, args.journalItems, queuedMessages, submissions]
+    [agentWorking, args.agentName, args.journalItems, orderedMessages, queuedMessages, submissions]
   )
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({
     ...args,
-    enabled: args.enabled && args.editCapable === true,
+    enabled:
+      args.enabled && args.editCapable === true && !composerActions.copyEdit && !args.promptPending,
     messages: queuedMessages,
     cards
   })
@@ -194,6 +214,12 @@ export function useMobileStructuredQueuedMessageControls(args: {
   )
   const edit = useCallback<MobileQueuedMessageEdit>(
     async (messageId, onCopied) => {
+      if (args.promptPending) {
+        return false
+      }
+      if (composerActions.copyEdit) {
+        return composerActions.copyEdit(messageId, onCopied)
+      }
       if (args.editCapable) {
         if (!args.enabled) {
           onSendError('Reconnect to edit.')
@@ -216,6 +242,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
     },
     [
       appendComposerText,
+      composerActions.copyEdit,
+      args.promptPending,
       args.editCapable,
       args.enabled,
       beginInlineEdit,
@@ -247,6 +275,10 @@ export function useMobileStructuredQueuedMessageControls(args: {
     clear,
     edit: args.editCapable === null ? undefined : edit,
     editor,
+    editDisabledReason: args.promptPending
+      ? 'Answer the question or approval before editing this message.'
+      : undefined,
+    move: composerActions.move,
     pause,
     resume,
     sessionKey

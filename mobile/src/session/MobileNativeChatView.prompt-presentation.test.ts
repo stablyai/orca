@@ -1,3 +1,4 @@
+import './MobileNativeChatView.harness.test-fixture'
 import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable } from 'react-native'

@@ -7,8 +7,11 @@ import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import type { z } from 'zod'
 import {
   MAX_SKILL_REFS,
-  type SendBody
+  type SendBody,
+  type SendImageRefBlock
 } from './rpc-contract/structured-agent-session-message-params'
+
+export type ComposerImageReference = Omit<z.infer<typeof SendImageRefBlock>, 'type'>
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 
 /** What a send carries beside its message: both join the OPERATION fingerprint, never the body's. */
@@ -92,6 +95,7 @@ export function structuredAgentSessionMessageSendMutation(
 export type StructuredAgentSessionAttachment = {
   path: string
   previewUri: string
+  reference?: ComposerImageReference
   /** The SSH connection a remote image lives on; kept by the client, never sent. */
   connectionId?: string
 }
@@ -114,7 +118,10 @@ export function structuredAgentSessionSendBody(
     role: 'user',
     blocks: [
       ...(text.trim().length > 0 ? [{ type: 'text' as const, text: text.trimEnd() }] : []),
-      ...attachments.map((attachment) => ({ type: 'image-ref' as const, path: attachment.path }))
+      ...attachments.map((attachment) => ({
+        type: 'image-ref' as const,
+        ...(attachment.reference ?? { path: attachment.path })
+      }))
     ],
     ...(picked.length > 0 ? { skills: picked } : {})
   }
@@ -134,6 +141,8 @@ export function pickedSkillsInText(
     return true
   })
 }
+
+export { composerSkillOccurrences } from './composer-skill-occurrences'
 
 function textNamesSkill(text: string, name: string): boolean {
   const token = `$${name}`

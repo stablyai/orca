@@ -49,13 +49,15 @@ describe('useMobileNativeChatMessageSend', () => {
 
   const mount = (
     readSeededLaunchDraftSeed: () => { text: string; createdAt: number | null } | null,
-    agent: string | null = 'claude'
+    agent: string | null = 'claude',
+    authoringReady = true
   ): void => {
     agentRef.current = agent
     function Probe(): null {
       api = useMobileNativeChatMessageSend({
         client: { sendRequest: vi.fn() } as never,
         enabled: true,
+        authoringReady,
         handleRef: { current: 'term' },
         deviceTokenRef: { current: 'device' },
         agentRef,
@@ -202,6 +204,17 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(clearInputWrite).not.toHaveBeenCalled()
     expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
+  })
+
+  it('keeps question answers and option commands usable while draft ownership is loading', async () => {
+    mount(() => null, 'claude', false)
+    await act(async () => {
+      expect(await api!.send('draft')).toBe(false)
+      expect(await api!.answerQuestion('1')).toBe(true)
+      expect(await api!.dispatchCommand('/clear')).toBe('accepted')
+    })
+    expect(sendWithOutcome).toHaveBeenCalledTimes(2)
+    expect(clearDraftForSend).not.toHaveBeenCalled()
   })
 
   it('does not resolve a composer seed from a question-card answer', async () => {

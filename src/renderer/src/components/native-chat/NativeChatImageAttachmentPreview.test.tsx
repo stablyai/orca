@@ -120,6 +120,16 @@ describe('NativeChatImageAttachmentPreview', () => {
     )
   })
 
+  it('does not read a captured host path through the client filesystem', () => {
+    mocks.useLocalImageSrc.mockReturnValue(undefined)
+    const path = '/host/clipboard/shot.png'
+    renderPreview({ id: 'returned', path, reference: { path } }, 'env-1')
+    expect(mocks.useLocalImageSrc).toHaveBeenCalledWith(path, path, undefined, null, {
+      kind: 'chat-image'
+    })
+    expect(screen.getByRole('button', { name: 'Image #1: View image: shot.png' })).toBeTruthy()
+  })
+
   it("keeps any other path on the chat's usual read route", () => {
     mocks.useLocalImageSrc.mockReturnValue(undefined)
     renderPreview({ id: 'a1', path: '/repo/docs/shot.png' }, 'env-1')

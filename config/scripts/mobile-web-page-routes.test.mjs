@@ -80,6 +80,9 @@ describe('the page routes the manifest declares', () => {
       MOBILE_WEB_PAGE_ROUTES.flatMap((route) => [...route.grants, ...(route.optionalGrants ?? [])])
     )
     expect(union.size).toBeLessThanOrEqual(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
+    for (const route of MOBILE_WEB_PAGE_ROUTES) {
+      expect(MobileWebBundleRouteSchema.safeParse(route).success, route.pathname).toBe(true)
+    }
   })
 
   it('holds the optional lane to the manifest grammar and the ceiling over the union', () => {

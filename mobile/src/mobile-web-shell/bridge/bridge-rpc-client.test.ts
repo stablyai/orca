@@ -5,8 +5,22 @@ import {
 } from '../../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../../transport/types'
 import { createFakeRpcClient } from '../bridge-host-test-fakes'
+import { installPageChatDraftStorage } from './page-draft-storage'
+import { createBridgeDraftWriter } from './bridge-draft-storage'
+import {
+  mobileChatDraftStorage,
+  publishMobileChatDraftStorage
+} from '../../session/mobile-native-chat-draft-storage'
+import {
+  hydrateMobileNativeChatDraft,
+  editMobileNativeChatDraft,
+  readMobileNativeChatDraft,
+  captureMobileChatDraftOwner,
+  mobileChatDraftOwnerLive,
+  resetMobileNativeChatDraftStoreForTests
+} from '../../session/mobile-native-chat-draft-store'
 import { BRIDGE_MAX_MESSAGE_BYTES, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
-import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
+import { BRIDGE_PROTOCOL_VERSION, readBridgeHostMessage } from './bridge-envelope'
 import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
 
 /**
@@ -337,4 +351,89 @@ describe('bridge round trip: close', () => {
     expect(closeShellClient).not.toHaveBeenCalled()
     expect(pair.readToShell().at(-1)).toEqual({ v: 1, type: 'close' })
   })
+})
+
+it('retires page draft authority on actual bridge replacement and close without reloading owned text', async () => {
+  let generation = 5
+  let sessionId = 'session-a'
+  const lifecycle = new Map<string, () => void>()
+  const document = {
+    visibilityState: 'visible',
+    addEventListener: (name: string, listener: () => void) => {
+      lifecycle.set(name, listener)
+    },
+    removeEventListener: (name: string) => {
+      lifecycle.delete(name)
+    }
+  }
+  vi.stubGlobal('document', document)
+  vi.stubGlobal('window', document)
+  let disk = JSON.stringify({ text: 'saved', images: [] })
+  let reads = 0
+  const writer = createBridgeDraftWriter({
+    mayWrite: () => true,
+    commit: async (_key, value) => {
+      disk = value ?? ''
+    },
+    removeWorkspace: async () => {}
+  })
+  const rpc = createFakeRpcClient({ getGeneration: () => generation })
+  const pair = createFakeBridgePortPair({
+    rpc,
+    rewriteToPage: (json) => {
+      const parsed = readBridgeHostMessage(json)
+      return parsed.ok && parsed.message.type === 'init'
+        ? JSON.stringify({ ...parsed.message, sessionId })
+        : json
+    },
+    serveNativeVerb: async (verb, params) => {
+      if (verb === 'native.storage.read') {
+        reads += 1
+        return { value: disk }
+      }
+      if (verb === 'native.storage.write') {
+        return writer.write(params)
+      }
+      throw new Error(`Unexpected native verb ${verb}`)
+    }
+  })
+  try {
+    await pair.flush()
+    installPageChatDraftStorage(pair.client)
+    expect(mobileChatDraftStorage()).not.toBeNull()
+    const scope = 'host-a\0workspace\0tab'
+    const loaded = hydrateMobileNativeChatDraft(scope)
+    await pair.flush()
+    await loaded
+    expect(readMobileNativeChatDraft(scope).text).toBe('saved')
+    editMobileNativeChatDraft(scope, 'owned edit')
+    const old = captureMobileChatDraftOwner(scope)!
+    expect(lifecycle.size).toBe(2)
+    document.visibilityState = 'hidden'
+    lifecycle.get('visibilitychange')?.()
+    await pair.flush()
+    expect(JSON.parse(disk)).toMatchObject({ text: 'owned edit' })
+    sessionId = 'session-b'
+    generation = 2
+    rpc.pushState('reconnecting')
+    await pair.flush()
+    expect(pair.client.getShellSession()?.sessionId).toBe('session-b')
+    expect(mobileChatDraftOwnerLive(old)).toBe(false)
+    expect(mobileChatDraftStorage()).not.toBeNull()
+    await hydrateMobileNativeChatDraft(scope)
+    expect(readMobileNativeChatDraft(scope).text).toBe('owned edit')
+    expect(reads).toBe(1)
+    const replaced = captureMobileChatDraftOwner(scope)!
+    pair.client.close()
+    await pair.flush()
+    expect(mobileChatDraftStorage()).toBeNull()
+    expect(lifecycle.size).toBe(0)
+    expect(mobileChatDraftOwnerLive(replaced)).toBe(false)
+    expect(readMobileNativeChatDraft(scope).text).toBe('owned edit')
+  } finally {
+    pair.client.close()
+    publishMobileChatDraftStorage(null)
+    resetMobileNativeChatDraftStoreForTests()
+    vi.unstubAllGlobals()
+  }
 })

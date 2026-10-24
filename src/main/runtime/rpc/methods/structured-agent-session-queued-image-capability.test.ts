@@ -85,13 +85,13 @@ it('withholds image cards from a reader that predates them, on history and the s
   // The local renderer is a negotiated reader too: its own list must carry the capability.
   for (const client of [DESKTOP, undefined]) {
     const [history, stream] = await read(client)
-    expect(history).toMatchObject({ result: { page: queue } })
-    expect(stream).toMatchObject({ result: queue })
+    expect(history).toMatchObject({ result: { page: { ...queue, queuedImageCards: true } } })
+    expect(stream).toMatchObject({ result: { ...queue, queuedImageCards: true } })
   }
   for (const client of [STRUCTURED_CLIENT, STRUCTURED_MOBILE_CLIENT]) {
     const [history, stream] = await read(client)
     // Positions, the pause over a card it sees, and the next card's id stay as the host published.
-    const withheld = { ...queue, queuedMessages: [TEXT] }
+    const withheld = { ...queue, queuedMessages: [TEXT], queuedImageCards: false }
     expect(history).toMatchObject({ result: { page: withheld } })
     expect(stream).toMatchObject({ result: withheld })
   }
@@ -142,5 +142,5 @@ it('publishes phone text behind hidden images before bounding, and deduplicates 
   })
   expect(
     await call('agentSession.subscribe', { sessionId: SESSION }, STRUCTURED_MOBILE_CLIENT)
-  ).toMatchObject({ result: { queuedMessages: [text] } })
+  ).toMatchObject({ result: { queuedMessages: [text], queuedImageCards: false } })
 })

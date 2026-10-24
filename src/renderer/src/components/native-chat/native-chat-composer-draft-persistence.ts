@@ -61,6 +61,7 @@ export function isKeptLocalPaste(image: NativeChatComposerDraftImage): boolean {
 function savedForm(record: DraftRecord): StoredNativeChatComposerDraft | null {
   const { unsavedText, ...saved } = record
   const images = saved.images.map((image) =>
+    !image.reference &&
     isNativeChatPastedImagePath(image.path) &&
     !isKeptLocalPaste(image) &&
     !isAgentSessionAttachmentStorePath(image.path)

@@ -19,6 +19,8 @@ export type AgentSessionQueuePause = { reason: 'stopped' }
 
 /** What rides beside a frame's `queuedMessages`, published together with the list. */
 export type AgentSessionQueuePublicationFields = {
+  /** This reader receives image cards; absent on older hosts. */
+  queuedImageCards?: boolean
   /** Null when the queue sends on its own. */
   queuePause?: AgentSessionQueuePause | null
   /** The card the queue sends next once nothing runs, null while anything holds the queue.
@@ -29,6 +31,16 @@ export type AgentSessionQueuePublicationFields = {
 export type AgentSessionQueuedMessagesResumeResult = {
   /** False when nothing was paused, and on a replay of an already-run Resume. */
   resumed: boolean
+}
+
+/** An ID neighbor, resolved against the host's full queue at commit time. */
+export type AgentSessionQueuedMessageMoveAnchor =
+  | { beforeMessageId: string | null; afterMessageId?: never }
+  | { afterMessageId: string; beforeMessageId?: never }
+
+export type AgentSessionQueuedMessageMoveResult = {
+  messageId: string
+  status: 'moved' | 'unchanged' | 'gone' | 'stale'
 }
 
 /** One draft the host holds for this conversation, published whole-list on the

@@ -178,6 +178,6 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     ],
     // `native.media.name` gives a file the composer attaches its real name; an older shell lacks it
     // and the page names the file from its type, so the attach still works.
-    optionalGrants: ['externalNavigation', 'native.media.name']
+    optionalGrants: ['externalNavigation', 'native.media.name', 'chatDraftStorage']
   }
 ]

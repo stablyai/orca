@@ -90,7 +90,7 @@ export function snapshotEvent(input?: {
   queuedMessages?: AgentSessionQueuedMessage[] | null
   runningTurn?: boolean
   submissions?: AgentJournalSubmission[]
-}): AgentSessionSubscribeEvent {
+}): Extract<AgentSessionSubscribeEvent, { type: 'snapshot' }> {
   return {
     type: 'snapshot',
     sessionId: SESSION_ID,

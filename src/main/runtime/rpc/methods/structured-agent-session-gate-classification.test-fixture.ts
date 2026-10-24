@@ -69,6 +69,10 @@ export const WORK_METHODS = [
     method: 'agentSession.queuedMessageDelete',
     params: { envelope: envelope(), messageId: 'queued-1' }
   },
+  {
+    method: 'agentSession.queuedMessageMove',
+    params: { envelope: envelope(), messageId: 'queued-1', beforeMessageId: null }
+  },
   { method: 'agentSession.queuedMessagesResume', params: { envelope: envelope() } },
   {
     method: 'agentSession.rewind',

@@ -80,7 +80,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     // Why: local, SSH, and runtime reconnects can replace or temporarily clear
     // the PTY id. Pane (or conversation) identity is the stable owner of unsent input.
     const imeEnterGesture = useImeEnterGestureOwnership()
-    const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(
+    const { draft, setDraft, commitDraft, flushDraftAppends } = useNativeChatDraft(
       draftScopeKey,
       imeEnterGesture.isComposing
     )
@@ -351,12 +351,11 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const handleDraftChange = useCallback(
       (value: string, element: NativeChatComposerInput) => {
         const nextCaret = element.selectionStart ?? value.length
-        setDraft(value)
         setCaret(nextCaret)
         handleDraftOrCaretChange(value, nextCaret)
         setActiveSuggestion(0)
       },
-      [handleDraftOrCaretChange, setDraft]
+      [handleDraftOrCaretChange]
     )
 
     return (
@@ -388,6 +387,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         isDictating={dictation.isDictating}
         isDictationHoldMode={dictation.isDictationHoldMode}
         imeEnterGesture={imeEnterGesture}
+        onDraftCommit={commitDraft}
         onDraftChange={handleDraftChange}
         onTextareaSelect={(element) => {
           const value = element.value
@@ -401,7 +401,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
           if (element.value !== draft) {
             handleDraftChange(element.value, element)
           }
-          flushDraftAppends()
+          flushDraftAppends(element.value)
           attachments.flushPendingAttachments()
         }}
         onPaste={handlePasteEvent}

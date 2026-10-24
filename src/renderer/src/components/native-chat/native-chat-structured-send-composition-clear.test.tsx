@@ -1,5 +1,5 @@
 import { endComposition } from '@/lib/ime-composition-event.test-support'
-import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
+import { changePrompt, promptEditor, promptValue } from './native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -76,6 +76,17 @@ vi.mock('../dictation/dictation-control-events', () => ({
 
 import { NativeChatComposer } from './NativeChatComposer'
 import { appendNativeChatDraftCache, readNativeChatDraftCache } from './native-chat-draft-cache'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  subscribeToNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
+import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
+import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
+import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import { promptSkillRefs, promptText } from './native-chat-prompt-document'
+import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 
 type Dispatched = { handled: boolean; accepted: boolean; error: string | null }
 
@@ -317,6 +328,86 @@ describe('a withdrawn message put back during an IME composition', () => {
 
     expect(promptValue(input)).toBe('하\n\nwithdrawn')
     expect(readNativeChatDraftCache(pane)).toBe('하\n\nwithdrawn')
+  })
+})
+
+describe('a send handed back while the IME owns the editor', () => {
+  // Every store publication is the complete draft: the visible composition plus the held hand-back,
+  // with its file chip, image and the pasted text's saved file, including a preventUpdate write.
+  it('publishes only complete drafts through composition, settle, Send and a retyped token', async () => {
+    const structured = transport()
+    const scope = structuredAgentSessionDraftScopeKey('session-test')
+    const pasteId = '12345678-1234-1234-1234-123456789abc'
+    const pastedTextFiles = { [pasteId]: '/tmp/pasted.txt' }
+    updateNativeChatComposerDraft(
+      scope,
+      { text: `see ${nativeChatPastedTextToken(pasteId)}`, pastedTextFiles },
+      'immediate'
+    )
+    paneCounter += 1
+    render(
+      <NativeChatComposer
+        terminalTabId={`tab-${paneCounter}`}
+        paneKey={`tab-${paneCounter}:structured`}
+        draftScopeKey={scope}
+        targetPtyId={null}
+        agent="codex"
+        structuredTransport={structured}
+      />
+    )
+    const input = textarea()
+    const editor = promptEditor(input)
+    const compose = (text: string, preventUpdate = false) =>
+      act(() => {
+        const tr = editor.state.tr.insertText(text, editor.state.doc.content.size - 1)
+        editor.view.dispatch(preventUpdate ? tr.setMeta('preventUpdate', true) : tr)
+      })
+    const published: NativeChatComposerDraft[] = []
+    const stop = subscribeToNativeChatComposerDraft(scope, () =>
+      published.push(readNativeChatComposerDraft(scope))
+    )
+
+    fireEvent.compositionStart(input)
+    compose('가')
+    const returnedSkill = { name: 'review', path: '/one/SKILL.md' }
+    act(() => {
+      handBackStructuredAgentSessionMessage('session-test', 'returned-1', {
+        ...structuredAgentSessionSendBody('$review', [
+          { path: '/local/a.png', previewUri: '/local/a.png' }
+        ]),
+        skills: [returnedSkill]
+      })
+    })
+    const returned = readNativeChatComposerDraft(scope)
+    const tail = returned.text.slice(`see ${nativeChatPastedTextToken(pasteId)}가`.length)
+    compose('나')
+    compose('다', true)
+    stop()
+    fireEvent.compositionEnd(input, { data: '가나다' })
+
+    expect(published.at(-1)?.text).toBe(`see ${nativeChatPastedTextToken(pasteId)}가나다${tail}`)
+    for (const draft of published) {
+      expect(promptText(editor.schema.nodeFromJSON(draft.document!))).toBe(draft.text)
+      expect(draft.pastedTextFiles).toEqual(pastedTextFiles)
+    }
+    const afterReturn = published.slice(published.findIndex((draft) => draft.text.endsWith(tail)))
+    expect(afterReturn.length).toBe(3)
+    for (const draft of afterReturn) {
+      expect(draft.text.endsWith(tail)).toBe(true)
+      expect(promptSkillRefs(draft.document)).toEqual([returnedSkill])
+      expect(draft.images).toEqual(returned.images)
+    }
+    expect(promptValue(input)).toBe(readNativeChatComposerDraft(scope).text)
+    expect(window.document.querySelector('[data-native-chat-skill]')).not.toBeNull()
+
+    await act(async () => pressEnter(input))
+    expect(structured.send).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ skills: [returnedSkill] })
+    )
+    changePrompt(input, '$review')
+    expect(promptSkillRefs(readNativeChatComposerDraft(scope).document)).toEqual([])
   })
 })
 

@@ -2,6 +2,7 @@ import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../src/sh
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-current-requests-capability'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -47,7 +48,9 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   // Native chat offers no Stop for a turn the host restored but could not confirm.
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   // A new empty chat waits at rest and its first message starts the agent, as on desktop.
-  AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+  AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
+  // Image sends during a turn queue as cards, whose images can be edited in place.
+  AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =

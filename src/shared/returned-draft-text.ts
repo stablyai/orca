@@ -7,7 +7,11 @@ import { isLoneStructuredAgentSessionConversationCommand } from './structured-ag
  * neither is left unusable. It adds nothing when the draft already ends with that text, so handing
  * the same text back twice leaves one copy.
  */
-export function appendReturnedDraftText(draft: string, text: string): string {
+export function appendReturnedDraftText(
+  draft: string,
+  text: string,
+  textPolicy?: 'append-repeated'
+): string {
   const returned = text.trimEnd()
   if (returned.trim() === '') {
     return draft
@@ -16,7 +20,7 @@ export function appendReturnedDraftText(draft: string, text: string): string {
   if (kept === '' || isLoneStructuredAgentSessionConversationCommand(kept)) {
     return text
   }
-  if (kept === returned || kept.endsWith(`\n\n${returned}`)) {
+  if (textPolicy !== 'append-repeated' && (kept === returned || kept.endsWith(`\n\n${returned}`))) {
     return draft
   }
   return `${kept}\n\n${text}`

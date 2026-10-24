@@ -1,3 +1,5 @@
+import { SendImageRefBlock } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
+import type { ComposerImageReference } from '../../../../shared/structured-agent-session-send-mutation'
 // The stored form of composer drafts and the storage they live in. Drafts are kept in their own
 // store (IndexedDB), not localStorage, so they never compete with other saved state for its quota
 // and need no budget: every draft comes back.
@@ -11,6 +13,7 @@ export type NativeChatComposerDraftImage = {
   /** Empty for an image Orca could not keep. */
   path: string
   connectionId?: string
+  reference?: ComposerImageReference
   /** Set on an image Orca could not keep: the file name the user must attach again. */
   unavailableName?: string
 }
@@ -122,16 +125,26 @@ function parseImage(value: unknown): NativeChatComposerDraftImage | null {
     return null
   }
   const { id, path, connectionId, unavailableName } = value
+  const parsed = SendImageRefBlock.safeParse({
+    type: 'image-ref',
+    ...(isRecord(value.reference) && value.reference)
+  })
+  const reference = parsed.success ? (({ type: _type, ...ref }) => ref)(parsed.data) : undefined
   if (typeof id !== 'string') {
     return null
   }
   if (typeof unavailableName === 'string') {
     return { id, path: '', unavailableName }
   }
-  if (typeof path !== 'string' || path === '') {
+  if (typeof path !== 'string' || (path === '' && !reference?.url)) {
     return null
   }
-  return { id, path, ...(typeof connectionId === 'string' ? { connectionId } : {}) }
+  return {
+    id,
+    path,
+    ...(reference ? { reference } : {}),
+    ...(typeof connectionId === 'string' ? { connectionId } : {})
+  }
 }
 
 function parseOwner(value: unknown): NativeChatComposerDraftOwner | undefined {

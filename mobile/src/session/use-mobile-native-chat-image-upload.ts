@@ -1,3 +1,8 @@
+import {
+  captureMobileChatDraftOwner,
+  mobileChatDraftOwnerLive,
+  type MobileChatDraftOwner
+} from './mobile-native-chat-draft-store'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-image'
 import type { RpcClient } from '../transport/rpc-client'
@@ -24,7 +29,7 @@ export function useMobileNativeChatImageUpload(args: {
   scopeKey: string | null
   structuredNativeChat: boolean
   showToast: ShowToast
-  onImagesUploaded: (scope: string, images: UploadedNativeChatImage[]) => void
+  onImagesUploaded: (owner: MobileChatDraftOwner, images: UploadedNativeChatImage[]) => void
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
@@ -54,9 +59,12 @@ export function useMobileNativeChatImageUpload(args: {
   const attachImage = useCallback(
     async (source: MobileImageSource): Promise<void> => {
       const scope = scopeKey
+      const owner = scope ? captureMobileChatDraftOwner(scope) : undefined
       if (
         !client ||
         !scope ||
+        !owner ||
+        owner.state === 'unread' ||
         connState !== 'connected' ||
         (!activeHandleRef.current && !structuredNativeChat)
       ) {
@@ -87,9 +95,12 @@ export function useMobileNativeChatImageUpload(args: {
           }
         }
       }
-      if (uploadedImages.length > 0) {
-        onImagesUploaded(scope, uploadedImages)
+      if (uploadedImages.length > 0 && mobileChatDraftOwnerLive(owner)) {
+        onImagesUploaded(owner, uploadedImages)
         onAttachSuccess?.()
+      }
+      if (uploadedImages.length > 0 && !mobileChatDraftOwnerLive(owner) && uploadError === null) {
+        uploadError = new Error('This draft session has ended')
       }
       if (uploadError !== null) {
         const message = uploadError instanceof Error ? uploadError.message : String(uploadError)

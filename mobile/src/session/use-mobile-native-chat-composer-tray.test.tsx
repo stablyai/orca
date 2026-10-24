@@ -22,6 +22,16 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
+vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
+
 vi.mock('lucide-react-native', () => ({
   Activity: 'Activity',
   AlertCircle: 'AlertCircle',

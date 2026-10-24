@@ -581,7 +581,9 @@ import {
   UnsubscribeParams
 } from './structured-agent-session-params'
 import {
+  QueuedMessageDeleteParams,
   QueuedMessageEditHoldParams,
+  QueuedMessageMoveParams,
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
@@ -738,8 +740,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.item': ItemParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
-  'agentSession.queuedMessageDelete': QueuedMessageActionParams,
+  'agentSession.queuedMessageDelete': QueuedMessageDeleteParams,
   'agentSession.queuedMessageEditHold': QueuedMessageEditHoldParams,
+  'agentSession.queuedMessageMove': QueuedMessageMoveParams,
   'agentSession.queuedMessageSend': QueuedMessageActionParams,
   'agentSession.queuedMessageUpdate': QueuedMessageUpdateParams,
   'agentSession.queuedMessagesResume': QueuedMessagesResumeParams,

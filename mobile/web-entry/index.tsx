@@ -1,3 +1,4 @@
+import { installPageChatDraftStorage } from '../src/mobile-web-shell/bridge/page-draft-storage'
 // Route A web entry: mounts the phone's h/[hostId] route tree on react-native-web.
 // Built by `build:mobile-web` into the packaged bundle dir; mounted by the app's shell.
 import { useEffect, type PropsWithChildren } from 'react'
@@ -124,6 +125,7 @@ bootstrapShellPage({
     startBlurringOnKeyboardClose()
     // Scoped to the host `init` named: with none, no key is writable, which is the right answer
     // for a shell too old to say whose list this is.
+    installPageChatDraftStorage(client)
     publishPageStorage(
       session.storage,
       (key, value) => client.notifyStorageWrite(key, value),

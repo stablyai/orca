@@ -39,6 +39,7 @@ const acquire = {
 }
 beforeEach(() => {
   installStructuredHostStub()
+  hostCalls.queuedMessageDelete = vi.fn(async () => ({ ok: true, value: { deleted: true } }))
   hostCalls.queuedMessageUpdate = vi.fn(async () => ({ ok: true, value: { status: 'updated' } }))
   hostCalls.queuedMessageEditHold = vi.fn(async () => ({ status: 'held' }))
 })
@@ -58,7 +59,19 @@ describe('queued edit methods', () => {
       'queuedMessageUpdate',
       { queuedImageCards: false }
     ],
-    ['agentSession.queuedMessageEditHold', acquire, 'queuedMessageEditHold', {}]
+    ['agentSession.queuedMessageEditHold', acquire, 'queuedMessageEditHold', {}],
+    [
+      'agentSession.queuedMessageDelete',
+      { envelope: envelope(), messageId: 'card', expectedBodyFingerprint: 'a'.repeat(64) },
+      'queuedMessageDelete',
+      {}
+    ],
+    [
+      'agentSession.queuedMessageMove',
+      { envelope: envelope(), messageId: 'card', afterMessageId: 'neighbor' },
+      'queuedMessageMove',
+      {}
+    ]
   ] as const)(
     '%s reaches the host as the authenticated caller',
     async (method, params, name, hostOnly) => {

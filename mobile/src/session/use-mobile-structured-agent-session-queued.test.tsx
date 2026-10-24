@@ -1,3 +1,14 @@
+import { mobileChatDraftStorageKey } from './mobile-native-chat-draft-data'
+import { copyMobileQueuedMessageToDraft } from './mobile-native-chat-queued-extraction'
+import {
+  readMobileNativeChatDraft,
+  editMobileNativeChatDraft,
+  resetMobileNativeChatDraftStoreForTests,
+  hydrateMobileNativeChatDraft,
+  deleteMobileNativeChatDrafts
+} from './mobile-native-chat-draft-store'
+import { publishMobileChatDraftStorage } from './mobile-native-chat-draft-storage'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
 // The mid-turn queue on mobile: `delivery` rides only capability-gated sends,
 // published drafts render as cards (never optimistic bubbles), and card actions
 // map to the queued-message RPCs. Stop never touches the queue — its cards
@@ -86,6 +97,8 @@ describe('mobile structured queued messages', () => {
       agent: 'claude',
       hostSupport,
       appendComposerText: appendText,
+      copyQueuedMessage: (message) =>
+        copyMobileQueuedMessageToDraft('copy-host\0workspace\0tab', message),
       onSendError
     })
     return null
@@ -147,7 +160,185 @@ describe('mobile structured queued messages', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    resetMobileNativeChatDraftStoreForTests()
+    publishMobileChatDraftStorage(null)
     unmountSession()
+  })
+
+  it('durably copies an occupied image and skill draft before conditional Delete, restores it, and sends as the user', async () => {
+    const scope = 'copy-host\0workspace\0tab'
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const write = vi.fn(async (key: string, value: string | null) => {
+      await gate
+      if (value === null) {
+        stored.delete(key)
+      } else {
+        stored.set(key, value)
+      }
+    })
+    publishMobileChatDraftStorage({
+      read: async (key) => stored.get(key) ?? null,
+      write,
+      removeWorkspace: async () => {}
+    })
+    await hydrateMobileNativeChatDraft(scope)
+    editMobileNativeChatDraft(scope, 'already typed')
+    const message = queuedDraft({
+      messageId: 'copy',
+      body: {
+        kind: 'message',
+        role: 'user',
+        from: { kind: 'agent', senders: [], orchestration: null },
+        blocks: [
+          { type: 'text', text: 'look [Image #1] $review' },
+          { type: 'image-ref', url: 'https://example.com/picture.png', alt: 'diagram' }
+        ],
+        skills: [{ name: 'review', path: '/skills/review' }]
+      }
+    })
+    const event = snapshotEvent({ queuedMessages: [message], runningTurn: true })
+    await mountSession(
+      { ...CAPABLE, queuedMessageCopyDelete: true, queuedMessageReorder: true },
+      { ...event, queuedImageCards: true }
+    )
+    sendRequest.mockImplementation(async (method) =>
+      method === 'agentSession.queuedMessageDelete'
+        ? mutationOk({ messageId: 'copy', deleted: true, disposition: 'deleted' })
+        : method === 'agentSession.send'
+          ? mutationOk({ status: 'accepted' })
+          : ok({})
+    )
+    let editing!: Promise<boolean>
+    await act(async () => {
+      editing = hook!.queued.edit!('copy')
+    })
+    expect(calls('agentSession.queuedMessageDelete')).toHaveLength(0)
+    release()
+    await act(async () => {
+      expect(await editing).toBe(true)
+    })
+    expect(requestOf('agentSession.queuedMessageDelete').params).toMatchObject({
+      messageId: 'copy',
+      expectedBodyFingerprint: agentSessionSendBodyFingerprint(SESSION_ID, message.body)
+    })
+    // A restored permissive body may have more selected files than visible tokens.
+    stored.set(
+      mobileChatDraftStorageKey(scope),
+      JSON.stringify({
+        ...readMobileNativeChatDraft(scope),
+        skills: [...(message.body.skills ?? []), { name: 'review', path: '/surplus/SKILL.md' }]
+      })
+    )
+    resetMobileNativeChatDraftStoreForTests()
+    await hydrateMobileNativeChatDraft(scope)
+    const draft = readMobileNativeChatDraft(scope)
+    expect(draft.text).toBe('already typed\n\nlook [Image #1] $review')
+    expect(draft.images[0]?.reference).toEqual({
+      url: 'https://example.com/picture.png',
+      alt: 'diagram'
+    })
+    await act(async () => {
+      await hook!.sendWithOutcome(draft.text, undefined, undefined, draft.images, draft.skills)
+    })
+    const sent = requestOf('agentSession.send').params
+    expect(sent.body).toEqual({
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'text', text: draft.text },
+        { type: 'image-ref', url: 'https://example.com/picture.png', alt: 'diagram' }
+      ],
+      skills: [{ name: 'review', path: '/skills/review' }]
+    })
+    expect(sent).not.toHaveProperty('messageId')
+    expect(calls('agentSession.queuedMessageUpdate')).toHaveLength(0)
+    expect(calls('agentSession.attachmentUploadBegin')).toHaveLength(0)
+  })
+
+  it('does not Delete when removal retires the acknowledged copy before the final check', async () => {
+    const scope = 'copy-host\0workspace\0tab'
+    publishMobileChatDraftStorage({
+      read: async () => null,
+      write: async () => {},
+      removeWorkspace: async () => {}
+    })
+    await mountSession(
+      { ...CAPABLE, queuedMessageCopyDelete: true },
+      snapshotEvent({ queuedMessages: [queuedDraft({ messageId: 'removed' })] })
+    )
+    await act(async () => {
+      expect(
+        await hook!.queued.edit!('removed', () => {
+          void deleteMobileNativeChatDrafts('copy-host', 'workspace')
+        })
+      ).toBe(false)
+    })
+    expect(calls('agentSession.queuedMessageDelete')).toHaveLength(0)
+    expect(readMobileNativeChatDraft(scope).text).toBe('')
+    expect(onSendError).toHaveBeenLastCalledWith(
+      "Couldn't save this message to your draft. It is still queued."
+    )
+  })
+
+  it('keeps the copied draft after Delete refusal and reverts an optimistic relative move', async () => {
+    const scope = 'copy-host\0workspace\0tab'
+    publishMobileChatDraftStorage({
+      read: async () => null,
+      write: async () => {},
+      removeWorkspace: async () => {}
+    })
+    const messages = [queuedDraft({ messageId: 'a' }), queuedDraft({ messageId: 'b', position: 2 })]
+    await mountSession(
+      { ...CAPABLE, queuedMessageCopyDelete: true, queuedMessageReorder: true },
+      snapshotEvent({ queuedMessages: messages })
+    )
+    sendRequest.mockResolvedValue(
+      mutationOk({ messageId: 'a', deleted: false, disposition: 'dispatched' })
+    )
+    await act(async () => {
+      expect(await hook!.queued.edit!('a')).toBe(false)
+    })
+    expect(readMobileNativeChatDraft(scope).text).toBe('text of a')
+    expect(onSendError).toHaveBeenLastCalledWith(
+      'Already sent — your message is still in the composer.'
+    )
+    const deletedBeforeStorageFailure = calls('agentSession.queuedMessageDelete').length
+    publishMobileChatDraftStorage({
+      read: async () => null,
+      write: async () => {
+        throw new Error('disk full')
+      },
+      removeWorkspace: async () => {}
+    })
+    await act(async () => {
+      expect(await hook!.queued.edit!('b')).toBe(false)
+    })
+    expect(calls('agentSession.queuedMessageDelete')).toHaveLength(deletedBeforeStorageFailure)
+    expect(readMobileNativeChatDraft(scope).text).toContain('text of b')
+    let finish: (response: RpcResponse) => void = () => {}
+    sendRequest.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    let moving!: Promise<boolean>
+    await act(async () => {
+      moving = hook!.queued.move!({ movedId: 'a', afterId: 'b' })
+    })
+    expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['b', 'a'])
+    expect(requestOf('agentSession.queuedMessageMove').params).toMatchObject({
+      messageId: 'a',
+      afterMessageId: 'b'
+    })
+    await act(async () => {
+      finish(mutationOk({ messageId: 'a', status: 'stale' }))
+      expect(await moving).toBe(false)
+    })
+    expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['a', 'b'])
   })
 
   describe('capability-gated delivery', () => {

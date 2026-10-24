@@ -1,3 +1,4 @@
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -15,6 +16,7 @@ import type {
   MobileNativeChatSendErrorReporter
 } from './use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
+import type { MobileQueuedMessageCopy } from './mobile-native-chat-queued-extraction'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 
 export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
@@ -28,7 +30,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      skills?: readonly AgentJournalSkillRef[]
     ) => Promise<MobileNativeChatSendOutcome>
     cancel: () => void
     receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
@@ -63,6 +66,7 @@ export type MobileStructuredAgentSessionArgs = {
   agent: string | null
   /** The active pane's live composer; Edit copies a card's text through it. */
   appendComposerText?: (text: string) => boolean
+  copyQueuedMessage?: MobileQueuedMessageCopy
   onSendError: MobileNativeChatSendErrorReporter
   /** Called on any accepted queued-card action; retires the route's failure banner. */
   onActionResolved?: () => void

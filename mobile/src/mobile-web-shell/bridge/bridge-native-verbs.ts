@@ -1,3 +1,4 @@
+import { draftWriteParamsSchema, draftWriteResultSchema } from './bridge-draft-storage'
 import { z } from 'zod'
 import {
   audioReadParamsSchema,
@@ -17,7 +18,6 @@ import {
   mediaNameParamsSchema,
   mediaNameResultSchema
 } from './bridge-media-verbs'
-import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 
 /**
  * The shell-answered request seam: what a `native.` method is, and every verb there is.
@@ -36,6 +36,9 @@ import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
  */
 export const BRIDGE_NATIVE_METHOD_PREFIX = 'native.'
 
+/** The route explicitly grants both acknowledged draft-storage operations together. */
+export const BRIDGE_CHAT_DRAFT_STORAGE_GRANT = 'chatDraftStorage'
+
 /** Every verb this shell serves. The table below must cover exactly these, or it does not compile. */
 export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.clipboard.write',
@@ -47,7 +50,8 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.start',
   'native.audio.read',
   'native.audio.stop',
-  'native.storage.read'
+  'native.storage.read',
+  'native.storage.write'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -95,7 +99,7 @@ export const clipboardReadResultSchema = z.strictObject({ value: z.string() })
 
 // A workspace key the host-area page opened in-page, read on demand rather than carried in `init`.
 export const storageReadParamsSchema = z.strictObject({
-  key: z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS)
+  key: z.string().min(1).max(1024)
 })
 export const storageReadResultSchema = z.strictObject({ value: z.string().nullable() })
 
@@ -141,6 +145,7 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     params: audioStopParamsSchema,
     result: audioStopResultSchema
   },
+  'native.storage.write': { params: draftWriteParamsSchema, result: draftWriteResultSchema },
   'native.storage.read': {
     params: storageReadParamsSchema,
     result: storageReadResultSchema
@@ -191,7 +196,10 @@ export function readBridgeNativeVerbCall(args: {
       detail: `this build serves no verb named ${args.method}`
     }
   }
-  if (!args.granted.includes(verb)) {
+  const draftStorage =
+    (verb === 'native.storage.read' || verb === 'native.storage.write') &&
+    args.granted.includes(BRIDGE_CHAT_DRAFT_STORAGE_GRANT)
+  if (!args.granted.includes(verb) && !draftStorage) {
     return { ok: false, refusal: 'ungranted', detail: `the page was not granted ${verb}` }
   }
   const read = BRIDGE_NATIVE_VERBS[verb].params.safeParse(args.params)

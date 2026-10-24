@@ -108,7 +108,12 @@ describe('the wide host-area session', () => {
   it("is granted every served route's grants, and no phone session is", () => {
     const view = routeViewOf(desktopRoutes(true), HOST_ROUTE, true)
     expect([...view.routeGrants].sort()).toEqual(
-      [...SESSION_GRANTS, 'externalNavigation', 'native.storage.read'].sort()
+      [
+        ...SESSION_GRANTS,
+        'externalNavigation',
+        'native.storage.read',
+        'native.storage.write'
+      ].sort()
     )
     // Every pair the page compares a hop against is covered, which is what keeps it in the page.
     for (const pair of view.pageRouteGrants) {

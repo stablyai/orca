@@ -292,6 +292,7 @@ export class StructuredAgentSessionHost {
 
   queuedMessageSend = this.queued.queuedMessageSend
   queuedMessageDelete = this.queued.queuedMessageDelete
+  queuedMessageMove = this.queued.queuedMessageMove
   queuedMessagesResume = this.queued.queuedMessagesResume
   queuedMessageUpdate = this.queued.queuedMessageUpdate
   queuedMessageEditHold = this.queued.queuedMessageEditHold
@@ -309,10 +310,7 @@ export class StructuredAgentSessionHost {
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
 
   conversationCommand = this.conversationCommands.run
-  /** Undefined means unavailable; an empty array is an authoritative catalog. */
-  readCommands = async (sessionId: string) => ({
-    commands: await this.clientDelivery.readCommandsSettled(sessionId)
-  })
+  readCommands = this.clientDelivery.readCommandsResult
 
   /** Read the store; idle-released chats have no session-map entry. */
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)

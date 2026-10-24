@@ -101,6 +101,8 @@ export function MobileNativeChatOverlay({
       onClearAll: queued.clear,
       onEdit: queued.edit,
       editor: queued.editor,
+      editDisabledReason: queued.editDisabledReason,
+      onMove: queued.move,
       pause: queued.pause,
       onResume: queued.resume,
       sessionKey: queued.sessionKey,
@@ -177,6 +179,7 @@ export function MobileNativeChatOverlay({
                 getComposerEditGeneration={controller.getChatComposerEditGeneration}
                 pending={controller.chatPending}
                 imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
+                draftAuthoringReady={controller.draftAuthoringReady}
                 composerText={controller.chatComposerText}
                 onComposerTextChange={controller.setChatComposerText}
                 onAttachImage={

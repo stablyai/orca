@@ -3,7 +3,8 @@ import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-
 import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
 import {
   readNativeChatDraftDocument,
-  writeNativeChatDraftDocument
+  writeNativeChatDraftDocument,
+  type NativeChatDraftCommit
 } from './native-chat-draft-cache'
 import {
   subscribeToNativeChatComposerDraft,
@@ -44,6 +45,7 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   initialValue: string
   disabled: boolean
   placeholder: string
+  onCommit?: NativeChatDraftCommit
   onChange: (input: NativeChatComposerInput) => void
   onSelect: (input: NativeChatComposerInput) => void
 }
@@ -58,6 +60,7 @@ export function NativeChatPromptEditor({
   disabled,
   placeholder,
   onChange,
+  onCommit,
   onSelect,
   className,
   ...events
@@ -143,12 +146,13 @@ export function NativeChatPromptEditor({
           (!transaction.getMeta('preventUpdate') ||
             hasUnsavedNativeChatComposerDraftChange(scopeKey))
         ) {
-          writeNativeChatDraftDocument(
-            scopeKey,
-            promptText(current.state.doc),
-            current.getJSON(),
-            pastedTextFiles
-          )
+          const text = promptText(current.state.doc)
+          const document = current.getJSON()
+          if (onCommit) {
+            onCommit({ text, document, pastedTextFiles })
+          } else {
+            writeNativeChatDraftDocument(scopeKey, text, document, pastedTextFiles)
+          }
         }
       },
       onUpdate: () => {

@@ -22,6 +22,7 @@ const doubles = vi.hoisted((): Doubles => ({
   releaseReads: []
 }))
 
+vi.mock('react-native', () => ({ AppState: { addEventListener: () => ({ remove: () => {} }) } }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     multiGet: async (keys: readonly string[]) => {

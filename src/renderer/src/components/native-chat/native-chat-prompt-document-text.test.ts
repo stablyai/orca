@@ -64,3 +64,24 @@ it('replaces an all-whitespace document with literal returned text', () => {
     { type: 'paragraph', content: [{ type: 'text', text: '$review' }] }
   ])
 })
+
+it('replaces a lone command even when incoming picked text begins with that command', () => {
+  const incoming = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: '/clear ' },
+          { type: 'nativeChatSkill', attrs: { token: '$review', path: '/skills/review' } }
+        ]
+      }
+    ]
+  }
+  const result = withNativeChatComposerDraftAddition(
+    { text: '/clear', images: [] },
+    { text: '/clear $review', document: incoming }
+  )
+  expect(result.text).toBe('/clear $review')
+  expect(result.document).toEqual(incoming)
+})

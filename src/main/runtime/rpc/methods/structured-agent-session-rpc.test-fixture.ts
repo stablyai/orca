@@ -175,6 +175,10 @@ export function hostStub(): StructuredAgentSessionHost {
       }
     })),
     waitForSendSettlement: vi.fn(),
+    queuedMessageMove: vi.fn(async () => ({
+      ok: true,
+      value: { messageId: 'queued-1', status: 'moved' }
+    })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
     sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [SESSION] })),
@@ -313,13 +317,7 @@ export const STRUCTURED_CLIENT = {
     AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
   ]
 }
-export const STRUCTURED_MOBILE_CLIENT = {
-  clientKind: 'mobile' as const,
-  clientCapabilities: [
-    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
-  ]
-}
+export const STRUCTURED_MOBILE_CLIENT = { ...STRUCTURED_CLIENT, clientKind: 'mobile' as const }
 
 /** Every suite wants the same lifecycle: a fresh stub per test, no host left installed. */
 export function installStructuredHostStub(): void {

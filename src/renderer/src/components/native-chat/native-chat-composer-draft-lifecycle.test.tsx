@@ -578,11 +578,13 @@ describe('native-chat composer draft lifecycle', () => {
     ])
   })
 
-  it('leaves a restored image a paired server stored to that server to check', async () => {
+  it.each([
+    { id: 'a', path: '/srv/orca/agent-session-attachments/0f6c/shot.png' },
+    { id: 'a', path: '/host/clipboard/shot.png', reference: { path: '/host/clipboard/shot.png' } }
+  ])('leaves a restored host image to its owner to check', async (stored) => {
     // Not on this machine's disk, so a local check could only call it gone.
     const pathExists = vi.fn(async () => false)
     vi.stubGlobal('api', { fs: { pathExists } })
-    const stored = { id: 'a', path: '/srv/orca/agent-session-attachments/0f6c/shot.png' }
     storage.drafts.set('agent-session:s1', { text: 'see this', images: [stored], savedAt: 1 })
     const hooks = await loadHooks()
     const seen: { api?: ComposerApi } = {}

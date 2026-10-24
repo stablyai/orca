@@ -202,7 +202,7 @@ export const CancelParams = z
     }
   })
 
-/** `agentSession.queuedMessageSend` / `agentSession.queuedMessageDelete`. Gated on
+/** `agentSession.queuedMessageSend`. Gated on
  *  `agent-session.queued-messages.v1`; an older host lacks the methods entirely. */
 export const QueuedMessageActionParams = z
   .object({

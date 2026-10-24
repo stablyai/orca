@@ -28,6 +28,9 @@ export function sameNativeChatComposerDraftImages(
       (image, index) =>
         image.id === right[index].id &&
         image.path === right[index].path &&
+        image.reference?.path === right[index].reference?.path &&
+        image.reference?.url === right[index].reference?.url &&
+        image.reference?.alt === right[index].reference?.alt &&
         image.connectionId === right[index].connectionId &&
         image.unavailableName === right[index].unavailableName
     )

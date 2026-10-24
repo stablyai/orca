@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
+import { composerSkillOccurrences } from '../../../src/shared/structured-agent-session-send-mutation'
 import {
   countUserTextOccurrences,
   findLandedImagePreviewEchoes,
@@ -24,8 +24,14 @@ import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-lau
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import {
   clearMobileNativeChatDraftForSend,
+  hydrateMobileNativeChatDraft,
+  useMobileNativeChatDraftHydrated,
+  useMobileChatDraftStatus,
+  useMobileChatDraftRuntime,
+  captureMobileChatDraftOwner,
+  restoreMobileChatDraft,
+  persistMobileNativeChatDraft,
   editMobileNativeChatDraft,
-  readMobileNativeChatDraftEditGeneration,
   setMobileNativeChatDraftText,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
@@ -57,6 +63,8 @@ export function useMobileNativeChatDrafts(args: {
   transcriptSettled: boolean
 }): {
   composerText: string
+  draftAuthoringReady: boolean
+  draftError: string | null
   setComposerText: Dispatch<SetStateAction<string>>
   /** Append after existing typing (newline-joined); a queued card's Edit copy lands here.
    *  False when nothing was appended: no active draft, or no text. */
@@ -98,6 +106,19 @@ export function useMobileNativeChatDrafts(args: {
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
   const composerText = useMobileNativeChatDraft(draftKey)
+  const runtime = useMobileChatDraftRuntime()
+  const { ready: draftAuthoringReady, error: draftError } = useMobileChatDraftStatus(draftKey)
+  const draftHydrated = useMobileNativeChatDraftHydrated(draftKey)
+  useEffect(() => {
+    if (draftKey) {
+      void hydrateMobileNativeChatDraft(draftKey).catch(() => undefined)
+    }
+    return () => {
+      if (draftKey) {
+        void persistMobileNativeChatDraft(draftKey).catch(() => undefined)
+      }
+    }
+  }, [draftKey, runtime])
   const [pendingBySession, setPendingBySession] = useState<
     Record<string, MobileNativeChatPendingMessage[]>
   >({})
@@ -118,7 +139,7 @@ export function useMobileNativeChatDrafts(args: {
     messages,
     launchDraft,
     launchDraftCreatedAt,
-    chatActive,
+    chatActive: chatActive && draftHydrated,
     transcriptLoading,
     setDraftText: setMobileNativeChatDraftText
   })
@@ -154,10 +175,16 @@ export function useMobileNativeChatDrafts(args: {
       if (!draftKey) {
         return null
       }
+      const owner = captureMobileChatDraftOwner(draftKey)
+      if (!owner) {
+        return null
+      }
       const normalizedText = normalizeReconcileText(text)
       return {
         draftKey,
-        draftEditGeneration: readMobileNativeChatDraftEditGeneration(draftKey),
+        owner,
+        skills: composerSkillOccurrences(text, owner.draft.skills ?? []).map(({ ref }) => ref),
+        draftEditGeneration: owner.draft.editGeneration,
         pendingKey,
         normalizedText,
         baselineOccurrences: countUserTextOccurrences(messagesRef.current, normalizedText),
@@ -176,14 +203,13 @@ export function useMobileNativeChatDrafts(args: {
   // composer that waits for settlement to empty reads as "my prompt didn't
   // send". Clear at send time; a definite rejection restores the text below.
   const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    clearMobileNativeChatDraftForSend(origin.draftKey, origin.draftEditGeneration, text)
+    clearMobileNativeChatDraftForSend(origin.owner, origin.draftEditGeneration, text)
   }, [])
 
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    // Appended, so typing done while the send was in flight stays and the returned text isn't dropped.
-    setMobileNativeChatDraftText(origin.draftKey, (current) =>
-      appendReturnedDraftText(current, text)
-    )
+    if (origin.owner) {
+      restoreMobileChatDraft(origin.owner, text, origin.skills)
+    }
   }, [])
 
   const acceptSend = useCallback(
@@ -279,6 +305,8 @@ export function useMobileNativeChatDrafts(args: {
 
   return {
     composerText,
+    draftAuthoringReady,
+    draftError,
     setComposerText,
     appendComposerText,
     getComposerEditGeneration,

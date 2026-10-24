@@ -1,3 +1,4 @@
+import { deleteMobileNativeChatDrafts } from '../session/mobile-native-chat-draft-store'
 import {
   deleteHostPageCache,
   forgetHostUpdateFailures
@@ -21,6 +22,7 @@ export async function removeHostAndCloseClient(
     restorePushRegistration()
     throw error
   }
+  void deleteMobileNativeChatDrafts(hostId).catch(() => undefined)
   forgetHostClient(hostId)
   forgetHostDescriptor(hostId)
   // Why after the commit and not awaited: state about a host that is gone, never a reason to hold

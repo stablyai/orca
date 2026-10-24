@@ -122,6 +122,11 @@ export class StructuredAgentSessionClientDelivery {
     return adapter.readCommands?.(sessionId) ?? commands
   }
 
+  /** Undefined means unavailable; an empty array is an authoritative catalog. */
+  readCommandsResult = async (sessionId: string) => ({
+    commands: await this.readCommandsSettled(sessionId)
+  })
+
   publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
 
   publishConversationName = (sessionId: string): void =>

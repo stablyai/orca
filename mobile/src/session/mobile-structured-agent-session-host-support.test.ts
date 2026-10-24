@@ -8,6 +8,8 @@ import {
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_COPY_DELETE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
@@ -26,6 +28,8 @@ describe('structuredAgentSessionHostSupport', () => {
       queuedMessages: false,
       queuedCommands: false,
       queuedMessageEdit: false,
+      queuedMessageCopyDelete: false,
+      queuedMessageReorder: false,
       queuedMessageImageEdit: false,
       quietRepeatedStop: false,
       statusFeed: false,
@@ -77,6 +81,14 @@ describe('structuredAgentSessionHostSupport', () => {
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, phoneAttachments: true })
+    expect(
+      structuredAgentSessionHostSupport([
+        AGENT_SESSION_QUEUED_MESSAGE_COPY_DELETE_RUNTIME_CAPABILITY
+      ])
+    ).toEqual({ ...none, queuedMessageCopyDelete: true })
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, queuedMessageReorder: true })
     // A host with the store but from before phones could upload into it offers them nothing.
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY])

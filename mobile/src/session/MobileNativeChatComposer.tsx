@@ -70,6 +70,7 @@ type Props = {
   dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
+  authoringReady?: boolean
   disabled?: boolean
   /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
   sendDisabled?: boolean
@@ -100,6 +101,7 @@ export function MobileNativeChatComposer({
   dictationMode = 'toggle',
   onMicPressIn,
   onMicPressOut,
+  authoringReady = true,
   disabled = false,
   sendDisabled = false,
   placeholder = NATIVE_CHAT_COMPOSER_PLACEHOLDER,
@@ -121,7 +123,11 @@ export function MobileNativeChatComposer({
   const files = structured?.files ?? NO_FILES
   const menu = useMobileNativeChatComposerMenu({
     value,
-    onChangeText,
+    onChangeText: (text) => {
+      if (authoringReady) {
+        onChangeText(text)
+      }
+    },
     agent,
     structuredCatalog: structured?.catalog,
     filePaths,
@@ -146,6 +152,7 @@ export function MobileNativeChatComposer({
   // An attachment alone is a valid send (desktop parity), so it rides even with no text.
   const canSend =
     (value.trim().length > 0 || attachmentCount > 0) &&
+    authoringReady &&
     !disabled &&
     !sendDisabled &&
     !sending &&
@@ -206,7 +213,7 @@ export function MobileNativeChatComposer({
 
   return (
     <View>
-      {menu.rows.length > 0 ? (
+      {authoringReady && menu.rows.length > 0 ? (
         <MobileNativeChatComposerMenu rows={menu.rows} onPick={menu.pick} />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
@@ -214,8 +221,8 @@ export function MobileNativeChatComposer({
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
-            onRemoveImage={onRemoveAttachment}
-            onRemoveFile={structured?.onRemoveFile}
+            onRemoveImage={authoringReady ? onRemoveAttachment : undefined}
+            onRemoveFile={authoringReady ? structured?.onRemoveFile : undefined}
           />
           <MobileNativeChatComposerField
             ref={fieldRef}
@@ -231,9 +238,8 @@ export function MobileNativeChatComposer({
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
             multiline
-            // Why: never revoke `editable` — iOS resigns first responder on a focused
-            // field, so a transient lock would yank the keyboard mid-typing (#10681).
-            // The lock gates sending; the draft survives and rides the next send.
+            // Storage ownership holds first paint; reconnects keep the field editable.
+            editable={authoringReady}
             textAlignVertical="top"
           />
           <View style={styles.actionRow} testID="native-chat-composer-actions">
@@ -242,7 +248,7 @@ export function MobileNativeChatComposer({
                 accessibilityLabel={attachLabel}
                 style={({ pressed }) => [styles.controlButton, pressed && styles.pressed]}
                 onPress={attachPress}
-                disabled={isAttaching || disabled}
+                disabled={!authoringReady || isAttaching || disabled}
               >
                 {isAttaching ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -276,7 +282,7 @@ export function MobileNativeChatComposer({
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
                 onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
                 onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
-                disabled={disabled && !micActive}
+                disabled={(!authoringReady || disabled) && !micActive}
               >
                 {/* The icon swaps on press; as the page's touch target, its removal would send
                     touchend to a detached node and lose the release. */}
@@ -324,11 +330,11 @@ export function MobileNativeChatComposer({
       </View>
       {structured ? (
         <ActionSheetModal
-          visible={attachOpen}
+          visible={attachOpen && authoringReady}
           onClose={() => setAttachOpen(false)}
           actions={mobileNativeChatAttachActions({
-            onPhotos: onAttachImage,
-            onFiles: structured.onAttachFiles,
+            onPhotos: authoringReady ? onAttachImage : undefined,
+            onFiles: authoringReady ? structured.onAttachFiles : undefined,
             onWorkspaceFile: menu.openFileMenu,
             onSkills: () => menu.openSlashMenu('skill'),
             onCommands: () => menu.openSlashMenu('command'),

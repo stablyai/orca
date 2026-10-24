@@ -1,3 +1,4 @@
+import { NativeChatQueuedMessageRows } from './NativeChatQueuedMessageRows'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { AlertCircle, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -140,29 +141,44 @@ export function NativeChatQueuedMessageList({
                 controller.editor?.images?.chips.length ? 'max-h-72' : 'max-h-40'
               )}
             >
-              {cards.map((card) => (
-                <NativeChatQueuedMessageCard
-                  key={card.messageId}
-                  card={card}
-                  chatWorktreeId={chatWorktreeId}
-                  agentName={agentName}
-                  statedFailures={statedFailures}
-                  showsSteerShortcut={controller.queueCapable && card === newest}
-                  steerHeld={steerHeld}
-                  pending={controller.pending(card.messageId)}
-                  onSteer={() => refocusAfter(controller.steer(card.messageId))}
-                  onDelete={() => refocusAfter(controller.remove(card.messageId))}
-                  onEdit={
-                    controller.editCapable ? () => void controller.edit(card.messageId) : undefined
-                  }
-                  editor={
-                    controller.editor?.messageId === card.messageId ? controller.editor : undefined
-                  }
-                  editAttachTo={editAttachTo}
-                  editDisabled={controller.editor !== undefined}
-                  onTurnOffQueueing={turnOffQueueing}
-                />
-              ))}
+              <NativeChatQueuedMessageRows
+                cards={cards}
+                reorder={controller.reorder}
+                renderCard={(card, drag) => (
+                  <NativeChatQueuedMessageCard
+                    key={card.messageId}
+                    card={card}
+                    drag={drag}
+                    chatWorktreeId={chatWorktreeId}
+                    agentName={agentName}
+                    statedFailures={statedFailures}
+                    showsSteerShortcut={controller.queueCapable && card === newest}
+                    steerHeld={steerHeld}
+                    pending={controller.pending(card.messageId)}
+                    onSteer={() => refocusAfter(controller.steer(card.messageId))}
+                    onDelete={() => refocusAfter(controller.remove(card.messageId))}
+                    onEdit={
+                      controller.editCapable
+                        ? () => {
+                            const action = controller.edit(card.messageId)
+                            if (controller.editReturnsToComposer) {
+                              refocusAfter(action)
+                            }
+                          }
+                        : undefined
+                    }
+                    editor={
+                      controller.editor?.messageId === card.messageId
+                        ? controller.editor
+                        : undefined
+                    }
+                    editAttachTo={editAttachTo}
+                    editDisabled={controller.editor !== undefined}
+                    editDisabledReason={controller.editDisabledReason}
+                    onTurnOffQueueing={turnOffQueueing}
+                  />
+                )}
+              />
             </ul>
           </div>
         </div>

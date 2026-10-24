@@ -1,3 +1,4 @@
+import { deleteMobileNativeChatDrafts } from '../session/mobile-native-chat-draft-store'
 import { useCallback } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
@@ -188,6 +189,8 @@ export function useHostWorktreeActions(args: {
         if (!worktreeRemove.interpret(reply).accepted) {
           setWorktrees((prev) => [...prev, item])
           setLastKnownWorktrees((prev) => [...prev, item])
+        } else if (hostId) {
+          void deleteMobileNativeChatDrafts(hostId, item.worktreeId).catch(() => undefined)
         }
         void fetchWorktrees()
       } catch {
@@ -195,7 +198,7 @@ export function useHostWorktreeActions(args: {
         setLastKnownWorktrees((prev) => [...prev, item])
       }
     },
-    [clientForRow, fetchWorktrees]
+    [clientForRow, fetchWorktrees, hostId]
   )
 
   const handleRemoveHost = useCallback(async () => {

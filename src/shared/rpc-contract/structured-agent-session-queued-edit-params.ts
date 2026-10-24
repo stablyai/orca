@@ -3,6 +3,28 @@ import { Identifier, SessionId } from './structured-agent-session-identifiers'
 import { MutationEnvelope, MAX_BLOCKS, MAX_PROMPT_BYTES } from './structured-agent-session-params'
 import { SendImageRefBlock } from './structured-agent-session-message-params'
 
+export const QueuedMessageDeleteParams = z
+  .object({
+    envelope: MutationEnvelope,
+    messageId: Identifier('Invalid queued message id'),
+    expectedBodyFingerprint: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional()
+  })
+  .strict()
+
+const moveIdentity = {
+  envelope: MutationEnvelope,
+  messageId: Identifier('Invalid queued message id')
+}
+export const QueuedMessageMoveParams = z.union([
+  z
+    .object({ ...moveIdentity, beforeMessageId: Identifier('Invalid anchor id').nullable() })
+    .strict(),
+  z.object({ ...moveIdentity, afterMessageId: Identifier('Invalid anchor id') }).strict()
+])
+
 export const QueuedMessageUpdateParams = z
   .object({
     envelope: MutationEnvelope,

@@ -1,3 +1,5 @@
+import type { NativeChatDraftCommit } from './native-chat-draft-cache'
+import type { ComposerImageReference } from '../../../../shared/structured-agent-session-send-mutation'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
@@ -60,6 +62,7 @@ export type NativeChatComposerFieldProps = {
   isDictating: boolean
   isDictationHoldMode: boolean
   imeEnterGesture: ReturnType<typeof useImeEnterGestureOwnership>
+  onDraftCommit?: NativeChatDraftCommit
   onDraftChange: (value: string, element: NativeChatComposerInput) => void
   onTextareaSelect: (element: NativeChatComposerInput) => void
   onKeyDown: KeyboardEventHandler<HTMLElement>
@@ -89,6 +92,7 @@ export type NativeChatComposerImageAttachment = {
   /** Empty while `pending`: the clipboard image has no agent-readable path yet. */
   path: string
   connectionId?: string
+  reference?: ComposerImageReference
   /** Clipboard thumbnail (blob/data URL) rendered before — and after — the file
    *  lands, so the chip never waits on a disk round-trip to show something. */
   previewUrl?: string
@@ -147,6 +151,7 @@ export function NativeChatComposerField({
   isDictationHoldMode,
   imeEnterGesture,
   onDraftChange,
+  onDraftCommit,
   onTextareaSelect,
   onKeyDown,
   onImeSettled,
@@ -289,6 +294,7 @@ export function NativeChatComposerField({
               inputRef={textareaRef}
               initialValue={draft}
               disabled={disabled}
+              onCommit={onDraftCommit}
               onChange={(input) => {
                 const value = input.value
                 editorDraftRef.current = value

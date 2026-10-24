@@ -156,8 +156,7 @@ function ComposerProbe({
           onTextareaSelect={(input) => setCaret(input.selectionStart ?? input.value.length)}
           onKeyDown={() => {}}
           onImeSettled={(input) => {
-            setDraft(input.value)
-            flushDraftAppends()
+            flushDraftAppends(input.value)
             attachments.flushPendingAttachments()
           }}
           onPaste={() => {}}

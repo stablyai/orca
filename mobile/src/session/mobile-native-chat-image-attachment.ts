@@ -1,3 +1,4 @@
+import type { ComposerImageReference } from '../../../src/shared/structured-agent-session-send-mutation'
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
 import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
 // Type-only import so this module (and its unit test) stays free of the expo/
@@ -10,19 +11,24 @@ import type { MobileImageSource, PickedMobileImage } from './mobile-image-source
 export type PendingNativeChatImage = {
   readonly id: string
   readonly path: string
+  readonly reference?: ComposerImageReference
+  readonly connectionId?: string
   readonly previewUri: string
 }
 
 export function appendPendingNativeChatImages(
   current: readonly PendingNativeChatImage[],
   uploaded: readonly Omit<PendingNativeChatImage, 'id'>[],
-  idCounter: { current: number }
+  idCounter: { current: number },
+  idPrefix = 'img'
 ): PendingNativeChatImage[] {
   return [
     ...current,
     ...uploaded.map((image) => {
-      idCounter.current += 1
-      return { id: `img-${idCounter.current}`, ...image }
+      do {
+        idCounter.current += 1
+      } while (current.some((image) => image.id === `${idPrefix}-${idCounter.current}`))
+      return { id: `${idPrefix}-${idCounter.current}`, ...image }
     })
   ]
 }

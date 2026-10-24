@@ -184,8 +184,14 @@ export function MobileWebShellScreen({
   // native screen, and the page lifts by the height native screens read.
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const pageInsets = pageSafeAreaInsets({ insets, topCovered: noticeShown })
+  const snapshotView = usePageHostSnapshot(
+    hostId,
+    route.pathname,
+    ownsHostArea,
+    state.kind === 'ready' ? state.sessionId : null
+  )
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
-    usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
+    snapshotView
   // Declared before the bridge so the handler it is handed already belongs to this session: the
   // media verbs hold staged files, and a registry born after the host would outlive the page.
   const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
@@ -193,7 +199,9 @@ export function MobileWebShellScreen({
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
-      : serveDeviceVerb(verb, params)
+      : verb === 'native.storage.write'
+        ? snapshotView.writeDraft(params)
+        : serveDeviceVerb(verb, params)
   // Straight to the system handler, and the one opener the shell has: the page's `externalLink`
   // notify and a cancelled top-frame navigation both arrive here already filtered. The only failure
   // left is a device with nothing registered for the scheme -- a `mailto:` on a phone with no mail

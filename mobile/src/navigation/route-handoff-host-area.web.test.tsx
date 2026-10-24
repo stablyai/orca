@@ -201,3 +201,30 @@ describe('a session page opened on its own, leaving for the host route', () => {
     expect(page.navigations()).toEqual([])
   })
 })
+
+describe('a session document keeping its original workspace authority', () => {
+  it('keeps A-to-host and return-to-A local, but hands the next workspace to native', () => {
+    const a = '/h/host-1/session/wt-1'
+    const b = '/h/host-1/session/wt-2'
+    const page = mountPage(a, false)
+    page.handoff.replace('/h/host-1')
+    page.handoff.push(`${a}?paneKey=another-tab&name=main`)
+    expect(router.replace).toHaveBeenCalledWith('/h/host-1', undefined)
+    expect(router.push).toHaveBeenCalledWith(`${a}?paneKey=another-tab&name=main`, undefined)
+    expect(page.navigations()).toEqual([])
+    router.push.mockClear()
+    page.handoff.replace('/h/host-1')
+    page.handoff.push(b)
+    expect(router.push).not.toHaveBeenCalled()
+    expect(page.navigations()).toHaveLength(1)
+  })
+
+  it('also hands off a different workspace from a wide detail document that owns no host area', () => {
+    const a = '/h/host-1/session/wt-1'
+    expect(routeViewOf(ROUTES, a, true).ownsHostArea).toBe(false)
+    const page = mountPage(a, true)
+    page.handoff.replace('/h/host-1/session/wt-2')
+    expect(router.replace).not.toHaveBeenCalled()
+    expect(page.navigations()).toHaveLength(1)
+  })
+})

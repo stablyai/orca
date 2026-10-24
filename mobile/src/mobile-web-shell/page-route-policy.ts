@@ -1,7 +1,10 @@
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import { BRIDGE_EXTERNAL_NAVIGATION_GRANT } from './cancelled-navigation-target'
 import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
-import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
+import {
+  BRIDGE_CHAT_DRAFT_STORAGE_GRANT,
+  BRIDGE_NATIVE_VERB_NAMES
+} from './bridge/bridge-native-verbs'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 
 /** The manifest's route entries, as this shell reads them. */
@@ -31,6 +34,7 @@ export const MOBILE_WEB_SHELL_GRANTS = [
   BRIDGE_EXTERNAL_NAVIGATION_GRANT,
   // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
   // advertised without a row and a row cannot exist without being advertised.
+  BRIDGE_CHAT_DRAFT_STORAGE_GRANT,
   ...BRIDGE_NATIVE_VERB_NAMES
 ] as const
 
@@ -303,5 +307,11 @@ export function pageRouteRefusalVerdict(
 /** Every served route's grants, so `route-handoff.web.ts` keeps each hop in the page, plus the read
  *  of a workspace key that page opens in-page. */
 function hostAreaGrants(entries: readonly MobileWebPageRoute[]): string[] {
-  return [...new Set([...entries.flatMap(effectiveRouteGrants), 'native.storage.read'])]
+  return [
+    ...new Set([
+      ...entries.flatMap(effectiveRouteGrants),
+      'native.storage.read',
+      'native.storage.write'
+    ])
+  ]
 }

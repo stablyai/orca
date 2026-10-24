@@ -36,7 +36,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import { useRouteHandoff } from './route-handoff.web'
+import { useRouteHandoff, WRAPPED_HREF_MEMBERS } from './route-handoff.web'
 
 const INIT = {
   v: BRIDGE_PROTOCOL_VERSION,
@@ -619,5 +619,78 @@ describe('an in-page hop the session cannot cover', () => {
     handoff.push(TASKS)
     expect(navigations(posted)).toHaveLength(1)
     expect(router.push).not.toHaveBeenCalled()
+  })
+})
+
+describe('workspace ownership even when older init supplies no grant pairs', () => {
+  const a = '/h/host-a/session/wt-1'
+  const b = '/h/host-a/session/wt-2'
+  const opener = {
+    ...INIT,
+    route: { pathname: a },
+    pageRoutes: ['/h/[hostId]', '/h/[hostId]/session/[worktreeId]']
+  }
+
+  it('keeps same-workspace tab hops local for every member and hands off only user navigation to B', () => {
+    const { posted, handoff } = mount(opener)
+    const tab = `${a}?paneKey=tab%2F2&name=main`
+    for (const member of WRAPPED_HREF_MEMBERS) {
+      handoff[member](tab)
+      expect(router[member]).toHaveBeenCalledTimes(1)
+      expect(router[member].mock.calls[0][0]).toBe(tab)
+      handoff[member](b)
+      expect(router[member]).toHaveBeenCalledTimes(1)
+    }
+    expect(navigations(posted)).toEqual(
+      ['push', 'replace', 'navigate', 'dismissTo'].map(() => ({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: 'navigate',
+        href: b
+      }))
+    )
+  })
+
+  it('preserves the unknown-route fallback when old init names no opener route', () => {
+    const { posted, handoff } = mount({ ...opener, route: undefined })
+    handoff.push(b)
+    expect(router.push).toHaveBeenCalledWith(b, undefined)
+    expect(navigations(posted)).toEqual([])
+  })
+
+  it('compares decoded host and workspace IDs without altering the handed-off href', () => {
+    const { posted, handoff } = mount({
+      ...opener,
+      route: { pathname: '/h/host%2f1/session/wt%2fa' }
+    })
+    const same = '/h/host%2F1/session/wt%2Fa?paneKey=tab%2F2'
+    handoff.push(same)
+    expect(router.push).toHaveBeenCalledWith(same, undefined)
+    const targets = ['/h/host%2F1/session/wt%2Fb?name=B', '/h/host%2F2/session/wt%2Fa']
+    for (const target of targets) {
+      handoff.push(target)
+    }
+    expect(router.push).toHaveBeenCalledTimes(1)
+    expect(navigations(posted)).toEqual(
+      targets.map((href) => ({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: 'navigate',
+        href
+      }))
+    )
+  })
+
+  it('reports a refused native cross-workspace handoff without falling back to local navigation', () => {
+    const { posted, handoff } = mount({
+      ...opener,
+      grants: { ...INIT.grants, native: [] }
+    })
+    handoff.push(b)
+    expect(router.push).not.toHaveBeenCalled()
+    expect(navigations(posted)).toEqual([])
+    expect(warned).toEqual([
+      ['[page-bridge] route-handoff-refused', { reason: 'shell-refused', target: b }]
+    ])
   })
 })

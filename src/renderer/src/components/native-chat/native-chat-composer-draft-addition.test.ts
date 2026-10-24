@@ -241,3 +241,36 @@ describe('native-chat composer draft addition', () => {
     }
   )
 })
+
+it('replays the repeated-text policy, incoming skill document, and original image reference', async () => {
+  storage.drafts.set(SCOPE, { text: '$review', images: [], savedAt: 1 })
+  const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
+  const crashed = await reload({ using: crashing })
+  const reference = { url: 'https://example.com/image.png', alt: 'diagram' }
+  expect(
+    crashed.store.appendToNativeChatComposerDraft(SCOPE, {
+      text: '$review',
+      textPolicy: 'append-repeated',
+      images: [{ id: 'returned', path: '', reference }],
+      document: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'nativeChatSkill', attrs: { token: '$review', path: '/skills/review' } }
+            ]
+          }
+        ]
+      }
+    })
+  ).toBe(true)
+  crashed.store.clearNativeChatComposerDraftsForTests()
+  const next = await reload()
+  const draft = next.store.readNativeChatComposerDraft(SCOPE)
+  expect(draft.text).toBe('$review\n\n$review')
+  expect(draft.images).toEqual([{ id: 'returned', path: '', reference }])
+  expect(draft.document?.content?.at(-1)?.content).toEqual([
+    { type: 'nativeChatSkill', attrs: { token: '$review', path: '/skills/review' } }
+  ])
+})

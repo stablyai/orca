@@ -1,3 +1,7 @@
+import type { JSONContent } from '@tiptap/react'
+import { composerSkillOccurrences } from '../../../../shared/structured-agent-session-send-mutation'
+import { promptTextContent, promptDocumentLeafText } from './native-chat-prompt-document-text'
+import type { NativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
@@ -16,7 +20,12 @@ export function returnMessageToComposer(
   attachmentIdPrefix: string,
   blocks: AgentJournalMessageItem['blocks'],
   /** Each image's SSH connection, in block order. */
-  imageConnectionIds?: readonly (string | null)[]
+  imageConnectionIds?: readonly (string | null)[],
+  options?: {
+    skills?: readonly { name: string; path: string }[]
+    textPolicy?: 'append-repeated'
+    acknowledge?: (saved: Promise<boolean>) => void
+  }
 ): boolean {
   // Its `[Image #k]` markers become chips for its k-th image, by the ids its images get below.
   const imageIds = blocks.flatMap((block, index) =>
@@ -29,27 +38,64 @@ export function returnMessageToComposer(
       return []
     }
     const connectionId = imageConnectionIds?.[image++]
-    return block.path
-      ? [
-          {
-            id: `${attachmentIdPrefix}-${index}`,
-            path: block.path,
-            ...(connectionId ? { connectionId } : {})
-          }
-        ]
-      : []
+    const { type: _type, ...reference } = block
+    return [
+      {
+        id: `${attachmentIdPrefix}-${index}`,
+        path: block.path ?? '',
+        reference,
+        ...(connectionId ? { connectionId } : {})
+      }
+    ]
   })
   // One step, so a crash never leaves chips without their images, and a second return of the
   // message is skipped by its image ids whatever was typed since.
-  return appendNativeChatDraftCache(
-    composerScopeKey,
-    promptMarkersToImageReferences(
-      structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
-      imageIds
-    ),
-    undefined,
-    images
+  const text = promptMarkersToImageReferences(
+    structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
+    imageIds
   )
+  const document = options?.skills?.length ? promptTextContent(text) : undefined
+  const bindings = composerSkillOccurrences(text, options?.skills ?? [])
+  let offset = 0
+  for (const paragraph of document?.content ?? []) {
+    paragraph.content = paragraph.content?.flatMap((node) => {
+      if (node.type !== 'text' || !node.text) {
+        offset += promptDocumentLeafText(node.type, node.attrs).length
+        return [node]
+      }
+      const start = offset
+      offset += node.text.length
+      const parts: JSONContent[] = []
+      let from = 0
+      for (const { ref, at: position } of bindings) {
+        if (position < start || position >= offset) {
+          continue
+        }
+        const at = position - start
+        if (at > from) {
+          parts.push({ type: 'text', text: node.text.slice(from, at) })
+        }
+        parts.push({
+          type: 'nativeChatSkill',
+          attrs: { token: `$${ref.name}`, path: ref.path }
+        })
+        from = at + ref.name.length + 1
+      }
+      if (from < node.text.length) {
+        parts.push({ type: 'text', text: node.text.slice(from) })
+      }
+      return parts
+    })
+    offset += 1
+  }
+  const addition: Pick<NativeChatComposerDraftAddition, 'document' | 'textPolicy'> = {
+    ...(document ? { document } : {}),
+    ...(options?.textPolicy ? { textPolicy: options.textPolicy } : {})
+  }
+  return appendNativeChatDraftCache(composerScopeKey, text, undefined, images, {
+    ...addition,
+    acknowledge: options?.acknowledge
+  })
 }
 
 /**
@@ -67,6 +113,7 @@ export function handBackStructuredAgentSessionMessage(
     structuredAgentSessionDraftScopeKey(sessionId),
     `returned-${clientMessageId}`,
     body.blocks,
-    imageConnectionIds
+    imageConnectionIds,
+    { skills: body.skills }
   )
 }

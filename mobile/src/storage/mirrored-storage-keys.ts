@@ -95,7 +95,28 @@ function note(key: string, value: string | null): void {
  *
  * Returns the store's own promise so callers can report refusals.
  */
+const writes = new Map<string, Promise<void>>()
+
+export function pendingMirroredStorageKeys(): string[] {
+  return [...writes.keys()]
+}
+
 export function persistMirrored(key: string, value: string | null): Promise<void> {
+  const next = (writes.get(key) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => commitMirrored(key, value))
+  writes.set(key, next)
+  void next
+    .finally(() => {
+      if (writes.get(key) === next) {
+        writes.delete(key)
+      }
+    })
+    .catch(() => undefined)
+  return next
+}
+
+function commitMirrored(key: string, value: string | null): Promise<void> {
   const write = value === null ? AsyncStorage.removeItem(key) : AsyncStorage.setItem(key, value)
   // Seated from what the store holds afterwards rather than from what was asked for, because a
   // refusal is not always a rejection: the page's adapter resolves a `not-allowed` write and logs

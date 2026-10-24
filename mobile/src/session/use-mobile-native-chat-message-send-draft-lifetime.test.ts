@@ -26,7 +26,11 @@ vi.mock('./mobile-native-chat-send', () => ({
 
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  deleteMobileNativeChatDrafts
+} from './mobile-native-chat-draft-store'
+import { publishMobileChatDraftStorage } from './mobile-native-chat-draft-storage'
 
 function deferred<T>() {
   let resolve: ((value: T) => void) | undefined
@@ -64,6 +68,7 @@ describe('mobile native-chat send across screen lifetimes', () => {
     renderer = null
     latest = null
     resetMobileNativeChatDraftStoreForTests()
+    publishMobileChatDraftStorage(null)
     vi.clearAllMocks()
   })
 
@@ -214,6 +219,19 @@ describe('mobile native-chat send across screen lifetimes', () => {
     })
     await remount('unchanged')
     expect(current().drafts.composerText).toBe('ping')
+    await act(async () => {
+      publishMobileChatDraftStorage({
+        read: async () => null,
+        write: async () => {},
+        removeWorkspace: async () => {}
+      })
+      publishMobileChatDraftStorage(null)
+      publishMobileChatDraftStorage({
+        read: async () => null,
+        write: async () => {},
+        removeWorkspace: async () => {}
+      })
+    })
 
     await act(async () => heal.resolve(true))
     expect(current().drafts.composerText).toBe('')
@@ -246,5 +264,27 @@ describe('mobile native-chat send across screen lifetimes', () => {
     })
     expect(current().drafts.composerText).toBe('new draft\n\nping')
     expect(transport.error).toHaveBeenCalledTimes(1)
+  })
+  it('does not restore a captured Send into a deliberately recreated draft', async () => {
+    const delivery = deferred<'rejected'>()
+    transport.heal.mockResolvedValue(true)
+    transport.clearInput.mockResolvedValue(true)
+    transport.send.mockImplementation(() => delivery.promise)
+    await mount('recreated')
+    await edit('old submitted text')
+    let sending: Promise<boolean> | undefined
+    await act(async () => {
+      sending = current().sender.send('old submitted text')
+    })
+    await act(async () => {
+      await deleteMobileNativeChatDrafts('r1-host', 'r1-workspace')
+    })
+    await remount('recreated')
+    await edit('new independent draft')
+    await act(async () => {
+      delivery.resolve('rejected')
+      expect(await sending).toBe(false)
+    })
+    expect(current().drafts.composerText).toBe('new independent draft')
   })
 })

@@ -1,3 +1,4 @@
+import type { MobileChatDraftOwner } from './mobile-native-chat-draft-store'
 import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 
 export type MobileNativeChatPendingMessage = {
@@ -16,6 +17,8 @@ export type MobileNativeChatPendingMessage = {
 }
 
 export type MobileNativeChatSendOrigin = {
+  owner?: MobileChatDraftOwner
+  skills?: { name: string; path: string }[]
   draftKey: string
   draftEditGeneration: number
   pendingKey: string | null

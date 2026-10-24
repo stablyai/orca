@@ -34,6 +34,7 @@ import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-olde
 type QueuedFeed = {
   messages: MobileQueuedMessageFeed
   pause: MobileQueuePause
+  queuedImageCards?: boolean
 }
 const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
 
@@ -52,6 +53,7 @@ export function useMobileStructuredAgentState(args: {
   stateRef: { readonly current: StructuredAgentSessionState }
   /** Host-held queued drafts from the live stream; null until the host claims any. */
   queuedMessages: MobileQueuedMessageFeed
+  queuedImageCards?: boolean
   /** The whole queue's pause, published with the drafts. */
   queuePause: MobileQueuePause
   olderPages: OlderPagePhase
@@ -112,12 +114,20 @@ export function useMobileStructuredAgentState(args: {
         const previous = current.get(sessionKey) ?? NO_QUEUED_FEED
         const messages = reduceMobileQueuedMessageFeed(previous.messages, event)
         const pause = reduceMobileQueuePause(previous.pause, event)
-        if (messages === previous.messages && pause === previous.pause) {
+        const queuedImageCards =
+          event.type === 'end' || event.queuedMessages === undefined
+            ? previous.queuedImageCards
+            : event.queuedImageCards === true
+        if (
+          messages === previous.messages &&
+          pause === previous.pause &&
+          queuedImageCards === previous.queuedImageCards
+        ) {
           return current
         }
         const updated = new Map(current)
         updated.delete(sessionKey)
-        updated.set(sessionKey, { messages, pause })
+        updated.set(sessionKey, { messages, pause, queuedImageCards })
         while (updated.size > MAX_RETAINED_SESSION_STATES) {
           const oldest = updated.keys().next().value
           if (oldest === undefined) {
@@ -277,5 +287,13 @@ export function useMobileStructuredAgentState(args: {
     loadEarlier()
   }, [drawsNothingFrom, loadEarlier, loadingEarlier])
 
-  return { state, stateRef, queuedMessages, queuePause: queued.pause, olderPages, loadEarlier }
+  return {
+    state,
+    stateRef,
+    queuedMessages,
+    queuedImageCards: queued.queuedImageCards,
+    queuePause: queued.pause,
+    olderPages,
+    loadEarlier
+  }
 }

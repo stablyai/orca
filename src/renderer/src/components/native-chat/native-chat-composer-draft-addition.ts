@@ -1,3 +1,4 @@
+import type { JSONContent } from '@tiptap/react'
 // What is added to a draft without replacing it: text given back (Stop, a queued card's Edit) and
 // images given back or attached. Kept as data, so the same addition can be made again on a draft
 // loaded later, or replayed from the journal after a crash.
@@ -11,6 +12,8 @@ import type {
 } from './native-chat-composer-draft-storage'
 
 export type NativeChatComposerDraftAddition = {
+  readonly document?: JSONContent
+  readonly textPolicy?: 'append-repeated'
   readonly text?: string
   readonly images?: readonly NativeChatComposerDraftImage[]
   /** Only an image the user attaches takes the place of a placeholder with its file name. */
@@ -28,6 +31,21 @@ export function placeNativeChatComposerDraftAddition(
   draft: NativeChatComposerDraft,
   addition: NativeChatComposerDraftAddition
 ): NativeChatComposerDraftAddition {
+  if (
+    addition.document &&
+    appendReturnedDraftText(draft.text, addition.text ?? '', addition.textPolicy) === draft.text
+  ) {
+    const kept = appendPromptDocumentText(draft.document, draft.text, draft.text.trimEnd())
+    const incoming = appendPromptDocumentText(
+      addition.document,
+      addition.text ?? '',
+      (addition.text ?? '').trimEnd()
+    )
+    const tail = kept?.content?.slice(-(incoming?.content?.length ?? 0))
+    if (JSON.stringify(tail) !== JSON.stringify(incoming?.content)) {
+      addition = { ...addition, textPolicy: 'append-repeated' }
+    }
+  }
   if (!addition.fromUser || !addition.images) {
     return addition
   }
@@ -62,11 +80,16 @@ export function withNativeChatComposerDraftAddition(
   ) {
     return { text: draft.text, images: draft.images, document: draft.document }
   }
-  const text = appendReturnedDraftText(draft.text, addition.text ?? '')
+  const text = appendReturnedDraftText(draft.text, addition.text ?? '', addition.textPolicy)
   const images = [...draft.images]
   let at = addition.before ? images.findIndex((held) => held.id === addition.before) : -1
-  for (const { id, path, connectionId } of addition.images ?? []) {
-    const image = { id, path, ...(connectionId ? { connectionId } : {}) }
+  for (const { id, path, connectionId, reference } of addition.images ?? []) {
+    const image = {
+      id,
+      path,
+      ...(reference ? { reference } : {}),
+      ...(connectionId ? { connectionId } : {})
+    }
     const held = images.findIndex((candidate) => candidate.id === id)
     if (fills.has(id) && held !== -1) {
       // One already filled stays as it is.
@@ -79,5 +102,9 @@ export function withNativeChatComposerDraftAddition(
       images.splice(at++, 0, image)
     }
   }
-  return { text, images, document: appendPromptDocumentText(draft.document, draft.text, text) }
+  return {
+    text,
+    images,
+    document: appendPromptDocumentText(draft.document, draft.text, text, addition.document)
+  }
 }

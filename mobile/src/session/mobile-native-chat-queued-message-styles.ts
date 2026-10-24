@@ -144,6 +144,13 @@ export const queuedMessageStyles = StyleSheet.create({
   actions: {
     flexDirection: 'row'
   },
+  // Not a button: the count reads beside the actions, as on desktop.
+  imageCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs
+  },
   textAction: {
     minHeight: MIN_TOUCH_TARGET,
     minWidth: MIN_TOUCH_TARGET,

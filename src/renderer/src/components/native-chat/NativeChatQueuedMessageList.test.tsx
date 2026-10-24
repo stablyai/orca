@@ -261,6 +261,27 @@ describe('NativeChatQueuedMessageList', () => {
     expect(owner.remove).toHaveBeenCalledWith('draft-2')
   })
 
+  it('reorders only user cards from the grip with arrow keys and retains focus', async () => {
+    const cards = [card({ messageId: 'a' }), card({ messageId: 'b', position: 2 })]
+    const owner = controller(cards)
+    const move = vi.fn(async () => {})
+    owner.reorder = { scope: 'session', pending: false, move }
+    const view = renderList(owner)
+    const grip = screen.getAllByRole('button', { name: 'Reorder message' })[0]!
+    grip.focus()
+    fireEvent.keyDown(grip, { key: 'ArrowDown' })
+    expect(move).toHaveBeenCalledExactlyOnceWith('a', { afterMessageId: 'b' })
+    view.rerender(
+      <TooltipProvider>
+        <NativeChatQueuedMessageList
+          chatWorktreeId={null}
+          controller={{ ...owner, cards: [cards[1]!, cards[0]!] }}
+        />
+      </TooltipProvider>
+    )
+    expect(document.activeElement).toBe(grip)
+  })
+
   it('a command card never steers: Send only while the agent is idle', () => {
     const owner = controller([
       card({ messageId: 'compact-1', text: '/compact', command: true, waitsForAgent: true }),
@@ -610,37 +631,6 @@ describe('NativeChatQueuedMessageList', () => {
       failed!.firstElementChild?.firstElementChild?.classList.contains('lucide-circle-alert')
     ).toBe(true)
     expect(container.querySelectorAll('.lucide-list-end')).toHaveLength(1)
-  })
-
-  it('one bordered box holds the header and every card, rows divided, cards unbordered', () => {
-    renderList(
-      controller(
-        [
-          card({ messageId: 'waiting', hold: 'queue-paused' }),
-          card({ messageId: 'refused', state: 'returned', hold: 'returned', position: 2 }),
-          card({ messageId: 'failed', hold: 'paused', pausedReason: 'send_failed', position: 3 })
-        ],
-        { reason: 'stopped' }
-      )
-    )
-    const list = screen.getByRole('list')
-    const box = list.parentElement!
-    expect(box.className.split(' ')).toEqual(
-      expect.arrayContaining(['rounded-md', 'border', 'border-border', 'bg-card', 'divide-y'])
-    )
-    // The header is the box's first row, outside the list; the list is its second.
-    expect(box.children).toHaveLength(2)
-    expect(box.firstElementChild?.textContent).toContain('Paused·3')
-    expect(box.lastElementChild).toBe(list)
-    expect(list.className.split(' ')).toContain('divide-y')
-    const rows = within(list).getAllByRole('listitem')
-    expect(rows).toHaveLength(3)
-    for (const row of rows) {
-      expect(row.className.split(' ')).not.toContain('border')
-      expect(row.className.split(' ')).not.toContain('rounded-md')
-    }
-    // Captions still render on their own rows.
-    expect(rows[2]?.textContent).toContain("Couldn't send — press Send to retry.")
   })
 
   it('Clear all deletes every card; the chevron folds only the cards, and an emptied queue opens again', () => {

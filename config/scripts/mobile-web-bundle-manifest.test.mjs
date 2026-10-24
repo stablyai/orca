@@ -11,6 +11,7 @@ import {
   sha256Hex,
   writeMobileWebBundleTree
 } from './mobile-web-bundle-manifest.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import {
   MOBILE_WEB_PAGE_VERSION,
   MobileWebBundleManifestSchema
@@ -81,12 +82,15 @@ describe('writeMobileWebBundleTree', () => {
       await writeMobileWebBundleTree({
         outDir,
         written: [entry],
+        routes: MOBILE_WEB_PAGE_ROUTES,
         desktopVersion: '1.0.0',
         protocolWindow: { runtimeProtocolVersion: 3, minCompatibleRuntimeProtocolVersion: 3 }
       })
       const manifest = JSON.parse(await readFile(join(outDir, 'manifest.json'), 'utf8'))
       expect(manifest.pageVersion).toBe(MOBILE_WEB_PAGE_VERSION)
-      expect(MobileWebBundleManifestSchema.parse(manifest).pageVersion).toBe(manifest.pageVersion)
+      const parsed = MobileWebBundleManifestSchema.parse(manifest)
+      expect(parsed.pageVersion).toBe(manifest.pageVersion)
+      expect(parsed.routes).toEqual(MOBILE_WEB_PAGE_ROUTES)
     } finally {
       await rm(outDir, { recursive: true, force: true })
     }

@@ -1,3 +1,4 @@
+import { installNativeMobileChatDraftStorage } from '../src/session/mobile-native-chat-draft-native-storage'
 import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/native-notification-data'
@@ -26,6 +27,8 @@ import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
+
+installNativeMobileChatDraftStorage()
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame

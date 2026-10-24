@@ -1,8 +1,12 @@
+import { publishMobileChatDraftStorage } from './mobile-native-chat-draft-storage'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  persistMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
 
@@ -13,12 +17,14 @@ describe('mobile native-chat draft store', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     resetMobileNativeChatDraftStoreForTests()
+    publishMobileChatDraftStorage(null)
     renderer = null
     state = null
   })
 
-  function Harness({ tabId }: { tabId: string }): null {
+  function Harness({ tabId, launchDraft }: { tabId: string; launchDraft?: string }): null {
     state = useMobileNativeChatDrafts({
+      launchDraft,
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,
@@ -87,5 +93,26 @@ describe('mobile native-chat draft store', () => {
     act(() => renderer?.unmount())
     await mount('a')
     expect(state?.composerText).toBe('')
+  })
+
+  it('hydrates saved typing before considering a host launch prefill', async () => {
+    let resolve: (value: string) => void = () => {}
+    const read = new Promise<string>((done) => {
+      resolve = done
+    })
+    publishMobileChatDraftStorage({
+      read: () => read,
+      write: async () => {},
+      removeWorkspace: async () => {}
+    })
+    await act(async () => {
+      renderer = create(createElement(Harness, { tabId: 'a', launchDraft: 'launch context' }))
+    })
+    await act(async () => {
+      resolve(JSON.stringify({ text: 'saved user draft', images: [] }))
+      await read
+    })
+    expect(state?.composerText).toBe('saved user draft')
+    await persistMobileNativeChatDraft('host\0worktree\0a')
   })
 })

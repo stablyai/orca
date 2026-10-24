@@ -4,18 +4,41 @@ import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 
-const env = vi.hoisted(() => ({
-  focused: true,
-  connected: false,
-  mode: 'hold',
-  reads: 0,
-  enabled: true,
-  captureEnabled: false,
-  foreground: new Set<(state: string) => void>(),
-  slowReply: Promise.resolve<RpcResponse | null>(null),
-  deferReply: false,
-  refuseRead: false
-}))
+const env = vi.hoisted(
+  (): {
+    native: boolean
+    tab: string
+    starts: number
+    transcript: ((text: string) => void) | null
+    toasts: string[]
+    focused: boolean
+    connected: boolean
+    mode: string
+    reads: number
+    enabled: boolean
+    captureEnabled: boolean
+    foreground: Set<(state: string) => void>
+    slowReply: Promise<RpcResponse | null>
+    deferReply: boolean
+    refuseRead: boolean
+  } => ({
+    native: false,
+    tab: 'tab',
+    starts: 0,
+    transcript: null,
+    toasts: [],
+    focused: true,
+    connected: false,
+    mode: 'hold',
+    reads: 0,
+    enabled: true,
+    captureEnabled: false,
+    foreground: new Set<(state: string) => void>(),
+    slowReply: Promise.resolve<RpcResponse | null>(null),
+    deferReply: false,
+    refuseRead: false
+  })
+)
 
 vi.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => {
@@ -43,13 +66,16 @@ vi.mock('./use-terminal-live-input-mode-preference', () => ({
 // The capture pipeline and the native-chat surface are off this path; the real modules would pull
 // the Expo audio runtime in behind them.
 vi.mock('../hooks/use-mobile-dictation', () => ({
-  useMobileDictation: (options: { enabled: boolean }) => {
+  useMobileDictation: (options: { enabled: boolean; onTranscript: (text: string) => void }) => {
+    env.transcript = options.onTranscript
     env.captureEnabled = options.enabled
     return {
       isStarting: false,
       isRecording: false,
       isProcessing: false,
-      start: async () => {},
+      start: async () => {
+        env.starts += 1
+      },
       stop: async () => {},
       cancel: async () => {}
     }
@@ -76,17 +102,36 @@ vi.mock('./use-mobile-native-chat-input-lease', () => ({
   })
 }))
 vi.mock('./use-mobile-native-chat-controller', () => ({
-  useMobileNativeChatController: () => ({
-    toggleTabChatView: () => {},
-    showNativeChat: false,
-    showNativeChatRef: { current: false },
-    setChatComposerText: () => {}
-  })
+  useMobileNativeChatController: () => {
+    const drafts = useMobileNativeChatDrafts({
+      hostId: 'host',
+      worktreeId: 'worktree',
+      tabId: env.tab,
+      sessionId: 'session',
+      messages: [],
+      transcriptSettled: true
+    })
+    return {
+      toggleTabChatView: () => {},
+      showNativeChat: env.native,
+      showNativeChatRef: { current: env.native },
+      draftAuthoringReady: drafts.draftAuthoringReady,
+      setChatComposerText: drafts.setComposerText
+    }
+  }
 }))
 vi.mock('./use-mobile-send-completion-generation', () => ({
   useMobileSendCompletionGeneration: () => () => 0
 }))
 
+import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import {
+  hydrateMobileNativeChatDraft,
+  readMobileNativeChatDraft,
+  deleteMobileNativeChatDrafts,
+  resetMobileNativeChatDraftStoreForTests
+} from './mobile-native-chat-draft-store'
+import { publishMobileChatDraftStorage } from './mobile-native-chat-draft-storage'
 import { useMobileSessionScreenState } from './use-mobile-session-screen-state'
 import { useMobileSessionNativeChatDictation } from './use-mobile-session-native-chat-dictation'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
@@ -117,6 +162,7 @@ const client = {
 }
 
 let renderer: ReactTestRenderer | null = null
+let voiceModel: ReturnType<typeof useMobileSessionNativeChatDictation>
 
 function Probe() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the screen state only reads these route fields; foundation services are mocked below.
@@ -135,7 +181,7 @@ function Probe() {
     client,
     connState: env.connected ? 'connected' : 'reconnecting',
     activeHandle: 'terminal',
-    activeSessionTabId: 'tab',
+    activeSessionTabId: env.tab,
     activeSessionTab: null,
     activeHandleRef,
     dictationRouteContextRef,
@@ -143,11 +189,14 @@ function Probe() {
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: env.connected,
     liveInputEnabled: false,
-    showToast: () => {},
+    showToast: (message: string) => {
+      env.toasts.push(message)
+    },
     resetLiveInputFocus: () => {}
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the native-chat dependencies are mocked; the real screen state and the mode read are exercised together.
   const voice = useMobileSessionNativeChatDictation(scope as never, async () => true)
+  voiceModel = voice
   return createElement(MobileTerminalInputActions, {
     canSend: env.connected,
     isAttaching: false,
@@ -192,6 +241,10 @@ function micBinding(): 'hold' | 'toggle' | 'inert' | 'hidden' {
 }
 
 beforeEach(() => {
+  env.native = false
+  env.tab = 'tab'
+  env.starts = 0
+  env.toasts.length = 0
   env.focused = true
   env.connected = false
   env.mode = 'hold'
@@ -206,6 +259,8 @@ beforeEach(() => {
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+  resetMobileNativeChatDraftStoreForTests()
+  publishMobileChatDraftStorage(null)
 })
 
 describe('the mic follows the host dictation mode', () => {
@@ -344,4 +399,39 @@ describe('the mic follows the host dictation mode', () => {
     expect(micBinding()).toBe('hold')
     expect(env.captureEnabled).toBe(true)
   })
+})
+
+it('gates every native dictation start and inserts only into its captured live draft', async () => {
+  env.native = true
+  env.connected = true
+  let loaded = (_value: string | null) => {}
+  publishMobileChatDraftStorage({
+    read: () =>
+      new Promise((resolve) => {
+        loaded = resolve
+      }),
+    write: async () => {},
+    removeWorkspace: async () => {}
+  })
+  await render()
+  act(() => voiceModel.startDictation())
+  expect(env.starts).toBe(0)
+  await act(async () => loaded(null))
+  act(() => voiceModel.startDictation())
+  expect(env.starts).toBe(1)
+  env.tab = 'other'
+  await render()
+  await act(async () => loaded(null))
+  act(() => env.transcript?.('spoken for original'))
+  expect(readMobileNativeChatDraft('host\0worktree\0tab').text).toBe('spoken for original')
+  expect(readMobileNativeChatDraft('host\0worktree\0other').text).toBe('')
+  expect(env.toasts).toEqual(['Dictation inserted'])
+  act(() => voiceModel.startDictation())
+  await act(async () => {
+    await deleteMobileNativeChatDrafts('host', 'worktree')
+    void hydrateMobileNativeChatDraft('host\0worktree\0other')
+  })
+  act(() => env.transcript?.('retired destination'))
+  expect(readMobileNativeChatDraft('host\0worktree\0other').text).toBe('')
+  expect(env.toasts).toEqual(['Dictation inserted'])
 })

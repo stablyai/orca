@@ -22,6 +22,8 @@ import {
 } from './structured-agent-session-host-current-work'
 
 export type QueuePublication = {
+  /** Set only by the per-reader projection. */
+  queuedImageCards?: boolean
   queuedMessages: AgentSessionQueuedMessage[]
   queuePause: AgentSessionQueuePause | null
   /** Bridge the turn-end/handoff gap with the drain’s next card. */

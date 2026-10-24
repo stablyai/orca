@@ -1,4 +1,13 @@
-import { useCallback, useRef, useState } from 'react'
+import {
+  captureMobileChatDraftOwner,
+  resolveMobileChatDraftSendOwner,
+  mobileChatDraftOwnerLive
+} from './mobile-native-chat-draft-store'
+import {
+  onMobileChatDraftRemoval,
+  subscribeMobileChatDraftStorage
+} from './mobile-native-chat-draft-storage'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMediaPicker } from '../platform/media-picker'
 import { uploadMobileAgentSessionAttachment } from './mobile-agent-session-attachment-upload'
@@ -20,6 +29,7 @@ export type MobileNativeChatFileAttachments = {
   /** Drops these files: a removed card, or the files a send carried (one attached while it was in
    *  flight stays). */
   readonly removeFiles: (ids: readonly string[]) => void
+  readonly consumeSubmittedFiles: (ids: readonly string[]) => void
 }
 
 /** Files attached to a structured chat, uploaded into the host's attachment store on pick. */
@@ -35,6 +45,35 @@ export function useMobileNativeChatFileAttachments(args: {
   const [filesByScope, setFilesByScope] = useState<FilesByScope>({})
   const picker = useMediaPicker()
   const idCounter = useRef(0)
+  const owner = scopeKey ? captureMobileChatDraftOwner(scopeKey) : undefined
+  useEffect(
+    () =>
+      onMobileChatDraftRemoval((host, workspace) => {
+        setFilesByScope((prev) =>
+          Object.fromEntries(
+            Object.entries(prev).filter(([scope]) => {
+              const [h, w] = scope.split('\0')
+              return h !== host || (workspace !== undefined && workspace !== w)
+            })
+          )
+        )
+      }),
+    []
+  )
+  useEffect(
+    () =>
+      subscribeMobileChatDraftStorage(() => {
+        setFilesByScope((prev) =>
+          Object.fromEntries(
+            Object.entries(prev).map(([scope, files]) => [
+              scope,
+              files.filter((file) => file.path !== null)
+            ])
+          )
+        )
+      }),
+    []
+  )
   const files = (scopeKey ? filesByScope[scopeKey] : undefined) ?? NO_FILES
 
   const updateScope = useCallback(
@@ -48,7 +87,8 @@ export function useMobileNativeChatFileAttachments(args: {
 
   const attachFiles = useCallback(async (): Promise<void> => {
     const scope = scopeKey
-    if (!client || !sessionId || !scope || !enabled) {
+    const owner = scope ? captureMobileChatDraftOwner(scope) : undefined
+    if (!client || !sessionId || !scope || !owner || owner.state === 'unread' || !enabled) {
       return
     }
     await uploadPickedNativeChatFiles({
@@ -63,27 +103,45 @@ export function useMobileNativeChatFileAttachments(args: {
         idCounter.current += 1
         return `file-${idCounter.current}`
       },
-      onPicked: (file) => updateScope(scope, (current) => [...current, file]),
-      onStored: (id, stored) =>
+      onPicked: (file) =>
+        mobileChatDraftOwnerLive(owner) && updateScope(scope, (current) => [...current, file]),
+      onStored: (id, stored) => {
+        if (!mobileChatDraftOwnerLive(owner)) {
+          throw new Error('This draft session has ended')
+        }
         updateScope(scope, (current) =>
           current.map((file) =>
             file.id === id ? { ...file, name: stored.name, path: stored.path } : file
           )
-        ),
-      onFailed: (id) => updateScope(scope, (current) => current.filter((file) => file.id !== id)),
+        )
+      },
+      onFailed: (id) =>
+        mobileChatDraftOwnerLive(owner) &&
+        updateScope(scope, (current) => current.filter((file) => file.id !== id)),
       onError: (message) => showToast(message)
     })
   }, [client, enabled, picker, scopeKey, sessionId, showToast, updateScope])
 
   const removeFiles = useCallback(
     (ids: readonly string[]) => {
-      if (scopeKey) {
+      if (scopeKey && owner && owner.state !== 'unread' && mobileChatDraftOwnerLive(owner)) {
         const removed = new Set(ids)
         updateScope(scopeKey, (current) => current.filter((file) => !removed.has(file.id)))
       }
     },
-    [scopeKey, updateScope]
+    [scopeKey, owner, updateScope]
   )
 
-  return { files, attachFiles, removeFiles }
+  const consumeSubmittedFiles = useCallback(
+    (ids: readonly string[]) => {
+      const target = resolveMobileChatDraftSendOwner(owner)
+      if (target) {
+        const removed = new Set(ids)
+        updateScope(target.scope, (current) => current.filter((file) => !removed.has(file.id)))
+      }
+    },
+    [owner, updateScope]
+  )
+
+  return { files, attachFiles, removeFiles, consumeSubmittedFiles }
 }

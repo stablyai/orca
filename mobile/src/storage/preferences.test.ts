@@ -132,9 +132,11 @@ describe('session view preference', () => {
   it('serializes default writes across callers and makes reads wait for the latest', async () => {
     let stored = 'terminal'
     const firstWrite = deferred<void>()
+    const enteredFirstWrite = deferred<void>()
     vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
     vi.mocked(AsyncStorage.setItem)
       .mockImplementationOnce(async (_key, value) => {
+        enteredFirstWrite.resolve()
         await firstWrite.promise
         stored = value
       })
@@ -143,14 +145,15 @@ describe('session view preference', () => {
       })
 
     const older = saveDefaultSessionView('chat')
-    await Promise.resolve()
     const newer = saveDefaultSessionView('terminal')
     const reloaded = loadDefaultSessionView()
-    await Promise.resolve()
-
-    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
-    firstWrite.resolve()
-    await Promise.all([older, newer])
+    try {
+      await enteredFirstWrite.promise
+      expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    } finally {
+      firstWrite.resolve()
+      await Promise.all([older, newer])
+    }
 
     await expect(reloaded).resolves.toBe('terminal')
     expect(AsyncStorage.setItem).toHaveBeenNthCalledWith(1, 'orca:defaultSessionView', 'chat')

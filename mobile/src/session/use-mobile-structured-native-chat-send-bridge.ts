@@ -1,3 +1,11 @@
+import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import { MAX_SKILL_REFS } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
+import {
+  composerSkillOccurrences,
+  SkillRefLimitError,
+  structuredAgentSessionSendBody
+} from '../../../src/shared/structured-agent-session-send-mutation'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
 import { useCallback } from 'react'
 import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
@@ -11,8 +19,10 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredMobileSendAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    skills?: readonly AgentJournalSkillRef[]
   ) => Promise<MobileNativeChatSendOutcome>
+  authoringReady?: boolean
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -30,6 +40,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     agent,
     captureSendOrigin,
     clearDraftForSend,
+    authoringReady = true,
     onSendError,
     restoreRejectedDraft,
     sendStructured
@@ -41,15 +52,37 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       deadline?: number,
       attachments?: readonly StructuredMobileSendAttachment[]
     ): Promise<MobileNativeChatSendOutcome> => {
+      if (!authoringReady) {
+        return 'rejected'
+      }
       const origin = captureSendOrigin(text.trimEnd())
       if (!origin) {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
       const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
+      const skills = origin.skills
+      try {
+        if (skills?.length) {
+          structuredAgentSessionSendBody(
+            text,
+            [],
+            composerSkillOccurrences(text, skills).map(({ ref }) => ref)
+          )
+        }
+      } catch (error) {
+        if (!(error instanceof SkillRefLimitError)) {
+          throw error
+        }
+        onSendError(
+          `Your message was not sent to ${formatAgentTypeLabel(agent)}. Keep at most ${MAX_SKILL_REFS} selected skill files and try again.`
+        )
+        return 'rejected'
+      }
       clearDraftForSend(origin, text)
-      const outcome =
-        attachments !== undefined
+      const outcome = skills?.length
+        ? await sendStructured(text, images, deadline, attachments, skills)
+        : attachments !== undefined
           ? await sendStructured(text, images, deadline, attachments)
           : deadline !== undefined
             ? await sendStructured(text, images, deadline)
@@ -63,7 +96,15 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       }
       return outcome
     },
-    [agent, captureSendOrigin, clearDraftForSend, onSendError, restoreRejectedDraft, sendStructured]
+    [
+      agent,
+      authoringReady,
+      captureSendOrigin,
+      clearDraftForSend,
+      onSendError,
+      restoreRejectedDraft,
+      sendStructured
+    ]
   )
   const send = useCallback(
     async (

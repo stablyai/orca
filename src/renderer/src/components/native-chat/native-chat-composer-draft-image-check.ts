@@ -30,7 +30,9 @@ export async function findMissingNativeChatComposerDraftImages(
 ): Promise<Set<string>> {
   const api = typeof window === 'undefined' ? undefined : window.api
   const missing = new Set<string>()
-  const checkable = images.filter((image) => image.unavailableName === undefined && image.path)
+  const checkable = images.filter(
+    (image) => !image.reference?.url && image.unavailableName === undefined && image.path
+  )
   const pastes = checkable.filter(isKeptLocalPaste)
   if (pastes.length > 0 && api?.ui?.restoreNativeChatPastes) {
     try {
@@ -88,7 +90,7 @@ function localStoreAuthority(
 }
 
 function checkAuthority(image: NativeChatComposerDraftImage, local: string | null): string | null {
-  return isAgentSessionAttachmentStorePath(image.path)
+  return isAgentSessionAttachmentStorePath(image.path) || image.reference !== undefined
     ? image.connectionId
       ? null
       : local

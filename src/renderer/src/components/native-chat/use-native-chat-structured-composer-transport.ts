@@ -72,9 +72,10 @@ export function useNativeChatStructuredComposerTransport(args: {
         sendThroughLaunch(text, attachments.length > 0, () =>
           controller.send(
             text,
-            attachments.map(({ path, connectionId }) => ({
+            attachments.map(({ path, connectionId, reference }) => ({
               path,
               previewUri: path,
+              ...(reference ? { reference } : {}),
               ...(connectionId ? { connectionId } : {})
             })),
             ...request

@@ -47,6 +47,9 @@ export type QueuedEditTransport = {
   capable: boolean
   /** The host advertises `agent-session.queued-message-image-edit.v1`: Save may replace images. */
   imagesCapable?: boolean
+  /** Conditional Delete is safe only after the host advertises full-body comparison. */
+  copyDeleteCapable?: boolean
+  reorderCapable?: boolean
   write: StructuredAgentSessionWrite
 }
 

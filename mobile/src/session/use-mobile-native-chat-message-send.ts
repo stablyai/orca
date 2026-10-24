@@ -53,6 +53,7 @@ export type MobileNativeChatMessageSend = {
  *  sends, and question answers, wired to the drafts accounting. */
 export function useMobileNativeChatMessageSend(args: {
   client: RpcClient | null
+  authoringReady?: boolean
   enabled: boolean
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
@@ -77,6 +78,7 @@ export function useMobileNativeChatMessageSend(args: {
 }): MobileNativeChatMessageSend {
   const {
     client,
+    authoringReady = true,
     enabled,
     handleRef,
     deviceTokenRef,
@@ -107,6 +109,9 @@ export function useMobileNativeChatMessageSend(args: {
       // rejected send has to put back exactly that (#14819).
       const text = draftText.trimEnd()
       const handle = handleRef.current
+      if (syncComposer && !authoringReady) {
+        return 'rejected'
+      }
       const origin = captureSendOrigin(text, sentAt)
       const agent = agentRef.current
       const recordCommand = commandSendRef.current
@@ -235,6 +240,7 @@ export function useMobileNativeChatMessageSend(args: {
       client,
       commandSendRef,
       deviceTokenRef,
+      authoringReady,
       enabled,
       handleRef,
       holdUnconfirmedSend,

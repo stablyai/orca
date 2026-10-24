@@ -8,7 +8,10 @@ import { createNativeMediaVerbServer } from './native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device'
 
 /** The storage read is the shell's own store, answered before this dispatcher is reached. */
-export type NativeDeviceVerb = Exclude<BridgeNativeVerb, 'native.storage.read'>
+export type NativeDeviceVerb = Exclude<
+  BridgeNativeVerb,
+  'native.storage.read' | 'native.storage.write'
+>
 
 /**
  * Every `native.` verb this device serves, behind the one function the host dispatches to.

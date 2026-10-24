@@ -127,6 +127,8 @@ export type AgentSessionHistoryPage = {
   /** The queue's pause, published with the list: present whenever `queuedMessages` is, null
    *  when the queue sends on its own. */
   queuePause?: AgentSessionQueuePause | null
+  /** The host's per-reader image-card verdict; absent on older hosts. */
+  queuedImageCards?: boolean
   /** Rides with `queuedMessages`: the card the queue sends next as soon as nothing runs, null
    *  while anything holds the queue. Absent from an older host, read as null. */
   nextQueuedMessageId?: string | null

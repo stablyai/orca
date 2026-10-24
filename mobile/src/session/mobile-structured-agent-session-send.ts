@@ -1,5 +1,8 @@
+import type {
+  AgentJournalSkillRef,
+  AgentJournalCursor
+} from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
@@ -23,6 +26,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   sessionId: string
   expectedRuntimeFence: number
   text: string
+  skills?: readonly AgentJournalSkillRef[]
   attachments: readonly StructuredAgentSessionAttachment[]
   /** Sent only when the host advertises `agent-session.queued-messages.v1`. */
   delivery?: 'queue-if-active'
@@ -39,7 +43,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     input.onError('Message not sent')
     return 'rejected'
   }
-  const body = structuredAgentSessionSendBody(input.text, input.attachments)
+  const body = structuredAgentSessionSendBody(input.text, input.attachments, input.skills)
   // The host refuses it unexplained, so say why here and keep the draft.
   if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
     input.onError(agentSessionWriteNoticeEnglish(AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS))

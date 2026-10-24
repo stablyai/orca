@@ -5,6 +5,7 @@ import {
   BRIDGE_ROUTE_HREF_PATTERN
 } from '../mobile-web-shell/bridge/bridge-caps'
 import { matchesRoutePattern } from '../mobile-web-shell/page-route-policy'
+import { pageRouteWorkspace } from '../mobile-web-shell/page-storage-keys'
 import { usePageBridgeClient } from '../transport/client-context.web'
 import { stringifyRouteHref, type RouterHref } from './route-href'
 import { useBackClaim } from './use-back-claim.web'
@@ -155,7 +156,7 @@ export function useRouteHandoff(): RouteHandoff {
   return useMemo<RouteHandoff>(() => {
     const report = createRefusalReporter()
     /**
-     * Whether this document both renders the target and may: pattern listed, grants covered.
+     * Whether this document may own and render the target: workspace, pattern and grants covered.
      *
      * Covered matters because grants are resolved once, from the route the shell opened, and a push
      * kept local runs the target under the opener's list. On a wide layout the sidebar reaches the
@@ -175,6 +176,18 @@ export function useRouteHandoff(): RouteHandoff {
         matchesRoutePattern(pathname, candidate)
       )
       if (pattern === undefined) {
+        return false
+      }
+      // A session document keeps the native workspace authority it opened with.
+      const workspace = pageRouteWorkspace(session?.route?.pathname ?? '')
+      const targetWorkspace = pageRouteWorkspace(pathname)
+      if (
+        !session?.ownsHostArea &&
+        workspace &&
+        targetWorkspace &&
+        (workspace.hostId !== targetWorkspace.hostId ||
+          workspace.worktreeId !== targetWorkspace.worktreeId)
+      ) {
         return false
       }
       const pairs = session?.pageRouteGrants ?? null
