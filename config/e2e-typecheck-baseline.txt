@@ -67,7 +67,6 @@
 4 tests/e2e/paired-remote-terminal-parked-scrollback-survives.spec.ts
 3 tests/e2e/paired-remote-terminal-stall-recovery.spec.ts
 1 tests/e2e/paired-startup-exec-readiness.spec.ts
-1 tests/e2e/plugin-marketplace-content.spec.ts
 2 tests/e2e/pr11346-selected-runtime-identity-oracle.ts
 5 tests/e2e/project-group-manual-sort.spec.ts
 1 tests/e2e/relay-region-correction.unit.test.ts
