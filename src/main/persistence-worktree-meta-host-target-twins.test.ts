@@ -3,11 +3,7 @@ import {
   createStore as createFreshStore,
   testState
 } from './persistence-test-harness'
-/**
- * A local row and an SSH row can share a repo id, so they share every worktree id under it.
- * Worktree meta and lineage writes take the row's host (R4-2 family b), and a write for one
- * twin must never land on the other.
- */
+// Identical repo/path IDs across hosts require host-scoped metadata and lineage writes.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -179,7 +175,7 @@ describe('worktree meta and lineage writes for same-id twins', () => {
     const store = await createTwinStore()
     expect(resolveWorktreeMetaOwner(store, WORKTREE_ID)).toBeUndefined()
 
-    // The raw-id row's stamp names the twin that wrote first, not the one the caller means.
+    // A raw-ID stamp identifies the first writer, not necessarily the caller’s intended host.
     store.setWorktreeMeta(SSH, { displayName: 'ssh copy' })
     expect(resolveWorktreeMetaOwner(store, WORKTREE_ID)).toBeUndefined()
     store.setWorktreeMeta(LOCAL, { displayName: 'local copy' })
@@ -237,7 +233,7 @@ describe('worktree meta and lineage writes for same-id twins', () => {
     expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'ssh:ssh-1')?.sortOrder).toBeGreaterThan(
       store.getWorktreeMetaForHost(solo.id, 'local')?.sortOrder ?? Infinity
     )
-    // An id-keyed patch would land on both copies, so the twinned repo is re-listed instead.
+    // ID-only patches would change both twins; re-list twinned repos instead.
     expect(notifyChanged).toHaveBeenCalledWith('dup', undefined)
     expect(notifyChanged).toHaveBeenCalledWith('solo', [
       expect.objectContaining({ worktreeId: solo.id })

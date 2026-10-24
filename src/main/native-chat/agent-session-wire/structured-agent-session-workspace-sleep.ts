@@ -21,8 +21,7 @@ type WorkspaceSleepHost = {
 
 type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null
 
-/** Snapshot host-owned members and return only same-call, current positive stop receipts. With
- *  `markAsleep`, exactly the chats in the receipt carry the Sleep mark. */
+/** Return only this call’s current proven stops; markAsleep marks exactly those receipts. */
 export async function sleepStructuredAgentSessionWorkspace(
   host: WorkspaceSleepHost,
   workspaceId: string,
@@ -46,7 +45,7 @@ export async function sleepStructuredAgentSessionWorkspace(
     ...host.tasks.pendingMembers(workspaceId, LOCAL_EXECUTION_HOST_ID)
   ])
   const sessionIds = [...candidates]
-  // Admits every close synchronously; `async` turns a synchronous throw into a rejection.
+  // async converts synchronous close failures to rejections while admitting every close immediately.
   const stops = await Promise.allSettled(
     sessionIds.map(async (sessionId) => {
       const stop = await host.lifetime.closeForWorkspaceSleep(
@@ -84,7 +83,6 @@ export async function sleepStructuredAgentSessionWorkspace(
       stoppedSessionIds.push(sessionId)
     } else if (
       stop.value &&
-      // A newer start superseded the unproven stop, so there is nothing left to report.
       host.deps.store.getRecord(sessionId)?.lease.runtimeFence === stop.value.fence
     ) {
       failures.push({ sessionId, reason: 'stop-unverifiable' })
@@ -93,7 +91,6 @@ export async function sleepStructuredAgentSessionWorkspace(
   return failures.length > 0 ? { stoppedSessionIds, failures } : { stoppedSessionIds }
 }
 
-/** After aborted starts settle, one ordered step decides the receipt and writes its mark. */
 async function settleWorkspaceSleepChat(
   host: WorkspaceSleepHost,
   sessionId: string,
@@ -107,7 +104,7 @@ async function settleWorkspaceSleepChat(
   if (!stopped) {
     return { stopped: false, fence: current.lease.runtimeFence }
   }
-  // Judge later work by facts, not lane occupancy: the stop queues its own end report.
+  // Stop queues its own end report, so judge work by state rather than lane occupancy.
   const quiet = (record: AgentSessionRecord): boolean => {
     const session = host.sessions.get(sessionId)
     return !(
@@ -124,7 +121,7 @@ async function settleWorkspaceSleepChat(
   }
   let marked = false
   const now = host.deps.now?.() ?? Date.now()
-  // Judged inside the write, so the receipt and the mark cannot disagree.
+  // Check inside the write so the mark and receipt cannot disagree.
   await host.deps.store.transitionHandoff(sessionId, (record) => {
     marked = quiet(record)
     return marked ? { ...record, sleptAt: now, updatedAt: now } : record

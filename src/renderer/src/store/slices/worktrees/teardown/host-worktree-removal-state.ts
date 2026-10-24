@@ -6,7 +6,7 @@ import {
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
   toRemoteRuntimeClientErrorLike
-} from '../../../../../../shared/remote-runtime-client-error-classification'
+} from '../../../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'

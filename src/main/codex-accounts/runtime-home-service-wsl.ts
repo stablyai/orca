@@ -74,8 +74,7 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     try {
       legacyPanePresent = hasRecordedLegacyWslCodexPane(getCodexSelectionLaneKey(target))
     } catch (error) {
-      // Why: unknown pane liveness must preserve the source, but promotion can
-      // still keep the direct home from launching stale auth.
+      // Unknown pane liveness preserves source auth while allowing promotion before direct-home launch.
       console.warn('[codex-wsl-auth-drain] Pane registry unavailable; preserving source:', error)
     }
     return startLegacyWslRuntimeAuthDrain(

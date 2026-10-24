@@ -72,7 +72,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
           (this.authoritativeWindowId !== null &&
             this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
             this.store?.getUI?.().sidebarOpen !== false),
-        hostLabelOverrides: () => getHostDisplayLabelOverrides(this.getClientSettings())
+        hostLabelOverrides: () => getHostDisplayLabelOverrides(this.requireStore().getSettings())
       })
     : null
   // Switch point: the phone's icon source.

@@ -45,8 +45,6 @@ describe('resolveWorktreeRemovalHomeForHost', () => {
   })
 
   it('refuses to answer a runtime host with this client s home', () => {
-    // `runtime:<env>` deletes on that environment's own server; this client's home vouches for
-    // nothing there, so the authority stays unknown and the guard refuses.
     expect(resolveWorktreeRemovalHomeForHost('runtime:env-1')).toEqual({
       kind: 'executionHost',
       homePath: null

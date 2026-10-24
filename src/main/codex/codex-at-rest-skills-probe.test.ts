@@ -1,6 +1,3 @@
-// A Codex chat whose Codex is not running lists what Codex itself would load in the folder the
-// chat launches in, from one short-lived app-server that answers at once and then settles.
-
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
@@ -54,7 +51,6 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
     expect(catalog.read(two)).toBeUndefined()
     await Promise.all([catalog.settled(one, 1_000), catalog.settled(two, 1_000)])
 
-    // Both answered while their probes still settle: two folders, two lists.
     expect(settling).toHaveLength(2)
     expect(catalog.read(one)?.filter((row) => row.kind === 'skill')).toEqual([
       { name: 'first', kind: 'skill', path: '/work/one/first/SKILL.md' }
@@ -62,7 +58,6 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
     expect(catalog.read(two)?.filter((row) => row.kind === 'skill')).toEqual([
       { name: 'second', kind: 'skill', path: '/work/two/second/SKILL.md' }
     ])
-    // Saved plugin settings and other config match a real chat; permission flags stay normalized.
     expect(invocations.map((invocation) => invocation.args)).toEqual([
       ['--disable', 'plugins', '-c', 'features.test=true', 'app-server'],
       ['--disable', 'plugins', '-c', 'features.test=true', 'app-server']

@@ -43,7 +43,7 @@ function saveEnvironment(name = 'server') {
       v: 2,
       endpoint: 'ws://127.0.0.1:59999',
       deviceToken: 'test-token',
-      // Why a key per name: one key is one server, which the store refuses to save twice.
+      // Each saved server needs a distinct key; duplicate keys are rejected.
       publicKeyB64: Buffer.alloc(32, name).toString('base64')
     })
   })
@@ -86,6 +86,30 @@ describe('Active Server after a saved host is removed', () => {
         { activeRuntimeEnvironmentId: null },
         { notifyListeners: true }
       )
+    } finally {
+      stopWatching()
+    }
+  })
+
+  it('keeps following the registry after earlier replacements', async () => {
+    const kept = saveEnvironment('kept')
+    const removed = saveEnvironment('removed')
+    const store = preferenceStore(removed.id)
+    const stopWatching = watchRuntimeEnvironmentPreference(store, userDataPath)
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      // Unrelated replacements move the registry to new inodes first.
+      saveEnvironment('first')
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      saveEnvironment('second')
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      expect(store.getSettings().activeRuntimeEnvironmentId).toBe(removed.id)
+
+      removeEnvironment(userDataPath, removed.id)
+      await vi.waitFor(() => expect(store.getSettings().activeRuntimeEnvironmentId).toBeNull(), {
+        timeout: 5_000
+      })
+      expect(listEnvironments(userDataPath).map(({ id }) => id)).toContain(kept.id)
     } finally {
       stopWatching()
     }

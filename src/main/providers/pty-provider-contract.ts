@@ -258,6 +258,10 @@ export type IPtyProvider = {
   listProcesses(opts?: {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean
+    /** Scope route validation to this workspace; providers may return a broader inventory. */
+    worktreeId?: string
+    /** Scope route validation to these PTYs; absence still requires a complete inventory. */
+    ptyIds?: readonly string[]
     /** Diagnostic display only: include generations whose routing owner is unverifiable. */
     includeUnrouted?: boolean
   }): Promise<PtyProcessInfo[]>

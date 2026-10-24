@@ -7,9 +7,7 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isStructuredAgentSessionCommandTurnId } from './structured-agent-session-command-turn'
 
-/** What a settlement read needs: the journal's sends and position, and the live generation's
- *  running turn as the host's projection reads it (`structuredAgentSessionCurrentWork`), so a send
- *  never reads as waiting behind a command an ended generation left. */
+/** Scope active turns to the live generation so ended commands cannot hold delivery waits. */
 export type SendSettlementJournal = Pick<AgentSessionJournal, 'submissions' | 'cursor'> & {
   activeTurnId: () => string | null
 }
@@ -21,13 +19,10 @@ type SettledSend = {
 
 type SendSettlement = SettledSend | 'pending' | 'missing'
 
-/** What ends a wait: the provider's answer, the host handing the message over, or either that or
- *  the message waiting behind a running command, which hands nothing over until it ends. */
 export type SendSettlementPoint = 'answered' | 'handed-over' | 'handed-over-or-behind-command'
 
 export type SendSettlementWaitOptions = {
   signal?: AbortSignal
-  /** How long to observe; unanswered by then resolves undefined. */
   budgetMs?: number
   until?: SendSettlementPoint
 }
@@ -44,7 +39,7 @@ type SendSettlementWaiter = {
 
 // Known legacy clients abandon the RPC after 15s without cancelling its socket dispatch.
 const SEND_SETTLEMENT_WAIT_TIMEOUT_MS = 30_000
-/** Long enough for a cold provider start; a longer one replays through the same wait. */
+/** Longer cold starts retry through the same wait. */
 export const STRUCTURED_AGENT_SESSION_START_WAIT_MS = 120_000
 const MAX_SEND_SETTLEMENT_WAITERS_PER_SESSION = 64
 const MAX_SEND_SETTLEMENT_WAITERS = 1_024
@@ -79,7 +74,6 @@ function abortError(signal: AbortSignal): Error {
     : new Error('agent session send settlement wait aborted')
 }
 
-/** Best-effort settlement observation for clients that predate admitted pending replies. */
 export class StructuredAgentSessionSendSettlement {
   private readonly waiters = new Map<string, Set<SendSettlementWaiter>>()
   private waiterCount = 0

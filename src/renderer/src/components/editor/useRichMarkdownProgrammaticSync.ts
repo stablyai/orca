@@ -185,13 +185,19 @@ function applyExternalRichMarkdownContent(
   try {
     const hadFocus = editor.isFocused
     const { from: prevFrom, to: prevTo } = editor.state.selection
-    editor.commands.setContent(
-      encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
-      {
-        contentType: 'markdown',
-        emitUpdate: false
-      }
-    )
+    // Why no history: another view's text (or a reload) is not this view's edit, so its undo must
+    // not revert it, nor re-apply text that view undid.
+    editor
+      .chain()
+      .setMeta('addToHistory', false)
+      .setContent(
+        encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
+        {
+          contentType: 'markdown',
+          emitUpdate: false
+        }
+      )
+      .run()
     // Why: normalizeEmptyListItems avoids splitting hard-wrapped paragraphs from
     // external content, matching onCreate's single-paragraph reflow behavior.
     normalizeEmptyListItems(editor)

@@ -1,4 +1,4 @@
-import { mkdtemp, open, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -27,11 +27,21 @@ const item: ArtifactListItem = {
   shareUrl: 'https://share.onorca.dev/a/artifact-1'
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(async () => {
+  vi.restoreAllMocks()
+  await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+})
+
+const directories: string[] = []
+async function artifactDirectory(): Promise<string> {
+  const path = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+  directories.push(path)
+  return path
+}
 
 describe('artifact CLI handlers', () => {
-  it('reads a relative HTML file and sends sanitized content to the runtime', async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+  it('reads a relative HTML file and sends its content to the runtime', async () => {
+    const cwd = await artifactDirectory()
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
     const call = vi.fn().mockResolvedValue({
       id: 'request-1',
@@ -61,7 +71,7 @@ describe('artifact CLI handlers', () => {
   })
 
   it('rejects unsupported file extensions before calling the runtime', async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const cwd = await artifactDirectory()
     await writeFile(join(cwd, 'report.txt'), 'hello', 'utf8')
     const call = vi.fn()
 
@@ -77,7 +87,7 @@ describe('artifact CLI handlers', () => {
   })
 
   it('rejects a sparse oversized file before attempting the RPC', async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const cwd = await artifactDirectory()
     const handle = await open(join(cwd, 'oversized.html'), 'w')
     await handle.truncate(ARTIFACT_CLI_MAX_RPC_BYTES + 1)
     await handle.close()
@@ -96,7 +106,6 @@ describe('artifact CLI handlers', () => {
         json: false
       })
     ).rejects.toThrow(/too large/)
-    // The capability preflight is the only permitted call; the oversized body never ships.
     expect(call).not.toHaveBeenCalledWith('artifacts.share', expect.anything())
   })
 
@@ -128,8 +137,7 @@ describe('artifact CLI handlers', () => {
   it.each(['artifacts share', 'artifacts update'])(
     'denies `%s` from the capability preflight without reading or shipping the file',
     async (command) => {
-      const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
-      await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
+      const cwd = await artifactDirectory()
       const call = vi.fn().mockResolvedValue({
         id: 'request-1',
         ok: true,
@@ -157,7 +165,7 @@ describe('artifact CLI handlers', () => {
     ['omits the capability field', {}],
     ['cannot answer the preflight', null]
   ])('still attempts the publish RPC when the host %s', async (_label, settings) => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const cwd = await artifactDirectory()
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
     const call = vi.fn().mockImplementation((method: string) => {
       if (method === 'settings.get') {

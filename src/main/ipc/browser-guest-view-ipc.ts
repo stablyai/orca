@@ -45,7 +45,7 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:zoomPage')
   ipcMain.removeHandler('browser:setPageSiteColorScheme')
 
-  // Why the page registry only: these act on a browser page, never on a document preview.
+  // Page/session operations exclude document previews.
   const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
     isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
       ? browserManager.getGuestWebContentsId(browserPageId)
@@ -143,10 +143,7 @@ export function registerBrowserGuestViewHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return false
       }
-      // Why: CDP misbehaves on non-finite/negative metrics (NaN/Infinity can
-      // wedge Emulation.setDeviceMetricsOverride and leave the page in a
-      // broken state). Validate at the main-process trust boundary so a buggy
-      // or compromised renderer cannot corrupt CDP state.
+      // Reject non-finite or negative renderer metrics before they can wedge CDP emulation.
       if (args.override !== null) {
         const { width, height, deviceScaleFactor, mobile } = args.override
         const isFinitePositive = (n: unknown): n is number =>
@@ -219,16 +216,13 @@ export function registerBrowserGuestViewHandlers(): void {
       ) {
         return false
       }
-      // Why resolve here: this is a tool acting on a guest the reader is looking at, so it answers
-      // for a workspace document too — and routing through the authority also pins the request to
-      // the renderer that owns the target, which page-id-only resolution never checked.
+      // Tools may target documents too; authority resolution binds either guest to its owning renderer.
       const resolveGuest = (): Electron.WebContents | null =>
         browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       if (!resolveGuest()) {
         return false
       }
-      // Why hand over the resolver rather than that guest: the op is serialized per tab, and the
-      // one it finally runs against must be the one on screen then, not the one this request saw.
+      // Queued operations must resolve the current guest when they run.
       return browserManager.setAnnotationViewportBridge(
         args.browserPageId,
         {
@@ -243,9 +237,7 @@ export function registerBrowserGuestViewHandlers(): void {
     }
   )
 
-  // Why this is not an ordinary runtime call: the runtime accepts page traffic only on the
-  // connection its browser-host lease attached on, and that lease lives here in main. A renderer
-  // publishing straight to the runtime is refused as a stale lease and the page's URL never moves.
+  // Publish through main's attached browser-host lease; direct renderer traffic would be refused as stale.
   ipcMain.handle(
     'browser:publishClientPageMetadata',
     async (

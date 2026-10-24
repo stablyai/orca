@@ -102,7 +102,6 @@ describe('orca serve asking the app which host to run', () => {
     expect(orcadServeArgs({})).toEqual(['--bind', '0.0.0.0'])
   })
 
-  // #30100: the slot carries no browser client, so without this orcad served no web page.
   it("hands orcad the app's browser client directory when the app has one", () => {
     expect(
       orcadServeArgs({ port: '6768' }, '/opt/Orca/resources/app.asar.unpacked/out/web')

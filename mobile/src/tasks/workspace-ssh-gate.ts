@@ -1,4 +1,5 @@
 import type { SshConnectionState, SshConnectionStatus } from '../../../src/shared/ssh-types'
+import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../../src/shared/orcad-stale-lock-reclaim'
 
 /**
  * What mobile stores for an SSH connection.
@@ -9,9 +10,13 @@ import type { SshConnectionState, SshConnectionStatus } from '../../../src/share
  * keeps its `status` instead of dropping the whole record into the connect path's `'connected'`
  * fallback.
  */
-export type WorkspaceSshRecord = Omit<SshConnectionState, 'error' | 'reconnectAttempt'> & {
+export type WorkspaceSshRecord = Omit<
+  SshConnectionState,
+  'error' | 'reconnectAttempt' | 'managedServer'
+> & {
   error?: string | null
   reconnectAttempt?: number
+  managedServer?: { kind?: string; serving?: { state?: string; detail?: string } }
 }
 
 export type WorkspaceSshGate = {
@@ -19,6 +24,8 @@ export type WorkspaceSshGate = {
   requiresConnection: boolean
   connectInProgress: boolean
   error: string | null
+  /** The host's server refused to start on a possibly stale lock; only the desktop can clear it. */
+  needsDesktopServerRecovery: boolean
 }
 
 function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): boolean {
@@ -62,6 +69,16 @@ export function deriveWorkspaceSshGate(args: {
     status,
     requiresConnection: args.connectionId !== null && status !== 'connected',
     connectInProgress: args.connecting || isWorkspaceSshConnectInProgress(status),
-    error: matchingState?.error ?? null
+    error: matchingState?.error ?? null,
+    needsDesktopServerRecovery: needsDesktopServerRecovery(matchingState?.managedServer)
   }
+}
+
+/** The desktop's own gate for Recover server (canRecoverSshHostServer), read from a lenient record. */
+function needsDesktopServerRecovery(server: WorkspaceSshRecord['managedServer']): boolean {
+  return (
+    server?.kind === 'managed' &&
+    server.serving?.state === 'unverifiable' &&
+    Boolean(server.serving.detail?.includes(ORCAD_RECLAIM_STALE_LOCK_FLAG))
+  )
 }

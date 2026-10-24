@@ -2,8 +2,10 @@ import { hasRemoteRuntimeOwner } from '@/runtime/runtime-file-routing'
 import type { FileLinkTarget } from './terminal-file-link-target'
 import { HostFileRefusal, resolveHostWorkspaceFile } from './terminal-host-workspace-file'
 import {
-  readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
+  readTerminalPathExistence,
+  writeTerminalPathExistence,
+  startTerminalPathExistsProbe,
+  type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
 
 /** A paired-server path outside the terminal's workspace: only its host can say whether it opens. */
@@ -17,17 +19,18 @@ export function isHostPathOutsideWorkspace(target: FileLinkTarget): boolean {
  */
 export async function hostFileLinkTargetExists(
   target: FileLinkTarget,
-  cache: Map<string, boolean>,
+  cache: TerminalPathExistsCache,
   terminalHandle: string | null | undefined
 ): Promise<boolean> {
   // Why: an unprompted stat of a network share can send the user's credentials to its server.
   if (/^[\\/]{2}/.test(target.absolutePath)) {
     return false
   }
-  const cached = readTerminalPathExistsCache(cache, target.cacheKey)
+  const cached = readTerminalPathExistence(cache, target.cacheKey)
   if (cached !== undefined) {
     return cached
   }
+  const probe = startTerminalPathExistsProbe()
   let exists: boolean
   try {
     exists =
@@ -39,6 +42,6 @@ export async function hostFileLinkTargetExists(
     }
     exists = false
   }
-  writeTerminalPathExistsCache(cache, target.cacheKey, exists)
+  writeTerminalPathExistence(cache, target.cacheKey, exists, probe)
   return exists
 }

@@ -15,12 +15,7 @@ import {
 import { resolveSkillDiscoveryTarget } from '../../skills/skill-discovery-target'
 import { handleMainWindowSkillIpc } from '../skill-ipc-main-window'
 
-/**
- * Local only. A remote runtime is reached straight from the renderer through
- * `callRuntimeRpc`, mirroring how the scan is routed — there is deliberately no
- * main-process remote branch here, unlike install and remove, because a
- * main-side capability check on one transport never runs on the other.
- */
+/** Local IPC only: remote scan/delete use renderer runtime RPC, so their capability checks stay on that transport. */
 export function registerSkillDeleteIpcHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const dependencies: SkillDeleteRequestDependencies = {
     repos: () => store.getRepos(),
@@ -34,8 +29,7 @@ export function registerSkillDeleteIpcHandlers(store: Store, runtime?: OrcaRunti
   }
   const resolve = (value: unknown) => {
     const request = SkillDeleteRequestSchema.parse(value)
-    // Send exactly what the scan sent: the nested target keeps discovery's own
-    // stripping schema, while the request itself is strict.
+    // Preserve discovery's nested stripping schema inside the strict deletion request.
     const target = resolveSkillDiscoveryTarget(
       request.target ? SkillDiscoveryTargetSchema.parse(request.target) : undefined
     )

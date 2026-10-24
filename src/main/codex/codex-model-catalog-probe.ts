@@ -19,14 +19,13 @@ import type {
 import type { AgentModelCatalogLookup } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 
 export type CodexModelCatalogProbeDeps = CodexStructuredInvocationDeps & {
-  /** Existing captured environment only: saved preference reads never recover a missing CLI. */
+  /** Saved preference reads must not attempt CLI recovery. */
   resolveSavedEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveEnv?: () => Record<string, string>
   resolveLaunchArgs?: () => Promise<string[]> | string[]
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
-  /** The sync a launch runs on this home first, so the probe reads the login a launch would. */
+  /** Match launch-time home sync so probes use the same login. */
   prepareHome?: (home: string) => void
-  /** Test seam; production runs the shared short-lived app-server session. */
   runSession?: typeof runCodexAppServerSession
 }
 
@@ -40,13 +39,7 @@ function definedEnv(env: NodeJS.ProcessEnv | undefined): Record<string, string> 
   return next
 }
 
-/**
- * Lists models without a live session: one short-lived read-only app-server under the given
- * account home and the shared probe budget, spawned through the SAME invocation resolver a
- * structured session launch uses — a probe that resolved a different binary or env could list
- * models the user's sessions cannot see, under their key. Its supervised session runner is the
- * one every Codex app-server RPC consumer shares.
- */
+// Share launch invocation resolution so probes list models with the session's binary, environment and account.
 export function createCodexModelCatalogProbe(
   deps: CodexModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
@@ -86,12 +79,12 @@ export function createCodexModelCatalogProbe(
             ...(signal ? { signal } : {})
           },
           async (rpc) => {
-            // Both at once, so the account check adds no latency.
+            // Overlap model and account reads to avoid serial probe latency.
             const listed = fetchCodexModelCatalogListing({ connection: rpc, cwd })
             void listed.catch(() => {})
             const response: unknown = await rpc
               .request('account/read', { refreshToken: false }, { timeoutMs: 2_000 })
-              // Unknown account status says nothing.
+              // Failed account reads do not establish sign-out.
               .catch(() => undefined)
             if (
               typeof response !== 'object' ||
@@ -106,7 +99,7 @@ export function createCodexModelCatalogProbe(
             }
             const account = deps.resolveAccountKind?.(accountHomePath)
             const signedOut = { reason: 'notSignedIn' as const, ...(account ? { account } : {}) }
-            // The verdict can be wrong (a gateway in Arguments), so a list in hand still fills the picker.
+            // Gateways may misreport sign-out; keep models that were successfully listed.
             const inHand = await listed.catch(() => null)
             if (!inHand?.models.length) {
               throw new AgentModelCatalogUnavailableError(signedOut)

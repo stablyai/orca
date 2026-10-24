@@ -1,10 +1,4 @@
-// Claude's declarative task protocol, read for which tasks are subagents and which ids name them.
-//
-// `local_agent`, `local_workflow` and `local_bash` tasks all arrive on the same
-// `message:system:task_*` channel and ALL carry a `tool_use_id`, so id presence
-// discriminates nothing: filtering on it alone puts a backgrounded `sleep 20` in
-// the subagent roster. `task_type` is the discriminator, with `subagent_type`
-// covering CLI releases that predate it.
+// Task IDs alone cannot distinguish agents from shells or workflows; task_type identifies the kind.
 
 import {
   classifyClaudeBackgroundTaskKind,
@@ -22,27 +16,21 @@ const TASK_SUBTYPES: ReadonlySet<string> = new Set([
 ])
 
 export type ClaudeSubagentTaskFrame = {
-  /** Canonical, resume-stable id. */
+  /** Canonical, resume-stable ID. */
   taskId: string
-  /** Re-minted when Claude re-announces a resumed task, so it is only an alias. */
+  /** Resumes mint new tool IDs, making each an alias. */
   toolUseId: string | null
-  /** `task_started` for a subagent. Only an announcement says what a task is: an update carries
-   *  no `task_type`. */
+  /** Only task_started establishes kind; later updates may omit task_type. */
   announcesSubagent: boolean
-  /** Ambient housekeeping, or a task that is not a subagent at all. Its ids must never be read as
-   *  a subagent's, by this frame or by later child traffic. */
+  /** Remember non-agent and housekeeping exclusions for later frames. */
   excluded: boolean
 }
 
-/** True when the task Claude announced is a subagent rather than a backgrounded
- *  shell command or a workflow. */
 export function isClaudeSubagentTask(message: Record<string, unknown>): boolean {
   if (isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(message.task_type))) {
     return true
   }
-  // Releases predating `task_type` still name the child in `subagent_type`. A
-  // task_type Orca does not recognise is NOT covered: it is a type this build
-  // has no reason to believe is an agent.
+  // Older releases use subagent_type; never apply that fallback to an unknown explicit task_type.
   return (
     (message.task_type === undefined || message.task_type === null) &&
     claudeText(message.subagent_type) !== null
@@ -66,7 +54,6 @@ export function readClaudeSubagentTaskFrame(
   const toolUseId =
     claudeText(message.tool_use_id) ?? claudeText(claudeRecord(message.patch)?.tool_use_id)
   const announcement = subtype === 'task_started'
-  // Housekeeping Claude runs for itself; the user never asked for it.
   const suppressed = message.ambient === true || message.skip_transcript === true
   const subagent = announcement && !suppressed && isClaudeSubagentTask(message)
   return {

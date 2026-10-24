@@ -121,7 +121,8 @@ export const ORCHESTRATION_SEND_METHODS = [
         sender,
         to: params.to,
         runId: runGroup ? undefined : params.run,
-        payload: runGroup ? undefined : params.payload
+        payload: runGroup ? undefined : params.payload,
+        type: params.type
       })
       if (
         params.type === 'worker_done' &&

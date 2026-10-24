@@ -14,7 +14,6 @@ import {
   type ProviderProcessLaunch
 } from '../provider-process/provider-process-launch'
 
-/** Codex's `--version`, which names the binary on its own line. */
 export const readCodexCliVersion: AgentCliVersionReader = (input) =>
   readAgentCliVersion(input, parseCodexCliVersion)
 

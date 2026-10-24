@@ -1,7 +1,3 @@
-/**
- * Guards the single-classification contract of `buildDetectedGitWorktrees`: every visible worktree
- * used to be run through `mergeWorktree` + `toDetectedWorktree` twice per catalog pass.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -67,7 +63,7 @@ function gitWorktree(path: string): GitWorktreeInfo {
   }
 }
 
-/** Fully settled metadata: discovery backfill has nothing to write, so it hands the same object back. */
+/** Settled metadata makes discovery backfill preserve object identity. */
 function settledMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
   return {
     ...ownershipMeta,
@@ -98,7 +94,7 @@ function createStore(meta: Record<string, WorktreeMeta>, repos: Repo[] = [repo])
   } as unknown as Store
 }
 
-/** The pre-change implementation, verbatim, as the equivalence oracle. */
+/** Preserve the original two-pass implementation as the equivalence oracle. */
 function buildDetectedGitWorktreesTwoPass(
   store: Store,
   target: Repo,
@@ -159,7 +155,7 @@ function buildDetectedGitWorktreesTwoPass(
 describe('buildDetectedGitWorktrees classification passes', () => {
   beforeEach(() => {
     toDetectedWorktreeSpy.mockClear()
-    // Discovery backfill stamps lastActivityAt from the clock; freeze it so equivalence is deterministic.
+    // Freeze activity-backfill timestamps to make equivalence deterministic.
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
   })
 
@@ -186,7 +182,7 @@ describe('buildDetectedGitWorktrees classification passes', () => {
     buildDetectedGitWorktrees(store, repo, [gitWorktree('/workspace/one')], meta)
     expect(legacyReads).not.toHaveBeenCalled()
 
-    // Partial stores (compatibility shapes) expose no snapshot, so the locator-keyed lookup must still run.
+    // Older partial stores lack snapshots and still require locator-keyed lookup.
     const partialStore = createStore(meta) as Partial<Store>
     delete partialStore.getAllWorktreeMeta
     delete partialStore.getAllWorktreeMetaForHost

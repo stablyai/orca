@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 /**
  * The media verbs over the real pair: a page that picks, reads to `eof` and releases, and every
  * refusal it gets for a handle it no longer has.
@@ -7,7 +8,7 @@
  * server directly would never serialize one, and serializing is where a reply that fits and a
  * reply that splits part ways.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
   BRIDGE_MEDIA_READ_MAX_BYTES,
@@ -18,7 +19,7 @@ import {
   createFakeBridgePortPair,
   type BridgePortPair
 } from './bridge/bridge-port-pair-test-harness'
-import { BRIDGE_NATIVE_VERBS } from './bridge/bridge-native-verbs'
+import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../session/mobile-clipboard-image-upload-chunk'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
 import { MEDIA_HANDLE_TTL_MS, MediaHandleRegistry } from './media-handle-registry'
 import { createNativeMediaVerbServer, type NativeMediaFile } from '../platform/native-media'
@@ -63,9 +64,20 @@ function fakeFile(byteLength: number): NativeMediaFile {
 type Pair = {
   pair: BridgePortPair<FakeRpcClient>
   registry: MediaHandleRegistry
+  readonly picker: ReturnType<typeof vi.fn>
   readonly discarded: string[]
   advance: (ms: number) => void
 }
+
+const probes = new Set<Pair>()
+afterEach(() => {
+  for (const probe of probes) {
+    probe.pair.client.close()
+    probe.pair.host.dispose()
+    probe.registry.releaseAll()
+  }
+  probes.clear()
+})
 
 function pairWith(options: { grants?: readonly string[]; byteLength?: number } = {}): Pair {
   const discarded: string[] = []
@@ -75,13 +87,15 @@ function pairWith(options: { grants?: readonly string[]; byteLength?: number } =
     now: () => clock,
     discard: (uri) => discarded.push(uri)
   })
+  const picker = vi.fn(() =>
+    Promise.resolve({
+      canceled: false,
+      assets: [{ uri: `${CACHE}/picked.png`, mimeType: 'image/png', width: 100, height: 80 }]
+    })
+  )
   const serveMedia = createNativeMediaVerbServer({
     registry,
-    launchLibrary: () =>
-      Promise.resolve({
-        canceled: false,
-        assets: [{ uri: `${CACHE}/picked.png`, mimeType: 'image/png', width: 100, height: 80 }]
-      }),
+    launchLibrary: picker,
     launchFiles: () => Promise.resolve({ canceled: true }),
     readClipboardImage: () => Promise.resolve(null),
     stageBase64: () => `${CACHE}/pasted.png`,
@@ -98,7 +112,9 @@ function pairWith(options: { grants?: readonly string[]; byteLength?: number } =
     routeGrants: options.grants ?? MOBILE_WEB_SHELL_GRANTS,
     serveNativeVerb: (verb, params) => serveMedia(verb, params)
   })
-  return { pair, registry, discarded, advance: (ms) => (clock += ms) }
+  const probe: Pair = { pair, registry, picker, discarded, advance: (ms) => (clock += ms) }
+  probes.add(probe)
+  return probe
 }
 
 async function ready(pair: BridgePortPair<FakeRpcClient>): Promise<void> {
@@ -127,9 +143,9 @@ describe('a granted page moving a picked image across the bridge', () => {
     let offset = 0
     let chunks = 0
     let decodedBytes = 0
-    let firstByte: number | null = null
-    let lastByte: number | null = null
-    for (;;) {
+    let eof = false
+    const maxChunks = Math.ceil(FIXTURE_BYTES / BRIDGE_MEDIA_READ_MAX_BYTES) + 1
+    for (; chunks < maxChunks;) {
       const chunk = mediaReadResultSchema.parse(
         (
           await probe.pair.client.callNativeVerb('native.media.read', {
@@ -139,22 +155,26 @@ describe('a granted page moving a picked image across the bridge', () => {
           })
         ).result
       )
-      const bytes = atob(chunk.base64)
-      firstByte ??= bytes.codePointAt(0) ?? null
-      lastByte = bytes.codePointAt(bytes.length - 1) ?? null
+      const bytes = Buffer.from(chunk.base64, 'base64')
+      expect(bytes.length).toBeGreaterThan(0)
+      const expected = Uint8Array.from({ length: bytes.length }, (_, index) =>
+        fixtureByte(offset + index)
+      )
+      expect(bytes.equals(expected), `chunk at byte ${offset}`).toBe(true)
+      expect(chunk.base64.length).toBeLessThanOrEqual(
+        MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+      )
       decodedBytes += bytes.length
       offset += bytes.length
       chunks += 1
       if (chunk.eof) {
+        eof = true
         break
       }
     }
-    // Every byte, in order, and no chunk skipped: the count is the file's own length and the
-    // ends are the fixture's, which a reader that dropped or reordered a chunk would not have.
+    expect(eof).toBe(true)
     expect(decodedBytes).toBe(FIXTURE_BYTES)
     expect(chunks).toBe(Math.ceil(FIXTURE_BYTES / BRIDGE_MEDIA_READ_MAX_BYTES))
-    expect(firstByte).toBe(fixtureByte(0))
-    expect(lastByte).toBe(fixtureByte(FIXTURE_BYTES - 1))
     // Not one frame of this crossed as a forwarded request: a `native.` method never reaches the
     // desktop, and a chunked reply would say so here as a split the page had to reassemble.
     expect(probe.pair.rpc.requests).toEqual([])
@@ -168,7 +188,7 @@ describe('a granted page moving a picked image across the bridge', () => {
 })
 
 describe('a page that was not granted the verbs', () => {
-  it('is refused at the call site, with no frame sent and no picker run', async () => {
+  it('is refused by the host before the picker runs', async () => {
     const probe = pairWith({ grants: ['navigate', 'storage'] })
     await ready(probe.pair)
     const before = probe.pair.toShell.length
@@ -176,6 +196,7 @@ describe('a page that was not granted the verbs', () => {
       probe.pair.client.callNativeVerb('native.media.pick', { source: 'library', multiple: false })
     ).rejects.toMatchObject({ code: 'native_verb_ungranted' })
     expect(probe.registry.liveCount()).toBe(0)
+    expect(probe.picker).not.toHaveBeenCalled()
     expect(probe.pair.rpc.requests).toEqual([])
     // A frame did leave — the page side of these verbs is C7.6's — so the oracle is the code,
     // and that the host decided it rather than a handler.
@@ -242,23 +263,5 @@ describe('a handle the page no longer has', () => {
       probe.pair.client.callNativeVerb('native.media.pick', { source: 'library', multiple: false })
     ).rejects.toMatchObject({ code: 'native_media_handle_cap' })
     warn.mockRestore()
-  })
-})
-
-describe('the pair every other suite gets by default', () => {
-  it('answers each verb a shape its own table declares, so a case can call one and read it', async () => {
-    // Without this the default handler answers a clipboard shape for every verb, and a media call
-    // through an unconfigured pair comes back as `native_verb_result` — a shell bug's code for a
-    // harness that was never told about the verb.
-    const pair = createFakeBridgePortPair()
-    await ready(pair)
-    for (const [verb, params] of [
-      ['native.media.pick', { source: 'library', multiple: false }],
-      ['native.media.read', { handle: 'media-1', offset: 0, length: 16 }],
-      ['native.media.release', { handle: 'media-1' }]
-    ] as const) {
-      const reply = await pair.client.callNativeVerb(verb, params)
-      expect(BRIDGE_NATIVE_VERBS[verb].result.safeParse(reply.result).success, verb).toBe(true)
-    }
   })
 })

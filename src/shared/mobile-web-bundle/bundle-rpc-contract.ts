@@ -11,7 +11,8 @@ import {
  *  against the 1 MiB frame ceiling on both the WebSocket and relay transports. */
 export const MOBILE_WEB_BUNDLE_CHUNK_BYTES = 48 * 1024
 
-/** 384 KiB raw is 512 KiB of base64, which the base64 mobile E2EE reply grows to ~683 KiB
+/** Compatibility ceiling; hosts advertise their current grid separately. 384 KiB raw is 512 KiB
+ *  of base64, which the base64 mobile E2EE reply grows to ~683 KiB
  *  (393216 x 16/9 = 699051 bytes) plus the envelope: under the 1 MiB WebSocket and relay frame
  *  ceiling. Gzip never raises that bound, because the host sends identity when gzip does not shrink. */
 export const MOBILE_WEB_BUNDLE_RANGE_BYTES = 384 * 1024

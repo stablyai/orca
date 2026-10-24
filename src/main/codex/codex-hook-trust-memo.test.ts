@@ -51,7 +51,7 @@ describe('Codex hook trust memo', () => {
 
     writeFileSync(codexPath, 'codex 0.160.0, replaced by an update')
     expect(read()).toBeNull()
-    // Why: the version's hashes outlive the binary, so a reinstall of that version asks no hooks/list.
+    // Version hashes survive binary replacement, avoiding hooks/list after reinstall.
     expect(readMemoizedVersionAnswer('codex-cli 0.150.1', COMMAND)).toMatchObject({
       hashes: HASHES
     })

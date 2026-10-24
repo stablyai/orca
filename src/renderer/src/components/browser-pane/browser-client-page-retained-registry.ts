@@ -163,7 +163,7 @@ export class BrowserClientPageRetainedRegistry {
     const webview = createBrowserClientPageWebview({
       createWebview: this.options.createWebview,
       document: this.options.document,
-      partition: identity.partition
+      identity
     })
 
     let resolveMount!: RetainedPage['resolveMount']

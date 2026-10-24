@@ -1,14 +1,4 @@
-// Claude CLI 2.1.280 stream-json captures of sends made while a turn is running
-// (`--replay-user-messages`), cut to the frames and fields the dispatch/turn path
-// reads. Ids, paths and prompts are replaced; the frame order and the relative
-// clock (`at`, ms after the first send) are the captured ones.
-//
-// The captured shape under test: a mid-turn send the CLI folds into the running
-// turn is replayed as a root user frame (`isReplay: true`, the client uuid) while
-// that turn is still open, and the turn's ONE result names every folded send in
-// `user_message_uuids`. A send the CLI runs later (miss) is replayed only when its
-// own turn starts, after the first result. A cancelled mid-turn send is never
-// replayed at all.
+// CLI 2.1.280 captures: sanitized IDs/paths/prompts; original frame order and send-relative times.
 
 import {
   assistant,
@@ -30,7 +20,6 @@ export const FIRST_PROMPT = 'Run the sleep command three times, then reply: FIRS
 export const STEER_PROMPT = 'Also say the word banana at the end of your reply.'
 export const SECOND_STEER_PROMPT = 'And also say the word mango at the very end.'
 
-/** p2-fold-fresh: first send at 12, steer at 3878; one result names both sends. */
 export const FOLD_FRESH_SEND_AT = { first: 12, steer: 3_878 }
 export function foldFreshCapture({ sessionId, first, steer }: FoldCaptureIds): CapturedFoldFrame[] {
   return [
@@ -51,7 +40,6 @@ export function foldFreshCapture({ sessionId, first, steer }: FoldCaptureIds): C
   ]
 }
 
-/** p2-fold-resumed: the same fold on a `--resume` session; steer at 4458. */
 export const FOLD_RESUMED_SEND_AT = { first: 12, steer: 4_458 }
 export function foldResumedCapture({
   sessionId,
@@ -83,7 +71,6 @@ export function foldResumedCapture({
   ]
 }
 
-/** p2-two-steers: steers at 3630 and 5031, both replayed back to back mid-turn. */
 export const TWO_STEERS_SEND_AT = { first: 31, steer: 3_630, secondSteer: 5_031 }
 export function twoSteersCapture({
   sessionId,
@@ -110,8 +97,7 @@ export function twoSteersCapture({
   ]
 }
 
-/** p2-miss: the steer lands too late to fold — its replay trails the first
- *  result, and it runs as its own turn with its own result. */
+/** A steer replayed after the first result runs in its own turn. */
 export const MISS_SEND_AT = { first: 30, steer: 23_384 }
 export function missCapture({ sessionId, first, steer }: FoldCaptureIds): {
   beforeSteerSend: CapturedFoldFrame[]
@@ -148,9 +134,7 @@ export function missCapture({ sessionId, first, steer }: FoldCaptureIds): {
   }
 }
 
-/** p2-cancel: the steer is cancelled while queued — no replay ever arrives, the
- *  interrupt injects a synthetic user text with NO `isReplay`, and the error
- *  result names only the first send. */
+/** Cancelled steer has no replay; the synthetic interrupt text is not a send. */
 export const CANCEL_SEND_AT = { first: 18, steer: 3_578 }
 export function cancelCapture({ sessionId, first, steer: _steer }: FoldCaptureIds): {
   beforeSteerSend: CapturedFoldFrame[]
@@ -197,9 +181,7 @@ export function cancelCapture({ sessionId, first, steer: _steer }: FoldCaptureId
   }
 }
 
-/** p3-early-steer: the steer is written BEFORE the first send's replay arrives
- *  (send at 312, first replay at 1208) and the CLI still folds it — one init,
- *  one turn, one result naming both sends. */
+/** A steer before the first replay still folds into one result naming both sends. */
 export const EARLY_STEER_SEND_AT = { first: 11, steer: 312 }
 export function earlySteerCapture({
   sessionId,
@@ -222,10 +204,7 @@ export function earlySteerCapture({
   ]
 }
 
-/** p3-background-wake: after the turn's result, the finished background task
- *  wakes the CLI — a NEW cycle: its own init, output with no user replay, and a
- *  result that names no send at all (`user_message_uuids` absent). The task's
- *  completion frames arrive BEFORE the wake's init. */
+/** Completion precedes wake init; the new cycle has no user replay or result send IDs. */
 export function backgroundWakeCapture({ sessionId, first }: FoldCaptureIds): {
   firstTurn: CapturedFoldFrame[]
   wake: CapturedFoldFrame[]

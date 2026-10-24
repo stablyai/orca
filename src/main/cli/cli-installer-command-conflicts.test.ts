@@ -30,7 +30,6 @@ describe('CliInstaller', () => {
     vi.restoreAllMocks()
   })
 
-  // Why: this test creates a Unix symlink to /tmp/not-orca, which only applies on macOS/Linux.
   it.skipIf(process.platform === 'win32')(
     'refuses to replace an unknown symlink at the command path',
     async () => {
@@ -58,8 +57,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: packaged app moves can leave a symlink to an older Orca-owned launcher;
-  // those are safe to refresh, unlike arbitrary user symlinks.
   it.skipIf(process.platform === 'win32')(
     'replaces stale packaged Orca launcher symlinks',
     async () => {
@@ -91,9 +88,7 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: old dev/package experiments wrote a generated Orca launcher file
-  // directly into /usr/local/bin/orca. That broke profiling because Settings
-  // treated the regular file as a hard conflict and would not self-heal it.
+  // Older builds wrote generated launcher files directly into /usr/local/bin/orca.
   it.skipIf(process.platform === 'win32')(
     'replaces stale generated Unix launcher files',
     async () => {
@@ -171,8 +166,6 @@ describe('CliInstaller', () => {
     }
   )
 
-  // Why: a dev build can temporarily own the public command on developer
-  // machines; packaged Orca should treat that as stale, not a hard conflict.
   it.skipIf(process.platform === 'win32')(
     'replaces stale sibling dev launcher symlinks from packaged installs',
     async () => {

@@ -1,8 +1,4 @@
-// A delete that fails after Git dropped the checkout's registration: the leftover stays listed with
-// the error until the checkout disappears, Git registers a checkout there again, or its repo leaves
-// Orca; Delete refuses while the folder is on disk. Git is mocked
-// here so this runs on every platform; the real-Git version is in
-// runtime/runtime-failed-local-worktree-removal.test.ts.
+// Mock Git for cross-platform coverage; real-Git cases live in runtime/runtime-failed-local-worktree-removal.test.ts.
 import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -116,7 +112,6 @@ describe('a delete that fails after Git dropped the registration', () => {
     const [record] = await readWorktreeRemovalRecords(join(directory, 'profile'))
     expect(record).toMatchObject({ worktreeId, failure: { message: GIT_ERROR } })
     expect(waitForPendingWorktreeRemoval(worktreeId)).toBeUndefined()
-    // Not marked removing and not left out for older clients: it is a row they can delete again.
     const rows: { id: string; hostId?: undefined }[] = [{ id: worktreeId }]
     expect(
       projectPendingWorktreeRemovals(
@@ -149,7 +144,6 @@ describe('a delete that fails after Git dropped the registration', () => {
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
-    // Git still has the checkout, so its branch and remote stay with it.
     expect(deleteBranchOfUnregisteredWorktree).not.toHaveBeenCalled()
     expect(cleanupPushTargetRemote).not.toHaveBeenCalled()
   })
@@ -208,7 +202,6 @@ describe('a delete that fails after Git dropped the registration', () => {
     await failRemoval()
     const publish = vi.fn()
     const run = vi.fn(async () => {
-      // The retry shows as removing while it runs.
       expect(await listRows()).toEqual([
         mainWorktree,
         { ...leftoverRow(), removalError: undefined }
@@ -218,13 +211,11 @@ describe('a delete that fails after Git dropped the registration', () => {
     })
 
     const retried = retryFailedWorktreeRemoval(worktreeId, 'local', (record) => {
-      // The user's first choices, without the failure.
       expect(record).toMatchObject({ deleteBranch: true, force: true })
       expect(record).not.toHaveProperty('failure')
       return { run, publish }
     })
 
-    // A second window's Delete joins the same run.
     expect(waitForPendingWorktreeRemoval(worktreeId)).toBe(retried)
     await expect(retried).resolves.toEqual({})
     await _settlePendingWorktreeRemovalsForTests()

@@ -251,7 +251,7 @@ const childResults = await Promise.all(
 const result = await buildOrcadEntry(SERVER_OUT_FILE)
 const cliResult = await buildOrcadCli(join(OUT_DIR, ORCAD_CLI_ENTRY_FILENAME))
 const { version: cliVersion } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-// Why commit: `orca skills install|update` pins official skills to it, as the desktop CLI does.
+// Why commit: the stamp keys one serve-supervisor snapshot per build.
 const cliPackage = {
   type: 'commonjs',
   private: true,

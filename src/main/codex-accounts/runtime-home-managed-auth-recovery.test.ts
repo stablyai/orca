@@ -14,7 +14,7 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Keep asserted config bytes independent of platform socket-path limits.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config
@@ -93,14 +93,11 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
-    // A stale pre-E process leaves a matching refresh in the shared runtime home.
     writeFileSync(runtimeAuthPath, account1Refreshed, 'utf-8')
 
-    // The active account's canonical auth disappears before launch.
     rmSync(join(managedHomePath1, 'auth.json'), { force: true })
     expect(service.prepareForCodexLaunch()).toBe(managedHomePath1)
 
-    // Missing canonical auth preserves selection without reviving shared bytes.
     expect(existsSync(join(managedHomePath1, 'auth.json'))).toBe(false)
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(account1Refreshed)
@@ -125,8 +122,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(store.updateSettings).not.toHaveBeenCalled()
 
     rmSync(join(managedHomePath1, 'auth.json'), { force: true })
-    // Why: the first missing read may be a rotation in flight — the selection
-    // survives the grace window and the launch still targets the account home.
+
     const absenceObservedAt = Date.now()
     expect(
       service.prepareForCodexLaunch(undefined, undefined, {
@@ -135,7 +131,6 @@ describe('CodexRuntimeHomeService', () => {
     ).toBe(managedHomePath1)
     expect(store.updateSettings).not.toHaveBeenCalled()
 
-    // Once the absence outlives the grace window it is durable and deselects.
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => absenceObservedAt + 6_000)
     try {
       expect(
@@ -189,8 +184,6 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
-    // A mid-write read observes torn JSON: no deselect, and the launch still
-    // targets the account home so codex re-reads the settled file itself.
     writeFileSync(join(managedHomePath, 'auth.json'), '{"tokens":{"acc', 'utf-8')
     expect(
       service.prepareForCodexLaunch(undefined, undefined, {
@@ -200,7 +193,6 @@ describe('CodexRuntimeHomeService', () => {
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
     expect(store.updateSettings).not.toHaveBeenCalled()
 
-    // The write completes; even past the grace window the selection is intact.
     writeFileSync(join(managedHomePath, 'auth.json'), accountAuth, 'utf-8')
     const healedAt = Date.now()
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => healedAt + 60_000)
@@ -295,15 +287,12 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
-    // A stale pre-E process writes matching bytes, then the normal selection
-    // path deselects the self-contained account.
     writeFileSync(runtimeAuthPath, refreshedManagedAuth, 'utf-8')
     settings.activeCodexManagedAccountId = null
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
     service.syncForCurrentSelection()
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
 
-    // A subsequent real-home launch also leaves both stores untouched.
     const syncSpy = vi.spyOn(service, 'syncForCurrentSelection')
     expect(service.prepareForCodexLaunch()).toBeNull()
     expect(syncSpy).not.toHaveBeenCalled()

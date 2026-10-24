@@ -13,7 +13,7 @@ import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
 import { useAppStore } from '../../store'
@@ -124,6 +124,12 @@ export function registerRuntimeClientIpcBridge(
         ...(event.selector ? { selector: event.selector } : {}),
         ...(event.reason ? { reason: event.reason } : {})
       })
+      return
+    }
+    if (event.type === 'browserProfilesChanged') {
+      void useAppStore
+        .getState()
+        .fetchBrowserSessionProfiles(toRuntimeExecutionHostId(environmentId))
       return
     }
     if (event.type === 'sshStateChanged') {

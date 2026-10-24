@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { JiraIssueTransitionControl } from './jira-issue-transition-control'
-import type { JiraIssue, JiraTransition } from '../../../shared/jira-types'
+import type { JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>

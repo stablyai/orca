@@ -17,7 +17,7 @@ export class DegradedDaemonOwnerRecovery {
   constructor(
     private readonly readProviders: () => readonly IPtyProvider[],
     private readonly readDaemonAdapters: () => readonly DaemonPtyAdapter[],
-    routes: Map<string, IPtyProvider>,
+    private readonly routes: Map<string, IPtyProvider>,
     private readonly spawnFresh: (opts: PtySpawnOptions) => Promise<PtySpawnResult>
   ) {
     this.attachResolver = new DaemonSessionOwnerResolver([], routes)
@@ -31,9 +31,20 @@ export class DegradedDaemonOwnerRecovery {
 
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
     this.syncCollections()
-    return opts.attachOnly && opts.sessionId
-      ? await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
-      : await this.spawnFresh(opts)
+    if (opts.attachOnly && opts.sessionId) {
+      return await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+    }
+    const result = await this.spawnFresh(opts)
+    const provider = this.routes.get(result.id)
+    if (provider && !result.exitedBeforeSpawnReply) {
+      this.recordRoute(result.id, provider, result.incarnationId)
+    }
+    return result
+  }
+
+  getVerifiedRoute = (id: string): IPtyProvider | undefined => {
+    this.syncCollections()
+    return this.attachResolver.getVerifiedRoute(id)
   }
 
   probe = async (sessionId: string): Promise<boolean | null> => {
@@ -82,11 +93,12 @@ export class DegradedDaemonOwnerRecovery {
     return { alive, killed }
   }
 
-  recordRoute(sessionId: string, provider: IPtyProvider): void {
+  recordRoute(sessionId: string, provider: IPtyProvider, incarnationId?: string): void {
     this.syncCollections()
-    this.attachResolver.recordRoute(sessionId, provider)
-    if (this.readDaemonAdapters().includes(provider as DaemonPtyAdapter)) {
-      this.livenessResolver.recordRoute(sessionId, provider as DaemonPtyAdapter)
+    this.attachResolver.recordRoute(sessionId, provider, incarnationId)
+    const adapter = this.readDaemonAdapters().find((candidate) => candidate === provider)
+    if (adapter) {
+      this.livenessResolver.recordRoute(sessionId, adapter, incarnationId)
     }
   }
 

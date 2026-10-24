@@ -21,7 +21,7 @@ import type { PtyIpcSession } from '../session'
 
 export function buildMainDeliveryDiagnostics(session: PtyIpcSession): PtyMainDeliveryDiagnostics {
   const now = Date.now()
-  // Include hidden/visible/active members even without an accounting entry: a pty gated before its first byte is exactly the wedge case to surface.
+  // Include PTYs gated before their first byte even when send accounting never started.
   const ids = new Set([
     ...session.rendererDeliveryAccountingByPty.keys(),
     ...session.pendingData.keys(),
@@ -81,7 +81,7 @@ export function readCurrentPtyRendererDeliveryDebugSnapshot(
     }
     maxRendererInFlightCharsByPty = Math.max(maxRendererInFlightCharsByPty, inFlight)
   }
-  // Why: a pty both hidden-gated and reported visible means main is starving a visible pane (v1.4.124-rc.2.perf field lead).
+  // Hidden gating on a renderer-reported visible pane indicates starvation.
   let hiddenDeliveryGatedVisiblePtyCount = 0
   for (const id of visibleRendererPtys) {
     if (isHiddenRendererPty(id)) {
@@ -149,7 +149,7 @@ export function warnIfDroppingHiddenBytesForVisiblePty(
   if (!visibleRendererPtys.has(id) && !activeRendererPtys.has(id)) {
     return
   }
-  // Recorded before the warn rate limit: the ring coalesces repeats, and the contradiction must appear in the freeze report either way.
+  // Record even rate-limited warnings in freeze reports; the ring coalesces repeats.
   mainDeliveryBreadcrumbs.record('hidden-drop-visible', {
     id: redactPtyIdForDiagnostics(id),
     droppedChars

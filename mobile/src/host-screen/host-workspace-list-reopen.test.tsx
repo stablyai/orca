@@ -1,6 +1,7 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -30,6 +31,21 @@ vi.mock('../components/WorktreeListRow', () => ({ WorktreeListRow: 'WorktreeList
 
 import { HostWorkspaceList } from './host-workspace-list'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
+
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
 
 /** A host whose feed this page cannot read: the notice, above the rows the page already holds. */
 function listWith(rows: number) {
@@ -108,3 +124,5 @@ describe('a host whose sidebar feed this page cannot read', () => {
     expect(tree.root.findAll((node) => String(node.type) === 'SectionList')).toEqual([])
   })
 })
+
+afterEach(unmountRenderers)

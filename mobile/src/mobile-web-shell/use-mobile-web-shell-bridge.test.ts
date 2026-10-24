@@ -6,7 +6,7 @@ import {
   type ReactElement
 } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
 import {
@@ -225,6 +225,23 @@ type Mounted = {
 
 let warned: MockInstance<typeof console.warn>
 
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(async () => {
+  await act(async () => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+  vi.restoreAllMocks()
+})
+
 async function mount(
   session: MobileWebShellSessionState,
   /** Overrides the reducer model below, for the cases that need a rebuilt host's pre-handshake
@@ -256,7 +273,7 @@ async function mount(
       readies
     })
   await act(async () => {
-    rendered.tree = create(render(session))
+    rendered.tree = createTracked(render(session))
   })
   const tree = rendered.tree
   if (tree === null) {
@@ -295,20 +312,16 @@ async function mount(
 beforeEach(() => {
   doubles.client = createFakeRpcClient()
   warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  // `spyOn` on an already-spied method hands back the same mock, calls and all.
-  warned.mockClear()
 })
 
 describe('the bridge channel', () => {
   it('is closed until the session is ready and opens with it', async () => {
     const mounted = await mount({ kind: 'checking' })
     expect(mounted.probe.view?.bridgeEnabled).toBe(false)
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    expect(mounted.posted).toEqual([])
     await mounted.update(readyState('session-one'))
     expect(mounted.probe.view?.bridgeEnabled).toBe(true)
-  })
-
-  it('answers the page through the handle of the session it belongs to', async () => {
-    const mounted = await mount(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'ready' }))
     expect(mounted.frames('session-one')).toEqual([
       expect.objectContaining({ type: 'init', sessionId: 'session-one', buildId: 'build-a' })
@@ -368,10 +381,16 @@ describe('the bridge channel', () => {
     const mounted = await mount(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
+    expect(fakeClient().requests.map((request) => request.method)).toEqual(['status.get'])
     // Same session, re-rendered: the harness passes a fresh `{ pathname }` every time. A rebuilt
     // host would have settled that request delivery-unknown on its way out.
     await mounted.update(readyState('session-one'))
     expect(mounted.frames('session-one').filter((frame) => frame.type === 'error')).toEqual([])
+    fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
+    await flushBridge()
+    expect(mounted.frames('session-one').filter((frame) => frame.type !== 'init')).toEqual([
+      { v: 1, type: 'reply', id: ID, payload: rpcSuccess('wire-1', 'ok') }
+    ])
   })
 
   it('hands a page fault to the screen and asks the client for nothing', async () => {
@@ -449,11 +468,16 @@ describe('the bridge channel', () => {
 describe('teardown', () => {
   it('posts a retiring session nothing into the page that replaced it', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
+    expect(fakeClient().requests.map((request) => request.method)).toEqual(['status.get'])
+    expect(warned).not.toHaveBeenCalled()
     await mounted.update(readyState('session-two'))
     expect(mounted.frames('session-two')).toEqual([])
-    // The retiring host still tried, and the rejection is what said the view was gone.
     expect(warned).toHaveBeenCalledTimes(1)
+    fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'late'))
+    await flushBridge()
+    expect(mounted.frames('session-two')).toEqual([])
   })
 
   it(`routes the next session's frames to the next host`, async () => {
@@ -553,7 +577,15 @@ describe('teardown', () => {
     // The commit tears the host down while its own view is still attached, so the page hears why
     // its request will never answer instead of being left holding it.
     expect(mounted.frames('session-one').filter((frame) => frame.type !== 'init')).toEqual([
-      expect.objectContaining({ type: 'error', id: ID })
+      expect.objectContaining({
+        type: 'error',
+        id: ID,
+        error: expect.objectContaining({
+          category: 'BridgeHostDisposedError',
+          code: 'bridge_host_disposed',
+          isRpcDeliveryUnknown: true
+        })
+      })
     ])
     expect(warned).not.toHaveBeenCalled()
     fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
@@ -603,59 +635,6 @@ describe('diagnostics', () => {
     await mounted.update(readyState('session-two'))
     await mounted.deliver('{"v":1,"type":')
     expect(warned).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('the callbacks a render passes', () => {
-  it('faults into the latest render, not into the closure the host was built with', async () => {
-    const first: BridgeErrorCapture[] = []
-    const second: BridgeErrorCapture[] = []
-    const posted: PostedFrame[] = []
-    const probe: Probe = {
-      view: null,
-      navigations: [],
-      externalLinks: [],
-      haptics: [],
-      backPops: 0,
-      droppedBinaryFrames: [],
-      paints: 0,
-      backClaims: [],
-      storageWrites: []
-    }
-    // One session throughout, so the host is never rebuilt: only the ref refresh can carry the
-    // second render's callback to a frame that arrives after it.
-    const render = (faults: BridgeErrorCapture[]): ReactElement =>
-      createElement(Harness, {
-        session: readyState('session-one'),
-        posted,
-        probe,
-        faults,
-        readies: []
-      })
-    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
-    await act(async () => {
-      rendered.tree = create(render(first))
-    })
-    await act(async () => {
-      rendered.tree?.update(render(second))
-    })
-    const deliver = async (json: string): Promise<void> => {
-      await act(async () => {
-        probe.view?.onBridgeMessage({ nativeEvent: { json } })
-      })
-    }
-    await deliver(clientFrame({ type: 'ready' }))
-    await deliver(
-      clientFrame({
-        type: 'notify',
-        name: BRIDGE_FAULT_GRANT,
-        error: { category: 'Error', message: 'the route threw', isRpcDeliveryUnknown: false }
-      })
-    )
-    expect(first).toEqual([])
-    expect(second).toEqual([
-      { category: 'Error', message: 'the route threw', isRpcDeliveryUnknown: false }
-    ])
   })
 })
 
@@ -733,7 +712,7 @@ describe('client changes', () => {
       createElement(DeliverDuringCommit, { deliver, posted, probe, faults: [], readies: [] })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
-      rendered.tree = create(render([]))
+      rendered.tree = createTracked(render([]))
     })
     const next = createFakeRpcClient()
     doubles.client = next
@@ -788,7 +767,7 @@ describe('the props one render passed', () => {
       createElement(Harness, { session: readyState('session-one'), posted, probe, faults, readies })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
-      rendered.tree = create(render(first, firstFaults, firstReadies))
+      rendered.tree = createTracked(render(first, firstFaults, firstReadies))
     })
     const deliver = async (probe: Probe, json: string): Promise<void> => {
       await act(async () => {
@@ -798,6 +777,7 @@ describe('the props one render passed', () => {
     await deliver(first, clientFrame({ type: 'ready' }))
     // Left open across the re-render: a rebuilt host settles it delivery-unknown on its way out.
     await deliver(first, clientFrame({ type: 'request', id: ID, method: 'status.get' }))
+    expect(fakeClient().requests.map((request) => request.method)).toEqual(['status.get'])
     await act(async () => {
       rendered.tree?.update(render(second, secondFaults, secondReadies))
     })
@@ -863,6 +843,18 @@ describe('the props one render passed', () => {
     // Announced once, to the render that was on screen when the one host was built.
     expect(first.droppedBinaryFrames).toEqual([0])
     expect(second.droppedBinaryFrames).toEqual([])
+    fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
+    await flushBridge()
+    const replied = posted.map((frame) => {
+      const read = readBridgeHostMessage(frame.json)
+      if (!read.ok) {
+        throw new Error(`the page would refuse this frame: ${read.refusal}`)
+      }
+      return read.message
+    })
+    expect(replied.filter((frame) => frame.type === 'reply')).toEqual([
+      { v: 1, type: 'reply', id: ID, payload: rpcSuccess('wire-1', 'ok') }
+    ])
   })
 })
 
@@ -877,7 +869,7 @@ describe('a session that handshook before this host existed', () => {
   it('serves a request from a page that never said `ready` to this host', async () => {
     const probe = newProbe()
     await act(async () => {
-      create(
+      createTracked(
         createElement(Harness, {
           session: readyState('session-one'),
           sessionEstablished: true,

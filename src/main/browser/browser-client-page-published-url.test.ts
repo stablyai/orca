@@ -56,7 +56,6 @@ describe('recordBrowserClientPagePublishedUrl', () => {
   it('ignores metadata whose pageHostGeneration does not match the tracked page', () => {
     const pages = tracked(inventory({ currentUrl: 'https://remote.example/opened-at' }))
 
-    // A stale generation reports on a page that has since been replaced, not on the one we track.
     recordBrowserClientPagePublishedUrl(pages, metadata({ pageHostGeneration: 99 }))
 
     expect(pages.get(PAGE_ID)?.inventory.currentUrl).toBe('https://remote.example/opened-at')
@@ -98,8 +97,7 @@ describe('recordBrowserClientPagePublishedUrl', () => {
     )
   })
 
-  // The metadata schema's url cap equals the inventory cap, so an over-cap url is rejected at parse
-  // and never reaches updateBrowserClientPageInventoryCurrentUrl's drop path from this seam.
+  // The metadata schema rejects oversized URLs before the inventory’s URL-drop fallback.
   it('rejects an over-cap url at schema validation rather than recording it', () => {
     const pages = tracked(inventory({ currentUrl: 'https://remote.example/opened-at' }))
     const url = 'h'.repeat(BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH + 1)

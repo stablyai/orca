@@ -1,5 +1,3 @@
-// A journal target for the deferred sink that records the bodies written to it, in order.
-
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity

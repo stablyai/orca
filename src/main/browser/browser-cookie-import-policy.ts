@@ -1,7 +1,6 @@
 import { isIP } from 'node:net'
 import type { Cookie, Cookies } from 'electron'
 import { parse as parseDomain } from 'tldts'
-// Why: type-only, so this does not create a runtime cycle with the clear module.
 import type { CookieClearIdentity } from './browser-cookie-import-clear'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
@@ -41,29 +40,15 @@ export function normalizeCookieDomain(domain: string): string | null {
   }
 }
 
-// Why allowPrivateDomains: the PSL's PRIVATE section is what keeps one tenant's cookies out of
-// another's — without it `foo.github.io` and `bar.github.io` collapse to the same family, and a
-// replace-mode import for one would clear the other. tldts defaults this off; cookie scoping needs
-// it on.
+// Private suffixes keep tenants such as foo.github.io and bar.github.io in separate removal scopes.
 const PUBLIC_SUFFIX_OPTIONS = { allowPrivateDomains: true } as const
 
-// psl exposed a single `listed` flag; tldts splits the same question across the two list sections.
 function isListedSuffix(parsed: { isIcann: boolean | null; isPrivate: boolean | null }): boolean {
   return parsed.isIcann === true || parsed.isPrivate === true
 }
 
-// Why (STA-4300): one definition of "family" for every consumer of the partition skip set — the
-// planner, the per-coordinate removal filter, and the path A domain comparison. Deriving it inline
-// in several places is what let the removal scope and the write set disagree (STA-4090, STA-4170).
-//
-// The IP test MUST run on normalizeCookieDomain's output, never the raw string: Chromium accepts
-// many spellings of one address and the suffix parser mangles all of them (tldts.parse('2130706433')
-// .domain is null, tldts.parse('127.1').domain is '127.1'). normalizeCookieDomain runs the value through
-// `new URL()`, which canonicalises 127.1 / 2130706433 / 0x7f.1 / 010.0.0.1 / a trailing dot to a
-// dotted quad first, so isIP() then recognises every one of them.
-//
-// Returns null when no family can be named (a bare public suffix). A helper that named `com` as a
-// family would preserve an entire TLD from removal, silently turning an import into a no-op.
+// Normalize before IP detection so alternate address spellings share the same removal family.
+// Bare public suffixes name no family; preserving one would exempt all tenants.
 export function registrableFamily(domain: string): string | null {
   const host = normalizeCookieDomain(domain)
   if (!host) {
@@ -72,7 +57,7 @@ export function registrableFamily(domain: string): string | null {
   if (isIP(host)) {
     return host
   }
-  // Why: isIP('[::1]') is 0 — the brackets have to come off before the check.
+  // isIP requires IPv6 addresses without brackets.
   if (host.startsWith('[') && host.endsWith(']') && isIP(host.slice(1, -1)) === 6) {
     return host
   }
@@ -101,17 +86,8 @@ export function normalizeCookieImportDomain(domain: string): string | null {
   return normalized
 }
 
-// Why (STA-3811): registrable families whose sessions are device-bound server-side, so a
-// transplanted cookie is rejected (or flagged and expired within ~1h) no matter how faithfully
-// it is copied. Signing in directly inside Orca is the only path that produces a working
-// session, so an import must never write these cookies and never remove them either — the
-// live session is always more valuable than anything an import could put in its place.
-// Entries must be canonical lowercase ASCII (punycode) registrable domains, never subdomains or
-// public suffixes: isNonTransplantableCookieDomain exempts an entry and everything under it, and
-// the staged image's clear matches the same way. Adding a site is one entry here.
-// youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
-// its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
-// users actually asked for.
+// Preserve device-bound Google sessions; YouTube accepts imports and stays eligible.
+// Entries must be canonical lowercase ASCII registrable domains, never public suffixes.
 const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
 
 export function isNonTransplantableCookieDomain(domain: string): boolean {
@@ -124,8 +100,6 @@ export function isNonTransplantableCookieDomain(domain: string): boolean {
   )
 }
 
-// Why: subsumed by the domain exclusion above for google.com — kept because it is the general
-// rule for rotation-only cookies and applies to any family added without a full exclusion.
 export function isGoogleSourceBoundCookie(name: string, domain: string): boolean {
   if (!GOOGLE_SOURCE_BOUND_COOKIE_NAMES.has(name)) {
     return false
@@ -152,10 +126,7 @@ function importDomainAncestors(domain: string): string[] {
   return ancestors
 }
 
-// Why (STA-4797): one scope object, shared by every clear that precedes an import — path B's
-// replacement, the native path's live-jar clear, and the staged image's delete. Each one used to
-// name its own scope (or, on the native path, none at all), which is how the two import paths came
-// to disagree about what an import is allowed to destroy.
+// Share removal scope across live imports, replacements, and staged replay to protect unrelated sessions.
 export type ImportedDomainScope = {
   exact: Set<string>
   ancestors: Set<string>
@@ -188,8 +159,7 @@ export function importedDomainScope(domains: readonly string[]): ImportedDomainS
   return { exact, ancestors, descendantRoots }
 }
 
-// Why: hostOnly is passed rather than read off a Cookie because the staged image scopes the same
-// way from a raw Chromium host_key, where the leading dot is the only host-only marker there is.
+// Staged rows derive hostOnly from host_key, without constructing an Electron Cookie.
 export function domainIsInImportedScope(
   scope: ImportedDomainScope,
   domain: string,
@@ -204,18 +174,14 @@ export function domainIsInImportedScope(
   return domainSuffixes(domain).some((suffix) => scope.descendantRoots.has(suffix))
 }
 
-// Why: takes a normalizeCookieDomain output, never a raw cookie domain. That host already parsed
-// as a URL hostname, and assigning pathname cannot throw, so this always builds — both callers
-// used to carry a branch for a null that could not happen, one of them a throw that failed an
-// import for a reason it could never actually hit.
+// normalizedDomain must come from normalizeCookieDomain.
 export function cookieRemovalUrl(cookie: Cookie, normalizedDomain: string): string {
   const url = new URL(`${cookie.secure ? 'https' : 'http'}://${normalizedDomain}/`)
   url.pathname = cookie.path?.startsWith('/') ? cookie.path : '/'
   return url.toString()
 }
 
-// Why (STA-4097): 'set' stays out so the partition-dropping reconstruction cannot return.
-// Undoing a removal is only possible through CDP identities, which carry partitionKey.
+// Restore through CDP identities; Electron cookies.set cannot retain partition keys.
 export type ImportedDomainReplaceStore = Pick<Cookies, 'get' | 'remove'> & {
   snapshotClearIdentities(
     cookies: readonly { cookie: Cookie; url: string }[]
@@ -255,9 +221,7 @@ export async function replaceCookiesForImportedDomains(
     return { removed: [], identities: [] }
   }
 
-  // Why (STA-4170): the removal plan is fixed here, beside the identities that can undo it, so
-  // the restorable set always equals the mutated set. Re-reading the jar later would widen the
-  // removal past what the snapshot can restore.
+  // Freeze the removal plan so every mutation is covered by the rollback snapshot.
   const existingCookies = await store.get({})
   const removable: { cookie: Cookie; url: string }[] = []
   for (const cookie of existingCookies) {
@@ -271,8 +235,7 @@ export async function replaceCookiesForImportedDomains(
     return { removed: [], identities: [] }
   }
 
-  // Why: snapshotting before the first removal is what makes the rollback lossless; an
-  // incomplete snapshot aborts while the session is still untouched.
+  // Abort before removal if the snapshot cannot restore every coordinate.
   const identities = await store.snapshotClearIdentities(removable)
   assertIdentitiesCoverRemovable(removable, identities)
   const identitiesByKey = new Map<string, CookieClearIdentity[]>()
@@ -284,8 +247,7 @@ export async function replaceCookiesForImportedDomains(
   }
 
   const removed: Cookie[] = []
-  // Why: one remove(url, name) deletes every cookie at that coordinate, partitioned twins
-  // included, so the rollback set is tracked per coordinate rather than per cookie.
+  // remove(url, name) also deletes partitioned twins; track rollback by coordinate.
   const attemptedKeys = new Set<string>()
   const attemptedIdentities: CookieClearIdentity[] = []
   for (const { cookie, url } of removable) {
@@ -299,8 +261,7 @@ export async function replaceCookiesForImportedDomains(
       removed.push(cookie)
     } catch (err) {
       try {
-        // Why: the failing coordinate is included because a rejected remove cannot prove the
-        // cookie survived; restoring a live cookie rewrites the value it was snapshotted with.
+        // A rejected removal may already have deleted its coordinate; restore it too.
         await store.restoreClearIdentities(attemptedIdentities.toReversed())
       } catch (restoreError) {
         throw new AggregateError([err, restoreError], 'Cookie replacement and rollback failed')

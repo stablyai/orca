@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web-shell-update-failure'
 
 /**
@@ -30,6 +30,7 @@ import { MobileWebShellUpdateFailureRow } from './mobile-web-shell-update-failur
 const NOW = Date.UTC(2026, 8, 22, 12, 0, 0)
 const OFFERED = `3f2a${'0'.repeat(60)}`
 const CACHED = `9e8d${'1'.repeat(60)}`
+const mounted: ReactTestRenderer[] = []
 
 function failure(overrides: Partial<MobileWebShellUpdateFailure>): MobileWebShellUpdateFailure {
   return {
@@ -53,6 +54,7 @@ async function mountRow(): Promise<ReactTestRenderer> {
   if (rendered.tree === null) {
     throw new Error('the row did not mount')
   }
+  mounted.push(rendered.tree)
   return rendered.tree
 }
 
@@ -63,6 +65,13 @@ function lines(tree: ReactTestRenderer): string[] {
 }
 
 describe('MobileWebShellUpdateFailureRow', () => {
+  afterEach(() => {
+    for (const tree of mounted.splice(0)) {
+      act(() => tree.unmount())
+    }
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(NOW)

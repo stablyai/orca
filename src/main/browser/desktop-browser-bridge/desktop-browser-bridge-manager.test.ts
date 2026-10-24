@@ -345,7 +345,6 @@ describe('DesktopBrowserBridgeManager', () => {
     finish()
   })
 
-  // Why: what a finished command left pressed is let go of on this signal, not on a cancel.
   it("hands each command a host signal that one command's cancel leaves alone", async () => {
     const h = harness()
     let host: AbortSignal | null = null

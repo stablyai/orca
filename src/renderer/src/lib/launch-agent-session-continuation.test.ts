@@ -15,8 +15,19 @@ vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [{ id: 'claude', label: 'Claude' }],
   getAgentLabel: (agent: string) => (agent === 'codex' ? 'Codex' : 'Claude')
 }))
-vi.mock('@/lib/agent-detection-target-inventory', () => ({ ensureDetectedAgentsForWorktree }))
+vi.mock('@/lib/agent-detection-target-inventory', () => ({
+  ensureDetectedAgentsForWorktree,
+  // A declined chat falls back to a terminal only where the agent's CLI was detected.
+  readAgentInventoryForTarget: () => ({ ids: ['claude'], state: 'successful' })
+}))
 vi.mock('sonner', () => ({ toast }))
+vi.mock('./host-chat-program-acquisition', () => ({
+  acquireAgentLaunchChoices: async (_: unknown, run: () => unknown) => {
+    const detected = await run()
+    return { detected, offered: detected }
+  }
+}))
+vi.mock('./host-chat-program', () => ({ agentChoicePending: () => false }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn(async () => ({ supported: false, reason: 'wsl' }))
 }))
@@ -76,7 +87,8 @@ describe('launchAgentSessionContinuation', () => {
     const { detectAgentSessionContinuationAgents } =
       await import('./launch-agent-session-continuation')
 
-    await expect(detectAgentSessionContinuationAgents('wt-1')).resolves.toEqual(['claude', 'codex'])
+    const { detected } = await detectAgentSessionContinuationAgents('wt-1')
+    expect(detected).toEqual(['claude', 'codex'])
     expect(ensureDetectedAgentsForWorktree).toHaveBeenCalledWith(store, 'wt-1')
   })
 

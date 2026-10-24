@@ -46,16 +46,12 @@ describe('readChromiumRowPartition', () => {
     ).toEqual({ status: 'unpartitioned' })
   })
 
-  // Why: a schema predating cookie partitioning genuinely has no partitioned rows, so importing
-  // every one of its cookies unpartitioned is faithful rather than lossy.
   it('reads a schema without the partition column as unpartitioned', () => {
     expect(readChromiumRowPartition({ name: 'sid' }, new Set(['host_key', 'name']))).toEqual({
       status: 'unpartitioned'
     })
   })
 
-  // Why (STA-4300): the ancestor bit selects which partition the cookie lands in. Guessing it files
-  // the cookie under a partition the site never reads — indistinguishable from losing it.
   it('refuses a partitioned row whose schema has no cross-site-ancestor column', () => {
     const result = readChromiumRowPartition(
       { top_frame_site_key: 'https://top.example' },
@@ -107,8 +103,6 @@ describe('readChromiumRowPartition', () => {
 })
 
 describe('readJsonCookiePartition', () => {
-  // Why: every mainstream exporter omits the field for ordinary cookies, so absence has to mean
-  // unpartitioned or whole exports would be rejected.
   it('reads an absent partitionKey as unpartitioned', () => {
     expect(readJsonCookiePartition(undefined)).toEqual({ status: 'unpartitioned' })
   })
@@ -144,8 +138,6 @@ describe('readJsonCookiePartition', () => {
     })
   })
 
-  // Why: exporters that emit only topLevelSite carry no ancestor bit. Skipping is reported; a
-  // guessed bit would be a silent misfile.
   it('refuses a partitionKey missing the cross-site-ancestor bit', () => {
     expect(readJsonCookiePartition({ topLevelSite: 'https://top.example' }).status).toBe(
       'unreadable'
@@ -181,8 +173,7 @@ describe('readJsonCookiePartition', () => {
 })
 
 describe('readFirefoxRowPartition', () => {
-  // Why: originAttributes partitionKey components describe Firefox storage isolation, not whether
-  // the server declared the cookie Partitioned.
+  // Firefox storage isolation does not imply a server-declared Partitioned attribute.
   it('keeps a dFPI row unpartitioned even with ancestor context', () => {
     expect(
       readFirefoxRowPartition(

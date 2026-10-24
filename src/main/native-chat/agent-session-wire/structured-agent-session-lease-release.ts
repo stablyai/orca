@@ -1,9 +1,5 @@
-// Handing the durable lease back once this host's own provider child is gone.
-//
-// Only an exit this host saw or proved, of the child it started at this fence, may release: a
-// session restored only for reading, or one a TUI owns, names an owner process this host never
-// started and may still be alive. Writing `exit-observed` against that record would release a lease
-// out from under a running process and let a second writer in.
+// Release only this host’s child with observed/proven exit; read-only or TUI ownership
+// proves no exit and must never admit a second writer.
 
 import {
   isSurfaceReleasableAgentSessionRecord,
@@ -17,8 +13,7 @@ export type StructuredAgentSessionLeaseStore = Pick<
   'getRecord' | 'transitionHandoff'
 >
 
-/** Releases the lease of the child whose exit this host observed, with that exit's evidence.
- *  Throws `agent_session_checkpoint_stale` when the record no longer names that child. */
+/** Release the observed child; throw agent_session_checkpoint_stale if ownership changed. */
 export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   store: StructuredAgentSessionLeaseStore
   sessionId: string

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// Why: persistence.ts touches electron at import time; a minimal stub keeps
-// this normalizer test focused instead of booting the full Store fixture.
+// Stub Electron at import time without loading the full Store fixture.
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-persistence-right-sidebar-tab-test'
@@ -23,8 +22,6 @@ describe('normalizeRightSidebarTab', () => {
     }
   )
 
-  // Regression: pr-checks was missing from the allow-list, so the folder
-  // PR Checks tab silently reset to Explorer on every app restart.
   it('preserves the folder-only pr-checks tab across restarts', () => {
     expect(normalizeRightSidebarTab('pr-checks')).toBe('pr-checks')
   })

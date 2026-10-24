@@ -3,6 +3,10 @@ import type { z } from 'zod'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
 import {
+  BundledSkillExecuteRequestSchema,
+  BundledSkillPlanRequestSchema
+} from '../../../../shared/bundled-skill-plan'
+import {
   previewSkillDeleteRequest,
   runSkillDeleteRequest,
   type SkillDeleteRequestDependencies
@@ -101,6 +105,19 @@ export const SKILL_METHODS = [
         resolveDiscoveryTarget(params.target ?? {}, runtime),
         skillDeleteDependencies(runtime)
       )
+  }),
+  // The host plans Orca's skills on its own disk; a paired client never sends a WSL target.
+  defineMethod({
+    name: 'skills.planBundledOrca',
+    permission: 'workspace',
+    params: BundledSkillPlanRequestSchema,
+    handler: (params, { runtime }) => runtime.planLocalBundledSkills(params)
+  }),
+  defineMethod({
+    name: 'skills.executeBundledOrca',
+    permission: 'skills-admin',
+    params: BundledSkillExecuteRequestSchema,
+    handler: (params, { runtime }) => runtime.executeLocalBundledSkills(params)
   }),
   defineMethod({
     name: 'skills.share',

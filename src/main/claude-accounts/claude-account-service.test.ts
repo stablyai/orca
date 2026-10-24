@@ -37,7 +37,6 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
   const root = mkdtempSync(join(tmpdir(), 'claude-accounts-'))
   roots.push(root)
   const home = (id: string) => join(root, id, 'home')
-  // Stands in for Claude finishing `claude auth login` in a folder.
   const signIn = (id: string, email: string, organizationUuid?: string) => {
     mkdirSync(home(id), { recursive: true })
     writeFileSync(
@@ -68,7 +67,6 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     removeAccountFolder: vi.fn(async (id: string) => rmSync(join(root, id), { recursive: true })),
     getRuntimeConfigDir: () => '/unused'
   }
-  // Stands in for the hidden `claude auth login`; each test decides how it ends.
   const runLogin = vi.fn<
     (
       args: string[],
@@ -94,12 +92,11 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
   return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
 }
 
-// The id the last sign-in prepared a folder for.
 function newId(f: ReturnType<typeof fixture>): string {
   return f.runtimeAuth.prepareAccountFolder.mock.calls.at(-1)![0]
 }
 
-// Why rename: the stand-in hands its link over whole; a direct write lets the poller read it empty.
+// Publish atomically so the poller cannot read an empty link.
 function handOverClaudeSignInLink(windowsPath: string, link: string): void {
   const helperPath = join(windowsPath, '.orca-sign-in-browser')
   writeFileSync(`${helperPath}.tmp`, link)
@@ -321,7 +318,6 @@ describe('ClaudeAccountService', () => {
       const f = fixture()
       let copied: string | null = null
       f.runLogin.mockImplementationOnce(async (_args, config) => {
-        // Stands in for Claude running BROWSER, then finishing once the browser signs in.
         handOverClaudeSignInLink(config.windowsPath, LINK)
         await vi.waitFor(() => expect(copied).toBe(LINK))
         f.signIn(newId(f), 'new@example.test')
@@ -337,7 +333,6 @@ describe('ClaudeAccountService', () => {
 
   it('fails a copy-link sign-in it cannot catch, rather than opening a browser', async () => {
     const f = fixture()
-    // A folder that does not exist: the BROWSER stand-in cannot be written there.
     f.runtimeAuth.prepareAccountFolder.mockImplementationOnce(async (id: string) => ({
       configDir: join(f.root, id, 'missing'),
       readPath: join(f.root, id, 'missing')
@@ -543,5 +538,33 @@ describe('ClaudeAccountService', () => {
     await expect(f.service.selectAccountForTarget('w', { runtime: 'host' })).rejects.toThrow(
       'That Claude account belongs to a different runtime.'
     )
+  })
+
+  it('selects and clears a WSL account across casing while retaining its recorded distro', async () => {
+    const f = fixture([
+      account('a'),
+      account('w', {
+        managedAuthRuntime: 'wsl',
+        wslDistro: 'Ubuntu',
+        wslLinuxAuthPath: '/home/u/.local/share/orca/claude-profiles/w/home'
+      })
+    ])
+    const selected = await f.service.selectAccountForTarget('w', {
+      runtime: 'wsl',
+      wslDistro: 'ubuntu'
+    })
+    expect(selected.activeAccountIdsByRuntime).toEqual({ host: 'a', wsl: { Ubuntu: 'w' } })
+    expect(f.runtimeAuth.syncForCurrentSelection).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+    await expect(
+      f.service.selectAccountForTarget('w', { runtime: 'wsl', wslDistro: 'Debian' })
+    ).rejects.toThrow('different runtime')
+    const cleared = await f.service.selectAccountForTarget(null, {
+      runtime: 'wsl',
+      wslDistro: 'ubuntu'
+    })
+    expect(cleared.activeAccountIdsByRuntime).toEqual({ host: 'a', wsl: { Ubuntu: null } })
   })
 })

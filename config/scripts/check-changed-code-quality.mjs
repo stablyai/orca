@@ -71,7 +71,9 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
   [
     'react-doctor(no-derived-state-effect)',
     new Set([
-      'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts'
+      'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts',
+      // The open-cycle reset effect predates this entry; it surfaced when its body changed.
+      'src/renderer/src/components/right-sidebar/useSourceControlAgentActionDialog.ts'
     ])
   ],
   [
@@ -144,7 +146,11 @@ function resolveBase(root, requestedBase) {
   throw new Error('Pass the pull request base SHA or make origin/main available locally.')
 }
 
-export function collectAddedLineRanges(root, requestedBase) {
+export function collectAddedLineRanges(
+  root,
+  requestedBase,
+  { includePath = (file) => isRootCodeQualityPath(file) && SOURCE_FILE_PATTERN.test(file) } = {}
+) {
   // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
   // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
   // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
@@ -153,23 +159,44 @@ export function collectAddedLineRanges(root, requestedBase) {
   const comparisonBase =
     resolvePullRequestDiffBase(root, null) ??
     runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
-  const changedFiles = splitNullDelimited(
-    runGit(root, ['diff', '--name-only', '-z', '--diff-filter=ACMRTUB', comparisonBase, '--'])
+  const changedEntries = splitNullDelimited(
+    runGit(root, ['diff', '--name-status', '--find-renames', '-z', comparisonBase, '--'])
   )
+  const changedFiles = []
+  const renamedSources = new Map()
+  for (let index = 0; index < changedEntries.length;) {
+    const status = changedEntries[index++]
+    const source = changedEntries[index++]
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const destination = changedEntries[index++]
+      changedFiles.push(destination)
+      if (status.startsWith('R') && includePath(source)) {
+        renamedSources.set(destination, source)
+      }
+    } else if (status !== 'D') {
+      changedFiles.push(source)
+    }
+  }
   const untrackedFiles = splitNullDelimited(
     runGit(root, ['ls-files', '--others', '--exclude-standard', '-z'])
   )
   const rangesByFile = new Map()
 
   for (const file of changedFiles) {
-    if (
-      !isRootCodeQualityPath(file) ||
-      !SOURCE_FILE_PATTERN.test(file) ||
-      !existsSync(path.join(root, file))
-    ) {
+    if (!includePath(file) || !existsSync(path.join(root, file))) {
       continue
     }
-    const diff = runGit(root, ['diff', '--unified=0', '--no-color', comparisonBase, '--', file])
+    const source = renamedSources.get(file)
+    const paths = source ? [source, file] : [file]
+    const diff = runGit(root, [
+      'diff',
+      '--find-renames',
+      '--unified=0',
+      '--no-color',
+      comparisonBase,
+      '--',
+      ...paths
+    ])
     const ranges = parseAddedLineRanges(diff)
     if (ranges.length > 0) {
       rangesByFile.set(file, ranges)
@@ -178,11 +205,7 @@ export function collectAddedLineRanges(root, requestedBase) {
 
   for (const file of untrackedFiles) {
     const absolutePath = path.join(root, file)
-    if (
-      !isRootCodeQualityPath(file) ||
-      !SOURCE_FILE_PATTERN.test(file) ||
-      !existsSync(absolutePath)
-    ) {
+    if (!includePath(file) || !existsSync(absolutePath)) {
       continue
     }
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length

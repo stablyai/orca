@@ -112,7 +112,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),
       respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
-      // As the real connection: the root's exit is reported, once, inside the close that ends it.
+      // Match the real connection's synchronous exit report during close.
       close: async () => {
         connection.closeCount += 1
         if (!connection.closed) {
@@ -141,7 +141,6 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
   return { connections, openConnection, routes }
 }
 
-/** A `turn/start` route for a Codex that opened the turn before its answer was read. */
 export function answerWithOpenedTurn(
   codex: Pick<ReturnType<typeof fakeCodex>, 'connections'>,
   turnId: string
@@ -158,7 +157,6 @@ export function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
   events: CodexStructuredSessionEvent[] = [],
-  /** Host wiring the runtime adds, such as the late dispatch settlement. */
   deps: Partial<CodexStructuredSessionAdapterDeps> = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0

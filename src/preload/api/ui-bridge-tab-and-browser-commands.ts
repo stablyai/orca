@@ -67,6 +67,12 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:focusBrowserAddressBar', listener)
     return () => ipcRenderer.removeListener('ui:focusBrowserAddressBar', listener)
   },
+  onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: BrowserPageCommandTarget) =>
+      callback(target)
+    ipcRenderer.on('ui:showBrowserHistory', listener)
+    return () => ipcRenderer.removeListener('ui:showBrowserHistory', listener)
+  },
   onFindInBrowserPage: browserFindSubscriptions.subscribe,
   onReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, target: BrowserPageCommandTarget) =>

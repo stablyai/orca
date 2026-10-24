@@ -104,14 +104,14 @@ describe('remote session startup ownership', () => {
     seed.setWorkspaceSession(browserSession(), HOST)
     seed.flush()
     const reloaded = createStore()
-    // Assert the row survived load first, or an empty partition below would prove nothing.
+    // Prove the fixture survived loading so an empty post-removal partition is meaningful.
     expect(reloaded.getWorkspaceSession(HOST).browserPagesByWorkspace).not.toEqual({})
     reloaded.removeProjectForHost({ id: REPO, executionHostId: HOST })
     reloaded.flush()
     expect(createStore().getWorkspaceSession(HOST).browserPagesByWorkspace).toEqual({})
   })
 
-  // STA-7117: a paired client registers none of these repos, so the removal must stay on its host.
+  // Paired hosts can share repo IDs without a local registration; removal must remain host-scoped (STA-7117).
   it("drops only the removed host's rows when another paired host shares the repo id", () => {
     const OTHER_HOST = 'runtime:other-host'
     const seed = createStore()

@@ -8,7 +8,7 @@ type ChromiumCookieTestRow = {
   name: string
   value: string
   encryptedValue?: Buffer
-  // Why: default '' matches a real unpartitioned row; CHIPS fixtures set a top-level site.
+  // Empty top_frame_site_key represents an unpartitioned Chromium cookie.
   topFrameSiteKey?: string
   hasCrossSiteAncestor?: 0 | 1
   isSecure?: 0 | 1

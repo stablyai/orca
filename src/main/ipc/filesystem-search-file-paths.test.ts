@@ -57,8 +57,6 @@ function createMockProcess(spawned = true): ChildProcess {
 
 const BUNDLED_ERROR = "Orca's bundled search tool (ripgrep) could not start"
 
-// Why Object.create and not `{} as Store`: this path never reads the store, and the changed-code
-// quality gate rejects type assertions.
 const UNUSED_STORE: Store = Object.create(null)
 
 function createSpawnError(code: string): NodeJS.ErrnoException {
@@ -289,13 +287,11 @@ describe('searchQuickOpenFilePaths', () => {
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(2)
   })
 
-  // Why both events: a failed spawn emits 'error' and THEN 'close' with a negative code. Emitting
-  // only 'error' lets the async cwd check win a race it loses in production.
+  // Model error then negative close so the async cwd check faces the real spawn ordering.
   it('reports the bundled-ripgrep error when rg genuinely cannot start', async () => {
     const child = createMockProcess(false)
     wslAwareSpawnMock.mockReturnValue(child)
-    // Why a root that exists: an ENOENT spawn error is also what a vanished workspace looks like,
-    // so this stays about the binary only while the search root is actually reachable.
+    // ENOENT must concern the binary here, not a missing workspace.
     resolveAuthorizedPathMock.mockImplementation(async () => process.cwd())
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'target',
@@ -310,8 +306,7 @@ describe('searchQuickOpenFilePaths', () => {
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(1)
   })
 
-  // Why close(97): the WSL wrapper's "cd failed" code. It is above rg's own 0/1/2, so a handler
-  // that checks it after the unavailable branch reports a broken install instead.
+  // Classify WSL cd failure 97 before generic unavailable checks for codes above rg's 0/1/2.
   it('names the unreachable root when the WSL wrapper cannot enter it', async () => {
     const child = createMockProcess()
     wslAwareSpawnMock.mockReturnValue(child)

@@ -166,7 +166,7 @@ describe('CdpWsProxy under a host command', () => {
       expect(mouseEvents(mock)).toEqual(['mousePressed'])
       expect(keyUps(mock)).toHaveLength(0)
       await page.release()
-      // Off the page, so letting go completes no click the host had started.
+      // Release off-page to avoid completing the revoked click.
       expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
         MOUSE,
         expect.objectContaining({ type: 'mouseReleased', x: -1, y: -1 })

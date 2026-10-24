@@ -1,3 +1,4 @@
+import { composeAgentLaunchProfile } from '../shared/tui-agent-launch-defaults'
 import {
   closeTestStores,
   testState,
@@ -21,7 +22,6 @@ import {
   isLocalWorktreeScanGenerationCurrent
 } from './local-worktree-scan-generation'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -73,7 +73,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── 9. Settings: get/update ────────────────────────────────────────
 
   it('updateSettings merges partial updates', async () => {
     const store = await createStore()
@@ -96,7 +95,6 @@ describe('Store', () => {
     expect(updated.terminalFontSize).toBe(16)
     expect(updated.terminalFontWeight).toBe(600)
     expect(updated.terminalFontWeightBold).toBe(800)
-    // Other fields preserved
     expect(updated.branchPrefix).toBe('git-username')
   })
 
@@ -462,12 +460,12 @@ describe('Store', () => {
     )
     const store = await createStore()
 
-    expect(store.getSettings().agentDefaultArgs).toMatchObject({
+    expect(composeAgentLaunchProfile(store.getSettings()).agentDefaultArgs).toMatchObject({
       claude: '--dangerously-skip-permissions',
       codex: '--dangerously-bypass-approvals-and-sandbox',
       cursor: '--yolo'
     })
-    expect(store.getSettings().agentDefaultEnv).toMatchObject({
+    expect(composeAgentLaunchProfile(store.getSettings()).agentDefaultEnv).toMatchObject({
       goose: { GOOSE_MODE: 'auto' }
     })
     expect(store.getSettings().agentYoloDefaultsMigrated).toBe(true)
@@ -487,9 +485,10 @@ describe('Store', () => {
     )
     const store = await createStore()
 
-    expect(store.getSettings().agentDefaultArgs?.codex).toBe('')
-    expect(store.getSettings().agentDefaultEnv?.goose).toEqual({})
-    expect(store.getSettings().agentDefaultArgs?.claude).toBe('--dangerously-skip-permissions')
+    const launched = composeAgentLaunchProfile(store.getSettings())
+    expect(launched.agentDefaultArgs.codex).toBe('')
+    expect(launched.agentDefaultEnv.goose).toEqual({})
+    expect(launched.agentDefaultArgs.claude).toBe('--dangerously-skip-permissions')
   })
 
   it('removes unsupported TUI skip-permissions args from migrated profiles', async () => {
@@ -511,7 +510,7 @@ describe('Store', () => {
 
     expect(store.getSettings().agentDefaultArgs?.opencode).toBe('--model opencode/gpt-5')
     expect(store.getSettings().agentDefaultArgs?.kilo).toBe('')
-    expect(store.getSettings().agentDefaultArgs?.codex).toBe(
+    expect(composeAgentLaunchProfile(store.getSettings()).agentDefaultArgs.codex).toBe(
       '--dangerously-bypass-approvals-and-sandbox'
     )
     expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.opencode).toBe(

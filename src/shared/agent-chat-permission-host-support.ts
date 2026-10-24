@@ -43,7 +43,9 @@ export function legacyHostChatPermissionMode(
     typeof configured === 'object' && configured !== null && agent in configured
       ? Object.getOwnPropertyDescriptor(configured, agent)?.value
       : undefined
-  const args = resolveTuiAgentLaunchArgs(agent, typeof raw === 'string' ? { [agent]: raw } : {})
+  const args = resolveTuiAgentLaunchArgs(agent, {
+    agentDefaultArgs: typeof raw === 'string' ? { [agent]: raw } : {}
+  })
   return HOST_STARTUP_SHELLS.some((shell) => tuiAgentArgsBypassPermissions(agent, args, shell))
     ? 'full-access'
     : 'ask'

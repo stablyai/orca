@@ -1,5 +1,4 @@
-// Real-binary coverage for worktree removal: the mocked-runner suite cannot prove what Git deletes,
-// deregisters and refuses, or that deleting a checkout leaves Node's file pool free.
+// Real Git verifies deletion/refusal behavior and file-pool responsiveness beyond mocked argv.
 import { execFile } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import { link, mkdir, mkdtemp, readFile, realpath, stat, writeFile } from 'node:fs/promises'
@@ -8,6 +7,7 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { classifyWorktreeForceDeleteReason } from '../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
@@ -19,6 +19,8 @@ import { sweepStaleWorktreeTrash, WORKTREE_TRASH_DIR_NAME } from '../worktree-tr
 
 const execFileAsync = promisify(execFile)
 
+installRealWorkerThreadChildProcesses()
+
 let scratchDir = ''
 let repoPath = ''
 let workspaceRoot = ''
@@ -29,7 +31,7 @@ async function git(args: string[], cwd: string): Promise<string> {
   return stdout
 }
 
-// Why parsed: Git prints forward slashes on Windows, so raw text never contains a joined path.
+// Git prints forward slashes on Windows, so compare parsed paths.
 async function isRegistered(path: string): Promise<boolean> {
   return (await listWorktreesStrict(repoPath)).some((worktree) =>
     areWorktreePathsEqual(worktree.path, path)
@@ -37,8 +39,7 @@ async function isRegistered(path: string): Promise<boolean> {
 }
 
 beforeEach(async () => {
-  // realpath: macOS hands out /var/... temp paths while Git reports /private/var/..., and Orca
-  // matches the worktree it is removing against Git's own list.
+  // Canonicalize macOS /var temp paths to match Git's /private/var output.
   scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-worktree-removal-')))
   repoPath = join(scratchDir, 'repo')
   workspaceRoot = join(scratchDir, 'workspaces')
@@ -48,7 +49,7 @@ beforeEach(async () => {
   await git(['init', '-q'], repoPath)
   await git(['config', 'user.email', 'removal@example.invalid'], repoPath)
   await git(['config', 'user.name', 'Worktree Removal'], repoPath)
-  // Why: a commit's detached auto-maintenance can still be writing packs when teardown deletes the repo.
+  // Disable detached maintenance that could race fixture teardown.
   await git(['config', 'maintenance.auto', 'false'], repoPath)
   await git(['config', 'gc.auto', '0'], repoPath)
   await writeFile(join(repoPath, 'seed.txt'), 'seed\n')
@@ -97,7 +98,6 @@ describe('worktree removal against the real Git binary', () => {
     expect(await isRegistered(worktreePath)).toBe(true)
   })
 
-  // A checkout whose initialized submodule holds a commit only it has; the parent does not record it.
   async function addSubmoduleCheckoutWithLocalCommit(): Promise<{
     subWorktreePath: string
     vendorPath: string
@@ -126,8 +126,7 @@ describe('worktree removal against the real Git binary', () => {
   }
 
   it('refuses a clean checkout with a submodule and offers Force Delete for it', async () => {
-    // Why: --force would delete submodule commits that exist only in this checkout, so Git's
-    // refusal must reach the user as a Force Delete choice rather than be retried away.
+    // Force deletion can destroy submodule-only commits; preserve Git's refusal.
     const { subWorktreePath, vendorPath, localCommit } = await addSubmoduleCheckoutWithLocalCommit()
     // Recorded by the parent so its status stays clean.
     await git(['commit', '-qam', 'bump vendor'], subWorktreePath)
@@ -145,7 +144,7 @@ describe('worktree removal against the real Git binary', () => {
   })
 
   it('names submodules when the dirty check refuses a checkout that has them', async () => {
-    // Why: the parent's status shows only its own file, yet Force Delete destroys the submodule commit.
+    // Parent status cannot show the submodule-only commit that Force Delete would destroy.
     const { subWorktreePath } = await addSubmoduleCheckoutWithLocalCommit()
     await git(['commit', '-qam', 'bump vendor'], subWorktreePath)
     await writeFile(join(subWorktreePath, 'notes.txt'), 'draft\n')
@@ -247,8 +246,7 @@ describe('worktree removal and the Node file pool', () => {
     }
     await git(['add', '-A'], worktreePath)
     await git(['commit', '-qm', 'bulk'], worktreePath)
-    // Outside hard links drop to one link only once the checkout's copies are gone, wherever the
-    // delete runs, so the window below covers the whole delete rather than just the call.
+    // Hard-link counts bound the actual delete window independently of the call's lifetime.
     const sentinelRoot = join(scratchDir, 'sentinels')
     await mkdir(sentinelRoot)
     const sentinels: string[] = []

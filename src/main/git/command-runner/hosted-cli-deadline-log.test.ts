@@ -22,11 +22,7 @@ function mockChild(pid = 4321): ChildProcess {
   return child as unknown as ChildProcess
 }
 
-/**
- * #18234 took four rounds of strace/perf/proc spelunking from the reporter
- * because a deadline kill produced no evidence at all. The resolved path is the
- * fact that names a self-recursive wrapper.
- */
+// A resolved path identifies recursive wrappers without logging secret-bearing arguments.
 describe('hosted CLI deadline logging', () => {
   let warn: ReturnType<typeof vi.spyOn>
 

@@ -17,7 +17,6 @@ describe('resolveDesktopScriptProviderPath', () => {
   })
 
   it('finds the runtime orcad ships beside its sidecar when there is no resourcesPath', () => {
-    // orcad's sidecar bundle is flat at the install root, so its runtimes sit beside it.
     const bundled = join(__dirname, 'computer-use-linux', 'runtime.py')
     existsSyncMock.mockImplementation((path) => path === bundled)
 

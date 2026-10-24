@@ -62,7 +62,7 @@ describe('managed orcad version GC after a deploy', () => {
       expect.objectContaining({
         liveDaemonVersion: '1.0.0+a',
         record: { active: '2.0.0+b' },
-        // The compat runtime stays pinned: a compat orcad and a rung A relay share the store.
+        // Default and compat builds share the runtime store; preserve both pins.
         nodeRuntimePins: [
           NODE_RUNTIME_ASSETS['linux-x64-glibc'].executableSha256,
           NODE_RUNTIME_COMPAT_ASSETS['linux-x64-glibc217'].executableSha256

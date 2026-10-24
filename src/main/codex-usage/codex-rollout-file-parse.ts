@@ -86,8 +86,7 @@ function createParseContext(
     currentCwd: null,
     currentModel: null,
     previousTotals: null,
-    // Why: suffix-only legacy copy parsing lacks the copied prefix context. A
-    // leading total-only snapshot is a baseline, not the suffix's billable delta.
+    // A copied suffix lacks prefix context; its first total-only snapshot establishes the baseline.
     totalOnlyBaselinePending: (options.legacySourceSkipBytes ?? 0) > 0
   }
 }

@@ -187,8 +187,6 @@ async function runFixture(): Promise<FixtureResult> {
 }
 
 describe('non-Google partitioned cookie under a failed Electron cookie clear', () => {
-  // Why (STA-4090): a later fallback rejection must not permanently drop cookies already
-  // removed in the same clear — including CHIPS cookies cookies.set() cannot round-trip.
   it('keeps already-removed CHIPS and ordinary cookies after a later removal rejects', async () => {
     const result = await runFixture()
 

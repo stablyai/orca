@@ -193,7 +193,6 @@ describe('getPRForBranch', () => {
       throw new Error('expected upstream-error')
     }
     expect(outcome.errorType).toBe('rate_limited')
-    // ~120s cooldown surfaced as both the manual gate and the auto-retry time.
     expect(outcome.retryDisabledUntil).toBeDefined()
     expect(outcome.nextAutoRetryAt).toBe(outcome.retryDisabledUntil)
     expect(outcome.retryDisabledUntil ?? 0).toBeGreaterThanOrEqual(before + 119_000)

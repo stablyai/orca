@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => {
   return state
 })
 
-// Why: stands in for a detected Windows Git checkout, so every Git call here runs minimal-stat.
+// Simulate a Windows Git drive checkout so calls use minimal stat.
 vi.mock('../wsl-windows-checkout-git-config', async (importOriginal) => {
   const actual = await importOriginal<typeof CheckoutGitConfig>()
   return {
@@ -107,7 +107,6 @@ describe('drive checkout suspect paths with real Git', () => {
 
     await rewriteKeepingMtime('c d.txt', 'bbbb\n')
     const beforeEvent = await statusPaths()
-    // Why assert the miss: proves minimal stat alone cannot see this write.
     expect(beforeEvent).toEqual([])
 
     notifyLocalWatcherEvents(root, [{ type: 'update', path: path.join(repo, 'c d.txt') }])
@@ -118,7 +117,6 @@ describe('drive checkout suspect paths with real Git', () => {
     expect(targeted).toHaveLength(1)
     expect(targeted[0].filter((arg) => arg.startsWith(':(literal)'))).toEqual([':(literal)c d.txt'])
 
-    // Kept while dirty: the next poll still reports it with no new watcher event.
     expect(await statusPaths()).toEqual(['unstaged:c d.txt'])
 
     await rewriteKeepingMtime('c d.txt', 'aaaa\n')

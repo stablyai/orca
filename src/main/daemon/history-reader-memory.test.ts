@@ -85,8 +85,6 @@ describe('terminal history restore memory limits', () => {
     expect(restore?.snapshotAnsi).toBe('safe checkpoint')
   })
 
-  // Why: the read cap once sat at 16MiB while the writer stayed unbounded, so a big-scrollback
-  // session cold-restored to an empty terminal — checkpoint nulled, and every fallback collapsed.
   it('restores a checkpoint larger than the retired 16MiB read cap', async () => {
     const { basePath, sessionPath } = createSession('large-checkpoint')
     const scrollbackAnsi = 'x'.repeat(RETIRED_CHECKPOINT_READ_CAP_BYTES + 1)
@@ -96,13 +94,11 @@ describe('terminal history restore memory limits', () => {
     expect(restore?.scrollbackAnsi).toBe(scrollbackAnsi)
   })
 
-  // Why the cap survives at all: it bounds a corrupt/runaway file, well above legitimate output.
   it('ignores oversized checkpoint and metadata files before parsing', async () => {
     const checkpointSession = createSession('oversized-checkpoint')
     const oversizedCheckpoint = join(checkpointSession.sessionPath, 'checkpoint.json')
     createSparseFile(oversizedCheckpoint, TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES + 1)
-    // Why assert the reader directly too: detectColdRestore returns null for any unparseable
-    // checkpoint, so it would stay green with the byte cap removed entirely.
+    // Assert the size guard directly because malformed sparse JSON would fail parsing without it.
     expect(() =>
       readTerminalHistoryJson(oversizedCheckpoint, TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES)
     ).toThrow(/File too large/)
@@ -138,9 +134,7 @@ describe('terminal history restore memory limits', () => {
     })
   })
 
-  // Why: the retired 1M-structural-token pre-scan was reachable by ordinary content —
-  // ~100k OSC-8 hyperlinks cross it, the assert threw, detectColdRestore swallowed it,
-  // and the terminal restored blank. Same user-visible loss as the retired byte cap.
+  // Ordinary hyperlink output exceeded the retired token cap and lost recovery.
   it('restores a checkpoint carrying more OSC links than the retired structural-token cap', async () => {
     const { basePath, sessionPath } = createSession('many-osc-links')
     const oscLinks = Array.from({ length: 150_000 }, (_, index) => ({
@@ -156,8 +150,7 @@ describe('terminal history restore memory limits', () => {
     expect(restore?.oscLinks).toHaveLength(oscLinks.length)
   })
 
-  // Why assert the reader directly too: detectColdRestore hides any reader throw as a
-  // null checkpoint, so a reinstated pre-scan would stay invisible above.
+  // Call the reader directly so fallback behavior cannot hide a parsing regression.
   it('parses link-dense checkpoints without a structural pre-scan budget', () => {
     const { sessionPath } = createSession('link-dense-checkpoint')
     const checkpointPath = join(sessionPath, 'checkpoint.json')
@@ -170,9 +163,7 @@ describe('terminal history restore memory limits', () => {
     ).toHaveLength(2_000_001)
   })
 
-  // Why: the pre-scan also carried a 128-level nesting cap, and dropping it is only safe
-  // because V8 parses JSON iteratively — depth costs heap, not stack. A future engine that
-  // recursed would abort the daemon rather than throw into the callers' catch, so pin it.
+  // V8 parses JSON iteratively; recursive parsing could abort the daemon instead of throwing.
   it('parses deeply nested checkpoints without the retired nesting-depth cap', () => {
     const { sessionPath } = createSession('deeply-nested-checkpoint')
     const checkpointPath = join(sessionPath, 'checkpoint.json')

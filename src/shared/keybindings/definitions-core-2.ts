@@ -276,5 +276,14 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
       linux: ['Alt+ArrowRight'],
       win32: ['Alt+ArrowRight']
     }
+  },
+  {
+    id: 'browser.showHistory',
+    title: 'Show Browser History',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: ['shortcut', 'browser', 'history', 'visited', 'clear'],
+    // Why Chrome's split: Ctrl+Y is redo (and readline yank) in pages on Linux/Windows.
+    defaultBindings: { darwin: ['Mod+Y'], linux: ['Mod+H'], win32: ['Mod+H'] }
   }
 ]

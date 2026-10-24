@@ -123,9 +123,14 @@ async function send(text: string): Promise<string> {
 }
 
 /** The chat's Stop; `turnId` names the turn it stops, as the phone does. */
-function stop(turnId?: string): Promise<unknown> {
+async function stop(turnId?: string): Promise<unknown> {
   const fields = turnId === undefined ? {} : { turnId }
-  return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
+  const result = await host.cancel(CALLER, {
+    envelope: envelope('agentSession.cancel', fields),
+    ...fields
+  })
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
+  return result
 }
 
 function verdictOf(submissions: readonly AgentJournalSubmission[], clientMessageId: string) {
@@ -314,7 +319,7 @@ describe('a send a Stop took back, then a send made while it read Stopping', () 
     turns.end('completed')
     await vi.waitFor(async () => expect(verdictOf(await submissions(), second)).toBe('accepted'))
     const live = await drawn()
-    expect(live).toEqual([
+    expect(live.filter((text) => text !== 'Cancellation requested.')).toEqual([
       'look around',
       NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
       'sent while stopping'
@@ -418,6 +423,12 @@ describe('a send a Stop took back before Codex echoed it', () => {
       ['user', [{ type: 'text', text: 'look around' }]],
       ['system', [expect.objectContaining({ text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT })]]
     ])
-    expect(await drawn()).toEqual(['warm up', 'look around', NATIVE_CHAT_STOPPED_BEFORE_START_TEXT])
+    const rows = await drawn()
+    expect(rows.filter((text) => text === 'Cancellation requested.')).toHaveLength(1)
+    expect(rows.filter((text) => text !== 'Cancellation requested.')).toEqual([
+      'warm up',
+      'look around',
+      NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
+    ])
   })
 })

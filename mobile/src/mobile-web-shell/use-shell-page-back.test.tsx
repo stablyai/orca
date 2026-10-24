@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => {
   // Annotated rather than asserted: the literal alone narrows to 'android' and the cases reassign it.
@@ -34,6 +34,22 @@ function Screen(props: {
   return null
 }
 
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(() => {
+  act(() => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
+
 function render(props: {
   claimed: boolean
   sendBack: () => boolean
@@ -41,7 +57,7 @@ function render(props: {
 }): ReactTestRenderer {
   let tree!: ReactTestRenderer
   act(() => {
-    tree = create(createElement(Screen, props))
+    tree = createTracked(createElement(Screen, props))
   })
   return tree
 }
@@ -93,15 +109,21 @@ describe('the shell taking the device Back key for a page that claimed it', () =
     expect(native.remove).toHaveBeenCalledTimes(1)
   })
 
-  it('registers once across a rebuilt sender, so the page beneath does not churn it', () => {
-    const tree = render({ claimed: true, sendBack: () => true, setOptions: vi.fn() })
+  it('registers once across a rebuilt sender and calls the current sender', () => {
+    const first = vi.fn(() => false)
+    const second = vi.fn(() => true)
+    const tree = render({ claimed: true, sendBack: first, setOptions: vi.fn() })
+    const listener = native.addEventListener.mock.calls[0]?.[1]
+    expect(listener?.()).toBe(false)
+    expect(first).toHaveBeenCalledTimes(1)
     act(() => {
-      tree.update(
-        createElement(Screen, { claimed: true, sendBack: () => true, setOptions: vi.fn() })
-      )
+      tree.update(createElement(Screen, { claimed: true, sendBack: second, setOptions: vi.fn() }))
     })
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
     expect(native.remove).not.toHaveBeenCalled()
+    expect(listener?.()).toBe(true)
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(1)
   })
 
   it('reaches for no hardware key on iOS, which has none', () => {

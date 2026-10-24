@@ -48,8 +48,7 @@ import {
   hasSeveredDaemonBeenReplaced
 } from './daemon-severed-restart'
 
-// Why the incarnation gate: a severed daemon passes health checks for hours, so only a
-// new daemon at the endpoint (after a crash respawn or restart) may take fresh terminals.
+// A severed daemon can pass health checks; require a new incarnation before routing fresh terminals.
 function probeCurrentDaemonCanSpawn(
   socketPath: string,
   tokenPath: string,
@@ -62,7 +61,7 @@ function probeCurrentDaemonCanSpawn(
     (await checkDaemonHealth(socketPath, tokenPath)) === 'healthy'
 }
 
-// Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
+// Use in-process timestamps: daemon init overlaps window loading and harness stderr can arrive late.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
   if (isStartupDiagnosticsEnabled()) {
     logStartupDiagnostic(event, {
@@ -77,7 +76,7 @@ export async function initDaemonPtyProvider(
   options: DaemonLaunchPolicy = {}
 ): Promise<void> {
   logDaemonMilestone('daemon-init-start')
-  // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
+  // Exercise startup-gate timeout by making daemon init deterministically outlast it.
   const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
   if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
@@ -92,7 +91,7 @@ export async function initDaemonPtyProvider(
     )
   })
 
-  // Why: current startup failure still installs when a legacy daemon has sessions; otherwise the original error propagates and nothing is installed.
+  // Current startup failure still installs when a legacy daemon has sessions; otherwise propagate the error.
   let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
   try {
     info = await newSpawner.ensureRunning()
@@ -120,13 +119,13 @@ export async function initDaemonPtyProvider(
     })
     return
   }
-  // Why: reclaim superseded daemon-host copies on EVERY launch (spawns are rare), keeping current + live-daemon-pinned versions.
+  // Reclaim superseded hosts after every adoption or spawn, retaining current and live-pinned versions.
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
   const quarantine = newSpawner.getHandle()?.quarantine
   logDaemonMilestone('daemon-current-ready')
   if (signal?.aborted) {
-    // Why: fail-open may already have spawned fallback PTYs; don't install late, but retire an empty daemon (live sessions reject it and survive).
+    // Fallback PTYs may already exist; release the late daemon lease without replacing their provider.
     const abortedStartupAdapter = new DaemonPtyAdapter({
       socketPath: info.socketPath,
       tokenPath: info.tokenPath,
@@ -147,16 +146,11 @@ export async function initDaemonPtyProvider(
     runtimeDir,
     packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
     historyPath: getHistoryDir(),
-    // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async (reason: DaemonRespawnReason) => {
-      // Why: attribute rather than emit — the launcher below is the one that completes the
-      // replacement, and emitting here would fire before the outcome is known.
-      // Caveat: a wedged-but-alive daemon (#8689) can still report died_respawn here and
-      // failed_health_check from the launcher — the app cannot tell wedged from dead at this point.
+      // A wedged daemon can look dead here; launch reports the proven replacement cause after recovery.
       if (reason === 'daemon_died') {
         console.warn('[daemon] Daemon process died — respawning')
-        // Why: a manual restart tears the daemon down under a still-live adapter, so a pane
-        // respawning on its synthetic exit would bill a user action to the crash bucket.
+        // Synthetic exits during manual restart must not enter the crash bucket.
         if (!isDaemonRestartInFlight()) {
           trackDaemonRetired('died_respawn')
         }
@@ -172,7 +166,7 @@ export async function initDaemonPtyProvider(
   let legacyAdapters: DaemonPtyAdapter[] = []
   let routedAdapter: DaemonProvider = newAdapter
   try {
-    // Why: the launcher's temporary pair closes only after this permanent pair is established, leaving no adoption gap.
+    // Overlap temporary and permanent leases so adoption never leaves a gap.
     await newAdapter.establishLifecycleLease()
   } catch (error) {
     await tryInstallLegacyFallbackOnCurrentFailure({
@@ -193,7 +187,7 @@ export async function initDaemonPtyProvider(
   try {
     releaseDaemonAdoptionLease(newSpawner.getHandle())
 
-    // Why beside legacy discovery: older daemons are adopted, newer ones only hold their tabs.
+    // Adopt older daemons; newer protocols only hold their tabs.
     const [discoveredLegacyAdapters] = await Promise.all([
       createLegacyDaemonAdapters(runtimeDir),
       discoverNewerProtocolHolds(runtimeDir)
@@ -219,13 +213,13 @@ export async function initDaemonPtyProvider(
             })
           : newAdapter
     if (routedAdapter instanceof DegradedDaemonPtyProvider) {
-      // Why: preserved daemon can't create fresh terminals; discover its live session ids so only they route to it (fresh panes fall back locally).
+      // Discover existing daemon sessions so fresh terminals can use the local fallback.
       await routedAdapter.discoverDaemonSessions()
     } else if (routedAdapter instanceof DaemonPtyRouter) {
       await routedAdapter.discoverLegacySessions()
     }
     if (signal?.aborted) {
-      // Why: same late-swap guard after legacy discovery; release uninstalled adapter leases without killing live sessions.
+      // Recheck after discovery; release uninstalled leases without killing live sessions.
       await routedAdapter.disconnectOnly()
       return
     }
@@ -242,7 +236,7 @@ export async function initDaemonPtyProvider(
   if (quarantine !== 'host-image-severed') {
     clearSeveredDaemon()
   }
-  // Why: the first window may register PTY listeners before daemon init finishes; rebind so daemon PTYs still fan out events.
+  // The first window can register listeners before init finishes; bind them to the installed provider.
   rebindLocalProviderListeners()
   logDaemonMilestone('daemon-init-done', {
     legacyAdapters: legacyAdapters.length
@@ -252,7 +246,7 @@ export async function initDaemonPtyProvider(
   }
 }
 
-// Why off the init path: this is measurement of an adopted daemon (#17696), and neither its probes nor their failure may delay or fail startup.
+// Adoption measurements must neither delay nor fail startup.
 async function reportDaemonAdoption(
   runtimeDir: string,
   socketPath: string,
@@ -273,6 +267,6 @@ async function reportDaemonAdoption(
       liveSessionCount
     )
   } catch {
-    // Best-effort measurement only.
+    // Measurement failure must not affect the installed provider.
   }
 }

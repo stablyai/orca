@@ -34,7 +34,6 @@ import { CodexHookService } from './hook-service'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
-// Why (#22592): Codex may write any of these; each names the same hooks.state table.
 const HOOK_STATE_SPELLINGS = [
   ['bare parent', (key: string) => `[hooks.state."${escapeTomlString(key)}"]`],
   ['fully quoted', (key: string) => `["hooks"."state"."${escapeTomlString(key)}"]`],
@@ -94,7 +93,6 @@ describe('CodexHookService user-hook trust spellings', () => {
 
         const service = new CodexHookService()
         expect((await service.install()).state).toBe('installed')
-        // Why: the second launch mirrors onto a runtime that already holds the entry.
         expect((await service.install()).state).toBe('installed')
 
         const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')

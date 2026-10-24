@@ -3,14 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { removeTransplantableCookies, type CookieClearSession } from './browser-cookie-import-clear'
 import { importedDomainScope } from './browser-cookie-import-policy'
 
-/**
- * A jar that actually holds cookies.
- *
- * Why this file exists: every end-to-end fixture in this module starts with `cookies.get` returning
- * `[]`. Against an empty jar, "clear then write all" and "clear then write some" produce the same
- * final state, so the STA-4300 P0 — clearing a populated jar and writing back a strict subset —
- * was invisible to four independent gates. These tests start populated on purpose.
- */
+/** A populated jar exposes loss from clearing more cookies than the import restores. */
 function jar(initial: Cookie[]) {
   let cookies = [...initial]
   const removeMock = vi.fn(async (url: string, name: string) => {
@@ -65,18 +58,13 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
       importedDomainScope(['mixed.example', 'sub.mixed.example', 'other.example'])
     )
 
-    // The whole family survives — apex AND subdomain — and it survives byte-identically.
     expect(target.names()).toEqual(['apex-session', 'sub-session'])
     expect(target.get('apex-session')?.value).toBe('apex-session-live')
     expect(target.get('sub-session')?.value).toBe('sub-session-live')
   })
 
   it('submits no coordinate to a removal the snapshot cannot restore', async () => {
-    // Why (§4.3a): the removed set must equal the restorable set. The bulk clearData path could not
-    // honour that — it deletes by exclusion, and its own contract admits a rejection may already
-    // have emptied part of the jar, so a preserved family absent from the snapshot would be
-    // destroyed with nothing able to put it back. Removal is per-coordinate for that reason, and
-    // every coordinate it submits comes from the same frozen plan the snapshot was taken from.
+    // Only remove coordinates covered by the frozen rollback snapshot.
     const target = jar([
       cookie('.mixed.example', 'live-session'),
       cookie('.other.example', 'stale')
@@ -97,9 +85,6 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
   })
 
   it('preserves a family named by an IPv4 literal', async () => {
-    // Why: an IPv4 literal has no registrable domain, so the family must come from the IP branch.
-    // If registrableFamily fell through to the suffix parser, the live 127.0.0.1 session would not
-    // match the preserve set and would be erased.
     const target = jar([cookie('127.0.0.1', 'loopback-session'), cookie('.other.example', 'stale')])
 
     await removeTransplantableCookies(

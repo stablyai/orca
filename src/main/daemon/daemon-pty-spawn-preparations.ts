@@ -2,12 +2,10 @@ import { TerminalAttachCanceledError } from './types'
 
 export type PendingPtySpawnPreparation = {
   canceled: boolean
-  // Why: `canceled` is only polled between spawn steps; the signal is what
-  // actually interrupts an in-progress cwd probe on a dead share.
+  // Unlike the polled canceled flag, the signal interrupts in-flight cwd probes on dead shares.
   readonly controller: AbortController
   cancelTimer?: ReturnType<typeof setTimeout>
-  // Why: preparations are keyed by sessionId, but a control-socket close must
-  // cancel only the disconnecting client's preps, not another client's (F4).
+  // Session IDs can be shared; disconnect cancels only this client's preparations.
   clientId: string
   requestId: string
 }
@@ -58,8 +56,7 @@ export class DaemonPtySpawnPreparations {
     sessionId: string,
     preparation: PendingPtySpawnPreparation
   ): Promise<void> {
-    // Race cancellation against preflight so shutdown/disconnect can return the
-    // protocol cancellation error before tearing down the client transport.
+    // Return protocol cancellation before shutdown tears down the client transport.
     const cancellation = this.cancellationByPreparation.get(preparation)
     const preparationTask = cancellation
       ? Promise.race([this.preparePtySpawn(), cancellation.promise])

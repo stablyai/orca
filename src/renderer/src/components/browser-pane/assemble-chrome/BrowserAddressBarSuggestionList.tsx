@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
 import type { BrowserAddressBarSuggestion } from './browser-address-bar-suggestions'
+import BrowserHistoryRowRemoveButton from '../history/BrowserHistoryRowRemoveButton'
+import { isRemovableHistoryRow } from '../history/browser-history-row-removal'
 
 const NO_SELECTED_ROW = 'orca:no-selected-row'
 
@@ -16,6 +18,7 @@ type BrowserAddressBarSuggestionListProps = {
   /** The row whose button holds keyboard focus (focus itself stays in the input). */
   switchFocusedUrl: string | null
   onSwitchToTab: (url: string) => void
+  onRemove: (suggestion: BrowserAddressBarSuggestion) => void
 }
 
 export default function BrowserAddressBarSuggestionList({
@@ -25,7 +28,8 @@ export default function BrowserAddressBarSuggestionList({
   onSelect,
   hasSwitchTarget,
   switchFocusedUrl,
-  onSwitchToTab
+  onSwitchToTab,
+  onRemove
 }: BrowserAddressBarSuggestionListProps): React.ReactElement {
   return (
     // Why the sentinel: cmdk selects its first row whenever the value is empty, and an empty bar
@@ -81,6 +85,9 @@ export default function BrowserAddressBarSuggestionList({
                     'Switch to tab'
                   )}
                 </Button>
+              ) : null}
+              {isRemovableHistoryRow(entry) ? (
+                <BrowserHistoryRowRemoveButton onRemove={() => onRemove(entry)} />
               ) : null}
             </CommandItem>
           ))}

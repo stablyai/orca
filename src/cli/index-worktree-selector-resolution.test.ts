@@ -100,9 +100,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('resolves the invocation cwd from ORCA_CLI_CWD when no cwd is passed', async () => {
-    // Why: the SSH relay bridge runs the CLI on the Orca host with the remote
-    // shell's cwd carried in ORCA_CLI_CWD (#7716); cwd-based selectors must
-    // resolve against it, not the host process cwd.
+    // ORCA_CLI_CWD carries the remote shell's cwd when the bridge executes the CLI on the host.
     process.env.ORCA_CLI_CWD = '/tmp/repo/feature/src'
     try {
       queueFixtures(

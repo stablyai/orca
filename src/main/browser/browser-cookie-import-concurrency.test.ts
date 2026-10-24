@@ -27,10 +27,7 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
-// Why (STA-4300): both import paths now write through writeCookieIdentity, not cookies.set. A stub
-// without that method throws a TypeError that writeImportedCookies CATCHES as a write rejection, so
-// the import would silently take the failure path and the ordering assertions would go vacuous.
-// Every test below therefore also asserts writeCookieIdentity was actually CALLED.
+// Implement CDP writes so swallowed missing-method errors cannot make ordering assertions pass.
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
@@ -63,17 +60,6 @@ import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cooki
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 import { acquireCookieMutationLock, withCookieMutationLock } from './browser-cookie-import-clear'
 
-/**
- * STA-4601: two imports on one partition must not interleave on the live jar.
- *
- * Nothing serialises imports per partition — neither the renderer IPC handler nor the runtime RPC
- * method — so before this change the lock covered the clear alone and was released before the
- * writes and the rollback. That let import A's rollback remove cookies import B had already
- * written and reported as imported.
- *
- * These tests drive the lock primitive directly with deterministic interleavings rather than
- * racing two real imports, so a failure names the ordering rule that broke instead of flaking.
- */
 describe('cookie mutation lock', () => {
   it('serialises two transactions on the same owner', async () => {
     const owner = {}
@@ -84,7 +70,6 @@ describe('cookie mutation lock', () => {
       await Promise.resolve()
       order.push('A:write')
     })
-    // Why: started before A resolves, so an unserialised implementation interleaves here.
     const second = withCookieMutationLock(owner, async () => {
       order.push('B:clear')
       await Promise.resolve()
@@ -97,7 +82,6 @@ describe('cookie mutation lock', () => {
   })
 
   it('does not serialise across different owners', async () => {
-    // Why: the lock is per partition. Two different profiles must still import concurrently.
     const order: string[] = []
     const a = withCookieMutationLock({}, async () => {
       order.push('a:start')
@@ -114,7 +98,6 @@ describe('cookie mutation lock', () => {
 
     expect(order).toContain('a:end')
     expect(order).toContain('b:end')
-    // Interleaved rather than strictly sequential.
     expect(order).not.toEqual(['a:start', 'a:end', 'b:start', 'b:end'])
   })
 
@@ -127,15 +110,12 @@ describe('cookie mutation lock', () => {
       })
     ).rejects.toThrow('clear rejected')
 
-    // Why: a failed import must not leave the partition permanently locked.
     await expect(withCookieMutationLock(owner, async () => 'second ran')).resolves.toBe(
       'second ran'
     )
   })
 
   it('holds across an explicit acquire/release so a rollback stays inside the transaction', async () => {
-    // Why: path A takes the lock directly rather than through a callback, because its rollback runs
-    // in a finally block. A stale rollback outside the lock is the STA-4601 defect.
     const owner = {}
     const order: string[] = []
 
@@ -164,12 +144,6 @@ describe('cookie mutation lock', () => {
   })
 })
 
-/**
- * The primitive tests above prove the lock works. They would ALL still pass if the importer stopped
- * calling it, because they never run an import — so on their own they are not a detector for the
- * bug this change fixes. These tests drive two real concurrent imports into one partition and
- * assert the second cannot begin until the first has finished writing.
- */
 describe('two concurrent imports into one partition', () => {
   let tmpDir: string
   let events: string[]
@@ -187,8 +161,7 @@ describe('two concurrent imports into one partition', () => {
       .mockImplementation((source: string, destination: string) => {
         copyFileSync(source, destination)
       })
-    // Why: the clear asserts its snapshot covers the removal plan, so a stub returning [] fails
-    // the import before it ever reaches a write — and the ordering assertion would pass vacuously.
+    // A complete snapshot lets each import reach the write whose ordering this test checks.
     snapshotClearIdentitiesMock
       .mockReset()
       .mockImplementation(async (items: { cookie: Record<string, unknown>; url: string }[]) =>
@@ -207,19 +180,15 @@ describe('two concurrent imports into one partition', () => {
     })
     writeCookieIdentityMock.mockReset().mockImplementation(async (identity: { name: string }) => {
       events.push(`set:${identity.name}`)
-      // Why: hold the FIRST import inside its write so a second import has a real opportunity to
-      // interleave. Without the lock it takes that opportunity; with it, it waits.
+      // Hold the first write so the second import has an opportunity to interleave.
       if (identity.name === 'new-a') {
         await firstWrite
       }
     })
-    // Why (STA-4300): the importer must never reach cookies.set — it drops partitionKey. Kept as a
-    // guard so a regression back onto it shows up here instead of silently passing.
+    // Direct cookies.set would drop partition keys.
     cookiesSetMock = vi.fn()
 
-    // Why: Electron returns the SAME Session instance for a given partition string, which is what
-    // makes a per-session lock a per-partition lock. Returning a fresh object per call here would
-    // make this test pass against an unlocked implementation.
+    // Return the same Session for each partition, matching Electron’s lock identity.
     const stableSession = {
       cookies: { get: cookiesGetMock, remove: cookiesRemoveMock, set: cookiesSetMock }
     }
@@ -248,35 +217,24 @@ describe('two concurrent imports into one partition', () => {
     const second = importCookiesFromFile(fileB, 'persist:concurrency-test')
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // At this instant the first import is still inside its write. Nothing from the second may have
-    // touched the jar yet — this is the assertion that fails if the call sites drop the lock.
     expect(events).not.toContain('remove:old-b')
     expect(events).not.toContain('set:new-b')
 
     releaseFirstWrite()
     const [resultA, resultB] = await Promise.all([first, second])
 
-    // Why: if either import failed, the ordering assertions below would pass vacuously.
     expect(resultA.ok).toBe(true)
     expect(resultB.ok).toBe(true)
-    // Why: a store stub missing writeCookieIdentity throws a TypeError that writeImportedCookies
-    // swallows as a rejection, so BOTH imports would report zero writes while the ordering
-    // assertions still held. Pin that the write path was actually entered, once per import.
+    // Assert both imports reached CDP writes; swallowed errors could otherwise preserve ordering.
     expect(writeCookieIdentityMock).toHaveBeenCalledTimes(2)
     expect(cookiesSetMock).not.toHaveBeenCalled()
 
-    // And the full ordering is serial, not interleaved.
     expect(events).toContain('set:new-a')
     expect(events).toContain('remove:old-b')
     expect(events.indexOf('set:new-a')).toBeLessThan(events.indexOf('remove:old-b'))
   })
 })
 
-/**
- * Path B (native Chromium) has its own lock acquisition, and the file-import test above cannot
- * reach it. Without this, deleting path B's withCookieMutationLock leaves every test green — which
- * a review round confirmed by mutation before this was added.
- */
 describe('two concurrent NATIVE imports into one partition', () => {
   let tmpDir: string
   let events: string[]
@@ -313,12 +271,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
         }
         copyFileSync(source, destination)
       })
-    // Why: an EMPTY jar makes removeTransplantableCookies return before it clears, so the clear
-    // would never run and the clear assertions would pass vacuously. Seed it.
-    // Why (STA-4797): the seed has to sit on the domains these two imports actually bring over.
-    // The clear is scoped to the imported domains now, so a jar holding only an unrelated site is
-    // the empty-jar case wearing a disguise — nothing would be removed and the detector, which
-    // reads "did B clear yet?" off the removals, would measure nothing.
+    // Seed in-scope cookies so the second import’s clear would expose a missing lock.
     snapshotClearIdentitiesMock
       .mockReset()
       .mockImplementation(async (items: { cookie: Record<string, unknown>; url: string }[]) =>
@@ -335,7 +288,6 @@ describe('two concurrent NATIVE imports into one partition', () => {
         await firstWrite
       }
     })
-    // Why (STA-4300): same guard as the file path — the native writes go through CDP identities.
     cookiesSetMock = vi.fn()
     cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {
       events.push(`remove:${name}`)
@@ -356,8 +308,6 @@ describe('two concurrent NATIVE imports into one partition', () => {
         })
       },
       clearData: clearDataMock,
-      // Why (STA-4300): the importer asks the Session where its storage lives instead of rebuilding
-      // the path from the partition string, so the stub has to answer.
       getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'native-conc'),
       setUserAgent: vi.fn()
     }
@@ -378,28 +328,22 @@ describe('two concurrent NATIVE imports into one partition', () => {
     createChromiumCookieTestDatabase(sourceB, [
       { domain: '.b.example', name: 'second', value: 'v' }
     ]).close()
-    // Why: a live target DB so the cold-init probe does not run and change the event ordering.
+    // Precreate the database to keep initialization probes out of this ordering test.
     createChromiumCookieTestDatabase(
       join(tmpDir, 'userData', 'Partitions', 'native-conc', 'Network', 'Cookies'),
       []
     ).close()
 
-    // Start both calls before either reaches its write. This makes the detector cover the full
-    // lock boundary: B's staging copy must be blocked too, not merely B's live clear/write.
+    // Start both imports early enough to cover staging as well as live writes.
     const first = importCookiesFromBrowser(chromeBrowser(sourceA), 'persist:native-conc')
     const second = importCookiesFromBrowser(chromeBrowser(sourceB), 'persist:native-conc')
-    // Wait until A is parked in its write so the assertions below have a deterministic hold point.
     for (let i = 0; i < 100 && !events.includes('set:first'); i++) {
       await new Promise((resolve) => setTimeout(resolve, 1))
     }
     expect(events).toContain('set:first')
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    // The first import is parked inside its write. The second must not stage a stale image while
-    // that transaction is active — this assertion fails if the staging copy sits outside the lock.
     expect(events).not.toContain('copy:second')
-    // The first import clears only its imported domain, while the second may not flush, remove,
-    // or write the live jar until that transaction finishes.
     expect(events).toContain('remove:old-a')
     expect(events).not.toContain('remove:old-b')
     expect(events.filter((e) => e === 'flushStore')).toHaveLength(1)
@@ -409,11 +353,8 @@ describe('two concurrent NATIVE imports into one partition', () => {
     releaseFirstWrite()
     const [resultA, resultB] = await Promise.all([first, second])
 
-    // Why: a failed import would make the ordering assertions pass vacuously.
     expect(resultA.ok).toBe(true)
     expect(resultB.ok).toBe(true)
-    // Why: same swallowed-TypeError trap as the file path — assert the write path was ATTEMPTED,
-    // once per import, not just that the end state looks right.
     expect(writeCookieIdentityMock).toHaveBeenCalledTimes(2)
     expect(cookiesSetMock).not.toHaveBeenCalled()
     expect(cookiesRemoveMock.mock.calls.map(([, name]) => name)).toEqual(['old-a', 'old-b'])
@@ -422,15 +363,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
   })
 })
 
-/**
- * The cold-init probe writes and then DELETES https://localhost/__init on the live jar, and an
- * import can legitimately write that exact coordinate (normalizeCookieImportDomain accepts
- * `localhost` and deriveUrl produces that URL). Unlocked, the probe's remove() would erase a cookie
- * a concurrent import had just reported as imported.
- *
- * Nothing else in the suite reaches this call site — the other native test pre-creates the target
- * DB so the probe never runs — so without this, dropping the probe's lock leaves every test green.
- */
+/** An unlocked initialization probe could delete a concurrent import’s localhost/__init cookie. */
 describe('cold-init probe on a partition that has never stored a cookie', () => {
   let tmpDir: string
   let events: string[]
@@ -461,9 +394,7 @@ describe('cold-init probe on a partition that has never stored a cookie', () => 
           events.push(`remove:${name}`)
         }),
         set: cookiesSetMock,
-        // Why: the real probe's flushStore is what creates the file. It must NOT create it on the
-        // earlier pre-staging flush, or the DB already exists when the probe is chosen and the
-        // probe never runs — which is exactly how this detector went vacuous the first time.
+        // Create the database only after __init is written so the initial flush cannot bypass the probe.
         flushStore: vi.fn(async () => {
           if (events.includes('set:__init')) {
             createChromiumCookieTestDatabase(join(partitionDir, 'Network', 'Cookies'), []).close()
@@ -490,7 +421,6 @@ describe('cold-init probe on a partition that has never stored a cookie', () => 
       { domain: '.probe.example', name: 'probe', value: 'v' }
     ]).close()
 
-    // Why: stand in for an import already mid-transaction on this partition.
     const release = await acquireCookieMutationLock(stableSession)
 
     const running = importCookiesFromBrowser(
@@ -507,15 +437,13 @@ describe('cold-init probe on a partition that has never stored a cookie', () => 
     )
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // This is the assertion that fails if the probe stops taking the lock.
     expect(events).not.toContain('set:__init')
     expect(events).not.toContain('remove:__init')
 
     release()
     await running
 
-    // Why: if the import had bailed before the probe, the assertions above would pass vacuously.
-    // Pin that the probe actually ran once released.
+    // Verify the probe ran after release, rather than bailing out before the lock.
     expect(cookiesSetMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: '__init', url: 'https://localhost' })
     )

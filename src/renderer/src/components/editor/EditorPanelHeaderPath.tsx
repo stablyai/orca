@@ -12,6 +12,7 @@ import {
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
+import { Badge } from '@/components/ui/badge'
 import type { OpenFile } from '@/store/slices/editor'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
@@ -118,6 +119,11 @@ export function EditorPanelHeaderPath({
             <span className="editor-header-path-prefix">{displayPath.prefix}</span>
             <span className="editor-header-path-file">{displayPath.fileName}</span>
           </button>
+        )}
+        {!isRenaming && activeFile.readOnly === true && (
+          <Badge variant="outline">
+            {translate('auto.components.editor.EditorPanelHeader.readOnlyBadge', 'Read-only')}
+          </Badge>
         )}
         {/* Why: the toast is opacity-0 rather than display-none, so leaving it
             mounted reserves ~100px of the row from the rename field for a

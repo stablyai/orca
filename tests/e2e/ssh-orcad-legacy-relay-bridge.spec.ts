@@ -19,7 +19,13 @@ import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 import { managedServer, reconnect, serverCall } from './helpers/orcad-convert-flow'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
-import { readPersistedProfileState } from './helpers/persisted-profile-state'
+import {
+  mutateStoppedProfileState,
+  readPersistedProfileState
+} from './helpers/persisted-profile-state'
+import { workspaceSessionStateSchema } from '../../src/shared/workspace-session-schema'
+import { makeTerminalScrollbackSnapshotRef } from '../../src/main/terminal-scrollback-snapshots'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import { toAppSshPtyId } from '../../src/shared/ssh-pty-id'
 import {
@@ -107,9 +113,11 @@ function launchUpgraded(session: ReturnType<typeof createRestartSession>) {
   })
 }
 
-test('terminals a 1.4.224 relay keeps running stay usable in their old tabs after upgrading', async ({
-  testRepoPath
-}, testInfo: TestInfo) => {
+async function verifyRunningRelayUpgrade(
+  testRepoPath: string,
+  testInfo: TestInfo,
+  missingScrollback = false
+): Promise<void> {
   test.setTimeout(25 * 60_000)
   host = startDockerSshHostTarget(testInfo)
   const targetId = `ssh-bridge-${Date.now()}`
@@ -143,6 +151,39 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       { targetId, relayPtyId: ours.relayPtyId }
     )
     const terminalTabId = seeded.terminalTabId!
+    if (missingScrollback) {
+      mutateStoppedProfileState(session.userDataDir, (state) => {
+        const partitions = z
+          .record(z.string(), workspaceSessionStateSchema)
+          .parse(state.workspaceSessionsByHostId)
+        const layout =
+          partitions[toSshExecutionHostId(targetId)]?.terminalLayoutsByTabId[terminalTabId]
+        if (!layout) {
+          throw new Error('Expected the released terminal layout')
+        }
+        layout.scrollbackRefsByLeafId = {
+          [seeded.terminalLeafId]: makeTerminalScrollbackSnapshotRef(
+            terminalTabId,
+            seeded.terminalLeafId
+          )
+        }
+        state.workspaceSessionsByHostId = partitions
+        state.sshRemotePtyLeases = [
+          ...z.array(z.unknown()).parse(state.sshRemotePtyLeases),
+          {
+            targetId,
+            ptyId: `old-${ours.relayPtyId}`,
+            tabId: 'closed-tab',
+            leafId: seeded.terminalLeafId,
+            worktreeId: seeded.worktreeId,
+            state: 'expired',
+            supersededBy: ours.relayPtyId,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+        ]
+      })
+    }
 
     const upgraded = await launchUpgraded(session)
     app = upgraded.app
@@ -163,7 +204,25 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       }
     )
 
-    // Never refused: the host converts while its relay terminal is live.
+    if (missingScrollback) {
+      await expect
+        .poll(() => managedServer(page, targetId), { timeout: 120_000 })
+        .toMatchObject({ kind: 'relay', reason: 'refused', canLeaveBehind: true })
+      const move = page.getByRole('button', { name: 'Move anyway…', exact: true })
+      await expect(move).toBeVisible()
+      await page.screenshot({
+        path: testInfo.outputPath('unreadable-history-recovery-offered.png')
+      })
+      await move.click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toContainText('saved terminal history Orca could not read')
+      await page.screenshot({
+        path: testInfo.outputPath('unreadable-history-recovery-confirm.png'),
+        animations: 'disabled'
+      })
+      await dialog.getByRole('button', { name: 'Move anyway', exact: true }).click()
+    }
+
     await expect
       .poll(() => managedServer(page, targetId), { timeout: 8 * 60_000 })
       .toMatchObject({ kind: 'managed' })
@@ -172,7 +231,7 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       .toEqual([expect.objectContaining({ ptyId: bridgedPtyId, state: 'live' })])
 
     const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-      (entry) => entry.orcadDeployment?.sshTargetId === targetId
+      (entry) => getOrcadSshDeployment(entry)?.sshTargetId === targetId
     )
     if (!environment) {
       throw new Error('Converted host is missing from the environment catalog')
@@ -392,7 +451,15 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
     }
     await session.dispose()
   }
-})
+}
+
+test('terminals a 1.4.224 relay keeps running stay usable in their old tabs after upgrading', async ({
+  testRepoPath
+}, testInfo) => verifyRunningRelayUpgrade(testRepoPath, testInfo))
+
+test('unreadable saved scrollback can be skipped while the original relay shell keeps working', async ({
+  testRepoPath
+}, testInfo) => verifyRunningRelayUpgrade(testRepoPath, testInfo, true))
 
 test('a relay terminal in a project another desktop already moved keeps working until it exits (STA-10604)', async ({
   testRepoPath

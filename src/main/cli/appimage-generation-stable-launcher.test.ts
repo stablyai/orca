@@ -21,7 +21,6 @@ afterEach(async () => {
   await Promise.all(created.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-/** A server run through the stable launcher runs from one extracted generation, with no $APPIMAGE. */
 async function makeGeneration() {
   const root = await mkdtemp(join(tmpdir(), 'orca-generation-launcher-'))
   created.push(root)

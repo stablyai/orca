@@ -99,7 +99,6 @@ describe('targeted restart reconciliation', () => {
 
     expect(await reconcile('session-1')).toBeNull()
     expect(store.getRecord('session-1')?.lease.unreconciled).toBe(false)
-    // The whole-host pass does run out of passes on session-2.
     expect(await reconcile()).not.toBeNull()
     expect(store.getRecord('session-2')?.lease.unreconciled).toBe(true)
   })

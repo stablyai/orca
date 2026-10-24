@@ -337,6 +337,45 @@ describe('MobileNativeChatMessage', () => {
       observedAt: 2,
       body
     })!
+
+  it.each([false, true])('draws an OpenCode usage warning with supplied reset: %s', (hasReset) => {
+    const resetsAt = new Date(2026, 9, 15, 15, 42).getTime()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 9, 15, 12).getTime())
+    try {
+      const host = agentSessionFailureWords(
+        agentSessionFailureFact('usageLimitReached', {
+          detail: {
+            text: 'Internal error: Rate limit exceeded. Please try again later.',
+            audience: 'person'
+          },
+          ...(hasReset ? { usageLimit: { resetsAt } } : {})
+        }),
+        { surface: 'row', agentName: 'OpenCode' }
+      )
+      expect(host.text).toBe(
+        'OpenCode hit its usage limit. Send a message once it resets to continue.'
+      )
+      const tree = render(statusRow({ kind: 'status', tone: 'warning', ...host }))
+      const text = tree.root.find(
+        (node) => String(node.type) === 'Text' && node.props.selectable === true
+      )
+      expect(text.props.children).toEqual(
+        hasReset
+          ? expect.stringMatching(
+              /^OpenCode hit its usage limit\. Send a message once it resets to continue\. It resets at (3:42\sPM|15:42)\.$/
+            )
+          : host.text
+      )
+      expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
+      expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
+        colors.statusAmber
+      )
+      expect(markdownIn(tree.root)).toEqual([])
+    } finally {
+      now.mockRestore()
+    }
+  })
+
   it.each([
     [
       'an API retry as a warning',
@@ -370,6 +409,17 @@ describe('MobileNativeChatMessage', () => {
       }),
       colors.statusRed
     ],
+    ...[
+      'Please add or update your payment method to continue',
+      'Your current subscription plan does not yet include access to glm-5'
+    ].map(
+      (instruction) =>
+        [
+          `an OpenCode corrective instruction: ${instruction}`,
+          statusRow({ kind: 'status', tone: 'error', text: `Internal error: ${instruction}` }),
+          colors.statusRed
+        ] as const
+    ),
     [
       'an interruption as a faint aside',
       {

@@ -18,10 +18,7 @@ function shouldRetryWindowsCommandShim(error: unknown, resolved: ResolvedCommand
   )
 }
 
-/**
- * Async command execution with the same WSL cwd translation as repo-scoped git.
- * Keep this for fixed binary+argv call sites; never pass shell fragments.
- */
+/** WSL-aware execution for a fixed binary and argv; never pass shell fragments. */
 export async function commandExecFileAsync(
   command: string,
   args: string[],

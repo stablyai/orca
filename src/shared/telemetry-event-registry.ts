@@ -5,6 +5,11 @@ import {
 } from './telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './telemetry-agent-token-usage-schema'
 import {
+  agentDashboardActiveSchema,
+  agentDashboardEnabledSchema,
+  agentDashboardOpenedSchema
+} from './telemetry-agent-dashboard-event-schemas'
+import {
   agentErrorSchema,
   agentPromptSentSchema,
   agentStartedSchema,
@@ -110,6 +115,9 @@ import {
 // ── Event registry: the one record the validator consumes ───────────────
 // Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
 export const eventSchemas = {
+  agent_dashboard_active: agentDashboardActiveSchema,
+  agent_dashboard_enabled: agentDashboardEnabledSchema,
+  agent_dashboard_opened: agentDashboardOpenedSchema,
   app_opened: appOpenedSchema,
   app_starred_orca: appStarredOrcaSchema,
   star_nag_outcome: starNagOutcomeEventSchema,

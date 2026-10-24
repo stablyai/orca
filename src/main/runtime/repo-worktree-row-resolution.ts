@@ -80,7 +80,7 @@ export type RepoWorktreeRowDeps = {
 
 /**
  * Persisted rows for a repo whose scan is unreachable or stalled, so a degraded host publishes what
- * it last knew instead of an empty catalog. `worktrees:list` does the same for disconnected SSH.
+ * it last knew instead of an empty catalog. `worktrees:listDetected` does the same for disconnected SSH.
  */
 export function listStoredWorktreeRowsForRepo(
   store: RepoWorktreeRowStore,

@@ -189,6 +189,12 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
     this.emitClientEvent({ type: 'reposChanged' })
   }
 
+  // Why: browser profiles change in main's session registry, outside runtime methods.
+  notifyBrowserProfilesChanged(): void {
+    this.notifier?.browserProfilesChanged?.()
+    this.emitClientEvent({ type: 'browserProfilesChanged' })
+  }
+
   /** `setup` and `defaultTabs` go to the host window only: main tried and failed to start them. */
   protected notifyActivateWorktree(
     repoId: string,

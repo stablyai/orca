@@ -1,6 +1,3 @@
-// The adapter against Grok's recorded traffic: each recording plays back as the agent, and the
-// assertions read the journal a client would see.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
@@ -66,7 +63,7 @@ describe('Grok recordings through the adapter', () => {
     expect(rig.settled).toMatchObject([{ clientMessageId: 'send-1', providerIdentity: {} }])
   })
 
-  it('s2: an allowed and then a rejected permission are each answered once, after the commit', async () => {
+  it('s2: an allowed and then a rejected permission keep their recorded replies', async () => {
     const { rig, replay } = await replaying('s2-permission')
     const answer = async (optionId: string, index: number) => {
       const approval = await waitFor(async () => {
@@ -110,7 +107,7 @@ describe('Grok recordings through the adapter', () => {
     await waitFor(async () =>
       expect(await turns(rig)).toMatchObject([{ state: 'interrupted', outcome: 'cancellation' }])
     )
-    // The recording left the shell call `in_progress`; the turn's end cuts it short.
+    // The recording leaves this call running; turn end must interrupt it.
     const tool = (await rowsOf(rig, 'tool-call')).at(-1)
     expect(tool?.body).toMatchObject({ kind: 'tool-call', state: 'failed', endedAs: 'interrupted' })
     await send(rig, 'send-2')

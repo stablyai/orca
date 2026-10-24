@@ -9,8 +9,7 @@ function normalizeIconHrefPath(href: string): { path: string; rootRelative: bool
   const rootRelative = trimmed.startsWith('/')
   const pathOnly = (trimmed.split(/[?#]/)[0] ?? '').replace(/^\/+/, '').replace(/\\/g, '/')
   const parts = pathOnly.split('/').filter((part) => part && part !== '.')
-  // Why: declared icon hrefs are repo content. Never let a best-effort icon
-  // probe resolve outside the worktree through `../` path segments.
+  // Repository-controlled hrefs must stay inside the worktree.
   if (parts.length === 0 || parts.some((part) => part === '..')) {
     return null
   }
@@ -27,8 +26,6 @@ export function iconHrefCandidates(href: string, sourceFile: string): string[] {
   if (!clean.rootRelative) {
     const sourceDirectory = posix.dirname(sourceFile)
     if (sourceDirectory && sourceDirectory !== '.') {
-      // Why: relative hrefs in nested route/root files resolve next to that
-      // source file, not from the repository root.
       candidates.add(posix.join(sourceDirectory, clean.path))
     }
   }

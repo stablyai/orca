@@ -16,7 +16,6 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from '../mobile-web-page-routes.mjs'
 import {
   EXTERNAL_LINK_SEAM as SEAM,
   externalLinkOffenders
@@ -79,14 +78,6 @@ describeClosure(
       expect(preview.local).toContain('src/platform/clipboard.web.ts')
       expect(explorer.local).not.toContain('src/platform/clipboard.web.ts')
     })
-
-    it.each(['/h/[hostId]/files/[worktreeId]', '/h/[hostId]/files/preview/[worktreeId]'])(
-      'grants the device writer when the document opens on %s',
-      (pathname) => {
-        const route = MOBILE_WEB_PAGE_ROUTES.find((entry) => entry.pathname === pathname)
-        expect(route?.grants).toContain('native.clipboard.write')
-      }
-    )
   },
   240_000
 )

@@ -236,13 +236,17 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
           metaIssue && 'url' in metaIssue && metaIssue.url ? handleOpenIssueInBrowser : undefined
         }
         onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
-        onOpenReviewInOrca={
-          metaReview?.url && metaReview.provider === 'github' ? handleOpenReviewInOrca : undefined
-        }
+        onOpenReviewInOrca={repo ? handleOpenReviewInOrca : undefined}
         onOpenReviewInBrowser={metaReview?.url ? handleOpenReviewInBrowser : undefined}
         onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
         onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
-        onUnlinkReview={!affiliateListMode && canUnlinkReview ? handleUnlinkReview : undefined}
+        onUnlinkReview={
+          !affiliateListMode &&
+          (canUnlinkReview ||
+            getWorkspaceAttachments(worktree).some((item) => item.type !== 'issue'))
+            ? handleUnlinkReview
+            : undefined
+        }
       >
         {detailsAndPortsContent}
       </WorktreeCardDetailsHover>

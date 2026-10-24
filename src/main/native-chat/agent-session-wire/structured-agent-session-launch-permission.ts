@@ -1,5 +1,3 @@
-// The one place that decides a chat's permission mode: what a start launches, a restart compares, a read shows.
-
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentChatPermissionModes,
@@ -10,8 +8,7 @@ import {
 } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
-/** Saved catalog only, so a start never waits on a listing; for the chat's own folder, as its
- *  options read names its default. */
+/** Use only the saved, folder-scoped catalog so startup never waits on a listing. */
 async function listedAutoModeSupport(
   catalog: StructuredAgentSessionHostDeps['modelCatalog'],
   record: AgentSessionRecord
@@ -32,7 +29,7 @@ async function listedAutoModeSupport(
   )
 }
 
-/** Null for an agent whose chats offer no modes, or one this runtime did not register. */
+/** null for unregistered agents or agents without permission modes. */
 export async function structuredAgentSessionLaunchPermission(
   deps: Pick<StructuredAgentSessionHostDeps, 'agents' | 'modelCatalog'>,
   record: AgentSessionRecord

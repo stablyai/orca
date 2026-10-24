@@ -1,7 +1,4 @@
-// Claude's `/goal`, read into the journal's typed goal transition so readers see it as they see
-// Codex's. Stream-json reports a goal only in words: a root `<synthetic>` reply to the command
-// ("Goal set: …", "Goal active: … (2 turns)", "Goal cleared: …", "No goal set"). Its
-// `active_goal` event never reaches stream-json, and meeting the goal sends no frame at all.
+// Stream-json exposes /goal through synthetic replies; completion must be inferred.
 
 import type {
   AgentJournalItemBody,
@@ -42,7 +39,7 @@ function goalReport(text: string): GoalReport | null {
     const objective = text.slice(GOAL_SET.length).trim()
     return objective ? { kind: 'set', objective } : null
   }
-  // Also "Goal cleared after an unrecoverable error (…)", which the CLI sends on its own.
+  // Includes unsolicited "Goal cleared after an unrecoverable error (…)" replies.
   if (text.startsWith('Goal cleared') || text.startsWith('No goal set')) {
     return { kind: 'cleared' }
   }
@@ -65,14 +62,11 @@ type SavedGoal = {
 }
 
 export class ClaudeThreadGoal {
-  /** Undefined until first needed: the journal answers for goals set before this process. */
+  /** Undefined defers hydration until the journal binds; null means no goal. */
   private known: AgentJournalThreadGoal | null | undefined
-  /** The row this process wrote for the goal, which a turn's time revises in place. */
   private row: { identity: AgentJournalItemIdentity; text: string } | null = null
-  /** Whether the model worked toward the active goal in the open turn. */
   private modelWorked = false
 
-  /** `journalGoal` answers undefined until the sink is bound to its journal. */
   constructor(private readonly journalGoal: () => SavedGoal | undefined) {}
 
   private get current(): AgentJournalThreadGoal | null {
@@ -86,7 +80,6 @@ export class ClaudeThreadGoal {
     return this.known ?? null
   }
 
-  /** The goal row a root reply to `/goal` becomes, in place of assistant prose; null otherwise. */
   report(
     message: Record<string, unknown>,
     identity: AgentJournalItemIdentity,
@@ -118,7 +111,6 @@ export class ClaudeThreadGoal {
     return goalRow(text, next)
   }
 
-  /** Root model output: a turn the goal's Stop hook will judge before Claude ends it. */
   observe(message: Record<string, unknown>): void {
     const reply = claudeRecord(message.message)
     if (
@@ -131,14 +123,7 @@ export class ClaudeThreadGoal {
     }
   }
 
-  /**
-   * What a root result writes for the goal, or null. With a goal set, Claude ends a turn on its
-   * own only once the goal's Stop hook passes, so a clean end after model work means the goal was
-   * met. It defers that check while background work runs, and a person's Stop during the check
-   * still ends the turn cleanly. Any of those, or any other end (a turn cap, an error), leaves
-   * the goal open: its row only gains the turn's time, counted as the banner counts it, from the
-   * later of the goal's last update and the turn's start.
-   */
+  /** A clean model turn implies the goal's Stop hook passed unless stopped or backgrounded. */
   settle(
     result: Record<string, unknown>,
     end: {
@@ -148,14 +133,13 @@ export class ClaudeThreadGoal {
     },
     observedAt: number
   ): GoalRowWrite | null {
-    // A subagent's result ends no turn.
     if (!isRootClaudeFrame(result)) {
       return null
     }
     const goal = this.current
     const worked = this.modelWorked
     this.modelWorked = false
-    // A command answered with no model turn (a bare `/goal`) spent no time on the goal.
+    // A bare /goal has no model time to charge.
     if (goal?.status !== 'active' || (!worked && result.num_turns === 0)) {
       return null
     }
@@ -185,7 +169,7 @@ export class ClaudeThreadGoal {
           }
         : null
     }
-    // A restart recovers the original identity with the goal, so this revision stays in place.
+    // Reuse the persisted row identity across restarts.
     return this.row ? { identity: this.row.identity, body: goalRow(this.row.text, next) } : null
   }
 }

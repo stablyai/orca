@@ -34,6 +34,9 @@ it('holds mail without interrupting an answerable ACP question', async () => {
       orchestration: { message: 'mail-notice', mailbox: 'run:r1', dispatchId: null, messages: [] }
     }
   }
+  const before = await host.journalSnapshot(SESSION)
+  const questions = before.items.filter((row) => row.body.kind === 'question')
+  expect(questions).toHaveLength(1)
   const operationId = mintAgentSessionOperationId(Date.now())
   const expectedRuntimeFence = host.deps.store.getRecord(SESSION)!.lease.runtimeFence
   expect(
@@ -45,7 +48,11 @@ it('holds mail without interrupting an answerable ACP question', async () => {
       body
     })
   ).toEqual({ kind: 'held' })
-  expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  const after = await host.journalSnapshot(SESSION)
+  expect(before.submissions).toHaveLength(1)
+  expect(after.submissions).toEqual(before.submissions)
+  expect(after.items.filter((row) => row.body.kind === 'question')).toEqual(questions)
+  expect(pointer.hasActionablePromptNow(SESSION)).toBe(true)
   expect(
     host.deps.store.readCommandReceipt(commandReceiptScope('any', 'global'), operationId)
   ).toMatchObject({ verdict: 'absent' })

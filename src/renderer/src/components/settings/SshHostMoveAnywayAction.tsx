@@ -27,7 +27,7 @@ export function canMoveSshHostAnyway(status: SshManagedServerStatus | undefined)
 
 /**
  * The way out of a move refused only by saved state: move the host now and keep what can't move on
- * this computer. Unsaved drafts are never deleted, and live terminals still have to be closed.
+ * this computer. Unsaved drafts stay here, and bridged terminals keep their tabs and panes.
  */
 export function SshHostMoveAnywayDialog({
   target,

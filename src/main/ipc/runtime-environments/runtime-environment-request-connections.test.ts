@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeSharedControlTestServers,
   createSharedControlTestServer
-} from '../../../shared/remote-runtime-shared-control-test-server'
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
   captureRuntimeEnvironmentCapabilityEvidence,

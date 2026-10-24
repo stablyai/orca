@@ -47,7 +47,6 @@ export function resolveWindowsCommand(
   return command
 }
 
-/** EACCES or EPERM. */
 export function isPermissionError(error: unknown): boolean {
   return (
     error instanceof Error &&
@@ -59,19 +58,7 @@ export function isPermissionError(error: unknown): boolean {
 
 const USER_DIRECTORY_GRANT = { inheritable: true, replace: true } as const
 
-/**
- * Grant Full Control (OI)(CI)(F) on a directory for the current user.
- * Used to fix Chromium's Protected DACL propagation which leaves child
- * directories with Inherit-Only ACEs that deny direct file creation.
- *
- * Why replace the user's rule rather than restore inheritance: Chromium's ACEs carry the
- * Inherit-Only flag when propagated to children, so restoring inheritance does not grant the
- * directory itself any effective permissions. An explicit ACE survives future DACL propagation
- * and grants create-file rights.
- *
- * Throws when the grant fails; a host without the native addon is a silent no-op, which leaves
- * the caller's original EPERM to surface.
- */
+/** An explicit user grant makes the directory writable when Chromium's inherited ACEs do not. */
 export function grantDirAcl(dirPath: string): void {
   const security = loadWindowsSecurity()
   if (!('error' in security)) {
@@ -84,7 +71,7 @@ export function grantDirAcl(dirPath: string): void {
   }
 }
 
-/** As grantDirAcl, on the thread pool: the grant propagates through the directory's subtree. */
+/** Run the subtree grant on the thread pool. */
 export async function grantDirAclAsync(dirPath: string): Promise<void> {
   const security = loadWindowsSecurity()
   if (!('error' in security)) {

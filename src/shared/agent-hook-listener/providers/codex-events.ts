@@ -11,6 +11,7 @@ import {
 } from '../../agent-lead-status-fold'
 import {
   codexRosterToSnapshots,
+  enrichCodexSubagentIdentity,
   finishCodexSubagent,
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
@@ -107,8 +108,24 @@ export function normalizeCodexSubagentLifecycleEvent(
       },
       Date.now()
     )
+    enrichCodexSubagentIdentity(
+      roster,
+      agentId,
+      readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
+    )
+    const parentPath =
+      state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath ??
+      state.lastStatusByPaneKey.get(paneKey)?.providerSession?.transcriptPath
+    if (parentPath) {
+      reconcileCodexSubagentTranscript(
+        getOrCreateCodexSubagentTranscriptState(state, paneKey),
+        roster,
+        parentPath
+      )
+    }
   } else {
     finishCodexSubagent(roster, agentId)
+    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.delete(agentId)
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }
@@ -236,6 +253,11 @@ export function normalizeCodexEvent(
         state: childState === 'waiting' ? 'waiting' : 'working'
       },
       Date.now()
+    )
+    enrichCodexSubagentIdentity(
+      getOrCreateCodexSubagentRoster(state, paneKey),
+      agentId,
+      transcriptPath
     )
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }

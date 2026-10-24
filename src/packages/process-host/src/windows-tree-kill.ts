@@ -1,30 +1,15 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
+import { constants, getPriority, setPriority } from 'node:os'
 import { windowsSystem32Binary } from './windows-system-binary'
 
-/**
- * `live` while taskkill is still walking the tree, `exited` once taskkill
- * reported the whole tree terminated, `unverifiable` when it failed or ran out
- * of time. Nothing short of a successful taskkill is reported as `exited`.
- */
+/** Only a successful taskkill proves the entire tree exited. */
 export type WindowsTreeKillVerdict = 'live' | 'unverifiable' | 'exited'
 export type SettledWindowsTreeKillVerdict = Exclude<WindowsTreeKillVerdict, 'live'>
 
-/** How long one caller waits before treating the tree as unverifiable. */
 export const WINDOWS_TASKKILL_WAIT_MS = 5_000
-/**
- * How long the tracked taskkill may keep walking after its caller stops waiting.
- * Why past the wait: loaded windows-2022 runners measured 4.6-18 s, and killing
- * the root before taskkill reads it orphans the descendants it was about to
- * find. Bounded because a live root keeps its git admission slot until it exits.
- */
+// Outlive the caller wait: killing the root before taskkill reads it can orphan descendants.
 export const WINDOWS_TASKKILL_DEADLINE_MS = 30_000
-/**
- * How long taskkill may keep running once the root has exited.
- * Why short: Node then releases the root's handle, so Windows may reissue the
- * pid (#10680) to a process a late-starting taskkill would walk instead. Within
- * this window a taskkill that itself killed the root still reports success;
- * past it the kill is abandoned as unverifiable. No longer than the old cap.
- */
+// Bound taskkill after root exit: Windows may reuse the PID once Node releases its handle.
 export const WINDOWS_TASKKILL_AFTER_ROOT_EXIT_MS = 2_000
 
 export type WindowsTreeKill = {
@@ -46,13 +31,11 @@ let launchTaskkill: TaskkillLauncher = launchSystemTaskkill
 // Keyed by handle, not pid: a reused pid must never join another tree's kill.
 const treeKills = new WeakMap<ChildProcess, WindowsTreeKill>()
 
-/** The tree kill already in flight or proven for this child, if any. */
 export function trackedWindowsTreeKill(child: ChildProcess): WindowsTreeKill | undefined {
   const kill = treeKills.get(child)
   return kill && kill.verdict() !== 'unverifiable' ? kill : undefined
 }
 
-/** Settles when this child's in-flight tree kill does; undefined when none is running. */
 export function inFlightWindowsTreeKill(
   child: ChildProcess
 ): Promise<SettledWindowsTreeKillVerdict> | undefined {
@@ -60,14 +43,7 @@ export function inFlightWindowsTreeKill(
   return kill?.verdict() === 'live' ? kill.settled : undefined
 }
 
-/**
- * Start one tracked `taskkill /t /f` for this child's tree.
- *
- * The taskkill outlives every caller's wait and is abandoned only at the
- * deadline or shortly after the root exits; the root is killed by handle only
- * after taskkill has failed or been abandoned, never while it may still be
- * reading the tree.
- */
+/** Delay the root fallback until taskkill fails or its deadline expires. */
 export function startWindowsTreeKill(
   child: ChildProcess,
   rootPid: number,
@@ -118,6 +94,16 @@ export function startWindowsTreeKill(
     finish('unverifiable')
     return kill
   }
+  if (process.platform === 'win32' && killer.pid !== undefined) {
+    try {
+      // Tree termination must not inherit a background caller's scheduling penalty.
+      if (getPriority(killer.pid) > constants.priority.PRIORITY_NORMAL) {
+        setPriority(killer.pid, constants.priority.PRIORITY_NORMAL)
+      }
+    } catch {
+      /* Priority changes are best effort; keep tracking the original termination. */
+    }
+  }
   killer.once('error', () => finish('unverifiable'))
   killer.once('close', (code) => finish(code === 0 ? 'exited' : 'unverifiable'))
   deadline = setTimeout(abandon, WINDOWS_TASKKILL_DEADLINE_MS)
@@ -129,7 +115,7 @@ export function startWindowsTreeKill(
   return kill
 }
 
-/** True when the tree is proven dead within this caller's wait; the kill keeps running either way. */
+/** The tracked kill continues even if this caller stops waiting. */
 export function waitForWindowsTreeKill(
   kill: WindowsTreeKill,
   waitMs = WINDOWS_TASKKILL_WAIT_MS
@@ -151,7 +137,7 @@ function childProcessExited(child: ChildProcess): boolean {
   return (child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null
 }
 
-/** Test seam: swap the taskkill launch, e.g. for one that starts late like a loaded host's. */
+/** Simulates taskkill delays seen on loaded Windows hosts. */
 export function _setWindowsTaskkillLauncherForTests(launcher: TaskkillLauncher | null): void {
   launchTaskkill = launcher ?? launchSystemTaskkill
 }

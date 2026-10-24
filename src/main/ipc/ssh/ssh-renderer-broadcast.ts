@@ -30,7 +30,7 @@ export function broadcastSshState(
   state: SshConnectionState
 ): void {
   const target = getSshTargetRegistryStore()?.getTarget(targetId)
-  // Why: owned targets are hidden from clients; broadcasting them leaks internal transport state into persisted reconnect hints.
+  // Internal targets must not leak transport state into clients' persisted reconnect hints.
   if (isOwnedSshTargetId(targetId) || (target && isRuntimeOwnedSshTarget(target))) {
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
     return
@@ -40,9 +40,8 @@ export function broadcastSshState(
   if (win && !win.isDestroyed()) {
     win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
   }
-  // Why: paired remote clients have no ssh:state-changed IPC; without this their terminals keep a stale reconnect overlay.
+  // Paired clients lack local SSH IPC; publish runtime events to clear stale reconnect overlays.
   currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
-  // Why: a host that connects or drops attaches or detaches its desktop browser bridge now.
   requestDesktopBrowserBridgeReconcile()
 }
 
@@ -58,11 +57,7 @@ function withSshRemotePlatform(targetId: string, state: SshConnectionState): Ssh
   }
 }
 
-/**
- * Forgets a host's managed-server decision once its server is unlinked, and republishes the
- * connection without it. The republish is also what drops the host's cached worktree scans, so
- * listings stop naming the removed server without waiting for a reconnect.
- */
+/** Unlinking clears managed status and republishes to invalidate cached worktree scans without reconnecting. */
 export function clearPublishedManagedServer(targetId: string): void {
   clearSshHostServerStatus(targetId)
   const state = connectionManager?.getState(targetId)

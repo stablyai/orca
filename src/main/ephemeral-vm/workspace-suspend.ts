@@ -5,7 +5,6 @@ import { suspendEphemeralVmRuntime } from './runtime-service'
 import { disconnectRuntimeOwnedSshTarget } from './runtime-ssh'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 
-/** Suspends the VM a workspace runs on; a workspace with no VM does nothing. */
 export async function suspendEphemeralVmWorkspace(
   store: Store,
   workspaceId: string
@@ -30,13 +29,9 @@ export async function suspendEphemeralVmWorkspace(
   if (!result.ok) {
     throw new Error(result.error)
   }
-  // Only tear down SSH for a real suspend; a skipped suspend keeps the runtime
-  // 'running', so disconnecting would break the still-active session with no resume.
+  // A skipped suspend leaves the VM running, so its SSH connection must remain live.
   if (runtime.connectionMode === 'ssh' && !result.skipped) {
-    // Why: the suspend recipe already succeeded (VM is suspended), so a failed
-    // LOCAL relay teardown must NOT flip to 'suspend_failed' — that status is not
-    // resume-eligible (see resume gate below), which would strand the runtime
-    // unrecoverable. Keep 'suspended'; resume re-establishes the relay anyway.
+    // Keep a successfully suspended VM resume-eligible even if local SSH teardown fails.
     await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
   }
 }

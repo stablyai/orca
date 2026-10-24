@@ -61,7 +61,7 @@ export async function syncWslCodexSessionsIntoManagedHome(
     distro: target.distro,
     loginPath: 'none',
     script: buildWslCodexSessionBridgeShellCommand(paths),
-    // Process substitution and `read -d` are bash-only; dash rejects both.
+    // The script uses Bash [[ ... ]] and read -d, which dash rejects.
     shell: 'bash',
     timeoutMs: WSL_SESSION_BRIDGE_TIMEOUT_MS
   })
@@ -111,7 +111,7 @@ function joinLinuxPath(basePath: string, ...segments: string[]): string {
 
 function parseWslSessionBridgeSummary(stdout: string): WslCodexSessionBridgeSummary {
   try {
-    // Why: login/profile scripts may write stdout before the bridge summary.
+    // Ignore shell startup output preceding the final JSON summary.
     const summaryLine =
       stdout
         .split(/\r?\n/)

@@ -1,5 +1,4 @@
-// What a handover carries of the stopped messages owed to the agent, chosen in the session's
-// serialized handover step so a phone and a desktop sending at once deliver each one once.
+// Select carried history inside serialized handover to deliver each message once across devices.
 
 import type {
   AgentJournalMessageItem,
@@ -22,9 +21,7 @@ type StoppedHistoryContext = {
   }
 }
 
-/** What a person's words-only send that opens a turn carries of the owed messages; null for a
- *  steer into a running turn, which may never record it, and for any other send. `turnScope`: where
- *  the handover joins, by the host's read of what runs. */
+/** Only personal words-only turn-opening sends carry history; steers may never record it. */
 export function carriedStoppedHistory(
   ctx: StoppedHistoryContext,
   turnScope: AgentJournalTurnScope,

@@ -48,8 +48,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: ['repo-1'],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      // Named as well as listed, so a remove+add reusing the name cannot keep
-      // serving the removed worktree's cached head.
+      // Name entries as well as the listing to invalidate a removed/recreated admin directory's cached head.
       headIdentityScope: {
         ...LISTING_HEAD_IDENTITY_SCOPE,
         entryNames: new Set(['wt-b'])
@@ -66,8 +65,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
 
   it('classifies primary-checkout branch metadata as structural and index as status-only', () => {
     const target = makeGitCommonTarget()
-    // A primary HEAD write can only move the primary checkout's head, while a
-    // packed-refs rewrite can move any branch oid with no admin-dir event.
+    // Primary HEAD affects one checkout; packed-refs can move any branch without admin-directory events.
     for (const [file, headIdentityScope] of [
       ['HEAD', PRIMARY_HEAD_IDENTITY_SCOPE],
       ['packed-refs', FULL_HEAD_IDENTITY_SCOPE]
@@ -129,7 +127,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
 
   it('classifies HEAD reflog appends as head-identity triggers for linked and primary checkouts', () => {
     const target = makeGitCommonTarget()
-    // commit --amend / reset --soft move HEAD without touching index or HEAD.
+    // Amend and soft reset can move HEAD without rewriting the watched HEAD or index leaves.
     expect(
       classifyWorktreeBaseChange(target, {
         type: 'update',
@@ -213,9 +211,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
 
   it('classifies config and the exact upstream ref as status-only external push signals', () => {
     const target = makeGitCommonTarget()
-    // External `git push -u` writes only branch.<name>.remote/merge into the
-    // common config; without this signal the upstream stays invisible until a
-    // safety poll.
+    // External push -u writes upstream config without another watched ref signal.
     expect(
       classifyWorktreeBaseChange(target, {
         type: 'update',
@@ -344,8 +340,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
 
   it('widens to a full head re-read when the worktrees admin root itself changes', () => {
     const target = makeGitCommonTarget()
-    // `git worktree prune` can delete and a later add recreate this dir; the
-    // watcher's stream is bound to the old inode, so no cached entry is trusted.
+    // Prune/recreate invalidates the old directory stream and every cached entry.
     for (const type of ['create', 'update', 'delete'] as const) {
       expect(
         classifyWorktreeBaseChange(target, { type, path: join(COMMON_DIR, 'worktrees') })

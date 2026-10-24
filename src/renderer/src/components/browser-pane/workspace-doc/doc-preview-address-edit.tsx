@@ -111,11 +111,6 @@ export function DocPreviewAddressEdit({
   return (
     <div
       className="flex min-w-0 flex-1"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          exitEdit()
-        }
-      }}
       onBlur={(event) => {
         // Why a grace timer and not an immediate exit: a suggestion click blurs the input before
         // its own click lands, and unmounting the list mid-gesture would swallow the commit.
@@ -134,6 +129,8 @@ export function DocPreviewAddressEdit({
       <BrowserAddressBar
         pageId={previewId}
         value={value}
+        committedValue={`${identity.directoryPrefix}${identity.fileName}`}
+        onLeave={exitEdit}
         onChange={setValue}
         onSubmit={submit}
         onNavigate={navigateToUrl}
