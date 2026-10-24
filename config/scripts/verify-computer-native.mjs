@@ -34,6 +34,12 @@ const checks = [
     enabled: true
   },
   {
+    name: 'Linux keyboard synthesis tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/runtime_keyboard_test.py'],
+    enabled: true
+  },
+  {
     name: 'native provider argument guardrails',
     run: verifyNativeArgumentGuardrails,
     enabled: true
