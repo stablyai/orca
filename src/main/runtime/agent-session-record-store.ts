@@ -306,6 +306,10 @@ export class AgentSessionRecordStore {
   commitOperationReceipt = (receipt: JournalOperationReceipt) =>
     this.transactions.commitReceipt(receipt)
 
+  readCommandReceiptCandidates = (
+    ...args: Parameters<AgentSessionStoreTransactions['readCommandReceiptCandidates']>
+  ) => this.transactions.readCommandReceiptCandidates(...args)
+
   readCommandReceipt = (...args: Parameters<AgentSessionStoreTransactions['readCommandReceipt']>) =>
     this.transactions.readCommandReceipt(...args)
 

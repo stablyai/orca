@@ -1,28 +1,47 @@
 import type {
+  AgentStatusIpcPayload,
   ParsedAgentStatusPayload,
   TurnEndDisposition
 } from '../../../../shared/agent-status-types'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import type { TerminalProcessInspection } from '../../../../shared/terminal-process-inspection'
 
-export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
-  stateStartedAt?: number
-  /** The host's stamp for the turn end this `done` reports; restatements keep it. */
-  turnEndedAt?: number
-  /** How the host identified that end (`TurnEndDisposition`). */
-  turnEndDisposition?: TurnEndDisposition
-  /** Renderer-local boundary used only to reject a delayed cross-host completion. */
-  localStateStartedAt?: number
+export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload &
+  Partial<
+    Pick<
+      AgentStatusIpcPayload,
+      | 'runId'
+      | 'executionId'
+      | 'terminalHandle'
+      | 'connectionId'
+      | 'turnStartedAt'
+      | 'authorityRestartId'
+      | 'isReplay'
+      | 'restoredUnconfirmed'
+    >
+  > & {
+    stateStartedAt?: number
+    turnEndedAt?: number
+    turnEndDisposition?: TurnEndDisposition
+    /** Renderer-local boundary used only to reject a delayed cross-host completion. */
+    localStateStartedAt?: number
+  }
+
+export type AgentCompletionHookCandidate = {
+  snapshot: AgentCompletionStatusSnapshot
+  originalRow: AgentStatusIpcPayload
 }
 
 export type AgentCompletionDispatchMeta = {
   source: 'hook' | 'title' | 'process-exit'
   quietedHookDone: boolean
+  hookCandidate?: AgentCompletionHookCandidate
   terminalIdleConfirmed?: boolean
   agentStatus?: AgentCompletionStatusSnapshot
 }
 
 export type AgentAttentionDispatchMeta = {
+  hookCandidate?: AgentCompletionHookCandidate
   source: 'hook'
   agentStatus: AgentCompletionStatusSnapshot
 }
@@ -37,7 +56,7 @@ export type AgentCompletionCoordinatorOptions = {
   inspectProcess: (
     ptyId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
-  ) => Promise<RuntimeTerminalProcessInspection>
+  ) => Promise<TerminalProcessInspection>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
   dispatchHookLifecycle?: (payload: AgentCompletionStatusSnapshot) => void

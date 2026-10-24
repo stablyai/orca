@@ -8,6 +8,48 @@ import {
 describe('agent completion coordinator stamped turn boundary', () => {
   useAgentCompletionCoordinatorLifecycle()
 
+  it('consumes the origin unstamped tail but preserves a distinct identified end on origin and sibling lanes', () => {
+    const dispatchCompletion = vi.fn()
+    const create = (statusLane: 'hook' | 'pty') =>
+      createAgentCompletionCoordinator({
+        paneKey: 'tail:leaf',
+        statusLane,
+        getPtyId: () => 'pty-1',
+        inspectProcess: vi.fn(),
+        dispatchCompletion,
+        isLive: () => true,
+        usesHookTurnEnds: (row) => row.turnEndDisposition === 'identified'
+      })
+    const origin = create('hook')
+    let sibling = create('pty')
+    const working = {
+      state: 'working' as const,
+      prompt: '',
+      agentType: 'claude',
+      stateStartedAt: 100
+    }
+    origin.observeHookStatus(working)
+    sibling.observeHookStatus(working)
+    origin.observeHookStatus({ ...working, turnCompletedAt: 200 })
+    vi.advanceTimersByTime(130_000)
+    const tail = { ...working, state: 'done' as const, stateStartedAt: 130_100 }
+    origin.observeHookStatus(tail)
+    sibling.dispose()
+    sibling = create('pty')
+    sibling.observeHookStatus(tail)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    const next = { ...tail, turnEndedAt: 140_000, turnEndDisposition: 'identified' as const }
+    origin.observeHookStatus(next)
+    sibling.observeHookStatus(next)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+    origin.observeHookStatus(next)
+    sibling.observeHookStatus(next)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+    origin.dispose()
+    sibling.dispose()
+  })
+
   it('ignores a turn end time that cannot name a turn', () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
@@ -130,7 +172,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
         agentStatus: expect.objectContaining({
           state: 'done',
           lastAssistantMessage: 'Which cells need hand-verification?',
-          stateStartedAt: 1_700_000_005_000,
+          stateStartedAt: 1_700_000_000_000,
           turnCompletedAt: 1_700_000_005_000
         })
       })

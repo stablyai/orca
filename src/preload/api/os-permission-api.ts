@@ -17,6 +17,7 @@ import type {
   NotificationDispatchResult,
   NotificationPermissionStatusResult,
   NotificationSoundResult,
+  LiveNotificationRetirement,
   StructuredNotificationRead
 } from '../../shared/notification-settings-types'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
@@ -28,7 +29,8 @@ export type NotificationsApi = {
   dismiss: (
     ids: string[],
     paneKeys?: string[],
-    reads?: StructuredNotificationRead[]
+    reads?: StructuredNotificationRead[],
+    turnStarts?: LiveNotificationRetirement[]
   ) => Promise<NotificationDismissResult>
   /** The remote host owning this session reports no prompt pending; retires relayed prompt alerts. */
   settleStructuredPrompts: (

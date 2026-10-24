@@ -310,6 +310,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
         dispatch: (event) => this.mobileNotifications.dispatch(event),
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
+        isConnectedDesktop: (id) => this.mobileNotifications.isConnectedDesktop(id),
+        onTurnStarted: (id, cursor, sourceSequence) =>
+          this.mobileNotifications.retireLiveStructuredTurn(id, cursor, sourceSequence),
         now: () => Date.now()
       }),
       // Read per sweep tick from the orchestration database: a worker whose dispatch is open keeps

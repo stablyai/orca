@@ -1,3 +1,5 @@
+import type { HostTurnEndFacts } from '../../../../shared/agent-status-types'
+
 export type CompletionIdentitySource = 'hook' | 'title' | 'process-exit'
 
 export type LastCompletionIdentity = {
@@ -15,11 +17,24 @@ type PendingStampedTail = {
   tailOpen: boolean
 }
 
-const lastCompletionByPane = new Map<string, LastCompletionIdentity>()
-const handledTurnCompletedAtsByPane = new Map<string, number[]>()
-const pendingStampedTailByPane = new Map<string, PendingStampedTail>()
-const workingBoundaryByPane = new Map<string, Map<string, number>>()
-const coordinatorCountByPane = new Map<string, number>()
+export function createAgentCompletionIdentityBacking() {
+  return {
+    lastCompletionByPane: new Map<string, LastCompletionIdentity>(),
+    handledTurnCompletedAtsByPane: new Map<string, number[]>(),
+    pendingStampedTailByPane: new Map<string, PendingStampedTail>(),
+    workingBoundaryByPane: new Map<string, Map<string, number>>(),
+    coordinatorCountByPane: new Map<string, number>()
+  }
+}
+
+const defaultBacking = createAgentCompletionIdentityBacking()
+const {
+  lastCompletionByPane,
+  handledTurnCompletedAtsByPane,
+  pendingStampedTailByPane,
+  workingBoundaryByPane,
+  coordinatorCountByPane
+} = defaultBacking
 const HANDLED_TURN_STAMP_LIMIT = 16
 let nextCoordinatorId = 1
 
@@ -35,7 +50,8 @@ export type AgentCompletionIdentityScope = {
   openStampedTail: (turnCompletedAt: number) => boolean
   consumePendingStampedTailForAgent: (
     agentIdentity: string | null,
-    completionIdentity: string | null
+    completionIdentity: string | null,
+    end?: HostTurnEndFacts
   ) => boolean
   consumeStampedTail: (turnCompletedAt: number) => void
   hasUnconsumedStampedTail: () => boolean
@@ -48,8 +64,16 @@ export type AgentCompletionIdentityScope = {
 
 export function createAgentCompletionIdentityScope(
   paneKey: string,
-  statusLane?: 'hook' | 'pty'
+  statusLane?: 'hook' | 'pty',
+  backing = defaultBacking
 ): AgentCompletionIdentityScope {
+  const {
+    lastCompletionByPane,
+    handledTurnCompletedAtsByPane,
+    pendingStampedTailByPane,
+    workingBoundaryByPane,
+    coordinatorCountByPane
+  } = backing
   const lane = statusLane ?? `coordinator:${nextCoordinatorId++}`
   let inheritedWorkingBoundary = pendingStampedTailByPane
     .get(paneKey)
@@ -94,7 +118,6 @@ export function createAgentCompletionIdentityScope(
       return true
     }
     const eligibleWorkingBoundaryByLane = new Map(workingBoundaryByPane.get(paneKey))
-    eligibleWorkingBoundaryByLane.delete(lane)
     pendingStampedTailByPane.set(paneKey, {
       turnCompletedAt,
       originLane: lane,
@@ -107,7 +130,8 @@ export function createAgentCompletionIdentityScope(
 
   function consumePendingStampedTailForAgent(
     agentIdentity: string | null,
-    completionIdentity: string | null
+    completionIdentity: string | null,
+    end?: HostTurnEndFacts
   ): boolean {
     const pending = pendingStampedTailByPane.get(paneKey)
     const stampedCompletion = lastCompletionByPane.get(paneKey)
@@ -115,6 +139,10 @@ export function createAgentCompletionIdentityScope(
     const eligibleWorkingBoundary = pending?.eligibleWorkingBoundaryByLane.get(lane)
     if (
       !pending ||
+      (end?.turnEndDisposition === 'identified' &&
+        end.turnEndedAt !== undefined &&
+        Number.isFinite(end.turnEndedAt) &&
+        end.turnEndedAt > pending.turnCompletedAt) ||
       stampedCompletion?.lastTurnCompletedAtNotified !== pending.turnCompletedAt ||
       agentIdentity === null ||
       stampedCompletion.agentIdentity !== agentIdentity ||

@@ -88,6 +88,11 @@ export type NotificationDispatchResult = {
     | 'invalid-request'
 }
 
+export type LiveNotificationRetirement = {
+  notificationId: string
+  executionHost?: string
+}
+
 export type NotificationDismissResult = {
   dismissed: number
 }

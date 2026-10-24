@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { AGENT_DONE_QUIET_MS, type AgentTransition } from '../../shared/agent-transitions'
@@ -28,17 +28,15 @@ function row(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPayl
 }
 
 function moved(
-  transition: AgentTransition | null,
+  _transition: AgentTransition | null,
   to: 'done' | 'needs-you' | 'working' | 'rest' = 'done'
 ): AgentPaneChange {
   return {
-    kind: 'moved',
+    kind: 'observed',
     paneKey: PANE,
     workspace: { worktreeId: WT, sshHostId: null },
-    from: 'working',
-    to,
-    at: 1,
-    transition
+    phase: to,
+    at: Date.now()
   }
 }
 
@@ -49,9 +47,12 @@ function harness(
     hookRow?: AgentStatusIpcPayload | null
   } = {}
 ) {
-  const clock = { now: 10_000 }
+  const clock = {
+    get now() {
+      return Date.now()
+    }
+  }
   const sent: MobileNotificationDispatchEvent[] = []
-  const timers: { at: number; run: () => void; cancelled: boolean }[] = []
   const state = {
     muted: options.muted ?? false,
     hasWindow: false,
@@ -75,25 +76,13 @@ function harness(
     isWorkspaceMuted: () => state.muted,
     readHookRow: () => state.hookRow,
     dispatch: (event) => sent.push(event),
-    setTimer: (run, delayMs) => {
-      const timer = { at: clock.now + delayMs, run, cancelled: false }
-      timers.push(timer)
-      return { cancel: () => (timer.cancelled = true) }
-    },
+    retire: () => {},
+    recordAnnounced: () => {},
     now: () => clock.now
   })
+  cleanups.push(() => push.dispose())
   const advance = (ms: number): void => {
-    clock.now += ms
-    for (const timer of timers.splice(0)) {
-      if (timer.cancelled) {
-        continue
-      }
-      if (timer.at <= clock.now) {
-        timer.run()
-      } else {
-        timers.push(timer)
-      }
-    }
+    vi.advanceTimersByTime(ms)
   }
   /** A live working row, as the detector reports every look. */
   const working = (overrides: Partial<AgentStatusIpcPayload> = {}): void => {
@@ -115,7 +104,16 @@ function harness(
 
 const ID = `agent:${encodeURIComponent(WT)}:${encodeURIComponent(PANE)}:5000`
 
+const cleanups: (() => void)[] = []
+
 describe('TerminalAgentPhonePush', () => {
+  beforeEach(() => vi.useFakeTimers({ now: 10_000 }))
+  afterEach(() => {
+    for (const cleanup of cleanups.splice(0)) {
+      cleanup()
+    }
+    vi.useRealTimers()
+  })
   it('pushes a finish that followed live work once its quiet window passes, worded as the window', () => {
     const { push, sent, advance, working, finish } = harness()
     working()
@@ -138,18 +136,13 @@ describe('TerminalAgentPhonePush', () => {
     ])
   })
 
-  it('pushes a finish with no live work seen at once, as the window does', () => {
-    const { sent, finish } = harness()
-    finish()
-    expect(sent).toHaveLength(1)
-  })
-
-  it('waits out the quiet window for a Pi agent even with no live work seen', () => {
+  it.each(['claude', 'pi'] as const)('seeds legacy %s history silently', (agentType) => {
     const { sent, advance, finish } = harness()
-    finish({ agentType: 'pi' })
-    expect(sent).toEqual([])
+    finish({ agentType })
+    expect(sent).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
     advance(AGENT_DONE_QUIET_MS)
-    expect(sent).toHaveLength(1)
+    expect(sent).toHaveLength(0)
   })
 
   it('announces no milestone a goal agent resumes from within the quiet window', () => {
@@ -198,10 +191,14 @@ describe('TerminalAgentPhonePush', () => {
   })
 
   it('collapses a burst in one workspace as the window’s fan-out does', () => {
-    const { push, sent, finish } = harness()
+    const { sent, finish, working, advance } = harness()
+    working()
     finish()
-    push.observe(moved('prompt-submitted', 'working'))
+    advance(AGENT_DONE_QUIET_MS)
+    working({ stateStartedAt: 5_500 })
     finish({ stateStartedAt: 6_000 })
+    expect(vi.getTimerCount()).toBe(1)
+    advance(AGENT_DONE_QUIET_MS)
     expect(sent).toHaveLength(1)
   })
 
@@ -226,14 +223,19 @@ describe('TerminalAgentPhonePush', () => {
   })
 
   it('pushes nothing for a muted workspace', () => {
-    const { sent, finish } = harness({ muted: true })
+    const { sent, finish, working, advance } = harness({ muted: true })
+    working()
     finish()
+    expect(vi.getTimerCount()).toBe(1)
+    advance(AGENT_DONE_QUIET_MS)
     expect(sent).toEqual([])
   })
 
   it('marks the push not desktop-allowed when agent notifications are off', () => {
-    const { sent, finish } = harness({ settings: { agentTaskComplete: false } })
+    const { sent, finish, working, advance } = harness({ settings: { agentTaskComplete: false } })
+    working()
     finish()
+    advance(AGENT_DONE_QUIET_MS)
     expect(sent[0]?.desktopAllowed).toBe(false)
   })
 
@@ -287,8 +289,10 @@ describe('TerminalAgentPhonePush', () => {
   })
 
   it('sends phones, old ones included, the alert the window’s own request would have', () => {
-    const { sent, finish } = harness()
+    const { sent, finish, working, advance } = harness()
+    working()
     finish()
+    advance(AGENT_DONE_QUIET_MS)
     const fromWindow: MobileNotificationEvent[] = []
     const service = createNotificationDeliveryService({
       readNotificationSettings: () => ({
@@ -311,7 +315,7 @@ describe('TerminalAgentPhonePush', () => {
       recordDeliveryOutcome: () => {},
       deliverNative: () => ({ delivered: false }),
       platform: 'linux',
-      now: () => 10_000
+      now: () => 11_500
     })
     void service.dispatch({
       source: 'agent-task-complete',

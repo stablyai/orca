@@ -8,24 +8,28 @@
 //
 // The phone suppresses an alert for what it is showing itself, so the host never guesses who looks.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
-import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
+import { selectHookNotificationTimestamp } from '../../renderer/src/components/terminal-pane/agent-completion-notification-controller'
+import type { AgentCompletionStatusSnapshot } from '../../renderer/src/components/terminal-pane/agent-completion-coordinator-types'
+import {
+  agentMainAgentVerdict,
+  agentTurnEndedOnPurpose
+} from '../../shared/agent-main-agent-verdict'
 import { buildAgentNotificationId } from '../../shared/agent-notification-id'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type {
+  LiveNotificationRetirement,
   NotificationDispatchRequest,
   NotificationSettings
 } from '../../shared/notification-settings-types'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
-import { TerminalAgentTurnNews } from './terminal-agent-turn-news'
+import {
+  TerminalAgentTurnNews,
+  type TerminalAgentTurnNewsDelivery
+} from './terminal-agent-turn-news'
 
 export type TerminalAgentWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
-
-type PaneNews = {
-  worktreeId: string
-  event: MobileNotificationDispatchEvent
-}
 
 export type TerminalAgentPhonePushDeps = {
   /** A desktop window owns this host and pushes its phones itself. */
@@ -37,35 +41,36 @@ export type TerminalAgentPhonePushDeps = {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
   translate?: (key: string, fallback: string) => string
   dispatch: (event: MobileNotificationDispatchEvent) => void
-  setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
+  retire: (alerts: LiveNotificationRetirement[]) => void
+  recordAnnounced: (paneKey: string, notificationId: string) => void
   now: () => number
 }
 
 export class TerminalAgentPhonePush {
-  // The burst gate the window's fan-out applies, per workspace.
   private readonly recentDispatches = new Map<string, number>()
-  private readonly turnNews: TerminalAgentTurnNews<PaneNews>
+
+  private readonly turnNews: TerminalAgentTurnNews
 
   constructor(private readonly deps: TerminalAgentPhonePushDeps) {
     this.turnNews = new TerminalAgentTurnNews({
       readHookRow: (paneKey) => deps.readHookRow(paneKey),
-      prepare: ({ paneKey, worktreeId, row }) => ({
-        worktreeId,
-        event: this.buildEvent(worktreeId, paneKey, row)
-      }),
       deliver: (news) => this.send(news),
-      setTimer: (run, delayMs) => deps.setTimer(run, delayMs)
+      retire: (alerts) => deps.retire(alerts)
     })
   }
 
   observe(change: AgentPaneChange): void {
-    this.turnNews.observe(change)
+    this.turnNews.observeNotification(change)
+  }
+
+  dispose(): void {
+    this.turnNews.dispose()
   }
 
   private buildEvent(
     worktreeId: string,
     paneKey: string,
-    row: AgentStatusIpcPayload
+    row: AgentCompletionStatusSnapshot
   ): MobileNotificationDispatchEvent {
     const outcome = agentMainAgentVerdict(row)
     const request: NotificationDispatchRequest = {
@@ -85,7 +90,7 @@ export class TerminalAgentPhonePush {
     const notificationId = buildAgentNotificationId({
       worktreeId,
       paneKey,
-      stateStartedAt: row.stateStartedAt
+      stateStartedAt: selectHookNotificationTimestamp(row)
     })
     return {
       type: 'notification',
@@ -99,25 +104,38 @@ export class TerminalAgentPhonePush {
     }
   }
 
-  private send(news: PaneNews): void {
+  private send({
+    paneKey,
+    worktreeId,
+    snapshot: row
+  }: TerminalAgentTurnNewsDelivery): string | undefined {
     // Decided when the alert would go out: a window that took over by then announces it itself.
-    if (this.deps.hasWindow() || this.deps.isWorkspaceMuted(news.worktreeId)) {
+    if (
+      this.deps.hasWindow() ||
+      this.deps.isWorkspaceMuted(worktreeId) ||
+      agentTurnEndedOnPurpose(row)
+    ) {
       return
     }
+    const event = this.buildEvent(worktreeId, paneKey, row)
     const settings = this.deps.readNotificationSettings()
     // The window's own fan-out gates the phone on these same preferences.
     const desktopAllowed = settings?.enabled !== false && settings?.agentTaskComplete !== false
     const now = this.deps.now()
-    const burstKey = JSON.stringify([desktopAllowed, news.event.agentState, news.worktreeId])
+    const burstKey = JSON.stringify([desktopAllowed, event.agentState, worktreeId])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {
       return
     }
     // No attention key: later cooldowns then key on the workspace, as the window's request does.
     this.deps.dispatch({
-      ...news.event,
+      ...event,
       emittedAt: now,
       ...(!desktopAllowed ? { desktopAllowed: false } : {})
     })
+    if (event.notificationId) {
+      this.deps.recordAnnounced(paneKey, event.notificationId)
+    }
+    return event.notificationId
   }
 
   private readLabels(worktreeId: string, paneKey: string): TerminalAgentWorkspaceLabels {

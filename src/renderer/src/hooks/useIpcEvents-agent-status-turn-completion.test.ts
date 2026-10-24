@@ -17,7 +17,7 @@ describe('useIpcEvents agent status turn completion', () => {
     vi.unstubAllGlobals()
   })
 
-  it('forwards turnCompletedAt through the agent-status IPC whitelist', async () => {
+  it('forwards source and host turn facts through the agent-status IPC whitelist', async () => {
     const setAgentStatus = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
@@ -63,18 +63,23 @@ describe('useIpcEvents agent status turn completion', () => {
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
-    onSetListenerRef.current({
+    const event = {
       paneKey: FUTURE_PANE_KEY,
       tabId: 'tab-future',
       worktreeId: 'wt-1',
-      state: 'working',
+      state: 'working' as const,
       prompt: 'review the PR',
       agentType: 'claude',
       lastAssistantMessage: 'Which cells need hand-verification?',
       turnCompletedAt: 1_700_000_005_000,
+      turnEndedAt: 1_700_000_005_001,
+      turnEndDisposition: 'identified' as const,
+      turnStartedAt: 1_700_000_000_000,
+      terminalHandle: 'terminal-projection',
       receivedAt: 1_700_000_005_000,
       stateStartedAt: 1_700_000_000_000
-    })
+    }
+    onSetListenerRef.current(event)
 
     expect(observeAgentHookCompletionForNotification).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -84,6 +89,11 @@ describe('useIpcEvents agent status turn completion', () => {
           state: 'working',
           agentType: 'claude',
           turnCompletedAt: 1_700_000_005_000,
+          turnEndedAt: 1_700_000_005_001,
+          turnEndDisposition: 'identified',
+          turnStartedAt: 1_700_000_000_000,
+          terminalHandle: 'terminal-projection',
+          isReplay: false,
           lastAssistantMessage: 'Which cells need hand-verification?'
         })
       })

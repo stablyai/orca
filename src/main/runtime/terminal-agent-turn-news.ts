@@ -1,11 +1,22 @@
-// What a hook-reported terminal agent's turns tell a listener away from the screen: a turn that
-// finished (or failed) and an agent that needs input, each with its hook row. The rules and timing
-// are the window's; the listener (the phone push, a connector) decides only how to word and send it.
+// The source lifetime composes the same completion interpreter as the window.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { agentTurnEndedOnPurpose } from '../../shared/agent-main-agent-verdict'
+import { createHookOnlyCompletionObserver } from '../../renderer/src/components/terminal-pane/agent-completion-hook-only-observer'
+import type {
+  AgentCompletionHookCandidate,
+  AgentCompletionStatusSnapshot
+} from '../../renderer/src/components/terminal-pane/agent-completion-coordinator-types'
+import type { AgentCompletionIdentityScope } from '../../renderer/src/components/terminal-pane/agent-completion-identity-store'
+import { createAgentHookNotificationRetirement } from '../../renderer/src/hooks/agent-hook-notification-retirement'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import { AGENT_DONE_QUIET_MS } from '../../shared/agent-transitions'
-import { isPiCompatibleAgentType } from '../../shared/pi-agent-kind'
+import type { LiveNotificationRetirement } from '../../shared/notification-settings-types'
+
+type PaneNews = {
+  worktreeId: string
+  source: string
+  observer: ReturnType<typeof createHookOnlyCompletionObserver>
+  retirement?: ReturnType<typeof createAgentHookNotificationRetirement>
+}
 
 export type TerminalAgentTurnNewsItem = {
   paneKey: string
@@ -13,86 +24,164 @@ export type TerminalAgentTurnNewsItem = {
   row: AgentStatusIpcPayload
 }
 
-export type TerminalAgentTurnNewsDeps<Prepared> = {
+export type TerminalAgentTurnNewsDelivery = TerminalAgentTurnNewsItem & {
+  snapshot: AgentCompletionStatusSnapshot
+}
+
+export type TerminalAgentTurnNewsDeps = {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
-  /** Runs when the news is decided, so what it reads is that moment's even if delivery waits. */
-  prepare: (news: TerminalAgentTurnNewsItem) => Prepared
-  deliver: (prepared: Prepared) => void
-  setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
+  deliver: (news: TerminalAgentTurnNewsDelivery) => string | undefined
+  retire?: (alerts: LiveNotificationRetirement[]) => void
+  createIdentityScope?: (paneKey: string) => AgentCompletionIdentityScope
   /** Opt-in: a turn began (a prompt went in), told at once. */
   started?: (news: TerminalAgentTurnNewsItem) => void
   /** Opt-in: a turn its user stopped or a newer request replaced, which is otherwise no news. */
   stopped?: (news: TerminalAgentTurnNewsItem) => void
 }
 
-type PendingFinish = {
-  /** Waiting out a finish's quiet window. */
-  quiet: { cancel: () => void } | null
-}
+export class TerminalAgentTurnNews {
+  private readonly newsByPane = new Map<string, PaneNews>()
+  private readonly titleWorking = new Set<string>()
 
-export class TerminalAgentTurnNews<Prepared> {
-  // A pane's pending finish, until it is sent or the pane moves on.
-  private readonly pendingByPane = new Map<string, PendingFinish>()
-  // Per pane, the `turnCompletedAt` of the turn last announced (or restored), until the next turn.
-  private readonly finishedTurnByPane = new Map<string, number>()
-  // Panes that reported live work since their last finish: as the window's, only those wait out
-  // the quiet window.
-  private readonly workingSeen = new Set<string>()
-
-  constructor(private readonly deps: TerminalAgentTurnNewsDeps<Prepared>) {}
+  constructor(private readonly deps: TerminalAgentTurnNewsDeps) {}
 
   observe(change: AgentPaneChange): void {
     const { paneKey } = change
     if (change.kind === 'seeded') {
+      this.newsByPane.get(paneKey)?.observer.clearPendingHookDone()
       if (change.phase !== 'rest') {
-        this.seed(paneKey)
+        const row = this.deps.readHookRow(paneKey)
+        const news = row ? this.sourceFor(change, row) : undefined
+        if (news && row) {
+          if (row.turnCompletedAt !== undefined) {
+            news.observer.rememberTurnCompletedAt(row.turnCompletedAt)
+          }
+          if (row.state === 'working') {
+            news.observer.seedHookStatus(row)
+          }
+        }
       }
       return
     }
     if (change.kind === 'observed') {
-      if (change.phase === 'working') {
-        this.observeWorking(paneKey, change.workspace?.worktreeId)
+      const row = this.deps.readHookRow(paneKey)
+      if (!row) {
+        this.forget(paneKey)
+        return
+      }
+      const news = this.sourceFor(change, row)
+      if (change.phase === 'working' && row.state === 'working') {
+        news?.observer.observeHookStatus(row)
       }
       return
     }
-    const { transition } = change
     this.tellOptIn(change)
-    const finished = transition === 'turn-finished' || transition === 'errored'
-    const row = finished || transition === 'needs-input' ? this.deps.readHookRow(paneKey) : null
-    // The all-clear of a turn announced when its lead agent finished: that finish still stands.
-    if (
-      finished &&
-      row?.turnCompletedAt !== undefined &&
-      this.finishedTurnByPane.get(paneKey) === row.turnCompletedAt
-    ) {
-      return
-    }
-    this.cancelPending(paneKey)
-    if (transition === 'prompt-submitted' || change.to === 'rest') {
-      this.finishedTurnByPane.delete(paneKey)
-    }
     if (change.to === 'rest') {
-      this.workingSeen.delete(paneKey)
-    }
-    if (!row) {
+      this.forget(paneKey)
       return
     }
-    if (transition === 'needs-input') {
-      this.announce(paneKey, change.workspace.worktreeId, row, false)
-      return
+    if (
+      change.transition === 'turn-finished' ||
+      change.transition === 'errored' ||
+      change.transition === 'needs-input'
+    ) {
+      const row = this.deps.readHookRow(paneKey)
+      if (row) {
+        this.sourceFor(change, row)?.observer.observeHookStatus(row)
+      }
+    } else {
+      this.newsByPane.get(paneKey)?.observer.clearPendingHookDone()
     }
-    // Goal and Pi agents report a milestone done mid-run; work resuming within the window cancels it.
-    const waitOutQuiet = this.workingSeen.has(paneKey) || isPiCompatibleAgentType(row.agentType)
-    this.workingSeen.delete(paneKey)
-    this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
   }
 
-  dispose(): void {
-    for (const paneKey of this.pendingByPane.keys()) {
-      this.cancelPending(paneKey)
+  observeNotification(change: AgentPaneChange): void {
+    const { paneKey } = change
+    const row = this.deps.readHookRow(paneKey)
+    if (change.kind === 'moved' || !row) {
+      if (
+        !row &&
+        ((change.kind === 'moved' && change.to === 'working') ||
+          (change.kind === 'seeded' && change.phase === 'working'))
+      ) {
+        this.titleWorking.add(paneKey)
+      }
+      if (change.kind === 'moved' && change.to === 'rest') {
+        this.titleWorking.delete(paneKey)
+        this.forget(paneKey)
+      }
+      if (!row && change.kind === 'observed') {
+        this.forget(paneKey)
+      }
+      return
     }
-    this.finishedTurnByPane.clear()
-    this.workingSeen.clear()
+    const previous = this.newsByPane.get(paneKey)
+    const workingObserved = this.titleWorking.has(paneKey)
+    const news = this.sourceFor(change, row)
+    if (!news) {
+      return
+    }
+    if (
+      news !== previous &&
+      change.kind === 'observed' &&
+      row.state === 'done' &&
+      row.turnEndDisposition === undefined &&
+      !workingObserved
+    ) {
+      news.observer.seedHookStatus(row)
+      return
+    }
+    if (change.kind === 'seeded' || row.isReplay || row.restoredUnconfirmed) {
+      news.retirement?.clear()
+      news.observer.seedHookStatus(row)
+    } else {
+      news.retirement?.observe(row)
+      news.observer.observeHookStatus(row)
+    }
+  }
+
+  private sourceFor(change: AgentPaneChange, row: AgentStatusIpcPayload): PaneNews | undefined {
+    const { paneKey } = change
+    if (!change.workspace || row.structuredHost) {
+      this.forget(paneKey)
+      return
+    }
+    if (row.providerSessionOnly || row.programStatusOnly) {
+      return
+    }
+    const worktreeId = change.workspace.worktreeId
+    const source = JSON.stringify([
+      worktreeId,
+      row.connectionId,
+      row.terminalHandle,
+      row.runId,
+      row.executionId,
+      row.authorityRestartId,
+      row.agentType
+    ])
+    let news = this.newsByPane.get(paneKey)
+    if (news?.source !== source) {
+      this.forget(paneKey)
+      const workingObserved = this.titleWorking.delete(paneKey)
+      const retirement = this.deps.retire
+        ? createAgentHookNotificationRetirement(() => row.terminalHandle ?? null, this.deps.retire)
+        : undefined
+      const entry: PaneNews = {
+        source,
+        worktreeId,
+        retirement,
+        observer: createHookOnlyCompletionObserver({
+          paneKey,
+          workingObserved,
+          identityScope: this.deps.createIdentityScope?.(paneKey),
+          isLive: () =>
+            this.newsByPane.get(paneKey) === entry && this.deps.readHookRow(paneKey) !== null,
+          dispatch: (candidate) => this.deliver(paneKey, entry, candidate)
+        })
+      }
+      this.newsByPane.set(paneKey, entry)
+      news = entry
+    }
+    return news
   }
 
   private tellOptIn(change: Extract<AgentPaneChange, { kind: 'moved' }>): void {
@@ -111,68 +200,29 @@ export class TerminalAgentTurnNews<Prepared> {
     }
   }
 
-  private observeWorking(paneKey: string, worktreeId: string | undefined): void {
-    const row = this.deps.readHookRow(paneKey)
-    if (!row || row.state !== 'working' || !worktreeId) {
-      return
-    }
-    const { turnCompletedAt } = row
-    if (turnCompletedAt === undefined) {
-      this.workingSeen.add(paneKey)
-      return
-    }
-    // The lead agent finished while background work keeps the pane working: as the window does,
-    // that is the turn's finish, named by its `turnCompletedAt` and announced at once, once.
-    if (this.finishedTurnByPane.get(paneKey) === turnCompletedAt) {
-      return
-    }
-    this.finishedTurnByPane.set(paneKey, turnCompletedAt)
-    // A finish of work this host never saw is the window's to drop too; it still marks the turn told.
-    if (!this.workingSeen.has(paneKey)) {
-      return
-    }
-    this.workingSeen.delete(paneKey)
-    this.cancelPending(paneKey)
-    const finish = { ...row, state: 'done' as const, stateStartedAt: turnCompletedAt }
-    this.announce(paneKey, worktreeId, finish, false)
+  private forget(paneKey: string): void {
+    const news = this.newsByPane.get(paneKey)
+    news?.observer.dispose()
+    news?.retirement?.clear()
+    this.newsByPane.delete(paneKey)
   }
 
-  // As the window seeds a restored pane: a working one counts as work seen, a stamped turn as told.
-  private seed(paneKey: string): void {
-    const row = this.deps.readHookRow(paneKey)
-    if (row?.turnCompletedAt !== undefined) {
-      this.finishedTurnByPane.set(paneKey, row.turnCompletedAt)
+  dispose(): void {
+    for (const paneKey of this.newsByPane.keys()) {
+      this.forget(paneKey)
     }
-    if (row?.state === 'working') {
-      this.workingSeen.add(paneKey)
-    }
+    this.titleWorking.clear()
   }
 
-  private announce(
-    paneKey: string,
-    worktreeId: string,
-    row: AgentStatusIpcPayload,
-    waitOutQuiet: boolean
-  ): void {
-    // A structured chat's projected row is announced by the structured lane.
-    if (row.structuredHost) {
-      return
+  private deliver(paneKey: string, news: PaneNews, candidate: AgentCompletionHookCandidate): void {
+    const notificationId = this.deps.deliver({
+      paneKey,
+      worktreeId: news.worktreeId,
+      row: candidate.originalRow,
+      snapshot: candidate.snapshot
+    })
+    if (notificationId) {
+      news.retirement?.record({ notificationId }, candidate.snapshot)
     }
-    const prepared = this.deps.prepare({ paneKey, worktreeId, row })
-    if (!waitOutQuiet) {
-      this.deps.deliver(prepared)
-      return
-    }
-    const pending: PendingFinish = { quiet: null }
-    this.pendingByPane.set(paneKey, pending)
-    pending.quiet = this.deps.setTimer(() => {
-      this.pendingByPane.delete(paneKey)
-      this.deps.deliver(prepared)
-    }, AGENT_DONE_QUIET_MS)
-  }
-
-  private cancelPending(paneKey: string): void {
-    this.pendingByPane.get(paneKey)?.quiet?.cancel()
-    this.pendingByPane.delete(paneKey)
   }
 }

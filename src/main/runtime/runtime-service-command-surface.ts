@@ -11,6 +11,7 @@ import type { RuntimeSessionSearchSettingsController } from './runtime-session-s
 import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
 
 export type RuntimeServiceCommandSurface = {
+  announcedNotifications: RuntimeMobileNotificationController['announcedNotifications']
   listAiVaultSessions: RuntimeAiVaultCommands['list']
   resolveAiVaultSessionTitles: RuntimeAiVaultCommands['resolveTitles']
   prepareAiVaultSessionResume: RuntimeAiVaultCommands['prepare']
@@ -37,6 +38,8 @@ export type RuntimeServiceCommandSurface = {
   reconcileDismissedPushes: RuntimeMobileNotificationController['reconcileDismissedPushes']
   getMobileNotificationEpoch: RuntimeMobileNotificationController['getEpoch']
   dismissMobileNotification: RuntimeMobileNotificationController['dismiss']
+  setNotificationDesktopProof: (proof: (deviceId: string) => boolean) => void
+  retireLiveNotifications: RuntimeMobileNotificationController['retireLiveNotifications']
   retireStructuredAttention: RuntimeMobileNotificationController['retireStructuredAttention']
   reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
@@ -119,6 +122,7 @@ export function installRuntimeServiceCommandSurface(
   const browsers = owners.browserDrivers
   const waiters = owners.messageWaiters
   Object.assign(target, {
+    announcedNotifications: notifications.announcedNotifications,
     listAiVaultSessions: vault.list.bind(vault),
     resolveAiVaultSessionTitles: vault.resolveTitles.bind(vault),
     prepareAiVaultSessionResume: vault.prepare.bind(vault),
@@ -146,6 +150,10 @@ export function installRuntimeServiceCommandSurface(
     reconcileDismissedPushes: notifications.reconcileDismissedPushes.bind(notifications),
     getMobileNotificationEpoch: notifications.getEpoch.bind(notifications),
     dismissMobileNotification: notifications.dismiss.bind(notifications),
+    setNotificationDesktopProof: (proof) => {
+      notifications.isConnectedDesktop = proof
+    },
+    retireLiveNotifications: notifications.retireLiveNotifications.bind(notifications),
     retireStructuredAttention: notifications.retireStructuredAttention.bind(notifications),
     reconcileStructuredPromptAttention:
       notifications.reconcileStructuredPromptAttention.bind(notifications),

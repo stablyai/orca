@@ -1,3 +1,5 @@
+import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
+import type { LiveNotificationRetirement } from '../../shared/notification-settings-types'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import {
@@ -64,6 +66,8 @@ export type MobilePushRegistrar = {
 }
 
 export class RuntimeMobileNotificationController {
+  readonly announcedNotifications = createAnnouncedNotificationRegistry()
+  isConnectedDesktop: (deviceId: string) => boolean = () => false
   private readonly listeners = new Set<(event: MobileNotificationEvent) => void>()
   private readonly legacyCooldown = new Map<string, number>()
   private readonly replay = new MobileNotificationReplayBuffer()
@@ -204,6 +208,54 @@ export class RuntimeMobileNotificationController {
         notificationSeq: delivery.notificationSeq
       }
     })
+  }
+
+  retireLiveNotifications(alerts: readonly LiveNotificationRetirement[]): void {
+    const events = this.replay.getMissedSince(0)
+    for (const alert of alerts) {
+      const delivery = events.findLast(
+        (event) =>
+          event.type === 'notification' &&
+          event.notificationId === alert.notificationId &&
+          event.executionHost === alert.executionHost
+      )
+      if (
+        !delivery?.notificationId ||
+        events.some(
+          (event) =>
+            event.type === 'dismiss' &&
+            event.notificationId === delivery.notificationId &&
+            event.notificationSeq > delivery.notificationSeq &&
+            (!event.dismissedDelivery ||
+              (event.dismissedDelivery.notificationEpoch === delivery.notificationEpoch &&
+                event.dismissedDelivery.notificationSeq >= delivery.notificationSeq))
+        )
+      ) {
+        continue
+      }
+      this.retireDelivery({ ...delivery, notificationId: delivery.notificationId })
+    }
+  }
+
+  retireLiveStructuredTurn(
+    sessionId: string,
+    cursor: StructuredAttentionRead['observedCursor'],
+    sourceSequence: number
+  ): void {
+    const alerts = this.replay
+      .getMissedSince(0)
+      .flatMap((event) =>
+        event.type === 'notification' &&
+        !event.executionHost &&
+        event.notificationId &&
+        event.structuredOrigin?.sessionId === sessionId &&
+        event.structuredOrigin.journalCursor.epoch === cursor.epoch &&
+        event.structuredOrigin.journalCursor.sequence > sourceSequence &&
+        event.structuredOrigin.journalCursor.sequence < cursor.sequence
+          ? [{ notificationId: event.notificationId }]
+          : []
+      )
+    this.retireLiveNotifications(alerts)
   }
 
   retireStructuredAttention(read: StructuredAttentionRead): void {

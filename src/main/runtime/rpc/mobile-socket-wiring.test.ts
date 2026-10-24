@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
-import type { WebSocket } from 'ws'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
@@ -8,68 +7,11 @@ import {
   type MobileE2EEV2Ready
 } from '../../../shared/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
-import type { DeviceRegistry } from '../device-registry'
 import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
-import {
-  MobileSocketWiring,
-  type MobileSocketTransport,
-  type MobileSocketTransportMetadata
-} from './mobile-socket-wiring'
+import { MobileSocketWiring, type MobileSocketTransportMetadata } from './mobile-socket-wiring'
 
-class FakeSocket {
-  readonly OPEN = 1
-  readyState = this.OPEN
-  bufferedAmount = 0
-  readonly sent: (string | Buffer)[] = []
-  readonly send = vi.fn((data: string | Buffer) => this.sent.push(data))
-  readonly close = vi.fn()
-}
-
-class FakeTransport implements MobileSocketTransport {
-  private messageHandler: Parameters<MobileSocketTransport['onMessage']>[0] | null = null
-  private closeHandler: Parameters<MobileSocketTransport['onConnectionClose']>[0] | null = null
-  readonly setClientId = vi.fn()
-  readonly terminateClientConnections = vi.fn(() => 0)
-
-  onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {
-    this.messageHandler = handler
-  }
-
-  onConnectionClose(handler: Parameters<MobileSocketTransport['onConnectionClose']>[0]): void {
-    this.closeHandler = handler
-  }
-
-  receive(ws: FakeSocket, message: string): void {
-    this.messageHandler?.(message, vi.fn(), ws as unknown as WebSocket)
-  }
-
-  disconnect(ws: FakeSocket): void {
-    this.closeHandler?.(null, ws as unknown as WebSocket, false)
-  }
-}
-
-function registryFor(
-  deviceId: string,
-  token: string,
-  scope: 'mobile' | 'runtime' = 'mobile'
-): DeviceRegistry {
-  return {
-    validateToken: (candidate: string) =>
-      candidate === token
-        ? {
-            deviceId,
-            token,
-            name: 'Phone',
-            scope,
-            pairedAt: 1,
-            lastSeenAt: 0
-          }
-        : null,
-    updateLastSeen: vi.fn(),
-    updateLastSeenDeferred: vi.fn()
-  } as unknown as DeviceRegistry
-}
+import { FakeSocket, FakeTransport, registryFor } from './mobile-socket-wiring.test-fixture'
 
 describe('MobileSocketWiring', () => {
   it('terminates a revoked device across every attached transport', () => {
@@ -176,6 +118,15 @@ describe('MobileSocketWiring', () => {
     )
     transport.receive(ws, encrypt('{"id":"rpc-1","method":"status.get"}', sharedKey))
 
+    expect(wiring.isConnectedDesktop('device-1')).toBe(false)
+    const authenticated = onText.mock.calls[0]?.[0]
+    if (!authenticated) {
+      throw new Error('expected authenticated socket')
+    }
+    authenticated.clientCapabilities = ['browser.clientHost.v1']
+    expect(wiring.isConnectedDesktop('device-1')).toBe(true)
+    authenticated.clientCapabilities = ['session-tabs.close-intent.v1']
+
     // Socket bookkeeping keys on the device id; legacy rows keep their token as the client id.
     expect(transport.setClientId).toHaveBeenCalledWith(ws, 'device-1')
     expect(onText).toHaveBeenCalledOnce()
@@ -195,6 +146,7 @@ describe('MobileSocketWiring', () => {
     expect(onClose).toHaveBeenCalledWith(expect.objectContaining({ ws }), false)
     expect(wiring.channelCount).toBe(0)
     expect(wiring.connectionCount).toBe(0)
+    expect(wiring.isConnectedDesktop('device-1')).toBe(false)
   })
 
   it('reports other live sockets of the same device on close', () => {

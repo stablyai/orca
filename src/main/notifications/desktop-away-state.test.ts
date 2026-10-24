@@ -23,3 +23,9 @@ it('allows immediate delivery when locked and fails open when presence cannot be
     })
   ).toBeUndefined()
 })
+
+it('treats a windowless sending host as away without changing the visible-window idle rule', () => {
+  const active = { getSystemIdleState: () => 'active', getSystemIdleTime: () => 0 }
+  expect(readDesktopAwayState(active, false)).toBe(true)
+  expect(readDesktopAwayState(active, true)).toBe(false)
+})

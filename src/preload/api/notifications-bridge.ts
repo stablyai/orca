@@ -7,6 +7,7 @@ import type {
   NotificationSoundDataResult,
   NotificationSoundPathResult,
   NotificationSoundResult,
+  LiveNotificationRetirement,
   StructuredNotificationRead
 } from '../../shared/notification-settings-types'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
@@ -35,11 +36,14 @@ export const notificationsApi = {
   dismiss: (
     ids: string[],
     paneKeys?: string[],
-    reads?: StructuredNotificationRead[]
+    reads?: StructuredNotificationRead[],
+    turnStarts?: LiveNotificationRetirement[]
   ): Promise<NotificationDismissResult> =>
-    reads === undefined
-      ? ipcRenderer.invoke('notifications:dismiss', ids, paneKeys)
-      : ipcRenderer.invoke('notifications:dismiss', ids, paneKeys, reads),
+    turnStarts !== undefined
+      ? ipcRenderer.invoke('notifications:dismiss', ids, paneKeys, reads, turnStarts)
+      : reads === undefined
+        ? ipcRenderer.invoke('notifications:dismiss', ids, paneKeys)
+        : ipcRenderer.invoke('notifications:dismiss', ids, paneKeys, reads),
   settleStructuredPrompts: (
     scope: AgentSessionExecutionLocation,
     sessionId: string

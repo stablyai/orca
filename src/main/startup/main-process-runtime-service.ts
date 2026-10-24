@@ -154,7 +154,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
-  runtime.attachAgentStatusStore(agentHookServer)
+  const detachAgentStatus = runtime.attachAgentStatusStore(agentHookServer)
+  app.once('will-quit', detachAgentStatus)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )

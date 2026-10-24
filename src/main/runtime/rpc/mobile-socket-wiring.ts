@@ -120,6 +120,21 @@ export class MobileSocketWiring {
     return removed
   }
 
+  isConnectedDesktop(deviceId: string): boolean {
+    const sockets = [...this.authenticatedSockets.values()].filter(
+      (socket) => socket.device.deviceId === deviceId
+    )
+    return (
+      sockets.length > 0 &&
+      sockets.every(
+        (socket) =>
+          socket.ws.readyState === socket.ws.OPEN &&
+          socket.device.scope === 'runtime' &&
+          socket.clientCapabilities.includes('browser.clientHost.v1')
+      )
+    )
+  }
+
   private hasAuthenticatedSocket(deviceId: string): boolean {
     return Array.from(this.authenticatedSockets.values()).some(
       (socket) => socket.device.deviceId === deviceId

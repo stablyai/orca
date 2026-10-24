@@ -38,11 +38,9 @@ function moved(
 
 function news(current: { row: AgentStatusIpcPayload | null }, optIn: boolean) {
   const readHookRow = vi.fn(() => current.row)
-  const deps: TerminalAgentTurnNewsDeps<string> = {
+  const deps: TerminalAgentTurnNewsDeps = {
     readHookRow,
-    prepare: ({ row }) => row.state,
     deliver: vi.fn(),
-    setTimer: () => ({ cancel: () => {} }),
     ...(optIn ? { started: vi.fn(), stopped: vi.fn() } : {})
   }
   return { turnNews: new TerminalAgentTurnNews(deps), deps, readHookRow }

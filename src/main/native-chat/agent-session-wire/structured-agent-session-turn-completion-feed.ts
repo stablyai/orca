@@ -1,6 +1,9 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
@@ -21,12 +24,13 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   includePrompts?: boolean
   /** In-process reconciliation on restore and prompt removal. */
   onState?: (state: StructuredAttentionState) => void
+  onTurnStarted?: (sessionId: string, cursor: AgentJournalCursor, sourceSequence: number) => void
 }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
 
 type CompletionFeedSession = {
-  journal: Pick<AgentSessionJournal, 'cursor'>
+  journal: Pick<AgentSessionJournal, 'cursor'> & Partial<Pick<AgentSessionJournal, 'snapshot'>>
   params: { location: AgentSessionRecord['location'] }
 }
 
@@ -44,6 +48,8 @@ type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 
 /** Missing baseline makes first observation silent; settled/prompts track already-accounted edges. */
 type SessionBaseline = CompletionFeedCursor & {
+  rootId?: string
+  sourceSequence: number
   settled: RequestMark | null
   prompts: ReadonlySet<string>
 }
@@ -101,17 +107,53 @@ export class StructuredAgentSessionTurnCompletionFeed {
       this.publishState(session, sessionId, state.pendingPromptIds)
     }
     if (!baseline || options?.historical) {
-      this.baselines.set(sessionId, { ...cursor, settled: settledMark(request), prompts })
+      this.baselines.set(sessionId, {
+        ...cursor,
+        sourceSequence: cursor.sequence,
+        settled: settledMark(request),
+        prompts,
+        rootId: request?.kind === 'turn' ? request.id : undefined
+      })
       return
     }
     if (baseline.epoch !== cursor.epoch || cursor.sequence < baseline.sequence) {
       // Rewind/import changes identity without a provider edge; silently replace the baseline.
       baseline.epoch = cursor.epoch
       baseline.sequence = cursor.sequence
+      baseline.sourceSequence = cursor.sequence
+      baseline.rootId = request?.kind === 'turn' ? request.id : undefined
       baseline.settled = settledMark(request)
       baseline.prompts = prompts
       return
     }
+    if (
+      request?.kind === 'turn' &&
+      request.turnState === 'running' &&
+      baseline.rootId !== request.id
+    ) {
+      const root = (journal ?? session.journal)
+        .snapshot?.()
+        .items.find(
+          (item) =>
+            isRootAgentJournalItem(item) &&
+            !item.recovered &&
+            readAgentJournalTurn(item.body)?.turnId === request.id
+        )
+      if (root && root.sequence > baseline.sequence) {
+        for (const subscriber of this.subscribers.values()) {
+          try {
+            subscriber.onTurnStarted?.(
+              sessionId,
+              { epoch: cursor.epoch, sequence: root.sequence },
+              baseline.sourceSequence
+            )
+          } catch {
+            /* Retirement cannot interrupt provider publication. */
+          }
+        }
+      }
+    }
+    baseline.rootId = request?.kind === 'turn' ? request.id : undefined
     baseline.sequence = cursor.sequence
     const raised = state.pendingPromptIds.find((id) => !baseline.prompts.has(id))
     baseline.prompts = prompts

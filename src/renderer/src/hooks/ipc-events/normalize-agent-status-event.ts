@@ -1,6 +1,8 @@
+import type { AgentCompletionStatusSnapshot } from '@/components/terminal-pane/agent-completion-coordinator-types'
 import type { AgentStatusMetadata } from '../../store/slices/agent-status-contract'
 import {
   normalizeAgentStatusPayload,
+  pickHostTurnEnd,
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
@@ -39,4 +41,28 @@ export function normalizeAgentStatusMetadata(
     ...(data.providerSession ? { providerSession: data.providerSession } : {}),
     ...(data.launchToken ? { launchToken: data.launchToken } : {})
   }
+}
+
+export function agentHookNotificationSnapshot(
+  data: AgentStatusIpcPayload,
+  payload: AgentCompletionStatusSnapshot,
+  connectionId: string | null | undefined,
+  authorityRestartId: string | undefined,
+  replayed: boolean
+): AgentCompletionStatusSnapshot {
+  return typeof data.stateStartedAt === 'number'
+    ? {
+        ...payload,
+        stateStartedAt: data.stateStartedAt,
+        ...pickHostTurnEnd(data),
+        runId: data.runId,
+        executionId: data.executionId,
+        terminalHandle: data.terminalHandle,
+        connectionId,
+        authorityRestartId,
+        turnStartedAt: data.turnStartedAt,
+        isReplay: replayed,
+        restoredUnconfirmed: data.restoredUnconfirmed
+      }
+    : { ...payload, ...pickHostTurnEnd(data) }
 }

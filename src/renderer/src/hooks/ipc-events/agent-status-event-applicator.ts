@@ -32,10 +32,7 @@ import type {
   AgentStatusApplyResult,
   PendingAgentStatusEvent
 } from './agent-status-bridge-types'
-import {
-  normalizeAgentStatusEvent,
-  normalizeAgentStatusMetadata
-} from './normalize-agent-status-event'
+import * as normalize from './normalize-agent-status-event'
 import {
   applyProgramStatusOnlyUpdate,
   applyProviderSessionOnlyUpdate,
@@ -67,7 +64,7 @@ export function createAgentStatusEventApplicator(args: {
     }
     const paneKey = resolveAgentPaneAuthorityKey(data.paneKey)
     const ownerTabId = parsePaneKey(paneKey)?.tabId ?? data.tabId
-    const payload = normalizeAgentStatusEvent(data)
+    const payload = normalize.normalizeAgentStatusEvent(data)
     if (!payload) {
       return 'dropped'
     }
@@ -249,22 +246,23 @@ export function createAgentStatusEventApplicator(args: {
         terminalHandle: data.terminalHandle,
         ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
       },
-      metadata: normalizeAgentStatusMetadata(data, authorityRestartId)
+      metadata: normalize.normalizeAgentStatusMetadata(data, authorityRestartId)
     }
     // Why: replays are cached state, so they seed completion tracking unless they carry an unseen completion.
     const replayed =
       options?.replay === true || isSeenHostReplay(data, resolvedPayload.state, existingStatus)
     const applyPostCommitNotification = (): void => {
       if (statusWorktreeId && (!replayed || resolvedPayload.state === 'working')) {
-        const notificationPayload = {
-          ...resolvedPayload,
-          stateStartedAt: data.stateStartedAt,
-          ...pickHostTurnEnd(data)
-        }
         observeAgentHookCompletionForNotification({
           paneKey,
           worktreeId: statusWorktreeId,
-          payload: notificationPayload,
+          payload: normalize.agentHookNotificationSnapshot(
+            data,
+            resolvedPayload,
+            ownershipConnectionId,
+            authorityRestartId,
+            replayed
+          ),
           ...(replayed ? { seedOnly: true } : {})
         })
       }

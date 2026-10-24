@@ -17,11 +17,15 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
+import { selectHookNotificationTimestamp } from './agent-completion-notification-controller'
 import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
-import type { NotificationDispatchResult } from '../../../../shared/notification-settings-types'
+import type {
+  LiveNotificationRetirement,
+  NotificationDispatchResult
+} from '../../../../shared/notification-settings-types'
 import { getNotificationWorkspaceLabels } from './terminal-notification-state'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
@@ -62,6 +66,7 @@ export type TerminalNotificationEvent = TerminalNotificationBinding & {
   terminalTitle?: string
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
   agentCompletionSource?: AgentCompletionDispatchMeta['source']
+  onNotificationRequested?: (alert: LiveNotificationRetirement) => void
   /** Main's answer to the delivery request this event sends (null: no answer). */
   onDispatchResult?: (result: NotificationDispatchResult | null) => void
 }
@@ -126,7 +131,9 @@ export function dispatchTerminalNotification(
     return false
   }
   const agentNotificationStateStartedAt =
-    eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
+    event.agentCompletionSource === 'hook' && agentStatus
+      ? selectHookNotificationTimestamp(agentStatus)
+      : (eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt)
   const attentionDecision = resolveAgentAttention(
     {
       subject: { workspaceId: worktreeId, surfaceKey: event.paneKey },
@@ -172,10 +179,17 @@ export function dispatchTerminalNotification(
       : null
 
   let requested = false
+
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
     requested = true
     const owner = resolveTerminalNotificationOwner(state, worktreeId, event)
     const executionHost = notificationExecutionHostForOwner(owner)
+    if (notificationId) {
+      event.onNotificationRequested?.({
+        notificationId,
+        ...(executionHost ? { executionHost } : {})
+      })
+    }
     deliverAgentAttentionNotification(
       {
         source: event.source,

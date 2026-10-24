@@ -1,13 +1,6 @@
-// The execution host's own delivery of structured-chat attention to the phones paired with it.
-//
-// WHY THE HOST: a structured session runs here and its attention edges are derived here, so a phone
-// paired to this host (a headless `orca serve` or `orcad` included) must not depend on some desktop
-// keeping a chat tab open to relay them. Desktops keep presentation only: unread, focus suppression
-// and their own OS banner. A local desktop marks its request so main does not push the phone twice.
-//
-// SENT AT THE COMMIT THAT RAISED IT: labels come from metadata already in memory, never a disk or
-// Git lookup, so the alert can't arrive after the prompt was answered. Each notification is keyed by
-// the edge's identity, which delivery dedupes on and retirement addresses.
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { AgentJournalCursor } from '../../shared/agent-session-journal-types'
+// Execution-host delivery for work without a proven connected desktop mirror.
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import {
   agentSessionAttentionKey,
@@ -43,12 +36,19 @@ export type StructuredAttentionMobileDeliveryDeps = {
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
+  isConnectedDesktop?: (deviceId: string) => boolean
+  onTurnStarted?: (sessionId: string, cursor: AgentJournalCursor, sourceSequence: number) => void
   now: () => number
 }
 
 export type StructuredAttentionMobileDelivery = {
-  deliver: (edge: AgentSessionAttentionEdge, summary: AgentSessionStatusSummary | undefined) => void
+  deliver: (
+    edge: AgentSessionAttentionEdge,
+    summary: AgentSessionStatusSummary | undefined,
+    caller?: string | null
+  ) => void
   reconcile: (state: StructuredAttentionState) => void
+  onTurnStarted?: StructuredAttentionMobileDeliveryDeps['onTurnStarted']
 }
 
 /** The labels the desktop shows for a workspace, from the host's persisted metadata alone. */
@@ -87,7 +87,10 @@ export function createStructuredAttentionMobileDelivery(
   deps: StructuredAttentionMobileDeliveryDeps
 ): StructuredAttentionMobileDelivery {
   return {
-    deliver: (edge, summary) => {
+    deliver: (edge, summary, caller) => {
+      if (caller && deps.isConnectedDesktop?.(caller)) {
+        return
+      }
       const news = agentSessionAttentionNews(edge)
       if (!news) {
         return
@@ -135,6 +138,28 @@ export function createStructuredAttentionMobileDelivery(
         agentState: news.agentState
       })
     },
-    reconcile: deps.reconcile
+    reconcile: deps.reconcile,
+    onTurnStarted: deps.onTurnStarted
   }
+}
+
+export function subscribeStructuredAgentSessionAttention(
+  host: StructuredAgentSessionHost,
+  delivery: StructuredAttentionMobileDelivery
+): void {
+  // Teardown drops the host and its subscribers together.
+  host.subscribeTurnCompletions({
+    id: 'host-attention-delivery',
+    includePrompts: true,
+    emit: (event) => {
+      if (event.type === 'end') {
+        return
+      }
+      const sessionId =
+        event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
+      delivery.deliver(event, host.readStatusSummary(sessionId), host.phoneAlertCaller(event))
+    },
+    onState: delivery.reconcile,
+    onTurnStarted: delivery.onTurnStarted
+  })
 }

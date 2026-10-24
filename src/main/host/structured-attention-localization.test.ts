@@ -14,7 +14,7 @@ import { electronRuntimeDesktopSurface } from './electron-runtime-desktop-surfac
 
 vi.mock('electron', () => ({
   app: { getLocale: () => 'en-US' },
-  BrowserWindow: {},
+  BrowserWindow: { getAllWindows: () => [] },
   ipcMain: {},
   Notification: {},
   powerMonitor: {}

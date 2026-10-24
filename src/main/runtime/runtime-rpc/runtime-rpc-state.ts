@@ -147,6 +147,9 @@ export class RuntimeRpcState {
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
     this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
     this.runtime.configureNotificationDismissalStore(userDataPath)
+    this.runtime.setNotificationDesktopProof?.(
+      (deviceId) => this.mobileSocketWiring?.isConnectedDesktop(deviceId) ?? false
+    )
   }
 
   /** Counts a client message for idle exit, from receipt until its dispatch settles. */

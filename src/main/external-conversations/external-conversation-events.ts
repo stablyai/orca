@@ -1,3 +1,7 @@
+import {
+  createAgentCompletionIdentityBacking,
+  createAgentCompletionIdentityScope
+} from '../../renderer/src/components/terminal-pane/agent-completion-identity-store'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
 import type { PendingPrompt } from '../../shared/agent-pending-prompt'
@@ -82,11 +86,24 @@ export class ConversationEvents {
 
   watch(listener: ConversationWatchListener): () => void {
     if (!this.release) {
-      const news = new TerminalAgentTurnNews<TerminalAgentTurnNewsItem>({
+      const news = new TerminalAgentTurnNews({
         readHookRow: (paneKey) => this.deps.readHookRow(paneKey),
-        prepare: (item) => item,
-        deliver: (item) => this.told(item),
-        setTimer: (run, delayMs) => this.deps.setTimer(run, delayMs),
+        createIdentityScope: (paneKey) =>
+          createAgentCompletionIdentityScope(
+            paneKey,
+            'hook',
+            createAgentCompletionIdentityBacking()
+          ),
+        deliver: ({ row, ...item }) => {
+          this.told({
+            ...item,
+            row:
+              row.state === 'working' && row.turnCompletedAt !== undefined
+                ? { ...row, state: 'done', stateStartedAt: row.turnCompletedAt }
+                : row
+          })
+          return undefined
+        },
         started: (item) => this.started(item),
         stopped: (item) => this.ended(item, agentMainAgentVerdict(item.row))
       })

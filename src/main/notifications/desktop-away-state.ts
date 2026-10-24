@@ -5,7 +5,13 @@ type IdleMonitor = {
   getSystemIdleTime(): number
 }
 
-export function readDesktopAwayState(monitor: IdleMonitor): boolean | undefined {
+export function readDesktopAwayState(
+  monitor: IdleMonitor,
+  hasVisibleWindow = true
+): boolean | undefined {
+  if (!hasVisibleWindow) {
+    return true
+  }
   try {
     const state = monitor.getSystemIdleState(DESKTOP_AWAY_SECONDS)
     if (state === 'locked' || state === 'idle') {

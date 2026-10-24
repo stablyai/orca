@@ -147,9 +147,14 @@ export function createAgentCompletionCoordinator(
 
   function consumePendingStampedTailForAgent(
     agentIdentity: string | null,
-    completionIdentity: string | null
+    completionIdentity: string | null,
+    payload?: Parameters<typeof identityScope.consumePendingStampedTailForAgent>[2]
   ): boolean {
-    return identityScope.consumePendingStampedTailForAgent(agentIdentity, completionIdentity)
+    return identityScope.consumePendingStampedTailForAgent(
+      agentIdentity,
+      completionIdentity,
+      payload
+    )
   }
 
   function consumeStampedTailForCurrentCoordinator(turnCompletedAt: number): void {
@@ -264,12 +269,7 @@ export function createAgentCompletionCoordinator(
     recordPaneActivity,
     clearPendingHookDone,
     dispatchAttention,
-    dispatchCompletion: (source, title, override) =>
-      dispatchCompletion(
-        source,
-        title,
-        override as Parameters<typeof notification.dispatchCompletion>[2]
-      ),
+    dispatchCompletion,
     scheduleHookDoneCompletion,
     doneShouldUseQuietWindow,
     hookCompletionIdentity,

@@ -39,12 +39,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     translate: (key, fallback) =>
       getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
     dispatch: (event) => this.mobileNotifications.dispatch(event),
-    setTimer: (run, delayMs) => {
-      // A pending finish must never hold the process open at quit.
-      const timer = setTimeout(run, delayMs)
-      timer.unref?.()
-      return { cancel: () => clearTimeout(timer) }
-    },
+    retire: (alerts) => this.mobileNotifications.retireLiveNotifications(alerts),
+    recordAnnounced: (paneKey, id) =>
+      this.mobileNotifications.announcedNotifications.record(paneKey, id),
     now: Date.now
   })
 
@@ -62,6 +59,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
 
   /** Attaches the detector, and main's generated tab titles; layers above subscribe their readers first. */
   attachAgentStatusStore(store: AgentStatusStoreView): () => void {
+    this.terminalAgentPhonePush.dispose()
     // Why here: each host attaches its hook store at startup, so an enabled connector seam watches
     // its links' agent sessions from then rather than from its first call.
     this.externalConversations.current()
@@ -73,6 +71,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     return () => {
       detachTitles()
       detachTransitions()
+      this.terminalAgentPhonePush.dispose()
     }
   }
 

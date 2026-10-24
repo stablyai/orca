@@ -92,7 +92,12 @@ describe('Claude background-turn completion notifications', () => {
   })
 
   async function play(events: { at: number; payload: Record<string, unknown> }[]): Promise<{
-    banners: { at: number; body: string | undefined; stateStartedAt: number | undefined }[]
+    banners: {
+      at: number
+      body: string | undefined
+      stateStartedAt: number | undefined
+      turnCompletedAt: number | undefined
+    }[]
     rows: HookRow[]
   }> {
     const { observeAgentHookCompletionForNotification } =
@@ -104,13 +109,15 @@ describe('Claude background-turn completion notifications', () => {
       at: number
       body: string | undefined
       stateStartedAt: number | undefined
+      turnCompletedAt: number | undefined
     }[] = []
 
     dispatchTerminalNotification.mockImplementation((_worktreeId, event) => {
       banners.push({
         at: Date.now(),
         body: event.agentStatusSnapshot?.lastAssistantMessage,
-        stateStartedAt: event.agentStatusSnapshot?.stateStartedAt
+        stateStartedAt: event.agentStatusSnapshot?.stateStartedAt,
+        turnCompletedAt: event.agentStatusSnapshot?.turnCompletedAt
       })
     })
 
@@ -173,7 +180,8 @@ describe('Claude background-turn completion notifications', () => {
     expect(banners).toHaveLength(1)
     expect(banners[0]?.at).toBe(1_700_000_006_000)
     expect(banners[0]?.body).toBe('Which cells need hand-verification?')
-    expect(banners[0]?.stateStartedAt).toBe(1_700_000_006_000)
+    expect(banners[0]?.stateStartedAt).toBe(1_700_000_000_000)
+    expect(banners[0]?.turnCompletedAt).toBe(1_700_000_006_000)
   })
 
   it('notifies each background-shell turn with a distinct notification identity', async () => {
@@ -208,13 +216,15 @@ describe('Claude background-turn completion notifications', () => {
     expect(banners[0]).toMatchObject({
       at: 1_700_000_001_000,
       body: 'Dev server is up.',
-      stateStartedAt: 1_700_000_001_000
+      stateStartedAt: 1_700_000_000_000,
+      turnCompletedAt: 1_700_000_001_000
     })
     expect(banners[1]).toMatchObject({
       at: 1_700_000_011_000,
       body: 'Route added.',
-      stateStartedAt: 1_700_000_011_000
+      stateStartedAt: 1_700_000_000_000,
+      turnCompletedAt: 1_700_000_011_000
     })
-    expect(banners[0]?.stateStartedAt).not.toBe(banners[1]?.stateStartedAt)
+    expect(banners[0]?.turnCompletedAt).not.toBe(banners[1]?.turnCompletedAt)
   })
 })

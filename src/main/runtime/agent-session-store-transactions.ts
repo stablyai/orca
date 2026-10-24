@@ -16,7 +16,10 @@ import {
   insertAgentSessionOperationRowsIfAbsent,
   writeAgentSessionStoreRows
 } from './agent-session-record-rows'
-import { readCommandReceipt } from '../native-chat/agent-session-journal/command-receipt-table'
+import {
+  readCommandReceipt,
+  readCommandReceiptCandidates
+} from '../native-chat/agent-session-journal/command-receipt-table'
 import type { CommandReceiptScope } from '../native-chat/agent-session-journal/command-receipt-schema'
 import {
   agentSessionRuntimeIncarnation,
@@ -124,6 +127,10 @@ export class AgentSessionStoreTransactions {
 
   get readOnly(): boolean {
     return this.journalDatabase.readOnly
+  }
+
+  readCommandReceiptCandidates(scope: CommandReceiptScope, operationId: string) {
+    return readCommandReceiptCandidates(this.journalDatabase.db, scope, operationId)
   }
 
   admittedSendCount = (sessionId: string): number => this.admittedSends.get(sessionId) ?? 0

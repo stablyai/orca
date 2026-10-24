@@ -3,14 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   RuntimeMobileNotificationController,
-  type MobileNotificationDispatchEvent,
   type MobileNotificationEvent
 } from '../runtime/runtime-mobile-notification-controller'
 import {
   agentSessionAttentionSubjectPrefix,
-  type StructuredAttentionRead,
-  type StructuredAttentionOrigin,
-  type StructuredAttentionState
+  type StructuredAttentionOrigin
 } from '../../shared/agent-session-attention'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,7 +17,8 @@ import {
   getDispatchHandler,
   getSettleStructuredPromptsHandler,
   notificationCloseMock,
-  resetNotificationDispatchMocks
+  resetNotificationDispatchMocks,
+  notificationIsSupportedMock
 } from './notifications-test-harness'
 
 vi.mock('electron', async () =>
@@ -39,53 +37,171 @@ vi.mock('../tray/system-tray', async () =>
   (await import('./notifications-test-harness')).createSystemTrayModuleMock()
 )
 
-import { registerNotificationHandlers } from './notifications'
+import { registerSubjectRetirement as register } from './notifications-subject-retirement.test-fixture'
+import { AgentHookServer } from '../agent-hooks/server'
+import { AgentTransitionDetector } from '../agent-hooks/agent-transition-detector'
+import { TerminalAgentPhonePush } from '../runtime/terminal-agent-phone-push'
+import { createAgentHookNotificationRetirement } from '../../renderer/src/hooks/agent-hook-notification-retirement'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
-
-function register(
-  options: { suppressWhenFocused: boolean },
-  controller?: RuntimeMobileNotificationController
-): {
-  dispatchMobileNotification: ReturnType<typeof vi.fn>
-  dismissMobileNotification: ReturnType<typeof vi.fn>
-} {
-  const dispatchMobileNotification = vi.fn((event: MobileNotificationDispatchEvent) =>
-    controller?.dispatch(event)
-  )
-  const dismissMobileNotification = vi.fn((id: string) => controller?.dismiss(id))
-  const retireStructuredAttention = (read: StructuredAttentionRead) =>
-    controller?.retireStructuredAttention(read)
-  const reconcileStructuredPromptAttention = (state: StructuredAttentionState) =>
-    controller?.reconcileStructuredPromptAttention(state)
-  registerNotificationHandlers(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only getSettings; Store is a class, so a structural double needs the cast.
-    {
-      getSettings: () => ({
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true,
-          terminalBell: true,
-          suppressWhenFocused: options.suppressWhenFocused
-        }
-      })
-    } as never,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the notification handlers call only these four runtime methods.
-    {
-      dispatchMobileNotification,
-      dismissMobileNotification,
-      retireStructuredAttention,
-      reconcileStructuredPromptAttention
-    } as never
-  )
-  return { dispatchMobileNotification, dismissMobileNotification }
-}
 
 describe('notifications:dismiss by acknowledged subject', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-28T16:00:00Z'))
     resetNotificationDispatchMocks()
+  })
+
+  it('reads the exact headless background alert after window return, and retires only a proved new start', () => {
+    const server = new AgentHookServer()
+    const detector = new AgentTransitionDetector({
+      resolveTabWorktreeId: () => 'wt-1',
+      subscribeToPtyExit: () => () => {},
+      now: Date.now
+    })
+    const controller = new RuntimeMobileNotificationController()
+    const events: MobileNotificationEvent[] = []
+    controller.onDispatched((event) => events.push(event))
+    let hasWindow = false
+    const push = new TerminalAgentPhonePush({
+      hasWindow: () => hasWindow,
+      readNotificationSettings: () => undefined,
+      readWorkspaceLabels: () => ({}),
+      isWorkspaceMuted: () => false,
+      readHookRow: (key) => detector.latestRow(key),
+      dispatch: (event) => controller.dispatch(event),
+      retire: (alerts) => controller.retireLiveNotifications(alerts),
+      recordAnnounced: (key, id) => controller.announcedNotifications.record(key, id),
+      now: Date.now
+    })
+    detector.subscribe((change) => push.observe(change))
+    const detach = detector.attach(server)
+    const report = (state: 'working' | 'done' | 'waiting', turnCompletedAt?: number) =>
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          state,
+          prompt: '',
+          agentType: 'claude',
+          ...(turnCompletedAt ? { turnCompletedAt } : {})
+        }
+      })
+    try {
+      vi.setSystemTime(100_100)
+      report('working')
+      vi.setSystemTime(100_200)
+      report('working', 100_200)
+      const emitted = events[0]
+      expect(emitted).toMatchObject({
+        type: 'notification',
+        notificationId: expect.stringMatching(/:100200$/)
+      })
+      expect(server.getStatusSnapshot()[0]?.stateStartedAt).toBe(100_100)
+      hasWindow = true
+      register({ suppressWhenFocused: false }, controller)
+      notificationIsSupportedMock.mockReturnValue(false)
+      getDismissHandler()({}, ['agent:wrong:100'], [PANE])
+      expect(events.slice(1)).toEqual([
+        expect.objectContaining({ type: 'dismiss', notificationId: 'agent:wrong:100' }),
+        expect.objectContaining({ type: 'dismiss', notificationId: emitted?.notificationId })
+      ])
+      hasWindow = false
+      vi.setSystemTime(230_000)
+      report('done')
+      vi.advanceTimersByTime(1_500)
+      expect(events.filter((event) => event.type === 'notification')).toHaveLength(1)
+      vi.setSystemTime(240_000)
+      report('working')
+      report('waiting')
+      const beforeStart = events.filter((event) => event.type === 'dismiss').length
+      vi.setSystemTime(250_000)
+      report('working')
+      expect(events.filter((event) => event.type === 'dismiss')).toHaveLength(beforeStart)
+      // Positive source IDs exercise the conditional contract; ordinary projection above omits them.
+      const retirementSource = { runId: 'fixture-run', executionId: 'fixture-execution' }
+      let start = 160_000
+      const proved = (state: 'working' | 'waiting', at: number, replay = false) => {
+        return {
+          state,
+          prompt: '',
+          agentType: 'claude',
+          stateStartedAt: at,
+          turnStartedAt: start,
+          ...retirementSource,
+          ...(replay ? { isReplay: true } : {})
+        }
+      }
+      const retirement = createAgentHookNotificationRetirement(
+        () => 'pty-1',
+        (alerts) => controller.retireLiveNotifications(alerts)
+      )
+      retirement.observe(proved('working', 160_000))
+      controller.dispatch({
+        type: 'notification',
+        source: 'agent-task-complete',
+        title: '',
+        body: '',
+        notificationId: 'conditional'
+      })
+      retirement.record({ notificationId: 'conditional' }, proved('waiting', 170_000))
+      retirement.observe(proved('working', 180_000))
+      expect(events.at(-1)?.type).toBe('notification')
+      start = 190_000
+      retirement.observe(proved('working', 190_000))
+      expect(events.at(-1)).toMatchObject({
+        type: 'dismiss',
+        notificationId: 'conditional',
+        dismissedDelivery: { notificationId: 'conditional' }
+      })
+      controller.dispatch({
+        type: 'notification',
+        source: 'agent-task-complete',
+        title: '',
+        body: '',
+        notificationId: 'replay'
+      })
+      retirement.record({ notificationId: 'replay' }, proved('waiting', 200_000))
+      start = 210_000
+      retirement.observe(proved('working', 210_000, true))
+      expect(events.at(-1)?.type).toBe('notification')
+    } finally {
+      detach()
+      push.dispose()
+    }
+  })
+
+  it('withdraws only the exact forwarded delivery through the existing dismiss bridge', () => {
+    const controller = new RuntimeMobileNotificationController()
+    const events: MobileNotificationEvent[] = []
+    controller.onDispatched((event) => events.push(event))
+    register({ suppressWhenFocused: false }, controller)
+    controller.dispatch({
+      type: 'notification',
+      source: 'agent-task-complete',
+      title: 'Done',
+      body: '',
+      notificationId: 'forwarded',
+      executionHost: 'runtime:host-b'
+    })
+    getDismissHandler()({}, [], [], undefined, [{ notificationId: 'forwarded' }])
+    expect(events).toHaveLength(1)
+    getDismissHandler()({}, [], [], undefined, [
+      { notificationId: 'forwarded', executionHost: 'runtime:host-b' }
+    ])
+    expect(events[1]).toMatchObject({
+      type: 'dismiss',
+      dismissedDelivery: {
+        notificationId: 'forwarded',
+        notificationEpoch: events[0]?.notificationEpoch,
+        notificationSeq: 1
+      }
+    })
+    getDismissHandler()({}, [], [], undefined, [
+      { notificationId: 'forwarded', executionHost: 'runtime:host-b' }
+    ])
+    expect(events).toHaveLength(2)
   })
 
   it('retires a shown banner by its subject alone, then forgets the subject', async () => {

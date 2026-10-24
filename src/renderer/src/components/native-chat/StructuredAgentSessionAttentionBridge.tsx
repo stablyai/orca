@@ -1,3 +1,8 @@
+import { agentSessionCurrentContextRows } from '../../../../shared/agent-session-context-clear'
+import { latestStructuredAgentSessionRequest } from '../../../../shared/structured-agent-session-latest-request'
+import { agentSessionAttentionKey } from '../../../../shared/agent-session-attention'
+import { isRootAgentJournalItem } from '../../../../shared/agent-session-journal-producer'
+import { readAgentJournalTurn } from '../../../../shared/agent-session-turn-record'
 import { useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -6,7 +11,10 @@ import {
   sameStructuredReadTarget,
   type StructuredSubjectRead
 } from '@/attention/agent-subject-read-actions'
-import { findStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
+import {
+  findStructuredAgentSessionReadOwner,
+  getStructuredAgentSessionReadOwner
+} from './structured-agent-session-read-owner'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -55,8 +63,94 @@ function StructuredAgentSessionOwnedAttention({
   target: RuntimeClientTarget
 }): null {
   const feed = useMemo(() => getStructuredAgentSessionTurnCompletionFeed(target), [target])
+  const owner = useMemo(
+    () => getStructuredAgentSessionReadOwner(tab.entityId, target),
+    [tab.entityId, target]
+  )
   useEffect(() => feed.activate(), [feed])
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  useEffect(() => {
+    const owed = new Map<string, AgentJournalCursor>()
+    const observe = (): void => {
+      const snapshot = owner.getSnapshot()
+      if (!snapshot.current) {
+        owed.clear()
+        return
+      }
+      const epoch = snapshot.state.cursor?.epoch
+      for (const [notificationId, cursor] of owed) {
+        if (cursor.epoch !== epoch) {
+          owed.delete(notificationId)
+        }
+      }
+      if (!owed.size) {
+        return
+      }
+      const context = agentSessionCurrentContextRows(
+        snapshot.state.items,
+        snapshot.state.submissions
+      )
+      const request = latestStructuredAgentSessionRequest(context.items, context.submissions)
+      const roots =
+        request?.kind === 'turn' && request.turnState === 'running'
+          ? context.items.filter(
+              (item) =>
+                isRootAgentJournalItem(item) &&
+                readAgentJournalTurn(item.body)?.turnId === request.id
+            )
+          : []
+      const root = roots.length === 1 ? roots[0] : undefined
+      const userItemId = readAgentJournalTurn(root?.body)?.userItemId
+      const message = context.items.find((item) => item.itemId === userItemId)
+      if (
+        !root ||
+        root.recovered ||
+        message?.body.kind !== 'message' ||
+        message.body.role !== 'user'
+      ) {
+        return
+      }
+      const ids: { notificationId: string; executionHost?: string }[] = []
+      for (const [notificationId, cursor] of owed) {
+        if (root.sequence > cursor.sequence) {
+          ids.push({
+            notificationId,
+            ...(target.kind === 'environment'
+              ? { executionHost: `runtime:${encodeURIComponent(target.environmentId)}` }
+              : {})
+          })
+          owed.delete(notificationId)
+        }
+      }
+      if (ids.length) {
+        void window.api?.notifications
+          ?.dismiss?.([], [], undefined, ids)
+          .catch((error: unknown) =>
+            console.warn('[structured-session-attention] turn retirement failed', error)
+          )
+      }
+    }
+    const stopOwner = owner.subscribe(observe)
+    const stopEdges = feed.subscribe((edge) => {
+      const payload = edge.type === 'prompt' ? edge.prompt : edge.completion
+      if (
+        payload.sessionId !== tab.entityId ||
+        !payload.journalCursor ||
+        !owner.getSnapshot().current
+      ) {
+        return
+      }
+      owed.set(agentSessionAttentionKey(edge), { ...payload.journalCursor })
+      if (owed.size > 20) {
+        owed.delete(owed.keys().next().value!)
+      }
+    })
+    return () => {
+      stopOwner()
+      stopEdges()
+      owed.clear()
+    }
+  }, [feed, owner, tab.entityId, target])
   const readFrontier = useRef<StructuredSubjectRead | undefined>(undefined)
   // Where the newest edge this tab was handed sits in the journal: what lit its row.
   const surfaced = useRef<AgentJournalCursor | undefined>(undefined)

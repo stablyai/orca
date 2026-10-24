@@ -16,7 +16,10 @@ import type { StructuredAgentSessionTransportOverrides } from './structured-agen
 import { existsSync } from 'node:fs'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
-import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
+import {
+  subscribeStructuredAgentSessionAttention,
+  type StructuredAttentionMobileDelivery
+} from './structured-agent-session-mobile-attention'
 import {
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,
@@ -327,22 +330,7 @@ async function installOnJournal(
     }))
   })
   if (deps.attentionDelivery) {
-    const installed = host
-    const delivery = deps.attentionDelivery
-    // Lives exactly as long as the host: teardown drops the host and its subscribers together.
-    installed.subscribeTurnCompletions({
-      id: 'host-attention-delivery',
-      includePrompts: true,
-      emit: (event) => {
-        if (event.type === 'end') {
-          return
-        }
-        const sessionId =
-          event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
-        delivery.deliver(event, installed.readStatusSummary(sessionId))
-      },
-      onState: delivery.reconcile
-    })
+    subscribeStructuredAgentSessionAttention(host, deps.attentionDelivery)
   }
   // The host starts with its runtime, local or remote, so this is the runtime-start listing.
   const modelCatalog = host.deps.modelCatalog
