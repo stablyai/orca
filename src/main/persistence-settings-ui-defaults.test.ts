@@ -264,6 +264,21 @@ describe('Store', () => {
     })
   })
 
+  it('defaults the notch status on and persists an explicit opt-out', async () => {
+    await withPlatform('darwin', async () => {
+      const persisted = getDefaultPersistedState(testState.dir)
+      delete persisted.settings.showNotchStatus
+      writeDataFile(persisted)
+
+      const store = await createStore()
+      expect(store.getSettings().showNotchStatus).toBe(true)
+      store.updateSettings({ showNotchStatus: false })
+      store.flush()
+
+      expect((await createStore()).getSettings().showNotchStatus).toBe(false)
+    })
+  })
+
   it('persists an explicit macOS menu bar opt-out', async () => {
     await withPlatform('darwin', async () => {
       const store = await createStore()

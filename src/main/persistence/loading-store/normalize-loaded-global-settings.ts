@@ -134,6 +134,8 @@ export function normalizeLoadedGlobalSettings(
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
     // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
+    // Why: missing means default-on, the same round-trip rule as showMenuBarIcon.
+    showNotchStatus: parsed.settings?.showNotchStatus !== false,
     ...migratedPortugueseUiLanguage,
     // Why: the structured runtime reads these per launch; a malformed hand-edited value must not fail a chat.
     nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,

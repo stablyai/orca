@@ -25,12 +25,17 @@ function toWindowTabId(target: TerminalPaneRevealTarget): string {
     : target.tabId
 }
 
+/** Reveals a pane named as its owning host names it; false when this window lacks the workspace. */
+export function revealHostTerminalPane(target: TerminalPaneRevealTarget): boolean {
+  return revealTerminalPane({ ...target, tabId: toWindowTabId(target) })
+}
+
 export function registerTerminalPaneRevealIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onRevealTerminalPane(({ requestId, ...target }) => {
       let revealed = false
       try {
-        revealed = revealTerminalPane({ ...target, tabId: toWindowTabId(target) })
+        revealed = revealHostTerminalPane(target)
       } catch (error) {
         console.error('Failed to reveal terminal pane:', error)
       } finally {

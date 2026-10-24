@@ -3436,6 +3436,18 @@
   "menu": {
     "quitApp": "Quit {{appName}}"
   },
+  "notch": {
+    "rowState": {
+      "attention": "Needs you",
+      "done": "Finished",
+      "working": "Working"
+    },
+    "status": {
+      "attention": "{{count}} awaiting input",
+      "done": "{{count}} finished",
+      "working": "{{count}} working"
+    }
+  },
   "resourceManager": {
     "pty": {
       "localOwnedCount_one": "{{count}} Orca PTY on this computer",

@@ -27,6 +27,7 @@ import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
+import { useNotchRevealBridge } from '../components/notch/useNotchRevealBridge'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -58,6 +59,7 @@ export function useAppShellServices(): void {
   useGitStatusPolling({ enabled: workspaceSessionReady })
   // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
   useEditorExternalWatch()
+  useNotchRevealBridge()
   useReadOnScreenAttention()
   useAppMenuPaste()
   useAppMenuSelectionActions()

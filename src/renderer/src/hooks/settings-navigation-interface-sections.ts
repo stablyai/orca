@@ -37,7 +37,8 @@ export function buildInterfaceSettingsSections({
       searchEntries: getAppearancePaneSearchEntries({
         showDesktopThemeImports: showDesktopOnlySettings,
         showSystemTray: showDesktopOnlySettings && isWindows,
-        showMenuBarIcon: showDesktopOnlySettings && isMac
+        showMenuBarIcon: showDesktopOnlySettings && isMac,
+        showNotchStatus: showDesktopOnlySettings && isMac
       }),
       group: 'interface'
     },

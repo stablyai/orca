@@ -1,4 +1,4 @@
-import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
+import { Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { Store } from '../persistence'
 import type {
@@ -20,6 +20,7 @@ import { createNotificationDeliveryService } from '../notifications/notification
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
+import { findAppWindow } from '../window/app-window-lookup'
 import { isStructuredAttentionRead } from '../../shared/agent-session-attention'
 import { isAgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import {
@@ -148,8 +149,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
   const deliveryService = createNotificationDeliveryService({
     readNotificationSettings: () => store.getSettings().notifications,
-    findActiveWindow: () =>
-      BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null,
+    findActiveWindow: findAppWindow,
     isWindowVisible: isMainWindowVisible,
     setTrayAttention,
     isNotificationSupported: () => Notification.isSupported(),

@@ -79,9 +79,35 @@ const getMenuBarIconEntryCatalog = createLocalizedCatalog((): SettingsSearchEntr
   }
 ])
 
+const getNotchStatusEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('settings.appearance.notchStatus.title', 'Show Agent Status at the Notch'),
+    description: translate(
+      'settings.appearance.notchStatus.description',
+      'Pin live agent counts beside the camera, and keep them updating while the Orca window is closed.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.notchStatus.keyword.notch', 'notch', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword('settings.appearance.notchStatus.keyword.agents', 'agents', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword('settings.appearance.notchStatus.keyword.status', 'status', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword('settings.appearance.notchStatus.keyword.counts', 'counts', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.1f2880a9d5', 'orca')
+    ]
+  }
+])
+
 type SystemPresenceSearchOptions = {
   showMenuBarIcon?: boolean
   showSystemTray?: boolean
+  showNotchStatus?: boolean
 }
 
 export function getSystemTrayEntries(
@@ -100,4 +126,14 @@ export function getMenuBarIconEntries(
   const show =
     options.showMenuBarIcon ?? (getRendererAppPlatform() === 'darwin' && !isWebClientLocation())
   return show ? getMenuBarIconEntryCatalog() : []
+}
+
+export function getNotchStatusEntries(
+  options: SystemPresenceSearchOptions = {}
+): SettingsSearchEntry[] {
+  // Same darwin-and-not-web gate as the menu bar icon: the notch surface is a local macOS
+  // window, so a mac-reporting web client must not advertise it.
+  const show =
+    options.showNotchStatus ?? (getRendererAppPlatform() === 'darwin' && !isWebClientLocation())
+  return show ? getNotchStatusEntryCatalog() : []
 }

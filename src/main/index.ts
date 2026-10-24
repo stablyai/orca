@@ -13,6 +13,7 @@ import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
+import { installNotchStatus } from './startup/notch-status-wiring'
 import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
 import { resolveOsOpenedDocuments } from './startup/os-opened-documents'
 import {
@@ -126,6 +127,7 @@ if (preflightReady) {
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()
   installMainProcessQuitHandlers()
+  installNotchStatus({ openMainWindow })
   void app.whenReady().then(async () => {
     try {
       await initializeMainProcessReady({

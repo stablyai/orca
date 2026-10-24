@@ -92,6 +92,8 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
       // as it stands now are the fallback after a restart emptied that record.
       if (paneKeys.length > 0 && typeof window !== 'undefined') {
         void window.api?.notifications?.dismiss?.([...notificationIdsToDismiss], paneKeys)
+        // Why: main keeps its own visited-set for the notch so a finished agent stops counting green.
+        window.api?.notch?.acknowledgePanes?.(paneKeys)
       }
     },
     unacknowledgeAgents: (paneKeys) =>

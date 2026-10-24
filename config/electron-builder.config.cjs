@@ -552,6 +552,10 @@ module.exports = {
         'orca-keyboard-layout',
         context.packager
       )
+      await signMacScreenGeometryHelper(
+        join(resourcesDir, 'bin', 'orca-screen-geometry'),
+        context.packager
+      )
       await packageMacTerminalHost(join(resourcesDir, '..', '..'), context)
     }
   },
@@ -674,6 +678,12 @@ module.exports = {
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
+      },
+      // Why: unlike the notification helper this one needs no bundle identity — it only reads
+      // NSScreen — so Resources/bin is fine and it avoids the Contents/MacOS signing dance.
+      {
+        from: 'native/screen-geometry-macos/.build/release/orca-screen-geometry',
+        to: 'bin/orca-screen-geometry'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
@@ -944,6 +954,22 @@ async function signMacStandaloneHelper(helperPath, helperName, packager, entitle
   args.push(helperPath)
   execFileSync('codesign', args, { stdio: 'inherit' })
   execFileSync('codesign', ['--verify', '--strict', helperPath], { stdio: 'inherit' })
+}
+
+async function signMacScreenGeometryHelper(helperPath, packager) {
+  // Why fail rather than warn: electron-builder only logs when an extraResources source is
+  // missing, so a forgotten build step shipped silently and the notch degraded to its pill
+  // fallback on every MacBook with nothing surfaced.
+  if (!existsSync(helperPath)) {
+    throw new Error(
+      `Missing orca-screen-geometry helper at ${helperPath} — run pnpm build:screen-geometry-macos`
+    )
+  }
+  chmodSync(helperPath, 0o755)
+  // Why sign at all: it is a nested Mach-O inside the bundle, and notarization rejects an
+  // unsigned one. Unlike the notification helper it needs no bundle identity — it only reads
+  // NSScreen — so it carries no embedded Info.plist and lives in Resources/bin.
+  await signMacStandaloneHelper(helperPath, 'orca-screen-geometry', packager)
 }
 
 function codesignArgs(identity, targetPath) {
