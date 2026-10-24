@@ -13,6 +13,7 @@ import {
   pluginInstallSourceSchema,
   removePluginLock
 } from '../../shared/plugins/plugin-install-lockfile'
+import type { PluginCatalogRelease } from '../../shared/plugins/plugin-catalog-release'
 import { readPluginLockfile, writePluginLockfile } from './plugin-install-lockfile-store'
 import {
   inspectPluginInstallTree,
@@ -151,6 +152,7 @@ export async function installPluginFromMarketplace(input: {
   expectedResolvedCommit: string
   marketplace: { url: string; ref: string; resolvedCommit: string }
   plugin: { url: string; ref: string }
+  release?: PluginCatalogRelease
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
   const source = pluginInstallSourceSchema.parse({
@@ -169,7 +171,7 @@ export async function installPluginFromMarketplace(input: {
     try {
       const resolvedCommit = await checkoutPluginGitSource({
         url: input.plugin.url,
-        ref: input.plugin.ref,
+        ref: input.release?.commit ?? input.plugin.ref,
         destination: stagingDir,
         workingDirectory: tmpdir()
       })
@@ -183,6 +185,7 @@ export async function installPluginFromMarketplace(input: {
         source,
         resolvedCommit,
         expectedPluginKey: input.expectedPluginKey,
+        ...(input.release ? { release: input.release } : {}),
         blockedPluginReason: input.blockedPluginReason
       })
     } catch (error) {

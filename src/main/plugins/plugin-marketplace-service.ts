@@ -283,6 +283,7 @@ export class PluginMarketplaceService {
       categories: entry.categories,
       official,
       bundled: false,
+      ...(entry.release ? { release: entry.release } : {}),
       ...(blocked
         ? {
             blockedByKillList: {

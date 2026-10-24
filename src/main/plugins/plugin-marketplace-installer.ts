@@ -65,14 +65,16 @@ export class PluginMarketplaceInstaller {
     try {
       const resolvedCommit = await checkoutPluginGitSource({
         url: listing.source.url,
-        ref: listing.source.ref,
+        // Why: a pinned release names its commit; the listed ref is only what the author calls it.
+        ref: listing.release?.commit ?? listing.source.ref,
         destination: stagingDirectory,
         workingDirectory: tmpdir()
       })
       const inspection = await inspectPluginInstallTree({
         rootDir: stagingDirectory,
         hostVersion: this.hostVersion,
-        expectedPluginKey: pluginKey
+        expectedPluginKey: pluginKey,
+        ...(listing.release ? { release: { record: listing.release, resolvedCommit } } : {})
       })
       if (!inspection.ok) {
         throw new Error(inspection.error)
@@ -124,6 +126,7 @@ export class PluginMarketplaceInstaller {
         resolvedCommit: preview.marketplaceCommit
       },
       plugin: { url: listing.source.url, ref: listing.source.ref },
+      ...(listing.release ? { release: listing.release } : {}),
       blockedPluginReason: this.blockedPluginReason
     })
   }

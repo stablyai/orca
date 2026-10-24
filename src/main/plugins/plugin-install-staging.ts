@@ -9,6 +9,10 @@ import {
   type PluginManifest
 } from '../../shared/plugins/plugin-manifest'
 import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
+import {
+  pluginCatalogReleaseError,
+  type PluginCatalogRelease
+} from '../../shared/plugins/plugin-catalog-release'
 import type {
   PluginInstallSource,
   PluginLockEntry
@@ -85,6 +89,8 @@ export async function inspectPluginInstallTree(input: {
   rootDir: string
   hostVersion: string
   expectedPluginKey?: string
+  /** Catalog-pinned release these bytes must match exactly. */
+  release?: { record: PluginCatalogRelease; resolvedCommit: string | null }
 }): Promise<PluginInstallInspection> {
   const sourceManifest = await readInstallManifest(input.rootDir, input.hostVersion)
   if (!sourceManifest.ok) {
@@ -105,6 +111,17 @@ export async function inspectPluginInstallTree(input: {
   if (!treeHash.ok) {
     return { ok: false, error: treeHash.error }
   }
+  const releaseError =
+    input.release &&
+    pluginCatalogReleaseError({
+      release: input.release.record,
+      manifest: sourceManifest.manifest,
+      resolvedCommit: input.release.resolvedCommit,
+      contentHash: treeHash.hash
+    })
+  if (releaseError) {
+    return { ok: false, error: releaseError }
+  }
   return {
     ok: true,
     manifest: sourceManifest.manifest,
@@ -122,6 +139,7 @@ export async function installStagedPluginTree(input: {
   source: PluginInstallSource
   resolvedCommit: string | null
   expectedPluginKey?: string
+  release?: PluginCatalogRelease
   /** Trusted bundled bytes may restore an immutable directory damaged on disk. */
   repairCorruptedVersion?: boolean
   blockedPluginReason?: (pluginKey: string) => string | null
@@ -129,7 +147,10 @@ export async function installStagedPluginTree(input: {
   const sourceInspection = await inspectPluginInstallTree({
     rootDir: input.stagingDir,
     hostVersion: input.hostVersion,
-    ...(input.expectedPluginKey ? { expectedPluginKey: input.expectedPluginKey } : {})
+    ...(input.expectedPluginKey ? { expectedPluginKey: input.expectedPluginKey } : {}),
+    ...(input.release
+      ? { release: { record: input.release, resolvedCommit: input.resolvedCommit } }
+      : {})
   })
   if (!sourceInspection.ok) {
     return sourceInspection

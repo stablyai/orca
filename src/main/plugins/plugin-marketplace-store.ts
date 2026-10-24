@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { PLUGIN_COMMIT_PATTERN } from '../../shared/plugins/plugin-install-lockfile'
 import {
   pluginMarketplaceGitSourceSchema,
+  pluginMarketplaceListingSchema,
   pluginMarketplaceSchema,
   type PluginMarketplace,
   type PluginMarketplaceGitSource
@@ -25,17 +26,29 @@ const sourceFileSchema = z.strictObject({
   schemaVersion: z.literal(1),
   sources: z.array(registeredSourceSchema).max(PLUGIN_MARKETPLACE_SOURCE_LIMIT)
 })
-const cachedSnapshotSchema = z.strictObject({
-  schemaVersion: z.literal(1),
+const snapshotFields = {
   sourceId: sourceIdSchema,
   source: pluginMarketplaceGitSourceSchema,
   marketplaceCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
-  fetchedAt: z.number().finite().nonnegative(),
+  fetchedAt: z.number().finite().nonnegative()
+}
+// Why two cache keys: builds that predate release records parse `<id>.json` strictly, so a
+// downgrade must find only v1-shaped data there and refetch rather than fail.
+const legacySnapshotSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  ...snapshotFields,
   marketplace: pluginMarketplaceSchema
+})
+const cachedSnapshotSchema = z.strictObject({
+  schemaVersion: z.literal(2),
+  ...snapshotFields,
+  marketplace: pluginMarketplaceListingSchema
 })
 
 export type PluginMarketplaceRegisteredSource = z.infer<typeof registeredSourceSchema>
-export type PluginMarketplaceCachedSnapshot = z.infer<typeof cachedSnapshotSchema>
+export type PluginMarketplaceCachedSnapshot =
+  | z.infer<typeof cachedSnapshotSchema>
+  | z.infer<typeof legacySnapshotSchema>
 
 const SOURCE_FILE_MAX_BYTES = 2 * 1024 * 1024
 const SNAPSHOT_FILE_MAX_BYTES = 16 * 1024 * 1024
@@ -97,6 +110,7 @@ export class PluginMarketplaceStore {
     })
     if (removed) {
       await rm(this.snapshotPath(parsedId), { force: true })
+      await rm(this.legacySnapshotPath(parsedId), { force: true })
     }
     return removed
   }
@@ -108,7 +122,7 @@ export class PluginMarketplaceStore {
     marketplace: PluginMarketplace
   }): Promise<PluginMarketplaceCachedSnapshot> {
     const snapshot = cachedSnapshotSchema.parse({
-      schemaVersion: 1,
+      schemaVersion: 2,
       sourceId: input.source.id,
       source: input.source.source,
       marketplaceCommit: input.marketplaceCommit,
@@ -121,17 +135,29 @@ export class PluginMarketplaceStore {
 
   async readSnapshot(sourceId: string): Promise<PluginMarketplaceCachedSnapshot | null> {
     const parsedId = sourceIdSchema.parse(sourceId)
+    return (
+      (await this.readSnapshotFile(this.snapshotPath(parsedId), parsedId, cachedSnapshotSchema)) ??
+      (await this.readSnapshotFile(
+        this.legacySnapshotPath(parsedId),
+        parsedId,
+        legacySnapshotSchema
+      ))
+    )
+  }
+
+  private async readSnapshotFile<T extends { sourceId: string }>(
+    path: string,
+    sourceId: string,
+    schema: z.ZodType<T>
+  ): Promise<T | null> {
     try {
-      const raw = JSON.parse(
-        await readBoundedText(this.snapshotPath(parsedId), SNAPSHOT_FILE_MAX_BYTES)
-      )
-      const parsed = cachedSnapshotSchema.parse(raw)
-      if (parsed.sourceId !== parsedId) {
+      const parsed = schema.parse(JSON.parse(await readBoundedText(path, SNAPSHOT_FILE_MAX_BYTES)))
+      if (parsed.sourceId !== sourceId) {
         throw new Error('marketplace snapshot source identity does not match its cache path')
       }
       return parsed
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         return null
       }
       throw new Error(
@@ -188,6 +214,10 @@ export class PluginMarketplaceStore {
   }
 
   private snapshotPath(sourceId: string): string {
+    return join(this.snapshotDirectory, `${sourceId}.v2.json`)
+  }
+
+  private legacySnapshotPath(sourceId: string): string {
     return join(this.snapshotDirectory, `${sourceId}.json`)
   }
 }

@@ -16,9 +16,13 @@ import {
   pluginRelativePathSchema
 } from './plugin-manifest-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
+import {
+  pluginExecutionProfileSchema,
+  validatePluginExecutionProfile
+} from './plugin-execution-profile'
 
 /**
- * Plugin manifest v1 (`orca-plugin.json` at the plugin root). The
+ * Plugin manifest v1 and v2 (`orca-plugin.json` at the plugin root). The
  * `contributes` key names deliberately mirror common Electron-ecosystem
  * manifest conventions so future adapters stay cheap.
  *
@@ -118,9 +122,18 @@ const pluginManifestV1Object = z.object({
   capabilities: z.array(pluginCapabilitySchema).max(32).default([])
 })
 
-export const pluginManifestSchema = pluginManifestV1Object.superRefine(
-  validatePluginManifestContributions
-)
+// Why strict: v2 declares its execution profile, so unknown keys must not smuggle in behavior.
+const pluginManifestV2Object = pluginManifestV1Object
+  .extend({ manifestVersion: z.literal(2), execution: pluginExecutionProfileSchema })
+  .strict()
+
+export const pluginManifestSchema = z.discriminatedUnion('manifestVersion', [
+  pluginManifestV1Object.superRefine(validatePluginManifestContributions),
+  pluginManifestV2Object.superRefine((manifest, ctx) => {
+    validatePluginManifestContributions(manifest, ctx)
+    validatePluginExecutionProfile(manifest, ctx)
+  })
+])
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
 export type PluginPanelContribution = z.infer<typeof panelContributionSchema>

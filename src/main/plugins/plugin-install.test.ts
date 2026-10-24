@@ -11,7 +11,6 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -21,6 +20,7 @@ import {
   readPluginLockfile,
   removeInstalledPlugin
 } from './plugin-install'
+import { serveRepositoriesOverTestSsh } from './__mocks__/plugin-git-ssh-remote-fixture'
 import { PLUGIN_MANIFEST_MAX_BYTES } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
 import { writePluginLockfile } from './plugin-install-lockfile-store'
@@ -65,6 +65,7 @@ async function writePluginSource(
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -447,34 +448,21 @@ describe('installPluginFromGit', () => {
       cwd: sourcePath
     })
 
-    const configKeys = ['GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0'] as const
-    const previous = Object.fromEntries(configKeys.map((key) => [key, process.env[key]]))
-    process.env.GIT_CONFIG_COUNT = '1'
-    process.env.GIT_CONFIG_KEY_0 = `url.${pathToFileURL(sourcePath).href}.insteadOf`
-    process.env.GIT_CONFIG_VALUE_0 = 'https://plugin.test/demo.git'
-    try {
-      const result = await installPluginFromGit({
-        pluginsDir,
-        url: 'https://plugin.test/demo.git',
-        ref: 'v1.0.0',
-        hostVersion: '1.4.0'
-      })
+    await serveRepositoriesOverTestSsh(await tempRoot('orca-plugin-ssh-shim-'), {
+      '/demo.git': sourcePath
+    })
+    const result = await installPluginFromGit({
+      pluginsDir,
+      url: 'ssh://git@plugin.test/demo.git',
+      ref: 'v1.0.0',
+      hostVersion: '1.4.0'
+    })
 
-      expect(result).toMatchObject({ ok: true, resolvedCommit: commitStdout.trim() })
-      if (result.ok) {
-        await expect(
-          readFile(join(pluginsDir, result.pluginKey, result.contentHash, 'panel.html'), 'utf8')
-        ).resolves.toBe('<h1>Panel</h1>')
-      }
-    } finally {
-      for (const key of configKeys) {
-        const value = previous[key]
-        if (value === undefined) {
-          delete process.env[key]
-        } else {
-          process.env[key] = value
-        }
-      }
+    expect(result).toMatchObject({ ok: true, resolvedCommit: commitStdout.trim() })
+    if (result.ok) {
+      await expect(
+        readFile(join(pluginsDir, result.pluginKey, result.contentHash, 'panel.html'), 'utf8')
+      ).resolves.toBe('<h1>Panel</h1>')
     }
   })
 })
