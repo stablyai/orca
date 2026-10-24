@@ -67,12 +67,17 @@ export async function enrichSessionFromSidecar(
     }
   }
   return {
-    session: mergeCursorChatMeta(foldSession, meta, platform),
+    session: mergeCursorChatMeta(foldSession, meta, platform, { preferStoredTitle: true }),
     refused: false
   }
 }
 
-/** Fills only what the transcript never recorded; its own records always win. */
+/**
+ * Fills metadata the transcript never recorded.
+ * Devin keeps a parsed transcript title. Cursor passes `preferStoredTitle`
+ * because `meta.json` is the chat name the user can rename; the transcript
+ * title is only the first prompt.
+ */
 export function mergeCursorChatMeta(
   session: AiVaultSession,
   meta: {
@@ -81,13 +86,19 @@ export function mergeCursorChatMeta(
     createdAt: string | null
     updatedAt: string | null
   },
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  options?: { preferStoredTitle?: boolean }
 ): AiVaultSession {
   const named = session.title !== generatedSessionTitle(session.agent, session.sessionId)
   const cwd = session.cwd ?? meta.cwd
+  const title = options?.preferStoredTitle
+    ? (meta.title ?? session.title)
+    : named
+      ? session.title
+      : (meta.title ?? session.title)
   const merged: AiVaultSession = {
     ...session,
-    title: named ? session.title : (meta.title ?? session.title),
+    title,
     cwd,
     createdAt: session.createdAt ?? meta.createdAt,
     updatedAt: session.updatedAt ?? meta.updatedAt
