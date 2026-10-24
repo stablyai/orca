@@ -5,6 +5,7 @@ import { isHostRouteOf } from '../mobile-web-shell/page-route-policy'
 import { pageRouteWorkspace } from '../mobile-web-shell/page-storage-keys'
 import { readLastVisitedWorktreeOnHost } from '../worktree/last-visited-worktree-by-host'
 import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
+import { notificationPaneTab } from '../session/notification-pane-tab'
 import {
   activeInPageHostKeys,
   bridgeSessionByHostKey,
@@ -13,6 +14,7 @@ import {
   normalizeHostKey,
   noteBridgeHostClientMessage,
   noteBridgeHostServerPayload,
+  publishBridgeSessionViewing,
   registerBridgeSessionViewingSink
 } from './bridge-session-viewing-tracker'
 import type { NotificationViewingWorkspace } from './notification-viewing-policy'
@@ -48,15 +50,43 @@ export function registerInPageNotificationNavigation(
 export function dispatchInPageNotificationNavigation(
   target: InPageNotificationTarget & { hostId: string }
 ): boolean {
-  const handler = handlersByHostId.get(normalizeHostKey(target.hostId))
+  const hostKey = normalizeHostKey(target.hostId)
+  const handler = handlersByHostId.get(hostKey)
   if (!handler) {
     return false
   }
-  return handler({
+  const handled = handler({
     worktreeId: target.worktreeId,
     paneKey: target.paneKey,
     executionHost: target.executionHost
   })
+  if (handled && target.worktreeId) {
+    const state = getOrCreateBridgeSessionState(hostKey)
+    state.worktreeId = target.worktreeId
+    state.executionHost = target.executionHost
+    if (target.paneKey) {
+      const matched = notificationPaneTab(
+        state.tabsByWorktree.get(target.worktreeId) ?? [],
+        target.paneKey
+      )
+      state.selectedByWorktree.set(target.worktreeId, {
+        ...(matched
+          ? {
+              tabId: matched.id,
+              ...(matched.type === 'terminal' && matched.leafId ? { leafId: matched.leafId } : {}),
+              ...(matched.type === 'terminal' && typeof matched.terminal === 'string'
+                ? { terminalHandle: matched.terminal }
+                : {})
+            }
+          : {}),
+        paneKey: target.paneKey,
+        explicit: true
+      })
+      state.paneKey = target.paneKey
+    }
+    publishBridgeSessionViewing(target.hostId, state)
+  }
+  return handled
 }
 
 export function encodeInPageNotificationTarget(target: InPageNotificationTarget): string {
@@ -127,9 +157,22 @@ export function noteInPageStorageWrite(
     state.worktreeId = visited.worktreeId
     state.executionHost = visited.executionHost
     if (visited.paneKey) {
+      const matched = notificationPaneTab(
+        state.tabsByWorktree.get(visited.worktreeId) ?? [],
+        visited.paneKey
+      )
       state.selectedByWorktree.set(visited.worktreeId, {
-        ...state.selectedByWorktree.get(visited.worktreeId),
-        paneKey: visited.paneKey
+        ...(matched
+          ? {
+              tabId: matched.id,
+              ...(matched.type === 'terminal' && matched.leafId ? { leafId: matched.leafId } : {}),
+              ...(matched.type === 'terminal' && typeof matched.terminal === 'string'
+                ? { terminalHandle: matched.terminal }
+                : {})
+            }
+          : {}),
+        paneKey: visited.paneKey,
+        explicit: true
       })
     }
     if (preservedPaneKey) {

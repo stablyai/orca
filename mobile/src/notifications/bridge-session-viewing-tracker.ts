@@ -5,7 +5,7 @@ import {
 } from '../../../src/shared/structured-agent-session-projection'
 import type { BridgeClientMessage } from '../mobile-web-shell/bridge/bridge-envelope'
 import type { MobileSessionTab } from '../session/mobile-session-route-types'
-import { sessionTabPaneKey } from '../session/notification-pane-tab'
+import { notificationPaneTab, sessionTabPaneKey } from '../session/notification-pane-tab'
 import type { NotificationViewingWorkspace } from './notification-viewing-policy'
 
 let inPageViewingSink: ((value: NotificationViewingWorkspace | null) => void) | null = null
@@ -16,7 +16,13 @@ export function registerBridgeSessionViewingSink(
   inPageViewingSink = sink
 }
 
-type SelectionMeta = { tabId?: string; leafId?: string; terminalHandle?: string; paneKey?: string }
+type SelectionMeta = {
+  tabId?: string
+  leafId?: string
+  terminalHandle?: string
+  paneKey?: string
+  explicit?: boolean
+}
 
 type TabsStreamMeta = {
   worktreeId: string
@@ -89,14 +95,20 @@ function findMatchingTab(
     }
   }
   if (selection?.terminalHandle) {
-    return tabs.find(
+    const byHandle = tabs.find(
       (tab) => tab.type === 'terminal' && tab.terminal === selection.terminalHandle
     )
+    if (byHandle) {
+      return byHandle
+    }
+  }
+  if (selection?.paneKey) {
+    return notificationPaneTab(tabs, selection.paneKey)
   }
   return undefined
 }
 
-function publishBridgeSessionViewing(hostId: string, state: HostBridgeSessionState): void {
+export function publishBridgeSessionViewing(hostId: string, state: HostBridgeSessionState): void {
   if (!state.worktreeId) {
     return
   }
@@ -116,11 +128,15 @@ function recordTerminalSelection(hostId: string, state: HostBridgeSessionState, 
   const matched = state.tabsByWorktree
     .get(state.worktreeId)
     ?.find((tab) => tab.type === 'terminal' && tab.terminal === handle)
-  const paneKey = sessionTabPaneKey(matched)
+  const paneKey =
+    sessionTabPaneKey(matched) ??
+    state.selectedByWorktree.get(state.worktreeId)?.paneKey ??
+    state.paneKey
   state.selectedByWorktree.set(state.worktreeId, {
     terminalHandle: handle,
     ...(matched ? { tabId: matched.id, ...(matched.leafId ? { leafId: matched.leafId } : {}) } : {}),
-    ...(paneKey ? { paneKey } : {})
+    ...(paneKey ? { paneKey } : {}),
+    explicit: true
   })
   if (paneKey) {
     state.paneKey = paneKey
@@ -138,7 +154,7 @@ function recordAgentSessionSelection(
   }
   const tabId = structuredAgentSessionTabId(sessionId)
   const paneKey = structuredAgentSessionPaneKey(tabId, sessionId)
-  state.selectedByWorktree.set(state.worktreeId, { tabId, paneKey })
+  state.selectedByWorktree.set(state.worktreeId, { tabId, paneKey, explicit: true })
   state.paneKey = paneKey
   publishBridgeSessionViewing(hostId, state)
 }
@@ -168,6 +184,9 @@ export function noteBridgeHostClientMessage(
       })
     } else {
       state.tabsRequestsById.set(message.id, { worktreeId, ...(executionHost ? { executionHost } : {}) })
+      if (state.worktreeId && state.worktreeId !== worktreeId) {
+        return
+      }
     }
     const worktreeChanged = state.worktreeId !== worktreeId
     state.worktreeId = worktreeId
@@ -175,8 +194,10 @@ export function noteBridgeHostClientMessage(
     if (worktreeChanged) {
       const selected = state.selectedByWorktree.get(worktreeId)
       const tabs = state.tabsByWorktree.get(worktreeId)
-      const matched = findMatchingTab(tabs, selected) ?? tabs?.find((tab) => tab.isActive) ?? tabs?.[0]
-      state.paneKey = sessionTabPaneKey(matched) ?? selected?.paneKey
+      const matched =
+        findMatchingTab(tabs, selected) ??
+        (selected?.paneKey ? undefined : (tabs?.find((tab) => tab.isActive) ?? tabs?.[0]))
+      state.paneKey = selected?.paneKey ?? sessionTabPaneKey(matched)
     }
     publishBridgeSessionViewing(hostId, state)
     return
@@ -198,7 +219,8 @@ export function noteBridgeHostClientMessage(
       ...(matched?.type === 'terminal' && typeof matched.terminal === 'string'
         ? { terminalHandle: matched.terminal }
         : {}),
-      paneKey
+      paneKey,
+      explicit: true
     })
     state.worktreeId = worktreeId
     const rawExec = message.envelope?.executionHost
@@ -274,6 +296,7 @@ export function noteBridgeHostServerPayload(hostId: string, id: string, payload:
   const decoded = streamMeta ? streamMeta.decoder.decode(payload) : { ok: true as const, result: payload }
   const resolvedPayload = (decoded.ok ? decoded.result : payload) as {
     activeTabId?: unknown
+    navigationIntent?: unknown
     tabs?: unknown
   }
   if (!Array.isArray(resolvedPayload.tabs)) {
@@ -297,14 +320,23 @@ export function noteBridgeHostServerPayload(hostId: string, id: string, payload:
     serverActive !== undefined &&
     prevServerActiveId !== undefined &&
     serverActive.id !== prevServerActiveId
-  const explicitMatch = serverActiveChanged ? undefined : findMatchingTab(tabs, existing)
-  const matched = explicitMatch ?? serverActive ?? tabs[0]
+  const followsHost =
+    resolvedPayload.navigationIntent === 'follow' || (serverActiveChanged && !existing?.explicit)
+  const explicitMatch = followsHost ? undefined : findMatchingTab(tabs, existing)
+  const preserveUnmatchedSelection = !followsHost && !explicitMatch && Boolean(existing?.paneKey)
+  const matched =
+    explicitMatch ?? (preserveUnmatchedSelection ? undefined : (serverActive ?? tabs[0]))
   const paneKey = sessionTabPaneKey(matched) ?? existing?.paneKey
-  if ((explicitMatch || serverActiveChanged) && matched && paneKey) {
+  if (matched && paneKey) {
     state.selectedByWorktree.set(meta.worktreeId, {
       ...(explicitMatch ? existing : {}),
       tabId: matched.id,
-      paneKey
+      ...(matched.type === 'terminal' && matched.leafId ? { leafId: matched.leafId } : {}),
+      ...(matched.type === 'terminal' && typeof matched.terminal === 'string'
+        ? { terminalHandle: matched.terminal }
+        : {}),
+      paneKey,
+      ...(explicitMatch && existing?.explicit ? { explicit: true } : {})
     })
   }
   if (!state.worktreeId || state.worktreeId === meta.worktreeId) {

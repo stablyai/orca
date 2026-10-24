@@ -704,4 +704,82 @@ it('decodes session.tabs.subscribe tabsDelta updates, tracks agentSession RPCs, 
       notificationSeq: 3
     })
   ).resolves.toBe(false)
+
+  // Switching tabs via LAST_VISITED_WORKTREE_STORAGE_KEY must not retain stale tabId/terminalHandle
+  // or be overwritten by subsequent server snapshots whose activeTabId is on a different desktop tab
+  // or by background session.tabs.list polls for other worktrees.
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    withLastVisitedWorktree(null, {
+      hostId: 'host-1',
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:22222222-2222-4222-8222-222222222222'
+    }),
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+  noteBridgeHostServerPayload('host-1', 'tabs-delta-sub', {
+    type: 'updated',
+    worktree: 'repo::/work',
+    tabsRevision: 3,
+    activeTabId: 'tab-a',
+    tabs: [
+      {
+        id: 'tab-a',
+        parentTabId: 'tab-a',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        type: 'terminal',
+        title: 'Shell 1',
+        isActive: true,
+        terminal: 'term-1'
+      },
+      {
+        id: 'tab-b',
+        parentTabId: 'tab-b',
+        leafId: '22222222-2222-4222-8222-222222222222',
+        type: 'terminal',
+        title: 'Claude',
+        isActive: false,
+        terminal: 'term-2'
+      }
+    ]
+  })
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'request',
+      id: 'bg-recent-cards-list',
+      method: 'session.tabs.list',
+      params: { worktree: 'id:repo::/other-worktree' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'bg-recent-cards-list', {
+    worktree: 'repo::/other-worktree',
+    activeTabId: 'other-tab',
+    tabs: [
+      {
+        id: 'other-tab',
+        parentTabId: 'other-tab',
+        leafId: '33333333-3333-4333-8333-333333333333',
+        type: 'terminal',
+        title: 'Other',
+        isActive: true,
+        terminal: 'term-other'
+      }
+    ]
+  })
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:22222222-2222-4222-8222-222222222222',
+      notificationId: 'stay-on-tab-b',
+      notificationEpoch: 'epoch',
+      notificationSeq: 4
+    })
+  ).resolves.toBe(false)
 })

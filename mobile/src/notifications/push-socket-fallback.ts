@@ -161,9 +161,17 @@ export async function presentSocketNotificationFallback(
       : {})
   }
   const { canPresentForegroundPush } = await import('./push-receive')
+  const suppressedWhileViewing = shouldSuppressNotificationWhileViewing(
+    payload,
+    hostId,
+    preferences.suppressWhileViewing
+  )
+  console.info(
+    `[notif-policy] id=${payload.notificationId ?? 'none'} wt=${payload.worktreeId ?? 'none'} pane=${payload.paneKey ?? 'none'} suppressed=${suppressedWhileViewing}`
+  )
   if (
     !(await canPresentForegroundPush(payload, hostId)) ||
-    shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing) ||
+    suppressedWhileViewing ||
     isDisposed?.()
   ) {
     return
