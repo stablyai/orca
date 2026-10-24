@@ -48,6 +48,7 @@ export function InAppNotificationBanner() {
   }>()
   const openNotificationRoute = useOpenNotificationRoute()
   const bannerId = banner?.id
+  const bannerCreatedAt = banner?.createdAt
 
   useEffect(() => {
     if (!bannerId) {
@@ -57,7 +58,7 @@ export function InAppNotificationBanner() {
       dismissInAppNotificationBanner(bannerId)
     }, AUTO_DISMISS_MS)
     return () => clearTimeout(timer)
-  }, [bannerId])
+  }, [bannerId, bannerCreatedAt])
 
   if (!banner) {
     return null
@@ -71,25 +72,19 @@ export function InAppNotificationBanner() {
     : isTerminalBell
       ? '🔔 Terminal bell'
       : '✅ Completed'
-  const canNavigate =
-    typeof banner.hostId === 'string' &&
-    banner.hostId.length > 0 &&
-    typeof banner.worktreeId === 'string' &&
-    banner.worktreeId.length > 0
+  const canNavigate = Boolean(banner.hostId)
 
   const handlePress = () => {
     dismissInAppNotificationBanner(banner.id)
     void dismissConsumedTrayNotifications(banner)
-    if (!canNavigate) {
+    if (!canNavigate || !banner.hostId) {
       return
     }
     const activeHostId = firstParam(activeParams.hostId)
     const activeWorktreeId = firstParam(activeParams.worktreeId)
-    const onSameHost =
-      pathname.startsWith('/h/') && paramMatches(activeHostId, banner.hostId)
+    const onSameHost = pathname.startsWith('/h/') && paramMatches(activeHostId, banner.hostId)
     if (
       onSameHost &&
-      banner.hostId &&
       banner.worktreeId &&
       dispatchInPageNotificationNavigation({
         hostId: banner.hostId,
@@ -101,16 +96,18 @@ export function InAppNotificationBanner() {
       return
     }
     const onNativeSessionRoute =
+      Boolean(banner.worktreeId) &&
       onSameHost &&
       pathname.includes('/session/') &&
       paramMatches(activeWorktreeId, banner.worktreeId)
     const onSameWorkspace =
-      onNativeSessionRoute ||
-      isViewingWorkspaceTarget({
-        hostId: banner.hostId,
-        worktreeId: banner.worktreeId,
-        executionHost: banner.executionHost
-      })
+      Boolean(banner.worktreeId) &&
+      (onNativeSessionRoute ||
+        isViewingWorkspaceTarget({
+          hostId: banner.hostId,
+          worktreeId: banner.worktreeId,
+          executionHost: banner.executionHost
+        }))
     const target = getNotificationNavigationTarget({
       hostId: banner.hostId,
       worktreeId: banner.worktreeId,
@@ -134,6 +131,9 @@ export function InAppNotificationBanner() {
       router.replace(hostStackRouteHref(target.sessionTarget))
       return
     }
+    if (onSameHost && !target.sessionTarget && !pathname.includes('/session/')) {
+      return
+    }
     openNotificationRoute(target)
   }
 
@@ -144,35 +144,39 @@ export function InAppNotificationBanner() {
 
   return (
     <View
+      accessibilityRole={isUrgent ? 'alert' : undefined}
+      accessibilityLiveRegion={isUrgent ? 'assertive' : 'polite'}
       pointerEvents="box-none"
       style={[styles.overlay, { top: Math.max(insets.top, spacing.sm) + spacing.xs }]}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${badgeText}: ${banner.title}. ${banner.body}`}
-        onPress={handlePress}
-        style={({ pressed }) => [styles.capsule, pressed && styles.capsulePressed]}
-      >
-        <View style={[styles.indicatorBar, { backgroundColor: accentColor }]} />
-        <View style={styles.content}>
-          <View style={styles.headerRow}>
-            <View style={[styles.badge, isUrgent ? styles.badgeUrgent : styles.badgeComplete]}>
-              <Text style={[styles.badgeText, { color: accentColor }]}>{badgeText}</Text>
+      <View style={styles.capsule}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${badgeText}: ${banner.title}. ${banner.body}`}
+          onPress={handlePress}
+          style={({ pressed }) => [styles.mainPressable, pressed && styles.capsulePressed]}
+        >
+          <View style={[styles.indicatorBar, { backgroundColor: accentColor }]} />
+          <View style={styles.content}>
+            <View style={styles.headerRow}>
+              <View style={[styles.badge, isUrgent ? styles.badgeUrgent : styles.badgeComplete]}>
+                <Text style={[styles.badgeText, { color: accentColor }]}>{badgeText}</Text>
+              </View>
+              <Text numberOfLines={1} style={styles.hostName}>
+                {banner.hostName}
+              </Text>
+              {canNavigate ? <Text style={styles.jumpHint}>Jump →</Text> : null}
             </View>
-            <Text numberOfLines={1} style={styles.hostName}>
-              {banner.hostName}
+            <Text numberOfLines={1} style={styles.title}>
+              {banner.title}
             </Text>
-            {canNavigate ? <Text style={styles.jumpHint}>Jump →</Text> : null}
+            {banner.body.length > 0 ? (
+              <Text numberOfLines={2} style={styles.body}>
+                {banner.body}
+              </Text>
+            ) : null}
           </View>
-          <Text numberOfLines={1} style={styles.title}>
-            {banner.title}
-          </Text>
-          {banner.body.length > 0 ? (
-            <Text numberOfLines={2} style={styles.body}>
-              {banner.body}
-            </Text>
-          ) : null}
-        </View>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Dismiss notification banner"
@@ -182,7 +186,7 @@ export function InAppNotificationBanner() {
         >
           <Text style={styles.closeText}>✕</Text>
         </Pressable>
-      </Pressable>
+      </View>
     </View>
   )
 }
@@ -209,6 +213,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 16,
     elevation: 14
+  },
+  mainPressable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   capsulePressed: {
     opacity: 0.92

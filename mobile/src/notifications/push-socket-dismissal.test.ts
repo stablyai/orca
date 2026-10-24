@@ -87,4 +87,38 @@ it('dismisses the matching in-app notification banner when a socket dismiss arri
   })
   await dismissHostPushNotification({ type: 'dismiss', notificationId: 'same' }, 'host-a')
   expect(getCurrentInAppNotificationBanner()).toBeNull()
+
+  publishInAppNotificationBanner({
+    id: 'banner-newer',
+    tone: 'urgent',
+    hostId: 'host-a',
+    hostName: 'Host A',
+    title: 'orca · main',
+    body: 'Claude needs input',
+    notificationId: 'same',
+    notificationEpoch: 'epoch-1',
+    notificationSeq: 4,
+    createdAt: 2
+  })
+  await dismissHostPushNotification(
+    {
+      type: 'dismiss',
+      notificationId: 'same',
+      notificationEpoch: 'epoch-1',
+      notificationSeq: 3
+    },
+    'host-a'
+  )
+  expect(getCurrentInAppNotificationBanner()?.id).toBe('banner-newer')
+
+  await dismissHostPushNotification(
+    {
+      type: 'dismiss',
+      notificationId: 'same',
+      notificationEpoch: 'epoch-1',
+      notificationSeq: 4
+    },
+    'host-a'
+  )
+  expect(getCurrentInAppNotificationBanner()).toBeNull()
 })

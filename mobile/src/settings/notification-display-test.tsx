@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { loadHostCatalog } from '../transport/host-store'
 import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
@@ -10,13 +11,15 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 
 const TOKEN_PROBE_TIMEOUT_MS = 1500
 
-async function readPushTokenQuickly() {
+async function readPushTokenQuickly(): Promise<
+  Awaited<ReturnType<typeof getDevicePushToken>> | 'timeout'
+> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
       getDevicePushToken().catch(() => null),
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), TOKEN_PROBE_TIMEOUT_MS)
+      new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), TOKEN_PROBE_TIMEOUT_MS)
       })
     ])
   } finally {
@@ -84,7 +87,11 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
             : 'Could not send through Orca’s push service. Try again.'
         )
       }
-      if (sawNotRegistered && (await readPushTokenQuickly()) === null) {
+      if (
+        sawNotRegistered &&
+        (await loadPushNotificationsEnabled()) &&
+        (await readPushTokenQuickly()) === null
+      ) {
         await sendLocalNotificationDisplayTest()
         setMessage(
           'Sent a local test notification. Live connection alerts are active on this device.'

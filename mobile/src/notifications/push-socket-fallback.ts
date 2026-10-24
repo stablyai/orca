@@ -16,6 +16,7 @@ import {
   isNotificationTargetConsumed
 } from './consumed-notification-tray-dismissal'
 import {
+  dismissInAppNotificationBannerById,
   publishInAppNotificationBanner,
   type NotificationTone
 } from './in-app-notification-banner-store'
@@ -24,6 +25,7 @@ import {
   describeNotificationViewing,
   shouldSuppressNotificationWhileViewing
 } from './notification-viewing-policy'
+import { wasPushDismissed } from './push-dismissal-watermarks'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import type { OrcaPushPayload } from './push-payload'
 import { isHostPushRegistered } from './push-registration'
@@ -39,8 +41,7 @@ function tryDecodeSegment(raw: string | undefined): string | undefined {
     return undefined
   }
   try {
-    const decoded = decodeURIComponent(raw).trim()
-    return decoded.length > 0 ? decoded : undefined
+    return decodeURIComponent(raw).trim() || undefined
   } catch {
     return undefined
   }
@@ -49,17 +50,15 @@ function tryDecodeSegment(raw: string | undefined): string | undefined {
 export function classifyNotificationTone(
   event: Pick<DesktopNotificationDispatchEvent, 'source' | 'agentState' | 'title' | 'body'>
 ): NotificationTone {
-  if (event.source === 'terminal-bell') {
+  if (event.source === 'terminal-bell' || event.agentState === 'done' || event.source === 'test') {
     return 'complete'
   }
   if (event.agentState === 'waiting' || event.agentState === 'blocked') {
     return 'urgent'
   }
-  if (event.agentState === 'done' || event.source === 'test') {
-    return 'complete'
-  }
-  const combined = `${event.title ?? ''} ${event.body ?? ''}`
-  return URGENT_TEXT_PATTERN.test(combined) ? 'urgent' : 'complete'
+  return URGENT_TEXT_PATTERN.test(`${event.title ?? ''} ${event.body ?? ''}`)
+    ? 'urgent'
+    : 'complete'
 }
 
 export function resolveEventPaneKey(
@@ -101,10 +100,7 @@ export function resolveEventWorktreeId(
     (event.notificationId.startsWith('agent:') ||
       event.notificationId.startsWith('agent-attention:'))
   ) {
-    const parts = event.notificationId.split(':')
-    if (parts.length >= 3) {
-      return tryDecodeSegment(parts[1])
-    }
+    return tryDecodeSegment(event.notificationId.split(':')[1])
   }
   return undefined
 }
@@ -114,23 +110,18 @@ export async function presentSocketNotificationFallback(
   hostId: string,
   isDisposed?: () => boolean
 ): Promise<void> {
-  if (
-    event.desktopAllowed === false ||
-    event.legacySocketAllowed === false ||
-    event.agentState === 'working'
-  ) {
-    return
-  }
   const title = event.title?.trim() ?? ''
   const body = event.body?.trim() ?? ''
   if (
+    event.desktopAllowed === false ||
+    event.legacySocketAllowed === false ||
+    event.agentState === 'working' ||
     (title.length === 0 && body.length === 0) ||
     event.source === 'terminal-bell' ||
-    title.startsWith('Bell in ')
+    title.startsWith('Bell in ') ||
+    (await isHostPushRegistered(hostId)) ||
+    !(await loadPushNotificationsEnabled())
   ) {
-    return
-  }
-  if ((await isHostPushRegistered(hostId)) || !(await loadPushNotificationsEnabled())) {
     return
   }
   const preferences = await loadNotificationDeliveryPreferences()
@@ -191,25 +182,31 @@ export async function presentSocketNotificationFallback(
     !shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing)
   ) {
     publishInAppNotificationBanner({
+      ...payload,
       id: osNotificationIdentifier,
       tone,
       hostId,
       hostName,
       title: title || 'Orca',
       body,
-      worktreeId: payload.worktreeId,
-      paneKey: payload.paneKey,
-      executionHost: payload.executionHost,
-      notificationId: payload.notificationId,
       osNotificationIdentifier,
       createdAt: Date.now()
     })
+  }
+  const targetMeta = {
+    hostId,
+    hostFingerprint,
+    worktreeId: payload.worktreeId,
+    paneKey: payload.paneKey,
+    executionHost: payload.executionHost,
+    osNotificationIdentifier,
+    notificationId: payload.notificationId
   }
   await ensureDesktopNotificationChannel()
   if (
     isDisposed?.() ||
     shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing) ||
-    isNotificationTargetConsumed({ osNotificationIdentifier, notificationId: payload.notificationId })
+    isNotificationTargetConsumed(targetMeta)
   ) {
     return
   }
@@ -235,19 +232,19 @@ export async function presentSocketNotificationFallback(
     },
     trigger: Platform.OS === 'android' ? { channelId } : null
   })
-  const targetMeta = {
-    hostId,
-    hostFingerprint,
-    worktreeId: payload.worktreeId,
-    paneKey: payload.paneKey,
-    executionHost: payload.executionHost
+  if (
+    payload.notificationId &&
+    payload.notificationEpoch &&
+    payload.notificationSeq !== undefined &&
+    (await wasPushDismissed(payload))
+  ) {
+    dismissInAppNotificationBannerById(payload.notificationId, hostId, payload)
+    const { dismissPresentedPushNotification } = await import('./push-tray-dismissal')
+    await dismissPresentedPushNotification(payload.notificationId, hostFingerprint, payload)
+    return
   }
-  if (isNotificationTargetConsumed({ osNotificationIdentifier, notificationId: payload.notificationId })) {
-    await dismissConsumedTrayNotifications({
-      ...targetMeta,
-      osNotificationIdentifier,
-      notificationId: payload.notificationId
-    })
+  if (isNotificationTargetConsumed(targetMeta)) {
+    await dismissConsumedTrayNotifications(targetMeta)
     return
   }
   await dismissSupersededPaneTrayNotifications(targetMeta, osNotificationIdentifier)
@@ -290,10 +287,9 @@ export async function sendLocalNotificationDisplayTest(): Promise<void> {
 }
 
 function notificationChannelId(sound: boolean, tone: NotificationTone): string {
-  if (!sound) {
-    return `${DESKTOP_NOTIFICATION_CHANNEL_ID}-silent`
-  }
-  return tone === 'urgent'
-    ? DESKTOP_NOTIFICATION_URGENT_CHANNEL_ID
-    : DESKTOP_NOTIFICATION_COMPLETE_CHANNEL_ID
+  return !sound
+    ? `${DESKTOP_NOTIFICATION_CHANNEL_ID}-silent`
+    : tone === 'urgent'
+      ? DESKTOP_NOTIFICATION_URGENT_CHANNEL_ID
+      : DESKTOP_NOTIFICATION_COMPLETE_CHANNEL_ID
 }

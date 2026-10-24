@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   catalog: vi.fn(async (): Promise<{ id: string; name?: string; publicKeyB64: string }[]> => []),
   eligible: vi.fn(async () => true),
   dismissed: vi.fn(async () => false),
+  dismissPresented: vi.fn(async () => undefined),
   schedule: vi.fn(async () => 'scheduled-1'),
   setChannel: vi.fn(async () => null),
   appState: { currentState: 'active' },
@@ -43,6 +44,9 @@ vi.mock('./notification-delivery-preferences', () => ({
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: mocks.catalog }))
 vi.mock('./push-receive', () => ({ canPresentForegroundPush: mocks.eligible }))
 vi.mock('./push-dismissal-watermarks', () => ({ wasPushDismissed: mocks.dismissed }))
+vi.mock('./push-tray-dismissal', () => ({
+  dismissPresentedPushNotification: mocks.dismissPresented
+}))
 vi.mock('expo-notifications', () => ({
   scheduleNotificationAsync: mocks.schedule,
   setNotificationChannelAsync: mocks.setChannel,
@@ -275,6 +279,23 @@ describe('presentSocketNotificationFallback', () => {
     mocks.enabled.mockResolvedValue(false)
     await presentSocketNotificationFallback(alert(), 'host-1')
     expect(mocks.schedule).not.toHaveBeenCalled()
+  })
+
+  it('dismisses the presented notification if a dismissal landed while scheduling', async () => {
+    const hostFingerprint = deriveHostFingerprint(publicKeyB64)
+    mocks.dismissed.mockResolvedValue(true)
+    await presentSocketNotificationFallback(alert({ agentState: 'waiting' }), 'host-1')
+    expect(mocks.schedule).toHaveBeenCalledOnce()
+    expect(mocks.dismissPresented).toHaveBeenCalledWith(
+      'agent-1',
+      hostFingerprint,
+      expect.objectContaining({
+        notificationId: 'agent-1',
+        notificationEpoch: 'epoch-1',
+        notificationSeq: 7
+      })
+    )
+    expect(getCurrentInAppNotificationBanner()).toBeNull()
   })
 })
 

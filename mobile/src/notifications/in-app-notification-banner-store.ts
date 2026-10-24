@@ -1,5 +1,10 @@
 export type NotificationTone = 'urgent' | 'complete'
 
+export type NotificationDismissalFence = Readonly<{
+  notificationEpoch?: string
+  notificationSeq?: number
+}>
+
 export type InAppNotificationBannerItem = Readonly<{
   id: string
   tone: NotificationTone
@@ -11,6 +16,8 @@ export type InAppNotificationBannerItem = Readonly<{
   paneKey?: string
   executionHost?: string
   notificationId?: string
+  notificationEpoch?: string
+  notificationSeq?: number
   osNotificationIdentifier?: string
   createdAt: number
 }>
@@ -46,7 +53,11 @@ export function dismissInAppNotificationBanner(id?: string): void {
   notifyListeners()
 }
 
-export function dismissInAppNotificationBannerById(notificationId: string, hostId?: string): void {
+export function dismissInAppNotificationBannerById(
+  notificationId: string,
+  hostId?: string,
+  fence?: NotificationDismissalFence
+): void {
   if (!currentBanner) {
     return
   }
@@ -58,6 +69,20 @@ export function dismissInAppNotificationBannerById(notificationId: string, hostI
     currentBanner.hostId !== undefined &&
     currentBanner.hostId !== hostId
   ) {
+    return
+  }
+  const hasFence = Boolean(fence?.notificationEpoch) && fence?.notificationSeq !== undefined
+  const bannerHasFence =
+    Boolean(currentBanner.notificationEpoch) && currentBanner.notificationSeq !== undefined
+  if (hasFence) {
+    if (
+      !bannerHasFence ||
+      currentBanner.notificationEpoch !== fence?.notificationEpoch ||
+      (currentBanner.notificationSeq ?? 0) > (fence?.notificationSeq ?? -1)
+    ) {
+      return
+    }
+  } else if (bannerHasFence) {
     return
   }
   currentBanner = null

@@ -15,12 +15,12 @@ export async function dismissHostPushNotification(
   hostId: string
 ): Promise<void> {
   const target = event.dismissedDelivery ?? event
-  dismissInAppNotificationBannerById(target.notificationId, hostId)
+  const fence =
+    target.notificationEpoch && target.notificationSeq !== undefined ? target : undefined
+  dismissInAppNotificationBannerById(target.notificationId, hostId, fence)
   const fingerprint = await hostFingerprint(hostId)
   if (!fingerprint) {
     return
   }
-  const fence =
-    target.notificationEpoch && target.notificationSeq !== undefined ? target : undefined
   await dismissPresentedPushNotification(target.notificationId, fingerprint, fence)
 }
