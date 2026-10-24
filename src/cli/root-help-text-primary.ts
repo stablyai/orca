@@ -26,6 +26,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   'Accounts:',
   '  account add               Add a managed agent account on this Orca host',
   '  account list              List managed agent accounts on this Orca host',
+  '  account usage             Show rate-limit usage per agent account on this Orca host',
   '  account select            Select an OpenCode or Devin account for new launches',
   '  account rm                Remove an OpenCode or Devin account and its private data',
   '',

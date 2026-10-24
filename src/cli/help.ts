@@ -187,6 +187,12 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'account add' && flag === 'agent') {
     return '--agent <id>           Account provider: claude, codex, opencode, or devin (default claude)'
   }
+  if (command === 'account usage' && flag === 'agent') {
+    return '--agent <id>           Only this agent, e.g. claude, codex, gemini, or antigravity'
+  }
+  if (command === 'account usage' && flag === 'fresh') {
+    return '--fresh                Re-read usage for every account before printing'
+  }
   if (command.startsWith('account ') && flag === 'agent') {
     return '--agent <id>           Account provider: opencode or devin'
   }

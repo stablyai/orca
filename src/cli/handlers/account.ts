@@ -41,6 +41,7 @@ import { getWslAccountTarget } from './account-wsl-location'
 import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
 import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
 import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
+import { showAccountUsage } from './account-usage-command'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
@@ -297,6 +298,10 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
         ...(snapshot.devin ? [formatDataAccounts('Devin', snapshot.devin)] : [])
       ].join('\n\n')
     )
+  },
+  'account usage': async (ctx) => {
+    rejectAccountRemoteSelectionFlags(ctx, 'orca account usage')
+    await showAccountUsage(ctx)
   },
   'account select': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account select')
