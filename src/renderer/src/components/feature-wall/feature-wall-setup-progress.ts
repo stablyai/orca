@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/feature-wall-setup-steps'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { selectWorktreesByRepo } from '../../store/workspace-record-selectors'
 
 export type FeatureWallSetupProgressInput = {
   ready?: boolean
@@ -59,6 +60,25 @@ export function isAgentCapabilitiesDone(state: AgentCapabilitiesState): boolean 
   )
 }
 
+// Upgrade eligibility keeps the pre-browser rules as the live checklist evolves.
+export function hasCompletedPreBrowserSetup(input: FeatureWallSetupProgressInput): boolean {
+  return (
+    Boolean(input.settings?.defaultTuiAgent) &&
+    input.settings?.defaultTuiAgent !== 'blank' &&
+    input.gitRepoCount >= 2 &&
+    input.settings?.notifications.enabled === true &&
+    input.settings.notifications.agentTaskComplete === true &&
+    hasFeatureInteraction(input.featureInteractions, 'terminal-pane-split') &&
+    countAvailableNonMainWorktrees(selectWorktreesByRepo(input)) >= 1 &&
+    input.hasConnectedTaskSource &&
+    input.browserUseSkillInstalled &&
+    input.computerUseSkillInstalled &&
+    (input.computerUsePermissionsReady || input.computerUseUnavailable === true) &&
+    input.orchestrationSkillInstalled &&
+    input.hasSetupScript
+  )
+}
+
 export function getFeatureWallSetupProgress(
   input: FeatureWallSetupProgressInput
 ): FeatureWallSetupProgress {
@@ -68,13 +88,12 @@ export function getFeatureWallSetupProgress(
     computerUseUnavailable: input.computerUseUnavailable === true
   })
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
-    'default-agent':
-      Boolean(input.settings?.defaultTuiAgent) && input.settings?.defaultTuiAgent !== 'blank',
+    'default-agent': Boolean(input.settings?.defaultTuiAgent),
     'add-two-repos': input.gitRepoCount >= 2,
     notifications:
       input.settings?.notifications.enabled === true &&
       input.settings.notifications.agentTaskComplete === true,
-    'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
+    'two-worktrees': countAvailableNonMainWorktrees(selectWorktreesByRepo(input)) >= 1,
     // Why: the 'browser' interaction fires when a non-blank page is viewed, so
     // opening any real page in Orca's browser durably completes this milestone.
     browser: hasFeatureInteraction(input.featureInteractions, 'browser'),
@@ -87,5 +106,15 @@ export function getFeatureWallSetupProgress(
     stepDone,
     coreDoneCount: FEATURE_WALL_SETUP_STEPS.filter((step) => stepDone[step.id]).length,
     coreTotal: FEATURE_WALL_SETUP_STEPS.length
+  }
+}
+
+export function getSetupGuideProgressSnapshot(input: FeatureWallSetupProgressInput): {
+  rawProgress: FeatureWallSetupProgress
+  preBrowserSetupComplete: boolean
+} {
+  return {
+    rawProgress: getFeatureWallSetupProgress(input),
+    preBrowserSetupComplete: hasCompletedPreBrowserSetup(input)
   }
 }
