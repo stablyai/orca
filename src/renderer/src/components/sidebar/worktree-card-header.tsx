@@ -11,6 +11,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { resolveRepoHeaderColor } from './project-header-color'
 import { formatSparseDirectoryPreview, shouldBeginWorktreeRename } from './worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
+import { WorktreeCardBoardStatusBadge } from './WorktreeCardBoardStatusBadge'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 import type { WorktreeCardController } from './use-worktree-card-controller'
@@ -266,6 +267,10 @@ export function WorktreeCardHeader({
               </div>
             </TooltipContent>
           </Tooltip>
+        )}
+
+        {!affiliateListMode && (
+          <WorktreeCardBoardStatusBadge worktree={worktree} iconOnly={compactCards} />
         )}
 
         {showTitleRowIndicators && titleRowIndicators}

@@ -5824,6 +5824,7 @@
           "0d224eff10": "プライマリワークツリー",
           "ca74db7550": "SSH ホスト上のプロジェクト",
           "021538e1d1": "SSH が切断されました",
+          "boardStatusTooltip": "ボードのステータス: {{value0}}",
           "runtimeHostDisconnected": "サーバーが切断されました",
           "runtimeHostDisconnectedNamed": "{{hostName}} が切断されました",
           "runtimeHostProject": "Orca サーバー上のプロジェクト",
