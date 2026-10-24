@@ -44,6 +44,7 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:getPageSiteDisplay')
   ipcMain.removeHandler('browser:zoomPage')
   ipcMain.removeHandler('browser:setPageSiteColorScheme')
+  ipcMain.removeHandler('browser:setPageAudioMuted')
 
   // Page/session operations exclude document previews.
   const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
@@ -92,6 +93,18 @@ export function registerBrowserGuestViewHandlers(): void {
         return null
       }
       return browserSiteDisplayController.setColorScheme(guestId, colorScheme)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:setPageAudioMuted',
+    (event, args: { browserPageId: string; muted: unknown }): boolean => {
+      const guest = pageGuest(event, args?.browserPageId)
+      if (!guest || typeof args.muted !== 'boolean') {
+        return false
+      }
+      guest.setAudioMuted(args.muted)
+      return true
     }
   )
 

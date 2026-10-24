@@ -122,6 +122,7 @@ export type BrowserApi = {
     browserPageId: string
     colorScheme: BrowserSiteColorScheme | null
   }) => Promise<BrowserPageSiteDisplay | null>
+  setPageAudioMuted: (args: { browserPageId: string; muted: boolean }) => Promise<boolean>
   reportViewportScrollState?: (args: {
     browserPageId: string
     state: BrowserViewportScrollState
@@ -137,6 +138,9 @@ export type BrowserApi = {
   ) => () => void
   onCertificateFailureChanged: (
     callback: (event: { browserPageId: string; failure: BrowserCertificateFailure | null }) => void
+  ) => () => void
+  onAudioStateChanged: (
+    callback: (event: { browserPageId: string; audible: boolean }) => void
   ) => () => void
   proceedCertificate: (args: {
     browserPageId: string

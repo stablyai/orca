@@ -19941,7 +19941,9 @@
           "switchToChatView": "Alternar para visualização de chat"
         },
         "BrowserTab": {
-          "closeOthers": "Fechar Outras"
+          "closeOthers": "Fechar Outras",
+          "muteTab": "Silenciar Aba",
+          "unmuteTab": "Reativar Som da Aba"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Fechar Outras"

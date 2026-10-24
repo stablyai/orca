@@ -79,6 +79,8 @@ export type IpcEventsHarnessOptions = {
   clientHostedBrowserRowsSnapshot?: ClientHostedBrowserRowsEvent[]
   /** Rejects the hydration round trip instead of resolving it. */
   clientHostedBrowserRowsSnapshotError?: Error
+  /** Extra `window.api.browser` members, e.g. a listener capture for a channel under test. */
+  browserApi?: Record<string, unknown>
 }
 
 /**
@@ -236,6 +238,7 @@ export async function loadIpcEventsHarness(
           onClearDismissal: () => () => {}
         },
         browser: createApiNamespaceStub({
+          ...options.browserApi,
           onNavigationUpdate: (
             listener: (event: { browserPageId: string; url: string; title: string }) => void
           ) => {
