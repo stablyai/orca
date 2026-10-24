@@ -55,10 +55,11 @@ function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): Featur
       browser: false,
       'task-sources': false,
       'agent-capabilities': false,
+      'cli-setup': false,
       'setup-script': false
     },
     coreDoneCount: 0,
-    coreTotal: 8,
+    coreTotal: 9,
     ...overrides
   }
 }
@@ -75,10 +76,11 @@ function makeAllDoneProgress(
       browser: true,
       'task-sources': true,
       'agent-capabilities': true,
+      'cli-setup': true,
       'setup-script': true
     },
-    coreDoneCount: 8,
-    coreTotal: 8,
+    coreDoneCount: 9,
+    coreTotal: 9,
     ...overrides
   })
 }
@@ -89,8 +91,8 @@ function makeOnlyBrowserIncompleteProgress(): FeatureWallSetupProgress {
       ...makeAllDoneProgress().stepDone,
       browser: false
     },
-    coreDoneCount: 7,
-    coreTotal: 8
+    coreDoneCount: 8,
+    coreTotal: 9
   })
 }
 

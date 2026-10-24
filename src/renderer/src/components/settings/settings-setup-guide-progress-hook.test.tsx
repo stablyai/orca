@@ -22,10 +22,11 @@ function makeProgress(): FeatureWallSetupProgress {
       browser: false,
       'task-sources': true,
       'agent-capabilities': false,
+      'cli-setup': false,
       'setup-script': false
     },
     coreDoneCount: 4,
-    coreTotal: 8
+    coreTotal: 9
   }
 }
 
@@ -42,7 +43,7 @@ describe('useSettingsSetupGuideProgress', () => {
   it('uses the same setup progress path as the main sidebar', () => {
     mocks.useSetupGuideProgress.mockReturnValue(makeProgress())
 
-    expect(renderToStaticMarkup(<SettingsProgressProbe />)).toContain('4/8')
+    expect(renderToStaticMarkup(<SettingsProgressProbe />)).toContain('4/9')
     expect(mocks.useSetupGuideProgress).toHaveBeenCalledWith(true, false, false)
   })
 
@@ -57,12 +58,13 @@ describe('useSettingsSetupGuideProgress', () => {
         browser: true,
         'task-sources': true,
         'agent-capabilities': true,
+        'cli-setup': true,
         'setup-script': true
       },
-      coreDoneCount: 8
+      coreDoneCount: 9
     })
 
-    expect(renderToStaticMarkup(<SettingsProgressProbe />)).toContain('8/8')
+    expect(renderToStaticMarkup(<SettingsProgressProbe />)).toContain('9/9')
   })
 
   it('shows browser incomplete after the browser migration has already run for fresh users', () => {
@@ -76,11 +78,12 @@ describe('useSettingsSetupGuideProgress', () => {
         browser: false,
         'task-sources': true,
         'agent-capabilities': true,
+        'cli-setup': true,
         'setup-script': true
       },
-      coreDoneCount: 7
+      coreDoneCount: 8
     })
 
-    expect(renderToStaticMarkup(<SettingsProgressProbe />)).toContain('7/8')
+    expect(renderToStaticMarkup(<SettingsProgressProbe />)).toContain('8/9')
   })
 })

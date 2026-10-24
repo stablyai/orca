@@ -6,6 +6,7 @@ export type FeatureWallSetupStepId =
   | 'browser'
   | 'task-sources'
   | 'agent-capabilities'
+  | 'cli-setup'
   | 'setup-script'
 
 export type FeatureWallSetupStep = {
@@ -48,6 +49,13 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
     name: 'Choose your default agent',
     subtitle: 'Choose your default agent',
     description: 'Start new work faster with your preferred agent already selected.'
+  },
+  {
+    id: 'cli-setup',
+    name: 'Set up the Orca CLI',
+    subtitle: 'Set up the Orca CLI',
+    description:
+      'Register the `orca` shell command on your PATH and install the CLI skill so agents can run Orca commands from any terminal.'
   },
   {
     id: 'agent-capabilities',

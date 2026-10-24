@@ -49,6 +49,16 @@ const getLocalizedFeatureWallSetupChecklistCopyById = createLocalizedCatalog(
         'Start new work faster with your preferred agent already selected.'
       )
     },
+    'cli-setup': {
+      name: translate(
+        'auto.components.feature.wall.feature.wall.setup.checklist.localized.copy.cliSetupName',
+        'Set up the Orca CLI'
+      ),
+      description: translate(
+        'auto.components.feature.wall.feature.wall.setup.checklist.localized.copy.cliSetupDescription',
+        'Register the `orca` shell command on your PATH and install the CLI skill so agents can run Orca commands from any terminal.'
+      )
+    },
     'agent-capabilities': {
       name: translate(
         'auto.components.feature.wall.feature.wall.setup.checklist.localized.copy.agentSkillsName',

@@ -27,6 +27,7 @@ const progress: FeatureWallSetupProgress = {
     browser: false,
     'task-sources': false,
     'agent-capabilities': false,
+    'cli-setup': false,
     'setup-script': false
   },
   coreDoneCount: 0,

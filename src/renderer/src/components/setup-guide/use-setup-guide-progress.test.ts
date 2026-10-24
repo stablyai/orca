@@ -34,6 +34,7 @@ function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): Featur
       browser: false,
       'task-sources': false,
       'agent-capabilities': false,
+      'cli-setup': false,
       'setup-script': false
     },
     coreDoneCount: 0,
@@ -154,9 +155,16 @@ describe('getSetupGuideProgressReady', () => {
     computerUseSkillDiscoveryLoading: false,
     orchestrationSkillDiscoveryLoading: false,
     setupScriptProbeReady: true,
+    cliInstallStatusChecked: true,
     computerUseSkillInstalled: false,
     computerUsePermissionStatusChecked: false
   }
+
+  it('waits for the CLI install status probe to settle', () => {
+    expect(getSetupGuideProgressReady({ ...readyInput, cliInstallStatusChecked: false })).toBe(
+      false
+    )
+  })
 
   it('waits for every setup-guide skill discovery scan to settle', () => {
     expect(
