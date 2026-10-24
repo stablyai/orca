@@ -55,7 +55,8 @@ export function createManagedPaneInternal(
     },
     (paneId, event) => {
       handleManagedPaneMouseEnter(host, paneId, event)
-    }
+    },
+    (paneId) => host.getActivePaneId() === paneId
   )
   pane.webglAttachmentDeferred = host.isRenderingSuspended()
   if (host.isRenderingSuspended()) {
