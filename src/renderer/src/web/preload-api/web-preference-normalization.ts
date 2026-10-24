@@ -27,6 +27,7 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../../shared/tui-agent-launch-defaults'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { hasTypedAgentPermission } from '../../../../shared/tui-agent-permission-choice'
 import {
   migrateAgentPermissionChoice,
@@ -186,6 +187,26 @@ export function migrateStoredWebSettings(stored: Partial<GlobalSettings>): Parti
   }
 }
 
+/** Pre-migration defaults, with command-overridden agents left on their own settings. */
+function browserPreMigrationLaunchProfile(stored: Partial<GlobalSettings>) {
+  const commandOverrides = stored.agentCmdOverrides ?? {}
+  const agentDefaultArgs = { ...stored.agentDefaultArgs }
+  for (const agent of Object.keys(DEFAULT_TUI_AGENT_ARGS)) {
+    if (!isTuiAgent(agent) || agent in agentDefaultArgs) {
+      continue
+    }
+    agentDefaultArgs[agent] = agent in commandOverrides ? '' : (DEFAULT_TUI_AGENT_ARGS[agent] ?? '')
+  }
+  const agentDefaultEnv = { ...stored.agentDefaultEnv }
+  for (const agent of Object.keys(DEFAULT_TUI_AGENT_ENV)) {
+    if (!isTuiAgent(agent) || agent in agentDefaultEnv) {
+      continue
+    }
+    agentDefaultEnv[agent] = agent in commandOverrides ? {} : { ...DEFAULT_TUI_AGENT_ENV[agent] }
+  }
+  return { agentDefaultArgs, agentDefaultEnv }
+}
+
 /** Browser-saved Arguments from before the stored permission carry their flags; moved so the
  *  stored default can't add a second one. A missing key launched with the shipped default. */
 function migrateBrowserSavedAgentPermission(
@@ -196,7 +217,14 @@ function migrateBrowserSavedAgentPermission(
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentPermissionDefault' | 'agentPermissionOverrides'
   >
 > {
-  if (hasTypedAgentPermission(stored) || (!stored.agentDefaultArgs && !stored.agentDefaultEnv)) {
+  if (hasTypedAgentPermission(stored)) {
+    return {}
+  }
+  if (
+    stored.agentYoloDefaultsMigrated !== true &&
+    !stored.agentDefaultArgs &&
+    !stored.agentDefaultEnv
+  ) {
     return {}
   }
   // Mirrors the main loader: a profile already migrated by an older build keeps agents added
@@ -207,10 +235,7 @@ function migrateBrowserSavedAgentPermission(
           agentDefaultArgs: { ...stored.agentDefaultArgs },
           agentDefaultEnv: { ...stored.agentDefaultEnv }
         }
-      : {
-          agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS, ...stored.agentDefaultArgs },
-          agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV, ...stored.agentDefaultEnv }
-        }
+      : browserPreMigrationLaunchProfile(stored)
   return migrateAgentPermissionChoice(launchProfile, null)
 }
 

@@ -133,3 +133,29 @@ it('matches the main loader for a migrated untyped profile that never stored DSH
   expect(resolveTuiAgentLaunchEnv('dsh', loaded)).toEqual({})
   expect(migrateStoredWebSettings(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded)
 })
+
+it('keeps a migrated browser profile with omitted maps on DSH own settings', () => {
+  const loaded = mergeSettings(
+    getDefaultSettings('~'),
+    migrateStoredWebSettings({ agentYoloDefaultsMigrated: true })
+  )
+
+  expect(loaded.dshAgentPermissionMigrated).toBe(true)
+  expect(resolveAgentPermission('dsh', loaded).choice).toBe('own')
+  expect(resolveTuiAgentLaunchEnv('dsh', loaded)).toEqual({})
+  expect(migrateStoredWebSettings(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded)
+})
+
+it('leaves a command-overridden DSH manual in a pre-migration browser profile', () => {
+  const loaded = mergeSettings(
+    getDefaultSettings('~'),
+    migrateStoredWebSettings({
+      agentCmdOverrides: { dsh: 'custom-dsh' },
+      agentDefaultArgs: {},
+      agentDefaultEnv: {}
+    })
+  )
+
+  expect(resolveAgentPermission('dsh', loaded).choice).toBe('own')
+  expect(resolveTuiAgentLaunchEnv('dsh', loaded)).toEqual({})
+})
