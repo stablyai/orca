@@ -44,4 +44,45 @@ describe('normalizeHermesEvent', () => {
     expect(normalize('subagent_stop')).toBeNull()
     expect(normalize('post_api_request')).toBeNull()
   })
+
+  // Regression: Hermes posts pre_tool_call/post_tool_call over an async channel with no
+  // ordering guarantee against post_llm_call. A tool-call event delivered after the turn's
+  // own done hook must not resurrect `working` and clobber the done the user already saw.
+  it('drops a post_tool_call that arrives after the turn already ended', () => {
+    const state = createHookListenerState()
+    expect(normalizeHermesEvent(state, 'pre_llm_call', 'hi', 'pane-1', {})).toMatchObject({
+      state: 'working'
+    })
+    expect(normalizeHermesEvent(state, 'post_llm_call', '', 'pane-1', {})).toMatchObject({
+      state: 'done'
+    })
+    expect(
+      normalizeHermesEvent(state, 'post_tool_call', '', 'pane-1', { tool_name: 'terminal' })
+    ).toBeNull()
+    expect(
+      normalizeHermesEvent(state, 'pre_tool_call', '', 'pane-1', { tool_name: 'terminal' })
+    ).toBeNull()
+    expect(normalizeHermesEvent(state, 'post_approval_response', '', 'pane-1', {})).toBeNull()
+  })
+
+  it('admits tool-call events again once a new turn opens after a stale close', () => {
+    const state = createHookListenerState()
+    normalizeHermesEvent(state, 'pre_llm_call', 'hi', 'pane-1', {})
+    normalizeHermesEvent(state, 'post_llm_call', '', 'pane-1', {})
+    expect(normalizeHermesEvent(state, 'pre_llm_call', 'again', 'pane-1', {})).toMatchObject({
+      state: 'working'
+    })
+    expect(
+      normalizeHermesEvent(state, 'pre_tool_call', '', 'pane-1', { tool_name: 'terminal' })
+    ).toMatchObject({ state: 'working' })
+  })
+
+  it("keeps separate panes from latching each other's turn state", () => {
+    const state = createHookListenerState()
+    normalizeHermesEvent(state, 'pre_llm_call', 'hi', 'pane-1', {})
+    normalizeHermesEvent(state, 'post_llm_call', '', 'pane-1', {})
+    expect(
+      normalizeHermesEvent(state, 'pre_tool_call', '', 'pane-2', { tool_name: 'terminal' })
+    ).toMatchObject({ state: 'working' })
+  })
 })

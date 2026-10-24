@@ -80,7 +80,15 @@ export type HookListenerState = {
   opencodeSessionPaneBySessionId: Map<string, OpenCodeSessionBinding>
   /** Last launch token seen per pane; a rewritten shared-server post needs the bound pane's live token to pass its fence. */
   lastLaunchTokenByPaneKey: Map<string, string>
+  /** Hermes's own turn boundary per pane: bumped on `pre_llm_call`/`on_session_start`, latched
+   *  `ended` on `post_llm_call`. A `pre_tool_call`/`post_tool_call`/`post_approval_response` that
+   *  arrives after its turn already ended (a delayed delivery of a sub-turn event racing the
+   *  turn-end hook) restates old activity, not new work, and must not revive `working` over the
+   *  `done` already shown for that turn. */
+  hermesTurnByPaneKey: Map<string, HermesTurnState>
 }
+
+export type HermesTurnState = { turnKey: number; ended: boolean }
 
 export type MusePaneState = {
   /** Internal reminder/subagent sessions; their hooks inherit the pane env and fire even after Stop. */
@@ -133,7 +141,8 @@ export function createHookListenerState(
     grokMainAgentStatusByPaneKey: new Map(),
     musePaneStateByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
-    lastLaunchTokenByPaneKey: new Map()
+    lastLaunchTokenByPaneKey: new Map(),
+    hermesTurnByPaneKey: new Map()
   }
   legacyStatusAdapterByState.set(state, adapter)
   return state
@@ -226,6 +235,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.musePaneStateByPaneKey.delete(paneKey)
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
+  state.hermesTurnByPaneKey.delete(paneKey)
 }
 
 /** Does this pane still hold anything that can ASSERT a state — a stored row, or a Claude latch that
@@ -279,6 +289,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.musePaneStateByPaneKey, fromPaneKey, toPaneKey)
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.hermesTurnByPaneKey, fromPaneKey, toPaneKey)
 }
 
 export function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -316,4 +327,5 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.musePaneStateByPaneKey.clear()
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
+  state.hermesTurnByPaneKey.clear()
 }
