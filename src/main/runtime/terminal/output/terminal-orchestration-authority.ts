@@ -296,6 +296,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       isWsl: pty.isWsl,
       worktreeId: pty.worktreeId,
       runtimeCliCommand: runtimeOrchestrationCliCommand(),
+      hostPlatform: process.platform,
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined
