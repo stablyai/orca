@@ -7043,6 +7043,10 @@
           "outsideDistro": "Pick a folder inside {{value0}}.",
           "underDistro": "This host can only add folders under \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Folders on a Windows drive stay on this computer. Choose this computer as the host to add one."
+        },
+        "SidebarWorkspaceTabs": {
+          "close": "Close {{value0}}",
+          "newTab": "New Tab"
         }
       },
       "shared": {
@@ -7452,6 +7456,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
+          },
+          "showTabsInSidebar": {
+            "title": "Show tabs in sidebar",
+            "description": "List the active workspace’s tabs under it in the sidebar, with split panes side by side, and hide the top tab bar."
           }
         },
         "AutoRenameBranchFromWorkSetting": {

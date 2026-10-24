@@ -284,6 +284,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   showMobileButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
+  /** Arc-style vertical tabs under the active workspace in the sidebar; hides the top tab strip. */
+  showTabsInSidebar?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
   /** Orca-first keeps app shortcuts from TUIs; terminal-first is opt-in to let shell/TUI bindings win. */

@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
+import { SidebarWorkspaceTabs } from './sidebar-tabs/SidebarWorkspaceTabs'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
@@ -82,6 +83,10 @@ export function WorktreeCardSecondaryRows({
           surface="modal"
           settings={settings}
         />
+      ) : null}
+
+      {isActive && settings?.showTabsInSidebar === true ? (
+        <SidebarWorkspaceTabs worktreeId={worktree.id} />
       ) : null}
 
       {/* Why: counterbalance the card stack gap (-mt-1) so agents right after the title read as one header group. */}

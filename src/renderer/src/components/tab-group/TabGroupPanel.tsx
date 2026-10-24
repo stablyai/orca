@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useMemo } from 'react'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
@@ -70,6 +71,13 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  // Why: sidebar tabs replace the strip only for one-group workspaces; split groups keep their own strips.
+  const hideStripTabs = useAppStore(
+    (state) =>
+      state.settings?.showTabsInSidebar === true &&
+      !hasSplitGroups &&
+      !isFloatingWorkspaceId(worktreeId)
+  )
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeTab,
@@ -292,7 +300,7 @@ export default function TabGroupPanel({
                 }
               />
             ) : null}
-            <div className="min-w-0 flex-1 h-full">{tabBar}</div>
+            <div className="min-w-0 flex-1 h-full">{hideStripTabs ? null : tabBar}</div>
             <div
               className={actionChromeClassName}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}

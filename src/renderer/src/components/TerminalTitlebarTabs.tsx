@@ -58,7 +58,14 @@ export function TerminalTitlebarTabs({
     worktreeClientHostedBrowserRows,
     worktreeFiles
   } = controller
-  if (!renderedActiveWorktreeId || effectiveActiveLayout || !titlebarTabsTarget) {
+  const showTabsInSidebar = useAppStore((state) => state.settings?.showTabsInSidebar === true)
+  // Why: with sidebar tabs on, the sidebar is the tab strip; keep the titlebar for window chrome only.
+  if (
+    !renderedActiveWorktreeId ||
+    effectiveActiveLayout ||
+    !titlebarTabsTarget ||
+    showTabsInSidebar
+  ) {
     return null
   }
   return createPortal(
