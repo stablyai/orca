@@ -86,7 +86,8 @@ describe('agent session resume metadata', () => {
       { key: 'session_id', id: 'session_431324d7' },
       ['kimi', '--session', 'session_431324d7']
     ],
-    ['jcode', { key: 'session_id', id: 'session_jc_1' }, ['jcode', '--resume', 'session_jc_1']]
+    ['jcode', { key: 'session_id', id: 'session_jc_1' }, ['jcode', '--resume', 'session_jc_1']],
+    ['dsh', { key: 'session_id', id: 's1' }, ['dsh-tui', '--backend=dsh', '--resume', 's1']]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })
