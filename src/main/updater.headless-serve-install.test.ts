@@ -723,7 +723,7 @@ describe('headless serve update install handoff', () => {
     }
   )
 
-  it('preserves interactive download and install-on-quit behavior', async () => {
+  it('preserves interactive download but requires explicit installation', async () => {
     const send = vi.fn()
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
@@ -745,7 +745,7 @@ describe('headless serve update install handoff', () => {
     await vi.advanceTimersByTimeAsync(0)
     downloadUpdate()
 
-    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
+    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
     expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(true)
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
     expect(getRemoteServerUpdateSupport()).toEqual({
