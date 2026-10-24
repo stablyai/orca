@@ -34,23 +34,27 @@ export function MobileFileTabActionSheet(props: {
             }
           }
         },
-        {
-          label: 'Copy Path',
-          icon: FileText,
-          onPress: () => {
-            const current = target
-            onClose()
-            if (current) {
-              void clipboard
-                .writeText(current.filePath || current.relativePath)
-                .then(() => onToast('Path copied'))
-                .catch(() => {
-                  triggerError()
-                  onToast("Couldn't copy path", 1500)
-                })
-            }
-          }
-        },
+        ...(target?.relativePath
+          ? [
+              {
+                label: 'Copy Path',
+                icon: FileText,
+                onPress: () => {
+                  const current = target
+                  onClose()
+                  if (current?.relativePath) {
+                    void clipboard
+                      .writeText(current.relativePath)
+                      .then(() => onToast('Path copied'))
+                      .catch(() => {
+                        triggerError()
+                        onToast("Couldn't copy path", 1500)
+                      })
+                  }
+                }
+              }
+            ]
+          : []),
         ...closeWithBulkActions(target, onClose)
       ]}
       onClose={onClose}

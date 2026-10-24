@@ -1,5 +1,4 @@
-import { ChevronLeft, ChevronRight, Copy, FileText, RefreshCw } from 'lucide-react-native'
-import { fileUriToFilesystemPath } from '../../../src/shared/file-uri-path'
+import { ChevronLeft, ChevronRight, Copy, RefreshCw } from 'lucide-react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError } from '../platform/haptics'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -8,26 +7,6 @@ import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
 export type MobileBrowserNavigationMethod = 'browser.back' | 'browser.forward' | 'browser.reload'
-
-function resolveBrowserTabCopyTarget(
-  rawUrl: string | undefined
-): { kind: 'path' | 'url'; value: string } | null {
-  const trimmed = rawUrl?.trim() ?? ''
-  if (!trimmed) {
-    return null
-  }
-  if (trimmed.toLowerCase().startsWith('file:')) {
-    try {
-      const filePath = fileUriToFilesystemPath(new URL(trimmed))
-      if (filePath) {
-        return { kind: 'path', value: filePath }
-      }
-    } catch {
-      // Fall back to copying the raw URL string if the file URI cannot be parsed.
-    }
-  }
-  return { kind: 'url', value: trimmed }
-}
 
 /** Keeps browser-tab navigation actions out of the session route while preserving
  *  the target captured at the moment each drawer action is pressed. */
@@ -43,7 +22,6 @@ export function MobileBrowserTabActionSheet(props: {
 }): React.JSX.Element {
   const { target, onClose, onNavigate, onCloseTab, onToast, bulkCloseActions } = props
   const clipboard = useClipboardWriter()
-  const copyTarget = resolveBrowserTabCopyTarget(target?.url)
   return (
     <ActionSheetModal
       visible={target != null}
@@ -90,26 +68,23 @@ export function MobileBrowserTabActionSheet(props: {
             }
           }
         },
-        ...(copyTarget
+        ...(target?.url
           ? [
               {
-                label: copyTarget.kind === 'path' ? 'Copy Path' : 'Copy URL',
-                icon: copyTarget.kind === 'path' ? FileText : Copy,
+                label: 'Copy URL',
+                icon: Copy,
                 onPress: () => {
-                  const currentCopy = copyTarget
+                  const current = target
                   onClose()
-                  void clipboard
-                    .writeText(currentCopy.value)
-                    .then(() =>
-                      onToast?.(currentCopy.kind === 'path' ? 'Path copied' : 'URL copied')
-                    )
-                    .catch(() => {
-                      triggerError()
-                      onToast?.(
-                        currentCopy.kind === 'path' ? "Couldn't copy path" : "Couldn't copy URL",
-                        1500
-                      )
-                    })
+                  if (current?.url) {
+                    void clipboard
+                      .writeText(current.url)
+                      .then(() => onToast?.('URL copied'))
+                      .catch(() => {
+                        triggerError()
+                        onToast?.("Couldn't copy URL", 1500)
+                      })
+                  }
                 }
               }
             ]
