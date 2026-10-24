@@ -65,4 +65,11 @@ describe('RuntimePairingGeneratorForm', () => {
     expect(markup).toContain('The connection address changed.')
     expect(markup).not.toContain('stale-secret')
   })
+
+  it('allows a pasted HTTPS tunnel address to generate an access link', () => {
+    const markup = renderForm('custom', 'https://orca.example.com')
+
+    expect(markup).not.toContain('disabled=""')
+    expect(markup).not.toContain('aria-invalid="true"')
+  })
 })

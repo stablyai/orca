@@ -44,6 +44,16 @@ The mobile app is intentionally not a full editor — it's a remote control for 
 
 Closing the desktop app drops a direct/LAN session until you reopen it. Relay-backed pairing follows the desktop Relay connection — reopen desktop if the host goes offline.
 
+### Use your own tunnel
+
+The direct/LAN address picker also accepts a user-managed Cloudflare Tunnel or reverse-proxy URL; the phone does not need to be on the same Wi-Fi when that public endpoint is reachable. Configure the tunnel's HTTP origin to reach Orca's actual local listener port and allow WebSocket upgrades. See [Remote Orca Servers → Your own HTTPS tunnel](/docs/remote-servers#alternative-your-own-https-tunnel) for host setup.
+
+In the desktop mobile-pairing flow, choose a custom network address and enter the public `https://orca.example.com` or `wss://orca.example.com` URL. Generate a mobile pairing code and scan or paste it on the phone. Keep the host and tunnel running. Prefer a stable named tunnel: a Quick Tunnel hostname changes on restart, so a saved phone may need its address updated under **Edit host**.
+
+An already paired phone can switch from LAN to a secure tunnel by entering `wss://orca.example.com` under **Edit host → Address**. A full WSS URL without a port uses `443`; an explicit port is preserved. The existing pairing token stays the same.
+
+An interactive Cloudflare Access login page cannot authenticate the native mobile WebSocket. Custom Access service-token headers are not supported by this setup; use a network path compatible with the mobile client rather than disabling an existing Access policy. Orca's device authentication and E2EE remain required on the direct connection.
+
 ## Chat UI
 
 For chat-capable agents (Claude, Codex, and others Orca recognizes), mobile can open the session in **Chat UI** instead of the raw terminal — the same idea as desktop's [Chat UI](/docs/agents/native-chat): a readable transcript, composer, permissions/questions, and image attachments.
@@ -84,7 +94,7 @@ From the mobile home screen, open **Create Workspace** / **New Workspace** and c
 On the hosts list, tap the host card's **⋯** button (or long-press the card) and choose **Edit host**.
 
 - **Name** — display name on this phone only.
-- **Address** — IP, `host:port`, or `ws://` / `wss://`. Missing port keeps the current port (or defaults to `6768`). Address edits only change where this phone connects; they do **not** re-pair. Use this when the same desktop is reachable at a different path (for example home LAN vs Tailscale).
+- **Address** — IP, `host:port`, or `ws://` / `wss://`. A full WSS URL without a port uses `443`; bare-host edits keep the current port (or default to `6768`). Address edits only change where this phone connects; they do **not** re-pair. Use this when the same desktop is reachable through a different address, such as a home LAN, Tailscale, or a secure tunnel.
 
 Saving an address change reconnects to the new endpoint. Pairing token stays the same.
 
