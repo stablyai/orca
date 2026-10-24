@@ -155,7 +155,6 @@ describe.skipIf(
           const command = installedCommand(configPath, event.eventName)
           const scriptPath = join(home, '.orca', 'agent-hooks', event.windowsWrapperFileName)
           const directCommand = wrapWindowsDirectCmdHookCommand(scriptPath)
-          // Why: an ASCII profile registers the forward-slash path Git Bash can start too.
           expect(command).toBe(wrapWindowsBatchHookCommand(scriptPath))
           if (!WINDOWS_CMD_SAFE_PATH.test(scriptPath)) {
             expect(decodeCommand(command)).not.toContain('Set-ExecutionPolicy')

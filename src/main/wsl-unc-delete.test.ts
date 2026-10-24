@@ -59,8 +59,6 @@ describe('tryDeleteWslUncPath', () => {
     const [{ program, args: spawnArgs, cwd, timeoutMs }] = runProcessMock.mock.calls[0]
     expect(program).toBe('wsl.exe')
     expect(timeoutMs).toBe(30000)
-    // Why a concrete directory (#16463): this deletes worktrees, so the cwd it
-    // would otherwise inherit is the very directory about to disappear.
     expect(cwd).toEqual('C:\\Windows')
     expect(spawnArgs).toEqual([
       '-d',

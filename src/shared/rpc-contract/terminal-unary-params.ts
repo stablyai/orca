@@ -256,6 +256,9 @@ export const TerminalSplit = z
     command: OptionalString,
     env: z.record(z.string(), z.string()).optional(),
     telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional(),
+    // A timed-out split's leaf id; sent only to hosts advertising TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY.
+    // Strict, unlike OptionalString: a stripped blank id would read as a fresh split.
+    retrySplit: z.string().min(1, 'Missing split id').optional(),
     // Layout-owner build: a window names its own pane; main writes the split and starts it.
     pane: z
       .object({

@@ -16,7 +16,6 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
-// Models a held AV lock on one path: every lstat of it fails EPERM until released.
 const lstatFaults = vi.hoisted(() => {
   const state = {
     held: new Set<string>(),
@@ -81,7 +80,6 @@ vi.mock('node:os', async () => {
   }
 })
 
-// Every side effect launch preparation performs and a read-only resolution must not.
 async function importServiceWithSideEffectSpies() {
   const syncResources = vi.fn()
   const syncConfig = vi.fn()
@@ -129,8 +127,7 @@ function expectNoSideEffects(
   expect(store.updateSettings).not.toHaveBeenCalled()
 }
 
-// The service constructor syncs the current selection; those calls are its
-// own, not the resolver's, so start each assertion window clean.
+// Exclude constructor synchronization from the resolver's assertion window.
 function clearSideEffectCalls(
   sideEffects: Record<string, ReturnType<typeof vi.fn>>,
   store: { updateSettings: ReturnType<typeof vi.fn> }
@@ -141,8 +138,6 @@ function clearSideEffectCalls(
   store.updateSettings.mockClear()
 }
 
-// One assertion-ready service per test: constructed, with the constructor's
-// own selection-sync calls cleared out of the spies.
 async function createServiceWithSpies(settings: ReturnType<typeof createSettings>) {
   const store = createStore(settings)
   const { CodexRuntimeHomeService, sideEffects } = await importServiceWithSideEffectSpies()
@@ -188,8 +183,7 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
     expect(readOnlyHome).toBe(managedHomePath)
     expectNoSideEffects(sideEffects, store)
 
-    // Positive control: launch preparation for the same settings lands on the
-    // same home and DOES run its side effects, so the spies are proven live.
+    // Prove the spies detect actual launch side effects.
     expect(service.prepareForCodexLaunch()).toBe(readOnlyHome)
     expect(sideEffects.syncResources).toHaveBeenCalled()
     expect(sideEffects.accountBridge).toHaveBeenCalled()
@@ -230,17 +224,14 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
     const { service, store, sideEffects } = await createServiceWithSpies(
       managedAccountSettings(managedHomePath)
     )
-    // The home turns untrusted only after construction (the constructor sync
-    // would otherwise clear the selection first): a foreign ownership marker.
+    // Change ownership after construction so its initial sync cannot clear the selection.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), 'someone-else\n', 'utf-8')
 
     const readOnlyHome = service.resolveHostCodexHomePathForLaunchReadOnly()
-    // The probe-supported lane routes a cleared selection to the real ~/.codex.
     expect(readOnlyHome).toBeNull()
     expectNoSideEffects(sideEffects, store)
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
 
-    // Launch prep for the same settings lands on the same route — by clearing.
     expect(service.prepareForCodexLaunch()).toBe(readOnlyHome)
     expect(store.updateSettings).toHaveBeenCalled()
     expect(store.getSettings().activeCodexManagedAccountId).toBeNull()
@@ -257,13 +248,10 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
     )
     const { ManagedCodexHomeTemporarilyUnavailableError } =
       await import('./host-codex-managed-home-ownership')
-    // Anchor: readable resolves the account home.
     expect(service.resolveHostCodexHomePathForLaunchReadOnly()).toBe(managedHomePath)
     const markerPath = join(realpathSync(managedHomePath), '.orca-managed-home')
     lstatFaults.hold(markerPath)
 
-    // An unreadable home is doubt, not evidence: refuse, never fall through to
-    // the system default behind a UI that still shows this account.
     expect(() => service.resolveHostCodexHomePathForLaunchReadOnly()).toThrow(
       ManagedCodexHomeTemporarilyUnavailableError
     )
@@ -271,7 +259,6 @@ describe('resolveHostCodexHomePathForLaunchReadOnly', () => {
     expectNoSideEffects(sideEffects, store)
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
 
-    // Parity: launch prep refuses the same way, also keeping the selection.
     expect(() => service.prepareForCodexLaunch()).toThrow(
       ManagedCodexHomeTemporarilyUnavailableError
     )

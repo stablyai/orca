@@ -10,8 +10,6 @@ export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> 
     const result = await client
       .call<OrchestrationMutationRequestShowResult>('orchestration.requestShow', { request })
       .catch((error: unknown) => {
-        // Why: an Orca server older than request-show answers method_not_found, which reads
-        // as a bug rather than a version gap on the very path a lost response sends you down.
         if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
           throw new RuntimeClientError(
             'incompatible_runtime',

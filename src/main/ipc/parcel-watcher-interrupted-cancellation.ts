@@ -14,8 +14,7 @@ export function cancelInterruptedWatcherSubscribe(args: {
     return
   }
   resetPendingSubscribeAttempt(record)
-  // Why: recovery may replace this root synchronously from the terminal hook;
-  // publish failure only after its predecessor releases native handles.
+  // A terminal hook may synchronously replace this root; release old native handles before publishing failure.
   void args.restartChild().then(
     () => args.reportTerminalError(record, args.error),
     (terminationError: unknown) =>

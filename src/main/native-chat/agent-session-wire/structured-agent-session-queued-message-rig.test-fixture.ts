@@ -1,6 +1,3 @@
-// One real-host rig for the mid-turn queue suites: store, journal, the scripted provider
-// (`...-rig-provider.test-fixture.ts`), and the send/stop/draft helpers every suite shares.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,7 +38,6 @@ export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
 type RigSendOptions = {
   internal?: true
   from?: AgentMessageSource
-  /** The choices the send carries, fingerprinted as a client's are. */
   carried?: Readonly<Record<string, string>>
 }
 
@@ -53,13 +49,10 @@ export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessage
 
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
-    /** Lets a test sweep idle chats on its own `tick`. */
     idleSweep?: { idleMs: number; intervalMs: number }
-    /** Teardown records its restart offers, which `restartOffers` lists. */
     recoveryCapsule?: true
-    /** Where the chat runs, when not the default worktree. */
     location?: AgentSessionExecutionLocation
-    /** How the host probes a recorded owner; absent answers indeterminate. */
+    /** Defaults to indeterminate. */
     probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
   } = {}
 ) {
@@ -103,13 +96,11 @@ export async function createQueuedMessageTestRig(
     }
   }
 
-  /** A client's send, as the `agentSession.send` RPC hands it to the host;
-   *  `internal` is a host-side sender (orchestration mail, a restart continuation), and `from`
-   *  the agent it is from. */
+  /** Match client RPC sends; internal marks host-origin mail/continuations, from identifies the agent. */
   function send(text: string, delivery?: 'queue-if-active', options?: RigSendOptions) {
     const body = { ...hostTestMessage(text), ...(options?.from ? { from: options.from } : {}) }
     const clientOperationId = hostTestOperationId()
-    // Fingerprinted as the host digests a send: the message without its sender.
+    // Sender identity is excluded from the payload fingerprint.
     const fields = {
       body: agentSessionMessagePayload(body),
       ...(delivery ? { delivery } : {}),
@@ -159,14 +150,13 @@ export async function createQueuedMessageTestRig(
     )
   }
 
-  /** The latest submission that hands off this draft, found by its link. */
   async function handoff(draftId: string): Promise<AgentJournalSubmission | undefined> {
     return (await host.journalSnapshot(SESSION)).submissions.findLast(
       (entry) => entry.queuedMessageId === draftId
     )
   }
 
-  /** The submission id a draft went out under: never the draft's own id. */
+  /** Handoff submission IDs differ from their draft IDs. */
   async function handoffId(draftId: string): Promise<string> {
     const sent = await handoff(draftId)
     if (!sent) {
@@ -189,8 +179,7 @@ export async function createQueuedMessageTestRig(
     }))
   }
 
-  /** A first send that keeps the session working until the test settles it. A starting child
-   *  proves its start first, as the host hands it nothing before. */
+  /** Wait for startup proof before the first send can hold work. */
   async function workingSend(): Promise<string> {
     const { id, result } = send('work on this')
     await result
@@ -216,7 +205,6 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  /** A provider refusal, written as the host writes one: the sentence and the typed fact. */
   async function settleRejected(id: string, providerText: string): Promise<void> {
     const detail = { text: providerText, audience: 'person' as const }
     await host.settleLateDispatch({
@@ -229,24 +217,21 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  /** A host-process restart: the app quits (its own teardown runs) and a new host opens the same
-   *  state. A quit writes no close's Stop event, so a person's Stop pause survives it. */
+  /** Graceful restart preserves personal Stop pauses because quit writes no close Stop event. */
   async function restartHostProcess(): Promise<void> {
     await quitRestartHostProcess()
   }
 
-  /** A host process that dies with no close: a new host opens the same state directory. */
+  /** Replace the host without graceful close, reusing persisted state. */
   function crashRestartHostProcess(): void {
     host = makeHost()
   }
 
-  /** The app quits — the host's own teardown runs — and a new host opens the same state. */
   async function quitRestartHostProcess(): Promise<void> {
     await host.flushAllStreamedEvents()
     crashRestartHostProcess()
   }
 
-  /** The queue's published pause: null when it sends on its own. */
   async function queuePause(sessionId = SESSION): Promise<AgentSessionQueuePause | null> {
     const page = await host.history({ sessionId, direction: 'tail' })
     if (!page.ok) {
@@ -255,7 +240,6 @@ export async function createQueuedMessageTestRig(
     return page.page.queuePause ?? null
   }
 
-  /** The restart offers this host lists for the chats an earlier one stopped. */
   async function restartOffers() {
     return (await host.restartResume.list()).map(({ sessionId, work }) => ({ sessionId, work }))
   }
@@ -266,7 +250,6 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  /** The starting child proves its open before the host hands it queued work. */
   async function proveStart(): Promise<void> {
     await eventually(() =>
       expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')

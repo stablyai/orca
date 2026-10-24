@@ -54,8 +54,7 @@ import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cach
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {
     resetFilesystemIpcMocks()
-    // Reset module-level auth cache so each test starts with a fresh dirty
-    // flag — prevents stale worktree data from a prior test's cache rebuild.
+    // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
   })
 
@@ -87,10 +86,7 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('allows git operations on worktrees outside repo/workspace roots', async () => {
-    // Linked worktrees can live anywhere on disk (e.g. ~/.codex/worktrees/).
-    // As long as the path matches a worktree reported by `git worktree list`
-    // for a registered repo, it should be allowed — the security boundary is
-    // worktree registration, not directory containment.
+    // Git-registered worktrees may live outside the repo; registration defines the boundary.
     const externalWorktreePath = path.resolve('/external/worktrees/feature')
     listWorktreesMock.mockResolvedValue([
       {
@@ -133,21 +129,15 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('rejects branchCompare for a worktree added after cache was built, then succeeds after invalidation', async () => {
-    // Reproduces the bug where CLI-created worktrees fail with
-    // "Access denied: unknown repository or worktree path" because the
-    // filesystem-auth cache was not invalidated after creation.
     const cliWorktreePath = path.resolve('/external/cli-created-worktree')
 
-    // Step 1: register handlers and trigger initial cache build with only
-    // the original worktree in the listing.
     registerFilesystemHandlers(store as never)
 
-    // Warm the cache by calling a git operation on the existing worktree.
+    // Warm authorization before simulating CLI creation.
     getStatusMock.mockResolvedValue({ entries: [] })
     await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
 
-    // Step 2: simulate the CLI creating a new worktree — git now lists it,
-    // but the auth cache is stale.
+    // Git now lists the CLI-created worktree, but authorization still has its old cache.
     listWorktreesMock.mockResolvedValue([
       {
         path: WORKTREE_FEATURE_PATH,
@@ -165,8 +155,6 @@ describe('registerFilesystemHandlers', () => {
       }
     ])
 
-    // Step 3: branchCompare on the new worktree should fail — this is the
-    // exact error the user reported.
     await expect(
       handlers.get('git:branchCompare')!(null, {
         worktreePath: cliWorktreePath,
@@ -174,10 +162,8 @@ describe('registerFilesystemHandlers', () => {
       })
     ).rejects.toThrow('Access denied: unknown repository or worktree path')
 
-    // Step 4: invalidate the cache (what our fix does after CLI create).
     invalidateAuthorizedRootsCache()
 
-    // Step 5: the same branchCompare should now succeed.
     getBranchCompareMock.mockResolvedValue({
       summary: {
         baseRef: 'origin/main',
@@ -222,8 +208,7 @@ describe('registerFilesystemHandlers', () => {
       oldPath: 'src/old-file.ts'
     })
 
-    // Why: validateGitRelativeFilePath uses path.relative() which produces
-    // platform-specific separators (backslashes on Windows).
+    // Expected Git paths use the host's path.relative separators.
     expect(getBranchDiffMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
       {

@@ -80,7 +80,6 @@ export class StructuredAgentSessionEventRecovery {
     }
   }
 
-  /** The one exit handler, for a caller inside the session's serialize that proved the exit. */
   endExitedChildUnderSerialize = (
     sessionId: string,
     child: StructuredAgentSessionProviderChild,
@@ -106,8 +105,7 @@ export class StructuredAgentSessionEventRecovery {
         ) {
           return
         }
-        // Ended in the same step as the stop, so no report of that close can end it first as a
-        // quiet rest: Orca stopped the provider because its own journal failed.
+        // End in this step so later close reports cannot misclassify journal-failure shutdown as quiet rest.
         await this.endExitedChildUnderSerialize(sessionId, child, {
           expected: false,
           heldSends: heldAtFailure,
@@ -128,9 +126,7 @@ export class StructuredAgentSessionEventRecovery {
       .finally(() => this.sinkFailures.delete(sessionId))
   }
 
-  /** Every child's exit ends its record here, expected or not. An exit is settled and shown;
-   *  nothing restarts the child. The next send does, through the delivery loop, which also owns any
-   *  message still queued. */
+  /** Settle/report exits without automatic restart; next-send delivery owns queued work and startup. */
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
     if (event.type === 'options-reported') {
       return settleStructuredAgentSessionOptionsReported(this.context, event)

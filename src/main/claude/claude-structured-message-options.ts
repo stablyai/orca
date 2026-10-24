@@ -19,7 +19,6 @@ import {
 
 const defaultLogger = createStructuredAgentSessionLogger()
 
-/** Applies the accepted message's choices while its prompt is still in the SDK input queue. */
 export async function applyClaudeMessageOptions(
   session: ClaudeSession,
   options: AgentSessionExecutionOptions,
@@ -120,7 +119,7 @@ export async function dispatchClaudeMessage(
         : new AgentSessionOptionRejectedError(error)
     }
   })
-  // Always, even empty: the settings effort the CLI reports is never evidence of a run.
+  // Keep an explicit snapshot, even empty, to prevent fallback to configured choices.
   return outcome.state === 'accepted' || outcome.state === 'admitted'
     ? { ...outcome, ranOptions }
     : outcome

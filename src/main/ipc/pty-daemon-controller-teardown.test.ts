@@ -57,7 +57,6 @@ describe('registerPtyHandlers', () => {
 
   describe('spawn environment', () => {
     describe('daemon-active provider (parity with LocalPtyProvider)', () => {
-      // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
       it('runtime controller stopAndWait fails when keepHistory allows the PTY to revive', async () => {
         vi.useFakeTimers()
         const shutdown = vi.fn(async () => undefined)
@@ -362,8 +361,7 @@ describe('registerPtyHandlers', () => {
           kill: (ptyId: string) => boolean
         }
 
-        // The lease is tombstoned, but nothing observed the detached relay PTY
-        // stop, so the stop itself is reported as unconfirmed.
+        // Tombstoning the lease does not prove its detached relay PTY stopped.
         expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(false)
 
         expect(localShutdown).not.toHaveBeenCalled()
@@ -577,12 +575,8 @@ describe('PTY SSH lease lifecycle', () => {
         ])
       })
       it('splits the teardown budget so the liveness RPC gets only what shutdown left', async () => {
-        // Why: sequential RPCs must share one absolute deadline; otherwise both get
-        // the full ~9.5s bound and their sum overruns the 10s sweep deadline (Finding 1).
-        // Fake timers freeze Date.now() at entry, then let the shutdown RPC burn a
-        // deterministic slice of the budget so the leaf-observed remainders are provable.
+        // Sequential shutdown/liveness RPCs must share one absolute deadline; freeze time to measure consumed budget.
         vi.useFakeTimers()
-        // Each provider call records the budget an RPC leaf would see at issue time.
         const remainingAtLeaf: number[] = []
         const shutdown = vi.fn(async (_id: string, opts?: { deadlineMs?: number }) => {
           remainingAtLeaf.push((opts?.deadlineMs ?? 0) - Date.now())
@@ -632,14 +626,11 @@ describe('PTY SSH lease lifecycle', () => {
         await vi.advanceTimersByTimeAsync(1000)
         await expect(stopPromise).resolves.toBe(true)
 
-        // Both calls carry the same absolute deadline...
         expect(shutdown).toHaveBeenCalledWith(
           'local-pty',
           expect.objectContaining({ immediate: true, deadlineMs })
         )
-        // ...so at the leaves the shutdown RPC sees the full 4321ms budget, while the
-        // SUBSEQUENT liveness list RPC sees only what shutdown left: the 1000ms it
-        // consumed is gone, so 4321 - 1000 = 3321 remain until the shared deadline.
+        // Liveness receives only the budget remaining after shutdown.
         expect(remainingAtLeaf).toEqual([4321, 3321])
         vi.useRealTimers()
       })

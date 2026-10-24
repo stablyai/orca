@@ -11,16 +11,17 @@ private fun failure(reason: String) = MobileWebShellLoadEmission("failed", reaso
 
 class MobileWebShellLoadStateTest {
   @Test
-  fun `spells each reason the way the TypeScript parser reads it`() {
-    assertEquals(
-      listOf(
-        "generation-unreadable",
-        "isolation-unavailable",
-        "document-load-failed",
-        "render-process-gone"
-      ),
-      MobileWebShellFailureReason.entries.map { it.wireName }
+  fun `emits each failure as the payload the TypeScript parser reads`() {
+    val cases = listOf(
+      MobileWebShellFailureReason.GENERATION_UNREADABLE to "generation-unreadable",
+      MobileWebShellFailureReason.ISOLATION_UNAVAILABLE to "isolation-unavailable",
+      MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED to "document-load-failed",
+      MobileWebShellFailureReason.RENDER_PROCESS_GONE to "render-process-gone"
     )
+    for ((reason, expected) in cases) {
+      val machine = MobileWebShellLoadStateMachine()
+      assertEquals(mapOf("state" to "failed", "reason" to expected), machine.failed(reason)?.toPayload())
+    }
   }
 
   @Test

@@ -100,7 +100,6 @@ describe('migrateAutomationsForSshReadoption', () => {
     expect(migrate([automation], 9)).toBe(true)
     expect(automation.runContext?.hostId).toBe(`ssh:${NEW_ID}`)
     expect(automation.sourceContext?.hostId).toBe(`ssh:${NEW_ID}`)
-    // A local record's execution target is not an SSH reference and must stay untouched.
     expect(automation.executionTargetId).toBe('local')
     expect(automation.executionTargetGeneration).toBeUndefined()
   })
@@ -161,7 +160,6 @@ describe('migrateAutomationHostFilterSshTargetId', () => {
     expect(migrateAutomationHostFilterSshTargetId(uiWithFilter('garbage'), OLD_ID, NEW_ID)).toBe(
       false
     )
-    // A store written before the filter existed must migrate without throwing.
     expect(migrateAutomationHostFilterSshTargetId({} as PersistedUIState, OLD_ID, NEW_ID)).toBe(
       false
     )

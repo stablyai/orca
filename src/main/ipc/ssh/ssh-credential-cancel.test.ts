@@ -39,7 +39,6 @@ describe('a cancelled SSH sign-in', () => {
     mockSshStore.getTarget.mockReturnValue(target)
   })
 
-  /** The prompt every connect (explicit, reconnect ladder, tunnel, census) reaches for a credential. */
   function requestCredential(
     targetId: string,
     kind: SshCredentialKind,
@@ -69,7 +68,6 @@ describe('a cancelled SSH sign-in', () => {
     )
   }
 
-  /** What any connect does when its key or password is needed: ask, and the user cancels. */
   async function promptAndCancel(attempt?: AbortSignal): Promise<void> {
     const pending = requestCredential(target.id, 'passphrase', '~/.ssh/id_ed25519', attempt)
     await submitCredential(null)
@@ -105,7 +103,6 @@ describe('a cancelled SSH sign-in', () => {
     void requestCredential(target.id, 'password', target.host, cancelledAttempt)
     expect(credentialRequests()).toHaveLength(1)
 
-    // A later automatic attempt.
     await expect(
       requestCredential(target.id, 'password', target.host, new AbortController().signal)
     ).resolves.toBeNull()

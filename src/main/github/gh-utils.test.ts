@@ -730,7 +730,6 @@ describe('resolveIssueSource', () => {
   })
 
   it("'upstream' + no upstream remote → origin, fellBack=true", async () => {
-    // No upstream remote configured — the first call fails.
     gitExecFileAsyncMock
       .mockRejectedValueOnce(new Error('fatal: No such remote'))
       .mockResolvedValueOnce({ stdout: 'git@github.com:solo/orca.git\n' })
@@ -742,7 +741,6 @@ describe('resolveIssueSource', () => {
   })
 
   it("'origin' + upstream exists → origin (ignores upstream), fellBack=false", async () => {
-    // Only one gh call should happen — origin. Upstream is never consulted.
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout: 'git@github.com:fork/orca.git\n'
     })
@@ -783,11 +781,6 @@ describe('resolveIssueSource', () => {
 })
 
 describe('gh error classification', () => {
-  // Why: a fork with Issues turned off triggers `gh issue list` stderr
-  // "the '<slug>' repository has disabled issues". Without a dedicated branch
-  // the raw "Command failed: gh issue list …" line leaks into the Tasks banner
-  // via the `unknown` fallback — which is what users see when they flip the
-  // per-repo selector to an origin fork that has issues disabled.
   it('classifies "has disabled issues" stderr as issues_disabled', () => {
     const stderr =
       "Command failed: gh issue list --limit 36 --json number,title,state --repo brennanb2025/orca --state open\nthe 'brennanb2025/orca' repository has disabled issues"
@@ -801,11 +794,7 @@ describe('gh error classification', () => {
     })
   })
 
-  // Why: the renderer detects the Search API 1000-result window by matching
-  // GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN against this message (#11485) —
-  // trimming the raw stderr out of the validation_error copy, or drifting the
-  // pattern off GitHub's real wording, would silently downgrade every window
-  // 422 to a generic failure. The stderr stays verbatim so this pins both ends.
+  // Renderer window detection matches this phrase; preserve raw stderr in validation errors.
   it('keeps the search-window phrase in validation_error list messages', () => {
     const stderr =
       'Command failed: gh api --hostname github.com search/issues\nValidation Failed: Only the first 1000 search results are available (HTTP 422)'

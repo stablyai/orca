@@ -14,7 +14,7 @@ export type AcpSessionEvent =
   | { kind: 'known'; notification: SessionNotification }
   | { kind: 'unrecognized'; sessionId: string; raw: z.infer<typeof updateEnvelopeSchema> }
 
-/** A `session/update`, typed when this build knows its kind; null when it is not one at all. */
+/** Preserve unknown updates; reject malformed envelopes. */
 export function readAcpSessionEvent(params: unknown): AcpSessionEvent | null {
   const envelope = updateEnvelopeSchema.safeParse(params)
   if (!envelope.success) {

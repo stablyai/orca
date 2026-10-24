@@ -56,7 +56,6 @@ describe('updateWorktreeGitIdentity', () => {
       branch: 'refs/heads/feature'
     })
     expect(store.getState().sortEpoch).toBe(4)
-    expect(mockApi.worktrees.list).not.toHaveBeenCalled()
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 

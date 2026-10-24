@@ -22,12 +22,11 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     options?: { retainPreviousGuestPolicies?: boolean }
   ): boolean {
     const browserTabId = browserPageId ?? legacyBrowserTabId
-    // Why refuse rather than overwrite: the two halves of the registry must stay disjoint, or one
-    // id resolves in both and the tool door silently prefers the document guest over the page.
+    // Keep document IDs out of browsing maps: tool authorization checks documents first.
     if (!browserTabId || isWorkspaceDocPageId(browserTabId)) {
       return false
     }
-    // Why: on guest-surface swap, cancel any grab bound to the old guest's listeners so it doesn't strand on a stale webContents.
+    // Cancel grabs bound to the previous surface before replacing its guest.
     this.cancelGrabOp(browserTabId, 'evicted')
 
     const previousCleanup = this.contextMenuCleanupByTabId.get(browserTabId)
@@ -41,12 +40,12 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       return false
     }
 
-    // Why: don't trust the renderer-sent id blindly — a compromised renderer could pass the main window's id; only accept webview guests.
+    // Renderer-supplied IDs may name privileged windows; accept only webviews.
     if (guest.getType() !== 'webview') {
       return false
     }
     if (!this.policyAttachedGuestIds.has(webContentsId)) {
-      // Why: only trust guests that passed attach-time policy install, or a renderer could point us at an arbitrary webview.
+      // Trust only webviews that passed attach-time policy installation.
       return false
     }
 
@@ -93,17 +92,14 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     browserTabId: string,
     reason: 'page-closed' | 'guest-destroyed' = 'page-closed'
   ): void {
-    // Why the check on the exit door too: a document page withdraws by revoking its grant, never
-    // through here, so its id arriving is misaddressed — and the cancel below would evict that
-    // preview's live grab on the strength of it.
+    // Document pages retire by grant revocation; this path must not cancel their grabs.
     if (isWorkspaceDocPageId(browserTabId)) {
       return
     }
-    // Why: teardown mid-grab must cancel it so the renderer gets a signal, not a dangling Promise.
+    // Resolve pending grabs before removing their registration.
     this.cancelGrabOp(browserTabId, 'evicted')
     cancelBrowserPagePrompts(browserTabId)
 
-    // Why: remove attachGuestPolicies listeners so their guest-WebContents closures don't block GC.
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (guestWebContentsId !== undefined) {
       this.cleanupGuestPolicyAttachment(guestWebContentsId)
@@ -151,7 +147,6 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.workspaceIdByPageId.delete(browserTabId)
     this.sessionProfileIdByPageId.delete(browserTabId)
     this.worktreeIdByTabId.delete(browserTabId)
-    // Why: drop the viewport-op chain so the Map doesn't retain a promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
     this.viewportPresetByTabId.delete(browserTabId)
     this.viewportScrollStateByTabId.delete(browserTabId)
@@ -161,7 +156,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.annotationViewportBridgeOpsByTabId.delete(browserTabId)
   }
 
-  // Why: headless orca serve has no <webview> window; back pages with offscreen WebContents and skip the webview-only setup.
+  // Headless serve uses offscreen contents without renderer webview bindings.
   registerOffscreenGuest({
     browserPageId,
     worktreeId,
@@ -173,8 +168,6 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     sessionProfileId?: string | null
     webContentsId: number
   }): boolean {
-    // Why the same check on both registration doors: one id resolving in both halves is the exact
-    // confusion the split registries exist to prevent.
     if (isWorkspaceDocPageId(browserPageId)) {
       return false
     }
@@ -182,7 +175,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     if (!guest || guest.isDestroyed()) {
       return false
     }
-    // Why: offscreen pages have no renderer webview listeners, so main owns their load-failure lifecycle.
+    // Main owns load-failure reporting for pages without renderer listeners.
     this.offscreenGuestIds.add(webContentsId)
     this.attachGuestPolicies(guest)
     const previousWebContentsId = this.webContentsIdByTabId.get(browserPageId)
@@ -202,7 +195,6 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
   }
 
   unregisterAll(): void {
-    // Cancel all active grab ops before tearing down registrations
     this.grabSessionController.cancelAll('evicted')
     for (const downloadId of this.downloadsById.keys()) {
       this.cancelDownloadInternal(downloadId, 'Orca is shutting down.')
@@ -213,7 +205,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     }
     this.policyAttachedGuestIds.clear()
     this.offscreenGuestIds.clear()
-    // Why: unregisterGuest skips guests that were policy-attached but never registered; invoke their cleanup closures here.
+    // Also clean up guests attached before registration.
     for (const cleanup of this.policyCleanupByGuestId.values()) {
       cleanup()
     }

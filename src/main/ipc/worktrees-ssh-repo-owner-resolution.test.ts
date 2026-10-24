@@ -96,7 +96,6 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
-// Why: every removal and listing reply now names the catalog it produced or scanned.
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
 
 describe('registerWorktreeHandlers', () => {
@@ -336,7 +335,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(result.status).toBe('complete')
     expect(result.result.authoritative).toBe(false)
-    // Why: the git-worktree synthesizer would read the "::workspace:<uuid>" tail as a directory.
+    // Git synthesis would mistake a folder workspace's instance suffix for a directory.
     expect(result.result.worktrees).toEqual([
       expect.objectContaining({ id: rootId, path: folderRepo.path, isMainWorktree: true }),
       expect.objectContaining({ id: instanceId, path: folderRepo.path, isMainWorktree: false })
@@ -377,7 +376,6 @@ describe('registerWorktreeHandlers', () => {
     const forgotten = await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
       repoId: sshRepo.id,
       executionHostId: sshHostId,
-      // Only the first two are this host's rows; the rest must survive an over-broad request.
       worktreeIds: [
         'repo-1::/remote/deleted',
         'repo-1::/remote/deleted-too',
@@ -407,7 +405,7 @@ describe('registerWorktreeHandlers', () => {
       pruneTargets
     )
 
-    // Why: the renderer's suppression memory is session-scoped, so the next launch must not re-list the row.
+    // Persist removal because renderer suppression lasts only for this session.
     const relisted = (await handlers['worktrees:listKnownForExecutionHost'](null, {
       repoId: sshRepo.id,
       executionHostId: sshHostId
@@ -443,8 +441,7 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  // Runtime-host rows are exempt from gcStaleWorktreeMeta exactly as SSH ones are, so a paired
-  // client needs this path to ever drop them (#17776).
+  // Runtime rows bypass local stale GC too, so only authoritative host scans retire them (#17776).
   it('retires runtime-host metadata an authoritative scan proved gone', async () => {
     const runtimeHostId = toRuntimeExecutionHostId('env-1')
     const runtimeRepo = {
@@ -474,16 +471,13 @@ describe('registerWorktreeHandlers', () => {
       worktreeIds: ['repo-1::/home/orca/deleted', 'repo-1::/home/orca/other-host']
     })
 
-    // The row stamped to another host needs that host's own scan, not this one's.
     expect(forgotten).toEqual({ forgottenWorktreeIds: ['repo-1::/home/orca/deleted'] })
     expect(store.removeWorktreeMeta).toHaveBeenCalledExactlyOnceWith(
       hostWorktreeTarget({ id: 'repo-1::/home/orca/deleted', hostId: runtimeHostId })
     )
   })
 
-  // A repo that reaches its checkouts over SSH is not the runtime host's to condemn. The refusal
-  // comes from `findExactRepoOwner`: a runtime `executionHostId` beside a `connectionId` is
-  // contradictory ownership evidence, so no owner resolves at all.
+  // Runtime ownership plus a connectionId is contradictory; findExactRepoOwner must refuse it.
   it('refuses to retire a connection-backed repo under a runtime host id', async () => {
     const runtimeHostId = toRuntimeExecutionHostId('env-1')
     store.getRepos.mockReturnValue([
@@ -532,7 +526,6 @@ describe('registerWorktreeHandlers', () => {
         worktreeIds: ['repo-1::/remote/deleted']
       })
     ).toEqual({ forgottenWorktreeIds: [] })
-    // Ambiguous SSH ownership fails closed the same way the metadata read does.
     expect(
       await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
         repoId: sshRepo.id,

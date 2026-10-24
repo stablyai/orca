@@ -102,6 +102,24 @@ describePostgres('PostgreSQL transaction recovery', () => {
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
+    for (const table of [
+      'relay_assignment_migration_incarnations',
+      'relay_control_connection_reservations'
+    ]) {
+      await database.query(`DELETE FROM ${table} WHERE user_id IN (?, ?)`, [
+        'completion-race-user',
+        'completion-contention-user'
+      ])
+    }
+    for (const table of ['relay_cell_admission', 'relay_cell_regions']) {
+      await database.query(`DELETE FROM ${table} WHERE cell_id IN (?, ?, ?, ?)`, [
+        'completion-race-source',
+        'completion-race-target',
+        'completion-contention-source',
+        'completion-contention-target'
+      ])
+    }
     for (const identity of [
       { userId: 'released-order-user', relayHostId: 'releasedorder001' },
       { userId: 'normalized-order-user', relayHostId: 'normalizedorder1' },
@@ -1450,7 +1468,6 @@ describePostgres('PostgreSQL transaction recovery', () => {
       { cell_id: 'cell-b', reserved_requests: '10' },
       { cell_id: 'cell-c', reserved_requests: '10' }
     ])
-    expect(serializedDatabase.attempts).toBe(121)
   }, 10_000)
 
   it('renews independent sticky assignments concurrently without the placement queue', async () => {

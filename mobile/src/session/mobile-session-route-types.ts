@@ -10,6 +10,7 @@ import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
+import type { MobileNativeChatIdentity } from './mobile-native-chat-eligibility'
 
 export type Terminal = TerminalRecord
 
@@ -28,6 +29,8 @@ export type MobileSessionTab =
       /** Agent Orca launched in this terminal, if any. This makes chat eligible
        *  before the first live agent-status update reaches the mobile client. */
       launchAgent?: TuiAgent
+      /** Client-only: the last chat identity seen on this handle (see withRememberedNativeChatIdentity). */
+      nativeChatIdentity?: MobileNativeChatIdentity
       /** Host-provided launch context still parked as an unsent TUI-input draft. */
       launchDraft?: string
       launchDraftCreatedAt?: number

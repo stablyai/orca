@@ -6,9 +6,7 @@ import type { JournalRow } from './journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 import type { JournalWriteBody } from './journal-write-queue'
 
-/** An operation's receipt, committed with the journal write that makes it true: `write` runs
- *  inside that transaction on the same connection, `committed` synchronously right after its
- *  COMMIT and never after a rollback. */
+/** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
   write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
@@ -23,7 +21,6 @@ export function composeJournalOperationReceipts(
   }
 }
 
-/** `run`, with `receipt` written in its transaction only when `changed` says it wrote something. */
 export function writeReceiptIfChanged<T>(
   run: (db: Database.Database) => T,
   changed: (result: T) => boolean,
@@ -47,8 +44,7 @@ export type JournalRowWriterDeps = {
   highestFence: () => number
   nextSequence: () => number
   commit: (rows: readonly JournalRow[], savedAt: number) => void
-  /** Rows an OS crash may lose without losing anything but streamed text; they commit without
-   *  the per-commit fsync (`isJournalStreamedTextRevision`). */
+  /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
   streamedTextRevision?: (row: JournalRow) => boolean
 }
 
@@ -64,7 +60,6 @@ export class JournalRowWriter {
       const savedAt = this.deps.now()
       const row = build(this.deps.nextSequence(), savedAt)
       assertJournalFence(row.fence, this.deps.highestFence())
-      // One INSERT: the chat's epoch pointer moves only when the epoch does.
       this.deps.database().transaction(
         (db) => {
           insertJournalRow(db, this.deps.sessionId, row, savedAt)
@@ -72,18 +67,14 @@ export class JournalRowWriter {
         },
         !receipt && this.streamed([row])
       )
-      // COMMIT landed, so the row is durable: adopt it before anything that can
-      // fail. Rejecting here instead would leave the next append reusing a
-      // sequence the table already holds. The ledger first: it cannot throw, the fold can.
+      // Adopt durable sequence state before fallible work: nonthrowing receipt ledger, then fold.
       receipt?.committed()
       this.deps.commit([row], savedAt)
       return row
     })
   }
 
-  /** Several rows in ONE transaction, in order, planned once the lane is this append's: none is
-   *  durable unless all are, so no reader ever meets some without the rest. `receiptRow` picks the
-   *  row `receipt` names. */
+  /** Plan on the write lane and commit all rows atomically; receiptRow identifies the receipt target. */
   enqueueRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     receipt?: JournalOperationReceipt,
@@ -92,7 +83,7 @@ export class JournalRowWriter {
     return this.deps.serialize(() => this.writeRows(plan, receipt, receiptRow))
   }
 
-  /** `enqueueRows`' write, for a caller already running at its own turn in the queue. */
+  /** Caller must already own the write lane. */
   writeRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     receipt?: JournalOperationReceipt,
@@ -122,8 +113,7 @@ export class JournalRowWriter {
     return rows
   }
 
-  /** Assign the next sequence, make the row durable, and fold it through the SAME reducer
-   *  replay uses — all inside one serialized step — answering where the row landed. */
+  /** Serialize sequence assignment, durable write and replay-equivalent folding. */
   append(
     build: (seq: number, ts: number) => JournalRow,
     receipt?: JournalOperationReceipt

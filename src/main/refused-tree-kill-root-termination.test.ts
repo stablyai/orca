@@ -33,7 +33,6 @@ import { killCodexAppServerProcessTree } from './codex/codex-app-server-process-
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { killSourceControlAgentProcess } from './text-generation/source-control-local-process'
 
-/** A pid Electron reports as one of ours: every gate below must refuse it. */
 const RENDERER_PID = 1001
 
 function appEnvironment(): AppEnvironment {
@@ -81,12 +80,7 @@ afterEach(() => {
   _resetTracerForTests()
 })
 
-/**
- * A refusal must never become a process leak. The gate only blocks the
- * pid-addressed tree walk; the root kill is addressed by the child handle, so it
- * cannot reach the recycled pid we refused, and skipping it would report a
- * timed-out command as stopped while its tree keeps running.
- */
+// A child-handle kill still owns the root when a PID-based tree walk is refused.
 describe('a refused tree-kill still terminates the root it owns', () => {
   it('kills the git command root when the tree walk is refused', async () => {
     setPlatform('win32')
@@ -150,9 +144,7 @@ describe('a refused tree-kill still terminates the root it owns', () => {
   })
 
   it('still signals the POSIX process group: a group only holds what Orca put in it', async () => {
-    // Same contract as main and as the other three POSIX group arms in main
-    // (claude-login, codex teardown, PTY sweep): record, never refuse. A stale
-    // `getAppMetrics()` entry must not orphan a macOS/Linux tree.
+    // Stale Electron metrics must not orphan an owned POSIX process group.
     setPlatform('linux')
     const posixChild = { pid: RENDERER_PID, kill: vi.fn(), exitCode: null, signalCode: null }
     const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)

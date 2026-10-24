@@ -111,6 +111,7 @@ export type RuntimeStore = {
     agentWorkspaceTrustEnabled?: GlobalSettings['agentWorkspaceTrustEnabled']
     codexManagedAccounts?: GlobalSettings['codexManagedAccounts']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
+    orchestrationChatErrorEscalationEnabled?: GlobalSettings['orchestrationChatErrorEscalationEnabled']
     workspaceDir: string
     nestWorkspaces: boolean
     workspaceDirHistory?: GlobalSettings['workspaceDirHistory']
@@ -127,6 +128,8 @@ export type RuntimeStore = {
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
+    agentPermissionDefault?: GlobalSettings['agentPermissionDefault']
+    agentPermissionOverrides?: GlobalSettings['agentPermissionOverrides']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     // Read by the launch-line carry rule to name the shell a local line is typed into.
     terminalDefaultShell?: GlobalSettings['terminalDefaultShell']

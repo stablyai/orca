@@ -3,11 +3,7 @@ import {
   createSqliteTestStore,
   readPersistedStateJson
 } from './persistence-test-harness'
-// Why this file exists: persistence.test.ts mocks safeStorage.encryptString
-// deterministically, which cannot catch the real-world hazard the single-
-// stringify save guard must survive — encrypt() uses a random IV, so identical
-// state produces different on-disk bytes each save. These tests mock a
-// nondeterministic cipher and pin the guard + payload invariants.
+// Random-IV ciphertext changes on every encryption; identical state must still skip redundant writes.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -22,11 +18,7 @@ vi.mock('./ssh/config/ssh-config-parser', () => ({
   sshConfigHostsToTargets: vi.fn()
 }))
 
-// Nondeterministic cipher: same plaintext → different ciphertext every call,
-// like safeStorage's random IV. encryptionAvailable is toggleable per test.
-// deterministic=true mimics macOS/legacy-Linux OSCrypt (constant IV → same
-// plaintext always yields the same ciphertext), which is what makes the
-// cross-field blob-collision reachable by a user.
+// Random IVs exercise write skipping; deterministic mode exposes collisions with user-controlled fields.
 const cipherState = { encryptionAvailable: true, deterministic: false }
 const DETERMINISTIC_IV = 'd'.repeat(36)
 
@@ -105,8 +97,7 @@ describe('persistence single-serialize save guard', () => {
     const store = await seedStoreWithSecrets()
     const stateBefore = readPersistedStateJson(dataFile())
 
-    // Net no-op mutation burst: the encrypted payload bytes would differ
-    // (random IV), but the normalized guard hash must not.
+    // Net no-op state must hash identically despite random-IV encryption.
     const originalWidth = store.getUI().sidebarWidth
     store.updateUI({ sidebarWidth: 512 })
     store.updateUI({ sidebarWidth: originalWidth })
@@ -141,7 +132,6 @@ describe('persistence single-serialize save guard', () => {
       settings: { opencodeSessionCookie: string; httpProxyUrl: string }
       ui: { browserKagiSessionLink: string }
     }
-    // Secrets are ciphertext on disk, plaintext nowhere in the payload.
     expect(persisted.settings.opencodeSessionCookie).not.toBe(SECRETS.opencodeSessionCookie)
     expect(persisted.settings.httpProxyUrl).not.toBe(SECRETS.httpProxyUrl)
     expect(persisted.ui.browserKagiSessionLink).not.toBe(KAGI_LINK)
@@ -187,9 +177,7 @@ describe('persistence single-serialize save guard', () => {
   it('does not serialize the complete profile for a UI domain save', async () => {
     const store = await seedStoreWithSecrets()
 
-    // Count full-state serializations: only the durable-state payload is
-    // anywhere near this size in the save path (tiny stringifies elsewhere
-    // stay far below the threshold).
+    // Only full durable-state payloads exceed this size threshold in the save path.
     const original = JSON.stringify.bind(JSON)
     let fullStateSerializations = 0
     const spy = vi.spyOn(JSON, 'stringify').mockImplementation((...args) => {
@@ -217,52 +205,36 @@ describe('persistence single-serialize save guard', () => {
     expect(fullStateSerializations).toBe(0)
   })
 
-  // Regression (adversarial review, gpt-5.6-sol round 1): the guard hash
-  // normalizes encrypted secrets back to plaintext. A user-controlled plaintext
-  // VALUE (httpProxyBypassRules) can equal a secret's ciphertext; on a
-  // deterministic cipher (macOS/legacy-Linux OSCrypt constant IV) a string
-  // search for the ciphertext would substitute the wrong site, letting two
-  // distinct states hash equal → a silently dropped write (data loss). The
-  // position-exact sentinel substitution must keep the hashes distinct.
+  // Ciphertext can equal a user-controlled value; value-based normalization could hash distinct states equally.
   it('persists a swap between a plaintext field and a secret when the plaintext equals the secret ciphertext (deterministic cipher)', async () => {
     cipherState.deterministic = true
     const store = await createStore()
 
     const P = 'cookie-plaintext-value'
-    // Persist cookie=P, then read its on-disk ciphertext C (what a user could
-    // copy out of orca-data.json).
     store.updateSettings({ opencodeSessionCookie: P })
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
     const C: string = JSON.parse(readPersistedStateJson(dataFile())).settings.opencodeSessionCookie
-    expect(C).not.toBe(P) // C is ciphertext
+    expect(C).not.toBe(P)
 
-    // State 1: the plaintext bypass-rules field literally holds ciphertext C;
-    // cookie is still P (which also encrypts to C under the deterministic IV).
+    // Place the same ciphertext in a non-secret field to expose value-based substitution.
     store.updateSettings({ httpProxyBypassRules: C, opencodeSessionCookie: P })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
     const inoState1 = readPersistedStateJson(dataFile())
 
-    // State 2 (distinct): swap the two values. Must be written, not skipped.
+    // Swap values without changing their textual occurrences; this must still write.
     store.updateSettings({ httpProxyBypassRules: P, opencodeSessionCookie: C })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
     expect(readPersistedStateJson(dataFile())).not.toBe(inoState1)
 
-    // The swap round-trips through a reload — nothing was lost.
     const reloaded = await createStore()
     expect(reloaded.getSettings().httpProxyBypassRules).toBe(P)
     expect(reloaded.getSettings().opencodeSessionCookie).toBe(C)
   })
 
-  // Regression (adversarial review, gpt-5.6-sol round 2): the deeper variant of
-  // the same class — a user-controlled JSON KEY. agentDefaultEnv lets the user
-  // name an env var exactly after a secret field, so `"browserKagiSessionLink":
-  // "<ciphertext>"` can appear (inside settings, before ui) as a non-secret
-  // entry. A key-anchored string replace would substitute that site instead of
-  // the real ui field. The per-slot sentinel is unguessable, so it only ever
-  // matches the real secret slot and the two distinct states stay distinct.
+  // User-controlled JSON keys can mimic secret slots; key-based replacement must not normalize the wrong field.
   it('persists a swap when an agentDefaultEnv var is named after a secret field and holds its ciphertext (deterministic cipher)', async () => {
     cipherState.deterministic = true
     const store = await createStore()
@@ -272,17 +244,16 @@ describe('persistence single-serialize save guard', () => {
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
     const C: string = JSON.parse(readPersistedStateJson(dataFile())).ui.browserKagiSessionLink
-    expect(C).not.toBe(K) // C is ciphertext
+    expect(C).not.toBe(K)
 
-    // State 1: env var literally named after the secret field, value = C; the
-    // real ui secret is still K.
+    // Place ciphertext under a secret-like key in a non-secret environment map.
     store.updateSettings({ agentDefaultEnv: { claude: { browserKagiSessionLink: C } } })
     store.updateUI({ browserKagiSessionLink: K })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
     const inoState1 = readPersistedStateJson(dataFile())
 
-    // State 2 (distinct): swap — env var value = K, ui secret = C. Must write.
+    // Swapping the environment value and UI secret must produce a distinct persisted state.
     store.updateSettings({ agentDefaultEnv: { claude: { browserKagiSessionLink: K } } })
     store.updateUI({ browserKagiSessionLink: C })
     vi.advanceTimersByTime(2000)

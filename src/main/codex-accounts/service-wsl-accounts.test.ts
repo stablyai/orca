@@ -15,7 +15,7 @@ import {
   testState
 } from './service-test-harness'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Keep asserted config bytes independent of platform socket-path limits.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config
@@ -222,14 +222,11 @@ describe('CodexAccountService config sync', () => {
       const script = String(spec.script)
       expect(spec.distro).toBe('Debian')
       if (script.includes('WSL_DISTRO_NAME')) {
-        // 'none': reads $HOME and $WSL_DISTRO_NAME, which wsl.exe supplies from
-        // /etc/passwd without a login shell.
         expect(spec.loginPath).toBe('none')
         return wslOk('Debian\n/home/alice\n')
       }
       if (script.includes('_orca_lookup_command=')) {
-        // 'preferred': a PATH lookup. Under 'none' an nvm-installed codex is
-        // invisible and a working install is reported absent (#9725).
+        // Include the login PATH so nvm-installed Codex remains visible (#9725).
         expect(spec.loginPath).toBe('preferred')
         expect(script).toBe(buildWslCodexAvailabilityScript())
         return wslOk()
@@ -243,8 +240,7 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
       expect(args).toEqual(buildWslCodexLoginArgs('Debian', wslLinuxHomePath))
-      // Why: codex login runs inside WSL, so the rewritten path must be the
-      // Linux-side ~/.codex, not a Windows UNC path.
+      // Codex consumes rewritten config paths inside WSL, so they must use guest spelling.
       expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
         'sandbox_mode = "danger-full-access"\n' +
           "model_instructions_file = '/home/alice/.codex/instructions.md'\n"
@@ -320,8 +316,7 @@ describe('CodexAccountService config sync', () => {
         wslLinuxHomePath,
         managedHomeRuntime: 'wsl'
       })
-      // Why: a WSL add must sync the WSL runtime home, not the default host lane,
-      // or the account it just selected stays unmaterialized until the next switch.
+
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({
         runtime: 'wsl',
         wslDistro: 'Debian'
@@ -410,9 +405,6 @@ describe('CodexAccountService config sync', () => {
   })
 
   it('says it could not check, not "not installed", when the login PATH is unavailable', async () => {
-    // #9725: an nvm-installed codex lives only on the login PATH. When the
-    // probe cannot supply it, a non-zero lookup is "we could not check" --
-    // reporting a working install as absent is the bug this pins.
     vi.resetModules()
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {

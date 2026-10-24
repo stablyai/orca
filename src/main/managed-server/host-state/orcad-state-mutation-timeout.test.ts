@@ -1,9 +1,4 @@
-/**
- * A snapshot capture or restore that outlives the client's wait, driven through the real
- * deploy, rollback and recovery code on the fake host. The host keeps applying the slow one;
- * a second mutation that takes the host lock answers busy, and one that doesn't (the old
- * command shape) runs beside it, as the two restores did on a real host.
- */
+// Exercise fake-host lifecycle recovery while channel timeout leaves mutation running under the host lock.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import type * as RecordFile from '../install/orcad-remote-record-file'
@@ -110,7 +105,7 @@ function stateMutation(command: string): StateMutation | null {
   return isSnapshotCaptureCommand(command) ? 'capture' : null
 }
 
-/** What ssh2 reports when the 30s timer closes the channel and sshd acknowledges the close. */
+/** Acknowledged SSH channel close still leaves remote command termination unproven. */
 function confirmedTimeout(): Error {
   return Object.assign(new Error('Command timed out after 30s'), {
     code: SSH_EXEC_TIMEOUT_CODE,
@@ -126,7 +121,7 @@ async function exec(command: string): Promise<string> {
   if (kind && kind === slow) {
     slow = null
     running = true
-    // The host finishes the work; the client only stopped waiting for it.
+    // The host completes work even though the client stopped observing it.
     host.exec(command)
     throw confirmedTimeout()
   }
@@ -177,13 +172,12 @@ describe('a state mutation that outlives the client’s wait', () => {
     host = FakeOrcadHost.deployedOld()
     await deploy()
     const total = host.mutations
-    // Lost after the candidate launched: candidate-ready journal, record and release remain.
+    // Crash after launch but before journal, record and release complete.
     host = FakeOrcadHost.deployedOld()
     host.crashAt = total - 2
     await deploy().catch(() => undefined)
     host.crashAt = null
     expect(host.alive.has(NEW)).toBe(true)
-    // An unhealthy candidate, so recovery undoes the activation instead of committing it.
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
       const answer = await exec(command)
       return command.includes(`orcad-${NEW}/`)

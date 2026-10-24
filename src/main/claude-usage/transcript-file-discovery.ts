@@ -31,8 +31,7 @@ async function walkJsonlFiles(dirPath: string): Promise<string[]> {
 }
 
 function appendDiscoveredFiles(target: string[], source: readonly string[]): void {
-  // Why: long-lived transcript directories can exceed V8's argument limit if
-  // child file arrays are spread into push().
+  // Spreading large transcript directories into push() can exceed V8's argument limit.
   for (const filePath of source) {
     target.push(filePath)
   }

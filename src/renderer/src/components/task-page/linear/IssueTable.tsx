@@ -4,7 +4,7 @@ import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-wo
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { cn } from '@/lib/utils'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
-import { LinearStateCell } from '../../task-page-linear-issue-model'
+import { LinearStateCell } from './task-page-linear-issue-model'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '../../task-page-source-context'

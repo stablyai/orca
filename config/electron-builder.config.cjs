@@ -393,6 +393,7 @@ module.exports = {
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
+    'out/main/orcad/orcad-stale-lock-reclaim.js',
     'out/main/chunks/**',
     'out/renderer/**',
     'out/mobile-web/**',

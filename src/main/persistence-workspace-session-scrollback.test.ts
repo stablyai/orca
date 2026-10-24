@@ -27,7 +27,6 @@ import {
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 import { Store, initDataPath } from './persistence'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -79,7 +78,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── GitHub Cache ───────────────────────────────────────────────────
 
   it('get/set GitHub cache round-trips', async () => {
     const store = await createStore()
@@ -90,8 +88,6 @@ describe('Store', () => {
     store.setGitHubCache(cache)
     expect(store.getGitHubCache()).toEqual(cache)
   })
-
-  // ── Workspace Session ──────────────────────────────────────────────
 
   it('get/set workspace session round-trips', async () => {
     const store = await createStore()
@@ -196,8 +192,7 @@ describe('Store', () => {
     const profileDataFile = join(profileDataDirectory, 'orca-data.json')
     mkdirSync(profileDataDirectory, { recursive: true })
 
-    // Why: the legacy snapshot dir hangs off userData, which resolves through
-    // AppEnvironment — without this it points at the global fake's shared dir.
+    // Legacy snapshot paths resolve through AppEnvironment; use this fixture’s userData.
     installFakeAppEnvironment({ getPath: () => testState.dir })
     initDataPath()
     const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
@@ -227,8 +222,7 @@ describe('Store', () => {
     mkdirSync(legacySnapshotDir, { recursive: true })
     writeFileSync(join(legacySnapshotDir, `${ref}.bin`), 'legacy-scrollback', 'utf-8')
 
-    // Why: the legacy snapshot dir hangs off userData, which resolves through
-    // AppEnvironment — without this it points at the global fake's shared dir.
+    // Legacy snapshot paths resolve through AppEnvironment; use this fixture’s userData.
     installFakeAppEnvironment({ getPath: () => testState.dir })
     initDataPath()
     const store = createSqliteTestStore(Store, { dataFile: profileDataFile })

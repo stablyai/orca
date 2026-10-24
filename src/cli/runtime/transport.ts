@@ -16,7 +16,7 @@ export async function sendRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  // Why separate from the envelope: federation forwards envelopes to other runtimes.
+  // Federation forwards envelopes; the runtime fence must stay local.
   expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
@@ -77,7 +77,7 @@ export async function sendRequest<TResult>(
     socket.once('error', (error) => {
       finish({
         ok: false,
-        // Why: a sandbox denying the socket/pipe is not a dead app, so restart advice would mislead.
+        // Access denial does not establish that the app is dead.
         error:
           runtimeAccessDeniedError(error, metadata.pid) ??
           new RuntimeClientError(
@@ -86,10 +86,7 @@ export async function sendRequest<TResult>(
           )
       })
     })
-    // Why: a clean peer close (FIN, no 'error') before a terminal frame never
-    // settles the promise, so the call would otherwise hang until the full
-    // timeout fires. Reject promptly. finish() guards double-settle, so this
-    // no-ops on the normal success/error paths that already called socket.end().
+    // A clean close without a terminal frame must reject rather than wait for the timeout.
     socket.once('close', () => {
       finish({
         ok: false,
@@ -100,11 +97,6 @@ export async function sendRequest<TResult>(
       })
     })
     socket.on('data', (chunk: string) => {
-      // Why: the server may interleave `{"_keepalive":true}\n` frames with the
-      // final success/failure frame to keep both idle timers alive during a
-      // long-poll (see design doc §3.1). Read frames in a loop until we see a
-      // terminal frame. Each keepalive refreshes the client-side timer so a
-      // 10 min wait doesn't trip the 60 s default ceiling.
       let cursor = 0
       while (cursor < chunk.length && !settled) {
         const newlineIndex = chunk.indexOf('\n', cursor)
@@ -138,20 +130,13 @@ export async function sendRequest<TResult>(
           return
         }
 
-        // Fast-path: ignore keepalives without running the full schema.
-        // setTimeout().refresh() is stable since Node 10 (Orca ships on
-        // Node 20+ via Electron and the standalone CLI targets the same
-        // major). See §7 risk #9.
+        // Keepalives refresh the idle timeout without a full envelope validation.
         if (isKeepaliveFrame(raw)) {
           timeout.refresh()
           continue
         }
 
-        // Why: validate the envelope shape (id, ok, result/error, _meta) at
-        // the decode boundary so version skew between the CLI and the Orca
-        // main runtime surfaces as a single invalid_runtime_response instead
-        // of a downstream mis-typed field access. `result` is left as
-        // unknown — the TResult generic is the caller's responsibility.
+        // Validate the envelope at the boundary; callers remain responsible for TResult’s shape.
         const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)
         if (!parsed.success) {
           finish({
@@ -164,8 +149,6 @@ export async function sendRequest<TResult>(
           return
         }
 
-        // Narrow out keepalive (already filtered above) so TS can see a
-        // Success|Failure shape here.
         const frame = parsed.data
         if ('_keepalive' in frame) {
           timeout.refresh()

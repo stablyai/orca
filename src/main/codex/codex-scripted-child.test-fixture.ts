@@ -14,12 +14,10 @@ const THREAD = CODEX_SCRIPTED_THREAD
 type ScriptedCodexRoute = (params: Record<string, unknown> | undefined) => unknown
 
 export type ScriptedCodexChild = ScriptedAgentChild & {
-  /** Every request any spawn received, in order. */
   requests(): readonly { method: string; params?: Record<string, unknown> }[]
 }
 
-/** A held answer gives up on the request's own deadline, as the real connection's does (30 s when
- *  the caller names none, never when it passes null). */
+/** Mirror connection deadlines: undefined uses 30 s; null disables the timer. */
 function heldAnswer(
   answer: Promise<unknown>,
   method: string,
@@ -44,7 +42,7 @@ function heldAnswer(
   return Promise.race([answer, timedOut]).finally(() => clearTimeout(timer))
 }
 
-/** `routes` answers methods the script does not, such as the history reads a rewind makes. */
+/** Routes override built-in replies except the initialization gate. */
 export const codexScriptedChild = (
   routes: Readonly<Record<string, ScriptedCodexRoute>> = {}
 ): ScriptedCodexChild => {

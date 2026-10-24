@@ -13,7 +13,6 @@ import type { PersistedState } from '../shared/persisted-state-types'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../shared/folder-workspace-worktree'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -65,7 +64,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── 8b. Folder-workspace review notes across a build rollback ──
 
   function makeFolderNote(id: string, body: string, workspaceId = 'fw-1') {
     return {
@@ -135,10 +133,7 @@ describe('Store', () => {
     })
   }
 
-  // The previous build's normalizeFolderWorkspaces has no diffComments projection (the line this
-  // checkout carries at src/shared/folder-workspaces.ts:107 does not exist on v1.4.179–v1.4.181),
-  // and its full-state write re-serializes everything else verbatim (the `{ ...defaults, ...parsed }`
-  // load spread and the omit-style getDurableState()).
+  // v1.4.179–v1.4.181 ignore the top-level notes map and reserialize it while normalizing folder records.
   function simulatePreviousBuildLoadAndFlush(onDisk: PersistedState): PersistedState {
     return {
       ...onDisk,
@@ -166,7 +161,6 @@ describe('Store', () => {
     const persisted = readDataFile() as PersistedState
     expect(persisted.folderWorkspaceDiffComments?.[workspace.id]).toEqual([note])
     expect(persisted.folderWorkspaces[0]).not.toHaveProperty('diffComments')
-    // The strip lives at the serialization boundary only; live records keep their notes.
     expect(store.getFolderWorkspace(workspace.id)?.diffComments).toEqual([note])
     expect(folderWorkspaceToWorktree(store.getFolderWorkspace(workspace.id)!).diffComments).toEqual(
       [note]
@@ -265,8 +259,7 @@ describe('Store', () => {
     const note = makeFolderNote('note-1', 'Legacy inline note')
     writeFolderWorkspaceProfile({ workspaces: [folderWorkspaceRecord({ diffComments: [note] })] })
 
-    // Launch and quit on the fixed build, with no mutation: loadNeedsSave must make the
-    // relocation durable on its own. This is the reported P0 sequence.
+    // Simulate an upgrade launch and quit with no user mutation to make relocation durable.
     const upgraded = await createStore()
     upgraded.flush()
 
@@ -284,8 +277,7 @@ describe('Store', () => {
       workspaces: [folderWorkspaceRecord()],
       diffCommentsMap: { 'fw-1': [mapped] }
     })
-    // #14112 persists notes inline and never learned about the top-level map, so a note authored
-    // there lands inline while the untouched map entry goes stale. Inline is the newer write.
+    // The older build writes notes inline while preserving a stale map; inline is therefore newer (#14112).
     const rolledBack = readDataFile() as PersistedState
     writeDataFile({
       ...rolledBack,
@@ -344,7 +336,7 @@ describe('Store', () => {
       'ghost'
     )
 
-    // Delete paths carry no pruning code: the map is derived from live workspaces on every write.
+    // Serialization derives the notes map from live workspaces; deletion needs no separate map pruning.
     expect(reloaded.removeFolderWorkspace('fw-1')).toBe(true)
     reloaded.flush()
     expect(readDataFile() as PersistedState).not.toHaveProperty('folderWorkspaceDiffComments')
@@ -393,8 +385,7 @@ describe('Store', () => {
   )
 
   it('passes note members through verbatim on load and re-write', async () => {
-    // Shape-only guard: the moment member filtering is added here, the fix itself becomes a new
-    // deletion path for user-authored prose.
+    // Preserve unknown note fields so validation cannot discard user-authored prose.
     const noteWithExtras = { ...makeFolderNote('note-1', 'Body'), unknownNoteField: 'kept' }
     writeFolderWorkspaceProfile({
       workspaces: [folderWorkspaceRecord(), folderWorkspaceRecord({ id: 'fw-2', name: 'Second' })],

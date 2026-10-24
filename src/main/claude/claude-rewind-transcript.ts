@@ -34,7 +34,7 @@ export async function materializeClaudeRewindTranscript(
   let resumeCursor: string | undefined
   const result = await forkSession(fork.sourceSessionId, {
     upToMessageId: fork.throughEntryId,
-    // A store pins both reads and writes to the resolved account, without changing process.env.
+    // Pin reads and writes to the resolved account without mutating process.env.
     sessionStore: {
       load: async () => {
         const entries: SessionStoreEntry[] = []
@@ -43,7 +43,7 @@ export async function materializeClaudeRewindTranscript(
             continue
           }
           const entry = parseTranscriptEntry(line)
-          // Skip torn lines (crash mid-write) like the SDK's own local reader does.
+          // Tolerate crash-torn lines like the SDK reader.
           if (entry) {
             entries.push(entry)
           }

@@ -12,7 +12,8 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp,
-  waitForRecordedRequests
+  waitForRecordedRequests,
+  waitForPageFrames
 } from './preview/mobile-web-app-render-harness.mjs'
 
 /**
@@ -231,6 +232,7 @@ describeRender(
       // Exact, because this closure's defects are exactly console lines: the unguarded
       // `BackHandler` put two here and the uncaught diff-notes rejection one, and both are fixed.
       expect(opened.errors).toEqual([])
+      expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
       await opened.page.close()
     }, 120_000)
 
@@ -264,20 +266,6 @@ describeRender(
         `/assets/${chunk}`
       )
       expect(loadedForFirstRoute).not.toContain(`/assets/${chunk}`)
-      await opened.page.close()
-    }, 120_000)
-
-    it('paints under the shipped policy without violating it or leaving the origin', async () => {
-      const opened = await openRoute(SESSION_ROUTE, 'Terminal')
-      // Chromium reports a refused subresource as a console error naming the directive, so
-      // anything this closure loaded that the policy blocked lands here.
-      expect(opened.errors.filter((entry) => entry.includes('Content Security Policy'))).toEqual([])
-      // And nothing else at all, so this case reads the whole account and not only the policy.
-      expect(opened.errors).toEqual([])
-      // Stronger than the line above and independent of it: not one request left the origin, so
-      // there is nothing for the policy to have refused. A font, a beacon or a provider image
-      // added anywhere in this closure reds this.
-      expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
       await opened.page.close()
     }, 120_000)
 
@@ -331,6 +319,8 @@ describeRender(
           capabilities: []
         }
       })
+      await waitForRecordedRequests(opened.page, ['status.get'])
+      await waitForPageFrames(opened.page)
       // The whole refusal and not this one key: any page-closure writer of an unlisted key lands
       // on the same line, and naming the key here would let the next one through.
       expect(opened.warnings.filter((text) => text.includes('storage-write-dropped'))).toEqual([])
@@ -347,7 +337,13 @@ describeRender(
       // never here. Under a 20x CPU throttle the snapshot at the paint holds none of them.
       const opened = await openRoute(SESSION_ROUTE, 'Terminal')
       const requests = await waitForRecordedRequests(opened.page, SESSION_MOUNT_READS)
-      expect(JSON.stringify(requests)).toContain(WORKTREE)
+      for (const method of SESSION_MOUNT_READS) {
+        const observed = requests.filter((request) => request.method === method)
+        expect(observed.length, method).toBeGreaterThan(0)
+        for (const request of observed) {
+          expect(request.params.worktree, method).toBe(`id:${WORKTREE}`)
+        }
+      }
       await opened.page.close()
     }, 120_000)
   },

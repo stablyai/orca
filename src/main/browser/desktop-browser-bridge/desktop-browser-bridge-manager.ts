@@ -1,9 +1,3 @@
-/**
- * Keeps this desktop attached to exactly the managed SSH hosts that should drive its browser: those
- * with "Allow this host's orca CLI to control Orca" on, connected now, and whose server advertises
- * the bridge. Anything else is detached at once, so turning the setting off or losing the host
- * revokes the host's reach immediately.
- */
 import type { DesktopBrowserBridgeRequest } from '../../../shared/desktop-browser-bridge-protocol'
 import {
   DesktopBrowserBridgeConnection,
@@ -18,9 +12,9 @@ export type DesktopBrowserBridgeCandidate = {
 }
 
 export type DesktopBrowserBridgeManagerDeps = {
-  /** The hosts that may attach now: setting on, SSH connected, managed environment linked. */
+  /** Hosts with the setting enabled, SSH connected and a linked managed environment. */
   listCandidates(): DesktopBrowserBridgeCandidate[]
-  /** False when the server answers without the capability; throws when it could not answer. */
+  /** False means unsupported; a throw means the capability could not be checked. */
   supportsBridge(environmentId: string): Promise<boolean>
   subscribe(environmentId: string): DesktopBrowserBridgeSubscribe
   execute(
@@ -83,7 +77,6 @@ export class DesktopBrowserBridgeManager {
     }
   }
 
-  /** Drops an attachment whose transport was retired (re-pair, disconnect) and re-checks at once. */
   resetEnvironment(environmentId: string): void {
     this.detach(environmentId, 'environment transport was retired')
     this.reconcile()
@@ -109,7 +102,7 @@ export class DesktopBrowserBridgeManager {
     try {
       supported = await this.deps.supportsBridge(environmentId)
     } catch (error) {
-      // Why not "unsupported": a server that did not answer yet (tunnel rebuilding) says nothing about its version.
+      // A failed capability request does not prove the server lacks support.
       if (this.entries.get(environmentId) === entry) {
         this.retryAfterFailure(environmentId, entry, error)
       }
@@ -162,7 +155,7 @@ export class DesktopBrowserBridgeManager {
     const setTimer = this.deps.setTimer ?? ((run, ms) => setTimeout(run, ms))
     entry.retryTimer = setTimer(() => {
       entry.retryTimer = null
-      // Why re-read: the setting or connection may have changed while waiting.
+      // Settings or connection state may have changed during backoff.
       const stillWanted = this.deps
         .listCandidates()
         .some((candidate) => candidate.environmentId === environmentId)

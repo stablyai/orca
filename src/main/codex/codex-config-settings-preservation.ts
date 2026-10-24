@@ -17,6 +17,5 @@ export function preserveRuntimeConflictValues(
       keys.add(key)
     }
   }
-  // Why: only schema-new ambiguous keys stay runtime-local; every unrelated setting still mirrors.
   return { content: result, keys }
 }

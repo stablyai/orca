@@ -19,7 +19,7 @@ vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
 
 const posix = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
-// What ssh2 surfaces when OpenSSH's sftp-server hits ENOSPC: SSH_FX_FAILURE, no errno.
+// OpenSSH collapses ENOSPC into SSH_FX_FAILURE without errno.
 const sftpFailure = (): Error => Object.assign(new Error('Failure'), { code: 4 })
 const dfLine = (availableKb: number): string =>
   `tmpfs 409600 ${409600 - availableKb} ${availableKb} 100% /root\n`
@@ -72,7 +72,7 @@ describe('a failed install write on a full host', () => {
   })
 
   it('keeps the original error when the filesystem still has room', async () => {
-    // Less than the whole bundle, but a partial upload may have spent the rest: not proof.
+    // Partial uploads may have consumed space; less than the bundle size does not prove exhaustion.
     vi.mocked(execHostCommand).mockResolvedValue(dfLine(1_500))
     const failure = sftpFailure()
     await expect(

@@ -17,7 +17,6 @@ function modelRow(id: string, isDefault = false): Record<string, unknown> {
   }
 }
 
-// Codex marks its recommended model; the user's config names another.
 function connection(
   configRead: { answer: unknown } | { error: Error }
 ): Pick<CodexAppServerConnection, 'request'> & { request: ReturnType<typeof vi.fn> } {

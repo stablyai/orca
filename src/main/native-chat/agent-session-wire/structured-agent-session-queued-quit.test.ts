@@ -1,7 +1,3 @@
-// A real quit with cards queued behind a running turn. The queue hands nothing off while the host
-// quits, so the chat keeps its restart offer: after the relaunch nothing sends by itself, and
-// resuming runs Orca's carry-on first, then the cards in order.
-
 import { afterEach, expect, it, vi } from 'vitest'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import {
@@ -13,7 +9,6 @@ afterEach(() => vi.restoreAllMocks())
 
 it('keeps the restart offer through a quit with cards queued; Resume sends the carry-on, then the cards in order', async () => {
   const { host, dispatch } = await interruptedRestart('queued-cards')
-  // Nothing was handed off while the host quit.
   const snapshot = await host.journalSnapshot(SESSION)
   expect(snapshot.submissions.filter((entry) => entry.queuedMessageId !== undefined)).toEqual([])
   expect(await host.restartResume.list()).toHaveLength(1)

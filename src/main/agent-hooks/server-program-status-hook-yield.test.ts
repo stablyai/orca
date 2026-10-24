@@ -98,7 +98,6 @@ describe('OSC 7501 status beside hooks', () => {
     programStatus({ state: 'done', agentType: 'opencode' })
     expect(paneRow()?.state).toBe('done')
     vi.useRealTimers()
-    // The next hook event hands the pane back.
     await openCodeHook('SessionBusy')
     expect(paneRow()?.state).toBe('working')
   })
@@ -229,7 +228,7 @@ describe('OSC 7501 status beside hooks', () => {
       await openCodeHook('SessionIdle')
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       vi.advanceTimersByTime(1_000)
-      // One chunk: the facet holds only its last report, the lifecycle reports keep their order.
+      // One output chunk keeps only the latest facet report while preserving lifecycle order.
       server.ingestProgramStatusFacet({
         paneKey: PANE,
         facet: {
@@ -305,7 +304,6 @@ describe('OSC 7501 status beside hooks', () => {
         programStatus: facet
       })
 
-      // Redelivering the same content is not news.
       server.ingestProgramStatusFacet({ paneKey: PANE, facet: { ...facet, observedAt: 2 } })
       expect(published).toHaveLength(1)
     })

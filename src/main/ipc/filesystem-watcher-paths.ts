@@ -4,13 +4,11 @@ import {
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
 
-// ── Path normalization ───────────────────────────────────────────────
-
 function normalizeWatcherRootPath(rootPath: string): string {
   let resolved = isWindowsAbsolutePathLike(rootPath)
     ? path.win32.resolve(rootPath)
     : path.resolve(rootPath)
-  // Why: Windows watcher events may use lowercase drive letters vs stored uppercase; normalize so renderer casing stays consistent (§4.4).
+  // Normalize drive casing so watcher events match stored renderer paths.
   if (/^[a-zA-Z]:/.test(resolved)) {
     resolved = resolved.charAt(0).toUpperCase() + resolved.slice(1)
   }
@@ -20,7 +18,7 @@ function normalizeWatcherRootPath(rootPath: string): string {
 export function getLocalWatcherRoot(rootPath: string): { key: string; path: string } {
   const normalizedPath = normalizeWatcherRootPath(rootPath)
   return {
-    // Why: Windows drive/UNC paths are case-insensitive; cleanup must match the owner even when Git returns a different spelling.
+    // Case-insensitive Windows/UNC keys must match Git's alternate spellings during cleanup.
     key: normalizeRuntimePathForComparison(normalizedPath),
     path: normalizedPath
   }

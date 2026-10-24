@@ -33,7 +33,7 @@ type IssueSourceActionsInput = Pick<
 
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import {
   toLinearLinkedWorkItem,
   getLinkedItemDisplayName,

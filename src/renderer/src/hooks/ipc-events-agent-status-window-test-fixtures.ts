@@ -102,6 +102,7 @@ export function buildWindowApi(args: {
         onGuestLoadFailed: () => () => {},
         onPaneFocus: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
+        onSessionProfilesChanged: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {}
       },

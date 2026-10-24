@@ -1,5 +1,4 @@
-/** Absent keeps legacy echo inference; a declaration never authorizes delivery recovery.
- * Unknown saved values remain declared through replay and history replacement. */
+/** Absent permits legacy inference; preserve unknown declarations without authorizing delivery recovery. */
 export type JournalItemEcho = { echoOf?: unknown }
 
 export function journalItemEchoFields(item: JournalItemEcho): JournalItemEcho {

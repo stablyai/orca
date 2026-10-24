@@ -59,11 +59,7 @@ export function attachUnverifiedTerminalPromptRecovery(error: unknown): RuntimeC
   )
 }
 
-/**
- * The prompt request ID survives a failed send unless a runtime other than the preflight's
- * prompt-delivery host handled it; a transport failure alone means nobody else answered, and the
- * attested host still holds the durable pending receipt that makes `--retry-request` idempotent.
- */
+/** Transport failures retain the attested host’s retry receipt; a different responding runtime invalidates it. */
 export function didAnotherRuntimeHandleTerminalPrompt(
   error: unknown,
   preflightRuntimeId: string | null,

@@ -4,21 +4,6 @@
   "family": "components.execution-target-local",
   "namedDeltas": [],
   "values": {
-    "1e4520fe6576": {
-      "detected": {
-        "$rpc": "null"
-      },
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
     "2498f3d3369f": {
       "name": "preflight.detectAgents#1",
       "ordinal": 1,
@@ -48,19 +33,6 @@
           "category": "Error",
           "message": "",
           "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "365a6864b043": {
-      "detected": [],
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
         }
       }
     },
@@ -133,6 +105,36 @@
             },
             "ok": false
           }
+        }
+      }
+    },
+    "5779e5e854f7": {
+      "detected": {
+        "$rpc": "null"
+      },
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "7097e9b8c337": {
+      "detected": [],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
         }
       }
     },
@@ -272,19 +274,6 @@
         }
       }
     },
-    "986a776213e8": {
-      "detected": ["claude"],
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
     "9b8ae0c8eec5": {
       "name": "preflight.detectAgents#1",
       "ordinal": 2,
@@ -344,6 +333,20 @@
         "value": {
           "id": "frame-1",
           "ok": true
+        }
+      }
+    },
+    "d3a709c13f9d": {
+      "detected": ["claude"],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
         }
       }
     },
@@ -468,7 +471,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1e4520fe6576",
+          "state": "5779e5e854f7",
           "effects": []
         }
       },
@@ -480,7 +483,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "986a776213e8",
+          "state": "d3a709c13f9d",
           "effects": []
         }
       },
@@ -492,7 +495,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -504,7 +507,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -516,7 +519,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -528,7 +531,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -540,7 +543,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -552,7 +555,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -564,7 +567,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -576,7 +579,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -588,7 +591,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -600,7 +603,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       }

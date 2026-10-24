@@ -8,8 +8,7 @@ import { recordCoalescedCrashBreadcrumb, recordCrashBreadcrumb } from './crash-b
 import { getMainProcessLifecycleIdentity } from './main-process-lifecycle-identity'
 
 function buildLifecycleData(data?: CrashReportBreadcrumbData): CrashReportBreadcrumbData {
-  // Why: durable events survive renderer replacement, so carrying the main
-  // identity here distinguishes renderer recovery from a true app relaunch.
+  // Main identity distinguishes renderer replacement from an app relaunch.
   return {
     ...(data ? sanitizeCrashReportDetails(data) : {}),
     ...getMainProcessLifecycleIdentity()
@@ -33,8 +32,7 @@ function traceDurableBreadcrumb(
   } else {
     span.end()
   }
-  // Why: these breadcrumbs explain a missing crash record; losing one to the
-  // normal trace batching window would recreate the diagnostic blind spot.
+  // Flush before a crash can lose the evidence explaining a missing report.
   flushActiveSink()
 }
 
@@ -50,9 +48,7 @@ export function recordDurableCrashBreadcrumb(
   traceDurableBreadcrumb(sanitizedName, lifecycleData, failureCause)
 }
 
-/** Durable counterpart to `recordCoalescedCrashBreadcrumb`: identical repeats
- *  inside `minIntervalMs` collapse into the next emitted breadcrumb's
- *  `suppressedSinceLast` instead of each costing a span plus a forced flush. */
+/** Coalesce durable repeats to avoid a trace span and forced flush for every occurrence. */
 export function recordCoalescedDurableCrashBreadcrumb({
   name,
   data,

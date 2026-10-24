@@ -1,19 +1,5 @@
 import { createWatcherSender } from './filesystem-watcher-test-sender'
-/*
- * Real (unmocked) @parcel/watcher integration test.
- *
- * Why: every other filesystem-watcher test mocks '@parcel/watcher', so the
- * suite stays green even when the native module is absent from the packaged
- * runtime — the exact failure behind the directory tree not auto-refreshing
- * (#4684; root cause #4851). A mocked subscribe() always "exists", so those
- * tests cannot see a missing-from-bundle watcher. This test loads the real
- * watcher, subscribes to a temp directory, mutates a file, and asserts a
- * 'fs:changed' event actually fires end-to-end. Only 'electron' is mocked
- * (it cannot load under vitest); the watcher itself is real.
- *
- * On a Linux host isWslPath() is always false, so a native /tmp path routes to
- * createWatcher() -> real @parcel/watcher (not the inotifywait WSL fallback).
- */
+/* Use the real native watcher to catch missing packaged addons and verify end-to-end delivery (#4684, #4851). */
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -37,8 +23,7 @@ type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 type FsChangedCall = { worktreePath: string; events: { kind: string; absolutePath: string }[] }
 
-// Why: real inotify + the 150ms trailing debounce means the event arrives
-// asynchronously after the file write; poll rather than assume a fixed delay.
+// Poll native delivery and batching rather than assuming a fixed delay.
 async function waitFor(predicate: () => boolean, timeoutMs = 8_000, stepMs = 50): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -78,19 +63,15 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
     vi.clearAllMocks()
   })
 
-  // Why: this integration targets the Linux native watcher path described
-  // above; macOS developer sandboxes can load the addon while suppressing
-  // subscribe callbacks, which makes this an environment check instead.
+  // Target Linux native delivery; macOS sandboxes can suppress callbacks despite loading the addon.
   it.runIf(process.platform === 'linux')(
     'emits fs:changed for a file created in a watched directory',
     async () => {
-      // Why: macOS reports temp watcher events under /private/var while
-      // tmpdir() returns /var, so compare canonical paths instead of aliases.
+      // Canonicalize macOS /var temp aliases before comparing event paths.
       tempDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-fswatch-real-')))
       const sendMock = vi.fn()
       const sender = createWatcherSender(1, sendMock)
 
-      // Subscribe resolves only after the native watcher is installed.
       await handlers['fs:watchWorktree']({ sender }, { worktreePath: tempDir })
 
       const createdFile = join(tempDir, 'new-file.txt')
@@ -116,11 +97,7 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
     15_000
   )
 
-  // Why: this is the end-to-end repro, and it fails differently per platform
-  // without the fix — Linux cannot inotify-watch the alias at all (IN_ONLYDIR),
-  // macOS watches it but reports paths under the resolved root. Both leave the
-  // renderer with events outside the root it subscribed with. One assertion
-  // covers both: the emitted paths must stay under the subscribed spelling.
+  // Alias watchers must preserve subscribed path spelling even when native events report resolved roots.
   it('reports events under an aliased worktree root, not its resolved path', async () => {
     const root = await createAliasedWatcherRoot('orca-fswatch-alias-')
     aliasedRoot = root

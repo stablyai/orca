@@ -36,10 +36,6 @@ afterEach(() => {
 })
 
 describe('browser client page metadata transport', () => {
-  // Why the timeout is asserted at all, and asserted relatively: a request that times out on the
-  // lease's subscription fails the whole subscription, fencing every page the host runs. Metadata
-  // is the most frequent and least important traffic on that socket, so a tighter deadline here
-  // would make it the message that kills a lease the file channel would still be waiting on.
   it('waits at least as long as anything else sharing the lease connection', () => {
     expect(BROWSER_CLIENT_PAGE_METADATA_REQUEST_TIMEOUT_MS).toBeGreaterThanOrEqual(
       BROWSER_CLIENT_FILE_CHANNEL_REQUEST_TIMEOUT_MS
@@ -56,8 +52,6 @@ describe('browser client page metadata transport', () => {
     expect(sendPageMetadataRequest).toHaveBeenCalledWith(PARAMS, expect.any(Number))
   })
 
-  // Why the un-accepted answer is carried rather than flattened into success: it is the difference
-  // between the runtime holding this page's URL and the runtime still holding its create URL.
   it('carries an un-accepted acknowledgement back to the caller', async () => {
     const transport = new BrowserClientPageMetadataTransport()
     transport.bind({
@@ -93,8 +87,6 @@ describe('browser client page metadata transport', () => {
     expect(sender.sendPageMetadataRequest).not.toHaveBeenCalled()
   })
 
-  // Why unbind is identity-checked: an authority transition binds the replacement host before the
-  // outgoing composition tears down, and a blind unbind would unbind the live one.
   it('leaves a replacement bound when the host it replaced unbinds', async () => {
     const transport = new BrowserClientPageMetadataTransport()
     const outgoing = { sendPageMetadataRequest: vi.fn() }
@@ -127,9 +119,7 @@ describe('browser client page metadata routing', () => {
     expect(otherSend).not.toHaveBeenCalled()
   })
 
-  // Why another environment is registered here: with the map empty, "no transport for this
-  // environment" and "no transport at all" are the same state, and a lookup that fell back to
-  // whichever transport happened to be registered would fail this test by accident.
+  // Another environment detects accidental fallback to any registered transport.
   it('fails a publish for an environment that hosts nothing while another one does', async () => {
     const elsewhere = new BrowserClientPageMetadataTransport()
     const elsewhereSend = vi.fn()
@@ -151,7 +141,6 @@ describe('browser client page metadata routing', () => {
     })
     registerBrowserClientPageMetadataTransport('environment-a', second)
 
-    // The outgoing composition releases after the replacement registered: it must not unregister it.
     release()
 
     await expect(publishBrowserClientPageMetadata('environment-a', PARAMS)).resolves.toEqual({
@@ -161,8 +150,6 @@ describe('browser client page metadata routing', () => {
 })
 
 describe('published-url observation', () => {
-  // Why the transport and not the navigate command: a guest the user drives never issues one, so
-  // without this seam a restored tab reopens at the URL it was created with.
   it('reports every publish to the observer', async () => {
     const observeCurrentUrl = vi.fn()
     const transport = new BrowserClientPageMetadataTransport(observeCurrentUrl)
@@ -179,8 +166,6 @@ describe('published-url observation', () => {
     ])
   })
 
-  // The runtime is what fails when the lease is down; the local record of where the guest went is
-  // still correct, and losing it would restore the page at a stale address.
   it('observes the publish even when no lease is bound to send it', async () => {
     const observeCurrentUrl = vi.fn()
     const transport = new BrowserClientPageMetadataTransport(observeCurrentUrl)

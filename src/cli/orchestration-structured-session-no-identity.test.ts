@@ -1,14 +1,3 @@
-/**
- * A structured chat session with NO orchestration identity must refuse, not guess.
- *
- * Non-worker structured sessions get no `ORCA_TERMINAL_HANDLE`, so `orchestration check` fell
- * through to the active-terminal guess — and `check` is destructive by default, so it consumed
- * another pane's oldest unread batch and marked it read. The rightful worker never saw that mail.
- *
- * The case pinned here is ONE terminal pane in the worktree, because that is the case
- * `requireUnambiguous` misses: with a single candidate the guess still resolves, to a sibling.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../shared/structured-session-marker'
 
@@ -38,8 +27,7 @@ describe('a structured chat session with no orchestration identity', () => {
     getTerminalHandleMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     process.env[ORCA_STRUCTURED_SESSION_ENV] = '1'
-    // Exactly ONE terminal pane in the worktree: the single-candidate case, where
-    // `requireUnambiguous` still resolves and would hand this session a sibling's handle.
+    // Even one candidate can belong to a sibling, so requireUnambiguous cannot protect this session.
     getTerminalHandleMock.mockResolvedValue('term_sibling')
   })
 
@@ -61,7 +49,6 @@ describe('a structured chat session with no orchestration identity', () => {
       code: 'no_active_sender_terminal',
       message: expect.stringContaining('--terminal')
     })
-    // Neither guessed nor sent: a destructive read must not reach the runtime at all.
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
     expect(callMock).not.toHaveBeenCalled()
   })

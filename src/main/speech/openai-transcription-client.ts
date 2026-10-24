@@ -29,8 +29,16 @@ export function sanitizeOpenAiTranscriptionErrorMessage(message: string): string
   return sanitized || 'OpenAI transcription request failed'
 }
 
-function encodePcm16Wav(samples: Float32Array, sampleRate: number): Buffer {
-  const dataBytes = samples.length * 2
+function writePcm16Samples(view: DataView, samples: Float32Array, offset: number): void {
+  for (let i = 0; i < samples.length; i += 1) {
+    const clamped = Math.max(-1, Math.min(1, samples[i]))
+    const value = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff
+    view.setInt16(offset + i * 2, Math.round(value), true)
+  }
+}
+
+function encodePcm16Wav(chunks: Float32Array[], sampleRate: number): Buffer<ArrayBuffer> {
+  const dataBytes = chunks.reduce((sum, chunk) => sum + chunk.length, 0) * 2
   const buffer = Buffer.alloc(44 + dataBytes)
 
   buffer.write('RIFF', 0)
@@ -47,24 +55,14 @@ function encodePcm16Wav(samples: Float32Array, sampleRate: number): Buffer {
   buffer.write('data', 36)
   buffer.writeUInt32LE(dataBytes, 40)
 
-  for (let i = 0; i < samples.length; i += 1) {
-    const clamped = Math.max(-1, Math.min(1, samples[i]))
-    const value = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff
-    buffer.writeInt16LE(Math.round(value), 44 + i * 2)
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+  let offset = 44
+  for (const samples of chunks) {
+    writePcm16Samples(view, samples, offset)
+    offset += samples.length * 2
   }
 
   return buffer
-}
-
-function combineChunks(chunks: Float32Array[]): Float32Array {
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const combined = new Float32Array(totalLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    combined.set(chunk, offset)
-    offset += chunk.length
-  }
-  return combined
 }
 
 function parseOpenAiTranscriptionResponse(data: OpenAiTranscriptionResponse): string {
@@ -105,15 +103,15 @@ export class OpenAiTranscriptionSession {
       throw new Error(`Unknown OpenAI transcription model: ${this.modelId}`)
     }
 
-    const audio = combineChunks(this.chunks)
+    const chunks = this.chunks
     this.chunks = []
-    const wav = encodePcm16Wav(audio, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
+    const wav = encodePcm16Wav(chunks, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
     const form = new FormData()
     form.append('model', apiModel)
     form.append('response_format', 'json')
     // Why: OpenAI's transcription endpoint expects a multipart file object;
     // a named WAV blob avoids filesystem temp files and works in packaged apps.
-    form.append('file', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), 'dictation.wav')
+    form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 
     const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
       method: 'POST',

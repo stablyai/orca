@@ -113,8 +113,19 @@ export function normalizeCodexSubagentLifecycleEvent(
       agentId,
       readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
     )
+    const parentPath =
+      state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath ??
+      state.lastStatusByPaneKey.get(paneKey)?.providerSession?.transcriptPath
+    if (parentPath) {
+      reconcileCodexSubagentTranscript(
+        getOrCreateCodexSubagentTranscriptState(state, paneKey),
+        roster,
+        parentPath
+      )
+    }
   } else {
     finishCodexSubagent(roster, agentId)
+    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.delete(agentId)
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }

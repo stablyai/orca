@@ -1,13 +1,3 @@
-/**
- * Memory-leak regression: the coalesced-breadcrumb map must stay bounded.
- *
- * `recordCoalescedCrashBreadcrumb` does `coalescedBreadcrumbs.set(coalesceKey, …)`
- * with no TTL prune and no size cap. Production keys are `agent:${agentType}:${state}`,
- * and agentType reaches this store (via relay/SSH ingestRemote + OSC observed-status)
- * as an OPEN string — only length-trimmed to 40 chars, never enum-checked — so the key
- * space is unbounded over a long multi-agent/SSH session. The only shrink path was the
- * test-only clear. (The sibling `breadcrumbs` array is already bounded to 30.)
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   recordCoalescedCrashBreadcrumb,
@@ -31,7 +21,7 @@ describe('coalescedBreadcrumbs stays bounded (leak regression)', () => {
   })
 
   it('caps the map even with an unbounded stream of distinct agentType keys', () => {
-    // No time advance, so nothing coalesces or TTL-prunes — pure cap pressure.
+    // Hold time fixed so expiry cannot relieve the size-cap pressure.
     for (let i = 0; i < 1000; i++) {
       recordCoalescedCrashBreadcrumb({
         name: 'agent_state',
@@ -45,7 +35,6 @@ describe('coalescedBreadcrumbs stays bounded (leak regression)', () => {
   it('still coalesces repeated breadcrumbs for the same key within the interval', () => {
     recordCoalescedCrashBreadcrumb({ name: 'x', coalesceKey: 'k', minIntervalMs: 30_000 })
     recordCoalescedCrashBreadcrumb({ name: 'x', coalesceKey: 'k', minIntervalMs: 30_000 })
-    // Second call is suppressed within the interval — one key, no growth.
     expect(getCoalescedKeyCountForTest()).toBe(1)
   })
 
@@ -57,7 +46,6 @@ describe('coalescedBreadcrumbs stays bounded (leak regression)', () => {
         minIntervalMs: 30_000
       })
     }
-    // The newest key survives; record it again — still suppressed (still present).
     recordCoalescedCrashBreadcrumb({
       name: 'agent_state',
       coalesceKey: `agent:type-${MAX_COALESCE_KEYS + 49}:working`,

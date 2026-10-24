@@ -111,7 +111,7 @@ export async function lookupPRByBranchName(args: {
               args.ghOptions
             )
           : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
-        // Why: REST/list branch lookup identifies the PR cheaply; exact `gh pr view` carries review, merge-queue, and auto-merge state.
+        // Cheap branch discovery needs exact hydration for review, queue and auto-merge metadata.
         const data = await hydrateBranchLookupWithExactPR(
           candidate,
           branchData,
@@ -161,7 +161,7 @@ export async function lookupPRByBranchName(args: {
         }
       }
     }
-    // Why: branch-list failures are ambiguous for fork discovery; give exact fallback-number recovery a chance before surfacing the error.
+    // Ambiguous fork-list failures still permit exact fallback-number recovery.
     return hasPendingError
       ? { data: null, dataRepo: null, pendingError }
       : { data: null, dataRepo: null }

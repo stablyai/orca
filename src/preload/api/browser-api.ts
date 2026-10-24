@@ -1,4 +1,5 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
@@ -185,6 +186,7 @@ export type BrowserApi = {
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
+  onSessionProfilesChanged: (callback: () => void) => () => void
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */
   prepareSshWorkspacePartition: (args: {
     targetId: string
@@ -196,6 +198,10 @@ export type BrowserApi = {
     scope: BrowserSessionProfileScope
     label: string
   }) => Promise<BrowserSessionProfile | null>
+  sessionEnsureManagedProfile: (args: {
+    owner: ManagedBrowserProfileOwner
+    label: string
+  }) => Promise<BrowserSessionProfile>
   identityGet: () => Promise<BrowserIdentityModeStatus | null>
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>

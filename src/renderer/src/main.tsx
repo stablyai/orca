@@ -25,6 +25,8 @@ import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
 import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
+import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
+import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
@@ -47,6 +49,7 @@ if (
 }
 
 applyDocumentTheme('system', { disableTransitions: false })
+registerBrowserClientPageGuestMessageHandler(handleGuestWindowCloseMessage)
 const browserClientPageRenderer = installBrowserClientPageRenderer()
 import.meta.hot?.dispose(() => browserClientPageRenderer?.dispose())
 

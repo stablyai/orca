@@ -8,8 +8,7 @@ type CancelledSubscribe = {
   timer: ReturnType<typeof setTimeout>
 }
 
-// Why: cancellation may queue behind a legitimate crawl, but must not let a
-// wedged native unsubscribe block destructive worktree cleanup forever.
+// Allow legitimate crawls without letting wedged teardown block destructive cleanup indefinitely.
 export const WATCHER_PROCESS_CANCEL_TIMEOUT_MS = RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS
 
 export class WatcherCancellationTracker {

@@ -49,7 +49,7 @@ export function editorSaveWriterView(
   trigger: EditorSaveTrigger
 ): OpenFile | null {
   const asked = state.openFiles.find((openFile) => openFile.id === fileId) ?? null
-  if (trigger === 'user' || trigger === 'overwrite') {
+  if (trigger === 'user' || trigger === 'convert' || trigger === 'overwrite') {
     return asked
   }
   const writer = firstEditorSaveWriter(state, editorBufferSiblingViewIds(state, fileId), trigger)

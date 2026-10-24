@@ -37,20 +37,20 @@ export function isEditorSshHostForOwner(
   } catch {
     return false
   }
-  // Why main re-derives it: the renderer's claim alone must not point an editor at another host.
+  // Re-derive ownership in main so renderer claims cannot redirect editing to another host.
   const environment = environments.find((entry) => entry.id === owner.environmentId)
   const link = environment ? getRuntimeSshAccess(environment) : undefined
   if (!environment || link?.sshTargetId !== target.id) {
     return false
   }
-  // Why: a link that outlived its SSH registration names whatever host now reuses the id.
+  // A stale link can name a different host that reused the registration ID.
   if (target.generation !== link.sshTargetGeneration) {
     return false
   }
   if (getOrcadSshDeployment(environment)) {
     return getManagedOrcadFenceEnvironmentId(target) === environment.id
   }
-  // Why: editing a host keeps its generation, so SSH access also pins the settings it was verified on.
+  // Edits retain generation, so also pin the settings used to verify SSH access.
   const access = environment.sshAccess
   return (
     !!access?.targetFingerprint && fingerprintRuntimeSshTarget(target) === access.targetFingerprint

@@ -226,8 +226,11 @@ describe('handleOscLink', () => {
     expect(getTerminalFileOpenHint()).toBe(
       'Click for actions, ⌘+click to open, or ⇧⌘+click for default app'
     )
-    expect(getTerminalHtmlFileOpenHint()).toBe(
-      'Click for actions, ⌘+click to open, or ⇧⌘+click for default browser'
+    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' })).toBe(
+      'Click for actions, ⌘+click to open, or ⇧⌘+click to open in Orca'
+    )
+    expect(getTerminalHtmlFileOpenHint({ primary: 'orca', alternate: 'system' })).toBe(
+      'Click for actions, ⌘+click to open, or ⇧⌘+click for system browser'
     )
     expect(getTerminalUrlOpenHint()).toBe(
       'Click for actions, ⌘+click to open, or ⇧⌘+click for system browser'
@@ -237,8 +240,8 @@ describe('handleOscLink', () => {
     expect(getTerminalFileOpenHint()).toBe(
       'Click for actions, Ctrl+click to open, or Shift+Ctrl+click for default app'
     )
-    expect(getTerminalHtmlFileOpenHint()).toBe(
-      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click for default browser'
+    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' })).toBe(
+      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click to open in Orca'
     )
     expect(getTerminalUrlOpenHint()).toBe(
       'Click for actions, Ctrl+click to open, or Shift+Ctrl+click for system browser'
@@ -248,8 +251,8 @@ describe('handleOscLink', () => {
   it('omits plain-click actions from hover hints when the popover is disabled', () => {
     setPlatform('Macintosh')
     expect(getTerminalFileOpenHint(false)).toBe('⌘+click to open, or ⇧⌘+click for default app')
-    expect(getTerminalHtmlFileOpenHint(false)).toBe(
-      '⌘+click to open, or ⇧⌘+click for default browser'
+    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' }, false)).toBe(
+      '⌘+click to open, or ⇧⌘+click to open in Orca'
     )
     expect(getTerminalUrlOpenHint({ showActions: false })).toBe(
       '⌘+click to open, or ⇧⌘+click for system browser'

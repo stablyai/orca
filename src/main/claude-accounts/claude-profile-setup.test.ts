@@ -51,7 +51,7 @@ function fixture() {
   return { root, defaultHome, dataRoot, service, installHooks, setup }
 }
 
-// Why: setup runs as 'linux', so it creates real symlinks, which Windows needs privilege for.
+// Linux-mode setup creates symlinks that require additional privileges on Windows.
 const itLinks = it.skipIf(process.platform === 'win32')
 
 describe('Claude account profile setup', () => {
@@ -167,7 +167,6 @@ describe('Claude account profile setup', () => {
       platform: 'linux'
     })
     expect(skipped.surfaces.hooks).toBe('absent')
-    // Copied as is from the default home, where Claude reports it the same way.
     writeFileSync(join(f.defaultHome, 'settings.json'), '{bad')
     const failed = await f.setup()
     expect(failed.surfaces.hooks).toBe('failed')

@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { findIndicClusterRanges } from './terminal-indic-cluster-ranges'
 
 type ArabicShapingTerminal = Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>
 
@@ -6,7 +7,7 @@ type LazyArabicShapingJoinerState = {
   cleanup: (() => void) | null
   isShapingActive: () => boolean
   registrationAttempted: boolean
-  trailingHighSurrogate: string
+  trailingChunkTail: string
 }
 
 const lazyArabicShapingJoinerByTerminal = new WeakMap<
@@ -161,14 +162,21 @@ export function findRtlJoinRanges(text: string): [number, number][] {
   return ranges
 }
 
-/** Register the RTL shaping joiner; returns a cleanup deregistering it — Terminal.dispose() leaks joiners (xtermjs/xterm.js#3289). */
+// Why: Indic clusters share the lazy joiner so one registration, WebGL gate and wiring cover both scripts; the RTL and Indic ranges can never overlap.
+function findShapingJoinRanges(text: string): [number, number][] {
+  const ranges = findRtlJoinRanges(text)
+  const indicRanges = findIndicClusterRanges(text)
+  return indicRanges.length === 0 ? ranges : [...ranges, ...indicRanges].sort((a, b) => a[0] - b[0])
+}
+
+/** Register the shaping joiner (RTL runs and Indic clusters); returns a cleanup deregistering it — Terminal.dispose() leaks joiners (xtermjs/xterm.js#3289). */
 export function registerArabicShapingJoiner(
   terminal: ArabicShapingTerminal,
   isShapingActive: () => boolean
 ): () => void {
   // Why: DOM renderer letter-spacing breaks grid alignment for joined runs, so join only while WebGL is the live renderer.
   const joinerId = terminal.registerCharacterJoiner((text) =>
-    isShapingActive() ? findRtlJoinRanges(text) : []
+    isShapingActive() ? findShapingJoinRanges(text) : []
   )
   return () => {
     terminal.deregisterCharacterJoiner(joinerId)
@@ -191,7 +199,7 @@ export function configureLazyArabicShapingJoiner(
     cleanup: null,
     isShapingActive,
     registrationAttempted: false,
-    trailingHighSurrogate: ''
+    trailingChunkTail: ''
   }
   lazyArabicShapingJoinerByTerminal.set(terminal, state)
 
@@ -209,6 +217,17 @@ export function configureLazyArabicShapingJoiner(
   }
 }
 
+const INDIC_TAIL = /[\u0900-\u0DFF\u200C\u200D]{1,8}$/
+
+// A trailing high surrogate, or the trailing Indic run that a following chunk may complete into a cluster.
+function getChunkTail(text: string): string {
+  const finalCodeUnit = text.charCodeAt(text.length - 1)
+  if (finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff) {
+    return text.at(-1) ?? ''
+  }
+  return INDIC_TAIL.exec(text)?.[0] ?? ''
+}
+
 /** Register the configured joiner immediately before the first RTL write. */
 export function ensureArabicShapingJoinerForText(
   terminal: ArabicShapingTerminal,
@@ -219,17 +238,14 @@ export function ensureArabicShapingJoinerForText(
     return
   }
 
-  // Why: PTY/replay chunks can split a supplementary-plane RTL code point across surrogate halves; keep the boundary unit.
-  const scanText = state.trailingHighSurrogate + text
-  const finalCharacter = scanText.at(-1) ?? ''
-  const finalCodeUnit = finalCharacter.charCodeAt(0)
-  state.trailingHighSurrogate =
-    finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff ? finalCharacter : ''
-  if (!containsStrongRtlText(scanText)) {
+  // Why: PTY/replay chunks can split a supplementary-plane RTL code point or an Indic cluster; keep the boundary tail.
+  const scanText = state.trailingChunkTail + text
+  state.trailingChunkTail = getChunkTail(scanText)
+  if (!containsStrongRtlText(scanText) && findIndicClusterRanges(scanText).length === 0) {
     return
   }
 
-  state.trailingHighSurrogate = ''
+  state.trailingChunkTail = ''
   state.registrationAttempted = true
   try {
     state.cleanup = registerArabicShapingJoiner(terminal, state.isShapingActive)

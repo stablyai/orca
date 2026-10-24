@@ -92,7 +92,6 @@ export const GRAB_GUEST_REACT_SCRIPT = `  function isElementFixed(el) {
     }
   }
 
-  // --- Build full payload for an element ---
   function extractPayload(el) {
     var rect = el.getBoundingClientRect();
     var react = getReactMetadata(el);
@@ -144,9 +143,5 @@ export const GRAB_GUEST_REACT_SCRIPT = `  function isElementFixed(el) {
     };
   }
 
-  // --- Overlay UI ---
-  // Why: the host element is a full-viewport overlay with pointer-events:all
-  // so it acts as a click catcher. This prevents the page from receiving the
-  // selection click. The overlay uses elementFromPoint (with itself temporarily
-  // hidden) to identify the element underneath the pointer.
+  // Catch selection clicks in the overlay so the page does not receive them.
 `

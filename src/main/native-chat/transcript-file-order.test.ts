@@ -7,8 +7,7 @@ import { projectNativeChatTranscriptMessages } from '../../shared/native-chat-tr
 import { readNativeChatTranscript } from './transcript-reader'
 import { readNativeChatTranscriptTail, subscribeNativeChatTranscript } from './transcript-watch'
 
-// A send while a tool runs: Claude stamps the queue entry at send time (10:00:10)
-// but writes it after the tool result it read it with (10:00:30).
+// Claude timestamps queued prompts at send time but writes them after the tool result that absorbed them.
 const PROMPT = {
   type: 'user',
   uuid: 'u-1',
@@ -74,7 +73,6 @@ async function transcriptFile(content: string): Promise<string> {
   return filePath
 }
 
-/** What the chat draws: the prompt after the tool run, with the call holding its result. */
 function expectPromptAfterToolRun(messages: NativeChatMessage[]): void {
   const rows = projectNativeChatTranscriptMessages(messages)
   expect(rows.map((row) => row.id)).toEqual(['u-1', 'a-1', 'q-1', 'a-2'])

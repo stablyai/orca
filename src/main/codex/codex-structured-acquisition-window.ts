@@ -1,14 +1,7 @@
-// The gap between spawning `codex app-server` and publishing the session it
-// belongs to. Codex talks during that gap — the handshake, an early
-// notification, even an approval request — and those events belong to the
-// session that is still being acquired, so they wait here instead of arriving
-// before anything can route them. The gap is bounded by the thread-open request
-// timeout; a failed acquisition discards the buffer along with the child.
-
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 
-/** Pre-publication buffering is bounded so a provider cannot pin closures. */
+// Bound events retained before a session can route them.
 export const MAX_CODEX_ACQUISITION_BUFFER_OPERATIONS = 1024
 export const MAX_CODEX_ACQUISITION_BUFFER_BYTES = 4 * 1024 * 1024
 
@@ -25,8 +18,7 @@ export class CodexAcquisitionWindow {
     return this.overflowed
   }
 
-  /** Returns false once the session is published, which is the caller's cue to
-   *  deliver live rather than buffer. */
+  /** False means the buffer closed or overflowed; only published sessions may deliver live. */
   buffer(event: () => void, retainedBytes = 256): boolean {
     if (!this.open) {
       return false
@@ -48,7 +40,6 @@ export class CodexAcquisitionWindow {
     return true
   }
 
-  /** Closes the window and hands back what arrived while it was open, in order. */
   drain(): (() => void)[] {
     this.open = false
     this.retainedBytes = 0

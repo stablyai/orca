@@ -41,7 +41,6 @@ export async function parseDevinSessionFile(
   )
 }
 
-/** Remote transcript content, streamed from a host that has no reader attached. */
 export function parseDevinSessionContent(
   file: FileWithMtime,
   content: string,
@@ -94,9 +93,7 @@ function decodeDevinStepMessage(
   return null
 }
 
-// Each bucket resolves from the first source that reports it. ATIF
-// `prompt_tokens` already includes `cached_tokens`, so only the Claude-style
-// cache keys (which sit outside input_tokens) are summed.
+// Resolve token buckets by source precedence; ATIF cached tokens are included, while Claude cache keys are additive.
 function devinStepTokenTotal(
   metadata: Record<string, unknown> | null,
   metrics: Record<string, unknown> | null,
@@ -148,8 +145,7 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
     extractString(metadata?.generation_model) ??
     extractString(metrics?.generation_model)
   accumulator.totalTokens += devinStepTokenTotal(metadata, metrics, asRecord(stepRecord.metrics))
-  // ATIF `source` is 'user' | 'agent' | 'system'; system steps are setup noise
-  // that must not count as messages or feed title/preview.
+  // System steps contribute usage but must not become messages, titles or previews.
   const source = extractString(stepRecord.source)
   const isSystem = source === 'system'
   const isUser = !isSystem && (source === 'user' || metadata?.is_user_input === true)

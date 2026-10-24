@@ -3,7 +3,7 @@ import type { GitWorktreeInfo } from '../shared/worktree/types'
 import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
 import { getLocalWorktreePathAccess, toLocalWorktreeRuntimePath } from './local-worktree-filesystem'
 
-/** Registration cleanup must never reinterpret a malformed .git row as its parent checkout. */
+/** Malformed .git paths must never resolve cleanup to a parent checkout. */
 export async function isPrunableGitFileWorktree(
   worktree: GitWorktreeInfo,
   options: LocalWorktreeFilesystemOptions = {}

@@ -105,7 +105,7 @@ describe('registerPtyHandlers', () => {
         data: 'remote-output'
       })
 
-      // Why: stale/duplicated renderer ACKs must not over-credit SSH/relay flow control beyond bytes main sent.
+      // Stale/duplicate renderer ACKs must not over-credit SSH/relay transport.
       ackData(null, { id: 'remote-like-pty', charCount: 1024 })
       ackData(null, { id: 'remote-like-pty', charCount: 1024 })
 
@@ -182,7 +182,7 @@ describe('registerPtyHandlers', () => {
         data: 'a'
       })
       interactiveProc.emitData(reserveChunk)
-      // Why: reserve-exhausted send stays gated, and the fully gated arrival emits one delivery resync probe (not pty:data).
+      // Reserve exhaustion sends a resync probe without additional pty:data delivery.
       expect(getPtyDataSendCalls()).toHaveLength(529)
       expect(getDeliveryResyncProbeCalls()).toHaveLength(1)
     } finally {
@@ -307,7 +307,7 @@ describe('PTY cumulative acknowledgement accounting', () => {
         rendererInFlightPtyCount: 1
       })
 
-      // Every per-chunk ACK was lost, but the next ACK carries the full cumulative total — the debt clears without any timer or reset.
+      // Cumulative ACKs recover all debt even when individual chunk ACKs were lost.
       const ackData = getPtyAckDataListener()
       ackData(null, { id: spawnResult.id, processedChars: 512 * 1024 })
 
@@ -337,13 +337,11 @@ describe('PTY cumulative acknowledgement accounting', () => {
         maxRendererInFlightCharsByPty: 256 * 1024
       })
 
-      // Replayed duplicate credits nothing further.
       ackData(null, { id: spawnResult.id, processedChars: 256 * 1024 })
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 256 * 1024
       })
 
-      // A stale reordered total can never move accounting backwards.
       ackData(null, { id: spawnResult.id, processedChars: 128 * 1024 })
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 256 * 1024
@@ -446,7 +444,7 @@ describe('PTY cumulative acknowledgement accounting', () => {
       mockProc.emitData('remote-output')
       vi.advanceTimersByTime(8)
 
-      // Why: cumulative totals clamp to what main sent; a replayed total credits SSH/relay flow control 0, not duplicate bytes.
+      // Clamp cumulative transport credit to bytes sent; duplicate totals add no credit.
       ackData(null, { id: 'cumulative-pty', processedChars: 1024 })
       ackData(null, { id: 'cumulative-pty', processedChars: 1024 })
 
@@ -472,7 +470,6 @@ describe('PTY cumulative acknowledgement accounting', () => {
       expect(getDeliveryResyncProbeCalls()).toHaveLength(1)
       const probePayload = getDeliveryResyncProbeCalls()[0]![1] as { requestId: number }
 
-      // Only one probe may be outstanding at a time.
       mockProc.emitData('still-stuck')
       expect(getDeliveryResyncProbeCalls()).toHaveLength(1)
 
@@ -487,7 +484,6 @@ describe('PTY cumulative acknowledgement accounting', () => {
         rendererInFlightPtyCount: 0
       })
 
-      // Reconciled gate lets held pendingData flush again (one 2ms batch window = one 16KB slice).
       vi.advanceTimersByTime(2)
       expect(getPtyDataSendCalls()).toHaveLength(33)
     } finally {
@@ -541,14 +537,13 @@ describe('PTY cumulative acknowledgement accounting', () => {
           pendingPtyCount: 1
         })
       )
-      // No blind reset: counters and pending output are untouched.
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 512 * 1024,
         pendingChars: 88 * 1024 + 'stuck-output'.length
       })
       expect(getPtyDataSendCalls()).toHaveLength(32)
 
-      // Cleared flag lets the next gated arrival probe again, but a still-silent renderer won't spam a second warn.
+      // Timeout permits a new probe without repeating warnings for the same silent renderer.
       mockProc.emitData('still-stuck')
       expect(getDeliveryResyncProbeCalls()).toHaveLength(2)
       vi.advanceTimersByTime(5_000)

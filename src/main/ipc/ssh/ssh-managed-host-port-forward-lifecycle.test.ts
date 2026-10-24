@@ -72,7 +72,7 @@ describe('saved port forwards on a managed host', () => {
     expect(h.removeAllForwards).toHaveBeenCalledWith('t1')
   })
 
-  // Why: a system-SSH managed tunnel is its own `ssh -L`, which the session's disconnect never ends.
+  // Managed system-SSH tunnels run separate ssh -L processes; session disconnect alone leaves them alive.
   it('closes the managed server tunnels the session carried', async () => {
     await disconnectRegisteredSshTarget('t1')
     expect(h.closeManagedTunnels).toHaveBeenCalledWith('t1')

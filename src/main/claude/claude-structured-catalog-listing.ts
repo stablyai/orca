@@ -1,5 +1,3 @@
-// What a Claude child's listing says about its account, apart from this session's own state.
-
 import type {
   AgentSessionFastModeSupport,
   AgentSessionOptionsResult

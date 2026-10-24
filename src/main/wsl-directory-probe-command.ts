@@ -1,12 +1,9 @@
 import type { WslUncPathInfo } from '../shared/wsl-paths'
 
-// Why markers rather than an exit code: wsl.exe uses numeric exits for both guest results
-// and host failures, so only a marker on stdout distinguishes "directory missing" from
-// "wsl.exe could not answer".
+// Exit codes conflate host failures with guest results; only stdout markers prove the guest answered.
 const WSL_DIRECTORY_EXISTS_MARKER = '__ORCA_DIRECTORY_EXISTS__'
 const WSL_DIRECTORY_MISSING_MARKER = '__ORCA_DIRECTORY_MISSING__'
 
-/** Argv after the wsl.exe binary for the guest directory-existence probe. */
 export function getWslDirectoryProbeArgs(info: WslUncPathInfo): string[] {
   return [
     '-d',
@@ -20,7 +17,7 @@ export function getWslDirectoryProbeArgs(info: WslUncPathInfo): string[] {
   ]
 }
 
-/** Null when neither marker appears, i.e. the guest never ran the test. */
+/** No marker means no authoritative guest answer. */
 export function parseWslDirectoryProbeOutput(stdout: unknown): boolean | null {
   const output = String(stdout)
   if (output.includes(WSL_DIRECTORY_EXISTS_MARKER)) {

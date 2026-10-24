@@ -1,3 +1,4 @@
+import { endComposition } from '@/lib/ime-composition-event.test-support'
 import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
@@ -151,14 +152,14 @@ describe('native chat composer composition ownership', () => {
     expect(settledValue).toBe('')
   })
 
-  it('uses the shared Enter gesture owner without swallowing the next deliberate Enter', () => {
+  it('swallows the Enter that confirms a Japanese candidate without eating the next one', () => {
     const onKeyDown = vi.fn()
-    render(<TestField {...fieldProps({ draft: '가', onKeyDown })} />)
+    render(<TestField {...fieldProps({ draft: '日本語', onKeyDown })} />)
     const input = textarea()
     fireEvent.compositionStart(input)
 
     fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: true })
-    fireEvent.compositionEnd(input, { data: '가' })
+    endComposition(input, '日本語')
     const redispatch = fireEvent.keyDown(input, {
       key: 'Enter',
       keyCode: 13,

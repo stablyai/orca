@@ -1,7 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 
-/** Why: two spawn paths (renderer IPC and runtime controller) must agree, or the
- *  configured profile silently applies to only one of them. */
+/** Keep configured shell profiles consistent between renderer IPC and runtime-controller spawns. */
 export function resolveConfiguredTerminalShellArgs(params: {
   connectionId: string | null | undefined
   requestedShellOverride: string | undefined

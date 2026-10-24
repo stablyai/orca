@@ -4,6 +4,12 @@ import {
   resolveTuiAgentLaunchArgs
 } from './tui-agent-launch-defaults'
 import { AUTO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
+import {
+  hasTypedAgentPermission,
+  resolveAgentPermission,
+  type AgentPermissionSettings
+} from './tui-agent-permission-choice'
+import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 
 /** A chat's own permission choice. Saved in chat records and settings: never rename a value. */
@@ -35,46 +41,14 @@ export function isAgentChatPermissionMode(value: unknown): value is AgentChatPer
   return AGENT_CHAT_PERMISSION_MODES.some((mode) => mode === value)
 }
 
-/** The modes one agent's chats offer. */
-export type AgentChatPermissionModeSupport = {
-  modes: readonly AgentChatPermissionMode[]
-  /** `auto` runs only on a model the agent's listing says supports it. */
-  autoNeedsModelSupport?: true
-}
-
-const CLAUDE_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
-  modes: AGENT_CHAT_PERMISSION_MODES,
-  autoNeedsModelSupport: true
-}
-
-const CODEX_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
-  modes: ['ask', 'auto', 'full-access']
-}
-
-// ACP chats: Orca answers the agent's permission requests yes under Full access, else the person does.
-const ACP_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
-  modes: ['ask', 'full-access']
-}
-
-// No Auto: the server has no reviewer that answers approvals for the person.
-const ANTIGRAVITY_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
-  modes: ['ask', 'accept-edits', 'full-access']
-}
-
-const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermissionModeSupport>([
-  ['claude', CLAUDE_CHAT_PERMISSION_MODES],
-  ['codex', CODEX_CHAT_PERMISSION_MODES],
-  ['grok', ACP_CHAT_PERMISSION_MODES],
-  ['opencode', ACP_CHAT_PERMISSION_MODES],
-  ['opencode2', ACP_CHAT_PERMISSION_MODES],
-  ['omp', ACP_CHAT_PERMISSION_MODES],
-  ['antigravity', ANTIGRAVITY_CHAT_PERMISSION_MODES]
-])
-
-/** The one table of which agents' chats offer which modes; null keeps following Agent Permissions. */
-export function agentChatPermissionModes(agent: string): AgentChatPermissionModeSupport | null {
-  return AGENT_CHAT_PERMISSION_MODES_BY_AGENT.get(agent) ?? null
-}
+import {
+  agentChatPermissionModes,
+  type AgentChatPermissionModeSupport
+} from './agent-chat-permission-support'
+export {
+  agentChatPermissionModes,
+  type AgentChatPermissionModeSupport
+} from './agent-chat-permission-support'
 
 /** The saved choice if this agent offers it; anything else asks, never grants more access. */
 export function savedChatPermissionMode(
@@ -136,14 +110,25 @@ export function newChatPermissionMode(
   return support ? savedChatPermissionMode(support, setting) : null
 }
 
-/** A scoped agent choice takes precedence over the shared new-chat default. */
+export type NewChatPermissionSettings = AgentPermissionSettings &
+  Partial<Pick<GlobalSettings, 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'>>
+
+/**
+ * An agent's stored permission starts its new chats, as it starts its terminals. On its own
+ * settings, chats keep the Chat page default (or its per-agent copy) until chats can run the
+ * agent's own config.
+ */
 export function newChatPermissionModeForSettings(
   agent: string,
-  settings:
-    | Partial<Pick<GlobalSettings, 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'>>
-    | null
-    | undefined
+  settings: NewChatPermissionSettings | null | undefined
 ): AgentChatPermissionMode | null {
+  const support = agentChatPermissionModes(agent)
+  if (support && isTuiAgent(agent) && hasTypedAgentPermission(settings)) {
+    const { choice } = resolveAgentPermission(agent, settings)
+    if (choice !== 'own') {
+      return savedChatPermissionMode(support, choice)
+    }
+  }
   const overrides = settings?.agentNativeChatPermissionModes
   const override = overrides && Object.getOwnPropertyDescriptor(overrides, agent)?.value
   return newChatPermissionMode(agent, override ?? settings?.nativeChatPermissionMode)
@@ -172,8 +157,7 @@ export function loadedChatPermissionSetting(
     return isAgentChatPermissionMode(saved) ? saved : 'ask'
   }
   const automatic = (agent: 'claude' | 'codex'): boolean =>
-    resolveTuiAgentLaunchArgs(agent, terminal.agentDefaultArgs).trim() ===
-    AUTO_TUI_AGENT_ARGS[agent]
+    resolveTuiAgentLaunchArgs(agent, terminal).trim() === AUTO_TUI_AGENT_ARGS[agent]
   if (automatic('claude') && automatic('codex')) {
     return 'auto'
   }
@@ -188,9 +172,10 @@ export function loadedChatPermissionSetting(
  *  the new-chat setting. */
 export function preModeChatGetsFullAccess(
   agent: TuiAgent,
-  settings: Partial<
-    Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell' | 'nativeChatPermissionMode'>
-  >,
+  settings: AgentPermissionSettings &
+    Partial<
+      Pick<GlobalSettings, 'agentDefaultArgs' | 'terminalWindowsShell' | 'nativeChatPermissionMode'>
+    >,
   platform: NodeJS.Platform
 ): boolean {
   return agent in YOLO_TUI_AGENT_ARGS

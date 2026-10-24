@@ -1,5 +1,6 @@
 /** The reducer's fixtures and drivers, shared by the suites that are split by concern rather than
  *  by subject: one session, one set of gates, and the steps that get it to each state. */
+import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 export { createMobileWebShellSession } from './mobile-web-shell-session'
 import {
@@ -34,30 +35,32 @@ export const ROUTE = '/h/host-1'
 export const PAGE_ROUTES = [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
 
 /** The manifest as the host sends it; facts below are projected from it. */
+const MANIFEST_ASSETS: MobileWebBundleManifestRead['assets'] = [
+  {
+    path: 'assets/app.js',
+    sha256: '1'.repeat(64),
+    byteLength: 1024,
+    contentType: 'text/javascript'
+  },
+  { path: 'assets/app.css', sha256: '2'.repeat(64), byteLength: 1024, contentType: 'text/css' },
+  {
+    path: 'assets/logo.svg',
+    sha256: '3'.repeat(64),
+    byteLength: 1024,
+    contentType: 'image/svg+xml'
+  },
+  { path: 'index.html', sha256: '4'.repeat(64), byteLength: 1024, contentType: 'text/html' }
+]
+
 export const MANIFEST_WIRE: MobileWebBundleManifestRead = {
   schemaVersion: 1,
-  buildId: 'b'.repeat(64),
+  buildId: computeMobileWebBundleId(MANIFEST_ASSETS),
   minCompatibleRuntimeProtocolVersion: 2,
   runtimeProtocolVersion: 5,
   pageVersion: 1,
   entrypoint: 'index.html',
   totalBytes: 4096,
-  assets: [
-    {
-      path: 'assets/app.js',
-      sha256: '1'.repeat(64),
-      byteLength: 1024,
-      contentType: 'text/javascript'
-    },
-    { path: 'assets/app.css', sha256: '2'.repeat(64), byteLength: 1024, contentType: 'text/css' },
-    {
-      path: 'assets/logo.svg',
-      sha256: '3'.repeat(64),
-      byteLength: 1024,
-      contentType: 'image/svg+xml'
-    },
-    { path: 'index.html', sha256: '4'.repeat(64), byteLength: 1024, contentType: 'text/html' }
-  ],
+  assets: MANIFEST_ASSETS,
   routes: PAGE_ROUTES
 }
 

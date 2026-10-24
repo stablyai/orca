@@ -5,11 +5,11 @@
  * The page must read and write them exactly as a session page opened for that workspace does:
  * `orca:nativeChatTabs:<host>:<worktree>` (which tabs show the chat) and
  * `orca:terminalLiveInputDisabled:<host>:<worktree>` (the handles typing goes around). They are the
- * only workspace-scoped keys in `page-storage-keys.ts`; `init` carries none of them for this page,
+ * workspace-scoped keys exercised here; `init` carries none of them for this page,
  * which reads each from the shell when it opens that workspace.
  */
-import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => new Map<string, string>())
 // Writes wait here until a case lands them, as a native store's queue holds them.
@@ -59,6 +59,16 @@ function persisted(): void {
   }
 }
 
+const mounted: ReactTestRenderer[] = []
+
+afterEach(() => {
+  act(() => {
+    for (const tree of mounted.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
+
 async function snapshotFor(routePathname: string, hostArea: boolean) {
   const held: { view: PageHostSnapshotView | null } = { view: null }
   function Probe() {
@@ -66,7 +76,7 @@ async function snapshotFor(routePathname: string, hostArea: boolean) {
     return null
   }
   await act(async () => {
-    create(<Probe />)
+    mounted.push(create(<Probe />))
   })
   await act(async () => {})
   if (held.view === null) {

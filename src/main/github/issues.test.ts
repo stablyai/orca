@@ -40,9 +40,7 @@ vi.mock('./github-api-repository', async (importOriginal) => {
     repo ? { host: 'github.com' as const, ...repo } : repo
   return {
     ...actual,
-    // Why: these suites drive source resolution through the legacy gh-utils
-    // mocks; bridge the hosted seams onto the same mocks and pin github.com so
-    // host-less fixtures still pass resolveGitHubApiRepository's host gate.
+    // Bridge hosted source resolution to the suite fixtures and retain explicit github.com host pinning.
     getIssueGitHubApiRepository: async (
       repoPath: string,
       connectionId?: string | null,
@@ -76,8 +74,6 @@ import { listAssignableUsers, listLabels } from './issue-field-options'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -90,9 +86,7 @@ describe('issue source operations', () => {
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
-    // Why: preference-aware paths call resolveIssueSource instead of
-    // getIssueOwnerRepo. Route through the same mock so existing tests that
-    // set up getIssueOwnerRepoMock continue to work.
+    // Share the preference-aware resolver with the issue-owner fixtures.
     resolveIssueSourceMock.mockImplementation(async () => ({
       source: await getIssueOwnerRepoMock(),
       fellBack: false
@@ -241,9 +235,7 @@ describe('issue source operations', () => {
   })
 
   it('surfaces a classified permission_denied error instead of collapsing to empty', async () => {
-    // Why: parent design doc §3 — a 403 on a private upstream must not
-    // masquerade as "No issues". The envelope carries an error the UI can
-    // render as a banner with retry, not a silent empty list.
+    // A private-upstream 403 must retain a retryable error instead of becoming an empty backlog.
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockRejectedValueOnce(
       new Error('HTTP 403: Resource not accessible by integration')

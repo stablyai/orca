@@ -40,8 +40,7 @@ export type ClaudeModelCatalogProbeDeps = ClaudeEnvDeps &
     runListing?: typeof runAgentModelCatalogListing
   }
 
-/** Asks Claude one control request without a session, under the SAME binary and environment the
- *  structured session launch resolves, pinned to the chat's account. */
+// Use the session's binary, environment and account for one-shot control requests.
 export async function runClaudeListing(
   deps: ClaudeModelCatalogProbeDeps,
   request: {
@@ -53,8 +52,7 @@ export async function runClaudeListing(
     isCurrent?: () => boolean
   }
 ): Promise<string> {
-  // Same pin rule as the session spawn: naming the CLI's default dir would move
-  // it off the default Keychain item and list under another identity.
+  // Explicitly pinning the default directory changes the CLI's Keychain identity.
   const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
     ...base,
     ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
@@ -93,11 +91,7 @@ export async function runClaudeListing(
   return result
 }
 
-/**
- * Lists models without a live session: one `list_models` control request, under the SAME binary
- * and environment the structured session launch resolves, so a probe can never list under a
- * different install or shell env than the sessions it stands in for.
- */
+// List models and settings with the same resolved executable, environment and account as sessions.
 export function createClaudeModelCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): AgentModelCatalogProbe {

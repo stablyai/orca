@@ -1,7 +1,3 @@
-// A targeted Stop against the real CLI: `stop_task` on one live background agent. The CLI's
-// acknowledgement is what the host settles that run on until the agent's own ending arrives.
-// Runs only where a signed-in Claude CLI exists, like the rest of the real-CLI suite.
-
 import { randomUUID } from 'node:crypto'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -47,7 +43,6 @@ async function until(check: () => boolean, timeoutMs: number): Promise<boolean> 
   return check()
 }
 
-/** The task frames the CLI sent about one task, in order. */
 function taskFrames(events: readonly ClaudeStructuredSessionEvent[], taskId: string) {
   return events.flatMap((event) =>
     event.type === 'message' &&
@@ -144,7 +139,6 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI targeted stop'
         expect(outcome).toMatchObject({ cancelled: true })
         expect(acknowledged).toEqual([{ taskId }])
 
-        // The CLI sends the run its own ending, and it says the run stopped.
         const ended = await until(
           () =>
             taskFrames(events, taskId).some(

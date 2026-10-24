@@ -1,6 +1,3 @@
-// The contract the admission fix exists for: dispatch settles when the write
-// completes, and nothing about elapsed time ever puts a message in doubt.
-
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
@@ -65,9 +62,6 @@ describe('Claude structured dispatch admission', () => {
         true
       )
 
-      // Queued while turn one is still running: a fold is echoed mid-turn, a
-      // queued send only when its own turn starts — either way elapsed time is
-      // not evidence of a delivery problem.
       const queued = await dispatchClaudeTurn(session, {
         clientMessageId: 'client-2',
         body: userMessage([{ type: 'text', text: 'two' }])
@@ -81,7 +75,6 @@ describe('Claude structured dispatch admission', () => {
       expect(session.retiredDispatchWaiters).toHaveLength(0)
       expect(settled).toHaveBeenCalledTimes(1)
 
-      // Turn one ends and turn two starts: the echo lands and settles the send.
       expect(resolveClaudeReplayWaiter(session, userReplayFrame(queuedUuid, 'two'), settled)).toBe(
         true
       )
@@ -104,7 +97,6 @@ describe('Claude structured dispatch admission', () => {
       })
     ).resolves.toEqual({ state: 'admitted' })
     expect(session.connection.send).toHaveBeenCalledTimes(1)
-    // Still unacknowledged, and deliberately so: the waiter outlives the call.
     expect(session.dispatchWaiters).toHaveLength(1)
     expect(session.dispatchWaiters[0]!.settledUuid).toBeUndefined()
   })

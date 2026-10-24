@@ -89,7 +89,6 @@ async function armGuest(previousMarker?: string) {
     }
   }
   const outline = (): Rect => {
-    // The outline is the first box inside the overlay container.
     const box = shadowRoots[0].firstElementChild?.firstElementChild
     if (!(box instanceof window.HTMLElement)) {
       throw new Error('outline not rendered')
@@ -103,7 +102,6 @@ async function armGuest(previousMarker?: string) {
     }
   }
 
-  // Hover the target, then click-freeze it like awaitClick does.
   grab.host.dispatchEvent(new window.MouseEvent('mousemove', { clientX: 50, clientY: 310 }))
   flushFrames()
   grab.freezeHighlight('selection-1')

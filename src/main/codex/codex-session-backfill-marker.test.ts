@@ -58,7 +58,6 @@ function writeFullBaseline(
   )
 }
 
-/** More dates than MAX_PENDING_SCAN_DATES, so the marker gives up on bounding. */
 function overflowingDates(): CodexSessionBackfillDate[] {
   return getCodexSessionBackfillDatesBetween(
     new Date(Date.UTC(2026, 6, 1)),
@@ -192,7 +191,6 @@ describe('codex session backfill marker', () => {
 
     writeFullBaseline(WINDOWS_ROOT)
 
-    // The walk looked at every date, so nothing is left to revisit.
     expect(readMarker()).toMatchObject({ pendingScanDates: [] })
   })
 
@@ -227,7 +225,6 @@ describe('codex session backfill marker', () => {
       coveredScanDates: []
     })
 
-    // The walk may have passed those dates before their rollouts existed.
     expect(readMarker()).toMatchObject({ needsFullScan: true })
   })
 

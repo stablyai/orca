@@ -1,5 +1,10 @@
 import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
-import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
+import type {
+  BrowserSlice,
+  BrowserSliceGet,
+  BrowserSliceSet,
+  RemovedBrowserHistory
+} from './browser-slice-contract'
 import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
 import { redactKagiSessionToken } from '../../../../../shared/browser-url'
 import {
@@ -23,8 +28,10 @@ export function createBrowserHistoryActions(
   | 'recordWorkspaceDocVisit'
   | 'addBrowserHistoryEntry'
   | 'removeBrowserHistoryEntry'
-  | 'restoreBrowserHistoryEntry'
+  | 'restoreBrowserHistory'
+  | 'removeWorkspaceDocHistoryEntry'
   | 'clearBrowserHistory'
+  | 'setBrowserHistoryPageId'
 > {
   return {
     recordWorkspaceDocVisit: (docLocation, title, options) => {
@@ -125,16 +132,50 @@ export function createBrowserHistoryActions(
       return removed
     },
 
-    restoreBrowserHistoryEntry: (entry) => {
-      set((s) =>
+    restoreBrowserHistory: (removed) => {
+      set((s) => {
         // A revisit between remove and Undo already re-created the row; keep the live one.
-        s.browserUrlHistory.some((existing) => existing.normalizedUrl === entry.normalizedUrl)
-          ? s
-          : { browserUrlHistory: [entry, ...s.browserUrlHistory] }
-      )
+        const urls = removed.browserUrlHistory.filter(
+          (entry) => !s.browserUrlHistory.some((live) => live.normalizedUrl === entry.normalizedUrl)
+        )
+        const docs = removed.workspaceDocHistory.filter(
+          (entry) =>
+            !s.workspaceDocHistory.some((live) =>
+              browserPageDocLocationsEqual(live.docLocation, entry.docLocation)
+            )
+        )
+        if (urls.length === 0 && docs.length === 0) {
+          return s
+        }
+        return {
+          browserUrlHistory: [...urls, ...s.browserUrlHistory],
+          workspaceDocHistory: [...docs, ...s.workspaceDocHistory]
+        }
+      })
+    },
+
+    removeWorkspaceDocHistoryEntry: (docLocation) => {
+      set((s) => ({
+        workspaceDocHistory: s.workspaceDocHistory.filter(
+          (entry) => !browserPageDocLocationsEqual(entry.docLocation, docLocation)
+        )
+      }))
     },
 
     // One clear for both sources: the dropdown presents them as one history.
-    clearBrowserHistory: () => set({ browserUrlHistory: [], workspaceDocHistory: [] })
+    clearBrowserHistory: (since = -Infinity) => {
+      const { browserUrlHistory, workspaceDocHistory } = get()
+      const removed: RemovedBrowserHistory = {
+        browserUrlHistory: browserUrlHistory.filter((entry) => entry.lastVisitedAt >= since),
+        workspaceDocHistory: workspaceDocHistory.filter((entry) => entry.lastVisitedAt >= since)
+      }
+      set({
+        browserUrlHistory: browserUrlHistory.filter((entry) => entry.lastVisitedAt < since),
+        workspaceDocHistory: workspaceDocHistory.filter((entry) => entry.lastVisitedAt < since)
+      })
+      return removed
+    },
+
+    setBrowserHistoryPageId: (pageId) => set({ browserHistoryPageId: pageId })
   }
 }

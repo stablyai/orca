@@ -71,7 +71,7 @@ export async function prepareWorktreeCreateCheckout(
             materializationBase = stdout.trim()
             await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
           }
-          // Why: reset materializes files without running user post-checkout hooks before submit.
+          // Materialize with reset to defer user post-checkout hooks until submission.
           await gitExecFileAsync(
             [...windowsLongPathGitArgs(worktreePath), 'reset', '--hard', materializationBase],
             { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
@@ -127,7 +127,6 @@ export async function unlockPreparedWorktree(
 }
 
 export type FinalizedPreparedWorktree = AddWorktreeResult & {
-  /** The prepared checkout was not already at the requested commit, so it was reset onto it. */
   preparedHeadReset: boolean
 }
 
@@ -200,7 +199,7 @@ export async function finalizePreparedWorktree(
       try {
         try {
           await verifyOwnership()
-          // Why: `-f -f` moves the locked preparation while preserving its lock reason (Git >=2.25).
+          // Git >= 2.25 needs two force flags to move a locked preparation without losing its lock reason.
           await gitExecFileAsync(
             [
               ...windowsLongPathGitArgs(repoPath),
@@ -265,7 +264,7 @@ export async function finalizePreparedWorktree(
         await baseContext.pendingLocalBaseRefRefresh
         throw error
       }
-      // Why: the refresh overlapped the finalize above; it has no bearing on the checkout's content.
+      // Advisory refresh may settle after finalization; it does not determine checkout contents.
       const localBaseRefRefresh = await baseContext.pendingLocalBaseRefRefresh
       return {
         preparedHeadReset,

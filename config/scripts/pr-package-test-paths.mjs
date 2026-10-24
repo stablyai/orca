@@ -99,6 +99,22 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/skills/bundled-skill-install/plan-selection.test.ts'
 ]
 
+const WINDOWS_PROCESS_PROBE_PREFIXES = [
+  'config/nsis/',
+  'config/scripts/nsis-process-check',
+  'config/scripts/idle-cpu-process-sampling',
+  'config/vitest.config.',
+  'config/scripts/vitest-',
+  'config/scripts/ci-unit-',
+  'config/scripts/workspace-source-exports',
+  'config/dark-build-switches.',
+  'src/packages/process-host/'
+]
+
+export function isWindowsProcessProbePath(file) {
+  return WINDOWS_PROCESS_PROBE_PREFIXES.some((prefix) => file.startsWith(prefix))
+}
+
 export const WINDOWS_PACKAGE_TESTS = [
   ...WINDOWS_BOUNDARY_TESTS,
   ...LINUX_PACKAGE_TESTS,

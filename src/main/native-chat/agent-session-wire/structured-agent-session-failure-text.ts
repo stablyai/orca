@@ -1,6 +1,3 @@
-// The facts a start or an exit reduces to, and the one place a failed start is worded. The
-// sentence itself comes from `agentSessionFailureWords`, beside the fact it states.
-
 import {
   agentSessionFailureFact,
   providerDiagnosticOf,
@@ -27,7 +24,6 @@ import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
 
-/** Start refusals whose situation is itself what the person reads, with its own next step. */
 const TYPED_START_REFUSALS = [
   'notSignedIn',
   'cliMissing',
@@ -50,12 +46,11 @@ function typedStartRefusal(
   return TYPED_START_REFUSALS.find((typed) => typed === reason)
 }
 
-/** Marks the error an adapter observed its child's exit with, where it observed it. */
+/** Mark exit evidence at the adapter’s observation site. */
 export function withObservedProviderExit<TError extends Error>(error: TError): TError {
   return Object.assign(error, { providerExitObserved: true })
 }
 
-/** Whether the error's chain marks an exit the adapter saw on its own. */
 export function providerExitObserved(error: unknown): boolean {
   return (
     findInErrorChain(error, (inner) =>
@@ -64,9 +59,7 @@ export function providerExitObserved(error: unknown): boolean {
   )
 }
 
-/** A start that did not land. A refusal the adapter typed keeps its situation, and an exit the
- *  adapter observed says the provider stopped; anything else blames no one — it may be Orca's, or
- *  a spawn that failed. Either keeps the provider's diagnostic when the error carried one. */
+/** Preserve typed/observed causes and diagnostics; unclassified spawn/host errors cannot imply provider failure. */
 export function providerStartupFailureFact(cause?: unknown): SubmissionRejectionFact {
   const installation = agentCliInstallationProblemOf(cause)
   if (installation) {
@@ -97,8 +90,7 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   })
 }
 
-/** A child that ended before it proved its start: an exit is a start that failed, keeping the
- *  provider's diagnostic; an Orca fault or a typed start refusal stays what it was. */
+/** Startup exits become start failures; preserve host faults and typed refusals. */
 function startupFailureFromExit(
   failure: SubmissionRejectionFact | undefined
 ): SubmissionRejectionFact {
@@ -108,9 +100,7 @@ function startupFailureFromExit(
   return failure
 }
 
-/** What the chat records when a session could not be made ready. Only a refusal the host typed as
- *  an observed exit says the provider stopped; a verdict of `exited` means only that nothing runs
- *  now. */
+/** Only observed exits blame the provider; an exited owner verdict proves absence alone. */
 function refusedStartFailureFact(
   cause: Extract<StructuredAgentSessionStartFailureCause, { refusal: unknown }>
 ): SubmissionRejectionFact {
@@ -135,33 +125,25 @@ function refusedStartFailureFact(
   })
 }
 
-/** Why a start the chat needed did not land, as the place that saw it knows it. */
 export type StructuredAgentSessionStartFailureCause =
-  /** The session could not be made ready; the provider's words, if any, are kept host-side, off
-   *  the refusal. `newSession`: one that never ran, so it failed to start rather than restart. */
+  /** Provider words stay host-side; newSession distinguishes first launch from restart. */
   | {
       refusal: AgentSessionWireRefusal
       diagnostic?: ProviderDiagnostic
       argumentProblem?: AgentSessionArgumentProblem
       newSession?: true
     }
-  /** A start that threw, or an adapter's own startup failure; any diagnostic it carries. */
   | { error: unknown }
-  /** The child ended before it proved its start, as its ended event told it. */
   | { exit: SubmissionRejectionFact | undefined }
-  /** The provider exited while starting; only its words are known, and the caller names their
-   *  audience. */
+  /** Caller assigns the audience of provider startup-exit diagnostics. */
   | { diagnostic: ProviderDiagnostic | undefined }
-  /** Orca's own fault; its error belongs in the log. */
+  /** Host errors stay in logs. */
   | { hostFault: true }
-  /** Already typed where it was observed. */
   | { failure: SubmissionRejectionFact }
 
-/** A start failure's row repeats the sentence its rejected messages carry: both are about the
- *  messages the start was for. */
+/** Failure rows and rejected sends share one sentence/fact. */
 export type StructuredAgentSessionStartFailureWords = AgentJournalDispatchRejection
 
-/** The fact a failed start records, for a writer that words it on its own surface. */
 export function structuredAgentSessionStartFailureFact(
   cause: StructuredAgentSessionStartFailureCause
 ): SubmissionRejectionFact {
@@ -183,8 +165,7 @@ export function structuredAgentSessionStartFailureFact(
   return cause.failure
 }
 
-/** The one place a failed start is worded: the error row and every message it rejects carry this
- *  sentence and this fact, whichever writer saw the start fail. */
+/** Word each start failure once for its row and every rejected send. */
 export function structuredAgentSessionStartFailure(
   cause: StructuredAgentSessionStartFailureCause,
   context: AgentSessionFailureWordsContext = {}

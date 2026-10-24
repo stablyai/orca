@@ -11,21 +11,26 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
 import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
 
 /**
- * `user`: an explicit desktop save (shortcut, save-and-close dialog). `restart`: the save-all
+ * `user`: an explicit desktop save (shortcut, save-and-close dialog). `convert`: an explicit save
+ * the user confirmed may replace a non-UTF-8 file's unreadable characters. `restart`: the save-all
  * before a restart. `overwrite`: the conflict banner's Overwrite, the only consent to replace a
  * disk change.
  */
-export type EditorSaveTrigger = 'autosave' | 'user' | 'restart' | 'overwrite'
+export type EditorSaveTrigger = 'autosave' | 'user' | 'convert' | 'restart' | 'overwrite'
 
 /**
  * `written`: disk holds the text. `blocked-stale`: the host refused because disk moved on since the
- * tab's baseline. `failed`: nothing was written (read-only, suspended, superseded). Write errors reject.
+ * tab's baseline. `not-utf8`: an explicit save met a file that isn't UTF-8 and needs `convert`.
+ * `failed`: nothing was written (read-only, suspended, superseded). Write errors reject.
  * Callers treat anything but `written` as not saved.
  */
-export type EditorSaveResult = 'written' | 'blocked-stale' | 'failed'
+export type EditorSaveResult = 'written' | 'blocked-stale' | 'not-utf8' | 'failed'
 
 export const EDITOR_STALE_SAVE_MESSAGE =
   'This file changed on disk since your edits. Use the banner to compare, reload, or overwrite.'
+
+/** The rejection an explicit save reports for a non-UTF-8 file, so the caller can ask to convert. */
+export const EDITOR_NOT_UTF8_SAVE_MESSAGE = "This file isn't UTF-8 text, so it wasn't saved."
 
 /** The Monaco model a tab edits; tabs of one file on one host share it, and so share its text. */
 export function editorTabModelUri(state: AppState, file: OpenFile): string {
@@ -123,7 +128,8 @@ export function editorSavePrecondition(
     kind: 'guarded',
     signature: baseline,
     allowMissing: trigger !== 'autosave',
-    requireLosslessUtf8: trigger === 'autosave' || trigger === 'restart'
+    // Why: only a confirmed conversion may replace bytes that didn't decode as UTF-8.
+    requireLosslessUtf8: trigger !== 'convert'
   }
 }
 

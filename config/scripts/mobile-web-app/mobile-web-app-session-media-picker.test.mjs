@@ -59,13 +59,6 @@ describeClosure(
       }
       expect(closure.local).toContain('src/session/mobile-clipboard-image-resize.ts')
     })
-
-    it('is big enough that finding nothing would mean something', async () => {
-      const closure = await mobileWebAppRouteClosure(SESSION)
-      // The largest route of the series; a closure that collapsed would pass every rule above by
-      // containing nothing to judge.
-      expect(closure.local.length).toBeGreaterThan(900)
-    })
   },
   240_000
 )

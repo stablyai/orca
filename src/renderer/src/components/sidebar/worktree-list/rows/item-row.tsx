@@ -204,7 +204,6 @@ export function renderWorktreeItemRow(
         inPinnedSection={itemRow.sectionKey === PINNED_GROUP_KEY}
         renameRowKey={itemRow.rowKey}
         lineageChildCount={itemRow.lineageChildCount}
-        lineageChildWorktreeIds={itemRow.lineageChildWorktreeIds}
         lineageCollapsed={itemRow.lineageCollapsed}
         lineageChildren={lineageChildren}
         lineageChildrenStyle={lineageChildrenStyle}

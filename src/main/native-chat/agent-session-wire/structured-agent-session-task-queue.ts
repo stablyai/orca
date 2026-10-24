@@ -45,7 +45,6 @@ export class StructuredAgentSessionTaskQueue {
       .map(({ sessionId }) => sessionId)
   }
 
-  /** A create or attach for this session that has not settled yet. */
   hasPendingAttach(sessionId: string): boolean {
     return [...this.pendingLocations.values()].some((pending) => pending.sessionId === sessionId)
   }

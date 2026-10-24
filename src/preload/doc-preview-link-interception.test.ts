@@ -70,15 +70,31 @@ describe('doc preview link interception', () => {
   })
 
   it('listens for both press kinds in the capture phase, so the document cannot consume them first', () => {
-    // Avoid leaving document listeners attached across tests.
-    const addEventListener = vi.spyOn(document, 'addEventListener').mockImplementation(() => {})
+    loadPreviewDocument('<a id="external" href="https://example.com/docs">go</a>')
+    const addEventListener = vi.spyOn(document, 'addEventListener')
+    try {
+      installDocPreviewLinkInterception(report)
+      expect(addEventListener.mock.calls.map(([type, , options]) => [type, options])).toEqual([
+        ['click', true],
+        ['auxclick', true]
+      ])
+      const link = document.querySelector('#external')!
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+      Object.defineProperty(click, 'isTrusted', { configurable: true, value: true })
+      link.dispatchEvent(click)
+      expect(report).toHaveBeenCalledExactlyOnceWith('https://example.com/docs')
+      expect(click.defaultPrevented).toBe(true)
 
-    installDocPreviewLinkInterception(vi.fn())
-
-    expect(addEventListener.mock.calls.map(([type, , options]) => [type, options])).toEqual([
-      ['click', true],
-      ['auxclick', true]
-    ])
+      const middleClick = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true })
+      Object.defineProperty(middleClick, 'isTrusted', { configurable: true, value: true })
+      link.dispatchEvent(middleClick)
+      expect(middleClick.defaultPrevented).toBe(true)
+      expect(report).toHaveBeenCalledOnce()
+    } finally {
+      for (const [type, listener, options] of addEventListener.mock.calls) {
+        document.removeEventListener(type, listener, options)
+      }
+    }
   })
 
   it('routes nothing for a click the document dispatched itself', () => {

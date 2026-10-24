@@ -22,7 +22,6 @@ export type ChromiumBrowserDef = {
   label: string
   keychainService: string
   keychainAccount: string
-  // Per-platform data-dir roots, resolved at detection time via browserRootPath().
   macRoot?: string
   winRoot?: string
   linuxRoot?: string
@@ -70,16 +69,14 @@ export const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     keychainAccount: 'Comet',
     macRoot: 'Comet',
     winRoot: 'Perplexity/Comet/User Data'
-    // linuxRoot intentionally omitted — Comet does not ship a Linux build as of 2026-05-15
   },
   {
     family: 'helium',
-    // Why: Helium breaks the '<Browser> Safe Storage' convention — its Keychain service is literally 'Helium Storage Key'.
     label: 'Helium',
     keychainService: 'Helium Storage Key',
     keychainAccount: 'Helium',
     macRoot: 'net.imput.helium'
-    // winRoot/linuxRoot intentionally omitted — only the macOS install is verified
+    // Only the macOS install is verified.
   }
 ]
 
@@ -101,7 +98,6 @@ export function browserRootPath(def: ChromiumBrowserDef): string | null {
     }
     return join(localAppData, def.winRoot)
   }
-  // Linux
   if (!def.linuxRoot) {
     return null
   }
@@ -120,7 +116,7 @@ export function isSafeBrowserProfileDirectory(directory: string): boolean {
   )
 }
 
-// Why: Chrome's Local State profile.info_cache maps profile dirs to display names for the picker.
+// Local State maps profile directories to display names.
 export function discoverProfiles(browserRoot: string): BrowserProfile[] {
   try {
     const localStatePath = join(browserRoot, 'Local State')
@@ -135,7 +131,7 @@ export function discoverProfiles(browserRoot: string): BrowserProfile[] {
     }
     const profiles: BrowserProfile[] = []
     for (const [dir, info] of Object.entries(infoCache)) {
-      // Why: Local State is external metadata, but profile dirs become path segments.
+      // External profile metadata becomes a filesystem path segment.
       if (!isSafeBrowserProfileDirectory(dir)) {
         continue
       }
@@ -147,10 +143,6 @@ export function discoverProfiles(browserRoot: string): BrowserProfile[] {
     return [{ name: 'Default', directory: 'Default' }]
   }
 }
-
-// ---------------------------------------------------------------------------
-// Firefox detection
-// ---------------------------------------------------------------------------
 
 export function firefoxProfilesRoot(): string | null {
   if (process.platform === 'darwin') {
@@ -177,7 +169,7 @@ export function discoverFirefoxProfiles(): BrowserProfile[] {
     const entries = readdirSync(profilesRoot, { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
-    // Why: Firefox dirs are named <random>.<name>; prefer 'default-release' as the primary profile on most installs.
+    // Firefox usually uses default-release as the primary profile.
     const sorted = entries.sort((a, b) => {
       if (a.includes('default-release')) {
         return -1

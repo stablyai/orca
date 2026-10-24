@@ -75,7 +75,6 @@ export function getTerminalScrollbackSnapshotPath(
   return snapshotPath(ref, getTerminalScrollbackSnapshotRoot(storage))
 }
 
-/** The stored bytes for `ref`, bounded by the store limit; `null` when absent or out of bounds. */
 export function readTerminalScrollbackStoredBytesSync(
   ref: string,
   storage?: TerminalScrollbackSnapshotStorage
@@ -88,7 +87,7 @@ export function readTerminalScrollbackStoredBytesSync(
       }
       return readFileSync(path)
     } catch {
-      // Try the profile fallback when the primary snapshot is absent.
+      // Try the next snapshot root when this read fails.
     }
   }
   return null
@@ -204,7 +203,7 @@ export function readTerminalScrollbackSnapshotSync(
     try {
       return readTrailingUtf8(path, TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
     } catch {
-      // Try the legacy/global fallback when a profile-local snapshot is absent.
+      // Try the next snapshot root when this read fails.
     }
   }
   return null
@@ -218,7 +217,7 @@ export function deleteTerminalScrollbackSnapshotSync(
     try {
       rmSync(path, { force: true })
     } catch {
-      // Best-effort cleanup; stale refs are harmless and bounded by per-file caps.
+      // Cleanup failures must not block session deletion.
     }
   }
 }

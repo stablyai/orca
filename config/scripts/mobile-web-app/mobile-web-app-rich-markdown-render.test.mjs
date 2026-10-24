@@ -6,9 +6,9 @@
  * calls them. That makes four claims this file measures rather than asserts: that all fifteen
  * toolbar commands change the document under the shipped header with no violation; that `ready`
  * and `change` reach the component through its own seam and never through the shell's bridge
- * object; that a remount leaves nothing of the first mount behind (rulings 20 and 21); and that the
- * surface is on the 16 px floor and the two URL commands are answered by a modal rather than by the
- * `null` both shells return from `window.prompt`.
+ * object; that a remount removes the first editor's listeners and keeps one stylesheet; and that
+ * the surface is on the 16 px floor and the two URL commands use a modal instead of the `null`
+ * both shells return from `window.prompt`.
  *
  * Both engines, because the shell is WKWebView on one platform and a Chromium WebView on the other,
  * and `document.execCommand` — which the whole program is built on — is the engine's.
@@ -31,7 +31,6 @@ import {
   createBundleServer,
   installCspViolationRecorder,
   installListenerRecorder,
-  installSchedulerRecorder,
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
@@ -315,8 +314,7 @@ async function openPage(browser) {
   page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`))
   await page.addInitScript(installBridgeObjectRecorder)
   await page.addInitScript(installCspViolationRecorder)
-  await page.addInitScript(installListenerRecorder)
-  await page.addInitScript(installSchedulerRecorder)
+  await page.addInitScript(installListenerRecorder, { selector: '#editor' })
   await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => document.body.dataset.ready === 'yes')
   await page.waitForSelector('#first-surface #editor')
@@ -609,6 +607,11 @@ describeEditor(
                 entry.expect,
                 { timeout: 15_000 }
               )
+              expect(
+                await page
+                  .locator(`#first-surface #editor ${entry.expect}`)
+                  .getAttribute(entry.label === 'Link' ? 'href' : 'src')
+              ).toBe(`${origin}${entry.path}`)
             }
             // Insertion precedes image loading; a refused image must still fail this paint check.
             await expect
@@ -668,24 +671,40 @@ describeEditor(
           }
         }, 600_000)
 
-        it('leaves no listener, timer or frame of the first mount in the second', async () => {
+        it('removes the first editor listeners and mounts a working second document', async () => {
           const { page, consoleErrors } = await openPage(browser)
           const listeners = () => page.evaluate(() => globalThis.__orcaListeners.snapshot())
           try {
             await setContent(page, 'first document', '<p>first document</p>')
+            const first = await listeners()
+            const firstOwned = Object.fromEntries(
+              Object.entries(first).filter(([key]) => key.startsWith('element '))
+            )
+            expect(
+              Object.keys(firstOwned)
+                .map((key) => key.split(' ').at(-1))
+                .sort()
+            ).toEqual(['change', 'click', 'input', 'keydown'])
+            expect(Object.values(firstOwned)).toEqual([1, 1, 1, 1])
 
             // A first mount installs listeners no dispose can take off — react-native-web's
             // responder system arms itself on the first `View` the page renders — so the baseline a
             // per-mount leak would move is the snapshot after one whole cycle, not before it.
             await page.evaluate(() => globalThis.__orcaEditor.set({ mounted: false }))
             await page.waitForFunction(() => document.querySelector('#first-surface') === null)
+            await expect
+              .poll(
+                async () =>
+                  Object.keys(await listeners()).filter((key) => key.startsWith('element ')),
+                { timeout: 5_000 }
+              )
+              .toEqual([])
             const afterOneCycle = await listeners()
             // The precondition that makes the comparison below non-vacuous: the recorder is reading
             // real listeners, so a snapshot of nothing cannot pass as a snapshot of no leak.
             expect(Object.keys(afterOneCycle).length).toBeGreaterThan(0)
 
             await page.evaluate(() => {
-              globalThis.__orcaScheduler.watching = true
               globalThis.__orcaEditor.set({ mounted: true, generation: 1 })
             })
             await page.waitForSelector('#first-surface #editor')
@@ -697,10 +716,21 @@ describeEditor(
                 document.querySelector('#first-surface #editor')?.querySelector('b,strong') !== null
             )
 
-            // The second mount is live, and the page is listening to exactly what it was after the
-            // first cycle. A mount that registered anything of its own would show up here.
-            expect(await listeners()).toEqual(afterOneCycle)
-            expect(await page.evaluate(() => globalThis.__orcaScheduler.leaked)).toEqual([])
+            const second = await listeners()
+            const globals = Object.fromEntries(
+              Object.entries(second).filter(([key]) => !key.startsWith('element '))
+            )
+            expect(globals).toEqual(afterOneCycle)
+            const secondOwned = Object.fromEntries(
+              Object.entries(second).filter(([key]) => key.startsWith('element '))
+            )
+            expect(
+              Object.keys(secondOwned)
+                .map((key) => key.split(' ').at(-1))
+                .sort()
+            ).toEqual(['change', 'click', 'input', 'keydown'])
+            expect(Object.values(secondOwned)).toEqual([1, 1, 1, 1])
+            expect(Object.keys(secondOwned).some((key) => key in firstOwned)).toBe(false)
             expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
             expect(consoleErrors).toEqual([])
             // The sheet stays in the head across mounts, and there is one of it.

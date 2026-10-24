@@ -24,7 +24,6 @@ const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\alice\\managed-home'
 const roots: string[] = []
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
 
-// Stands in for `codex login`: prints its link, then exits.
 function loginThatPrints(text: string) {
   const requests: CodexLoginSpawnRequest[] = []
   const spawn = vi.fn((request: CodexLoginSpawnRequest) => {
@@ -70,7 +69,7 @@ describe('runCodexLoginSession sign-in link opening', () => {
     await done
     expect(open).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
     expect(onAuthUrl).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
-    // Why: Orca opens the link, so the distro's own opener must not open a second tab.
+    // Suppress the distro opener to avoid a second browser tab.
     expect(login.requests[0].args.at(-1)).toContain('export BROWSER=true')
   })
 

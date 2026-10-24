@@ -5,6 +5,7 @@ import type {
 import {
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,
+  AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
@@ -81,6 +82,15 @@ export async function mutateHostAgentLaunchSettings(
     !(await hostSupportsNativeChatPermissions(owner))
   ) {
     throw new Error('agent_launch_native_chat_permissions_unsupported')
+  }
+  if (
+    (mutation.type === 'permission' || mutation.type === 'user-arguments') &&
+    !(await runtimeEnvironmentSupportsCapability(
+      owner.environmentId,
+      AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY
+    ))
+  ) {
+    throw new Error('agent_launch_permission_choice_unsupported')
   }
   const result = await callRuntimeRpc<{ settings: AgentLaunchSettings }>(
     { kind: 'environment', environmentId: owner.environmentId },

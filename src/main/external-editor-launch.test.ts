@@ -49,7 +49,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
       spawnCmd: `${installBin}\\idea64.exe`,
       spawnArgs: ['C:\\workspaces\\orca']
     })
-    // Why: a bare PATH `idea64` may belong to a different, stale install.
+    // A bare idea64 on PATH may belong to a different install.
     expect(resolveCliCommandMock).toHaveBeenCalledWith('idea', { platform: 'win32' })
     expect(resolveCliCommandMock).not.toHaveBeenCalledWith('idea64', expect.anything())
   })
@@ -173,7 +173,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
     })
   })
 
-  // Why: `start` re-parses argv, so only JetBrains shims may take that path.
+  // start re-parses argv; reserve it for shims that need detachment.
   it.each([
     ['code', 'C:\\Tools\\code.cmd', ['C:\\workspaces\\orca']],
     [
