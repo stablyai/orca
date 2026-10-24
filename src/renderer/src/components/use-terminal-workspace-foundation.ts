@@ -4,6 +4,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '../store'
 import { useWorktreeMap } from '../store/selectors'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { resolveVisibleWorkspaceIds } from '@/lib/workspace-grid-view-membership'
 import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reused-array-identity'
@@ -63,6 +64,20 @@ export function useTerminalWorkspaceFoundation() {
     () => new Set(workspaceSurfaceIds),
     [workspaceSurfaceIds]
   )
+  const workspaceGridViewMemberIds = useAppStore((state) => state.workspaceGridViewMemberIds)
+  // Why separate from renderedActiveWorktreeId: grid view members are on screen together, but only
+  // the active one owns keyboard focus and global shortcuts.
+  const visibleWorkspaceIds = useReusedArrayIdentity(
+    useMemo(
+      () =>
+        resolveVisibleWorkspaceIds({
+          gridViewMemberIds: workspaceGridViewMemberIds,
+          activeWorkspaceId: renderedActiveWorktreeId,
+          mountableWorkspaceIds: workspaceSurfaceIdSet
+        }),
+      [workspaceGridViewMemberIds, renderedActiveWorktreeId, workspaceSurfaceIdSet]
+    )
+  )
   const activeView = useAppStore((state) => state.activeView)
   // Why: terminal titles are leaf chrome. The root host only subscribes to
   // mount/parking semantics; a real transition publishes fresh tab objects,
@@ -105,6 +120,7 @@ export function useTerminalWorkspaceFoundation() {
     workspaceSurfaceIdSet,
     activeWorktreeId,
     renderedActiveWorktreeId,
+    visibleWorkspaceIds,
     activeWorktreeDeferralHostId,
     activeView,
     tabsByWorktree,

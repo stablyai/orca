@@ -55,6 +55,7 @@ async function renderSurfaces(
     mountedWorktreeIdsRef: { current: new Set(WORKTREE_IDS) },
     renderedActiveWorktreeId: HELD_WORKTREE_ID,
     startupTerminalTabHold: hold,
+    visibleWorkspaceIds: [HELD_WORKTREE_ID],
     workspaceSurfaces: WORKTREE_IDS.map((id) => ({ id, path: `/${id}` }))
   } as unknown as TerminalController
   const container = document.createElement('div')

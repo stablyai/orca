@@ -100,6 +100,7 @@ describe('workspace surface ids', () => {
       tabsByWorktree: {},
       terminalParkingEnabled: true,
       terminalTitleSnapshotAuthorityEnabled: true,
+      visibleWorkspaceIds: [],
       workspaceSessionReady: false,
       workspaceSurfaces: surfaces,
       workspaceSurfaceIds: ids,
@@ -122,6 +123,7 @@ describe('workspace surface ids', () => {
       ['repo::/worktree-0', 1],
       ['repo::/stale', 2]
     ])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: collectTerminalParkingPassCandidates reads only the fields listed here; the rest of the foundation is render machinery this test never exercises.
     const controller = {
       activeView: 'terminal',
       activityTerminalPortals: [],
@@ -137,6 +139,7 @@ describe('workspace surface ids', () => {
       terminalWorktreeHiddenSinceRef: { current: hiddenSince },
       terminalWorktreeParkCooldownUntilRef: { current: new Map() },
       terminalWorktreeParkingTimersRef: { current: new Map() },
+      visibleWorkspaceIds: ['repo::/worktree-0'],
       workspaceSurfaces: surfaces,
       workspaceSurfaceIds: ids,
       workspaceSurfaceIdSet: new Set(ids)

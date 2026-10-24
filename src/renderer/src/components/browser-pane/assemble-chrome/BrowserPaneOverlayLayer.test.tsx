@@ -200,6 +200,15 @@ describe('BrowserPaneOverlayLayer', () => {
     )
   })
 
+  it('keeps a visible but unfocused grid view cell from owning chrome chords', () => {
+    const markup = renderOverlay({ isWorktreeActive: true, isWorktreeFocused: false })
+
+    // Why: its own split is focused within the worktree, but another cell owns the keyboard.
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="inactive"'
+    )
+  })
+
   it('restores 200 tabs on demand and preserves viewport roots across parking and selection', () => {
     const browsers = Array.from({ length: 200 }, (_, index) =>
       createBrowserTab(`browser-${index}`, [`page-${index}`])
@@ -489,9 +498,19 @@ describe('BrowserPaneOverlayLayer', () => {
   })
 })
 
-function renderOverlay({ isWorktreeActive }: { isWorktreeActive: boolean }): string {
+function renderOverlay({
+  isWorktreeActive,
+  isWorktreeFocused
+}: {
+  isWorktreeActive: boolean
+  isWorktreeFocused?: boolean
+}): string {
   return renderToStaticMarkup(
-    <BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={isWorktreeActive} />
+    <BrowserPaneOverlayLayer
+      worktreeId="wt-1"
+      isWorktreeActive={isWorktreeActive}
+      isWorktreeFocused={isWorktreeFocused}
+    />
   )
 }
 

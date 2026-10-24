@@ -41,6 +41,10 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       32,
       'Web client only; the desktop keeps visit recency in the session.'
     ),
+  'src/renderer/src/store/slices/workspace-grid-view-storage.ts': notApplicableDisposition(
+    62,
+    'Per-device grid view membership; ids that stop resolving after a move are skipped when rendering.'
+  ),
   ...Object.fromEntries(
     [
       'src/renderer/src/components/browser-pane/annotate/use-markup-draw-hint.ts',

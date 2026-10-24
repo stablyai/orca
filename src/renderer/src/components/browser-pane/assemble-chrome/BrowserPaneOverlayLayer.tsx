@@ -7,6 +7,7 @@ import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
+import { resolveBrowserChromeShortcutScope } from './browser-chrome-shortcut-scope'
 import { tabGroupBodyAnchorName } from '../../tab-group/tab-group-body-anchor'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { useBrowserGuestPaintRetention } from '../host-guest/browser-guest-paint-retention'
@@ -121,10 +122,12 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
 // Why: memoize so parent re-renders on props this layer doesn't consume don't rerun its selector or assignments mapping (focused-split state comes from the store selector below, not props).
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
-  isWorktreeActive
+  isWorktreeActive,
+  isWorktreeFocused = isWorktreeActive
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  isWorktreeFocused?: boolean
 }): React.JSX.Element {
   const { browserTabs, unifiedTabs, groups, focusedGroupId } = useAppStore(
     useShallow((state) => ({
@@ -180,14 +183,13 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-        const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
-          ? 'inactive'
-          : // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
-            isFloatingWorkspace || knownFocusedGroupId === undefined
-            ? 'owned-target'
-            : assignment?.groupId === knownFocusedGroupId
-              ? 'focused'
-              : 'inactive'
+        const chromeShortcutScope = resolveBrowserChromeShortcutScope({
+          isActive,
+          isWorktreeFocused,
+          isFloatingWorkspace,
+          focusedGroupId: knownFocusedGroupId,
+          groupId: assignment?.groupId
+        })
         return (
           <BrowserOverlaySlot
             key={browserTab.id}
@@ -263,15 +265,22 @@ function ClientHostedBrowserRowOverlaySlot({
 export const RetainedBrowserPaneOverlayLayer = memo(function RetainedBrowserPaneOverlayLayer({
   worktreeId,
   isWorktreeActive,
+  isWorktreeFocused = isWorktreeActive,
   mountEligible
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  /** False for a visible grid view member: its browsers paint but must not own chrome chords. */
+  isWorktreeFocused?: boolean
   mountEligible: boolean
 }): React.JSX.Element | null {
   return (
     <DeferredBrowserContent mountEligible={mountEligible}>
-      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
+      <BrowserPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isWorktreeActive}
+        isWorktreeFocused={isWorktreeFocused}
+      />
     </DeferredBrowserContent>
   )
 })

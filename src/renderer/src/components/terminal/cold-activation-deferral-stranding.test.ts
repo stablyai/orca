@@ -112,6 +112,7 @@ function useStrandingHarness(props: HarnessProps) {
     tabsByWorktree: useAppStore.getState().tabsByWorktree,
     terminalParkingEnabled: true,
     terminalTitleSnapshotAuthorityEnabled: true,
+    visibleWorkspaceIds: props.worktreeId ? [props.worktreeId] : [],
     workspaceSessionReady: props.gateOpen,
     workspaceSurfaceIds: SURFACE_IDS,
     workspaceSurfaceIdSet: new Set(SURFACE_IDS)

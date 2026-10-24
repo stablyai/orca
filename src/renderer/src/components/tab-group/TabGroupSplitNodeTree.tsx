@@ -145,6 +145,7 @@ function SplitNode({
   worktreeId,
   focusedGroupId,
   isWorktreeActive,
+  isWorktreeFocused,
   hasSplitGroups,
   tabStrip,
   markdownAnnotationsEnabled,
@@ -163,6 +164,7 @@ function SplitNode({
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
+  isWorktreeFocused: boolean
   hasSplitGroups: boolean
   tabStrip: TabGroupPanelTabStrip
   markdownAnnotationsEnabled: boolean
@@ -189,7 +191,8 @@ function SplitNode({
         // survive worktree switches, but only the visible worktree may own the
         // global terminal shortcuts. If an offscreen group's pane stays
         // "focused", Cmd/Ctrl+W and split shortcuts can hit the wrong worktree.
-        isFocused={isWorktreeActive && node.groupId === focusedGroupId}
+        // A grid view shows several worktrees at once; only the focused one owns them.
+        isFocused={isWorktreeFocused && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
         tabStrip={tabStrip}
         markdownAnnotationsEnabled={markdownAnnotationsEnabled}
@@ -224,6 +227,7 @@ function SplitNode({
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
           isWorktreeActive={isWorktreeActive}
+          isWorktreeFocused={isWorktreeFocused}
           hasSplitGroups={hasSplitGroups}
           tabStrip={tabStrip}
           markdownAnnotationsEnabled={markdownAnnotationsEnabled}
@@ -257,6 +261,7 @@ function SplitNode({
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
           isWorktreeActive={isWorktreeActive}
+          isWorktreeFocused={isWorktreeFocused}
           hasSplitGroups={hasSplitGroups}
           tabStrip={tabStrip}
           markdownAnnotationsEnabled={markdownAnnotationsEnabled}
@@ -288,21 +293,27 @@ export function TabGroupSplitNodeTree({
   worktreeId,
   focusedGroupId,
   isWorktreeActive,
+  isWorktreeFocused = isWorktreeActive,
   isTabDragActive,
   hoveredTabInsertion,
   tabStrip = 'attached',
   markdownAnnotationsEnabled = true,
+  rootTouchesTopEdge = true,
   rootTouchesBottomEdge = false
 }: {
   layout: TabGroupLayoutNode
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
+  /** False for a visible grid view member that does not own keyboard focus. */
+  isWorktreeFocused?: boolean
   isTabDragActive: boolean
   hoveredTabInsertion: HoveredTabInsertion | null
   tabStrip?: TabGroupPanelTabStrip
   /** Off for scratch workspaces (the floating panel) whose markdown is not a review surface. */
   markdownAnnotationsEnabled?: boolean
+  /** False when host chrome sits above the tree, so its tab rows need not clear the window-corner controls. */
+  rootTouchesTopEdge?: boolean
   /** True when the host's own chrome bounds the tree's bottom edge (no border-b to paint). */
   rootTouchesBottomEdge?: boolean
 }): React.JSX.Element {
@@ -313,10 +324,11 @@ export function TabGroupSplitNodeTree({
       worktreeId={worktreeId}
       focusedGroupId={focusedGroupId}
       isWorktreeActive={isWorktreeActive}
+      isWorktreeFocused={isWorktreeFocused}
       hasSplitGroups={layout.type === 'split'}
       tabStrip={tabStrip}
       markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-      touchesTopEdge={true}
+      touchesTopEdge={rootTouchesTopEdge}
       touchesRightEdge={true}
       touchesLeftEdge={true}
       touchesBottomEdge={rootTouchesBottomEdge}

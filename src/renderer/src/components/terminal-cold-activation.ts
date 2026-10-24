@@ -41,6 +41,7 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     tabsByWorktree,
     terminalParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
+    visibleWorkspaceIds,
     workspaceSessionReady,
     workspaceSurfaceIds,
     workspaceSurfaceIdSet
@@ -165,6 +166,16 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
       })
     }
     mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)
+    // Why: the other grid view members are on screen too, so they mount every tab now instead of
+    // keeping a hidden worktree's targeted background mounts.
+    for (const workspaceId of visibleWorkspaceIds) {
+      if (workspaceId === renderedActiveWorktreeId) {
+        continue
+      }
+      mountedWorktreeIdsRef.current.add(workspaceId)
+      backgroundMountTabIdsByWorktreeRef.current.delete(workspaceId)
+      activationDeferredMountTabIdsByWorktreeRef.current.delete(workspaceId)
+    }
   } else {
     lastActivationWorktreeIdRef.current = null
   }

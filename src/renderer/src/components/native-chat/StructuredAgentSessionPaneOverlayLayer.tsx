@@ -23,6 +23,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   groupId,
   isActive,
   isFocusedGroup,
+  isFocusedSplit,
   hasSplitGroups,
   onFocusOwningGroup
 }: {
@@ -30,6 +31,8 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   groupId: string | undefined
   isActive: boolean
   isFocusedGroup: boolean
+  /** The workspace's own focused split, regardless of which grid view cell holds the keyboard. */
+  isFocusedSplit: boolean
   hasSplitGroups: boolean
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element | null {
@@ -44,7 +47,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
     <RetainedPaneHost
       groupId={groupId}
       isVisible={isActive}
-      dimmed={hasSplitGroups && !isFocusedGroup}
+      dimmed={hasSplitGroups && !isFocusedSplit}
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
@@ -65,10 +68,12 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
 const StructuredAgentSessionPaneOverlayLayer = memo(
   function StructuredAgentSessionPaneOverlayLayer({
     worktreeId,
-    isWorktreeActive
+    isWorktreeActive,
+    isWorktreeFocused = isWorktreeActive
   }: {
     worktreeId: string
     isWorktreeActive: boolean
+    isWorktreeFocused?: boolean
   }): React.JSX.Element {
     const { unifiedTabs, groups, activeGroupId } = useAppStore(
       useShallow((state) => ({
@@ -93,21 +98,24 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
 
     return (
       <>
-        {structuredTabs.map((tab) => (
-          <StructuredAgentSessionOverlaySlot
-            key={tab.id}
-            tab={tab}
-            groupId={tab.groupId}
-            isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
-            isFocusedGroup={Boolean(
-              isWorktreeActive &&
-              groupActiveTabById.get(tab.groupId) === tab.id &&
-              tab.groupId === activeGroupId
-            )}
-            hasSplitGroups={groups.length > 1}
-            onFocusOwningGroup={focusOwningGroup}
-          />
-        ))}
+        {structuredTabs.map((tab) => {
+          const isActive = Boolean(
+            isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id
+          )
+          const isFocusedSplit = isActive && tab.groupId === activeGroupId
+          return (
+            <StructuredAgentSessionOverlaySlot
+              key={tab.id}
+              tab={tab}
+              groupId={tab.groupId}
+              isActive={isActive}
+              isFocusedGroup={isFocusedSplit && isWorktreeFocused}
+              isFocusedSplit={isFocusedSplit}
+              hasSplitGroups={groups.length > 1}
+              onFocusOwningGroup={focusOwningGroup}
+            />
+          )
+        })}
       </>
     )
   }
