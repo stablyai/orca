@@ -139,7 +139,12 @@ function recordTerminalSelection(hostId: string, state: HostBridgeSessionState, 
     state.paneKey
   state.selectedByWorktree.set(state.worktreeId, {
     terminalHandle: handle,
-    ...(matched ? { tabId: matched.id, ...(matched.leafId ? { leafId: matched.leafId } : {}) } : {}),
+    ...(matched
+      ? {
+          tabId: matched.id,
+          ...(matched.type === 'terminal' && matched.leafId ? { leafId: matched.leafId } : {})
+        }
+      : {}),
     ...(paneKey ? { paneKey } : {}),
     explicit: true
   })

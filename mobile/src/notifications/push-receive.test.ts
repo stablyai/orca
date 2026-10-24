@@ -357,6 +357,10 @@ it('silences only the viewed workspace on its own host, desktop or server', asyn
 
 it('shows notifications from another tab in the same workspace while suppressing the active tab', async () => {
   AppState.currentState = 'active'
+  storage.set(
+    'orca:notificationDeliveryPreferences',
+    JSON.stringify({ suppressWhileViewing: false })
+  )
   let seq = 0
   const presentPane = (paneKey?: string) =>
     canPresentForegroundPush({
@@ -372,8 +376,13 @@ it('shows notifications from another tab in the same workspace while suppressing
     worktreeId: 'repo::/work',
     paneKey: 'tab-a:11111111-1111-4111-8111-111111111111'
   })
+  // The tab on screen never alerts, even with the workspace-wide switch off.
   await expect(presentPane('tab-a:11111111-1111-4111-8111-111111111111')).resolves.toBe(false)
   await expect(presentPane('tab-b:22222222-2222-4222-8222-222222222222')).resolves.toBe(true)
+
+  // The switch widens suppression to every tab of the open workspace.
+  storage.set('orca:notificationDeliveryPreferences', JSON.stringify({ suppressWhileViewing: true }))
+  await expect(presentPane('tab-b:22222222-2222-4222-8222-222222222222')).resolves.toBe(false)
 })
 
 it('keeps suppressing the active in-page tab across ready/drawer back-claim drops until leaving the session', async () => {
@@ -473,6 +482,10 @@ it('suppresses notifications when the active session is on a duplicate host entr
 
 it('tracks active session tab and suppression via BridgeHost RPC even when WebView bundle omits paneKey in storage', async () => {
   AppState.currentState = 'active'
+  storage.set(
+    'orca:notificationDeliveryPreferences',
+    JSON.stringify({ suppressWhileViewing: false })
+  )
   noteBridgeHostClientMessage(
     'host-1',
     {

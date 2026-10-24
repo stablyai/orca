@@ -194,19 +194,34 @@ export function isViewingNotificationTarget(target: {
   return paneKeyMatches(viewing.paneKey, target.paneKey)
 }
 
+function isViewingNotificationTab(target: {
+  hostId?: string
+  worktreeId?: string
+  paneKey?: string
+  executionHost?: string
+}): boolean {
+  const viewing = getNotificationViewingWorkspace()
+  return (
+    isViewingWorkspaceTarget(target) &&
+    Boolean(target.paneKey && viewing?.paneKey) &&
+    paneKeyMatches(viewing?.paneKey, target.paneKey)
+  )
+}
+
+/** The tab on screen never alerts; `suppressWhileViewing` widens that to the whole workspace. */
 export function shouldSuppressNotificationWhileViewing(
   event: { worktreeId?: string; paneKey?: string; executionHost?: string },
   hostId: string,
   suppressWhileViewing: boolean
 ): boolean {
-  return (
-    suppressWhileViewing &&
-    AppState.currentState === 'active' &&
-    isViewingNotificationTarget({
-      hostId,
-      worktreeId: event.worktreeId,
-      paneKey: event.paneKey,
-      executionHost: event.executionHost
-    })
-  )
+  if (AppState.currentState !== 'active') {
+    return false
+  }
+  const target = {
+    hostId,
+    worktreeId: event.worktreeId,
+    paneKey: event.paneKey,
+    executionHost: event.executionHost
+  }
+  return suppressWhileViewing ? isViewingWorkspaceTarget(target) : isViewingNotificationTab(target)
 }
