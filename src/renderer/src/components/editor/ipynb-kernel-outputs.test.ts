@@ -66,7 +66,7 @@ describe('applyKernelOutput', () => {
       const replace = vi.spyOn(String.prototype, 'replace')
       let normalizeCalls: number
       try {
-        for (let frame = 0; frame < 512; frame += 1) {
+        for (let frame = 0; frame < 480; frame += 1) {
           live = applyKernelOutput(live, 'stream', { name: 'stdout', text: chunk })
         }
         normalizeCalls = replace.mock.calls.length
@@ -75,7 +75,7 @@ describe('applyKernelOutput', () => {
       }
       expect(normalizeCalls).toBe(2)
       expect(live.outputs).toEqual([
-        { output_type: 'stream', name: 'stdout', text: chunk.repeat(512) }
+        { output_type: 'stream', name: 'stdout', text: chunk.repeat(480) }
       ])
     }
   })

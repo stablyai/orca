@@ -1,5 +1,10 @@
 import type { NotebookOutput } from './ipynb-kernel-outputs'
-import { runningCellKey, type CellRun, type NotebookKernelSession } from './ipynb-kernel-store'
+import {
+  runningCellKey,
+  updateSession,
+  type CellRun,
+  type NotebookKernelSession
+} from './ipynb-kernel-store'
 
 export function startRun(): CellRun {
   return {
@@ -10,6 +15,20 @@ export function startRun(): CellRun {
     finishedAt: null,
     committed: false
   }
+}
+
+export function markRunCommitted(filePath: string, key: string): void {
+  updateSession(filePath, ({ runs }) => {
+    const run = runs[key]
+    return run ? { runs: { ...runs, [key]: { ...run, outputs: [], committed: true } } } : {}
+  })
+}
+
+/** Forgets finished runs, e.g. after Clear All Outputs; the executing run keeps streaming. */
+export function forgetFinishedRuns(filePath: string): void {
+  updateSession(filePath, ({ runs }) => ({
+    runs: Object.fromEntries(Object.entries(runs).filter(([, run]) => run.finishedAt === null))
+  }))
 }
 
 /** Ends the executing run, if any, and drops every queued cell. */

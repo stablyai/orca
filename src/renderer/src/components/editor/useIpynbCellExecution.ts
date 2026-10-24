@@ -5,12 +5,8 @@ import { useAppStore } from '@/store'
 import { resolveNotebookExecutionHost, type NotebookExecutionHost } from './ipynb-execution-host'
 import { clearIpynbOutputs, updateIpynbCellRuns, withIpynbCellIds } from './ipynb-cell-mutations'
 import { toStoredOutputs } from './ipynb-kernel-outputs'
-import {
-  forgetFinishedRuns,
-  markRunCommitted,
-  runCells,
-  trustNotebook
-} from './ipynb-kernel-session'
+import { forgetFinishedRuns, markRunCommitted } from './ipynb-kernel-runs'
+import { runCells, trustNotebook } from './ipynb-kernel-session'
 import {
   getCellRun,
   getSession,
