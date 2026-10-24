@@ -222,7 +222,7 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     const online = await mountRoute(fileSystem)
 
     expect(online.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
+    expect(online.routeGrants()).toEqual([...GRANTS_A_PLUS_B, 'native.storage.read'])
     const generationWrites = fileSystem.writes
       .slice(settled)
       .filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
@@ -237,13 +237,13 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
     doubles.manifest = M2
     const online = await mountRoute(fileSystem)
-    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
+    expect(online.routeGrants()).toEqual([...GRANTS_A_PLUS_B, 'native.storage.read'])
     await online.unmount()
 
     goOffline()
     const offline = await mountRoute(fileSystem)
 
     expect(offline.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(offline.routeGrants()).toEqual(GRANTS_A)
+    expect(offline.routeGrants()).toEqual([...GRANTS_A, 'native.storage.read'])
   })
 })

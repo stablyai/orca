@@ -4,14 +4,13 @@ import type {
   OrcaMobileWebShellViewHandle
 } from '../../modules/orca-mobile-web-shell/src'
 import { useHostClient } from '../transport/host-client-hooks'
-import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
-import { bridgeDiagnosticLine, frameWithoutHostLine } from './shell-bridge-log-lines'
+import { frameWithoutHostLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
-import { createBridgeHost, type BridgeHost } from './bridge-host'
+import type { BridgeHost } from './bridge-host'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -19,23 +18,19 @@ import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
 import type { PageStorageForInit } from './page-storage-keys'
+import {
+  acquireRetainedOrCreateBridgeHost,
+  postToMountedBridgeView,
+  releaseOrParkBridgeHost,
+  resetBridgeDocumentBindings,
+  type MountedBridgeView
+} from './retained-bridge-host-lifecycle'
+import {
+  flushRetainedBridgeFrames,
+  type RetainedBridgeHostBinding
+} from './retained-shell-session-store'
 
-class BridgeViewGoneError extends Error {
-  constructor() {
-    super('the shell view for this session is not mounted')
-    this.name = 'BridgeViewGoneError'
-  }
-}
-
-/**
- * Both halves are stamped with the session they belong to.
- *
- * React swaps refs in the commit phase and runs the retiring effect's cleanup after it, so a host
- * disposing on a remount would otherwise post its teardown frames into the page that replaced it.
- */
-type MountedView = { sessionId: string; handle: OrcaMobileWebShellViewHandle }
 type MountedHost = { sessionId: string; host: BridgeHost }
-/** What a retiring host established, and the session it established it for. */
 type EstablishedBack = { sessionId: string; back: BridgeSessionBack }
 
 /** Exactly the field the handler reads. The view's own `NativeSyntheticEvent` prop type is
@@ -145,122 +140,99 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const ready = args.session.kind === 'ready' ? args.session : null
   const sessionId = ready?.sessionId ?? null
   const buildId = ready?.buildId ?? null
-  const viewRef = useRef<MountedView | null>(null)
+  const viewRef = useRef<MountedBridgeView | null>(null)
   const hostRef = useRef<MountedHost | null>(null)
-  /**
-   * The device Back key across a host rebuild, which is the one thing here that outlives a host.
-   *
-   * A client swapped under a live page is not a new document: the WebView stays mounted, the
-   * session id does not move, and the page neither handshakes again nor hears that anything
-   * happened. Stamped with its session for the reason the two refs above are — a record left by
-   * one session must not seed the next one's host.
-   */
+  const bindingRef = useRef<RetainedBridgeHostBinding | null>(null)
   const establishedBackRef = useRef<EstablishedBack | null>(null)
-  /**
-   * Every prop, held rather than depended on: the host is built once per session, and a caller's
-   * fresh closures and inline objects every render must not tear one down and settle its pendings.
-   *
-   * The route in it is not the whole story any more (ruling 33.1). A same-path param change used
-   * to be unreachable — the page routes once, before its first render, so a route that changed
-   * afterwards had nothing left to change, and every route file keyed on the whole route to make one
-   * a remount. The session route does not: a notification tap for another pane of the session on
-   * screen is a tab switch, so it keeps `paneKey` out of its key and hands the change to
-   * `publishRoute` below, which re-sends `init` to a page that said it takes one.
-   */
   const argsRef = useRef(args)
-  // Held rather than depended on, for the reason every prop above is: the identity settles with the
-  // client, and taking it as a dependency would tear a live page session down to re-read a string.
   const clientIdRef = useRef(clientId)
-  // Read only by the dropped-frame log line, which says which of the two a host waits on.
   const clientRef = useRef(client)
-  // The session a dropped frame was last logged for, so a page re-asking `ready` logs once.
   const droppedFrameLoggedRef = useRef<string | null>(null)
-  // Commit-phase and declared above the host's effect, so the host is built against what this
-  // render passed: a native frame can land between a commit and a passive effect.
-  //
-  // No dependency list, rather than one holding `args`: a caller builds that object inline, so
-  // every render is a new one and there is nothing to compare. This runs after each commit, which
-  // is what the ref is for.
+  const writingFromPageRef = useRef(false)
   useLayoutEffect(() => {
     argsRef.current = args
     clientIdRef.current = clientId
     clientRef.current = client
+    if (bindingRef.current !== null) {
+      bindingRef.current.args = args
+      bindingRef.current.clientId = clientId
+    }
   })
-  const snapshot = args.snapshot
+  const hasSnapshot = args.snapshot !== null
 
-  // Commit-phase, not passive: a native frame that arrives between the two carries the session id
-  // the handler is fenced on, so only handing the host over here keeps it off the retired client.
   useLayoutEffect(() => {
-    if (client === null || sessionId === null || buildId === null || snapshot === null) {
+    const currentSnapshot = argsRef.current.snapshot
+    if (client === null || sessionId === null || buildId === null || currentSnapshot === null) {
       return
     }
-    const latest = argsRef.current
-    // The host outlives every render after this one, so each callback it holds reads the ref at
-    // call time: a closure captured here would settle frames into a screen that has moved on, and
-    // adding one is an entry in `MobileWebShellBridgeArgs` and a line here, nothing else.
-    const host = createBridgeHost({
+    const { host, binding } = acquireRetainedOrCreateBridgeHost({
       client,
       buildId,
       sessionId,
-      route: latest.route,
-      safeAreaInsets: latest.safeAreaInsets,
-      keyboardInset: latest.keyboardInset,
-      pageRoutes: latest.pageRoutes,
-      pageRouteGrants: latest.pageRouteGrants,
-      routeGrants: latest.routeGrants,
-      ownsHostArea: latest.ownsHostArea === true,
-      sessionEstablished: latest.sessionEstablished,
-      ...(establishedBackRef.current?.sessionId === sessionId
-        ? { sessionBack: establishedBackRef.current.back }
-        : {}),
-      host: snapshot.host,
-      readClientIdentity: () => clientIdRef.current,
-      post: (json) => {
-        const mounted = viewRef.current
-        return mounted === null || mounted.sessionId !== sessionId
-          ? Promise.reject(new BridgeViewGoneError())
-          : mounted.handle.postBridgeMessage(json)
-      },
-      onDiagnostic: createBridgeDiagnosticReporter((diagnostic) => {
-        const line = bridgeDiagnosticLine(diagnostic)
-        if (line !== null) {
-          recordShellLifecycleLine(latest.hostId, line)
-        }
-      }),
-      onNavigate: (href) => argsRef.current.onNavigate(href),
-      onNavigateBack: () => argsRef.current.onNavigateBack(),
-      onExternalLink: (url) => argsRef.current.onExternalLink(url),
-      onHaptic: (kind) => argsRef.current.onHaptic(kind),
-      serveNativeVerb: (verb, params) => argsRef.current.serveNativeVerb(verb, params),
-      readStorage: () => argsRef.current.readStorage(),
-      onStorageWrite: (key, value) => argsRef.current.onStorageWrite(key, value),
-      onPageFault: (error) => argsRef.current.onPageFault(error),
-      onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),
-      onRouteRefused: (issue) => argsRef.current.onRouteRefused(issue),
-      onBinaryFramesDropped: (total) => argsRef.current.onBinaryFramesDropped(total),
-      onPageReady: () => argsRef.current.onPageReady(),
-      onPagePainted: () => argsRef.current.onPagePainted(),
-      onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed)
+      snapshot: currentSnapshot,
+      latest: argsRef.current,
+      clientId: clientIdRef.current,
+      sessionBack:
+        establishedBackRef.current?.sessionId === sessionId
+          ? establishedBackRef.current.back
+          : undefined,
+      readMountedView: () => viewRef.current,
+      setWritingFromPage: (writing) => {
+        writingFromPageRef.current = writing
+      }
     })
+    bindingRef.current = binding
     hostRef.current = { sessionId, host }
-    // The count belongs to this host, so a rebuild starts it over. Without this the screen keeps
-    // the retired host's number and the next drop reports the new host's first, so the line falls —
-    // which reads as frames coming back rather than as a fresh count.
-    latest.onBinaryFramesDropped(0)
     return () => {
-      // Read before the teardown and stamped with the session, so a replacement built for this
-      // same document takes the key over rather than refusing the first press on it.
       establishedBackRef.current = { sessionId, back: host.readSessionBack() }
       hostRef.current = null
-      host.dispose()
+      if (bindingRef.current === binding) {
+        bindingRef.current = null
+      }
+      releaseOrParkBridgeHost({
+        hostId: argsRef.current.hostId,
+        sessionId,
+        buildId,
+        client,
+        host,
+        binding
+      })
     }
-  }, [buildId, client, sessionId, snapshot])
+  }, [buildId, client, hasSnapshot, sessionId])
+
+  const wasEstablishedRef = useRef<{ sessionId: string | null; established: boolean }>({
+    sessionId,
+    established: args.sessionEstablished
+  })
+  useLayoutEffect(() => {
+    const previous = wasEstablishedRef.current
+    wasEstablishedRef.current = { sessionId, established: args.sessionEstablished }
+    if (previous.sessionId === sessionId && previous.established && !args.sessionEstablished) {
+      establishedBackRef.current = null
+      resetBridgeDocumentBindings(
+        bindingRef.current,
+        hostRef.current?.sessionId === sessionId ? hostRef.current.host : null
+      )
+    }
+  }, [args.sessionEstablished, sessionId])
+
 
   return {
     bridgeEnabled: ready !== null,
     viewRef: useCallback(
       (handle: OrcaMobileWebShellViewHandle | null) => {
         viewRef.current = handle === null || sessionId === null ? null : { sessionId, handle }
+        if (handle === null || sessionId === null) {
+          if (bindingRef.current !== null) {
+            bindingRef.current.post = null
+          }
+          return
+        }
+        if (bindingRef.current !== null) {
+          flushRetainedBridgeFrames(bindingRef.current, (json) =>
+            postToMountedBridgeView(viewRef.current, sessionId, json)
+          )
+        }
       },
       [sessionId]
     ),
@@ -302,7 +274,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishRoute(route)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     publishSafeAreaInsets: useCallback(
       (insets: BridgeSafeAreaInsets) => {
@@ -311,7 +283,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishSafeAreaInsets(insets)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     publishKeyboardInset: useCallback(
       (height: number) => {
@@ -320,7 +292,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishKeyboardInset(height)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     // Fenced on the session the way inbound frames are, and answering false rather than throwing
     // when there is no host: the caller is a hardware key handler, and a press it cannot forward
@@ -331,3 +303,4 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     }, [sessionId])
   }
 }
+

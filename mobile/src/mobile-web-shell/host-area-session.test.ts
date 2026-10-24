@@ -105,20 +105,20 @@ describe('the page declaring it can own the host area', () => {
 })
 
 describe('the wide host-area session', () => {
-  it("is granted every served route's grants, and no phone session is", () => {
-    const view = routeViewOf(desktopRoutes(true), HOST_ROUTE, true)
-    expect([...view.routeGrants].sort()).toEqual(
-      [...SESSION_GRANTS, 'externalNavigation', 'native.storage.read'].sort()
-    )
+  it("is granted every served route's grants, on a phone as well as a wide layout", () => {
+    const covered = [...SESSION_GRANTS, 'externalNavigation', 'native.storage.read'].sort()
+    const wide = routeViewOf(desktopRoutes(true), HOST_ROUTE, true)
+    const phone = routeViewOf(desktopRoutes(true), HOST_ROUTE)
+    expect([...wide.routeGrants].sort()).toEqual(covered)
+    expect([...phone.routeGrants].sort()).toEqual(covered)
+    expect(phone.ownsHostArea).toBe(false)
     // Every pair the page compares a hop against is covered, which is what keeps it in the page.
-    for (const pair of view.pageRouteGrants) {
-      expect(pair.grants.every((grant) => view.routeGrants.includes(grant))).toBe(true)
+    for (const pair of phone.pageRouteGrants) {
+      expect(pair.grants.every((grant) => phone.routeGrants.includes(grant))).toBe(true)
     }
-    expect(routeViewOf(desktopRoutes(true), HOST_ROUTE).routeGrants).toEqual([
-      'navigate',
-      'storage',
-      'externalLink',
-      'haptics'
+    expect(routeViewOf(desktopRoutes(true), '/h/host-1/session/wt-1').routeGrants).toEqual([
+      ...SESSION_GRANTS,
+      'externalNavigation'
     ])
   })
 

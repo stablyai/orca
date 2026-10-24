@@ -14,6 +14,10 @@ import {
   pageStorageKeysForRoute,
   type PageStorageForInit
 } from './page-storage-keys'
+import {
+  readRetainedPageHostSnapshot,
+  recordRetainedPageHostSnapshot
+} from './retained-shell-session-store'
 
 export type PageHostSnapshot = {
   host: BridgeInitHost
@@ -56,7 +60,9 @@ export function usePageHostSnapshot(
   routePathname: string,
   hostArea = false
 ): PageHostSnapshotView {
-  const [snapshot, setSnapshot] = useState<PageHostSnapshot | null>(null)
+  const [snapshot, setSnapshot] = useState<PageHostSnapshot | null>(() =>
+    readRetainedPageHostSnapshot(hostId)
+  )
   const [unreadable, setUnreadable] = useState(false)
 
   // The allowlist is the shell's, not the mirror's: what the page may be handed is named here on
@@ -68,7 +74,9 @@ export function usePageHostSnapshot(
 
   useEffect(() => {
     let stale = false
-    setSnapshot(null)
+    setSnapshot((prev) =>
+      prev?.host.id === hostId ? prev : readRetainedPageHostSnapshot(hostId)
+    )
     setUnreadable(false)
     // Both reads, not whichever answers first. The host is built from the snapshot and answers the
     // page's pending `ready` the moment it exists, so a profile that beat the store would put the
@@ -80,25 +88,25 @@ export function usePageHostSnapshot(
           return
         }
         const found = hosts.find((profile) => profile.id === hostId)
-        setSnapshot(
-          found
-            ? {
-                host: {
-                  id: found.id,
-                  name: found.name,
-                  ...(found.personalName !== undefined ? { personalName: found.personalName } : {}),
-                  ...(found.lastKnownMachineName !== undefined
-                    ? { lastKnownMachineName: found.lastKnownMachineName }
-                    : {}),
-                  ...(found.lastKnownHostPlatform !== undefined
-                    ? { lastKnownHostPlatform: found.lastKnownHostPlatform }
-                    : {}),
-                  endpoint: found.endpoint,
-                  lastConnected: found.lastConnected
-                }
+        const nextSnapshot = found
+          ? {
+              host: {
+                id: found.id,
+                name: found.name,
+                ...(found.personalName !== undefined ? { personalName: found.personalName } : {}),
+                ...(found.lastKnownMachineName !== undefined
+                  ? { lastKnownMachineName: found.lastKnownMachineName }
+                  : {}),
+                ...(found.lastKnownHostPlatform !== undefined
+                  ? { lastKnownHostPlatform: found.lastKnownHostPlatform }
+                  : {}),
+                endpoint: found.endpoint,
+                lastConnected: found.lastConnected
               }
-            : null
-        )
+            }
+          : null
+        recordRetainedPageHostSnapshot(hostId, nextSnapshot)
+        setSnapshot(nextSnapshot)
       },
       () => {
         // A keychain read that failed is not a host that is gone, and it is not something to wait

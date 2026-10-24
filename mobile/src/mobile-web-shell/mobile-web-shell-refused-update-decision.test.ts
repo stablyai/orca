@@ -42,7 +42,7 @@ describe('an update this shell refused falls back to the generation that already
 
   it('asks for the newer generation before any of this, so the refusal is a real one', () => {
     const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
-    expect(fetching.session.state).toMatchObject({ kind: 'fetching' })
+    expect(fetching.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(fetching.effects).toEqual([{ kind: 'download' }])
   })
 
@@ -50,18 +50,11 @@ describe('an update this shell refused falls back to the generation that already
     const step = refused()
     expect(step.session.updateNotice).toBe('update-failed')
     expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
-    expect(withoutRecord(step.effects)).toEqual([
-      {
-        kind: 'open-generation',
-        directory: CACHED.directory,
-        buildId: CACHED.buildId,
-        totalBytes: CACHED.totalBytes
-      }
-    ])
+    expect(withoutRecord(step.effects)).toEqual([])
   })
 
   it('runs it under its own grants, not the ones the refused manifest declared', () => {
-    expect(refused().session.routeGrants).toEqual(['navigate'])
+    expect(refused().session.routeGrants).toEqual(['navigate', 'native.storage.read'])
   })
 
   it('names the refusal as a notice beside the workspace, not as a state in front of it', () => {
@@ -239,7 +232,7 @@ describe('an update this shell refused, once it is on screen', () => {
     expect(retried.session.updateNotice).toBeNull()
     expect(retried.effects).toEqual([{ kind: 'open-cache' }])
     const again = run(retried.session, { type: 'cache-read', generation: CACHED })
-    expect(again.effects).toEqual([{ kind: 'read-manifest' }])
+    expect(again.effects.map((effect) => effect.kind)).toEqual(['open-generation', 'read-manifest'])
     expect(run(again.session, { type: 'manifest-read', manifest: NEWER }).effects).toEqual([
       { kind: 'download' }
     ])
@@ -256,5 +249,119 @@ describe('an update this shell refused, once it is on screen', () => {
     })
     const dropped = run(served.session, { type: 'shell-failed', reason: 'document-load-failed' })
     expect(dropped.session.updateNotice).toBeNull()
+  })
+
+  it('ignores a late cache activation after the manifest already walled an unlisted route', () => {
+    const UNSERVED = manifestFacts({ ...MANIFEST_WIRE, buildId: 'd'.repeat(64), routes: [] })
+    const unserved = run(afterCacheRead(CACHED).session, {
+      type: 'manifest-read',
+      manifest: UNSERVED
+    })
+    expect(unserved.session.state).toEqual({
+      kind: 'wall',
+      verdict: { kind: 'blocked', reason: 'page-route-unlisted' }
+    })
+    const lateActivated = run(unserved.session, {
+      type: 'activated',
+      generationDirectory: CACHED.directory,
+      sessionId: 'session-late',
+      buildId: CACHED.buildId,
+      totalBytes: CACHED.totalBytes,
+      elapsedMs: 5
+    })
+    expect(lateActivated.session.state).toEqual({
+      kind: 'wall',
+      verdict: { kind: 'blocked', reason: 'page-route-unlisted' }
+    })
+  })
+
+  it('keeps a newer downloaded build ready when a subsequent update download fails', () => {
+    const BUILD_B = 'b'.repeat(64)
+    const BUILD_C = 'c'.repeat(64)
+    const afterB = run(
+      afterCacheRead(CACHED).session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: BUILD_B })
+      },
+      {
+        type: 'activated',
+        generationDirectory: '/gen/b',
+        sessionId: 'session-b',
+        buildId: BUILD_B,
+        totalBytes: 2048,
+        elapsedMs: 12
+      }
+    )
+    expect(afterB.session.state).toMatchObject({ kind: 'ready', buildId: BUILD_B })
+    const afterCFailed = run(
+      afterB.session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: BUILD_C })
+      },
+      { type: 'download-failed', cause: BUNDLE_REFUSED }
+    )
+    expect(afterCFailed.session.state).toMatchObject({ kind: 'ready', buildId: BUILD_B })
+    expect(afterCFailed.session.updateNotice).toBe('update-failed')
+  })
+
+  it('activates a background update on a session that originally opened from a cold download', () => {
+    const BUILD_B = 'b'.repeat(64)
+    const BUILD_C = 'c'.repeat(64)
+    const coldReady = run(
+      afterCacheRead(null).session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: BUILD_B })
+      },
+      { type: 'download-staged' },
+      {
+        type: 'activated',
+        generationDirectory: '/gen/b',
+        sessionId: 'session-b',
+        buildId: BUILD_B,
+        totalBytes: 2048,
+        elapsedMs: 12
+      }
+    )
+    expect(coldReady.session.cached).toBeNull()
+    expect(coldReady.session.state).toMatchObject({ kind: 'ready', buildId: BUILD_B })
+
+    const updated = run(
+      coldReady.session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: BUILD_C })
+      },
+      {
+        type: 'activated',
+        generationDirectory: '/gen/c',
+        sessionId: 'session-c',
+        buildId: BUILD_C,
+        totalBytes: 4096,
+        elapsedMs: 15
+      }
+    )
+    expect(updated.session.state).toMatchObject({
+      kind: 'ready',
+      buildId: BUILD_C,
+      generationDirectory: '/gen/c',
+      sessionId: 'session-c'
+    })
+
+    const failedFollowup = run(
+      updated.session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: 'd'.repeat(64) })
+      },
+      { type: 'download-failed', cause: BUNDLE_REFUSED }
+    )
+    expect(failedFollowup.session.state).toMatchObject({
+      kind: 'ready',
+      buildId: BUILD_C
+    })
+    expect(failedFollowup.session.updateNotice).toBe('update-failed')
   })
 })

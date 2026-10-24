@@ -41,7 +41,7 @@ vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
 
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import { MobileWebShellScreen } from './MobileWebShellScreen'
 import type { NativeStackState } from './native-stack-return'
@@ -137,6 +137,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  harness.unmountRenderedScreens()
   vi.clearAllMocks()
 })
 
@@ -168,5 +169,61 @@ describe('the same hop on a phone', () => {
     const other = '/h/host-1/session/wt-2'
     await hopFromSession(PHONE, [HOST, DETAIL], other)
     expect(applied([HOST, DETAIL])).toEqual([HOST, DETAIL, other])
+  })
+
+  it('pops back to the home screen via dismissTo when exiting to /', async () => {
+    await hopFromSession(PHONE, ['/', HOST], '/')
+    expect(device.dismissTo).toHaveBeenCalledWith('/')
+    expect(applied(['/', HOST])).toEqual(['/'])
+  })
+})
+
+const FAILED = {
+  kind: 'failed' as const,
+  reason: 'document-load-failed' as const,
+  retriedOnce: true
+}
+
+function shellViews(tree: ReactTestRenderer): ReactTestInstance[] {
+  return tree.root.findAll((node) => String(node.type) === 'ShellViewProbe')
+}
+
+describe('a host view that leaves ready', () => {
+  it('clears the native retention slot after the failed view unmounts', async () => {
+    dependencies.pathname = HOST
+    const tree = await harness.renderScreen(
+      MobileWebShellScreen,
+      dependencies,
+      harness.readyState('session-one')
+    )
+    const mounted = shellViews(tree)
+    expect(mounted).toHaveLength(1)
+    expect(mounted[0]?.props.retainsSlot).toBe(true)
+    expect(dependencies.clearRetainedNativeSlot).not.toHaveBeenCalled()
+
+    await harness.updateScreen(MobileWebShellScreen, dependencies, tree, FAILED)
+
+    expect(shellViews(tree)).toEqual([])
+    expect(
+      tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-failed')
+    ).toHaveLength(1)
+    expect(dependencies.clearRetainedNativeSlot).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not clear the parked host slot when a child route fails', async () => {
+    dependencies.pathname = '/h/host-1/accounts'
+    const tree = await harness.renderScreen(
+      MobileWebShellScreen,
+      dependencies,
+      harness.readyState('session-one')
+    )
+    const mounted = shellViews(tree)
+    expect(mounted).toHaveLength(1)
+    expect(mounted[0]?.props.retainsSlot).toBe(false)
+
+    await harness.updateScreen(MobileWebShellScreen, dependencies, tree, FAILED)
+
+    expect(shellViews(tree)).toEqual([])
+    expect(dependencies.clearRetainedNativeSlot).not.toHaveBeenCalled()
   })
 })

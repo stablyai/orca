@@ -148,6 +148,34 @@ private final class MobileWebShellBridgeReceiver: NSObject, WKScriptMessageHandl
   }
 }
 
+private final class RetainedMobileWebShellSlot {
+  let applied: MobileWebShellAppliedProps
+  let webView: WKWebView
+  let schemeHandler: MobileWebShellSchemeHandler
+  let bridgeReceiver: MobileWebShellBridgeReceiver
+  let bridgeTarget: MobileWebShellBridgeTarget<WKFrameInfo>
+  let bridgeInstalled: Bool
+  let isolationReady: Bool
+
+  init(
+    applied: MobileWebShellAppliedProps,
+    webView: WKWebView,
+    schemeHandler: MobileWebShellSchemeHandler,
+    bridgeReceiver: MobileWebShellBridgeReceiver,
+    bridgeTarget: MobileWebShellBridgeTarget<WKFrameInfo>,
+    bridgeInstalled: Bool,
+    isolationReady: Bool
+  ) {
+    self.applied = applied
+    self.webView = webView
+    self.schemeHandler = schemeHandler
+    self.bridgeReceiver = bridgeReceiver
+    self.bridgeTarget = bridgeTarget
+    self.bridgeInstalled = bridgeInstalled
+    self.isolationReady = isolationReady
+  }
+}
+
 /// The RN host sees this, never the page: it is the difference between a request that failed and
 /// one that never settles.
 internal final class MobileWebShellBridgeDeliveryFailedException: GenericException<String>,
@@ -172,15 +200,74 @@ internal final class MobileWebShellBridgeMessageTooLargeException: GenericExcept
   }
 }
 
+private final class ParkedNavigationDelegate: NSObject, WKNavigationDelegate {
+  func webView(
+    _ webView: WKWebView,
+    decidePolicyFor navigationAction: WKNavigationAction,
+    decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+  ) {
+    decisionHandler(.cancel)
+  }
+
+  func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    OrcaMobileWebShellView.evictRetained(ifWebView: webView)
+  }
+}
+
 final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate {
+  private static var retainedSlot: RetainedMobileWebShellSlot?
+  private static let parkedDelegate = ParkedNavigationDelegate()
+
+  static func clearRetainedSlot() {
+    guard let slot = retainedSlot else { return }
+    retainedSlot = nil
+    teardownSlot(slot)
+  }
+
+  static func evictRetained(ifWebView target: WKWebView) {
+    guard let slot = retainedSlot, slot.webView === target else { return }
+    retainedSlot = nil
+    teardownSlot(slot)
+  }
+
+  private static func takeMatchingOrEvict(_ props: MobileWebShellAppliedProps) -> RetainedMobileWebShellSlot? {
+    guard let slot = retainedSlot else { return nil }
+    retainedSlot = nil
+    if slot.applied.matches(props) {
+      return slot
+    }
+    teardownSlot(slot)
+    return nil
+  }
+
+  private static func retainSlot(_ slot: RetainedMobileWebShellSlot) {
+    if let previous = retainedSlot, previous.webView !== slot.webView {
+      teardownSlot(previous)
+    }
+    retainedSlot = slot
+  }
+
+  private static func teardownSlot(_ slot: RetainedMobileWebShellSlot) {
+    slot.bridgeReceiver.view = nil
+    slot.webView.navigationDelegate = nil
+    slot.webView.uiDelegate = nil
+    slot.webView.stopLoading()
+    slot.webView.configuration.userContentController.removeScriptMessageHandler(
+      forName: MobileWebShellBridge.handlerName
+    )
+    slot.webView.removeFromSuperview()
+  }
+
   let onLoadState = EventDispatcher()
   let onBridgeMessage = EventDispatcher()
   let onExternalNavigation = EventDispatcher()
 
-  private let schemeHandler = MobileWebShellSchemeHandler()
-  private let bridgeReceiver = MobileWebShellBridgeReceiver()
+  private var schemeHandler = MobileWebShellSchemeHandler()
+  private var bridgeReceiver = MobileWebShellBridgeReceiver()
   private let bridgeGate = MobileWebShellBridgeGate()
   private var bridgeEnabled = false
+  // Host page only. A child route must not take or replace the parked WebView.
+  private var retainsSlot = true
   private var bridgeInstalled = false
   private var bridgeTarget = MobileWebShellBridgeTarget<WKFrameInfo>()
   private var webView: WKWebView!
@@ -191,6 +278,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private var pendingDocumentUrl: URL?
   private var isolationReady = false
   private var isolationFailed = false
+  private var renderProcessGone = false
   private let loadState = MobileWebShellLoadStateMachine()
 
   required init(appContext: AppContext? = nil) {
@@ -222,15 +310,19 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     webView.scrollView.contentInsetAdjustmentBehavior = .never
     hideKeyboardAccessoryBar(of: webView)
     ignoreKeyboardNotifications(in: webView)
-    webView.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(webView)
-    NSLayoutConstraint.activate([
-      webView.topAnchor.constraint(equalTo: topAnchor),
-      webView.bottomAnchor.constraint(equalTo: bottomAnchor),
-      webView.leadingAnchor.constraint(equalTo: leadingAnchor),
-      webView.trailingAnchor.constraint(equalTo: trailingAnchor)
-    ])
+    attachWebView(webView)
     installNetworkBlock(into: configuration.userContentController)
+  }
+
+  private func attachWebView(_ target: WKWebView) {
+    target.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(target)
+    NSLayoutConstraint.activate([
+      target.topAnchor.constraint(equalTo: topAnchor),
+      target.bottomAnchor.constraint(equalTo: bottomAnchor),
+      target.leadingAnchor.constraint(equalTo: leadingAnchor),
+      target.trailingAnchor.constraint(equalTo: trailingAnchor)
+    ])
   }
 
   func setGenerationDirectory(_ value: String) {
@@ -245,6 +337,10 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     bridgeEnabled = value
   }
 
+  func setRetainsSlot(_ value: Bool) {
+    retainsSlot = value
+  }
+
   /// Props arrive in no defined order, so neither setter starts anything; this does, once both are
   /// in. A repeat of the same triple is not a retry: a retry is a remount under a new React key.
   /// `bridgeEnabled` is in the record because a document-start script only takes effect at the next
@@ -256,6 +352,10 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       bridgeEnabled: bridgeEnabled
     )
     guard applied?.matches(next) != true else { return }
+    if retainsSlot, applied == nil, let retained = Self.takeMatchingOrEvict(next) {
+      attachRetainedSlot(retained)
+      return
+    }
     applied = next
     clearBridgeTarget()
     loadState.reset()
@@ -286,6 +386,73 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     }
     pendingDocumentUrl = documentUrl
     loadWhenIsolated()
+  }
+
+  private func attachRetainedSlot(_ slot: RetainedMobileWebShellSlot) {
+    webView.navigationDelegate = nil
+    webView.uiDelegate = nil
+    webView.stopLoading()
+    webView.removeFromSuperview()
+    applied = slot.applied
+    schemeHandler = slot.schemeHandler
+    bridgeReceiver = slot.bridgeReceiver
+    bridgeReceiver.view = self
+    bridgeTarget = slot.bridgeTarget
+    bridgeInstalled = slot.bridgeInstalled
+    isolationReady = slot.isolationReady
+    isolationFailed = false
+    renderProcessGone = false
+    pendingDocumentUrl = nil
+    webView = slot.webView
+    webView.navigationDelegate = self
+    webView.uiDelegate = self
+    webView.isHidden = false
+    attachWebView(webView)
+    loadState.reset()
+    loadState.committed()
+    loadState.started()
+    emit(loadState.finished())
+  }
+
+  func destroyWebView() {
+    guard let view = webView else { return }
+    if
+      retainsSlot,
+      !renderProcessGone,
+      !isolationFailed,
+      loadState.hasCommittedDocument,
+      !bridgeEnabled || bridgeInstalled,
+      let currentApplied = applied
+    {
+      bridgeReceiver.view = nil
+      view.navigationDelegate = Self.parkedDelegate
+      view.uiDelegate = nil
+      view.removeFromSuperview()
+      loadState.documentEnded()
+      Self.retainSlot(
+        RetainedMobileWebShellSlot(
+          applied: currentApplied,
+          webView: view,
+          schemeHandler: schemeHandler,
+          bridgeReceiver: bridgeReceiver,
+          bridgeTarget: bridgeTarget,
+          bridgeInstalled: bridgeInstalled,
+          isolationReady: isolationReady
+        )
+      )
+      return
+    }
+    clearBridgeTarget()
+    bridgeReceiver.view = nil
+    view.navigationDelegate = nil
+    view.uiDelegate = nil
+    view.stopLoading()
+    if bridgeInstalled {
+      view.configuration.userContentController.removeScriptMessageHandler(
+        forName: MobileWebShellBridge.handlerName
+      )
+    }
+    view.removeFromSuperview()
   }
 
   /// The generation that failed to apply replaces whatever was on screen; leaving the previous one
@@ -550,6 +717,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   /// Reported, never recovered from here. Renderer memory pressure and a WebView provider update
   /// look identical at this point, so the retry policy is the caller's and lives in one place.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    renderProcessGone = true
     clearBridgeTarget()
     emit(loadState.failed(.renderProcessGone))
   }

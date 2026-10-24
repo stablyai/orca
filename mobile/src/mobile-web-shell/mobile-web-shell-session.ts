@@ -24,11 +24,27 @@ import {
   gateVerdict,
   ROUTE_UNAVAILABLE
 } from './mobile-web-shell-gates'
-import { pageRouteRefusalVerdict, routeViewOf, sameRouteView } from './page-route-policy'
-import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-document-state'
-import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
-import { step } from './mobile-web-shell-session-step'
-import { AWAIT_DOCUMENT_LOAD, reducePageDocumentLifecycle } from './page-document-lifecycle'
+import {
+  isHostIndexPathname,
+  pageRouteRefusalVerdict,
+  routeViewOf,
+  sameRouteView
+} from './page-route-policy'
+import { pageDocumentStatePatch } from './page-document-state'
+import {
+  cachedFallback,
+  generationActivated,
+  openByOwnRoutes,
+  reachableCacheRead,
+  reconcileManifestCache,
+  rendersRoute
+} from './mobile-web-shell-cached-generation'
+import {
+  acceptsSessionEventFlow,
+  step,
+  stepNewFlow
+} from './mobile-web-shell-session-step'
+import { reducePageDocumentLifecycle } from './page-document-lifecycle'
 
 export function createMobileWebShellSession(
   routePathname: string,
@@ -55,6 +71,7 @@ export function createMobileWebShellSession(
     cached: null,
     updateNotice: null,
     requestedBuildId: null,
+    offeredRoutes: null,
     flow: 0
   }
 }
@@ -76,20 +93,21 @@ function startFlow(
   const base = {
     updateNotice: null,
     requestedBuildId: null,
+    offeredRoutes: null,
     ...patch,
     gates,
     flow: session.flow + 1
   }
   const gated = gateState(gateVerdict(gates), patch.retriedOnce ?? session.retriedOnce)
   if (gated !== null) {
-    return step(session, { ...base, state: gated }, before)
+    return stepNewFlow(session, { ...base, state: gated }, before)
   }
   // Offline sweeps and reads the cache exactly as a connected host does. What it skips is the
   // compat check, and `onCacheRead` is where that shows.
-  return step(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
+  return stepNewFlow(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
 }
 
-/** Holds the generation read off disk, and opens it at once only when the host is unreachable. */
+/** Holds the generation read off disk. Unreachable opens it alone; connected opens it and asks. */
 function onCacheRead(
   session: MobileWebShellSession,
   generation: CachedGeneration | null
@@ -115,7 +133,7 @@ function onCacheRead(
       patch: { cached: generation }
     })
   }
-  return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
+  return reachableCacheRead(session, generation, gates)
 }
 
 function onManifestRead(
@@ -150,32 +168,15 @@ function onManifestRead(
     return step(session, { ...view, state })
   }
   // Same build id is the same bytes (the id is their digest), so the generation on disk opens as is.
-  const cached = session.cached
-  if (cached?.buildId === manifest.buildId) {
-    return openCached(session, cached, view)
-  }
-  return step(
-    session,
-    {
-      ...view,
-      requestedBuildId: manifest.buildId,
-      state: {
-        kind: 'fetching',
-        completedAssets: 0,
-        totalAssets: manifest.totalAssets,
-        receivedBytes: 0,
-        totalBytes: manifest.totalBytes
-      }
-    },
-    [{ kind: 'download' }]
-  )
+  return reconcileManifestCache(session, manifest, view)
 }
 
 /**
  * B3's contract, and the only place it is interpreted.
  *
  * `generation-unreadable` and `document-load-failed` say the bytes on disk are suspect, so the
- * host's cache goes and the flow runs once more. `render-process-gone` says nothing about the
+ * host page's cache goes and the flow runs once more. A child route shares those bytes and does
+ * not delete them. `render-process-gone` says nothing about the
  * bytes — renderer memory pressure and a WebView provider update look identical from here — so it
  * remounts and never deletes. `isolation-unavailable` is terminal on the first report: the fence is
  * the whole reason this view exists, and a device that cannot install it will not on a retry.
@@ -209,9 +210,11 @@ function onShellFailed(
   // Through the gate, not straight back to the manifest check: the gates a ready session holds are
   // whatever the last reconnect stored, so a recovery that trusted them walled hosts whose status
   // had gone unreadable underneath a workspace that was, until this failure, working.
-  return startFlow(session, session.gates, { retriedOnce: true, cached: null }, [
-    { kind: 'delete-cache' }
-  ])
+  // Child routes share these bytes, so only the host page deletes them.
+  const before: readonly MobileWebShellSessionEffect[] = isHostIndexPathname(session.routePathname)
+    ? [{ kind: 'delete-cache' }]
+    : []
+  return startFlow(session, session.gates, { retriedOnce: true, cached: null }, before)
 }
 
 /** The decision below, plus one record of it: a release build logs nothing, so what the shell
@@ -253,7 +256,7 @@ function decideDownloadFailed(
 ): MobileWebShellStep {
   const cached = session.cached
   const gates = session.gates
-  if (cached === null || gates === null) {
+  if (gates === null) {
     return step(session, {
       state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
     })
@@ -265,7 +268,18 @@ function decideDownloadFailed(
   if (gated !== null) {
     return step(session, { state: gated })
   }
-  return openByOwnRoutes(session, cached, {
+  if (cached === null) {
+    if (session.state.kind === 'ready') {
+      return step(session, {
+        offeredRoutes: null,
+        updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null
+      })
+    }
+    return step(session, {
+      state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+    })
+  }
+  return cachedFallback(session, cached, {
     // The newer manifest claimed this route or never arrived, so the cache lacking it is this
     // download's failure, with its retry.
     unclaimed: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce },
@@ -300,7 +314,7 @@ export function reduceMobileWebShellSession(
   session: MobileWebShellSession,
   event: MobileWebShellSessionEvent
 ): MobileWebShellStep {
-  if ('flow' in event && event.flow !== session.flow) {
+  if (!acceptsSessionEventFlow(session, event)) {
     return step(session, {})
   }
   switch (event.type) {
@@ -332,23 +346,7 @@ export function reduceMobileWebShellSession(
     case 'activated':
       // Only a download's activation is an update that landed. Not build-id equality: the fetch
       // re-reads the manifest, so what it commits can be newer than what this flow was offered.
-      return step(
-        session,
-        {
-          ...CLEAR_PAGE_DOCUMENT_STATE,
-          state: {
-            kind: 'ready',
-            generationDirectory: event.generationDirectory,
-            sessionId: event.sessionId,
-            buildId: event.buildId,
-            totalBytes: event.totalBytes,
-            elapsedMs: event.elapsedMs
-          }
-        },
-        session.state.kind === 'activating' && session.state.source === 'download'
-          ? [{ kind: 'forget-update-failures' }, AWAIT_DOCUMENT_LOAD]
-          : [AWAIT_DOCUMENT_LOAD]
-      )
+      return generationActivated(session, event)
     case 'download-failed':
       return onDownloadFailed(session, event.cause)
     case 'shell-failed':
@@ -371,7 +369,7 @@ export function reduceMobileWebShellSession(
       // Clears both latches, so the delete-and-refetch and the remount are each available again.
       // Only here: a reconnect is not a reason to grant a second remount of the same session.
       return session.gates === null
-        ? step(session, {
+        ? stepNewFlow(session, {
             retriedOnce: false,
             remountedOnce: false,
             updateNotice: null,

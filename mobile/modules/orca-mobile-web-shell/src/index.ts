@@ -1,4 +1,4 @@
-import { requireNativeViewManager } from 'expo-modules-core'
+import { requireNativeViewManager, requireOptionalNativeModule } from 'expo-modules-core'
 import type { ComponentType, RefAttributes } from 'react'
 import type { NativeSyntheticEvent, ViewProps } from 'react-native'
 import type { MobileWebShellLoadStatePayload } from './load-state'
@@ -25,6 +25,8 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
    * without a channel, and only when this is true.
    */
   bridgeEnabled?: boolean
+  /** False on every shell route except the host page, so a child route cannot evict the parked WebView. */
+  retainsSlot?: boolean
   onLoadState?: (event: NativeSyntheticEvent<MobileWebShellLoadStatePayload>) => void
   /**
    * The page posted `json` through `window.orcaBridge`. Native has already refused anything from
@@ -81,6 +83,16 @@ export const OrcaMobileWebShellView: ComponentType<
 > = requireNativeViewManager<
   OrcaMobileWebShellViewProps & RefAttributes<OrcaMobileWebShellViewHandle>
 >('OrcaMobileWebShell')
+
+export function clearRetainedNativeWebShellSlot(): void {
+  try {
+    requireOptionalNativeModule<{ clearRetainedSlot?: () => void }>(
+      'OrcaMobileWebShell'
+    )?.clearRetainedSlot?.()
+  } catch {
+    // Native module is absent in Jest/Node unit tests.
+  }
+}
 
 export {
   MOBILE_WEB_SHELL_FAILURE_REASONS,

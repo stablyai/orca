@@ -109,6 +109,7 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
   const React = await import('react')
   const loadState = await import('../../modules/orca-mobile-web-shell/src/load-state')
   return {
+    clearRetainedNativeWebShellSlot: () => {},
     OrcaMobileWebShellView: (props: OrcaMobileWebShellViewProps) =>
       React.createElement('ShellViewProbe', props),
     parseMobileWebShellLoadState: loadState.parseMobileWebShellLoadState

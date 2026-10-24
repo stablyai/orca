@@ -203,7 +203,13 @@ export function routeViewOf(
   if (!servesWideLayout(entries, pathname, wide)) {
     return { pageRoutes: [], pageRouteGrants: [], routeGrants: [], ownsHostArea: false }
   }
-  const ownsHostArea = wide && pathname === root
+  // Host root holds every child grant, phone included, so a workspace tap stays in this document.
+  // The sidebar stays wide-only.
+  const atHostRoot =
+    root !== null &&
+    pathname === root &&
+    entries.some((route) => matchesRoutePattern(root, route.pathname))
+  const ownsHostArea = wide && atHostRoot
   // No pair for the host route in a wide detail session, so a hop there goes to the shell, which
   // opens it owning the area rather than as a second host list in this pane.
   const paired =
@@ -216,7 +222,7 @@ export function routeViewOf(
       pathname: route.pathname,
       grants: effectiveRouteGrants(route)
     })),
-    routeGrants: ownsHostArea ? hostAreaGrants(entries) : grantsForRoute(routes, pathname),
+    routeGrants: atHostRoot ? hostAreaGrants(entries) : grantsForRoute(routes, pathname),
     ownsHostArea
   }
 }
@@ -246,6 +252,20 @@ export function sameRouteView(a: RouteViewFacts, b: RouteViewFacts): boolean {
 export function isHostRouteOf(href: string, hostId: string): boolean {
   const [path] = href.split(/[?#]/)
   return path === `/h/${hostId}` || path === `/h/${encodeURIComponent(hostId)}`
+}
+
+/** `/h/<id>` itself. Account usage and workspace screens sit further down the path. */
+export function isHostIndexPathname(pathname: string): boolean {
+  const [path] = pathname.split(/[?#]/)
+  const parts = path.split('/')
+  if (parts.length !== 3 || parts[0] !== '' || parts[1] !== 'h' || parts[2] === '') {
+    return false
+  }
+  try {
+    return isHostRouteOf(path, decodeURIComponent(parts[2]))
+  } catch {
+    return false
+  }
 }
 
 /** The `/h/<host>` route a pathname sits under, or null outside a host. */

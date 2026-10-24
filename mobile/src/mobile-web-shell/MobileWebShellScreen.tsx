@@ -1,11 +1,13 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
+  clearRetainedNativeWebShellSlot,
   OrcaMobileWebShellView,
   parseMobileWebShellLoadState
 } from '../../modules/orca-mobile-web-shell/src'
+import { registerRetainedNativeWebShellClearer } from './retained-shell-session-store'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -34,12 +36,19 @@ import { nativeStackReturn } from './native-stack-return'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
+import {
+  SHELL_HOST_OPENING_LABEL,
+  SHELL_OPENING_LABEL,
+  ShellPageCover,
+  ShellWaitingFrame
+} from './ShellWaitingFrame'
 import { ShellDownloadProgress } from './ShellDownloadProgress'
 import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+
+registerRetainedNativeWebShellClearer(clearRetainedNativeWebShellSlot)
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -277,10 +286,10 @@ export function MobileWebShellScreen({
         })
         return
       }
-      // Wide, this host's route is the area-owning session even when it is not on the stack as
-      // asked: `dismissTo` pops to it by name with the href's params, or replaces this one after a
-      // cold deep link, so it is never a second on top.
-      if (isWideLayout && isHostRouteOf(href, hostId)) {
+      // Home, and a wide host route that is not on the stack: `dismissTo` pops to that route with
+      // the href's params, or replaces this one after a cold deep link, so it is never a second
+      // on top.
+      if (href === '/' || (isWideLayout && isHostRouteOf(href, hostId))) {
         router.dismissTo(href)
         return
       }
@@ -336,6 +345,16 @@ export function MobileWebShellScreen({
   })
   useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
 
+  const shellKindRef = useRef(state.kind)
+  useLayoutEffect(() => {
+    const previous = shellKindRef.current
+    shellKindRef.current = state.kind
+    // Destroy parks a host view whose slot was cleared before unmount; clear that refill.
+    if (previous === 'ready' && state.kind !== 'ready' && isHostRouteOf(route.pathname, hostId)) {
+      clearRetainedNativeWebShellSlot()
+    }
+  }, [hostId, route.pathname, state.kind])
+
   // A profile read that rejected never becomes a host, so the session would otherwise sit in
   // `ready` behind an un-hidden view with nothing serving it and the page asking forever.
   // `document-load-failed` because that is the outcome: the document loads and no session opens.
@@ -358,6 +377,9 @@ export function MobileWebShellScreen({
   if (overlay && state.kind !== 'ready') {
     return null
   }
+  const openingLabel = isHostRouteOf(route.pathname, hostId)
+    ? SHELL_HOST_OPENING_LABEL
+    : SHELL_OPENING_LABEL
   if (state.kind === 'route-unavailable') {
     return <PageRouteUnavailableScreen hostId={hostId} />
   }
@@ -388,7 +410,7 @@ export function MobileWebShellScreen({
     )
   }
   if (state.kind !== 'ready') {
-    return <Waiting label={state.kind === 'activating' ? SHELL_OPENING_LABEL : 'Checking host'} />
+    return <Waiting label={state.kind === 'activating' ? openingLabel : 'Checking host'} />
   }
   return (
     <View
@@ -419,6 +441,7 @@ export function MobileWebShellScreen({
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
+        retainsSlot={isHostRouteOf(route.pathname, hostId)}
         onBridgeMessage={bridge.onBridgeMessage}
         onExternalNavigation={(event) => {
           const target = cancelledShellNavigationTarget(event.nativeEvent.url)
@@ -451,7 +474,7 @@ export function MobileWebShellScreen({
         }}
       />
       {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
+        <ShellPageCover label={openingLabel} visible={pageFrame === 'unpainted'} />
       )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
@@ -459,16 +482,9 @@ export function MobileWebShellScreen({
 }
 
 const styles = StyleSheet.create({
-  shellRoot: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  shellView: {
-    flex: 1
-  },
-  unpaintedOverlay: {
-    opacity: 0
-  },
+  shellRoot: { flex: 1, backgroundColor: colors.bgBase },
+  shellView: { flex: 1 },
+  unpaintedOverlay: { opacity: 0 },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -494,12 +510,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: radii.button
   },
-  retryLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
-  }
+  retryLabel: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
+  pressed: { opacity: 0.7 }
 })

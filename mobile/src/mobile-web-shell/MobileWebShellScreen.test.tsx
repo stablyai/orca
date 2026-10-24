@@ -761,16 +761,24 @@ describe('the frame under a page that has not painted', () => {
     ).toHaveLength(1)
     // Over, not instead of: the document is loading the whole time the cover is up.
     expect(byName(tree, 'ShellViewProbe')).toHaveLength(1)
-    expect(textOf(tree)).toContain('Opening workspace')
+    expect(textOf(tree)).toContain('Loading host')
   })
 
   it('carries the same label the screen was already painting while it opened the generation', async () => {
     const opening = await renderScreen({ kind: 'activating', source: 'cache' })
-    expect(textOf(opening)).toContain('Opening workspace')
+    expect(textOf(opening)).toContain('Loading host')
     dependencies.pageFrame = 'unpainted'
     await updateScreen(opening, readyState('session-a'))
     // The frame does not change when the state does, which is what makes the handover invisible.
-    expect(textOf(opening)).toContain('Opening workspace')
+    expect(textOf(opening)).toContain('Loading host')
+  })
+
+  it('calls a workspace route a workspace, and the host route a host', async () => {
+    dependencies.pathname = '/h/host-1/session/wt-1'
+    dependencies.pageFrame = 'unpainted'
+    const workspace = await renderScreen(readyState('session-workspace'))
+    expect(textOf(workspace)).toContain('Opening workspace')
+    expect(textOf(workspace)).not.toContain('Loading host')
   })
 
   it('takes the frame down once the page reports one of its own', async () => {

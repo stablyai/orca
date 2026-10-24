@@ -3,10 +3,15 @@ import { mobileWebBundleManifestRead } from '../transport/mobile-web-bundle-oper
 import { runRpcOperation } from '../transport/rpc-operation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GenerationStore } from './generation-store'
-import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
+import {
+  DOCUMENT_LOAD_DEADLINE_MS,
+  PAGE_READY_DEADLINE_MS,
+  type MobileWebShellRuntime
+} from './mobile-web-shell-runtime'
 import { generationDirectoryPath } from './generation-store-file-system'
 import type {
   CachedGeneration,
+  MobileWebShellSessionEffect,
   MobileWebShellSessionEvent
 } from './mobile-web-shell-session-contract'
 import {
@@ -152,5 +157,79 @@ export async function download(args: {
     })
   } finally {
     args.downloads.delete(controller)
+  }
+}
+
+export async function runMobileWebShellSessionEffect(args: {
+  effect: MobileWebShellSessionEffect
+  flow: number
+  client: RpcClient | null
+  store: GenerationStore
+  hostId: string
+  hostKey: string
+  runtime: MobileWebShellRuntime
+  startedAt: number
+  downloads: Set<AbortController>
+  timers: Set<() => void>
+  send: (event: MobileWebShellSessionEvent) => void
+}): Promise<void> {
+  const {
+    effect,
+    flow,
+    client,
+    store,
+    hostId,
+    hostKey,
+    runtime,
+    startedAt,
+    downloads,
+    timers,
+    send
+  } = args
+  switch (effect.kind) {
+    case 'delete-cache':
+      await store.deleteHostCache(hostKey).catch(() => undefined)
+      return
+    case 'record-update-failure':
+      await store.recordUpdateFailure({ ...effect.failure, hostId, at: runtime.now() })
+      return
+    case 'forget-update-failures':
+      await store.forgetHostUpdateFailures(hostId)
+      return
+    case 'open-cache':
+      send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
+      return
+    case 'read-manifest':
+      await readManifest(client, flow, send)
+      return
+    case 'download':
+      await download({ client, store, hostKey, flow, runtime, startedAt, downloads, send })
+      return
+    case 'open-generation':
+      send({
+        type: 'activated',
+        flow,
+        generationDirectory: effect.directory,
+        sessionId: runtime.mintSessionId(),
+        buildId: effect.buildId,
+        totalBytes: effect.totalBytes,
+        elapsedMs: runtime.now() - startedAt
+      })
+      return
+    case 'remount':
+      send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
+      return
+    case 'await-page-ready':
+    case 'await-document-load': {
+      const pageReady = effect.kind === 'await-page-ready'
+      const cancel = runtime.setTimer(
+        () => {
+          timers.delete(cancel)
+          send({ type: pageReady ? 'page-ready-deadline' : 'document-load-deadline', flow })
+        },
+        pageReady ? PAGE_READY_DEADLINE_MS : DOCUMENT_LOAD_DEADLINE_MS
+      )
+      timers.add(cancel)
+    }
   }
 }

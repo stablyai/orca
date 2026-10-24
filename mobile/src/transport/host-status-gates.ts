@@ -55,6 +55,41 @@ const UNREADABLE_STATUS_GATES: Omit<HostStatusGates, 'statusPending'> = {
   statusReadable: false
 }
 
+const provenGatesByClient = new WeakMap<RpcClient, Map<string, LoadedHostStatusGates>>()
+
+function readProvenGates(
+  client: RpcClient | null,
+  hostId: string | undefined,
+  connState: ConnectionState
+): LoadedHostStatusGates | null {
+  if (!client || !hostId || connState !== 'connected') {
+    return null
+  }
+  return provenGatesByClient.get(client)?.get(hostId) ?? null
+}
+
+function writeProvenGates(entry: LoadedHostStatusGates): void {
+  if (!entry.hostId) {
+    return
+  }
+  if (!entry.statusReadable) {
+    provenGatesByClient.get(entry.client)?.delete(entry.hostId)
+    return
+  }
+  let byHost = provenGatesByClient.get(entry.client)
+  if (!byHost) {
+    byHost = new Map()
+    provenGatesByClient.set(entry.client, byHost)
+  }
+  byHost.set(entry.hostId, entry)
+}
+
+function dropProvenGates(client: RpcClient | null, hostId: string | undefined): void {
+  if (client && hostId) {
+    provenGatesByClient.get(client)?.delete(hostId)
+  }
+}
+
 // Reads status.get on connect for capabilities, protocol-compat verdict, and the
 // floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
 export function useHostStatusGates(args: {
@@ -63,24 +98,32 @@ export function useHostStatusGates(args: {
   connState: ConnectionState
 }): HostStatusGates {
   const { hostId, client, connState } = args
-  const [loaded, setLoaded] = useState<LoadedHostStatusGates | null>(null)
+  const [loaded, setLoaded] = useState<LoadedHostStatusGates | null>(() =>
+    readProvenGates(client, hostId, connState)
+  )
   // Why (F10): a drop must not erase proven capabilities, but it does invalidate them — this keeps
   // statusPending true across the reconnect refetch, so gates stay "unknown" while the data survives.
   const [unverified, setUnverified] = useState(false)
 
   useEffect(() => {
     if (connState !== 'connected' || !client) {
+      dropProvenGates(client, hostId)
       setUnverified(true)
       return
     }
     return startHostStatusRead(client, hostId, (gates) => {
-      setLoaded({ hostId, client, ...gates })
+      const next: LoadedHostStatusGates = { hostId, client, ...gates }
+      writeProvenGates(next)
+      setLoaded(next)
       setUnverified(false)
     })
   }, [client, connState, hostId])
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
-  const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
+  const proven =
+    loaded && loaded.hostId === hostId && loaded.client === client
+      ? loaded
+      : readProvenGates(client, hostId, connState)
   if (!proven) {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,

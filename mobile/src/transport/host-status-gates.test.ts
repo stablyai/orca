@@ -374,4 +374,48 @@ describe('useHostStatusGates', () => {
       vi.useRealTimers()
     }
   })
+
+  it('seeds proven gates synchronously on remount for the same connected client', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        appVersion: '1.4.191',
+        capabilities: ['mobile-web-bundle.v1'],
+        floatingWorkspaceEnabled: true
+      }
+    })
+    const client = { sendRequest } as unknown as RpcClient
+    const seenOnFirstRender: HostStatusGates[] = []
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      const gates = useHostStatusGates({ hostId: 'host-remount', client, connState: 'connected' })
+      if (seenOnFirstRender.length === 0) {
+        seenOnFirstRender.push(gates)
+      }
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      await act(async () => {
+        renderer?.unmount()
+      })
+      seenOnFirstRender.length = 0
+      await act(async () => {
+        renderer = create(createElement(Probe))
+      })
+      expect(seenOnFirstRender[0]).toMatchObject({
+        hostCapabilities: ['mobile-web-bundle.v1'],
+        floatingWorkspaceEnabled: true,
+        statusPending: false,
+        statusReadable: true
+      })
+    } finally {
+      renderer?.unmount()
+    }
+  })
 })

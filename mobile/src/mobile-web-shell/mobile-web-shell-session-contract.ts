@@ -13,10 +13,9 @@ import type {
 /**
  * Whether the host can be asked anything right now.
  *
- * Three values, not a boolean: a connection still being made is not an offline host, and opening a
- * cached generation with no compat check for the second or two before a socket completes would
- * flash a workspace this host may already have replaced. `connecting` waits; only a settled
- * non-connection opens the cache unchecked.
+ * Three values, not a boolean: a connection still being made is not an offline host. `connecting`
+ * waits. An unreachable host opens the cache with no compat check. A connected host opens a
+ * compatible cache at once and reads the manifest beside it.
  */
 export type MobileWebShellReachability = 'connected' | 'connecting' | 'unreachable'
 
@@ -221,7 +220,7 @@ export type MobileWebShellSession = {
   /** False for the catch-all's pathnames: with no screen of its own here, an unserved one is not
    *  evidence of an older desktop. */
   readonly appNamesRoute: boolean
-  /** A wide layout: served only under `canOwnHostArea`; the host route gets every route's grants. */
+  /** Wide layout: served only under `canOwnHostArea`. The host route gets every route's grants. */
   readonly wide: boolean
   /** The route list the view below was built from, so a layout-class change can rebuild it. */
   readonly routes: readonly MobileWebPageRoute[] | undefined
@@ -263,6 +262,8 @@ export type MobileWebShellSession = {
   /** The generation this flow asked the host for, so a failed read can name it. Cleared by every
    *  entry into the flow. */
   readonly requestedBuildId: string | null
+  /** Routes of a download running behind a cached page. Applied when that download activates. */
+  readonly offeredRoutes: readonly MobileWebPageRoute[] | null
   /** Which run of the flow the session is on. Bumped by every restart, stamped on the effects that
    *  run belongs to, and echoed back on their results. */
   readonly flow: number
