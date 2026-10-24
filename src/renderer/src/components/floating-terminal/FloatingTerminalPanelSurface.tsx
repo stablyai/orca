@@ -11,6 +11,7 @@ import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestra
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 import type { useFloatingTerminalPanelController } from './use-floating-terminal-panel-controller'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 
 const NO_ACTIVITY_TERMINAL_PORTALS: [] = []
 
@@ -163,7 +164,7 @@ export function renderFloatingTerminalPanelSurface({
                   activeFileId={activeEditorUnifiedId}
                   activeBrowserTabId={activeBrowserId}
                   activeSimulatorTabId={
-                    activeTab?.contentType === 'simulator' ? activeTab.id : null
+                    isLiveSurfaceContentType(activeTab?.contentType) ? activeTab.id : null
                   }
                   activeTabType={activeTabType}
                   onActivateFile={model.commands.activateEditor}

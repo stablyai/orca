@@ -1,4 +1,5 @@
 import { structuredLaunchSlotIds } from '@/lib/structured-agent-session-launch-persistence'
+import { isLiveSurfaceContentType } from '../../../../../shared/tab-types'
 import type { AppState } from '../../types'
 import type { Tab } from '../../../../../shared/tab-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
@@ -124,7 +125,7 @@ export function projectWorktreeTabModelReconciliation(
     if (tab.contentType === 'browser') {
       return liveBrowserIds.has(tab.entityId)
     }
-    if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
+    if (isLiveSurfaceContentType(tab.contentType) || tab.contentType === 'agent-session') {
       return true
     }
     return liveEditorIds.has(tab.entityId)

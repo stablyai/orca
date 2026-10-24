@@ -9,6 +9,7 @@ import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { buildTabAgentLaunchOptionsFromRows } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
+import { runTabCreateMenuOption } from './tab-create-menu-selection'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import {
   buildWindowsShellMenuEntries,
@@ -18,6 +19,7 @@ import type {
   getProjectRuntimeShellMenuMode,
   resolveWindowsPowerShellImplementationSetting
 } from './use-tab-bar-runtime-model'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 export type TabBarCreateMenuController = {
@@ -57,6 +59,7 @@ export function useTabBarCreateMenuController({
   onNewTerminalWithShell,
   onNewBrowserTab,
   onNewSimulatorTab,
+  onNewDesktopAppTab,
   onNewFileTab,
   onOpenFileTab
 }: {
@@ -80,6 +83,7 @@ export function useTabBarCreateMenuController({
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewSimulatorTab?: () => void
+  onNewDesktopAppTab?: () => void
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
 }): TabBarCreateMenuController {
@@ -118,7 +122,7 @@ export function useTabBarCreateMenuController({
   ): void => {
     const state = useAppStore.getState()
     if (
-      (state.activeTabType === 'terminal' || state.activeTabType === 'simulator') &&
+      (state.activeTabType === 'terminal' || isLiveSurfaceContentType(state.activeTabType)) &&
       state.activeTabId &&
       state.activeTabId !== previousActiveTabId
     ) {
@@ -181,7 +185,8 @@ export function useTabBarCreateMenuController({
           mobileEmulatorEnabled &&
           mobileEmulatorCreationEnabled &&
           Boolean(onNewSimulatorTab),
-        simulatorIsGoTo: workspaceHasSimulatorTab
+        simulatorIsGoTo: workspaceHasSimulatorTab,
+        hasDesktopApp: !terminalOnly && Boolean(onNewDesktopAppTab)
       }),
     [
       mobileEmulatorEnabled,
@@ -189,45 +194,30 @@ export function useTabBarCreateMenuController({
       mobileEmulatorCreationEnabled,
       onNewFileTab,
       onNewSimulatorTab,
+      onNewDesktopAppTab,
       onOpenFileTab,
       terminalOnly,
       windowsShellEntries,
       workspaceHasSimulatorTab
     ]
   )
-  const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
-    switch (option.kind) {
-      case 'new-terminal':
-        queueNewActiveTerminalFocusAfterNewTabMenuClose()
-        onNewTerminalTab()
-        break
-      case 'new-terminal-shell':
-        if (!onNewTerminalWithShell || !option.shell) {
-          break
-        }
-        queueNewActiveTerminalFocusAfterNewTabMenuClose()
-        onNewTerminalWithShell(
-          resolveWindowsShellLaunchTarget(
-            option.shell,
-            defaultWindowsPowerShellImplementation,
-            windowsTerminalCapabilities.pwshAvailable
-          )
-        )
-        break
-      case 'new-browser':
-        onNewBrowserTab()
-        break
-      case 'new-markdown':
-        onNewFileTab?.()
-        break
-      case 'open-markdown':
-        onOpenFileTab?.()
-        break
-      case 'new-simulator':
-      case 'go-to-simulator':
-        onNewSimulatorTab?.()
-    }
-  }
+  const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void =>
+    runTabCreateMenuOption(option, {
+      focusNewTerminal: queueNewActiveTerminalFocusAfterNewTabMenuClose,
+      onNewTerminalTab,
+      onNewTerminalWithShell,
+      resolveShell: (shell) =>
+        resolveWindowsShellLaunchTarget(
+          shell,
+          defaultWindowsPowerShellImplementation,
+          windowsTerminalCapabilities.pwshAvailable
+        ),
+      onNewBrowserTab,
+      onNewFileTab,
+      onOpenFileTab,
+      onNewSimulatorTab,
+      onNewDesktopAppTab
+    })
   const launchAgentRow = useTabAgentMenuLaunch({
     worktreeId,
     groupId: resolvedGroupId,

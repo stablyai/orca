@@ -126,6 +126,7 @@ export type WindowLayoutCommand =
   | {
       type: 'openSimulatorTab'
       tabId: string
+      kind?: CommandOf<'openSimulatorTab'>['kind']
       groupId: string
       afterTabId?: string
       index?: number

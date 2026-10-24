@@ -1,5 +1,6 @@
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceSet } from './tabs-slice-contract'
+import { isLiveSurfaceContentType } from '../../../../../shared/tab-types'
 
 function previewActiveSurfacePatch(
   state: AppState,
@@ -62,16 +63,16 @@ function previewActiveSurfacePatch(
       activeTabTypeByWorktree: nextActiveTabTypeByWorktree('browser')
     }
   }
-  if (unifiedTab.contentType === 'simulator') {
+  if (isLiveSurfaceContentType(unifiedTab.contentType)) {
     if (
-      state.activeTabType === 'simulator' &&
-      state.activeTabTypeByWorktree[worktreeId] === 'simulator'
+      state.activeTabType === unifiedTab.contentType &&
+      state.activeTabTypeByWorktree[worktreeId] === unifiedTab.contentType
     ) {
       return {}
     }
     return {
-      activeTabType: 'simulator',
-      activeTabTypeByWorktree: nextActiveTabTypeByWorktree('simulator')
+      activeTabType: unifiedTab.contentType,
+      activeTabTypeByWorktree: nextActiveTabTypeByWorktree(unifiedTab.contentType)
     }
   }
   if (

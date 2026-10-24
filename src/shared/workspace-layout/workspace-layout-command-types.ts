@@ -8,7 +8,7 @@ import type { LiveTerminalAdoption } from './workspace-layout-terminal-adoption'
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
 import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
-import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
+import type { LiveSurfaceContentType, TabContentType, TabGroupLayoutNode } from '../tab-types'
 import type {
   TerminalGrid,
   TerminalPaneLayoutNode,
@@ -147,7 +147,10 @@ export type LayoutCommand =
       /** The editor's file id: the tab's entity. Absent (main's own opens only; the wire still
        *  requires it): main picks it for `file`. */
       fileId?: string
-      contentType: Exclude<TabContentType, 'terminal' | 'browser' | 'agent-session' | 'simulator'>
+      contentType: Exclude<
+        TabContentType,
+        'terminal' | 'browser' | 'agent-session' | 'simulator' | 'desktop-app'
+      >
       /** Present for edit-mode files, which are restored after restart. */
       file?: LayoutEditorFile
       /** What the tab shows beyond its file; not saved. */
@@ -167,6 +170,8 @@ export type LayoutCommand =
       type: 'openSimulatorTab'
       /** The window's id for the tab it drew; also the tab's entity. */
       tabId: string
+      /** Which live-surface tab; absent means 'simulator' (older windows). */
+      kind?: LiveSurfaceContentType
       groupId?: string
       /** Placement in the group: after this tab, else at this index, else at its end. */
       afterTabId?: string

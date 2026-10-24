@@ -18,22 +18,37 @@ import time
 import uuid
 from dataclasses import dataclass
 
-try:
-    import gi
+# Why lazy: the Desktop App tools only need libX11, so a distro without python3-gi or the
+# AT-SPI typelib must still list and drive windows. load_accessibility_bindings fills these.
+Atspi = None
+Gdk = None
+GdkPixbuf = None
 
-    gi.require_version("Atspi", "2.0")
-except (ImportError, ValueError) as error:
-    # Why name it: PATH often puts a pyenv/Nix python3 without gi ahead of the system one.
-    sys.stderr.write(f"PyGObject unavailable in interpreter: {sys.executable}\n{error}\n")
-    sys.exit(1)
-try:
-    gi.require_version("Gdk", "3.0")
-    gi.require_version("GdkPixbuf", "2.0")
-    from gi.repository import Gdk, GdkPixbuf
-except (ImportError, ValueError):
-    Gdk = None
-    GdkPixbuf = None
-from gi.repository import Atspi
+
+def load_accessibility_bindings():
+    global Atspi, Gdk, GdkPixbuf
+    if Atspi is not None:
+        return
+    try:
+        import gi
+
+        gi.require_version("Atspi", "2.0")
+    except (ImportError, ValueError) as error:
+        # Why name it: PATH often puts a pyenv/Nix python3 without gi ahead of the system one.
+        message = f"PyGObject unavailable in interpreter: {sys.executable}\n{error}"
+        raise RuntimeError(message) from error
+    try:
+        gi.require_version("Gdk", "3.0")
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import Gdk as gdk, GdkPixbuf as gdk_pixbuf
+
+        Gdk, GdkPixbuf = gdk, gdk_pixbuf
+    except (ImportError, ValueError):
+        Gdk = None
+        GdkPixbuf = None
+    from gi.repository import Atspi as atspi
+
+    Atspi = atspi
 
 MAX_NODES = 1200
 MAX_DEPTH = 64
@@ -1057,8 +1072,534 @@ def set_value(node, value):
     return False
 
 
+# --- Desktop App pane: background window list and input (X11 only) -------------------------
+#
+# Why X11 only: Wayland gives no client a list of other apps' windows or a way to inject input
+# into them, so on Wayland the pane degrades with unsupported_capability instead of guessing.
+# Why raw Xlib through ctypes: libX11 ships with every X11 desktop, so the pane needs no new
+# package, and XSendEvent targets one window without moving the real pointer or focus
+# (xdotool/XTest would click wherever the user's pointer is).
+
+DESKTOP_APP_TOOLS = ("list_desktop_windows", "desktop_input")
+DESKTOP_APP_MAX_SCROLL_STEPS = 50
+# One wheel notch scrolls about three text lines in most toolkits.
+DESKTOP_APP_PIXELS_PER_SCROLL_STEP = 50
+X_KEY_PRESS, X_KEY_RELEASE, X_BUTTON_PRESS, X_BUTTON_RELEASE, X_MOTION_NOTIFY = 2, 3, 4, 5, 6
+X_SHIFT_MASK, X_CONTROL_MASK, X_MOD1_MASK = 1, 4, 8
+X_XKB_USE_CORE_KBD = 0x0100
+X_KEY_PRESS_MASK = 1
+X_KEY_EVENT_MASKS = 1 | 2
+X_BUTTON_PRESS_MASK = 1 << 2
+X_BUTTON_EVENT_MASKS = X_BUTTON_PRESS_MASK | (1 << 3)
+X_IS_VIEWABLE = 2
+DESKTOP_APP_KEYSYM_NAMES = {
+    "return": "Return", "enter": "Return", "tab": "Tab", "backspace": "BackSpace",
+    "forwarddelete": "Delete", "delete": "Delete", "escape": "Escape", "esc": "Escape",
+    "left": "Left", "right": "Right", "up": "Up", "down": "Down", "home": "Home", "end": "End",
+    "pageup": "Prior", "pagedown": "Next", "space": "space", "insert": "Insert",
+}
+DESKTOP_APP_MODIFIER_MASKS = {
+    # Why cmd maps to Control: the pane forwards the platform's primary shortcut modifier,
+    # which on Linux is Control.
+    "cmd": X_CONTROL_MASK, "command": X_CONTROL_MASK, "ctrl": X_CONTROL_MASK,
+    "control": X_CONTROL_MASK, "alt": X_MOD1_MASK, "option": X_MOD1_MASK, "shift": X_SHIFT_MASK,
+}
+
+
+def desktop_app_unsupported_reason(environ=None):
+    environ = os.environ if environ is None else environ
+    session = str(environ.get("XDG_SESSION_TYPE", "")).lower()
+    if session == "wayland" or (environ.get("WAYLAND_DISPLAY") and session != "x11"):
+        return (
+            "unsupported capability: Desktop App tabs need an X11 session; Wayland does not let "
+            "apps list or control other apps' windows"
+        )
+    if not environ.get("DISPLAY"):
+        return "unsupported capability: Desktop App tabs need an X11 display, and DISPLAY is not set"
+    return None
+
+
+def desktop_app_point_in_bounds(width, height, x, y):
+    x = require_finite_number(x, "x")
+    y = require_finite_number(y, "y")
+    if x < 0 or y < 0 or x >= width or y >= height:
+        raise ValueError(f"invalid_argument: point ({x}, {y}) is outside the window")
+    return int(round(x)), int(round(y))
+
+
+def require_finite_number(value, name):
+    if value is None:
+        raise ValueError(f"{name} is required")
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be a finite number")
+    if math.isnan(number) or math.isinf(number):
+        raise ValueError(f"{name} must be a finite number")
+    return number
+
+
+def desktop_app_scroll_buttons(delta_x, delta_y):
+    """Maps pixel deltas to (button, steps): 4/5 vertical, 6/7 horizontal, positive is down/right."""
+    buttons = []
+    for delta, negative, positive in ((delta_y, 4, 5), (delta_x, 6, 7)):
+        if abs(delta) < 1:
+            continue
+        steps = min(DESKTOP_APP_MAX_SCROLL_STEPS, max(1, int(round(abs(delta) / DESKTOP_APP_PIXELS_PER_SCROLL_STEP))))
+        buttons.append((positive if delta > 0 else negative, steps))
+    return buttons
+
+
+def desktop_app_key_spec(raw):
+    """Splits "shift+cmd+a" into (key, X modifier mask)."""
+    parts = [part.strip().lower() for part in str(raw).split("+") if part.strip()]
+    if not parts:
+        raise ValueError(f"unsupported key: {raw}")
+    state = 0
+    for modifier in parts[:-1]:
+        if modifier not in DESKTOP_APP_MODIFIER_MASKS:
+            raise ValueError(f"unsupported modifier: {modifier}")
+        state |= DESKTOP_APP_MODIFIER_MASKS[modifier]
+    return parts[-1], state
+
+
+def desktop_app_keysym_for_char(character):
+    code = ord(character)
+    if 0x20 <= code <= 0x7E or 0xA0 <= code <= 0xFF:
+        return code
+    # X11 maps every other Unicode code point to 0x01000000 + code point.
+    return 0x01000000 | code
+
+
+def desktop_app_is_blocked(*values):
+    lowered = " ".join(str(value or "") for value in values).lower()
+    return any(fragment in lowered for fragment in BLOCKED_APP_FRAGMENTS)
+
+
+def desktop_app_process_name(pid):
+    try:
+        with open(f"/proc/{pid}/comm", "r", encoding="utf-8") as handle:
+            return handle.read().strip()
+    except OSError:
+        return ""
+
+
+class XlibSession:
+    """Short-lived libX11 connection; every Xlib call stays inside this class."""
+
+    def __init__(self):
+        import ctypes
+        import ctypes.util
+
+        self.ctypes = ctypes
+        reason = desktop_app_unsupported_reason()
+        if reason:
+            raise RuntimeError(reason)
+        library = ctypes.util.find_library("X11")
+        if not library:
+            raise RuntimeError("unsupported capability: Desktop App tabs need libX11, which is not installed")
+        self.x = ctypes.CDLL(library)
+        self._declare()
+        # Why: Xlib's default error handler exits the process on BadWindow, which a window
+        # closing mid-call triggers; this records the error so the call fails cleanly instead.
+        self.errors = []
+        self._error_handler = self.ErrorHandler(lambda _display, _event: self.errors.append(True) or 0)
+        self.x.XSetErrorHandler(self._error_handler)
+        self.display = self.x.XOpenDisplay(None)
+        if not self.display:
+            raise RuntimeError("unsupported capability: Desktop App tabs could not open the X11 display")
+        self.root = self.x.XDefaultRootWindow(self.display)
+
+    def _declare(self):
+        c = self.ctypes
+        self.ErrorHandler = c.CFUNCTYPE(c.c_int, c.c_void_p, c.c_void_p)
+        x = self.x
+        x.XOpenDisplay.restype = c.c_void_p
+        x.XOpenDisplay.argtypes = [c.c_char_p]
+        x.XDefaultRootWindow.restype = c.c_ulong
+        x.XDefaultRootWindow.argtypes = [c.c_void_p]
+        x.XInternAtom.restype = c.c_ulong
+        x.XInternAtom.argtypes = [c.c_void_p, c.c_char_p, c.c_int]
+        x.XGetWindowProperty.argtypes = [
+            c.c_void_p, c.c_ulong, c.c_ulong, c.c_long, c.c_long, c.c_int, c.c_ulong,
+            c.POINTER(c.c_ulong), c.POINTER(c.c_int), c.POINTER(c.c_ulong), c.POINTER(c.c_ulong),
+            c.POINTER(c.c_void_p),
+        ]
+        x.XGetWindowAttributes.argtypes = [c.c_void_p, c.c_ulong, c.POINTER(XWindowAttributes)]
+        x.XTranslateCoordinates.argtypes = [
+            c.c_void_p, c.c_ulong, c.c_ulong, c.c_int, c.c_int,
+            c.POINTER(c.c_int), c.POINTER(c.c_int), c.POINTER(c.c_ulong),
+        ]
+        x.XSendEvent.argtypes = [c.c_void_p, c.c_ulong, c.c_int, c.c_long, c.POINTER(XEvent)]
+        x.XStringToKeysym.restype = c.c_ulong
+        x.XStringToKeysym.argtypes = [c.c_char_p]
+        x.XKeysymToKeycode.restype = c.c_ubyte
+        x.XKeysymToKeycode.argtypes = [c.c_void_p, c.c_ulong]
+        x.XkbKeycodeToKeysym.restype = c.c_ulong
+        x.XkbKeycodeToKeysym.argtypes = [c.c_void_p, c.c_ubyte, c.c_int, c.c_int]
+        x.XkbGetState.argtypes = [c.c_void_p, c.c_uint, c.c_void_p]
+        x.XDisplayKeycodes.argtypes = [c.c_void_p, c.POINTER(c.c_int), c.POINTER(c.c_int)]
+        x.XFree.argtypes = [c.c_void_p]
+        x.XSync.argtypes = [c.c_void_p, c.c_int]
+        x.XCloseDisplay.argtypes = [c.c_void_p]
+        x.XSetErrorHandler.argtypes = [self.ErrorHandler]
+
+    def close(self):
+        if self.display:
+            self.x.XCloseDisplay(self.display)
+            self.display = None
+
+    def atom(self, name):
+        return self.x.XInternAtom(self.display, name.encode("ascii"), 0)
+
+    def keycode_range(self):
+        """The server's legal keycodes, lowest and highest."""
+        lowest, highest = self.ctypes.c_int(), self.ctypes.c_int()
+        self.x.XDisplayKeycodes(self.display, self.ctypes.byref(lowest), self.ctypes.byref(highest))
+        return lowest.value, highest.value
+
+    def keyboard_group(self):
+        """The XKB group (layout) the user has active now; 0 when XKB cannot report it."""
+        # XkbStateRec: its first byte is the effective group; 32 bytes covers the whole struct.
+        state = (self.ctypes.c_ubyte * 32)()
+        if self.x.XkbGetState(self.display, X_XKB_USE_CORE_KBD, state) != 0:
+            return 0
+        return state[0] & 3
+
+    def property(self, window, name):
+        """Returns (format, raw bytes, item count) or None."""
+        c = self.ctypes
+        actual_type, actual_format = c.c_ulong(), c.c_int()
+        items, after, data = c.c_ulong(), c.c_ulong(), c.c_void_p()
+        status = self.x.XGetWindowProperty(
+            self.display, window, self.atom(name), 0, 1 << 20, 0, 0,
+            c.byref(actual_type), c.byref(actual_format), c.byref(items), c.byref(after), c.byref(data),
+        )
+        if status != 0 or not data.value:
+            return None
+        try:
+            unit = {8: 1, 16: c.sizeof(c.c_short), 32: c.sizeof(c.c_long)}.get(actual_format.value, 0)
+            return actual_format.value, c.string_at(data.value, unit * items.value), items.value
+        finally:
+            self.x.XFree(data)
+
+    def cardinals(self, window, name):
+        value = self.property(window, name)
+        if value is None or value[0] != 32:
+            return []
+        array = (self.ctypes.c_ulong * value[2]).from_buffer_copy(value[1])
+        return [int(item) for item in array]
+
+    def text(self, window, name):
+        value = self.property(window, name)
+        return "" if value is None or value[0] != 8 else value[1].decode("utf-8", "replace")
+
+    def geometry(self, window):
+        c = self.ctypes
+        attributes = XWindowAttributes()
+        if not self.x.XGetWindowAttributes(self.display, window, c.byref(attributes)):
+            return None
+        root_x, root_y, child = c.c_int(), c.c_int(), c.c_ulong()
+        if not self.x.XTranslateCoordinates(
+            self.display, window, self.root, 0, 0, c.byref(root_x), c.byref(root_y), c.byref(child)
+        ):
+            return None
+        return {
+            "x": root_x.value, "y": root_y.value, "width": attributes.width,
+            "height": attributes.height, "viewable": attributes.map_state == X_IS_VIEWABLE,
+        }
+
+    def child_at(self, window, root_x, root_y):
+        """Deepest descendant of `window` under the root point, its window-local coordinates,
+        and the chain from `window` down to it."""
+        c = self.ctypes
+        chain = [window]
+        for _ in range(32):
+            local_x, local_y, child = c.c_int(), c.c_int(), c.c_ulong()
+            self.x.XTranslateCoordinates(
+                self.display, self.root, chain[-1], root_x, root_y,
+                c.byref(local_x), c.byref(local_y), c.byref(child),
+            )
+            if not child.value:
+                break
+            chain.append(child.value)
+        return chain[-1], local_x.value, local_y.value, chain
+
+    def event_masks(self, window):
+        attributes = XWindowAttributes()
+        if not self.x.XGetWindowAttributes(self.display, window, self.ctypes.byref(attributes)):
+            return 0
+        return attributes.all_event_masks
+
+    def send(self, window, event, mask):
+        if not self.x.XSendEvent(self.display, window, 1, mask, self.ctypes.byref(event)):
+            raise RuntimeError("window_not_found: the window stopped accepting input")
+
+    def sync(self):
+        self.x.XSync(self.display, 0)
+        if self.errors:
+            raise RuntimeError("window_not_found: the window closed while Orca was sending input")
+
+
+def desktop_app_ctypes_structs():
+    import ctypes as c
+
+    class _XWindowAttributes(c.Structure):
+        _fields_ = [
+            ("x", c.c_int), ("y", c.c_int), ("width", c.c_int), ("height", c.c_int),
+            ("border_width", c.c_int), ("depth", c.c_int), ("visual", c.c_void_p),
+            ("root", c.c_ulong), ("class_", c.c_int), ("bit_gravity", c.c_int),
+            ("win_gravity", c.c_int), ("backing_store", c.c_int), ("backing_planes", c.c_ulong),
+            ("backing_pixel", c.c_ulong), ("save_under", c.c_int), ("colormap", c.c_ulong),
+            ("map_installed", c.c_int), ("map_state", c.c_int), ("all_event_masks", c.c_long),
+            ("your_event_mask", c.c_long), ("do_not_propagate_mask", c.c_long),
+            ("override_redirect", c.c_int), ("screen", c.c_void_p),
+        ]
+
+    # XKeyEvent and XButtonEvent share this layout; `detail` is keycode or button.
+    class _XInputEvent(c.Structure):
+        _fields_ = [
+            ("type", c.c_int), ("serial", c.c_ulong), ("send_event", c.c_int),
+            ("display", c.c_void_p), ("window", c.c_ulong), ("root", c.c_ulong),
+            ("subwindow", c.c_ulong), ("time", c.c_ulong), ("x", c.c_int), ("y", c.c_int),
+            ("x_root", c.c_int), ("y_root", c.c_int), ("state", c.c_uint), ("detail", c.c_uint),
+            ("same_screen", c.c_int),
+        ]
+
+    class _XEvent(c.Union):
+        _fields_ = [("input", _XInputEvent), ("pad", c.c_long * 24)]
+
+    return _XWindowAttributes, _XEvent
+
+
+XWindowAttributes, XEvent = desktop_app_ctypes_structs()
+
+
+def desktop_app_window_record(session, window, exclude_pid):
+    pids = session.cardinals(window, "_NET_WM_PID")
+    pid = pids[0] if pids else 0
+    if pid <= 0 or pid in (exclude_pid, os.getpid()):
+        return None
+    hidden = session.atom("_NET_WM_STATE_HIDDEN")
+    if hidden in session.cardinals(window, "_NET_WM_STATE"):
+        return None
+    types = session.cardinals(window, "_NET_WM_WINDOW_TYPE")
+    if types and session.atom("_NET_WM_WINDOW_TYPE_NORMAL") not in types and session.atom("_NET_WM_WINDOW_TYPE_DIALOG") not in types:
+        return None
+    geometry = session.geometry(window)
+    if not geometry or not geometry["viewable"] or geometry["width"] <= 0 or geometry["height"] <= 0:
+        return None
+    title = session.text(window, "_NET_WM_NAME") or session.text(window, "WM_NAME")
+    wm_class = [part for part in session.text(window, "WM_CLASS").split("\0") if part]
+    instance = wm_class[0] if wm_class else None
+    process_name = desktop_app_process_name(pid)
+    app_name = wm_class[-1] if wm_class else (process_name or title)
+    if not title or desktop_app_is_blocked(app_name, instance, title, process_name):
+        return None
+    return {
+        "windowId": int(window), "pid": int(pid), "appName": app_name, "bundleId": instance,
+        "title": title,
+        "bounds": {key: geometry[key] for key in ("x", "y", "width", "height")},
+    }
+
+
+def list_desktop_windows(exclude_pid):
+    session = XlibSession()
+    try:
+        exclude = int(exclude_pid) if exclude_pid is not None else 0
+        windows = []
+        for window in session.cardinals(session.root, "_NET_CLIENT_LIST"):
+            record = attempt(lambda w=window: desktop_app_window_record(session, w, exclude))
+            if record:
+                windows.append(record)
+        return windows
+    finally:
+        session.close()
+
+
+def desktop_app_require_id(value, name):
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
+
+def desktop_app_resolve_target(session, pid, window_id):
+    if window_id not in session.cardinals(session.root, "_NET_CLIENT_LIST"):
+        raise RuntimeError(f"window_not_found: window {window_id} is gone")
+    record = desktop_app_window_record(session, window_id, 0)
+    if record is None or record["pid"] != pid:
+        if desktop_app_is_blocked(desktop_app_process_name(pid)):
+            raise RuntimeError(f'appBlocked("{pid}")')
+        raise RuntimeError(f"window_not_found: window {window_id} does not belong to pid {pid}")
+    return record
+
+
+def desktop_app_input_event(session, kind, target, local, root_point, state, detail):
+    event = XEvent()
+    event.input.type = kind
+    event.input.send_event = 1
+    event.input.display = session.display
+    event.input.window = target
+    event.input.root = session.root
+    event.input.x, event.input.y = local
+    event.input.x_root, event.input.y_root = root_point
+    event.input.state = state
+    event.input.detail = detail
+    event.input.same_screen = 1
+    return event
+
+
+def desktop_app_pointer_target(session, record, x, y):
+    """Window under the point that core button events can reach, plus local and root points."""
+    root_point = (record["bounds"]["x"] + x, record["bounds"]["y"] + y)
+    target, local_x, local_y, chain = session.child_at(record["windowId"], *root_point)
+    # Why: GTK3/4, Qt and Chromium read the pointer through XInput2 and select no core button
+    # events, so XSendEvent would succeed and the click would vanish without any error.
+    if not any(session.event_masks(window) & X_BUTTON_PRESS_MASK for window in chain):
+        raise RuntimeError(
+            "unsupported capability: this app ignores background clicks and scrolling on X11; "
+            "use it in its own window"
+        )
+    return target, (local_x, local_y), root_point
+
+
+def desktop_app_click(session, record, payload):
+    x, y = desktop_app_point_in_bounds(record["bounds"]["width"], record["bounds"]["height"], payload.get("x"), payload.get("y"))
+    require_positive_integer(payload.get("clickCount"), "clickCount")
+    button = {"left": 1, "right": 3}.get(payload.get("button"))
+    if button is None:
+        raise ValueError(f"unsupported mouse button: {payload.get('button')}")
+    target, local_point, root_point = desktop_app_pointer_target(session, record, x, y)
+    # Why one press: the pane sends one click per real press, with clickCount as that press's
+    # position in a double or triple click; toolkits count multi-clicks from consecutive presses.
+    press = desktop_app_input_event(session, X_BUTTON_PRESS, target, local_point, root_point, 0, button)
+    session.send(target, press, X_BUTTON_EVENT_MASKS)
+    release_state = 1 << (7 + button)
+    release = desktop_app_input_event(session, X_BUTTON_RELEASE, target, local_point, root_point, release_state, button)
+    session.send(target, release, X_BUTTON_EVENT_MASKS)
+
+
+def desktop_app_scroll(session, record, payload):
+    x, y = desktop_app_point_in_bounds(record["bounds"]["width"], record["bounds"]["height"], payload.get("x"), payload.get("y"))
+    delta_x = require_finite_number(payload.get("deltaX"), "deltaX")
+    delta_y = require_finite_number(payload.get("deltaY"), "deltaY")
+    target, local_point, root_point = desktop_app_pointer_target(session, record, x, y)
+    for button, steps in desktop_app_scroll_buttons(delta_x, delta_y):
+        for _ in range(steps):
+            for kind in (X_BUTTON_PRESS, X_BUTTON_RELEASE):
+                event = desktop_app_input_event(session, kind, target, local_point, root_point, 0, button)
+                session.send(target, event, X_BUTTON_EVENT_MASKS)
+
+
+def desktop_app_keycode(session, keysym, group=0):
+    """Returns (keycode, needs_shift) for a keysym in the given layout group, or None."""
+    # Why scan: XKeysymToKeycode ignores the group, so its keycode may lack the keysym in the
+    # active layout while another keycode has it. It is tried first since it usually matches.
+    first = session.x.XKeysymToKeycode(session.display, keysym)
+    lowest, highest = session.keycode_range()
+    keycodes = ([first] if first else []) + [code for code in range(lowest, highest + 1) if code != first]
+    for keycode in keycodes:
+        # Why: only levels 0 and 1 are reachable with Shift alone; an AltGr level (German "@" on Q)
+        # would type the shifted symbol instead, so it reports that the layout cannot type it.
+        for level, needs_shift in ((0, False), (1, True)):
+            if session.x.XkbKeycodeToKeysym(session.display, keycode, group, level) == keysym:
+                return keycode, needs_shift
+    return None
+
+
+def desktop_app_send_key(session, record, keysym, state, group=None):
+    # Why: XSendEvent does not reach a child that alone selects key events, so the key would
+    # vanish while the call reported success.
+    if not session.event_masks(record["windowId"]) & X_KEY_PRESS_MASK:
+        raise RuntimeError(
+            "unsupported capability: this app ignores background typing on X11; use it in its own window"
+        )
+    group = session.keyboard_group() if group is None else group
+    resolved = desktop_app_keycode(session, keysym, group)
+    if resolved is None:
+        raise RuntimeError("unsupported capability: the current keyboard layout cannot type that key")
+    keycode, needs_shift = resolved
+    if needs_shift:
+        state |= X_SHIFT_MASK
+    # Why: the receiving toolkit maps the keycode with the group carried in the event state
+    # (XkbBuildCoreState), not with the server's current group.
+    state |= group << 13
+    # Why the top-level window: toolkits route key events from their top-level window to the
+    # widget that holds keyboard focus inside it.
+    window = record["windowId"]
+    origin = (record["bounds"]["x"], record["bounds"]["y"])
+    for kind in (X_KEY_PRESS, X_KEY_RELEASE):
+        event = desktop_app_input_event(session, kind, window, (0, 0), origin, state, keycode)
+        session.send(window, event, X_KEY_EVENT_MASKS)
+
+
+def desktop_app_text(session, record, text):
+    keysyms = []
+    for character in str(text):
+        if character == "\r":
+            continue
+        if character == "\n":
+            keysym = session.x.XStringToKeysym(b"Return")
+        elif character == "\t":
+            keysym = session.x.XStringToKeysym(b"Tab")
+        else:
+            keysym = desktop_app_keysym_for_char(character)
+        keysyms.append(keysym)
+    # Why check first: stopping halfway would leave a partly typed string in the target app.
+    group = session.keyboard_group()
+    if any(desktop_app_keycode(session, keysym, group) is None for keysym in keysyms):
+        raise RuntimeError("unsupported capability: the text has characters the current keyboard layout cannot type")
+    for keysym in keysyms:
+        desktop_app_send_key(session, record, keysym, 0, group)
+
+
+def desktop_app_key(session, record, raw):
+    key, state = desktop_app_key_spec(raw)
+    if key in DESKTOP_APP_KEYSYM_NAMES:
+        keysym = session.x.XStringToKeysym(DESKTOP_APP_KEYSYM_NAMES[key].encode("ascii"))
+    elif re.fullmatch(r"f([1-9]|1[0-2])", key):
+        keysym = session.x.XStringToKeysym(key.upper().encode("ascii"))
+    elif len(key) == 1:
+        keysym = desktop_app_keysym_for_char(key)
+    else:
+        raise ValueError(f"unsupported key: {raw}")
+    desktop_app_send_key(session, record, keysym, state)
+
+
+def desktop_input(operation):
+    pid = desktop_app_require_id(operation.get("pid"), "pid")
+    window_id = desktop_app_require_id(operation.get("windowId"), "windowId")
+    payload = operation.get("input")
+    if not isinstance(payload, dict):
+        raise ValueError("invalid_argument: input is required")
+    session = XlibSession()
+    try:
+        record = desktop_app_resolve_target(session, pid, window_id)
+        kind = payload.get("kind")
+        if kind == "click":
+            desktop_app_click(session, record, payload)
+        elif kind == "scroll":
+            desktop_app_scroll(session, record, payload)
+        elif kind == "text":
+            desktop_app_text(session, record, payload.get("text") or "")
+        elif kind == "key":
+            desktop_app_key(session, record, require_non_empty_string(payload.get("key"), "key"))
+        else:
+            raise ValueError(f"invalid_argument: unsupported input kind {kind}")
+        session.sync()
+    finally:
+        session.close()
+    # Why synthetic: XSendEvent is the only background path; AT-SPI actions would need the
+    # snapshot element cache the computer-use tools keep, which the pane does not use.
+    return "synthetic"
+
+
 def run_operation(operation):
     tool = operation.get("tool")
+    if tool == "list_desktop_windows":
+        return {"ok": True, "desktopWindows": list_desktop_windows(operation.get("excludePid"))}
+    if tool == "desktop_input":
+        return {"ok": True, "path": desktop_input(operation)}
     include_screenshot = not bool(operation.get("noScreenshot"))
     if tool == "handshake":
         return {"ok": True, "capabilities": handshake_response()}
@@ -1175,9 +1716,13 @@ def run_operation(operation):
 
 def main():
     try:
-        ensure_desktop_bus()
         with open(sys.argv[1], "r", encoding="utf-8") as handle:
             operation = json.load(handle)
+        # Why: Desktop App tools talk to the X server, not AT-SPI, so they must not require the
+        # session bus that only the accessibility tools use.
+        if operation.get("tool") not in DESKTOP_APP_TOOLS:
+            load_accessibility_bindings()
+            ensure_desktop_bus()
         print(json.dumps(run_operation(operation), separators=(",", ":")))
     except Exception as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, separators=(",", ":")))

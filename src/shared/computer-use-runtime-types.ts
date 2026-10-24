@@ -166,6 +166,11 @@ export type ComputerProviderCapabilities = {
       dock: boolean
       menubar: boolean
     }
+    // Desktop App pane: background window listing and input; absent where unsupported.
+    desktopApp?: {
+      listWindows: boolean
+      input: boolean
+    }
   }
 }
 

@@ -11,6 +11,7 @@ import type { TabBarProps } from './tab-bar-props'
 import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import TabBarItemRow from './TabBarItemRow'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 
 export type TabBarItemSurfaceProps = Pick<
   TabBarProps,
@@ -83,19 +84,23 @@ export function renderTabBarItems({
     }
     if (item.type === 'terminal') {
       return (
-        (activeTabType === 'terminal' || activeTabType === 'simulator') && item.id === activeTabId
+        (activeTabType === 'terminal' || isLiveSurfaceContentType(activeTabType)) &&
+        item.id === activeTabId
       )
     }
     if (item.type === 'browser') {
       return activeTabType === 'browser' && activeBrowserTabId === item.id
     }
     if (item.type === 'simulator') {
-      return activeTabType === 'simulator' && item.id === activeSimulatorTabId
+      return isLiveSurfaceContentType(activeTabType) && item.id === activeSimulatorTabId
     }
     if (item.type === 'agent-session') {
       return activeTabType === 'agent-session' && item.id === activeTabId
     }
-    return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
+    return (
+      (activeTabType === 'editor' || isLiveSurfaceContentType(activeTabType)) &&
+      activeFileId === item.id
+    )
   }
 
   return items.map((item, index) => {

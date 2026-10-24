@@ -14,8 +14,9 @@ export function openSimulatorTab(
   context: LayoutContext
 ): Applied {
   const key = command.workspace
+  const kind = command.kind ?? 'simulator'
   // Only a layout-owner window sends this command, so a taken id is always refused.
-  const drawn = drawnTabOpen(model, key, command.tabId, (tab) => tab.kind === 'simulator', true)
+  const drawn = drawnTabOpen(model, key, command.tabId, (tab) => tab.kind === kind, true)
   if (drawn) {
     return drawn
   }
@@ -31,7 +32,7 @@ export function openSimulatorTab(
   const tab = {
     id: command.tabId,
     entityId: command.tabId,
-    kind: 'simulator' as const,
+    kind,
     createdAt: command.createdAt ?? context.now(),
     customTitle: null,
     color: null

@@ -22,6 +22,7 @@ import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
+import { hasArmedDesktopAppCapture } from '../desktop-app/desktop-app-capture-source'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history-gc'
@@ -138,7 +139,18 @@ export function attachMainWindowServices(
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
-    (_webContents, permission, callback, details) => {
+    (webContents, permission, callback, details) => {
+      // Why: Electron asks for getDisplayMedia as 'media' with no mediaTypes, which the camera
+      // path below denies; grant it only while the Desktop App pane has a window armed.
+      if (
+        permission === 'media' &&
+        !(details && 'mediaTypes' in details && details.mediaTypes?.length) &&
+        webContents &&
+        hasArmedDesktopAppCapture(webContents.id)
+      ) {
+        callback(true)
+        return
+      }
       if (permission === 'media') {
         void requestSystemMediaAccess(details).then(callback, (error: unknown) => {
           console.error('[permissions] Failed to request media access:', error)

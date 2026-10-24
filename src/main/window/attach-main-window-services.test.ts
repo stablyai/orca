@@ -141,6 +141,10 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
+// Renderer 7 stands for a Desktop App pane that armed a window for getDisplayMedia.
+vi.mock('../desktop-app/desktop-app-capture-source', () => ({
+  hasArmedDesktopAppCapture: (webContentsId: number) => webContentsId === 7
+}))
 vi.mock('../updater', () => ({
   checkForUpdates: vi.fn(),
   getUpdateStatus: vi.fn(),
@@ -586,6 +590,19 @@ describe('attachMainWindowServices', () => {
     permissionHandler(null, 'clipboard-read', callback)
 
     expect(callback.mock.calls).toEqual([[true], [true], [true], [false]])
+  })
+
+  it('grants display capture only to a renderer with an armed Desktop App window', async () => {
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+
+    const permissionHandler = setPermissionRequestHandlerMock.mock.calls[0][0]
+    const callback = vi.fn()
+    permissionHandler({ id: 7 }, 'media', callback, { mediaTypes: [] })
+    permissionHandler({ id: 8 }, 'media', callback, { mediaTypes: [] })
+
+    // The unarmed renderer falls through to the camera/microphone path, which denies empty asks.
+    await vi.waitFor(() => expect(callback.mock.calls).toEqual([[true], [false]]))
+    expect(systemPreferencesAskForMediaAccessMock).not.toHaveBeenCalled()
   })
 
   it('requests macOS media access only when the renderer asks for media', async () => {

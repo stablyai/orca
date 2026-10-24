@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
@@ -71,7 +72,9 @@ export function useTabBarItemProjection({
   const simulatorTabIds = useMemo(
     () =>
       unifiedTabs
-        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'simulator')
+        .filter(
+          (tab) => tab.groupId === resolvedGroupId && isLiveSurfaceContentType(tab.contentType)
+        )
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )

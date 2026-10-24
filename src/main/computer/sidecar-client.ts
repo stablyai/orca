@@ -11,6 +11,7 @@ import { normalizeComputerActionResult } from './computer-action-verification-no
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
+import type { NativeDesktopAppMethod } from './macos-native-provider-contract'
 import { getForkedChildEntryPath } from '../forked-child-entry-path'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
@@ -30,6 +31,7 @@ type ComputerSidecarMethod =
   | 'hotkey'
   | 'pasteText'
   | 'setValue'
+  | NativeDesktopAppMethod
 
 type ComputerSidecarRequest = {
   id: number
@@ -73,10 +75,17 @@ export async function callComputerSidecarSnapshot(
   return (await getComputerSidecar().call('getAppState', params)) as ComputerSnapshotResult
 }
 
+export async function callComputerSidecarDesktopApp(
+  method: NativeDesktopAppMethod,
+  params: unknown
+): Promise<unknown> {
+  return await getComputerSidecar().call(method, params)
+}
+
 export async function callComputerSidecarAction(
   method: Exclude<
     ComputerSidecarMethod,
-    'capabilities' | 'listApps' | 'listWindows' | 'getAppState'
+    'capabilities' | 'listApps' | 'listWindows' | 'getAppState' | NativeDesktopAppMethod
   >,
   params: unknown
 ): Promise<ComputerActionResult> {

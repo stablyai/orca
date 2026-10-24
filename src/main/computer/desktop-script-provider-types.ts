@@ -120,6 +120,10 @@ export type BridgeResponse = {
   windows?: BridgeWindow[]
   snapshot?: BridgeSnapshot
   action?: ComputerActionMetadata
+  /** Desktop App pane window list; validated again by parseDesktopAppWindows in main. */
+  desktopWindows?: unknown[]
+  /** Desktop App pane input delivery path. */
+  path?: string
 }
 
 export type BridgeRequest = {
@@ -150,4 +154,7 @@ export type BridgeRequest = {
   windowIndex?: number
   noScreenshot?: boolean
   restoreWindow?: boolean
+  pid?: number
+  input?: Record<string, unknown>
+  excludePid?: number
 }

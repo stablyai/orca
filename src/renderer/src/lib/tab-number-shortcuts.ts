@@ -1,4 +1,5 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { isLiveSurfaceContentType } from '../../../shared/tab-types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
@@ -91,9 +92,9 @@ export function activateTabNumberShortcut(index: number): boolean {
     return true
   }
 
-  if (target.contentType === 'simulator') {
+  if (isLiveSurfaceContentType(target.contentType)) {
     store.setActiveTab(target.id)
-    store.setActiveTabType('simulator', worktreeId)
+    store.setActiveTabType(target.contentType, worktreeId)
     return true
   }
 
