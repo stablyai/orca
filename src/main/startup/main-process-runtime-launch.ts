@@ -181,6 +181,7 @@ async function launchServeMode(
   // Why: a phone paired to a headless host still registers and unregisters its token;
   // it simply never receives a push, because nothing dispatches notifications here.
   startDesktopPushService(runtimeRpc)
+  startDesktopRelayService(runtimeRpc)
   settleDesktopActivation()
   installServeQuitHandling()
   await registerCliForHeadlessServe()
