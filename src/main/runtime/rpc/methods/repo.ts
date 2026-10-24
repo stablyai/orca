@@ -30,6 +30,15 @@ import {
 } from '../../../../shared/rpc-contract/repo-params'
 import { RepoAddRemote } from '../../../../shared/rpc-contract/ssh-params'
 
+const WORKTREE_VISIBILITY_UPDATES = [
+  'externalWorktreeVisibility',
+  'importedExternalWorktreePaths',
+  'agentWorktreeVisibility',
+  'worktreeBasePath',
+  'customWorktreeVisibilitySources',
+  'worktreeVisibilitySourcePreferences'
+] as const
+
 export const REPO_METHODS = [
   defineMethod({
     name: 'repo.list',
@@ -185,15 +194,17 @@ export const REPO_METHODS = [
     name: 'repo.update',
     permission: 'workspace',
     params: RepoUpdate,
-    handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(
-        await context.runtime.updateRepo(
-          params.repo,
-          params.updates as Parameters<typeof context.runtime.updateRepo>[1]
-        ),
-        context
+    handler: async (params, context) => {
+      const repo = await context.runtime.updateRepo(
+        params.repo,
+        params.updates as Parameters<typeof context.runtime.updateRepo>[1]
       )
-    })
+      // Why: clients keep worktree rows until worktrees:changed, so a visibility edit here left them stale.
+      if (WORKTREE_VISIBILITY_UPDATES.some((key) => key in params.updates)) {
+        context.runtime.notifyWorktreesChanged(repo.id)
+      }
+      return { repo: projectRepoVisibilityForClient(repo, context) }
+    }
   }),
   defineMethod({
     name: 'repo.rm',
