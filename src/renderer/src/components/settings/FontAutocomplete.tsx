@@ -6,6 +6,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
 import { ScrollArea } from '../ui/scroll-area'
 import { filterFontSuggestions, getRenderedFontSuggestions } from './settings-form-option-filter'
 import { translate } from '@/i18n/i18n'
+import { buildAppFontFamily } from '@/lib/app-font-family'
 
 type FontAutocompleteProps = {
   value: string
@@ -358,7 +359,12 @@ export function FontAutocomplete({
                         : 'hover:bg-muted/60'
                     }`}
                   >
-                    <span className="truncate">{font || defaultOptionLabel}</span>
+                    <span
+                      className="truncate"
+                      style={font ? { fontFamily: buildAppFontFamily(font) } : undefined}
+                    >
+                      {font || defaultOptionLabel}
+                    </span>
                     {font === value ? <Check className="ml-3 size-4 shrink-0" /> : null}
                   </button>
                 ))
