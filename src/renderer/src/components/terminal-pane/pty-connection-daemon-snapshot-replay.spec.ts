@@ -21,7 +21,10 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
+import {
+  buildReattachPaneTitleState,
+  createInitialStoreState
+} from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
@@ -61,6 +64,62 @@ export function registerPtyConnectionDaemonSnapshotReplayTests(): void {
     afterEach(async () => {
       await restoreTerminalTestGlobals()
     })
+
+    it.each([
+      { owner: 'replacement shell', snapshot: 'SHELL>', mode: 'none', focus: false },
+      {
+        owner: 'older live agent without encoding metadata',
+        snapshot: '\x1b[?1049hLIVE_TUI\x1b[?1002h\x1b[?1004h',
+        mode: 'drag',
+        focus: true
+      },
+      {
+        owner: 'live agent',
+        snapshot: '\x1b[?1049hLIVE_TUI\x1b[?1002h\x1b[?1006h\x1b[?1004h',
+        mode: 'drag',
+        focus: true
+      }
+    ])(
+      'adopts $owner snapshot reporting with a persisted agent title (#18424)',
+      async (scenario) => {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport('tab-pty')
+        transport.connect.mockImplementation(async ({ sessionId }) =>
+          sessionId ? { id: sessionId, snapshot: scenario.snapshot } : null
+        )
+        transportFactoryQueue.push(transport)
+        mockStoreState = buildReattachPaneTitleState(mockStoreState, 'Claude working')
+        const pane = createPane(1)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: existing fixtures implement the connection's pane, manager and dependency contracts.
+        const args = [
+          pane,
+          createManager(1),
+          createDeps({ restoredLeafId: LEAF_1, restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' } })
+        ] as unknown as Parameters<typeof connectPanePty>
+        const binding = connectPanePty(...args)
+        const rendered = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+        try {
+          await flushAsyncTicks(20)
+          await writeHeadlessTerminal(rendered, '\x1b[?1003h\x1b[?1006h\x1b[?1004h')
+          for (const [data] of pane.terminal.write.mock.calls) {
+            if (data) {
+              await writeHeadlessTerminal(rendered, data)
+            }
+          }
+          expect(rendered.modes.mouseTrackingMode).toBe(scenario.mode)
+          expect(rendered.modes.sendFocusMode).toBe(scenario.focus)
+          if (scenario.focus) {
+            const replies: string[] = []
+            rendered.onData((data) => replies.push(data))
+            await writeHeadlessTerminal(rendered, '\x1b[?1006$p')
+            expect(replies).toEqual(['\x1b[?1006;1$y'])
+          }
+        } finally {
+          rendered.dispose()
+          binding.dispose()
+        }
+      }
+    )
 
     it('clears the captured pen for a normal-buffer fallback reattach', async () => {
       const { connectPanePty } = await import('./pty-connection')

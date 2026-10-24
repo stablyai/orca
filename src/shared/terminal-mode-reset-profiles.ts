@@ -22,9 +22,9 @@ export function buildKittyKeyboardRestore(provenFlags: number | undefined): stri
 export const RESET_GRAPHIC_RENDITION = '\x1b[0m'
 // Last so a dead process cannot leave stale attributes in the DECSC register.
 const SAVE_GROUNDED_CURSOR = '\x1b7'
-// Every mouse mode the daemon can re-arm from a snapshot: protocols 9/1000/1002/1003 + SGR encodings 1006/1016.
-export const RESET_MOUSE_REPORTING =
-  '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
+const RESET_MOUSE_PROTOCOLS = '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l'
+// Every mouse protocol and encoding the daemon can re-arm.
+export const RESET_MOUSE_REPORTING = `${RESET_MOUSE_PROTOCOLS}\x1b[?1006l\x1b[?1016l`
 
 // Why: serialized panes can end with a live pen, but the following shell assumes default attributes.
 export const POST_REPLAY_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_MODIFY_OTHER_KEYS}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l\x1b[?2004l${SAVE_GROUNDED_CURSOR}`
@@ -82,6 +82,8 @@ const LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR = `${SAVE_GROUNDED_CURSOR}\x1
 // UTF-8 and urxvt encodings RESET_MOUSE_REPORTING leaves out; xterm ignores them, other hosts may not.
 const RESET_LEGACY_MOUSE_ENCODINGS = '\x1b[?1005l\x1b[?1015l'
 const RESET_FOCUS_REPORTING = '\x1b[?1004l'
+// Snapshots omit disabled reporting; preserve encodings older hosts cannot reassert.
+export const RESET_SNAPSHOT_MOUSE_AND_FOCUS = `${RESET_MOUSE_PROTOCOLS}${RESET_FOCUS_REPORTING}`
 const RESET_BRACKETED_PASTE = '\x1b[?2004l'
 const RESET_APPLICATION_CURSOR_AND_KEYPAD = '\x1b[?1l\x1b[?66l'
 const SHOW_CURSOR = '\x1b[?25h'
@@ -119,7 +121,7 @@ export const RESET_AFTER_BYTE_GAP = `${ABORT_TRUNCATED_CONTROL_STRING}${RELEASE_
 // resetting is unilateral. `enacs=\E(B\E)0` (screen/tmux/vt100 terminfo)
 // designates G1 once at init and then uses bare SO/SI, so grounding G1 would
 // render a live app's box drawing as letters.
-const REPLAY_BASELINE_TERMINAL_RESET = `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x0f\x1b(B\x1b[?6l\x1b[?7h\x1b[?45l\x1b[4l`
+const REPLAY_BASELINE_TERMINAL_RESET = `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_SNAPSHOT_MOUSE_AND_FOCUS}${RESET_GRAPHIC_RENDITION}\x0f\x1b(B\x1b[?6l\x1b[?7h\x1b[?45l\x1b[4l`
 
 // Buffer-scoped: margins live on the xterm buffer, and `?1049` neither carries
 // them across nor clears them unless it actually swaps.

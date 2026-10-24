@@ -2,6 +2,7 @@ import { waitForTerminalReplayWritesParsed } from '../replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
+  RESET_SNAPSHOT_MOUSE_AND_FOCUS,
   RELEASE_SYNCHRONIZED_OUTPUT
 } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
@@ -87,6 +88,7 @@ export function createReattachPayloadHandlers(
         Boolean(ctx.connectResult.coldRestore) ||
         (!session.shouldPreserveAgentReattachModes() &&
           !(ctx.connectResult.isAlternateScreen ?? session.kittyKeyboardModes.isAlternateScreen))
+      session.writeReplayData(RESET_SNAPSHOT_MOUSE_AND_FOCUS)
       session.writeReplayData(
         `${groundDaemonSnapshot ? RESET_GRAPHIC_RENDITION : ''}${
           daemonAltFrameSkippable
