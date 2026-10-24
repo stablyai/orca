@@ -1,0 +1,6 @@
+# Standalone project (own lockfile), same trick mobile/ uses to stay out of
+# the root pnpm graph: without this, `pnpm -r` at repo root auto-discovers
+# even-g2/ and its deps collide with the root's patchedDependencies.
+packages: []
+allowBuilds:
+  esbuild: true
