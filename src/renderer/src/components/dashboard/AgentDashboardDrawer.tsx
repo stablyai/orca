@@ -43,6 +43,11 @@ function AgentDashboardDrawerBody({
   const snapshot = useLiveDashboardSnapshot()
   useAgentDashboardTelemetry('in_window')
 
+  // Board-scoped shortcuts (the dialog's "Open worktree" chord) read the live
+  // keybindings here; the pop-out host has no store and keeps the defaults.
+  const keybindingOverrides = useAppStore((s) => s.keybindings)
+  const terminalShortcutPolicy = useAppStore((s) => s.settings?.terminalShortcutPolicy)
+
   // In-window ack/reveal act on the local store directly — the pop-out's IPC
   // relay is gated to the pop-out renderer and would reject calls from here.
   const handleAckAgent = useCallback((paneKey: string, intent: AgentSubjectReadIntent) => {
@@ -72,6 +77,8 @@ function AgentDashboardDrawerBody({
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
       onClose={onClose}
+      keybindingOverrides={keybindingOverrides}
+      terminalShortcutPolicy={terminalShortcutPolicy}
       headerActions={
         <AgentDashboardSettingsMenu
           onSwitchToPopout={handleSwitchToPopout}
