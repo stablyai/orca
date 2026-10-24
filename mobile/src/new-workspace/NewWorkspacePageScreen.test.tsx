@@ -66,4 +66,14 @@ describe('the Create Workspace page', () => {
       '/h/laptop/session/wt-1?name=Hammerhead&created=1&warning=No+startup+terminal&executionHost=ssh%3Abox'
     )
   })
+
+  it('opens an existing project worktree without marking the session as newly created', async () => {
+    const drawer = await render()
+
+    act(() => drawer.props.onOpenWorktree('wt-primary', 'main', 'ssh:box'))
+
+    expect(handoff.replace).toHaveBeenCalledWith(
+      '/h/laptop/session/wt-primary?name=main&executionHost=ssh%3Abox'
+    )
+  })
 })

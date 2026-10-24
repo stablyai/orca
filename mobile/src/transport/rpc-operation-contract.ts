@@ -12,6 +12,7 @@ export type { RpcAcceptedResult }
 /** One of the named policies in rpc-acceptance-policies.ts, chosen per operation family. */
 export type RpcAcceptanceName =
   | 'require-result-or-throw'
+  | 'success-result-or-throw'
   | 'object-result-or-null'
   | 'method-not-found-refusal'
   | 'streaming-opener'
@@ -96,6 +97,7 @@ export type AnyRpcOperation = Pick<
 /** The verdict the declared policy yields. Not a per-call choice. */
 export type RpcVerdict<Acceptance extends RpcAcceptanceName, Value> = Acceptance extends
   | 'require-result-or-throw'
+  | 'success-result-or-throw'
   | 'require-result-or-throw-message'
   ? Value
   : Acceptance extends 'success-result-or-skip'
@@ -127,7 +129,7 @@ export type RequireResultRpcDefinition<
   Value,
   Barrier extends RpcInterpretationBarrier
 > = RpcOperationDefinition<Method, Barrier> & {
-  acceptance: 'require-result-or-throw'
+  acceptance: 'require-result-or-throw' | 'success-result-or-throw'
   read: RpcCompatibleReader<unknown, Variant, Value>
 }
 

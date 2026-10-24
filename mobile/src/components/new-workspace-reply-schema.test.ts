@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { z } from 'zod'
 import {
   newWorkspaceRepoHooksSchema,
-  newWorkspaceUiTrustSchema
+  newWorkspaceUiTrustSchema,
+  repoAddReplySchema,
+  serverDirectoryBrowseReplySchema
 } from './new-workspace-reply-schema'
 
 function reads<T>(schema: z.ZodType<T, unknown>, value: unknown): T {
@@ -87,5 +89,80 @@ describe('the trust record salvages per repo', () => {
       expect(refuses(newWorkspaceUiTrustSchema, value)).toBe(false)
       expect(reads(newWorkspaceUiTrustSchema, value)).toBe(undefined)
     }
+  })
+})
+
+describe('serverDirectoryBrowseReplySchema validates directory listings', () => {
+  it('reads a valid browse reply with directory and file entries', () => {
+    const reply = {
+      resolvedPath: '/Users/alice',
+      entries: [
+        { name: 'projects', isDirectory: true, isSymlink: false },
+        { name: 'file.txt', isDirectory: false }
+      ],
+      pathFlavor: 'posix'
+    }
+    const result = reads(serverDirectoryBrowseReplySchema, reply)
+    expect(result.resolvedPath).toBe('/Users/alice')
+    expect(result.pathFlavor).toBe('posix')
+    expect(result.entries).toEqual([
+      { name: 'projects', isDirectory: true, isSymlink: false },
+      { name: 'file.txt', isDirectory: false, isSymlink: undefined }
+    ])
+  })
+
+  it('reads a Windows browse reply', () => {
+    const reply = {
+      resolvedPath: 'C:\\Users\\alice',
+      entries: [{ name: 'code', isDirectory: true }],
+      pathFlavor: 'win32'
+    }
+    const result = reads(serverDirectoryBrowseReplySchema, reply)
+    expect(result.resolvedPath).toBe('C:\\Users\\alice')
+    expect(result.pathFlavor).toBe('win32')
+  })
+
+  it('refuses replies with missing required fields or unknown path flavor', () => {
+    expect(refuses(serverDirectoryBrowseReplySchema, { entries: [], pathFlavor: 'posix' })).toBe(
+      true
+    )
+    expect(
+      refuses(serverDirectoryBrowseReplySchema, { resolvedPath: '/', pathFlavor: 'posix' })
+    ).toBe(true)
+    expect(
+      refuses(serverDirectoryBrowseReplySchema, {
+        resolvedPath: '/',
+        entries: [],
+        pathFlavor: 'bsd'
+      })
+    ).toBe(true)
+    expect(refuses(serverDirectoryBrowseReplySchema, null)).toBe(true)
+  })
+})
+
+describe('repoAddReplySchema validates project registration reply', () => {
+  it('reads a valid repo add reply', () => {
+    const reply = {
+      repo: {
+        id: 'repo-1',
+        displayName: 'orca',
+        path: '/code/orca',
+        kind: 'git',
+        badgeColor: '#123456'
+      }
+    }
+    const result = reads(repoAddReplySchema, reply)
+    expect(result.repo.id).toBe('repo-1')
+    expect(result.repo.displayName).toBe('orca')
+    expect(result.repo.path).toBe('/code/orca')
+    expect(result.repo.kind).toBe('git')
+    expect(result.repo.badgeColor).toBe('#123456')
+  })
+
+  it('refuses replies missing repo or required repo fields', () => {
+    expect(refuses(repoAddReplySchema, {})).toBe(true)
+    expect(refuses(repoAddReplySchema, { repo: { id: 'repo-1' } })).toBe(true)
+    expect(refuses(repoAddReplySchema, { repo: null })).toBe(true)
+    expect(refuses(repoAddReplySchema, null)).toBe(true)
   })
 })

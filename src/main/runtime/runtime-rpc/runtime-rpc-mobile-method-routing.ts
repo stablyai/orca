@@ -148,6 +148,7 @@ export const EXECUTION_HOST_METHODS = [
   // Why: the phone reports a takeover out of band, the same signal the desktop renderer sends.
   'orchestration.workerTerminalUserInput',
   'projectGroup.list',
+  'repo.add',
   'repo.baseRefDefault',
   'repo.gitAvailable',
   'repo.hooks',

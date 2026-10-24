@@ -241,5 +241,18 @@ export const newWorktreeFormStyles = StyleSheet.create({
     color: colors.bgBase,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  addProjectButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button,
+    alignItems: 'center'
+  },
+  addProjectButtonText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
   }
 })

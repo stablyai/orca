@@ -16,6 +16,7 @@ type Props<T extends PickerListItem> = {
   onSelect: (item: T) => void
   onClose: () => void
   renderIcon?: (item: T) => ReactNode
+  footer?: ReactNode
 }
 
 export function PickerListDrawer<T extends PickerListItem>({
@@ -25,7 +26,8 @@ export function PickerListDrawer<T extends PickerListItem>({
   selectedId,
   onSelect,
   onClose,
-  renderIcon
+  renderIcon,
+  footer
 }: Props<T>) {
   const [closing, setClosing] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -107,6 +109,7 @@ export function PickerListDrawer<T extends PickerListItem>({
           )
         }}
       />
+      {footer}
     </BottomDrawer>
   )
 }
