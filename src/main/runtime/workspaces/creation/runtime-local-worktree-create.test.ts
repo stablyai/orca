@@ -289,4 +289,9 @@ describe('runtime branch prefix choice', () => {
     await createWorktree({})
     expect(branchSettings()).toMatchObject({ branchPrefix: '' })
   })
+
+  it('ignores the client custom prefix unless the client selects custom', async () => {
+    await createWorktree({ branchPrefixCustom: 'devel' })
+    expect(branchSettings()).not.toHaveProperty('branchPrefixCustom', 'devel')
+  })
 })
