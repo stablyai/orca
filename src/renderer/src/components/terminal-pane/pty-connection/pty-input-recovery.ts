@@ -20,6 +20,7 @@ import {
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers
 } from '../terminal-capability-replies'
+import { getComposedTerminalAppearanceTheme } from '../terminal-appearance'
 
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
 import { buildPaneTransportOptions } from './pane-transport-options'
@@ -128,6 +129,10 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages) &&
       terminalRendersInlineImages(session.pane.terminal),
     skipOscColorQueryReplies: () => !session.shouldAnswerPaneOscColorQueries(),
+    // #32242: before the first applyTerminalAppearance pass — and after options.theme
+    // legitimately loses a slot — OSC 10/11 would otherwise answer nothing at all. The
+    // fallback is exactly the theme the appearance pass will write, so the two cannot drift.
+    colorQueryFallback: () => getComposedTerminalAppearanceTheme() ?? undefined,
     answerProgramStatusQueries: () =>
       !session.runtimeEnvironmentId ||
       readCachedRuntimeEnvironmentCapability(

@@ -1,10 +1,12 @@
 import type { ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
   getBuiltinTheme,
+  getSystemPrefersDark,
   resolvePaneStyleOptions,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
@@ -107,6 +109,20 @@ export function publishTerminalViewAttributesAtAppStart(
   return send !== undefined
     ? publishTerminalViewAttributes(theme, appearance.mode, settings, send)
     : publishTerminalViewAttributes(theme, appearance.mode, settings)
+}
+
+/** The composed theme applyTerminalAppearance would write to a pane right now — the same
+ *  object, from the same settings, so a pane asked before its first theme apply (or after
+ *  options.theme legitimately lost a slot) answers OSC 10/11 with what the appearance pass
+ *  will apply a moment later instead of silence (#32242). Null until settings exist. */
+export function getComposedTerminalAppearanceTheme(): ITheme | null {
+  const settings = useAppStore.getState().settings
+  if (!settings) {
+    return null
+  }
+  const appearance = resolveEffectiveTerminalAppearance(settings, getSystemPrefersDark())
+  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
+  return composeActiveTerminalTheme(baseTheme, settings)
 }
 
 // Value equality over composed ITheme objects (flat string slots plus the extendedAnsi array); gates the options.theme write.
