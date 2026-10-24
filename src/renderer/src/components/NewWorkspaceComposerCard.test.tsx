@@ -390,14 +390,13 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(current.container.textContent).not.toContain('Create workspace')
   })
 
-  it('removes collapsed Advanced controls from the Tab order', () => {
-    current = renderCard({ advancedOpen: false, branchesEnabled: true })
-
-    const advancedPanel = [...current.container.querySelectorAll('[aria-hidden="true"]')].find(
-      (element) => element.querySelector('textarea[placeholder="Write a note"]') !== null
-    )
-
-    expect(advancedPanel?.hasAttribute('inert')).toBe(true)
+  it('does not mount collapsed Advanced controls', () => {
+    const setup = { setupControlsEnabled: true, setupConfig: pnpmInstallSetupConfig }
+    current = renderCard({ ...setup, advancedOpen: false })
+    expect(current.container.querySelector('[aria-label="Run setup command"]')).toBeNull()
+    unmountCurrent()
+    current = renderCard({ ...setup, advancedOpen: true })
+    expect(current.container.querySelector('[aria-label="Run setup command"]')).not.toBeNull()
   })
 
   it('passes folder child repos into the create-from field without a source trigger', () => {
@@ -559,7 +558,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
   it('shows a git-only branch name field in Advanced and emits manual edits', () => {
     const changes: (string | undefined)[] = []
     current = renderCard({
-      advancedOpen: false,
+      advancedOpen: true,
       branchesEnabled: true,
       branchNameOverride: 'feature/initial',
       onBranchNameOverrideChange: (next) => changes.push(next)
