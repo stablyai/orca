@@ -24,9 +24,13 @@ import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
   type AgentLaunchSettings,
-  type AgentLaunchSettingsMutation
+  type AgentLaunchSettingsMutation,
+  type AgentLaunchSettingsMutationResult
 } from '../../shared/agent-launch-settings'
-import { legacyLaunchTextUpdates } from '../../shared/agent-launch-permission-updates'
+import {
+  agentPermissionResetEntries,
+  legacyLaunchTextUpdates
+} from '../../shared/agent-launch-permission-updates'
 import { composeAgentLaunchProfile } from '../../shared/tui-agent-launch-defaults'
 import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
 import type {
@@ -166,7 +170,9 @@ export class RuntimeClientSettingsController {
     return projectAgentLaunchSettings(this.store.getSettings(), process.platform)
   }
 
-  async mutateAgentLaunch(mutation: AgentLaunchSettingsMutation): Promise<AgentLaunchSettings> {
+  async mutateAgentLaunch(
+    mutation: AgentLaunchSettingsMutation
+  ): Promise<AgentLaunchSettingsMutationResult> {
     const store = this.store
     if (!store?.getSettings || !store.updateSettings || !store.runDurableMutation) {
       throw new Error('runtime_unavailable')
@@ -180,6 +186,7 @@ export class RuntimeClientSettingsController {
       return {
         value: {
           settings: projectAgentLaunchSettings(applied, process.platform),
+          permissionResets: agentPermissionResetEntries(before, mutation, applied),
           reconcileHooks:
             updates.disabledTuiAgents !== undefined &&
             !haveSameDisabledTuiAgents(before.disabledTuiAgents, applied.disabledTuiAgents)
@@ -205,7 +212,10 @@ export class RuntimeClientSettingsController {
         )
       })
     }
-    return committed.settings
+    return {
+      settings: committed.settings,
+      ...(committed.permissionResets.length ? { permissionResets: committed.permissionResets } : {})
+    }
   }
 
   updateTerminalQuickCommands(mutation: TerminalQuickCommandMutation): TerminalQuickCommand[] {

@@ -73,6 +73,13 @@ export type AgentLaunchSettings = {
   }
 }
 
+export type AgentPermissionResetEntry = { agent: TuiAgent; previousChoice: AgentPermissionChoice }
+
+export type AgentLaunchSettingsMutationResult = {
+  settings: AgentLaunchSettings
+  permissionResets?: AgentPermissionResetEntry[]
+}
+
 export type AgentLaunchSettingsMutation =
   | { type: 'default'; agent: GlobalSettings['defaultTuiAgent']; setupOnly?: boolean }
   | { type: 'availability'; agent: TuiAgent; enabled: boolean }

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import {
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
+  AGENT_LAUNCH_PERMISSION_RESET_UNDO_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
 const rpc = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn() }))
@@ -11,7 +12,8 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 import {
   readHostAgentLaunchSettings,
-  mutateHostAgentLaunchSettings
+  mutateHostAgentLaunchSettings,
+  hostSupportsPermissionResetUndo
 } from './agent-launch-settings-transport'
 
 beforeEach(() => {
@@ -148,3 +150,25 @@ it('sends the explicit native synchronization marker only after capability verif
     syncNativeChat: true
   })
 })
+
+it.each([false, true])(
+  'preserves the request and settings envelope with optional reset Undo support: %s',
+  async (supported) => {
+    rpc.supports.mockImplementation(
+      async (_id, capability) =>
+        capability !== AGENT_LAUNCH_PERMISSION_RESET_UNDO_CAPABILITY || supported
+    )
+    const settings = projectAgentLaunchSettings({ agentPermissionDefault: 'full-access' })
+    const permissionResets = [{ agent: 'gemini', previousChoice: 'ask' }]
+    rpc.call.mockResolvedValue({ settings, ...(supported ? { permissionResets } : {}) })
+    const owner = { environmentId: 'host', pairingRevision: 17 }
+    expect(await hostSupportsPermissionResetUndo(owner)).toBe(supported)
+    const result = await mutateHostAgentLaunchSettings(owner, {
+      type: 'permission',
+      choice: 'full-access'
+    })
+    expect(result.settings).toEqual(settings)
+    expect(result.permissionResets).toEqual(supported ? permissionResets : undefined)
+    expect(rpc.call.mock.calls[0][2]).toEqual({ type: 'permission', choice: 'full-access' })
+  }
+)

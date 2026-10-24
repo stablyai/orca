@@ -73,6 +73,10 @@ export const AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY =
 // `user-arguments` and publishes `agentPermission`. Older hosts keep the permission in the text.
 export const AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY = 'settings.agent-permission.v1' as const
 
+// Host returns acknowledged reset entries and accepts exact raw saved choices for scoped Undo.
+export const AGENT_LAUNCH_PERMISSION_RESET_UNDO_CAPABILITY =
+  'settings.agent-permission.reset-undo.v1' as const
+
 // Host-advertised: reads `surface`, the user's chat or terminal pick for one launch, and refuses an
 // explicit chat it cannot open before creating anything. Older hosts strip the field.
 export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1' as const
@@ -82,6 +86,7 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY,
+  AGENT_LAUNCH_PERMISSION_RESET_UNDO_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,

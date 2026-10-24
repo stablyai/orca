@@ -16,7 +16,9 @@ import {
 } from '../../../../shared/global-settings-test-fixture'
 import { resolveTuiAgentLaunchArgs } from '../../../../shared/tui-agent-launch-defaults'
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), dismiss: vi.fn() }
+}))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: () => ({
     detectedIds: ['claude', 'gemini', 'goose'],
@@ -538,9 +540,7 @@ it.each([20, 200])('keeps Goose Environment editable after Reset/reopen (%i)', a
 it('reports one direct local permission action failure without changing saved intent', async () => {
   persist.mockRejectedValueOnce(new Error('private error'))
   render(<AgentsHarness />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Permissions' }))
-  await user.click(await screen.findByRole('menuitemradio', { name: /Full access/ }))
+  await pickGlobalPermission('Full access')
   await waitFor(() =>
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(
       'Agent settings could not be saved. Try again.'
@@ -552,3 +552,59 @@ it('reports one direct local permission action failure without changing saved in
 
 const uiWork = { entries: 0, bytes: 0 }
 const envWork = { entries: 0, bytes: 0 }
+
+async function pickGlobalPermission(name: string) {
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Permissions' }))
+  await user.click(await screen.findByRole('menuitemradio', { name: new RegExp(name) }))
+}
+
+it('Undo restores only captured choices and preserves later edits', async () => {
+  useAppStore.setState(({ settings }) => ({
+    settings: settings && {
+      ...settings,
+      agentPermissionDefault: 'ask',
+      agentPermissionOverrides: { codex: 'full-access', gemini: 'full-access' }
+    }
+  }))
+  render(<AgentsHarness />)
+  await pickGlobalPermission('Ask for approval')
+  await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(toast.success).mock.calls[0]?.[0]).toBe('Moved 2 agents to Ask for approval')
+  const options = vi.mocked(toast.success).mock.calls[0]?.[1]
+  const description = options?.description
+  const details = render(typeof description === 'function' ? description() : description)
+  expect(details.container.textContent).toBe('Codex · was Full accessGemini · was Full access')
+  const action = options?.action
+  if (
+    !action ||
+    typeof action !== 'object' ||
+    !('onClick' in action) ||
+    typeof action.onClick !== 'function'
+  ) {
+    throw new Error('Missing Undo action')
+  }
+  const undo = action.onClick
+  await pickGlobalPermission('Approve for me')
+  await waitFor(() => expect(useAppStore.getState().settings?.agentPermissionDefault).toBe('auto'))
+  const input = argumentsInput('Claude')
+  fireEvent.change(input, { target: { value: '--model opus' } })
+  fireEvent.blur(input)
+  await waitFor(() => expect(input.readOnly).toBe(false))
+  fireEvent.click(screen.getByRole('button', { name: /Remove .* and use Claude's own settings/ }))
+  await waitFor(() =>
+    expect(useAppStore.getState().settings?.agentPermissionOverrides?.claude).toBe('own')
+  )
+  const before = persist.mock.calls.length
+  render(<button onClick={(event) => undo(event)}>Undo reset</button>)
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Undo reset' }))
+  await waitFor(() => expect(persist).toHaveBeenCalledTimes(before + 2))
+  expect(useAppStore.getState().settings?.agentPermissionOverrides).toMatchObject({
+    codex: 'full-access',
+    gemini: 'full-access'
+  })
+  expect(useAppStore.getState().settings?.agentPermissionDefault).toBe('auto')
+  expect(useAppStore.getState().settings?.agentPermissionOverrides?.claude).toBe('own')
+  expect(useAppStore.getState().settings?.agentDefaultArgs?.claude).toBe('--model opus')
+  expect(toast.success).toHaveBeenCalledTimes(1)
+})

@@ -438,8 +438,16 @@
       }
     },
     "agents": {
+      "permissionResetMoved": "Moved {{count}} agents to {{mode}}",
+      "permissionResetMoved_one": "Moved {{count}} agent to {{mode}}",
+      "permissionResetMoved_other": "Moved {{count}} agents to {{mode}}",
+      "permissionResetUndo": "Undo",
+      "permissionResetWas": "was {{mode}}",
+      "permissionResetOwn": "its own settings",
+      "permissionResetMore": "and {{count}} more",
+      "permissionResetMore_one": "and {{count}} more",
+      "permissionResetMore_other": "and {{count}} more",
       "permissionsTitle": "Permissions",
-      "permissionsResetExplanation": "Picking a mode here resets agents you set separately.",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",
       "permissionEachOwnDescription": "Orca adds nothing; each CLI uses its own config",

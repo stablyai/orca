@@ -71,12 +71,6 @@ export function AllAgentsPermissionSetting({
             'What every agent may do without asking. You can set one agent differently below.'
           )}
         </p>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'settings.agents.permissionsResetExplanation',
-            'Picking a mode here resets agents you set separately.'
-          )}
-        </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1.5">
         <DropdownMenu>

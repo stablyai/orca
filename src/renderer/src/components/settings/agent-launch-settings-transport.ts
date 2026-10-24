@@ -1,11 +1,13 @@
 import type {
   AgentLaunchSettings,
-  AgentLaunchSettingsMutation
+  AgentLaunchSettingsMutation,
+  AgentLaunchSettingsMutationResult
 } from '../../../../shared/agent-launch-settings'
 import {
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY,
+  AGENT_LAUNCH_PERMISSION_RESET_UNDO_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
@@ -57,7 +59,7 @@ export async function mutateHostAgentLaunchSettings(
   owner: AgentLaunchSettingsOwner,
   mutation: AgentLaunchSettingsMutation,
   signal?: AbortSignal
-): Promise<AgentLaunchSettings> {
+): Promise<AgentLaunchSettingsMutationResult> {
   if (
     !(await runtimeEnvironmentSupportsCapability(
       owner.environmentId,
@@ -92,7 +94,7 @@ export async function mutateHostAgentLaunchSettings(
   ) {
     throw new Error('agent_launch_permission_choice_unsupported')
   }
-  const result = await callRuntimeRpc<{ settings: AgentLaunchSettings }>(
+  const result = await callRuntimeRpc<AgentLaunchSettingsMutationResult>(
     { kind: 'environment', environmentId: owner.environmentId },
     'settings.mutateAgentLaunch',
     mutation,
@@ -101,7 +103,7 @@ export async function mutateHostAgentLaunchSettings(
   if (!signal?.aborted) {
     settingsListeners.forEach((listener) => listener(owner))
   }
-  return result.settings
+  return result
 }
 
 export function hostSupportsAutoPermissions(owner: AgentLaunchSettingsOwner): Promise<boolean> {
@@ -117,5 +119,12 @@ export function hostSupportsNativeChatPermissions(
   return runtimeEnvironmentSupportsCapability(
     owner.environmentId,
     AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY
+  )
+}
+
+export function hostSupportsPermissionResetUndo(owner: AgentLaunchSettingsOwner): Promise<boolean> {
+  return runtimeEnvironmentSupportsCapability(
+    owner.environmentId,
+    AGENT_LAUNCH_PERMISSION_RESET_UNDO_CAPABILITY
   )
 }

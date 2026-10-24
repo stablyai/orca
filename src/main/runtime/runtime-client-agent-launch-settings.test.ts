@@ -82,7 +82,7 @@ describe('execution-host agent launch settings', () => {
     expect(desktop.agentDefaultArgs?.claude).toBe('--desktop-marker')
     expect(desktop.agentDefaultEnv?.claude).toEqual({ API_KEY: 'desktop-secret' })
     expect(JSON.stringify(result)).not.toContain('host-secret')
-    expect(result.environmentNames.claude).toEqual(['API_KEY', 'KEEP', 'MARKER'])
+    expect(result.settings.environmentNames.claude).toEqual(['API_KEY', 'KEEP', 'MARKER'])
   })
 
   it('mutates the latest host maps instead of replacing a stale client snapshot', async () => {
@@ -164,15 +164,13 @@ describe('execution-host agent launch settings', () => {
       setupOnly: true
     })
     await expect(controller.mutateAgentLaunch(mutation)).resolves.toMatchObject({
-      defaultTuiAgent: 'blank',
-      newWorkspaceSetupOnly: false
+      settings: { defaultTuiAgent: 'blank', newWorkspaceSetupOnly: false }
     })
     expect(host.newWorkspaceSetupOnly).toBe(false)
     await expect(
       controller.mutateAgentLaunch({ type: 'default', agent: 'blank' })
     ).resolves.toMatchObject({
-      defaultTuiAgent: 'blank',
-      newWorkspaceSetupOnly: false
+      settings: { defaultTuiAgent: 'blank', newWorkspaceSetupOnly: false }
     })
     expect(host.newWorkspaceSetupOnly).toBe(false)
   })
@@ -236,7 +234,7 @@ describe('execution-host agent launch settings', () => {
       value: 'explicit-value'
     })
     expect(host.agentDefaultEnv?.claude?.['__proto__']).toBe('explicit-value')
-    expect(result.environmentNames.claude).toContain('__proto__')
+    expect(result.settings.environmentNames.claude).toContain('__proto__')
     expect(host.agentDefaultEnv?.claude?.API_KEY).toBe('host-secret')
   })
 

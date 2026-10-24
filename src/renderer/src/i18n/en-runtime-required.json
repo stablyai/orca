@@ -3457,6 +3457,10 @@
     "agents": {
       "loadingHost": "Loading agent settings…",
       "permissionChoiceDescription": "Applies where each agent supports this mode. Change one agent below.",
+      "permissionResetMore_one": "and {{count}} more",
+      "permissionResetMore_other": "and {{count}} more",
+      "permissionResetMoved_one": "Moved {{count}} agent to {{mode}}",
+      "permissionResetMoved_other": "Moved {{count}} agents to {{mode}}",
       "permissionResetsOwnChoices": "Choosing a mode here resets the agents marked as set separately."
     },
     "browser": {

@@ -31,6 +31,41 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
 }))
 
 describe('durable execution-host launch settings', () => {
+  it('returns changed choices from the durable owner and restores unsupported raw saved intent', async () => {
+    const { store, authority, readState } = await fixture()
+    const controller = new RuntimeClientSettingsController(store)
+    await controller.mutateAgentLaunch({ type: 'permission', choice: 'ask' })
+    await controller.mutateAgentLaunch({ type: 'permission', choice: 'auto' })
+    await controller.mutateAgentLaunch({ type: 'permission', agent: 'codex', choice: 'ask' })
+    const result = await controller.mutateAgentLaunch({ type: 'permission', choice: 'full-access' })
+    expect(result.settings.agentPermission?.default).toBe('full-access')
+    expect(result.permissionResets).toEqual(
+      expect.arrayContaining([
+        { agent: 'gemini', previousChoice: 'ask' },
+        { agent: 'codex', previousChoice: 'ask' }
+      ])
+    )
+    expect(readState().settings.agentPermissionOverrides).toEqual({})
+    for (const { agent, previousChoice } of result.permissionResets ?? []) {
+      const undo = await controller.mutateAgentLaunch({
+        type: 'permission',
+        agent,
+        choice: previousChoice
+      })
+      expect(undo.permissionResets).toBeUndefined()
+    }
+    expect(readState().settings.agentPermissionDefault).toBe('full-access')
+    expect(readState().settings.agentPermissionOverrides?.gemini).toBe('ask')
+    expect(readState().settings.agentPermissionOverrides?.codex).toBe('ask')
+    authority.failNextWrite()
+    const acknowledged = vi.fn()
+    await expect(
+      controller.mutateAgentLaunch({ type: 'permission', choice: 'full-access' }).then(acknowledged)
+    ).rejects.toThrow('profile_state_write_failed')
+    expect(acknowledged).not.toHaveBeenCalled()
+    expect(readState().settings.agentPermissionOverrides?.gemini).toBe('ask')
+  })
+
   it('persists host carrier edits and reloads the same terminal and new-chat intent', async () => {
     const { store, readState } = await fixture()
     const controller = new RuntimeClientSettingsController(store)
@@ -239,7 +274,7 @@ describe('durable execution-host launch settings', () => {
     try {
       await expect(
         controller.mutateAgentLaunch({ type: 'availability', agent: 'claude', enabled: false })
-      ).resolves.toMatchObject({ disabledTuiAgents: ['claude'] })
+      ).resolves.toMatchObject({ settings: { disabledTuiAgents: ['claude'] } })
       await controller.mutateAgentLaunch({
         type: 'arguments',
         agent: 'codex',
@@ -278,7 +313,7 @@ describe('durable execution-host launch settings', () => {
     } finally {
       gate.finish.resolve()
     }
-    expect((await writing).agentDefaultArgs.claude).toBe('--durable-marker')
+    expect((await writing).settings.agentDefaultArgs.claude).toBe('--durable-marker')
     expect(readState().settings.agentDefaultArgs.claude).toBe('--durable-marker')
   })
 

@@ -19,13 +19,17 @@ const transport = vi.hoisted(() => ({
   mutate: vi.fn(),
   detection: vi.fn(),
   auto: vi.fn(),
-  native: vi.fn()
+  native: vi.fn(),
+  undo: vi.fn()
 }))
 vi.mock('./agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: transport.read,
-  mutateHostAgentLaunchSettings: transport.mutate,
+  mutateHostAgentLaunchSettings: async (...args: unknown[]) => ({
+    settings: await transport.mutate(...args)
+  }),
   hostSupportsAutoPermissions: transport.auto,
-  hostSupportsNativeChatPermissions: transport.native
+  hostSupportsNativeChatPermissions: transport.native,
+  hostSupportsPermissionResetUndo: transport.undo
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: (target: unknown) => {
@@ -65,6 +69,7 @@ beforeEach(() => {
   transport.detection.mockClear()
   transport.auto.mockReset().mockResolvedValue(true)
   transport.native.mockReset().mockResolvedValue(true)
+  transport.undo.mockReset().mockResolvedValue(false)
 })
 
 describe('host launch settings form', () => {
