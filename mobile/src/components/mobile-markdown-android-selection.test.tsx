@@ -17,6 +17,7 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 const CONTENT = [
   '# Heading',

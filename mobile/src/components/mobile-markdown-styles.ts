@@ -64,10 +64,15 @@ export const styles = StyleSheet.create({
     borderRadius: radii.input,
     padding: spacing.sm
   },
+  codeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs
+  },
+  codeCopy: { marginLeft: 'auto' },
   codeLanguage: {
     fontSize: 10,
     color: colors.textMuted,
-    marginBottom: spacing.xs,
     textTransform: 'uppercase'
   },
   codeText: {
