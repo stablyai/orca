@@ -82,6 +82,8 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  worktree create           Create a new Orca-managed worktree',
   '  worktree set              Update Orca metadata for a worktree',
   '  worktree rm               Remove a worktree from Orca and git',
+  '  worktree sleep            Sleep a workspace, keeping its agent sessions to resume later',
+  "  worktree wake             Resume a workspace's slept agents without switching the desktop view",
   '  worktree ps               Show a compact orchestration summary across worktrees',
   '',
   'Agents:',

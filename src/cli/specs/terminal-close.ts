@@ -11,7 +11,7 @@ export const TERMINAL_CLOSE_COMMAND_SPEC: CommandSpec = {
   notes: [
     'Without --all, closes one terminal pane/session; add --tab to close its whole tab.',
     'With --worktree <selector> --all, stops every terminal process owned by that workspace and durably removes its terminal tabs, layouts, and resume records.',
-    'Use workspace Sleep when the terminals and agent sessions should resume later.'
+    'Use workspace Sleep (`orca worktree sleep`) when the terminals and agent sessions should resume later.'
   ],
   examples: [
     'orca terminal close --terminal term_abc123',

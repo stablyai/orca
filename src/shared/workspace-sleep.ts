@@ -77,6 +77,9 @@ export function hasWindowOnlyWakeRecord(
   return hasSleptAgentToWake(Object.fromEntries(windowWoken), worktreeId)
 }
 
+/** `unsupported-headless`: only a window could wake these agents and the host has none. */
+export type SleepingAgentWakeReport = 'requested' | 'unsupported-headless' | 'not-applicable'
+
 /**
  * What a phone's open of a workspace woke: main resumes a sleep's running agents itself, a window
  * wakes its own hibernation, and a headless host without a window cannot wake that.
@@ -85,7 +88,7 @@ export function phoneWakeReport(
   records: Readonly<Record<string, SleepingAgentSessionRecord>> | undefined,
   worktreeId: string,
   hasWindow: boolean
-): 'requested' | 'unsupported-headless' | 'not-applicable' {
+): SleepingAgentWakeReport {
   if (hasWindow) {
     return 'requested'
   }

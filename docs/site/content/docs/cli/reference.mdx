@@ -101,7 +101,11 @@ orca worktree create --name child-task --agent codex --prompt "Investigate the f
 orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
 orca worktree set --worktree active --workspace-status in-review --unread --json
 orca worktree rm --worktree id:<worktreeId> --force --json
+orca worktree sleep --worktree active --json
+orca worktree wake --worktree id:<worktreeId> --json
 ```
+
+`worktree wake` resumes the agents a workspace sleep left running and those Agent sleep put to sleep, without switching what the desktop shows, so a script can send them work without taking over your view. Finished agents in a workspace slept with `worktree sleep` or the Sleep action resume when you open their tab instead.
 
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
 
@@ -184,8 +188,8 @@ Omit `--terminal` to target the active terminal in the current worktree. Read be
 
 Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
 terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that
-workspace, including its saved layouts and agent-resume records. Use workspace Sleep when those
-terminals should resume later. If the execution host cannot confirm that every PTY stopped, bulk
+workspace, including its saved layouts and agent-resume records. Use workspace Sleep
+(`orca worktree sleep`) when those terminals should resume later. If the execution host cannot confirm that every PTY stopped, bulk
 close returns a failing `unverifiable` result rather than claiming the processes exited.
 `terminal stop` remains only for compatibility with older tooling.
 

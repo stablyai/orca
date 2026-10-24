@@ -1,13 +1,12 @@
-import { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
+import { OrcaRuntimeWithWakeManagedWorktree } from './workspace-wake'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import {
   navigationTargetsClients,
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../shared/runtime-navigation'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { phoneWakeReport } from '../../../shared/workspace-sleep'
 import type { Repo } from '../../../shared/repo-types'
+import type { SleepingAgentWakeReport } from '../../../shared/workspace-sleep'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
@@ -49,7 +48,7 @@ import {
 } from '../launched-agent-foreground'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
 
-export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListManagedWorktrees {
+export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithWakeManagedWorktree {
   protected abstract toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
   ): Record<string, string> | undefined
@@ -72,7 +71,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     /** Mobile-scoped slept-agent wake outcome. `unsupported-headless` means no
      *  renderer holds the sleeping records (headless `orca serve`), so nothing
      *  woke — clients must not present the worktree's agents as resumed. */
-    sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable'
+    sleepingAgentWake: SleepingAgentWakeReport
   }> {
     this.assertGraphReady()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
@@ -96,8 +95,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       this.notifyWorktreesChanged(repo.id)
     }
 
-    let sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable' =
-      'not-applicable'
+    let sleepingAgentWake: SleepingAgentWakeReport = 'not-applicable'
     if (targetsHost || targetsClients) {
       // Why: inactive worktree terminal panes are renderer-owned and may not have
       // live PTYs until the desktop activates the worktree and mounts them.
@@ -116,18 +114,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       })
       await this.refreshMobileSessionPtyRecords()
       this.notifyMobileSessionTabsChanged(worktree.id)
-      // Why: main resumes a workspace sleep's agents; only a window wakes its own hibernation.
       if (opts.clientKind === 'mobile') {
-        // Not awaited: behind a running sleep it would outlast the phone's request timeout.
-        const worktreeId = worktree.id
-        void this.queueSleepingAgentWake(worktreeId)
-        // Why the repo's host: records are partitioned by it, so SSH workspaces are not missed.
-        const records = this.store?.getWorkspaceSession?.(getRepoExecutionHostId(repo))
-        sleepingAgentWake = phoneWakeReport(
-          records?.sleepingAgentSessionsByPaneKey,
-          worktreeId,
-          Boolean(this.getAvailableAuthoritativeWindow())
-        )
+        sleepingAgentWake = this.wakeSleepingAgents(repo, worktree.id)
       }
     }
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }

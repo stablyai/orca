@@ -34,7 +34,7 @@ import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
 import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../workspaces/workspace-lifecycle-commands'
-import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
+import { WORKTREE_SLEEP_WAKE_METHODS } from './worktree-sleep-wake-methods'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -66,7 +66,7 @@ export const WORKTREE_METHODS = [
       worktree: await runtime.showManagedWorktree(params.worktree)
     })
   }),
-  WORKTREE_SLEEP_METHOD,
+  ...WORKTREE_SLEEP_WAKE_METHODS,
   defineMethod({
     name: 'worktree.activate',
     permission: 'workspace',

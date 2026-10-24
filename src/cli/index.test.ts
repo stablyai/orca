@@ -220,6 +220,20 @@ describe('command aliases dispatch to the canonical handler', () => {
     )
   })
 
+  it('sends worktree sleep and wake to their runtime methods with the resolved selector', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_sleep', { worktreeId: 'wt-1' }),
+      okFixture('req_wake', { worktreeId: 'wt-1', sleepingAgentWake: 'requested' })
+    )
+
+    await main(['worktree', 'sleep', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+    await main(['worktree', 'wake', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.sleep', { worktree: 'id:wt-1' })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.wake', { worktree: 'id:wt-1' })
+  })
+
   it('still runs `terminal focus` after the handler de-duplication', async () => {
     queueFixtures(callMock, okFixture('req', { focus: { ok: true } }))
 

@@ -149,6 +149,27 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['worktree', 'sleep'],
+    summary: 'Sleep a workspace, keeping its agent sessions to resume later',
+    usage: 'orca worktree sleep --worktree <selector> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'Same as the workspace Sleep action: stops its terminals and chats and records each agent session for resume. Returns once the sleep finished; fails when a terminal stop cannot be proven.'
+    ]
+  },
+  {
+    path: ['worktree', 'wake'],
+    summary: "Resume a workspace's slept agents without switching the desktop view",
+    usage: 'orca worktree wake --worktree <selector> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'Resumes agents a workspace sleep left running and agents slept by Agent sleep, in hidden panes; the desktop keeps showing what it showed. Returns once the wake is queued, behind any sleep still running.',
+      'Finished agents in a workspace slept with `orca worktree sleep` or the Sleep action resume when their tab is opened, not here.',
+      'result.sleepingAgentWake is requested, not-applicable, or unsupported-headless (the slept agents only a desktop window can wake, and headless `orca serve` has none).'
+    ],
+    examples: ['orca worktree wake --worktree active --json']
+  },
+  {
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
     usage: 'orca worktree ps [--limit <n>] [--json]',

@@ -1448,7 +1448,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,
   'worktree.sleep': WorktreeSleepParams,
-  'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
+  'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams,
+  'worktree.wake': WorktreeSelectorOfWorktreeParams
 } as const
 
 // Why: these methods bind a schema the shared contract cannot hold because its value
