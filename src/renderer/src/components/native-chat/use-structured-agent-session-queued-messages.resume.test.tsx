@@ -63,7 +63,7 @@ function renderController(initialProps: ControllerInput = {}) {
   const stateRef = { current: { fence: 1 } }
   return renderHook(
     (input: ControllerInput) => {
-      const { mutate, write } = useStructuredAgentSessionMutate({
+      const { mutate, write, admit, capturePresentation } = useStructuredAgentSessionMutate({
         sessionId: 'session-1',
         target: { kind: 'local' },
         stateRef
@@ -77,6 +77,8 @@ function renderController(initialProps: ControllerInput = {}) {
         isWorking: false,
         composerScopeKey: undefined,
         mutate,
+        admit,
+        capturePresentation,
         editTransport: { ...NO_EDIT, write }
       })
     },
@@ -193,12 +195,12 @@ function resumedResult(resumed = true) {
 
 /** The queue controller as a pane builds it, over the real mutation. */
 function useQueue(sessionId = 'session-1', fence: number | null = 1) {
-  const { mutate } = useStructuredAgentSessionMutate({
+  const { mutate, admit, capturePresentation } = useStructuredAgentSessionMutate({
     sessionId,
     target: { kind: 'local' },
     stateRef: { current: { fence } }
   })
-  return useStructuredAgentSessionQueuedMessages({
+  const queue = useStructuredAgentSessionQueuedMessages({
     enabled: true,
     queuedMessages: [card('held')],
     queuePause: { reason: 'stopped' },
@@ -207,8 +209,11 @@ function useQueue(sessionId = 'session-1', fence: number | null = 1) {
     isWorking: false,
     composerScopeKey: undefined,
     mutate,
+    admit,
+    capturePresentation,
     editTransport: NO_EDIT
   })
+  return { ...queue, capturePresentation }
 }
 
 function renderRevealingController(sessionId = 'session-1', fence: number | null = 1) {
@@ -216,7 +221,11 @@ function renderRevealingController(sessionId = 'session-1', fence: number | null
     ({ isVisible }) => {
       const queue = useQueue(sessionId, fence)
       const submits = useStructuredNativeChatSubmitReveal(
-        { queuedMessages: queue, respond: async () => null },
+        {
+          queuedMessages: queue,
+          respond: async () => null,
+          capturePresentation: queue.capturePresentation
+        },
         vi.fn()
       )
       const scrollRef = useRef(document.createElement('div'))

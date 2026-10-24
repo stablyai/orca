@@ -19,14 +19,9 @@ type StageBeforeUnloadSyncArgs = {
   ui: Partial<PersistedUIState>
 }
 
-/** Layout-owner builds: main's quit capture of the agents of the panes a partition holds. */
 export type QuitResumeRecordsFor = (session: WorkspaceSessionState) => SleepingAgentSessionRecord[]
 
-/**
- * The partition with the quit capture's resume records written, each workspace's through the
- * record-only sleep command a live capture sends: only what the capture changed, so a wake main
- * recorded stays. Records of panes the partition lacks change nothing.
- */
+/** Apply only captured resume-record changes to existing panes so later wakes remain intact. */
 function withQuitSleepRecords(
   hostId: string | undefined,
   session: WorkspaceSessionState,
@@ -66,8 +61,7 @@ function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointR
       resolve({ ok: false })
     }, SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)
   })
-  // Why not drain to stable: Store retries a superseded staged write without
-  // chasing unrelated live mutations, which the deadline would otherwise cut off.
+  // Retry superseded staged writes without chasing unrelated mutations beyond the shutdown deadline.
   const flush = store
     .flushPendingOrThrowAsync({ signal: controller.signal, drainToStableGeneration: false })
     .then((): ShutdownCheckpointResult => ({ ok: true }))
@@ -82,10 +76,7 @@ function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointR
   })
 }
 
-/**
- * Switch point: main keeps its own layout over the window's and takes its view and facts, with its
- * quit capture's resume records written into its own first.
- */
+/** Keep main's layout, merge window view/facts and apply main's quit capture. */
 function stagedSessionForMain(
   store: Store,
   state: WorkspaceSessionState,
@@ -104,8 +95,7 @@ export function registerRendererShutdownCheckpointHandler(
   quitResumeRecordsFor: QuitResumeRecordsFor = () => [],
   reconnectFactsFor?: ReconnectFactsFor
 ): void {
-  // Why: beforeunload cannot await, so the sync reply only reports staging.
-  // Durability is joined out-of-band by paths that are about to navigate.
+  // beforeunload cannot await; sync reply confirms staging while navigation paths separately join durability.
   let pendingCheckpoint: Promise<ShutdownCheckpointResult> = Promise.resolve({ ok: true })
 
   ipcMain.on('app:stage-before-unload-sync', (event, args: StageBeforeUnloadSyncArgs) => {

@@ -11,7 +11,6 @@ import {
 
 const tempRoots: string[] = []
 
-// Why: the ranking inputs are required by design; cases below that never reach the rescan stay neutral.
 const withoutHomeRanking = {
   getSelectedAccountCodexHome: (): string | null => null,
   systemCodexHomePath: null,
@@ -96,7 +95,6 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     ).toBeNull()
   })
 
-  // Why: the sessions root is folded too, so the home side must accept the extended spelling.
   it('accepts a normal-form rollout under an extended-length trusted home', () => {
     const homePath = '\\\\?\\C:\\Users\\Example\\.codex'
     expect(
@@ -108,8 +106,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     ).toBe(homePath)
   })
 
-  // Why: the .zst sibling is derived from the persisted path, so a folded
-  // comparison copy must never leak into the probed or returned path.
+  // Comparison normalization must not change paths used for file access.
   it('follows a compressed extended-length rollout without losing the extended spelling', async () => {
     const homePath = 'C:\\Users\\Example\\.codex'
     const plainPath =
@@ -127,7 +124,6 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     ).resolves.toEqual({ homePath, transcriptPath: compressedPath })
   })
 
-  // Why: the id scan is a second call site of the same check, once per directory entry.
   it('accepts extended-length scan entries but not device-namespace entries', async () => {
     const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
     const homePath = 'C:\\Users\\Example\\.codex'
@@ -385,9 +381,7 @@ describe('findTrustedCodexSessionResume legacy-rescan home ranking', () => {
   const rolloutIn = (homePath: string): string =>
     join(homePath, 'sessions', '2026', '07', '20', `rollout-2026-07-20T15-50-19-${sessionId}.jsonl`)
 
-  // Why: one id already lives in several homes on main — the one-shot migrateLegacySessions copies
-  // each per-account rollout into the shared mirror and leaves the original. #10770 widens this to
-  // every managed home. Either way the id alone stops naming an account.
+  // Bridged rollouts can share an ID across account homes.
   const listRolloutInEveryHome = async function* (sessionsRoot: string): AsyncIterable<string> {
     yield join(sessionsRoot, '2026', '07', '20', `rollout-2026-07-20T15-50-19-${sessionId}.jsonl`)
   }
@@ -433,8 +427,6 @@ describe('findTrustedCodexSessionResume legacy-rescan home ranking', () => {
     ).resolves.toEqual({ homePath: systemHome, transcriptPath: rolloutIn(systemHome) })
   })
 
-  // Why: `/Users/…` already wins the tier-3 byte order, so the case above cannot tell the
-  // system-home tier apart from the path tie-break. Pin it with a home that sorts last.
   it('ranks the real system home above the others even when its path sorts last', async () => {
     const lateSortingSystemHome = join('/var', 'lib', 'orca', '.codex')
     await expect(
@@ -472,11 +464,7 @@ describe('findTrustedCodexSessionResume legacy-rescan home ranking', () => {
     }
   })
 
-  // Why: the mirror is the only home whose win migrates the rollout into ~/.codex
-  // (prepareLegacySharedCodexSessionResume), which is how a system-default selection resumes on the
-  // real home. 'codex-accounts' sorts before 'codex-runtime-home', so path order alone would hand
-  // that selection to an arbitrary account instead. One-shot legacy migration already copies
-  // per-account rollouts into the mirror, so both really do hold the id.
+  // The mirror permits migration to the system home for system-default resumes.
   it('prefers the shared mirror over a per-account home when the system home lacks the id', async () => {
     await expect(
       findTrustedCodexSessionResume({
@@ -507,7 +495,6 @@ describe('findTrustedCodexSessionResume legacy-rescan home ranking', () => {
         sessionId,
         transcriptPath: undefined,
         trustedCodexHomes: [windowsSystemHome, windowsAccountAHome, windowsAccountBHome],
-        // Why: settings and discovery can disagree on drive/segment case; the selection must still match.
         getSelectedAccountCodexHome: () => windowsAccountBHome.toLowerCase(),
         systemCodexHomePath: windowsSystemHome,
         sharedRuntimeCodexHomePath: null,
@@ -624,8 +611,6 @@ describe('resolveCodexSessionResumeProvenance', () => {
   }
 
   it('starts fresh for a rollout file that really exists under a home Orca no longer trusts', async () => {
-    // Why: the discriminating case — the file is present, so only the trust check can
-    // reject it. Resuming here would run the session under the selected account.
     const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
     const removed = writeRollout(sessionId)
     const trusted = mkdtempSync(join(tmpdir(), 'orca-codex-resume-provenance-'))

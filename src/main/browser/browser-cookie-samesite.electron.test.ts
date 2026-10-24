@@ -49,7 +49,6 @@ const VALID_COMBINATIONS: readonly ExpectedCookie[] = [
     secure: false,
     sameSite: 'unspecified'
   },
-  // Ablation C: neither the old decoder nor the null-default regression affects this row.
   {
     name: 'raw-minus-1-secure-1',
     rawSameSite: -1,
@@ -259,8 +258,7 @@ describe('Chromium SameSite storage enum import', () => {
   )
 
   it('rejects the synthetic SameSite=None insecure control and continues later writes', () => {
-    // Chromium refuses this shape, so real profiles cannot contain it. Keeping the synthetic row
-    // proves the fixture can observe rejection instead of making every presence assertion vacuous.
+    // A synthetic rejection proves the fixture can distinguish refused writes from successful imports.
     expect(
       fixture.afterCookies.find((cookie) => cookie.name === REJECTION_CONTROL.name)
     ).toBeUndefined()

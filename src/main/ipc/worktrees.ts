@@ -9,7 +9,6 @@ import { registerReviewBaseHandlers } from './worktrees/create/register-review-b
 import { registerWorktreeHookCheckHandler } from './hooks/register-worktree-hook-check-handler'
 import { registerWorktreeHookFileHandlers } from './hooks/register-worktree-hook-file-handlers'
 import { registerWorktreeHookInspectionHandler } from './hooks/register-worktree-hook-inspection-handler'
-import { registerWorktreeHookRunnerHandler } from './hooks/register-worktree-hook-runner-handler'
 import { registerDetectedWorktreeHandlers } from './worktrees/listing/register-detected-worktree-handlers'
 import { registerHostCatalogHandlers } from './worktrees/listing/register-host-catalog-handlers'
 import { registerWorktreeCatalogHandlers } from './worktrees/listing/register-worktree-catalog-handlers'
@@ -25,13 +24,10 @@ import {
 
 registerDetectedWorktreeScanInvalidation()
 
-// Why not module scope like the invalidation above: this needs `mainWindow`/`store`, which only
-// exist once a window is attached, and must track the current ones across re-registration.
+// Registration supplies the current window/store; dispose the previous listener before replacing them.
 let disposeSparseCheckoutCacheInvalidation: (() => void) | undefined
 
 const WORKTREE_HANDLER_CHANNELS = [
-  'worktrees:listAll',
-  'worktrees:list',
   'worktrees:listRetiredNames',
   'worktrees:listDetected',
   'worktrees:listKnownForExecutionHost',
@@ -56,7 +52,6 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:getBranchRenameFailureOutput',
   'hooks:check',
   'hooks:inspectSetupScriptImports',
-  'hooks:createIssueCommandRunner',
   'hooks:readIssueCommand',
   'hooks:writeIssueCommand'
 ] as const
@@ -76,7 +71,6 @@ export function registerWorktreeHandlers(
     worktreeRemovalsInFlight: createWorktreeRemovalRegistry()
   }
 
-  // Remove all stale registrations before installing any replacement handler.
   for (const channel of WORKTREE_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
@@ -98,7 +92,6 @@ export function registerWorktreeHandlers(
   registerWorktreeForgetHandlers(context)
   registerWorktreeMetadataHandlers(context)
   registerWorktreeHookCheckHandler(context)
-  registerWorktreeHookRunnerHandler(context)
   registerWorktreeHookInspectionHandler(context)
   registerWorktreeHookFileHandlers(context)
 }

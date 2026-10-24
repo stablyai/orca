@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSessionInfo } from '../daemon/types'
 
-// Mirrors DaemonFolderAccessResetResult; declared here so the mock is not typed by the module it
-// replaces.
+// Keep mock result types independent of the replaced module.
 type FolderAccessResetResult = {
   outcome: string
   mismatch?: { daemonScope: string; cwdClass: string; freshDaemonAccess: string } | null
@@ -53,13 +52,7 @@ vi.mock('../daemon/daemon-provider-state', () => ({
   getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock
 }))
 
-// Why: the handler uses `provider instanceof DaemonPtyRouter` to branch
-// between "plain adapter" and "router with current + legacy adapters".
-// Mock the class here so tests can construct real instances via `new
-// DaemonPtyRouter(...)` and the instanceof check returns true. The real
-// router's constructor is side-effect heavy (subscribes to adapter events),
-// so we only keep the accessors that pty-management touches — enough to
-// satisfy the runtime type check without pulling in all the wiring.
+// Preserve instanceof routing without the real router constructor's event subscriptions.
 vi.mock('../daemon/daemon-pty-router', () => {
   class DaemonPtyRouter {
     private allAdapters: unknown[]
@@ -71,7 +64,6 @@ vi.mock('../daemon/daemon-pty-router', () => {
     getAllAdapters() {
       return this.allAdapters
     }
-    // Why: the folder-access read asks the *current* adapter for the daemon identity.
     getCurrentAdapter() {
       return this.current
     }
@@ -82,9 +74,7 @@ vi.mock('../daemon/daemon-pty-router', () => {
   return { DaemonPtyRouter }
 })
 
-// Why: the handler also branches on `provider instanceof DegradedDaemonPtyProvider`
-// (for getAllAdapters) and reports `degraded` from it. The real constructor
-// subscribes to adapter events, so keep only the accessors pty-management uses.
+// Preserve degraded-provider instanceof routing without constructor event subscriptions.
 vi.mock('../daemon/degraded-daemon-pty-provider', () => {
   class DegradedDaemonPtyProvider {
     private allAdapters: unknown[]
@@ -156,10 +146,7 @@ function makeAdapter(
   sessions: DaemonSessionInfo[],
   shutdownImpl?: (id: string, immediate: boolean) => Promise<void>
 ): MockAdapter {
-  // Why: collectSessions calls adapter.listSessions() (the daemon-side RPC)
-  // and then annotates with adapter.protocolVersion. The mock returns the
-  // *internal* SessionInfo shape (no protocolVersion) since the adapter adds
-  // it. Stripping it here mirrors production behavior.
+  // listSessions returns internal SessionInfo; collectSessions adds the adapter protocol version.
   return {
     protocolVersion,
     listSessions: vi.fn(async () => sessions.map(({ protocolVersion: _pv, ...rest }) => rest)),
@@ -290,10 +277,7 @@ describe('pty:management IPC handlers', () => {
   })
 
   describe('killAll', () => {
-    // Why: the handler sleeps POLL_INTERVAL_MS between listSessions polls.
-    // Fake timers let the tests drive that loop deterministically — without
-    // them, a happy-path test that converges in ≥1 poll would take 100ms+
-    // of real wall time and the "refuses to die" test would take ~1s.
+    // Drive polling deterministically without waiting through the shutdown ladder.
     beforeEach(() => {
       vi.useFakeTimers()
     })
@@ -310,9 +294,7 @@ describe('pty:management IPC handlers', () => {
         remainingCount: number
         killedSessionIds: string[]
       }>
-      // Why: advance the loop's sleeps one at a time. Between each sleep the
-      // handler awaits collectSessions (a microtask), so we need to flush
-      // pending microtasks before advancing the next timer.
+      // Flush listSessions microtasks between polling sleeps.
       for (let i = 0; i < pollCount; i += 1) {
         await Promise.resolve()
         await Promise.resolve()
@@ -326,9 +308,7 @@ describe('pty:management IPC handlers', () => {
       const legacySessions = [makeSession('old-1', { protocolVersion: 3 })]
       const current = makeAdapter(5, [])
       const legacy = makeAdapter(3, [])
-      // Why: shutdown removes the session from the adapter's backing list so
-      // the next poll observes the shrinking set — mirrors a daemon that
-      // actually reaped the processes.
+      // Model successful shutdown by removing the session from the next inventory.
       const removeFrom = (list: DaemonSessionInfo[], id: string): void => {
         const idx = list.findIndex((s) => s.sessionId === id)
         if (idx !== -1) {
@@ -359,7 +339,6 @@ describe('pty:management IPC handlers', () => {
         remainingCount: 0,
         killedSessionIds: ['new-1', 'new-2', 'old-1']
       })
-      // Each initial session receives exactly one shutdown — no retries.
       expect(current.shutdown).toHaveBeenCalledTimes(2)
       expect(current.shutdown).toHaveBeenCalledWith('new-1', { immediate: true })
       expect(current.shutdown).toHaveBeenCalledWith('new-2', { immediate: true })
@@ -373,10 +352,7 @@ describe('pty:management IPC handlers', () => {
       current.listSessions = vi.fn(async () =>
         sessions.map(({ protocolVersion: _pv, ...rest }) => rest)
       )
-      // Why: shutdown resolves but the session never leaves listSessions —
-      // simulates a process wedged in uninterruptible sleep. After the poll
-      // window (≈6.5s, past the daemon's 5s SIGTERM→SIGKILL ladder) the
-      // handler must return remainingCount=1 rather than loop forever.
+      // Resolved shutdown does not prove exit; keep the session listed through the bounded poll window.
       current.shutdown = vi.fn(async () => {})
       const { registerDaemonManagementHandlers } = await importFresh()
       getDaemonProviderMock.mockReturnValue(await makeRouter(current))
@@ -386,29 +362,20 @@ describe('pty:management IPC handlers', () => {
       const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
 
       expect(result).toEqual({ killedCount: 0, remainingCount: 1, killedSessionIds: [] })
-      // One shutdown fired — no per-session retry. Initial-snapshot
-      // accounting means the stuck session is counted once.
       expect(current.shutdown).toHaveBeenCalledTimes(1)
     })
 
     it('does not count respawned sessions with fresh IDs against remainingCount', async () => {
-      // Why: mounted panes may re-call pty:spawn with brand-new session IDs
-      // while killAll is polling (tab remount, navigate-back). Those fresh
-      // IDs are not part of the initial snapshot and must not inflate the
-      // "refused to exit" count — the user asked to kill what was alive
-      // when the button was pressed, not to chase new spawns.
+      // Pane remounts can create new IDs during polling; count only sessions in the initial kill snapshot.
       const liveSessions = [makeSession('a'), makeSession('b')]
       const current = makeAdapter(5, [])
       let pollCalls = 0
       current.listSessions = vi.fn(async () => {
         pollCalls += 1
         if (pollCalls === 1) {
-          // Initial snapshot: a and b are alive.
           return liveSessions.map(({ protocolVersion: _pv, ...rest }) => rest)
         }
-        // First poll onward: a and b have been reaped, but the renderer
-        // respawned a fresh pane with id 'c'. 'c' was never in the initial
-        // snapshot, so it must not count as remaining.
+        // Original sessions exited; a newly spawned pane must not count as remaining.
         return [makeSession('c')].map(({ protocolVersion: _pv, ...rest }) => rest)
       })
       current.shutdown = vi.fn(async () => {})
@@ -432,9 +399,7 @@ describe('pty:management IPC handlers', () => {
       current.listSessions = vi.fn(async () =>
         sessionsList.map(({ protocolVersion: _pv, ...rest }) => rest)
       )
-      // Why: a rejecting shutdown for 'a' must not block the shutdown of 'b'.
-      // Since shutdowns fire in parallel (Promise.allSettled), both must be
-      // invoked regardless of 'a' throwing.
+      // One rejecting shutdown must not prevent other sessions from being stopped.
       const removeFrom = (id: string): void => {
         const idx = sessionsList.findIndex((s) => s.sessionId === id)
         if (idx !== -1) {
@@ -456,7 +421,6 @@ describe('pty:management IPC handlers', () => {
 
       expect(current.shutdown).toHaveBeenCalledWith('a', { immediate: true })
       expect(current.shutdown).toHaveBeenCalledWith('b', { immediate: true })
-      // 'a' rejected and is still alive → counts as remaining; 'b' reaped.
       expect(result).toEqual({
         killedCount: 1,
         remainingCount: 1,
@@ -569,7 +533,7 @@ describe('pty:management IPC handlers', () => {
         cwdClass: 'documents',
         freshDaemonAccess: 'allowed'
       })
-      // Why: evidence belongs to the daemon spawning terminals now, never a legacy adapter's.
+      // Folder-access evidence belongs to the current spawning daemon, not a legacy adapter.
       expect(getDaemonFolderAccessMismatchMock).toHaveBeenCalledWith({
         pid: 1530,
         startedAtMs: 1_700_000,
@@ -586,8 +550,7 @@ describe('pty:management IPC handlers', () => {
       return { daemonScope: 'abc123def4567890', cwdClass: 'documents', freshDaemonAccess }
     }
 
-    // Why re-probe on the poll: the fix dialog's first step completes in System Settings, and
-    // this is the only moment anything can notice that it landed.
+    // Focus-time polling must notice System Settings changes made during repair.
     it.each([['denied'], ['unknown']])(
       'reports the verdict the re-probe leaves behind, not the %s one it started from',
       async (initial) => {
@@ -680,7 +643,6 @@ describe('pty:management IPC handlers', () => {
           freshDaemonAccess: 'allowed'
         }
       })
-      // Why the current adapter: a legacy daemon's denial is not the one the user is looking at.
       expect(resetFolderAccessForDaemonMock).toHaveBeenCalledWith({
         pid: 1530,
         startedAtMs: 1_700_000,

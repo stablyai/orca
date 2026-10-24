@@ -1,18 +1,5 @@
-// Provider history for restart reconciliation, read from the Claude project JSONL.
-//
-// Why this file is the source of truth for "did Claude take it": a resume replays
-// this transcript by session id, so a message absent from it is absent from the
-// conversation Orca is about to resume. Absence here is not an inference about a
-// dead child — it is the content of the next turn's context.
-//
-// The window is anchored on the leaf uuid Orca durably recorded for the session
-// and walks back to it from the file's last transcript row, which is where a
-// resume by session id continues; Claude's marker lags a crash mid-turn.
-// Without that anchor the read has no proven start, and the branch proof is what
-// decides whether the file we just read still descends from it: a fork, a
-// compaction, a sibling branch, or a torn tail all fail the proof, and every one
-// of those makes absence meaningless. Failing it reports an inconsistent
-// boundary rather than an empty window, because the two decide opposite things.
+// Reconcile sends against the transcript Claude resumes, from the durable anchor to the file tail.
+// Unproven ancestry makes absence inconclusive, so report an inconsistent boundary, not an empty window.
 
 import { join } from 'node:path'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
@@ -35,9 +22,7 @@ import {
   replayClaudeTranscriptBranchAncestryFromJsonl
 } from './claude-transcript-branch-proof'
 
-/** The legacy-import bound, now applied PER RECORD rather than per file. The
- *  line framer buffers one record at a time, so this is the only thing standing
- *  between a pathological row and the whole file being resident. */
+// Bound each JSONL record without imposing a whole-file limit.
 const MAX_HISTORY_WINDOW_RECORD_BYTES = 16 * 1024 * 1024
 
 const INCONSISTENT: ProviderHistoryWindow = {
@@ -90,17 +75,7 @@ function rawTextParts(content: unknown): string[] | null {
   return parts
 }
 
-/**
- * A user record Orca could itself have submitted. Everything the harness injects
- * is excluded, because a fingerprint computed over machinery would claim a
- * history slot the user's message should have had.
- *
- * Attachments are excluded too, and deliberately: the transcript keeps a pasted
- * image as base64 with no path, so the `image-ref` block the submission was
- * fingerprinted from cannot be reconstructed. Measured over 2,764 genuine prompt
- * records in 12 local transcripts, every multi-block prompt was exactly
- * text + image; none carried injected content.
- */
+/** Exclude injected turns and attachments: transcript images lack the paths needed for send fingerprints. */
 function claudePromptBlocks(record: TranscriptRecord): NativeChatBlock[] | null {
   if (
     record.type !== 'user' ||
@@ -115,9 +90,7 @@ function claudePromptBlocks(record: TranscriptRecord): NativeChatBlock[] | null 
   const message = record.message
   const content =
     message && typeof message === 'object' ? (message as TranscriptRecord).content : undefined
-  // Read the RAW parts, not the decoded ones: a base64 image decodes to nothing
-  // at all, so a prompt with an attachment would otherwise pass as text-only and
-  // be fingerprinted as if the attachment had never been sent.
+  // Inspect raw content because the display decoder omits images, which would change fingerprints.
   if (Array.isArray(content) && !content.every((part) => isPlainTextPart(part))) {
     return null
   }
@@ -140,14 +113,7 @@ function claudePromptBlocks(record: TranscriptRecord): NativeChatBlock[] | null 
   return preservedBlocks
 }
 
-/**
- * The digest the submission row is GUARANTEED to carry. `admitAndRunAgentSessionMutation`
- * recomputes this exact call over the send's own body and refuses the send on a
- * mismatch, and `performSend` is the only writer of a submission row — so the
- * stored fingerprint is this function's output over the stored body, whoever
- * produced the envelope. Matching here is therefore an equality between two runs
- * of one function, not a guess about two encodings agreeing.
- */
+/** Use the same canonical fingerprint enforced at send admission. */
 function promptFingerprint(sessionId: string, blocks: NativeChatBlock[]): string {
   return computeAgentSessionPayloadFingerprint({
     method: 'agentSession.send',
@@ -159,18 +125,13 @@ function promptFingerprint(sessionId: string, blocks: NativeChatBlock[]): string
 type HistoryWindowInput = {
   providerSessionId: string
   previousLeafUuid: string | null
-  /** Orca session id: the fingerprint a submission carries is scoped to it. */
+  /** Send fingerprints are scoped to the Orca session. */
   sessionId: string
-  /** The caller must PROVE no provider child can be appending; absence proves
-   *  nothing while a turn is running. */
+  /** Absence is conclusive only when the caller proves no provider child can still append. */
   turnInFlight: boolean
 }
 
-/**
- * Sink for the ancestry replay. Only the fingerprinted item survives the call,
- * so the window holds at most one small row per anchor..leaf record — never the
- * prompt bodies it was computed from.
- */
+/** Retain fingerprints, not prompt bodies, while replaying the proven branch. */
 function createWindowCollector(input: HistoryWindowInput) {
   const byUuid = new Map<string, ProviderHistoryItem>()
   return { byUuid, onAncestorRecord }
@@ -182,8 +143,7 @@ function createWindowCollector(input: HistoryWindowInput) {
     }
     byUuid.set(uuid, {
       providerItemId: uuid,
-      // Claude echoes no client message id, so identity matching reduces to the
-      // fingerprint pass; the reconciler treats that as the weakest evidence.
+      // Claude omits client message IDs; reconciliation must use weaker fingerprint evidence.
       clientMessageId: null,
       payloadFingerprint: promptFingerprint(input.sessionId, blocks),
       identity: {
@@ -195,7 +155,6 @@ function createWindowCollector(input: HistoryWindowInput) {
   }
 }
 
-/** The chain is leaf first; a history window is oldest first. */
 function windowFromChain(
   chain: readonly string[],
   byUuid: Map<string, ProviderHistoryItem>,
@@ -229,18 +188,12 @@ export function claudeProviderHistoryWindowFromJsonl(
     })
     return windowFromChain(chain, collector.byUuid, input.turnInFlight)
   } catch {
-    // Every failure mode here — missing ancestor, sibling branch, compacted
-    // cursor, torn tail — is a boundary we cannot vouch for.
+    // Unproven ancestry cannot establish that a send is absent.
     return INCONSISTENT
   }
 }
 
-/**
- * The window for one attached session: resolve the provider's transcript, then
- * read it against the handle's durable leaf. A live child means a send queued
- * behind its running turn is not in the file yet, so liveness is carried in
- * rather than assumed — only the adapter's session map can answer it.
- */
+/** A live child can still append queued sends, so transcript absence cannot prove non-delivery. */
 export async function resolveClaudeProviderHistoryWindow(input: {
   identity: AgentSessionJournalIdentity
   accountHomePath: string
@@ -287,9 +240,7 @@ export async function readClaudeProviderHistoryWindow(
     })
     return windowFromChain(chain, collector.byUuid, input.turnInFlight)
   } catch (error) {
-    // Unreadable, unprovable, or a single record too large to frame: all of them
-    // leave the boundary unvouched for, which is not the same as an empty window.
-    // Oversize is no longer among them, so only the log separates what is left.
+    // Read, ancestry, and record-size failures leave absence inconclusive.
     console.warn('[claude-history-window] transcript unprovable; boundary inconsistent:', {
       transcriptPath: input.transcriptPath,
       sessionId: input.sessionId,

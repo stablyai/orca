@@ -19,6 +19,7 @@ import {
   readStructuredAgentSessionOlderPage
 } from './structured-agent-session-older-page-read'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
+import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 
 import type {
   StructuredAgentSessionReadSnapshot,
@@ -61,6 +62,7 @@ function createReadOwner(
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
   const activations = new Set<symbol>()
   const listeners = new Set<() => void>()
+  const observePRLinks = createStructuredAgentSessionPRLinkObserver(sessionId, target)
 
   const emit = (): void => {
     for (const listener of listeners) {
@@ -196,7 +198,10 @@ function createReadOwner(
     }
     const transport = startStructuredAgentSessionReadTransport({
       applyRequests: apply,
-      applyEvent: (event, options) => apply({ type: 'event', event, ...options }),
+      applyEvent: (event, options) => {
+        apply({ type: 'event', event, ...options })
+        observePRLinks(event)
+      },
       applyError: (message, refusal) => {
         // Once loaded, a failure with no host refusal attached is treated as lost contact: the
         // transport retries it and the chat stays as it is. A refusal is the host's answer: shown.

@@ -62,8 +62,6 @@ describe('scanAiVaultSessions OMP subagent pruning', () => {
     const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
 
     expect(result.issues).toEqual([])
-    // Only the coordinator surfaces; the task child is not a row, but it is
-    // still counted for the row's "N subagents" affordance (#9330).
     expect(result.sessions).toHaveLength(1)
     expect(result.sessions[0]).toMatchObject({
       sessionId: SESSION_ID,
@@ -75,8 +73,7 @@ describe('scanAiVaultSessions OMP subagent pruning', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-omp-depth-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
-    // Depth 0 is the workspace dir. Pruning by name alone would hide every
-    // session in a workspace that happened to be named like a session stem.
+    // Workspace names can resemble session stems; depth 0 must never be pruned.
     const workspaceDir = join(roots.ompSessionsDir, SESSION_STEM)
     await mkdir(workspaceDir, { recursive: true })
     await writeFile(
@@ -108,8 +105,7 @@ describe('scanAiVaultSessions OMP subagent pruning', () => {
     const roots = isolatedScanRoots(root)
     const workspaceDir = join(roots.ompSessionsDir, 'home-app-85dfa2f0')
     await mkdir(workspaceDir, { recursive: true })
-    // A coordinator that persisted no conversation turns: its file never
-    // changes again, so only the cached-reuse recount can see a late child.
+    // No further parent writes: only cached-reuse recount can discover a late child.
     await writeFile(
       join(workspaceDir, `${SESSION_STEM}.jsonl`),
       jsonLines([

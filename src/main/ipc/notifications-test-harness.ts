@@ -1,8 +1,7 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 
-// Why: mock state lives in this module so each split suite's `vi.mock` factory can
-// pull it in with a lazy dynamic import (hoisted factories cannot close over imports).
+// Split suites load mock state dynamically because hoisted factories cannot capture imports.
 
 /** Unconstrained spy; annotated explicitly so declaration emit never names @vitest/spy internals. */
 export type NotificationSpy = Mock<(...args: never[]) => unknown>
@@ -66,9 +65,7 @@ export function createTrustedUIRendererModuleMock(): Record<string, unknown> {
   return { getTrustedUIRendererWindow: getTrustedUIRendererWindowMock }
 }
 
-// Why: notifications.ts pulls in the tray module (for the minimized attention
-// dot), which transitively loads app-icon/electron-toolkit; stub it so these
-// suites stay focused on notification dispatch and avoid that import chain.
+// Stub tray imports to keep notification suites independent of app-icon/toolkit setup.
 export function createSystemTrayModuleMock(): Record<string, unknown> {
   return { setTrayAttention: setTrayAttentionMock }
 }

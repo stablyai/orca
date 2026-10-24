@@ -3,7 +3,6 @@ const MAX_ENTRIES = 256
 
 type RecentPtyExit = { sequence: number; recordedAt: number }
 
-// Why: one aging policy for every lease-keyed migration map, so none can grow for the process lifetime.
 export function evictStaleLeaseEntries<T extends { recordedAt: number }>(
   entries: Map<string, T>,
   now: number

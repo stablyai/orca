@@ -41,7 +41,6 @@ const FOLDER_KEY = folderWorkspaceKey(FOLDER_WORKSPACE.id)
 
 type Store = ReturnType<typeof createStore>
 
-// The moved session owns PANE in the dormant worktree and OTHER_PANE in the folder workspace.
 function manifest(): OrcadMigrationManifest {
   const dormant = dormantState()
   const session = dormant.workspaceSession!
@@ -161,7 +160,6 @@ describe('orcad migration terminal restore hints through the store', () => {
     expect(peek(restarted, PANE, DORMANT_WORKTREE_ID)).toBe('/home/me/src')
     expect(peek(restarted, PANE, FOLDER_KEY)).toBeNull()
     expect(peek(restarted, OTHER_PANE, FOLDER_KEY)).toBe('/srv/app')
-    // A pane the moved session does not hold has no worktree to scope it to.
     expect(peek(restarted, ABSENT_PANE, DORMANT_WORKTREE_ID)).toBeNull()
     restarted.consumeOrcadMigrationTerminalRestoreHint(PANE)
     expect(peek(createStore(), PANE, DORMANT_WORKTREE_ID)).toBeNull()
@@ -175,7 +173,7 @@ describe('orcad migration terminal restore hints through the store', () => {
     stageBlob(store, input, blob)
     store.commitStagedOrcadMigrationCatalog(input)
     await store.flushPendingOrThrowAsync()
-    // A crash after install but before the blob was deleted leaves it in place.
+    // Simulate a crash leaving an installed blob pending deletion.
     store.installOrcadMigrationReceivedBlobs(input)
     expect(peek(store, PANE, DORMANT_WORKTREE_ID)).toBe('/home/me/src')
     store.consumeOrcadMigrationTerminalRestoreHint(PANE)
@@ -193,7 +191,7 @@ describe('orcad migration terminal restore hints through the store', () => {
     const store = createStore()
     stageBlob(store, input, encodedHints())
     const installed = join(testState.dir, 'orcad-migration-blobs', 'installed')
-    // A file where the hint store's directory belongs makes the install's write fail.
+    // Block the hint directory with a file to force a write failure.
     writeFileSync(installed, '')
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
 

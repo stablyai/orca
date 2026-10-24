@@ -14,9 +14,6 @@ describe('BrowserSessionRegistry retired identity data', () => {
     vi.restoreAllMocks()
   })
 
-  // Why: imports before Aug 2026 persisted a synthesized source-browser UA
-  // (fork imports as a broken Chrome/1.x, Chrome imports as a valid version).
-  // Neither may ever be applied again — the engine-derived UA is the only one.
   it('ignores legacy persisted UAs, valid or broken, and applies the engine UA', async () => {
     const importedPartition = 'persist:orca-browser-session-11111111-1111-4111-8111-111111111111'
     const brokenUa =
@@ -54,7 +51,6 @@ describe('BrowserSessionRegistry retired identity data', () => {
     )
     expect(appliedUas).not.toContain(brokenUa)
     expect(appliedUas).not.toContain(validUa)
-    // Why: every partition inherits the one process identity rather than an imported value.
     expect(appliedUas.length).toBeGreaterThan(0)
     expect(appliedUas.every((ua) => ua === CLEAN_USER_AGENT)).toBe(true)
     expect(installBrowserSessionUserAgentPolicyMock).toHaveBeenCalled()
@@ -90,14 +86,12 @@ describe('BrowserSessionRegistry retired identity data', () => {
         migrationNoticePending: true
       })
     )
-    // Retaining the retired key is what makes rollback and data-loss machinery unnecessary.
+    // Preserve retired choices for rollback.
     expect(JSON.parse(fsState.files.get(META_PATH) ?? '{}').profiles[0].userAgentMode).toBe(
       'native'
     )
   })
 
-  // The notice is documented as one-time, but the legacy bytes it keys on are retained forever by
-  // design, so nothing but the explicit choice can stop a later launch from re-arming it.
   it('does not re-arm the retired-choice notice on the launch after an explicit choice', async () => {
     const profileId = '11111111-1111-4111-8111-111111111111'
     const fsState = createFsState()
@@ -125,7 +119,6 @@ describe('BrowserSessionRegistry retired identity data', () => {
     await identity.setBrowserIdentityMode('native')
     expect(identity.getBrowserIdentityMigrationNotice()).toBeNull()
 
-    // A fresh launch re-reads the record from disk; the same retired bytes are still beside it.
     identity.resetBrowserIdentityModeStoreForTests()
     browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
 
@@ -164,7 +157,6 @@ describe('BrowserSessionRegistry retired identity data', () => {
     expect(() => browserSessionRegistry.initializeBrowserSessionsFromPersistedState()).not.toThrow()
     expect(browserSessionRegistry.getProfile(profileId)?.partition).toBe(partition)
     if (failWrite) {
-      // Notice bookkeeping may fail; it must report and never gate session startup.
       await vi.waitFor(() => expect(errors).toHaveBeenCalled())
       expect(errors.mock.calls[0]?.[1]).toMatchObject({ message: 'read-only userData' })
     }

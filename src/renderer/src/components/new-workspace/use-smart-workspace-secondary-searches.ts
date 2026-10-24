@@ -11,7 +11,7 @@ import {
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import type { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
-import { restrictJiraQueryToProject } from '../../../../shared/jira-project-reference'
+import { restrictJiraQueryToProject } from '../../../../shared/jira/jira-project-reference'
 import { getBranchSearchRequest } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 

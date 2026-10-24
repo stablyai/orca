@@ -63,9 +63,7 @@ export class CodexResetCreditCoordinator {
     if (this.ledger.error) {
       return Promise.reject(this.ledger.error)
     }
-    // Why: as on the desktop, the host's ledger owns retries. A request answers as its own key's
-    // attempt, else the attempt that claimed its offer, else the account's unresolved attempt (the
-    // provider refresh after an unknown outcome moves the offer, so a retry names a newer one).
+    // Reuse unresolved account attempts even when provider refresh changes the offer revision.
     const found = this.ledger.findAttemptFor(
       idempotencyKey,
       resetScopeKey(expectedScope),
@@ -99,7 +97,7 @@ export class CodexResetCreditCoordinator {
     if (existing.promise) {
       return existing.promise as Promise<CodexResetCreditConsumeResult>
     }
-    // Resumed under its own key and scope, so the provider sees one operation.
+    // Keep the original key and scope so the provider sees one operation.
     return this.startAttempt(attemptKey, existing.expectedScope, existing)
   }
 
@@ -130,8 +128,7 @@ export class CodexResetCreditCoordinator {
       if (!expectedScope) {
         throw new Error('The managed Codex reset-credit offer is no longer available.')
       }
-      // Why: do not enter the mutation queue first; the coordinator owns that
-      // queue and nested serialization would deadlock behind this operation.
+      // consume owns the mutation queue; entering it here first would deadlock.
       const result = await this.consume(
         pendingAttempt?.idempotencyKey ?? randomUUID(),
         expectedScope
@@ -157,8 +154,7 @@ export class CodexResetCreditCoordinator {
         throw new Error('A previous reset attempt for this target still has an unknown outcome.')
       }
       const homeResolution = this.dependencies.runtimeHome.prepareForRateLimitFetch(target)
-      // Why: reject before the provider mutation — a skip must never be spent
-      // against the system-default home (#STA-4422).
+      // A skipped home cannot authorize spending a credit against system default (#STA-4422).
       if (homeResolution.kind === 'skip') {
         throw new ManagedCodexHomeTemporarilyUnavailableError()
       }
@@ -214,8 +210,7 @@ export class CodexResetCreditCoordinator {
             target: expectedScope.target,
             codexHomePath: validation.managedHomePath
           })
-        // Why: queued account selection may start as soon as this mutation resolves;
-        // capture both account selection and usage before releasing the queue.
+        // Capture selection and usage before releasing the queue to the next account mutation.
         const result: CodexResetCreditConsumedResult = {
           outcome,
           scope: expectedScope,

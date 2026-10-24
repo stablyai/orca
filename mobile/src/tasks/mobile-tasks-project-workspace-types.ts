@@ -7,7 +7,7 @@ import type {
 } from './mobile-tasks-provider-detail-types'
 import type { WorkspaceAgentChoice, SparsePreset } from './mobile-tasks-dependencies'
 import type { GitHubProjectRow } from './mobile-tasks-view-state-types'
-import type { JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 
 export type TaskItem =
   | {

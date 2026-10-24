@@ -68,8 +68,7 @@ describe('registerFilesystemHandlers', () => {
     resetFilesystemIpcMocks()
     listMarkdownDocumentsMock.mockReset().mockResolvedValue([])
     localOptionsMock.mockReset().mockReturnValue({})
-    // Reset module-level auth cache so each test starts with a fresh dirty
-    // flag — prevents stale worktree data from a prior test's cache rebuild.
+    // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
   })
 

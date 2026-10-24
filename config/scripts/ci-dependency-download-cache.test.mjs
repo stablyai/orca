@@ -373,9 +373,9 @@ describe('CI dependency download caches', () => {
     const platforms = read(workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses)
     const warm = platforms.jobs['warm-windows']
     const context = { runner: { arch }, matrix: { os } }
-    for (const step of warm.steps.filter((step) =>
-      ['Cache Windows CLI launcher', 'Build the Windows native executables'].includes(step.name)
-    )) {
+    for (const name of ['Cache Windows CLI launcher', 'Build the Windows native executables']) {
+      const step = warm.steps.find((step) => step.name === name)
+      expect(step, name).toBeDefined()
       expect(runInNewContext(step.if, context)).toBe(cli)
     }
     const consumer = workflow('wsl-orcad-e2e').jobs.wsl2
@@ -395,7 +395,10 @@ describe('CI dependency download caches', () => {
     const warmInstall = warm.steps.find((step) => step.uses === installer)
     const unitInstall = units.steps.find((step) => step.uses === installer)
     expect(warm['runs-on']).toBe('${{ matrix.runner }}')
-    expect(warm.strategy.matrix.runner).toEqual(['ubuntu-24.04-arm', pr.jobs.test.with.runner])
+    expect(warm.strategy.matrix.runner).toEqual([
+      'blacksmith-4vcpu-ubuntu-2404-arm',
+      pr.jobs.test.with.runner
+    ])
     expect(pr.jobs.preflight['runs-on']).toBe('blacksmith-8vcpu-ubuntu-2404')
     expect(pr.jobs.test.with.runner).toBe('blacksmith-8vcpu-ubuntu-2404')
     expect(units['runs-on']).toBe('${{ inputs.runner }}')

@@ -1,7 +1,3 @@
-// The install pass a connected WSL relay runs inside its guest: the managed
-// hook installers, the OpenCode plugin overlay, and the interval policy that
-// decides when a still-running relay may install again. Kept out of the
-// manager so that file stays about relay lifecycle.
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import type { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import { requestGuestOpenCodeOverlayDir } from './wsl-guest-plugin-install'
@@ -11,7 +7,6 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { openCodePluginSettingsKey } from './opencode-plugin-settings'
 import type { PluginSources } from '../../wsl-guest/plugin-overlay'
 
-/** Structural slice of WslHookRelayManagerDeps — only what an install pass uses. */
 type GuestInstallDeps = {
   installHooks: typeof installRemoteManagedAgentHooks
   installCodex: WslHookRelayManagerDeps['installCodex']
@@ -20,7 +15,6 @@ type GuestInstallDeps = {
   warn: (message: string) => void
 }
 
-/** Structural slice of the manager's DistroState this pass reads and writes. */
 type GuestInstallState = {
   distro: string
   mux?: SshChannelMultiplexer
@@ -96,8 +90,7 @@ async function installGuestHooksAndPlugins(
     settings: deps.managedHookSettings(),
     warn: deps.warn
   })
-  // Why: ship OpenCode's status plugin and record the guest overlay dir the
-  // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.
+  // Record plugin overlays for PTY environments only while this relay still owns the state.
   const kinds = requestedKinds(state)
   for (const kind of kinds) {
     if (state.mux !== mux || mux.isDisposed()) {
@@ -132,7 +125,6 @@ async function installGuestHooksAndPlugins(
   }
 }
 
-/** Rate-limited repeat of the (byte-equality idempotent) install pass on a live relay. */
 export async function maybeRerunWslRelayGuestInstall(
   deps: GuestInstallDeps,
   state: GuestInstallState

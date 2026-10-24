@@ -54,8 +54,7 @@ function sshTarget(id: string, overrides: Partial<SshTarget> = {}): SshTarget {
 async function reloadStore() {
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
-  // Why here: userData resolves through AppEnvironment, and this must point at this
-  // file's temp dir rather than the global fake's shared one, after resetModules.
+  // Reinstall this test’s userData path after resetModules before initializing Store.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
@@ -155,7 +154,6 @@ describe('worktree name retirement registry', () => {
   })
 
   it('degrades to nothing retired when the persisted map is corrupt', async () => {
-    // Why: a load failure costs the app; over- or under-retiring costs at most a name.
     const store = await createStore({ retiredWorktreeNamesByRepo: 'not-an-object' })
     expect(store.getRetiredWorktreeNameRegistry(REPO).names).toEqual([])
   })
@@ -171,8 +169,6 @@ describe('worktree name retirement registry', () => {
   })
 
   it('drops the registry when the repo is removed, matching the sparse-preset convention', async () => {
-    // Why: entries are repo-id keyed, so without this they orphan forever — a repo id is never
-    // reused, and remove/re-add mints a new one.
     const store = await createStore()
     store.addRepo({ id: REPO, path: '/repos/a', displayName: 'a', badgeColor: '', addedAt: 0 })
     store.addRetiredWorktreeName(REPO, 'nautilus')
@@ -224,7 +220,7 @@ describe('worktree name retirement registry', () => {
       await import('./worktree-name-retirement')
     await retireGeneratedWorktreeName(store, oldRepo, store.getSettings(), 'nautilus')
 
-    // The deleted workspace has no Claude bucket; Codex rollout files are not backfilled.
+    // No Claude history exists to recover this retirement, and Codex rollouts are not backfilled.
     store.removeProjectForHost({ id: REPO, executionHostId: 'local' })
     const newRepo = { ...oldRepo, id: OTHER_REPO }
     store.addRepo(newRepo)
@@ -243,7 +239,6 @@ describe('worktree name retirement registry', () => {
       await import('./worktree-name-retirement')
     await retireGeneratedWorktreeName(store, oldRepo, store.getSettings(), 'nautilus')
 
-    // Removing and re-adding the host mints a fresh row id for the same machine and account.
     store.removeProjectForHost({ id: REPO, executionHostId: getRepoExecutionHostId(oldRepo) })
     store.removeSshTarget('ssh-old')
     store.addSshTarget(sshTarget('ssh-new'))
@@ -269,14 +264,13 @@ describe('worktree name retirement registry', () => {
     const otherRepo = { ...oldRepo, id: OTHER_REPO, connectionId: 'ssh-other' }
     store.addRepo(otherRepo)
 
-    // A different machine has its own filesystem, so the spent name is free there.
     await expect(
       getRetiredNameRegistryForRepo(store, otherRepo, [otherRepo], store.getSettings())
     ).resolves.toEqual({ exhaustedTiers: 0, names: [] })
   })
 
   it('reassigning a target id carries retirements written before endpoint identity', async () => {
-    // What the shipped code wrote: a namespace whose host half is the target row id.
+    // Legacy namespace keys used target-row IDs instead of endpoint identity.
     const store = await createStore({
       retiredWorktreeNamesByNamespace: {
         'ssh:ssh-old:posix:/remote/repos/a-orca-retirement-probe': {
@@ -307,9 +301,9 @@ describe('worktree name retirement registry', () => {
       await import('./worktree-name-retirement')
     await retireGeneratedWorktreeName(store, repo, store.getSettings(), 'nautilus')
 
-    // Drop the repo row, so the namespace copy is the only thing left holding the tombstone.
+    // Remove the repo so only the namespace retains the retirement.
     store.removeProjectForHost({ id: REPO, executionHostId: getRepoExecutionHostId(repo) })
-    // The ssh-config alias is unchanged, so re-adoption matches even though the host moved.
+    // Unchanged ssh-config aliases can establish re-adoption after an endpoint moves.
     store.removeSshTarget('ssh-old')
     store.addRemovedSshTargetTombstone({
       oldTargetId: 'ssh-old',
@@ -331,8 +325,7 @@ describe('worktree name retirement registry', () => {
   })
 
   it('carries retirements across an in-place endpoint edit, which keeps the target id', async () => {
-    // Config sync rewrites host/port/username on the existing row, so no re-adoption runs and the
-    // endpoint-derived namespace key silently moves. Without a migration here the mirror strands.
+    // In-place config edits change endpoint-derived namespaces without triggering target re-adoption.
     const store = await createStore()
     store.addSshTarget(sshTarget('ssh-1', { configHost: 'builder', host: 'old.example.com' }))
     const repo = { ...REMOTE_REPO, connectionId: 'ssh-1' }
@@ -341,10 +334,9 @@ describe('worktree name retirement registry', () => {
       await import('./worktree-name-retirement')
     await retireGeneratedWorktreeName(store, repo, store.getSettings(), 'nautilus')
 
-    // The user edits ~/.ssh/config; the next import refreshes the row in place, same id.
     store.updateSshTarget('ssh-1', { host: 'new.example.com' })
 
-    // Drop the repo row the way a project remove/re-add does, leaving the mirror as the only source.
+    // Remove the repo so the namespace mirror is the only remaining retirement source.
     store.removeProjectForHost({ id: REPO, executionHostId: getRepoExecutionHostId(repo) })
     const readded = { ...REMOTE_REPO, id: OTHER_REPO, connectionId: 'ssh-1' }
     store.addRepo(readded)
@@ -354,8 +346,7 @@ describe('worktree name retirement registry', () => {
   })
 
   it('does not spend namespace slots on on-demand runtime workspaces', async () => {
-    // Each provision reaches a discarded filesystem under a fresh address, so a mirror written here
-    // could never be read back — it would only consume the cap and evict real projects' tombstones.
+    // Disposable runtime filesystems cannot reuse retirements; mirroring them would evict durable hosts’ entries.
     const store = await createStore()
     const runtimeId = getRuntimeOwnedSshTargetId('vm-1')
     store.addSshTarget({
@@ -368,7 +359,6 @@ describe('worktree name retirement registry', () => {
       await import('./worktree-name-retirement')
     await retireGeneratedWorktreeName(store, repo, store.getSettings(), 'nautilus')
 
-    // The repo-id row still records it for the live session; the shared namespace map does not.
     expect(store.getRetiredWorktreeNameRegistry(REPO).names).toEqual(['nautilus'])
     const namespaceKey = getRemoteRetirementNamespaceKey(repo, store.getSettings(), (id) =>
       store.getSshTarget(id)
@@ -377,8 +367,7 @@ describe('worktree name retirement registry', () => {
   })
 
   it('does not carry retirements forward when an on-demand runtime target is reprovisioned', async () => {
-    // Each provision mints a fresh address onto a discarded filesystem, so the old names collide
-    // with nothing. Copying per run would also churn the namespace cap out from under real hosts.
+    // Reprovisioned filesystems need no prior retirements; copying them only churns the namespace cap.
     const store = await createStore()
     const runtimeId = getRuntimeOwnedSshTargetId('vm-1')
     store.addSshTarget({
@@ -403,8 +392,7 @@ describe('worktree name retirement registry', () => {
 
   it('keeps a live sibling target its retirements when another row on the same endpoint rotates', async () => {
     const store = await createStore()
-    // Two rows, one endpoint: nothing dedupes SSH targets by host|port|username, so the endpoint
-    // bucket is shared and is not owned by whichever row happens to rotate.
+    // Distinct target rows may share an endpoint bucket; rotating one must preserve its sibling’s entries.
     store.addSshTarget(sshTarget('ssh-x', { configHost: 'builder', host: 'old.example.com' }))
     store.addSshTarget(sshTarget('ssh-y', { host: 'old.example.com' }))
     const sibling = { ...REMOTE_REPO, connectionId: 'ssh-y' }
@@ -413,8 +401,7 @@ describe('worktree name retirement registry', () => {
       await import('./worktree-name-retirement')
     await retireGeneratedWorktreeName(store, sibling, store.getSettings(), 'nautilus')
 
-    // `ssh-x` is removed and re-imported with a moved HostName; its alias still matches, so
-    // re-adoption rotates it onto a new endpoint.
+    // Re-adopt the same config alias at a new endpoint.
     store.removeSshTarget('ssh-x')
     store.addRemovedSshTargetTombstone({
       oldTargetId: 'ssh-x',
@@ -428,8 +415,7 @@ describe('worktree name retirement registry', () => {
     store.addSshTarget(sshTarget('ssh-x-new', { configHost: 'builder', host: 'new.example.com' }))
     store.reassignSshTargetId('ssh-x', 'ssh-x-new')
 
-    // `ssh-y` never moved. Drop its repo row the way a project remove/re-add does, so the namespace
-    // copy is the only thing left holding the tombstone.
+    // The sibling stays at its original endpoint; remove its repo so only the namespace holds the retirement.
     store.removeProjectForHost({ id: REPO, executionHostId: getRepoExecutionHostId(sibling) })
     const readded = { ...REMOTE_REPO, id: OTHER_REPO, connectionId: 'ssh-y' }
     store.addRepo(readded)
@@ -439,8 +425,7 @@ describe('worktree name retirement registry', () => {
   })
 
   it('shares one retirement bucket across SSH repos whose target row is gone', async () => {
-    // No target row means no endpoint to compare. Retirement prefers spending one name out of the
-    // pool over reissuing a cwd whose agent history is still on disk, so these share a bucket.
+    // Without endpoint identity, share a conservative bucket rather than reissue a name with history on disk.
     const store = await createStore()
     const oldRepo = { ...REMOTE_REPO, connectionId: 'ssh-old' }
     store.addRepo(oldRepo)
@@ -458,8 +443,7 @@ describe('worktree name retirement registry', () => {
   })
 
   it('bounds the namespace map instead of growing it for the life of the profile', async () => {
-    // Nothing prunes this map per repo — surviving a project removal is the point — so the store
-    // write is the only place the cap can be applied.
+    // Namespaces outlive repo removal, so enforce their cap at the write boundary.
     const store = await createStore()
     for (let index = 0; index <= MAX_RETIREMENT_NAMESPACES; index += 1) {
       store.mergeRetiredWorktreeNamesForNamespace(`local:posix:/w/${index}`, ['nautilus'])
@@ -499,9 +483,7 @@ describe('worktree name retirement registry', () => {
   })
 
   it('compacts a completed tier instead of evicting, and still reports its names as retired', async () => {
-    // The registry is a correctness guarantee, so it can never drop a name. It stays bounded by
-    // folding a fully spent tier into the watermark — the one case where dropping the entries
-    // loses nothing, because every name in that tier is spent.
+    // A fully spent tier can compact into a watermark without forgetting any retired name.
     const store = await createStore()
     store.mergeRetiredWorktreeNames(REPO, POOL.slice(0, -1))
     expect(store.getRetiredWorktreeNameRegistry(REPO)).toMatchObject({ exhaustedTiers: 0 })
@@ -516,8 +498,7 @@ describe('worktree name retirement registry', () => {
   })
 
   it('keeps out-of-order higher-tier names when a lower tier compacts', async () => {
-    // A create-time collision can spend `nautilus-2` while tier 1 is still open, so tiers do not
-    // fill in order and compacting tier 1 must not take the tier-2 name with it.
+    // Collisions can spend higher-tier names before lower tiers finish; compaction must preserve them.
     const store = await createStore()
     store.addRetiredWorktreeName(REPO, 'nautilus-2')
     store.mergeRetiredWorktreeNames(REPO, POOL)
@@ -580,8 +561,7 @@ describe('worktree name retirement registry', () => {
   })
 
   it('ignores a hand-written watermark that outruns the names it claims', async () => {
-    // Why not trust it: over-retiring costs a name, and the watermark is the cheapest thing to
-    // hand-edit. Clamping garbage to none keeps a bad value from silencing the whole pool.
+    // Reject malformed watermarks so a hand-edited value cannot silence the whole name pool.
     const store = await createStore({
       retiredWorktreeNamesByRepo: { [REPO]: { exhaustedTiers: -3, names: ['nautilus'] } }
     })

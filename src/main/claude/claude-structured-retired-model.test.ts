@@ -13,8 +13,7 @@ import {
 } from './claude-structured-session-test-support'
 
 const RETIRED = 'claude-retired-1'
-/** The rows Claude Code 2.1.280 lists for a child launched with `--model claude-bogus-9`: its own
- *  native rows, then one for the launched id, named by that id. */
+/** Claude Code 2.1.280 lists native rows plus the custom model passed at launch. */
 const NATIVE_OPUS = { value: 'opus', resolvedModel: 'claude-opus-5', displayName: 'Opus' }
 const LAUNCHED_ROW = {
   value: RETIRED,
@@ -140,7 +139,6 @@ describe('a live child still launched with a retired model', () => {
     answerReset()
     await tick()
 
-    // The pick goes out after the reset, so the CLI runs it; the reset's bookkeeping stands aside.
     expect(setModelCalls(claude).map((call) => call.params?.model)).toEqual([undefined, 'opus'])
     const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(options.current.model).toBe('opus')

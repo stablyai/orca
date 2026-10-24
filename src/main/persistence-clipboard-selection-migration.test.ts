@@ -11,7 +11,6 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -99,8 +98,7 @@ describe('Store', () => {
   })
 
   it('migrates the legacy OSC 52 clipboard disabled default to enabled', async () => {
-    // Why this migration exists: the old off default was persisted for every
-    // profile, so without the one-shot flip #10567 would only fix new installs.
+    // Migrate existing profiles too; changing the default alone affects only new installs (#10567).
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -117,12 +115,7 @@ describe('Store', () => {
   })
 
   it('persists the OSC 52 clipboard migration stamp back to disk', async () => {
-    // Why round-trip a store first: on a bare legacy profile ~30 other migrations also
-    // set loadNeedsSave, so the save happens regardless and this migration's own dirty
-    // flag goes untested. Re-loading a profile the new build already wrote leaves OSC 52
-    // as the only unmigrated key — which is exactly the upgrade case that matters.
-    // Why no flush(): flush() writes unconditionally, so only the debounced load-path
-    // save proves this migration marked the state dirty by itself.
+    // Settle other migrations first, then rely on the debounced save to prove this migration dirties state.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -143,8 +136,6 @@ describe('Store', () => {
     vi.useFakeTimers()
     try {
       const store = await createStore()
-      // Why over-advance: the debounce is exactly 1000ms, so an exact-fit advance turns a
-      // future debounce raise into a confusing no-write instead of a loud failure.
       vi.advanceTimersByTime(5000)
       await store.waitForPendingWrite()
     } finally {
@@ -197,7 +188,7 @@ describe('Store', () => {
   })
 
   it('leaves the OSC 52 notice disarmed for a profile with no persisted value', async () => {
-    // Why: the notice explains an overridden choice; a fresh profile made no choice.
+    // Fresh profiles made no choice for the migration notice to explain.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -213,9 +204,7 @@ describe('Store', () => {
   })
 
   it('keeps the OSC 52 notice armed on disk until the renderer clears it', async () => {
-    // Why the disk assertion: the flip happens during load, before any window exists, and
-    // once the settings stamp lands the arming predicate is false forever — so the on-disk
-    // ui flag is the only thing that survives a crash before the toast renders.
+    // Persist the pending notice before stamping migration complete so a crash cannot lose it.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -239,7 +228,6 @@ describe('Store', () => {
     reloaded.updateUI({ osc52ClipboardDefaultOnNoticePending: false })
     reloaded.flush()
     const cleared = await createStore()
-    // Why re-check after the stamp: a cleared notice must not be resurrected by a later load.
     expect(cleared.getUI().osc52ClipboardDefaultOnNoticePending).toBe(false)
   })
 

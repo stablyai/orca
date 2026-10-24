@@ -6,13 +6,9 @@ import {
   registrableFamily
 } from './browser-cookie-import-policy'
 
-// Why this file exists: the public-suffix engine decides which cookies share a removal scope, so a
-// library swap silently re-partitions the jar. These cases pin the boundaries that moved (or had to
-// be held) when this moved off `psl`.
+// Suffix-list changes can widen removal scopes and destroy unrelated sessions.
 describe('registrable family across public-suffix sections', () => {
   it('keeps each PRIVATE-section tenant in its own family', () => {
-    // psl and tldts disagree here unless allowPrivateDomains is set; without it every
-    // *.github.io tenant collapses into one family and a replace-mode import clears siblings.
     expect(registrableFamily('foo.github.io')).toBe('foo.github.io')
     expect(registrableFamily('bar.github.io')).toBe('bar.github.io')
     expect(registrableFamily('bar.s3.amazonaws.com')).toBe('bar.s3.amazonaws.com')
@@ -23,7 +19,6 @@ describe('registrable family across public-suffix sections', () => {
     expect(registrableFamily('com')).toBeNull()
     expect(registrableFamily('co.uk')).toBeNull()
     expect(registrableFamily('github.io')).toBeNull()
-    // Absent from psl 1.15.0's 2024 snapshot; naming it a family would preserve a whole suffix.
     expect(registrableFamily('api.br')).toBeNull()
     expect(registrableFamily('seg.ar')).toBeNull()
   })
@@ -53,18 +48,13 @@ describe('registrable family across public-suffix sections', () => {
   })
 })
 
-// Why: `.local` is absent from the PSL, and the two libraries disagreed about what that means. psl
-// returned an all-null parse, so every `*.orca.local` host was its own family; tldts applies the
-// default single-label rule and stops at `orca.local`, which is what Chromium treats as registrable.
-// The widening is deliberate, so it is pinned here rather than left to the next library bump.
+// Unlisted .local uses a two-label family boundary.
 describe('unlisted .local suffix', () => {
   it('stops at the two-label boundary', () => {
     expect(registrableFamily('app.orca.local')).toBe('orca.local')
     expect(registrableFamily('orca.local')).toBe('orca.local')
   })
 
-  // The consequence of the boundary move: a replace-mode import of one host now also clears
-  // non-host-only cookies scoped to `.orca.local`, which every sibling `*.orca.local` host shares.
   it('pulls the shared parent into the removal scope', () => {
     const scope = importedDomainScope(['app.orca.local'])
 
@@ -73,9 +63,7 @@ describe('unlisted .local suffix', () => {
   })
 })
 
-// Why: psl's 2024 snapshot carried `compute.amazonaws.com` as a literal PRIVATE suffix; the current
-// list only has the `*.compute.amazonaws.com` wildcard, so the bare host is an ordinary ICANN domain
-// now. That moves a real host shape from "no family" to `amazonaws.com`.
+// Only *.compute.amazonaws.com is a suffix; the bare host belongs to amazonaws.com.
 describe('suffix entries that changed shape upstream', () => {
   it('reads bare compute.amazonaws.com as a registrable domain', () => {
     expect(registrableFamily('compute.amazonaws.com')).toBe('amazonaws.com')

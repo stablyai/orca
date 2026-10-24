@@ -100,7 +100,10 @@ describe('Codex approval ownership', () => {
   it('reconciles reviewer ownership before a child-first auto-reviewed approval', () => {
     const transcriptPath = writeRollout({ reviewer: 'auto_review' })
 
-    expect(childPermissionRequest(transcriptPath)?.payload.state).toBe('working')
+    expect(childPermissionRequest(transcriptPath)?.payload).toMatchObject({
+      state: 'working',
+      subagents: [{ id: 'child-after-relay-restart', agentType: 'worker', state: 'working' }]
+    })
   })
 
   it('keeps a child-first manual approval waiting after reviewer reconciliation', () => {

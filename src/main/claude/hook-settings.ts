@@ -118,7 +118,6 @@ export function getRemoteManagedEventCommand(eventName: string, scriptPath: stri
     : getRemoteManagedCommand(scriptPath)
 }
 
-/** `nativeHookPath` is the installed orca-agent-hook.exe, or null to keep the `.cmd` form. */
 export function getManagedLifecycleHook(
   scriptPath: string,
   settings = CLAUDE_HOOK_SETTINGS,
@@ -127,8 +126,7 @@ export function getManagedLifecycleHook(
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
-  // Why a bare exe path plus a plain word: Git Bash, PowerShell and CreateProcess all start
-  // `<exe> claude` the same way, without cmd.exe.
+  // Native exe plus agent name launches consistently across Git Bash, PowerShell and CreateProcess.
   const nativeCommand = nativeHookPath ? wrapWindowsDirectCmdHookCommand(nativeHookPath) : null
   if (nativeCommand) {
     const agent = getWindowsNativeHookAgent(scriptPath)
@@ -185,7 +183,7 @@ export function hasSameManagedHookInvocation(
   )
 }
 
-/** Per planned event, the index of the first of `formsFor(event)` it carries; unmatched are missing. */
+/** Report the first matching invocation form per event, or list the event as missing. */
 export function findManagedEventHookForms(
   config: HooksConfig,
   eventNames: string[],
@@ -251,8 +249,7 @@ export function applyManagedHooks(
 
 export type StatusLineSlotState = 'managed' | 'user' | 'empty'
 
-// Why: install policy needs "user owns the slot" vs "slot is empty" vs "ours" — an empty slot
-// after a prior install means the user deleted the managed entry, which install must respect.
+// An empty slot after a prior install is a user opt-out, distinct from a fresh empty slot.
 export function getStatusLineSlotState(
   config: HooksConfig,
   scriptFileName = getStatusLineScriptFileName()
@@ -267,13 +264,11 @@ export function getStatusLineSlotState(
   return isManagedCommand(currentCommand) ? 'managed' : 'user'
 }
 
-// Why: records that the managed statusline was installed once, so a later empty slot reads as user opt-out.
 export function getStatusLineInstallMarkerPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return getSharedManagedScriptPath(`${getStatusLineScriptBaseName(settings)}.installed`)
 }
 
-// Why: statusLine is a single settings slot, not a hooks array — never overwrite a
-// user-owned status line; the usage feed then simply falls back to the OAuth poll.
+// A user-owned status line takes precedence over Orca's usage feed.
 export function applyManagedStatusLine(
   config: HooksConfig,
   command: string,

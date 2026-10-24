@@ -17,7 +17,6 @@ import {
 import { _resetBitbucketRepoRefCache } from './repository-ref'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
-/** Serve the remote URL plus the #9171 default-branch resolver probes. */
 function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] === 'remote') {
@@ -134,8 +133,6 @@ describe('Bitbucket client', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    // Why: a merged branch match is history. Returning it made eligibility
-    // report "a pull request already exists" and blocked the branch's next PR.
     await expect(
       getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login')
     ).resolves.toBeNull()
@@ -154,8 +151,6 @@ describe('Bitbucket client', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    // Why: only merged matches are hidden. Hiding declined too made a declined
-    // PR permanently invisible off the default branch, unlike every other provider.
     await expect(
       getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login')
     ).resolves.toMatchObject({ number: 9, state: 'closed' })
@@ -167,8 +162,6 @@ describe('Bitbucket client', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    // Why: an unauthenticated query 404s on private repos, which would read as
-    // "no pull request" and offer Create for a branch that already has one.
     await expect(
       getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login')
     ).resolves.toBeNull()
@@ -290,10 +283,7 @@ describe('Bitbucket client', () => {
     const fetchMock = vi.fn(async () => Response.json({ error: 'forbidden' }, { status: 403 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    // The swallowing variant collapses a real failure into a false "no PR".
     await expect(getBitbucketPullRequestForBranch('/repo', 'feature/bitbucket')).resolves.toBeNull()
-    // The throwing variant makes the failure visible so eligibility records
-    // `unavailable` rather than a false "No pull request found".
     await expect(
       getBitbucketPullRequestForBranchOrThrow('/repo', 'feature/bitbucket')
     ).rejects.toThrow(/Bitbucket request failed/)

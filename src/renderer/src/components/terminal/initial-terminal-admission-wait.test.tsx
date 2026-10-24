@@ -27,6 +27,7 @@ vi.mock('@/store', () => ({
       // A switch-on chat open places the tab in the workspace's root group.
       ensureWorktreeRootGroup: () => 'group-1',
       createUnifiedTab: mocks.createUnifiedTab,
+      readLocalAgentInventory: () => ({ ids: null, state: 'pending' }),
       setActiveTabType: vi.fn()
     })
   })

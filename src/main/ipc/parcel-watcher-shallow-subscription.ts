@@ -10,11 +10,7 @@ export type ShallowWatcherSubscription = {
   unsubscribe: () => Promise<void>
 }
 
-// Why: fs.watch binds to an inode, not a path, and reports nothing when that
-// inode is replaced — no error, no events, permanently (verified on Linux and
-// Windows). Git replaces `.git/logs` on some maintenance paths, and a repo
-// re-clone replaces the common dir itself, so the binding is re-checked on a
-// bounded cadence. Two stats per interval is the whole steady-state cost.
+// fs.watch can silently stay bound to a replaced inode; periodically check root and nested directory identity.
 const REBIND_CHECK_INTERVAL_MS = 30_000
 
 export function startShallowWatcher(
@@ -23,8 +19,7 @@ export function startShallowWatcher(
   onEvents: (events: ParcelWatcherEvent[]) => void,
   onError: (error: Error) => void
 ): ShallowWatcherSubscription {
-  // Why: on macOS fs.watch(dir) is a recursive FSEvents stream, so a `.git`
-  // root would stream every object, ref and linked-worktree write to fseventsd.
+  // macOS directory watches stream recursive .git churn; watch individual metadata files instead.
   return process.platform === 'darwin'
     ? startShallowFileWatcher(rootPath, relativePaths, onEvents, onError)
     : startShallowDirectoryWatcher(rootPath, relativePaths, onEvents, onError)
@@ -97,8 +92,7 @@ export function startShallowDirectoryWatcher(
         if (parent === '' && pathsByDirectory.has(name)) {
           const nestedNames = pathsByDirectory.get(name)
           if (nestedNames) {
-            // 'rename' is a create/delete of the nested dir itself, so the
-            // existing binding (if any) is stale and must be replaced.
+            // Rename may replace the directory inode; discard the old binding.
             watchDirectory(name, nestedNames, eventType === 'rename')
             emitUpdates(name, nestedNames)
           }
@@ -153,8 +147,7 @@ export function startShallowDirectoryWatcher(
     if (bound === identity) {
       return
     }
-    // Either the directory appeared after we started, or it was replaced while
-    // watched. Both leave the old binding deaf, so rebind and resync.
+    // Appeared or replaced directories need a fresh binding and resync.
     if (!watchDirectory(parent, fileNames, true)) {
       return
     }
@@ -173,10 +166,7 @@ export function startShallowDirectoryWatcher(
   rebindTimer.unref?.()
 
   for (const [parent, fileNames] of pathsByDirectory) {
-    // Why: read identity BEFORE binding. If the directory is replaced in the gap,
-    // the recorded identity is stale and the first sweep rebinds — the harmless
-    // direction. Reading after would pin the dead inode's watcher to the new
-    // identity, and the sweep would then never rebind it.
+    // Read identity before binding: a racing replacement then causes a safe rebind instead of pinning a dead watch to the new inode.
     const identityBeforeBind = directoryIdentitySync(parent)
     watchDirectory(parent, fileNames)
     if (watchers.has(parent) && identityBeforeBind !== null) {

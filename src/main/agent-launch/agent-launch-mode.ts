@@ -1,23 +1,4 @@
-/**
- * Which surface a launch gets — a structured chat session or a terminal agent — decided from the
- * caller's explicit pick, else the user's own settings, and the executing host's answer.
- *
- * A caller may name the surface (`agent.launch`'s `surface`). Without one, the user's default
- * applies to every launch: an orchestration worker, a mobile create, a CLI create, a renderer tab.
- * That default is a preference rather than a demand, so a launch it cannot apply to falls back to a
- * PTY terminal and the receipt says which mode ran and why — a routine launch must never fail
- * because the user happens to have a chat preference on. An explicit chat is a demand: one this
- * host conclusively refuses before launch effects is rejected. A created workspace keeps its
- * terminal fallback.
- *
- * The settings default and the per-launch feasibility both come from
- * `shared/structured-native-chat-launch-route`. This module supplies placement facts and formats
- * the receipt; it does not own a second feasibility policy.
- *
- * Callers differ only in what they call the thing being started, so the receipt's noun is
- * parameterized. Orchestration says "worker" because its receipts are read alongside dispatch
- * records; every other surface says "chat session" / "terminal agent".
- */
+/** Chat defaults may fall back; explicit chat is refused only conclusively before launch effects. */
 
 import { requestsCwdOutsideWorkspaceRoot } from '../../shared/terminal-startup-cwd'
 import type {
@@ -40,21 +21,15 @@ import type { AgentLaunchSurface } from '../../shared/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
 
-// The receipt is part of the launch contract, so it is declared with the rest of it; re-exported
-// here because this module is where the decision that fills it lives.
 export type { AgentLaunchMode, AgentLaunchModeReason, AgentLaunchModeReceipt }
 
 type AgentLaunchDowngradeReason = Exclude<AgentLaunchModeReason, 'user_default' | 'requested'>
 
-/** What this caller calls the thing it is starting, so one decision serves every surface without
- *  a receipt reading "worker" on a phone. */
+/** Caller-specific receipt wording, shared across desktop, mobile and orchestration. */
 export type AgentLaunchModeVocabulary = {
-  /** e.g. 'a structured chat session worker' */
   structured: string
-  /** e.g. 'a terminal agent worker' */
   terminal: string
-  /** Per-reason wording a surface states differently. Orchestration names the `--terminal` flag
-   *  in its reused-terminal detail, which would be meaningless in a phone's receipt. */
+  /** Override wording such as orchestration’s --terminal guidance for the calling surface. */
   detailOverrides?: Partial<Record<AgentLaunchDowngradeReason, string>>
 }
 
@@ -65,28 +40,18 @@ export const DEFAULT_LAUNCH_VOCABULARY: AgentLaunchModeVocabulary = {
 
 export type AgentLaunchModeSettings = Partial<NativeChatDefaultSettings>
 
-/** The placement facts the decision reads. `worktree`, `model` and `effort` are deliberately not
- *  here: a structured launch honours all three, and a placement flag must never imply a mode. */
 export type AgentLaunchModePlacement = {
   agent?: string
   /** A connected execution server; absent means local. */
   on?: string
-  /** An existing terminal being reused. */
   terminal?: string
-  /** Which kind of workspace the launch lands in, derived by the host from the workspace it
-   *  resolved — never accepted from a caller, which would let one route around this decision.
-   *  Absent means the kind was never established, and is not read as any particular kind. */
+  /** Derived by the host; absent means unknown, not a default workspace kind. */
   workspaceKind?: WorkspaceLaunchKind
-  /** A requested start directory. It belongs here, unlike `model` or `effort`, because a structured
-   *  session has no way to apply one — it runs in its workspace — so honouring it and honouring the
-   *  chat preference are mutually exclusive rather than merely awkward. Read against
-   *  `workspacePath`: a cwd that names the root asks for nothing and decides nothing. */
+  /** Structured sessions cannot honor a cwd outside their workspace root. */
   cwd?: string
-  /** The root of the workspace the launch lands in, when the host has resolved it. Without it a
-   *  requested `cwd` remains unresolved until materialization. */
+  /** Missing until materialization; a requested cwd cannot be classified without it. */
   workspacePath?: string
-  /** False when the client asking for the launch cannot show this agent's chat; absent for the
-   *  host's own callers, which can. */
+  /** False if the client cannot display this chat; host callers may omit it. */
   callerRendersStructured?: boolean
 }
 
@@ -117,23 +82,17 @@ const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeRe
   'client-capability': 'structured_sessions_unavailable'
 }
 
-/** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
 const HOST_SUPPORT_REASON: Record<'agent' | 'remote' | 'wsl', AgentLaunchDowngradeReason> = {
   agent: 'structured_unsupported_on_host',
   remote: 'remote_execution_host',
   wsl: 'wsl_execution_runtime'
 }
 
-/**
- * First half of the decision: the user's default, plus every feasibility fact knowable before a
- * workspace is resolved.
- */
+/** Apply shared feasibility policy to facts available before resolving the workspace. */
 export function decideAgentLaunchMode(args: {
   placement: AgentLaunchModePlacement
   settings: AgentLaunchModeSettings | null | undefined
-  /** Host-internal: the caller's contract is a terminal handle, so the chat default cannot apply. */
   terminalOnly?: boolean
-  /** The caller's explicit pick, which replaces the settings default for this launch. */
   surface?: AgentLaunchSurface
   vocabulary?: AgentLaunchModeVocabulary
 }): AgentLaunchModeReceipt {
@@ -162,8 +121,7 @@ export function decideAgentLaunchMode(args: {
       detail: `Started ${vocabulary.terminal}, the default for new agent tabs in your settings.`
     }
   }
-  // A worker placed on another runtime starts through federation, which creates terminal agents
-  // only; this host cannot answer for that runtime's structured support.
+  // Federated launches create terminals; this host cannot establish the remote’s chat support.
   if (placement.on) {
     return blocked('remote_execution_host')
   }
@@ -173,20 +131,15 @@ export function decideAgentLaunchMode(args: {
     executionHostId: 'local',
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
-    // This host is the one that will run the agent, so its own registrations answer.
     hostStructuredAgents: REGISTERED_STRUCTURED_AGENTS,
-    // The host resolves the floating workspace to its configured directory; create-support still
-    // answers for the resolved workspace, including whether it uses WSL.
+    // Resolved-workspace support still decides runtime constraints such as WSL.
     ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
-    // Mirrors the renderer's own route input (`agent-launch-route-input.ts`): a cwd is terminal-only
-    // when it names somewhere other than the workspace root, by the same shared rule.
     startsOutsideWorkspaceRoot:
       cwdRelation === 'custom' || (surface !== 'chat' && cwdRelation === 'unknown')
   })
   if (!support.supported) {
     return blocked(BLOCKER_REASON[support.blocker])
   }
-  // A chat its caller can neither show nor close is no launch; that caller gets the terminal.
   if (placement.callerRendersStructured === false) {
     return blocked(BLOCKER_REASON['client-capability'])
   }
@@ -205,11 +158,7 @@ export function decideAgentLaunchMode(args: {
       }
 }
 
-/**
- * Second half, once the workspace is resolved: the host that will run the agent answers whether it
- * can create a structured session there. Only a conclusive refusal before launch effects can
- * reject an explicit chat; a materialized workspace retains its terminal fallback.
- */
+/** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
 export async function resolveAgentLaunchModeOnHost(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   receipt: AgentLaunchModeReceipt,
@@ -241,7 +190,7 @@ export async function resolveAgentLaunchModeOnHost(
   )
 }
 
-/** A host that cannot answer has not proved it can create one, so the launch stays a PTY agent. */
+/** Unknown host support must fall back to a terminal. */
 async function readStructuredCreateSupport(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   worktreeId: string,
@@ -257,10 +206,6 @@ async function readStructuredCreateSupport(
   }
 }
 
-/**
- * Applies the executing host's `agentSession.createSupport` answer, which is the authority on WSL,
- * remoteness and per-agent support for the resolved workspace.
- */
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
   support: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null,
@@ -346,7 +291,6 @@ function downgraded(
   }
 }
 
-/** One main-log line when a launch the user's default asked to be a chat opened a terminal. */
 export function warnStructuredLaunchDowngrade(
   agent: string,
   receipt: AgentLaunchModeReceipt
@@ -356,7 +300,7 @@ export function warnStructuredLaunchDowngrade(
   }
 }
 
-/** Read private saved choices; a desktop stamp already resolved the preference for this agent. */
+/** A desktop stamp supplies the resolved preference; other callers read the host’s settings. */
 export function readAgentLaunchModeSettings(
   runtime: { requireStore(): { getSettings(): AgentLaunchModeSettings | null } },
   nativeChatDefault?: boolean

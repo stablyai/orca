@@ -25,8 +25,7 @@ const {
   writeKeychainMock: vi.fn()
 }))
 
-// Why: keep real temp-dir cleanup by default so leak assertions stay honest,
-// while allowing deterministic Windows EBUSY coverage.
+// Use real cleanup by default so leaks remain visible; override it only for Windows EBUSY cases.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   rmSyncMock.mockImplementation(actual.rmSync)
@@ -43,8 +42,7 @@ vi.mock('../../main/claude-accounts/keychain', () => ({
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
-// Why importOriginal: withCliRuntimeOnPath is a pure filesystem-probing helper,
-// and the PATH assertions below are only meaningful against the real one.
+// PATH assertions must exercise the real withCliRuntimeOnPath filesystem probes.
 vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
   getVersionManagerBinPaths: getVersionManagerBinPathsMock,
@@ -73,9 +71,7 @@ function successfulChild(): EventEmitter {
   return child
 }
 
-// Why: identify the handler under test by set difference, not by position —
-// `.at(-1)` picks up any listener a later registration appends (vitest installs
-// its own once-wrapped SIGINT teardown), which made assertions flake.
+// Diff listener sets: Vitest may append its own wrapped SIGINT listener after ours.
 function newSignalListener(
   signal: NodeJS.Signals,
   before: readonly unknown[]
@@ -146,8 +142,7 @@ describe('account CLI handlers', () => {
     )
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     process.env.ELECTRON_RUN_AS_NODE = '1'
-    // Why: a test run inside a real distro carries WSL_DISTRO_NAME, which would
-    // leak WSL attribution into every faked-win32 add below.
+    // Clear real WSL attribution before simulating win32.
     delete process.env.WSL_DISTRO_NAME
     delete process.env.ORCA_CLI_WSL_DISTRO
   })
@@ -389,8 +384,7 @@ describe('account CLI handlers', () => {
   it.each(['linux', 'darwin'])(
     'keeps host attribution when the CLI runs on %s',
     async (platform) => {
-      // Why: a Linux CLI talks to a Linux runtime whose accounts are host-lane;
-      // WSL_DISTRO_NAME there names the CLI's own environment, not a target lane.
+      // Linux runtimes use host-lane accounts even when the CLI itself runs in WSL.
       Object.defineProperty(process, 'platform', { configurable: true, value: platform })
       process.env.WSL_DISTRO_NAME = 'Ubuntu-22.04'
       process.env.ORCA_CLI_WSL_DISTRO = 'Ubuntu-22.04'
@@ -403,7 +397,7 @@ describe('account CLI handlers', () => {
   )
 
   it('waits for physical child close before removing interrupted login credentials', async () => {
-    // Why: deleting first lets the still-live login recreate credentials afterward.
+    // A live login can recreate credentials after cleanup; wait for close before deleting them.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const kill = vi.fn()
     const child = Object.assign(new EventEmitter(), { kill })
@@ -436,8 +430,7 @@ describe('account CLI handlers', () => {
   })
 
   it('cleans up when an SSH hangup ends the login', async () => {
-    // Why: this flow targets headless/SSH hosts, where a dropped connection
-    // delivers SIGHUP — Node's default terminates without running cleanup.
+    // Node's default SIGHUP exit would bypass cleanup when an SSH connection drops.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const child = Object.assign(new EventEmitter(), { kill: vi.fn() })
     let codexHome = ''
@@ -467,8 +460,7 @@ describe('account CLI handlers', () => {
   })
 
   it('warns that the account may already be registered when interrupted mid-RPC', async () => {
-    // Why: the runtime finishes the add independently of this process, so an
-    // interrupt after sign-in cannot honestly be reported as "not added".
+    // Registration continues at the runtime after the CLI is interrupted.
     const child = Object.assign(new EventEmitter(), { kill: vi.fn() })
     spawnMock.mockImplementation(() => {
       queueMicrotask(() => child.emit('exit', 0))
@@ -524,7 +516,6 @@ describe('account CLI handlers', () => {
   })
 
   it('fails before the login when the runtime is unreachable', async () => {
-    // Why: discovering a dead runtime after sign-in wastes a full OAuth round trip.
     callMock.mockRejectedValue(new Error('runtime not running'))
 
     await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow(
@@ -571,8 +562,6 @@ describe('account CLI handlers', () => {
   it.each(['environment', 'pairing-code'])(
     'rejects --%s instead of silently ignoring it',
     async (flag) => {
-      // Why: account commands are pinned to the local runtime, so honoring these
-      // silently would register the account on the wrong host.
       await expect(
         ACCOUNT_HANDLERS['account add']({
           ...context('codex'),
@@ -589,8 +578,6 @@ describe('account CLI handlers', () => {
   it.each(['environment', 'pairing-code'])(
     'rejects --%s on `account list` instead of listing the local host',
     async (flag) => {
-      // Why: listing is read-only, but answering with the LOCAL machine's accounts
-      // when the user named a remote host is the specific wrong answer they'd act on.
       await expect(
         ACCOUNT_HANDLERS['account list']({
           ...context('claude'),
@@ -602,8 +589,6 @@ describe('account CLI handlers', () => {
   )
 
   it('keeps the original add error when cleanup also fails', async () => {
-    // Why: cleanup runs in a `finally`, so an unguarded rejection there replaces
-    // the error that actually explains why the add failed.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     rmSyncMock.mockImplementationOnce(() => {
       throw new Error('EBUSY: resource busy or locked')
@@ -648,8 +633,6 @@ describe('account CLI handlers', () => {
   })
 
   it('rejects `--agent` with no value instead of defaulting to Claude', async () => {
-    // Why: the parser turns a valueless flag into boolean true, so a silent
-    // default would run a full OAuth login for the wrong provider.
     await expect(
       ACCOUNT_HANDLERS['account add']({ ...context('claude'), flags: new Map([['agent', true]]) })
     ).rejects.toThrow(
@@ -705,8 +688,6 @@ describe('account CLI handlers', () => {
   })
 
   it('lists accounts without forcing a provider usage refresh', async () => {
-    // Why: the forced lane bypasses the poll throttle and costs one serial
-    // round-trip per managed account, and this output shows no usage numbers.
     callMock.mockResolvedValue({
       id: 'test',
       ok: true,

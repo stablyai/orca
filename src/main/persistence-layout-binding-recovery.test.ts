@@ -18,7 +18,6 @@ import {
   TEST_LEAF_EXPIRED
 } from './persistence-session-fixtures'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -219,8 +218,7 @@ describe('Store', () => {
     expect(leafId).not.toBe(TEST_LEAF_2)
   })
 
-  // An `expired` lease means reattach gave up, not that the remote shell died. Dropping the
-  // binding here left the pane unable to re-adopt a process that is still running.
+  // Expired means reattach gave up; the remote shell can still be alive and need its binding.
   it('restores a cleared SSH binding after a lease expired so the pane can reattach', async () => {
     const store = createStoreWithSshRemotePtyLeases([
       {

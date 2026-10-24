@@ -183,8 +183,7 @@ describe('mapMRInfo', () => {
     expect(info.mergeStateStatus).toBe('checking')
   })
 
-  // Why: GitLab < 15.6 has no detailed_merge_status. Without the legacy fallback these MRs stay
-  // UNKNOWN, and the merge UI (which gates on MERGEABLE) shows "Checking" with no merge button.
+  // GitLab <15.6 lacks detailed_merge_status; legacy positive mergeability keeps actions usable.
   it('falls back to legacy merge_status when detailed_merge_status is absent', () => {
     const info = mapMRInfo(
       { iid: 1, title: 't', state: 'opened', merge_status: 'can_be_merged' },
@@ -238,20 +237,13 @@ describe('mapMRInfo', () => {
   })
 
   it('omits description / author when absent (distinguishes from list payloads)', () => {
-    // Why: detail vs list endpoints differ — a `description` of '' on the
-    // type would be ambiguous with "list payload that stripped the body".
-    // Prefer absent over default '' so callers can tell them apart.
+    // Missing description means unloaded list data; empty string means a known blank body.
     const info = mapMRInfo({ iid: 5, title: 't', state: 'opened' }, 'success')
     expect('description' in info).toBe(false)
     expect('author' in info).toBe(false)
     expect('authorAvatarUrl' in info).toBe(false)
   })
 })
-
-// Why: mapMRToWorkItem / mapIssueToWorkItem tests live in
-// mappers-workitem.test.ts so this file stays under the oxlint
-// max-lines budget. Same import surface, same describe-per-export
-// shape — split is mechanical, not behavioral.
 
 describe('derivePipelineStatus', () => {
   it('returns neutral for null/undefined/empty', () => {
@@ -264,17 +256,12 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus('success')).toBe('success')
     expect(derivePipelineStatus('failed')).toBe('failure')
     expect(derivePipelineStatus('running')).toBe('pending')
-    // Why: pipeline-level `manual` means GitLab blocked the pipeline on a human trigger — it is
-    // outstanding, not broken (red) and not resolved (which would paint the MR card green while
-    // "Pipelines must succeed" still refuses the merge).
+    // Pipeline manual means blocked on human action, not failed or complete.
     expect(derivePipelineStatus('manual')).toBe('pending')
     expect(derivePipelineStatus({ status: 'manual' })).toBe('pending')
   })
 
-  // Why: pins the two remaining string/array divergences. The job rollup calls skipped jobs
-  // passing and canceled jobs failing, but `head_pipeline.status` is the only production entry
-  // point and GitLab paints both pipeline states grey — flipping either card tone needs product
-  // sign-off, so these assertions exist so neither flip can land silently.
+  // Preserve pipeline-level neutral skipped/canceled states independently of job-level rollup tones.
   it('keeps skipped and canceled pipeline strings neutral (deferred tone changes)', () => {
     expect(derivePipelineStatus('skipped')).toBe('neutral')
     expect(derivePipelineStatus({ status: 'skipped' })).toBe('neutral')
@@ -318,8 +305,6 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus([{}])).toBe('neutral')
   })
 
-  // Why: matches the shared rollup rule — one unresolved job must not demote a pipeline that has
-  // a passing job, or the same MR reads green in the Checks tab and grey on the card.
   it('lets a passing job outweigh an unknown one', () => {
     expect(derivePipelineStatus([{ status: 'success' }, { status: 'future_status' }])).toBe(
       'success'

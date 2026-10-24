@@ -5,6 +5,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import {
   isManagedBrowserProfileOf,
   managedBrowserProfileOwnerKey,
+  unadmittedBrowserPartition,
   type ManagedBrowserProfileOwner
 } from '../../../../../shared/browser-profile-scope'
 import { withoutKey } from '../../../../../shared/workspace-layout/stored-record-fields'
@@ -16,7 +17,7 @@ const placeholderProfile = (
   sessionProfileId: string
 ): { sessionProfileId: string; sessionPartition: string } => ({
   sessionProfileId,
-  sessionPartition: `persist:orca-browser-unminted-${sessionProfileId}`
+  sessionPartition: unadmittedBrowserPartition(sessionProfileId)
 })
 
 const localProfiles = (state: AppState): BrowserSessionProfile[] =>

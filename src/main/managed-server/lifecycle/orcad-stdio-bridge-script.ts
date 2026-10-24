@@ -1,13 +1,4 @@
-/**
- * The host side of the stdio tunnel to managed orcad: run on the host's pinned Node over one SSH
- * exec channel, it dials orcad's loopback port and pipes that socket to its own stdin/stdout.
- * Hosts whose sshd refuses port forwarding (`AllowTcpForwarding no`) still allow exec, which is
- * how every orcad host op already runs.
- *
- * A sentinel line comes first, so the client can skip whatever a login profile prints and tell a
- * running bridge from a host where it could not start. `base64` mode frames each chunk as one
- * ASCII line: a PowerShell DefaultShell re-decodes native output as text, which corrupts bytes.
- */
+// Sentinels skip noisy login profiles; base64 framing prevents PowerShell text decoding from corrupting bytes.
 import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
@@ -20,16 +11,14 @@ import { ORCAD_MACHINE_HOMES_DIRNAME } from '../host-state/orcad-machine-home'
 export type OrcadStdioBridgeMode = 'raw' | 'base64'
 
 export const ORCAD_STDIO_BRIDGE_READY = 'ORCA-STDIO-BRIDGE READY'
-/** The bridge ran but orcad's port refused it: a dead server, not a missing bridge. */
+// Refused server ports do not mean the bridge runtime is missing.
 export const ORCAD_STDIO_BRIDGE_REFUSED = 'ORCA-STDIO-BRIDGE REFUSED'
-/** No pinned Node in the host's runtime store. */
 export const ORCAD_STDIO_BRIDGE_NO_NODE = 'ORCA-STDIO-BRIDGE NO_NODE'
-/** Bounds a half-closed bridge whose orcad side never closes after the client's EOF. */
 const HALF_CLOSE_GRACE_MS = 30_000
 
 const text = JSON.stringify
 
-/** `orcadStdioBridge(port, mode)`: shared by the POSIX `-e` script and the Windows host script. */
+// POSIX inline execution and the Windows host script must share the same bridge function.
 export const ORCAD_STDIO_BRIDGE_FUNCTION = `function orcadStdioBridge(port, mode) {
   const net = require('net')
   const out = process.stdout
@@ -76,11 +65,7 @@ export const ORCAD_STDIO_BRIDGE_FUNCTION = `function orcadStdioBridge(port, mode
   })
 }`
 
-/**
- * Any verified runtime serves; orcad is running on one of them. Machine homes on a shared `$HOME`
- * (`orcad-machine-home.ts`) hold stores too, possibly for another architecture, so a runtime must
- * start before the bridge execs it.
- */
+/** Shared machine homes may contain other architectures' runtimes; self-test before exec. */
 export function orcadPosixStdioBridgeCommand(port: number): string {
   const script = `${ORCAD_STDIO_BRIDGE_FUNCTION}\norcadStdioBridge(Number(process.argv[1]), 'raw')`
   const store = `${RELAY_REMOTE_DIR}/${ORCAD_RUNTIMES_DIRNAME}/${ORCAD_NODE_RUNTIME_DIR_PREFIX}`

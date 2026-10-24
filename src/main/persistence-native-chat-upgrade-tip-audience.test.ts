@@ -44,7 +44,6 @@ async function reopen(): Promise<ReturnType<typeof createStore>> {
   return createStore()
 }
 
-/** Turns Chat UI on, restarts, and reports the tip variant after each of several launches. */
 async function variantAfterLaterOptIn(
   store: ReturnType<typeof createStore>
 ): Promise<NativeChatUpgradeTipVariant[]> {
@@ -121,7 +120,7 @@ describe('native chat upgrade tip audience', () => {
     expect(store.getSettings().experimentalNativeChat).toBe(false)
     store.flush()
     expect(readDataFile()).toHaveProperty('settings.experimentalNativeChat', false)
-    // Turning it back on later sticks: the saved Default view is gone after the first save.
+    // Once the saved Default view is removed, a later explicit Chat UI choice must persist.
     store.updateSettings({ experimentalNativeChat: true })
     store.flush()
     expect((await reopen()).getSettings().experimentalNativeChat).toBe(true)
@@ -151,7 +150,6 @@ describe('native chat upgrade tip audience', () => {
   })
 
   it('keeps an excluded record when a later build turns Chat UI on by default', async () => {
-    // A future build where Chat UI is a regular setting that defaults on.
     writeDataFile({
       settings: { experimentalNativeChat: true },
       nativeChatUpgradeTipAudience: { version: 1, membership: 'excluded', basis: 'chat-ui-off' }
@@ -165,7 +163,7 @@ describe('native chat upgrade tip audience', () => {
   })
 
   it('fails closed when a later build finds Chat UI on but no record and no pre-upgrade save', () => {
-    // A record lost by some later rewrite must not be recaptured from the live switch.
+    // Missing audience records must not be recaptured from a later live setting.
     writeDataFile({ settings: { experimentalNativeChat: true } })
     const store = createStore()
     expect(store.getNativeChatUpgradeTipVariant()).toBe('none')
@@ -232,7 +230,6 @@ describe('native chat upgrade tip audience', () => {
     writeDataFile({ settings: preUpgradeSettings(true) })
     const store = createStore()
     store.updateUI({ featureTipsSeenIds: ['native-chat-upgrade'] })
-    // A paired client hydrated before the tip was shown marks another tip seen.
     store.updateUI({ featureTipsSeenIds: ['voice-dictation'] })
     store.flush()
     expect((await reopen()).getUI().featureTipsSeenIds).toEqual([

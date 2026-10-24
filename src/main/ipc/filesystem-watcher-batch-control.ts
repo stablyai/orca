@@ -23,7 +23,6 @@ export function createDebouncedBatch(): DebouncedBatch {
   }
 }
 
-/** Cancel pending and queued flush work when a root is torn down. */
 export function cancelLocalBatchFlush(root: WatchedRoot): void {
   root.batch.cancelled = true
   root.batch.flushQueued = false

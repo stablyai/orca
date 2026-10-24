@@ -11,10 +11,6 @@ import {
   type DetectedBrowser
 } from './browser-cookie-detection-types'
 
-// ---------------------------------------------------------------------------
-// Safari detection
-// ---------------------------------------------------------------------------
-
 export function detectSafari(): DetectedBrowser | null {
   if (process.platform !== 'darwin') {
     return null
@@ -55,7 +51,6 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
       continue
     }
     const profiles = discoverProfiles(root)
-    // Why: a browser counts as detected once a profile has a cookies DB; use the first such profile as default.
     for (const profile of profiles) {
       const profileDir = join(root, profile.directory)
       const cookiesPath = resolveChromiumCookiesPath(profileDir)

@@ -1,5 +1,4 @@
-// Why: stuck retiring children still consume RSS even after their logical pool
-// slot is retired, so they must count against one process-wide hard cap.
+// Retiring children still consume RSS and count against the process-wide cap.
 export const MAX_PHYSICAL_WATCHER_CHILDREN = 8
 
 export class WatcherChildCapacityError extends Error {
@@ -42,8 +41,7 @@ export function onWatcherChildCapacityAvailable(listener: () => void | Promise<v
     await listener()
   }
   capacityListeners.add(notify)
-  // Why: a child may exit between a failed reservation and listener setup.
-  // Recheck asynchronously so that release cannot become a lost wake-up.
+  // Recheck after listener setup so a racing child exit cannot become a lost wakeup.
   if (reservedChildren < MAX_PHYSICAL_WATCHER_CHILDREN) {
     queueMicrotask(notifyCapacityListeners)
   }
@@ -54,8 +52,7 @@ export function onWatcherChildCapacityAvailable(listener: () => void | Promise<v
 }
 
 function notifyCapacityListeners(): void {
-  // Why: an installing callback claims one free slot until it either reserves
-  // the child or finishes, so one release cannot wake every waiting root.
+  // Reserve notification capacity until each callback claims a child slot or finishes.
   while (capacityNotificationsInProgress < MAX_PHYSICAL_WATCHER_CHILDREN - reservedChildren) {
     const listener = capacityListeners.values().next().value
     if (!listener) {

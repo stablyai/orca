@@ -159,18 +159,14 @@ describe('registerPtyHandlers', () => {
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-    // Why: without this seed main's model would be a strict suffix of what the renderer painted, and a later park-reveal would restore the fragment.
+    // Seed full history so a later reveal cannot restore only the live-output suffix.
     expect(runtime.seedHeadlessTerminal).toHaveBeenCalledTimes(1)
     expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
       'pty-ssh-reattach',
       'relay history\r\n'
     )
   })
-  // STA repro (post-restart blind orchestrator): reattach restore payloads
-  // arrive as spawn RPC results, never through onPtyData, so without record
-  // seeding `terminal list` reported connected terminals with empty
-  // title/preview/lastOutputAt after every relaunch and `terminal read`
-  // returned a zero-line tail for a running session.
+  // Reattach restores arrive outside onPtyData; seed list/read records to avoid empty terminal metadata after restart.
   it('leaves the runtime reporting preview and title after a reattach spawn (restart restore)', async () => {
     const worktreeId = 'repo-restore::/tmp/restore-records'
     const tabId = 'tab-restore-records'
@@ -282,9 +278,7 @@ describe('registerPtyHandlers', () => {
       env: { ORCA_PANE_KEY: paneKey }
     })
 
-    // The renderer owns the emulator snapshot here — but the list/read records
-    // are main-side only, so the record seed must still run. Under main's layout, main's copy is
-    // the history every view repaints from, so it is seeded too.
+    // Record seeding is always main-owned; main-owned layout also needs its emulator history seeded.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
         'pty-gated-reattach',
@@ -343,8 +337,6 @@ describe('registerPtyHandlers', () => {
       lastTitle: 'checkpoint-title'
     })
   })
-  // Why windowless: `orca serve`/CLI runtime creation is the topology that most
-  // needs informative records — its controller.spawn path must seed them too.
   it('seeds restore records for a runtime-controller created terminal (headless reattach)', async () => {
     const worktreeId = 'repo-restore::/tmp/restore-records'
     const ptyId = `${worktreeId}@@session-headless-1`
@@ -369,12 +361,7 @@ describe('registerPtyHandlers', () => {
       getProjects: () => [],
       persistPtyBinding: vi.fn()
     } as never)
-    // Why: selector resolution shells out to git for real repos; prime the
-    // resolved-worktree cache so this headless fixture resolves offline.
-    //
-    // Why through getSnapshot and not a hand-written `resolved` entry: the cache decides freshness
-    // from fields it stamps itself, so a literal that mirrors them is a second copy of that
-    // contract and goes stale the moment a field is added. Let the cache stamp its own entry.
+    // Prime selector resolution through the real cache API to avoid Git I/O and hand-copied freshness fields.
     const worktreeResolutionInternals = runtime as unknown as {
       buildResolvedWorktreeFromId(id: string): ResolvedWorktree
       resolvedWorktrees: RuntimeResolvedWorktreeCache
@@ -595,7 +582,7 @@ describe('registerPtyHandlers', () => {
       forgetAgentExit: true
     })
   })
-  // Why: a disconnect that can reconnect is no death, so the hook store keeps the agent's proven exit.
+  // A reconnectable disconnect must preserve the agent's proven exit evidence.
   it('keeps the proven agent exit when a PTY is cleared for a disconnect', async () => {
     registerPtyHandlers(mainWindow as never)
     const stablePaneKey = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')

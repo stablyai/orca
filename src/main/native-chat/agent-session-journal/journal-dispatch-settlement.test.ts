@@ -11,7 +11,6 @@ import {
   type JournalPendingSubmission
 } from './journal-pending-submission-recovery'
 
-/** A card's hand-off, handed to the agent unless `held`, refused with `kind`. */
 function settle(kind: SubmissionRejectionKind, proof: { held?: true; unrun?: true } = {}) {
   const words = agentSessionFailureWords(
     agentSessionFailureFact(kind, proof.unrun ? { neverReachedAgent: true } : {}),
@@ -71,7 +70,7 @@ describe('what a rejection does to the draft it was consumed from', () => {
     for (const kind of ['hostRestarted', 'chatClosed'] as const) {
       expect(settle(kind, { held: true })).toBe('waiting')
     }
-    // An older host's send carries no hand-over record: it may have gone at once.
+    // Legacy rows lack handover evidence and may already have reached the provider.
     expect(queuedHandOffOutcome({ reason: DISPATCH_REJECTED_HOST_RESTARTED })).toBe('inDoubt')
   })
 

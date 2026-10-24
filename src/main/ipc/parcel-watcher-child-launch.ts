@@ -22,8 +22,7 @@ export function launchWatcherChild(
   const releaseReservation = reserveWatcherChild()
   if (!releaseReservation) {
     console.error('[parcel-watcher-process] physical watcher child limit reached')
-    // Why: capacity is transient and has an event-driven retry owner. Preserve
-    // its type so the desktop root is not cached permanently unavailable.
+    // Preserve transient capacity errors so callers retry instead of caching the root as unavailable.
     throw new WatcherChildCapacityError()
   }
   const canaryDir = currentCanaryDir ?? createWatcherCanaryDirectory()
@@ -47,8 +46,7 @@ export function launchWatcherChild(
   const faultHarnessPidFile = process.env.ORCA_WATCHER_CHILD_PID_FILE
   if (faultHarnessPidFile && child.pid) {
     try {
-      // Why: exclusive creation lets the harness identify the child without a
-      // leaked test-only environment variable clobbering an existing file.
+      // Exclusive creation keeps a leaked harness path from overwriting an existing file.
       writeFileSync(faultHarnessPidFile, String(child.pid), { flag: 'wx' })
     } catch {
       // Fault-injection observability must never affect watcher availability.
@@ -68,12 +66,10 @@ export function launchWatcherChild(
     signalPhysicalExit()
     releaseReservation()
   }
-  // Why: Node can close IPC before emitting exit. Recover at disconnect so a
-  // concurrent subscribe cannot replace the child without restoring old roots.
+  // Recover at disconnect, before a concurrent subscribe can replace the child and lose old roots.
   child.on('disconnect', () => onGone(child))
   child.on('error', () => onGone(child))
-  // Why: asynchronous spawn failures emit error then close without exit; close
-  // must release the physical-process budget even though no child was created.
+  // Spawn failure can emit close without exit; release its physical-process reservation.
   child.once('close', finalizePhysicalExit)
   child.on('exit', (code, signal) => {
     finalizePhysicalExit()

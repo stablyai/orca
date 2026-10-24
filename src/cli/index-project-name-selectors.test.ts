@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -55,6 +55,10 @@ const ORCA_PROJECT = {
 const PROJECT_LIST_FIXTURE = okFixture('req_project_list', { projects: [ORCA_PROJECT] })
 
 describe('orca cli project and host names', () => {
+  const priorExitCode = process.exitCode
+  afterEach(() => {
+    process.exitCode = priorExitCode
+  })
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -127,15 +131,21 @@ describe('orca cli project and host names', () => {
     )
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(['project', 'setups', '--project', 'orca', '--json'], '/tmp/repo')
 
-    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
-    expect(printed).toContain('Ambiguous --project orca')
-    expect(printed).toContain('--project repo:second-orca')
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: expect.stringContaining('Ambiguous --project orca'),
+        data: {
+          nextSteps: expect.arrayContaining([expect.stringContaining('--project repo:second-orca')])
+        }
+      }
+    })
+    expect(errSpy).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
-    process.exitCode = priorExitCode
   })
 
   it('sends the project id when a setup command names the project by display name', async () => {
@@ -198,7 +208,6 @@ describe('orca cli project and host names', () => {
     )
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       ['worktree', 'create', '--project', 'repo:alpha', '--name', 'x', '--no-parent', '--json'],
@@ -206,8 +215,13 @@ describe('orca cli project and host names', () => {
     )
 
     expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
-    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
-    expect(printed).toContain('No ready setup found for --project repo:alpha')
-    process.exitCode = priorExitCode
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: expect.stringContaining('No ready setup found for --project repo:alpha')
+      }
+    })
+    expect(errSpy).not.toHaveBeenCalled()
   })
 })

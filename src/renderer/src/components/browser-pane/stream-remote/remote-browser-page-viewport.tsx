@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -9,17 +9,14 @@ import type {
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser'
-import {
-  resolveRemoteFailureExternalUrl,
-  toHttpsRecoveryUrl
-} from '../../../../../shared/browser-url'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
-import { toDisplayUrl } from '../describe-page/browser-page-url-display'
+import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
   canReconnectRemoteBrowserStream,
@@ -45,7 +42,7 @@ export function RemoteBrowserPageViewport({
   worktreeId,
   runtimeWorktree,
   runtimeTarget,
-  onReload,
+  isActive,
   onGoto,
   onNavigateToUrl,
   onReconnect,
@@ -70,8 +67,8 @@ export function RemoteBrowserPageViewport({
   worktreeId: string
   runtimeWorktree: string
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
-  onReload: () => void
-  onGoto: (url: string) => void
+  isActive: boolean
+  onGoto: (url: string) => Promise<void>
   /** The address bar's submit path, which also parks a URL typed before the host page exists. */
   onNavigateToUrl: (url: string) => void
   onReconnect: () => void
@@ -81,10 +78,19 @@ export function RemoteBrowserPageViewport({
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
 }): React.JSX.Element {
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
-  const remoteFailureUrl = browserTab.loadError?.validatedUrl ?? browserTab.url
+  // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
+  const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
+  if (
+    browserTab.loadError !== standingFailure &&
+    (browserTab.loadError || (!browserTab.loading && !busy))
+  ) {
+    setStandingFailure(browserTab.loadError)
+  }
+  const loadError =
+    browserTab.loadError ?? resolveActiveBrowserLoadFailure(standingFailure, browserTab.url)
+  const remoteFailureUrl = loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
-  const showRemoteFailureOverlay =
-    Boolean(browserTab.loadError) && !isBlankBrowserUrl(remoteFailureUrl)
+  const showRemoteFailureOverlay = Boolean(loadError) && !isBlankBrowserUrl(remoteFailureUrl)
 
   return (
     <div
@@ -150,15 +156,16 @@ export function RemoteBrowserPageViewport({
       {isBlankBrowserUrl(browserTab.url) ? (
         <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
       ) : null}
-      {showRemoteFailureOverlay && browserTab.loadError ? (
+      {showRemoteFailureOverlay && loadError ? (
         <BrowserLoadFailureOverlay
-          loadError={browserTab.loadError}
+          loadError={loadError}
           externalUrl={remoteFailureExternalUrl}
-          currentUrl={toDisplayUrl(remoteFailureUrl)}
-          httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}
-          onRetry={onReload}
-          onTryHttps={onGoto}
-          onCopy={(url) => void window.api.ui.writeClipboardText(url)}
+          // Why: reloading the server's error page only refreshes it; re-attempt the URL that failed.
+          onRetry={() => onGoto(remoteFailureUrl)}
+          autoRetry={{
+            active: isActive,
+            loading: browserTab.loading
+          }}
           onOpenExternal={(url) => void window.api.shell.openUrl(url)}
           certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
           expectedBrowserPageId={

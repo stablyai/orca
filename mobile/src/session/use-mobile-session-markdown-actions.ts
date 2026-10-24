@@ -91,6 +91,19 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     [clipboard, markdownDocs, showToast]
   )
 
+  const copyMarkdownPath = useCallback(
+    async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
+      try {
+        await clipboard.writeText(tab.relativePath || tab.filePath)
+        showToast('Path copied')
+      } catch {
+        triggerError()
+        showToast("Couldn't copy path", 1500)
+      }
+    },
+    [clipboard, showToast]
+  )
+
   const getDirtyMarkdownDrafts = useCallback(() => {
     const drafts: DirtyMarkdownDraft[] = []
     for (const [tabId, doc] of markdownDocs) {
@@ -240,6 +253,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
   return {
     updateMarkdownLocalContent,
     copyMarkdownLocalContent,
+    copyMarkdownPath,
     getDirtyMarkdownDrafts,
     leaveSession,
     requestLeaveSession,

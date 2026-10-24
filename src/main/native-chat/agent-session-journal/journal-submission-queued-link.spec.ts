@@ -1,6 +1,4 @@
-// A submission that hands off a queued draft names that draft (`queuedMessageId`),
-// persisted on its journal row and published on the submission; a direct send
-// names none. Clients read the link, never a draft id compared with a submission id.
+// Persist explicit queuedMessageId links; clients must not infer them by comparing unrelated IDs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

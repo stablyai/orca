@@ -33,7 +33,7 @@ const SIDE_BY_SIDE: Extract<TerminalPaneLayoutNode, { type: 'split' }> = {
 
 type TestStore = ReturnType<typeof createStore>
 
-/** Two panes side by side that the window saved; main has seen neither split command. */
+// Simulate a split created by the window without main observing the command.
 function seedTwoPaneTab(store: TestStore, ratio?: number): void {
   store.setWorkspaceSession({
     activeRepoId: 'repo1',
@@ -68,7 +68,6 @@ function root(store: TestStore): TerminalPaneLayoutNode | null | undefined {
   return store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.root
 }
 
-/** Today's guess for a pane main cannot place: the whole tree on the left, the pane on the right. */
 const WRAPPED_AT_ROOT: TerminalPaneLayoutNode = {
   type: 'split',
   direction: 'vertical',

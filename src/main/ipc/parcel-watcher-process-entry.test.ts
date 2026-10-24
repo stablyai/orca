@@ -34,7 +34,7 @@ describe('parcel watcher process canary', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
   beforeEach(() => {
-    // Why: crawl-gating differs on macOS (no crawl in subscribe); pin a crawling backend.
+    // Pin a crawling backend; macOS subscribe does not crawl.
     Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
     detectShallowWatchDeliveryMock.mockReset()
     vi.useFakeTimers()
@@ -72,9 +72,7 @@ describe('parcel watcher process canary', () => {
   })
 
   it('fails the shallow subscribe when the host never delivers fs.watch events', async () => {
-    // A real macOS 26.3.1 machine registers the watch and stays mute forever.
-    // Reporting failure is what lets the caller fall back to polling instead of
-    // showing indefinitely stale Git metadata.
+    // Registration can succeed with permanently silent delivery; callers must fall back to polling.
     detectShallowWatchDeliveryMock.mockResolvedValue(false)
     watchMock.mockImplementation(() => {
       const watcher = new EventEmitter() as EventEmitter & { close: () => void }
@@ -414,8 +412,7 @@ describe('parcel watcher process canary', () => {
     process.emit('message', { op: 'subscribe', id: 2, dir: '/queued', opts: {} }, undefined)
     process.emit('message', { op: 'cancel-subscribe', id: 2 }, undefined)
 
-    // Why: non-restart cancel reuses async unsubscribe teardown; drain the
-    // exclusive lifecycle queue after the active crawl finishes.
+    // Non-restart cancellation queues unsubscribe after the active crawl.
     finishActiveCrawl?.({ unsubscribe: vi.fn().mockResolvedValue(undefined) })
     await vi.advanceTimersByTimeAsync(0)
 

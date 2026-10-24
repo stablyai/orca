@@ -56,19 +56,15 @@ import { _resetHiddenRendererPtyDeliveryGateForTest } from './pty-hidden-deliver
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 import { _resetWslCachesForTests } from '../wsl'
 
-/** The mocked webContents each suite asserts sends against. */
 export type PtyIpcTestWebContents = {
   id: number
   on: Mock
   send: Mock
   removeListener: Mock
-  // Why real Electron has this: webContents can be destroyed a beat before its BrowserWindow
-  // during close, so renderer-liveness guards check both. Omitting it here let those guards
-  // pass vacuously in every suite (STA-2373 / STA-5373).
+  // WebContents may die before its window; model that liveness check explicitly (STA-2373, STA-5373).
   isDestroyed: Mock
 }
 
-/** The mocked BrowserWindow handed to registerPtyHandlers. */
 export type PtyIpcTestMainWindow = {
   isDestroyed: () => boolean
   isFocused: () => boolean
@@ -84,7 +80,6 @@ export type PtyIpcSuiteEnvironment = {
   foreignWindowIpcEvent: { sender: PtyIpcTestWebContents }
 }
 
-/** Registers the shared beforeEach/afterEach every pty IPC suite file relies on. */
 export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   const handlers = new Map<string, (_event: unknown, ...args: unknown[]) => unknown>()
   const mainWindow = {
@@ -113,15 +108,9 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   const envScope = createPtyIpcProcessEnvScope()
 
   beforeEach(() => {
-    // Why here: pty.ts registers against injected surfaces now, so the mocked ipcMain
-    // must be installed for the shared `handlers` map to keep capturing registrations.
+    // Capture registrations through the injected host port.
     setPtyHostBindings({ ipc: testPtyIpcSurface() })
-    // Why here: pty.ts reads app paths and the packaged flag through the AppEnvironment
-    // port now, so the shared vi.mock('electron') app object alone is inert. Back the
-    // port with the same mocks so every suite's existing expectations still hold.
-    // Why read through the electron mock instead of hardcoding: suites toggle
-    // `app.isPackaged` mid-test to exercise dev-mode spawn paths, so the port must
-    // observe the same mutable field rather than freeze a value at install time.
+    // Back AppEnvironment with the mutable Electron mock so mid-test isPackaged changes remain visible.
     const electronAppMock = (
       vi.mocked(electron) as unknown as {
         app: { isPackaged: boolean; getPath: (name: string) => string; getVersion: () => string }
@@ -180,15 +169,14 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
     mainWindow.webContents.removeListener.mockReset()
-    // Why re-stub, not just reset: a bare mockReset returns undefined, which reads as "alive"
-    // by accident rather than by intent, and hides a test that forgot to restore liveness.
+    // Reset to explicitly alive; bare mockReset returns undefined and can hide missing liveness setup.
     mainWindow.webContents.isDestroyed.mockReset()
     mainWindow.webContents.isDestroyed.mockReturnValue(false)
-    // Why: hidden-delivery gate state is module-level (PTY-keyed), so tests must not leak hidden bits across cases.
+    // Module-level PTY gate state must not leak between cases.
     _resetHiddenRendererPtyDeliveryGateForTest()
     __resetShellStartupEnvCache()
 
-    // Why: mirror real Electron — ipcMain.handle throws on a duplicate channel, catching re-registration that forgot removeHandler.
+    // Mirror Electron's duplicate-channel rejection to catch missing removeHandler calls.
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
       if (handlers.has(channel)) {
         throw new Error(`Attempted to register a second handler for '${channel}'`)
@@ -198,21 +186,21 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     removeHandlerMock.mockImplementation((channel: string) => {
       handlers.delete(channel)
     })
-    // Why: production gates PTY sends on pty:rendererDispatcherReady; model a live page by firing the handshake as soon as it registers.
+    // Model a live page by firing dispatcher-ready when the listener registers.
     onMock.mockImplementation((channel: string, listener: (...args: unknown[]) => void) => {
       if (channel === 'pty:rendererDispatcherReady') {
         listener(mainWindowIpcEvent)
-        // Drain the handshake's empty flush so it can't later perturb send-timing assertions.
+        // Clear the handshake flush before send-timing assertions.
         if (vi.isFakeTimers()) {
           vi.advanceTimersByTime(0)
         }
       }
     })
     getPathMock.mockReturnValue('/tmp/orca-user-data')
-    // Why: wrapper roots resolve from ORCA_USER_DATA_PATH; mirror the mocked userData so ZDOTDIR/wrapper assertions match.
+    // Wrapper roots must use the same userData path as the mocked app.
     process.env.ORCA_USER_DATA_PATH = '/tmp/orca-user-data'
     existsSyncMock.mockReturnValue(true)
-    // size: the shell wrapper writer verifies each generated file is non-empty.
+    // Generated shell wrapper validation rejects empty files.
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755, size: 1 })
     readFileSyncMock.mockReturnValue('')
     openCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
@@ -247,7 +235,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       ) => {
         const materializeDefaultHome = options?.materializeDefaultHome !== false
         if (kind === 'omp') {
-          // Why: bare shells no longer create ~/.omp; only a userData status path is set (#10196).
+          // Bare shells keep OMP status under userData without creating ~/.omp (#10196).
           if (!existingAgentDir && !materializeDefaultHome) {
             return {
               ORCA_OMP_STATUS_EXTENSION:

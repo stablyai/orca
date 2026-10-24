@@ -9,10 +9,7 @@ vi.mock('../runtime-client', async () => {
     openOrca = vi.fn()
   }
 
-  // Why: re-export the REAL error classes rather than redefining them. format.ts
-  // narrows with `instanceof` against ./runtime/types, so a look-alike class
-  // here would make every CLI error fall through to the generic `runtime_error`
-  // shape — mirroring the barrel keeps the mock faithful to production.
+  // Error formatting uses instanceof, so preserve the production error classes.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
   return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })

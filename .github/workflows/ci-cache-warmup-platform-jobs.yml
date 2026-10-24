@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04-arm, blacksmith-8vcpu-ubuntu-2404]
+        runner: [blacksmith-4vcpu-ubuntu-2404-arm, blacksmith-8vcpu-ubuntu-2404]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
@@ -95,7 +95,7 @@ jobs:
     concurrency:
       group: ci-cache-warmup-linux-package-fixtures-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'

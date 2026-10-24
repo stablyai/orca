@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { parsePairingCode } from '../../shared/pairing'
-import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import type {
   RuntimeEnsureAgentSessionResult,
   RuntimeEnsureAgentSessionRequest

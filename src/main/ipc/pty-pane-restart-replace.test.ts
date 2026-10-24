@@ -143,12 +143,11 @@ describe('pty:spawn replacing a pane owner', () => {
     ).rejects.toThrow('daemon unreachable')
     expect(providerSpawn).not.toHaveBeenCalled()
     expect(exitPayloads('pty-old')).toEqual([])
-    // The pane is released: a later spawn still reaches the surviving owner instead of hanging.
     await expect(handlers.get('pty:spawn')!(null, restartSpawnArgs())).resolves.toMatchObject({
       id: 'pty-old',
       isReattach: true
     })
-    // The failed restart left no label behind: a later close of the same PTY reads as a close.
+    // Failed restarts must not leave a reason label that misclassifies later closure.
     control.shutdownFails = false
     await handlers.get('pty:kill')!(null, { id: 'pty-old' })
     expect(exitPayloads('pty-old')).toHaveLength(1)

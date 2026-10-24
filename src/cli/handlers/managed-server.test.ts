@@ -97,7 +97,7 @@ describe('managed server CLI verbs', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const confirmed = client(forgotten)
     await run('environment forget', confirmed, [['yes', true]])
-    // Never managedServer.stop: an older desktop would drop a flag and decommission instead.
+    // Older desktops ignore flags; using stop for forget would decommission the server.
     expect(confirmed).toHaveBeenCalledWith(
       'managedServer.forget',
       { selector: 'build-box' },
@@ -193,7 +193,6 @@ describe('managed server CLI verbs', () => {
     })
   })
 
-  // BUG-21: an update restarts the server, so the call's connection closes before it answers.
   it('reports what a restarting update left behind instead of failing on the closed connection', async () => {
     vi.useFakeTimers()
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})

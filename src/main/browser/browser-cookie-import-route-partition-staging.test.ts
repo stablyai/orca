@@ -80,7 +80,7 @@ function chromeBrowser(cookiesPath: string): DetectedBrowser {
 }
 
 beforeEach(() => {
-  // Why: macOS reports /private/var for a /var mkdtemp path, so resolve before comparing paths.
+  // Resolve macOS /var aliases before comparing paths.
   tmpDir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-route-cookie-staging-')))
   cookiesSetMock = vi.fn().mockResolvedValue(undefined)
   appGetPathMock.mockReset()
@@ -112,9 +112,7 @@ afterEach(() => {
 })
 
 describe('importCookiesFromBrowser into a client-hosted route partition', () => {
-  // Why: the cold-start replay only knows the default partition and persisted session profiles, so
-  // a route partition can never be replayed — staging one would leave a plaintext cookie DB in
-  // userData forever and still report a lossy import as a clean success.
+  // Route partitions have no startup replay consumer; do not leave plaintext staged cookies.
   it('refuses the restart fallback instead of staging a plaintext cookie database', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(
@@ -129,7 +127,6 @@ describe('importCookiesFromBrowser into a client-hosted route partition', () => 
       { name: 'sid', value: 'source-value' }
     ]).close()
     createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-    // Forces the restart fallback to be the only way these cookies could ever land.
     cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
@@ -143,13 +140,12 @@ describe('importCookiesFromBrowser into a client-hosted route partition', () => 
       expect(setPendingCookieImportMock).not.toHaveBeenCalled()
       expect(clearPendingCookieImportMock).toHaveBeenCalledWith(routePartition)
       expect(existsSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toBe(false)
-      // Why: the plaintext copy must never be written, not merely deleted afterwards.
+      // Verify that plaintext copies were never written, rather than merely cleaned up.
       expect(
         copyFileSyncMock.mock.calls.some(([, destination]) =>
           String(destination).includes('cookie-import-staging')
         )
       ).toBe(false)
-      // Why: the jar was cleared and nothing replaced it, so this must not read as a clean success.
       expect(result.ok && result.summary?.warning).toEqual({
         code: 'restart-fallback-unavailable',
         loadedCookies: 0,

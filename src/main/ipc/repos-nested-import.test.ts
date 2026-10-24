@@ -62,7 +62,6 @@ describe('projectGroups IPC validation', () => {
     updatedAt: 1
   }
 
-  // Why: a local tree whose root is a plain folder and whose listed dirs are git repos.
   async function withNestedTree(
     repoDirs: string[],
     run: (root: string) => Promise<void>

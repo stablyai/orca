@@ -1,5 +1,4 @@
-// Whether a session's record may start its agent on this host, read in the commit after the
-// lease is adjudicated and recovery concluded, so it sees the lease the resolver handed back.
+// Read eligibility after ownership recovery commits so startup uses the resolver’s current lease.
 
 import {
   refuse,
@@ -15,8 +14,6 @@ import {
   structuredAgentSessionResumeParams
 } from './structured-agent-session-resume-eligibility'
 
-/** The eligibility read, in the commit after recovery: the params the attach acts on, or why the
- *  record may not start here. */
 export function structuredAgentSessionStartParams(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,

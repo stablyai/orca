@@ -23,7 +23,6 @@ export function indexedStatusFeedSession<P extends AgentSessionHandleProvider = 
   }
 }
 
-/** One child record as the views a status sink hands the feed. */
 export function statusFeedChildView(over: Partial<AgentChildWorkView> = {}): AgentChildWorkView {
   return {
     id: 'child-1',

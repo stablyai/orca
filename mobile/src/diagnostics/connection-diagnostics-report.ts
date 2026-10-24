@@ -1,4 +1,4 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 import type {
   ConnectionLogEntry,

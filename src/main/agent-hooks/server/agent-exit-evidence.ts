@@ -7,7 +7,7 @@ import {
   type AgentProcessIdentity
 } from '../../../shared/agent-process-presence'
 
-/** A proven agent exit, shared by every key the pane was addressed by when it ended. */
+/** All pane aliases share the same exit evidence. */
 export type AgentExitEvidence = {
   at: number
   paneKeys: Set<string>
@@ -44,7 +44,7 @@ export function recordAgentExit(
   }
 }
 
-/** Drops the exit and every alias key that shares it; true when one was held. */
+/** Forget every alias of the exit, not just this key. */
 export function forgetAgentExit(exits: Map<string, AgentExitEvidence>, paneKey: string): boolean {
   const exit = exits.get(paneKey)
   for (const key of exit?.paneKeys ?? []) {
@@ -53,7 +53,6 @@ export function forgetAgentExit(exits: Map<string, AgentExitEvidence>, paneKey: 
   return exit !== undefined
 }
 
-/** Whether an event proves a different agent claimed the pane after the exit. */
 export function claimsPaneAfterExit(
   event: AgentHookEventPayload,
   exit: AgentExitEvidence
@@ -63,7 +62,7 @@ export function claimsPaneAfterExit(
     return !exit.process || !isSameAgentProcess(sender, exit.process)
   }
   const agent = event.agentPresence?.agent ?? event.payload.agentType
-  // Why: only Claude hooks carry a process identity, so another provider reporting is the successor.
+  // A different known provider proves succession even without process identity.
   if (
     event.source !== undefined &&
     exit.agent &&
@@ -73,14 +72,14 @@ export function claimsPaneAfterExit(
   ) {
     return true
   }
-  // Why: an unidentified late hook from the ended session (a Stop) is no evidence of a successor.
+  // An unidentified late Stop cannot prove a successor.
   return (
     opensNewTurn(event) ||
     (event.source !== undefined && isNewTurnEvent(event.source, event.hookEventName))
   )
 }
 
-/** Drops one retired key; a pane that moved away keeps the exit under its surviving keys. */
+/** Retire one key while preserving the exit under surviving aliases. */
 export function releaseAgentExitKey(
   exits: Map<string, AgentExitEvidence>,
   paneKey: string
@@ -90,14 +89,13 @@ export function releaseAgentExitKey(
   return exits.delete(paneKey)
 }
 
-/** Drops exits proven before `notBefore` unless a retained row still names one of their panes. */
 export function pruneAgentExits(
   exits: Map<string, AgentExitEvidence>,
   notBefore: number,
   isPaneRowRetained: (paneKey: string) => boolean
 ): void {
   for (const [key, exit] of exits) {
-    // Why: a kept resume row without its exit would read as a live session holder.
+    // A retained resume row needs its exit to avoid appearing live.
     if (exit.at < notBefore && ![...exit.paneKeys].some(isPaneRowRetained)) {
       exits.delete(key)
     }

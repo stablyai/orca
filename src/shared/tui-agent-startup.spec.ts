@@ -52,7 +52,7 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: '',
       agentArgs: resolveTuiAgentLaunchArgs('claude', {
-        claude: '--dangerously-skip-permissions --model Opus'
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions --model Opus' }
       }),
       cmdOverrides: {},
       platform: 'linux',
@@ -400,7 +400,7 @@ describe('tui agent startup plans', () => {
         cmdOverrides: {},
         platform,
         shell,
-        agentArgs: resolveTuiAgentLaunchArgs('muse', defaults)
+        agentArgs: resolveTuiAgentLaunchArgs('muse', { agentDefaultArgs: defaults })
       })
 
       expect(plan).toMatchObject({
@@ -607,7 +607,7 @@ describe('tui agent startup plans', () => {
       agent: 'opencode',
       prompt: 'fix it',
       cmdOverrides: {},
-      agentArgs: resolveTuiAgentLaunchArgs('opencode', agentDefaultArgs),
+      agentArgs: resolveTuiAgentLaunchArgs('opencode', { agentDefaultArgs }),
       platform: 'linux'
     })
 

@@ -63,8 +63,6 @@ describe('ClaudeRuntimePathResolver', () => {
     const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
 
     expect(paths.configDir).toBe(join(testState.fakeHomeDir, '.claude'))
-    // Why: background rate-limit refreshes resolve these paths even when Claude
-    // is disabled, so resolving must never materialize the directory (#12181).
     expect(existsSync(paths.configDir)).toBe(false)
   })
 

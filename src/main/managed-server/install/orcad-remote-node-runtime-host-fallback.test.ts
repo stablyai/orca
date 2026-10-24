@@ -41,7 +41,7 @@ afterEach(() => {
   vi.mocked(uploadRemoteInstallDirectory).mockClear()
 })
 
-/** A fresh POSIX host; `download` is what its curl/wget step prints. */
+/** Model a fresh host with a configurable curl/wget download verdict. */
 function freshHost(download: string): string[] {
   const commands: string[] = []
   vi.mocked(execCommand).mockImplementation(async (_conn, command) => {

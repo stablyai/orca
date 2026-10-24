@@ -177,7 +177,6 @@ describe('orca file CLI handlers', () => {
     process.exitCode = undefined
   })
 
-  // Why: an older host still answers a PDF with opened:false (STA-9113); that must not read as success.
   it('fails an unopened file open with ok:false in --json mode', async () => {
     queueFixtures(
       callMock,
@@ -520,7 +519,7 @@ describe('orca file CLI handlers', () => {
       '/tmp/elsewhere'
     )
 
-    // Why: an older host answers a binary edit open with opened:false, so focus carries to the next open.
+    // Declined binary opens must leave focus available for the next successful open.
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
       relativePath: 'assets/logo.png',

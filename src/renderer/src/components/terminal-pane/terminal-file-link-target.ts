@@ -17,8 +17,10 @@ import {
 import type { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import {
   getTerminalPathExistsCacheKey,
-  readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
+  readTerminalPathExistence,
+  writeTerminalPathExistence,
+  startTerminalPathExistsProbe,
+  type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
@@ -121,7 +123,7 @@ export function mayCheckFileLinkTargetUnprompted(
 /** Rejects when the host cannot answer, so callers never mistake an outage for a missing file. */
 export async function fileLinkTargetExists(
   target: FileLinkTarget,
-  cache: Map<string, boolean>,
+  cache: TerminalPathExistsCache,
   pathExists: FileLinkPathExistence,
   terminalHandle?: string | null
 ): Promise<boolean> {
@@ -138,9 +140,16 @@ export async function fileLinkTargetExists(
     // Why: a local stat here would answer for this computer, not the server that printed the path.
     return hostFileLinkTargetExists(target, cache, terminalHandle)
   }
-  const exists =
-    readTerminalPathExistsCache(cache, target.cacheKey) ??
-    (await pathExists(target.fileContext, target.absolutePath, target.isRemoteRuntimePath))
-  writeTerminalPathExistsCache(cache, target.cacheKey, exists)
+  const cached = readTerminalPathExistence(cache, target.cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const probe = startTerminalPathExistsProbe()
+  const exists = await pathExists(
+    target.fileContext,
+    target.absolutePath,
+    target.isRemoteRuntimePath
+  )
+  writeTerminalPathExistence(cache, target.cacheKey, exists, probe)
   return exists
 }

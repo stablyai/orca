@@ -134,7 +134,7 @@ describe('ACP dialect request and turn boundaries', () => {
       outcome: 'accepted',
       answers: { 'Choose a test?': ['Unit', 'Integration'], 'Another?': 'Yes' }
     })
-    // A plan is shown, never put to the person as an approval, and never approved for them.
+    // Show the plan without opening approval or auto-approving it.
     const plan = translator.request(
       '_x.ai/exit_plan_mode',
       { sessionId: 'provider-1', toolCallId: 'plan-1', planContent: '# Plan' },

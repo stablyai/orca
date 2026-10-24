@@ -29,7 +29,7 @@ type LocalRepoCatalog = {
   ownerCountById: Map<string, number>
 }
 
-// Why: matches existing local Git/read startup budgets while allowing for Defender-heavy repos.
+// Match local startup budgets while allowing for Defender-heavy repositories.
 export const LOCAL_PTY_REGISTRY_BOOT_HYDRATION_DEADLINE_MS = 5_000
 export const LOCAL_PTY_REGISTRY_GIT_ENUMERATION_CONCURRENCY = 4
 

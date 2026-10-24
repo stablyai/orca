@@ -14,7 +14,7 @@ it.each([
   expect((await classifyNodeServerChanges([file], async () => new Set())).shouldRun).toBe(true)
 })
 
-it('runs a real structured chat on Linux from the built desktop template', () => {
+it('configures Linux packaged-chat verification after building the desktop template', () => {
   const workflow = parse(readFileSync('.github/workflows/node-server-tests.yml', 'utf8'))
   const steps = workflow.jobs.persistence.steps
   const chat = steps.find((step) =>

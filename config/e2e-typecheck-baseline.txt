@@ -85,7 +85,6 @@
 2 tests/e2e/ssh-orcad-browser-routing.spec.ts
 1 tests/e2e/ssh-orcad-browser-service-status.spec.ts
 2 tests/e2e/ssh-orcad-explorer-selected-host.spec.ts
-1 tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts
 1 tests/e2e/ssh-orcad-terminal-network-outage.spec.ts
 5 tests/e2e/staging-skill-sharing.spec.ts
 3 tests/e2e/structured-agent-session-read-owner.unit.test.ts

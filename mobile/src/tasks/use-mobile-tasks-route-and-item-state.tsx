@@ -49,7 +49,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
 import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
-import type { JiraIssueFilter } from '../../../src/shared/jira-types'
+import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
 export function useMobileTasksRouteAndItemState() {
   const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()

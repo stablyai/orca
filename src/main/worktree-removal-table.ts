@@ -3,13 +3,10 @@ import { getErrorCode } from './git/worktree-operation-options'
 import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { writeWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
 
-// The accepted removals, mirrored to disk on every change; listings and joins read only this.
 export const pendingWorktreeRemovals = new Map<string, WorktreeRemovalRecord>()
-// Deletes that failed after Git dropped the registration: listed with their error until the
-// checkout disappears or is replaced, Delete finds Git registering it, or the repo leaves Orca.
-// Never retried unasked.
+// Failed leftovers stay visible until gone/replaced or their repo is removed; never retry without a request.
 export const failedWorktreeRemovals = new Map<string, WorktreeRemovalRecord>()
-// Why weak: a listing that read Git before a delete finished holds the record until it replies.
+// In-flight listings retain completed records only until their stale Git read is projected.
 export const finishedWorktreeRemovals = new WeakSet<WorktreeRemovalRecord>()
 let recordsDirectory: string | null = null
 
@@ -25,7 +22,6 @@ export function persistWorktreeRemovalRecords(): Promise<void> {
     ...pendingWorktreeRemovals.values(),
     ...failedWorktreeRemovals.values()
   ]).catch((error: unknown) => {
-    // Why: bookkeeping must not gate the delete; a lost write only costs resuming it after a quit.
     console.warn('[worktrees] failed to persist worktree removal records', error)
   })
 }

@@ -1,10 +1,3 @@
-// The streaming contract the history window now reads under: two bounded passes
-// over ONE pinned snapshot, and no whole-file buffer at any point. The previous
-// contract was a single bounded read, which made an oversized transcript report
-// an inconsistent boundary — that answer left reconciliation permanently
-// unresolved for a session whose transcript simply grew, so what is asserted
-// here is the opposite: it resolves, and it never holds the file.
-
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FileHandle } from 'node:fs/promises'
@@ -16,7 +9,6 @@ const state = vi.hoisted(() => ({
   growth: '',
   readError: false,
   bytesRead: 0,
-  /** Largest single chunk handed to the framer across every pass. */
   peakChunkBytes: 0,
   streams: 0,
   closes: 0,
@@ -102,7 +94,6 @@ const read = (previousLeafUuid: string | null = 'anchor') =>
     turnInFlight: false
   })
 
-/** Filler rows, so the padding a size test needs is still valid JSONL. */
 function padTo(bytes: number): string {
   const filler = `${JSON.stringify({ type: 'comment', note: 'x'.repeat(4096) })}\n`
   const rows = Math.ceil((bytes - Buffer.byteLength(SOURCE)) / Buffer.byteLength(filler))
@@ -167,8 +158,7 @@ describe('Claude provider history source budget', () => {
     await writeFile(
       state.path,
       SOURCE.split('\n')
-        // Only the record — `"latest"` alone would take the marker row with it,
-        // leaving an unprovable transcript that satisfies this test vacuously.
+        // Keep the marker so malformed input cannot make the no-replay assertion pass vacuously.
         .filter((line) => !line.includes('"uuid":"latest"'))
         .join('\n')
         .replace('"leafUuid":"latest"', '"leafUuid":"anchor"')
@@ -202,8 +192,6 @@ describe('Claude provider history source budget', () => {
   })
 
   it('refuses a single record too large to frame', async () => {
-    // Per-record, not per-file: the framer buffers one line, so an unbounded
-    // record is the only remaining way for the source to become resident.
     const huge = `${JSON.stringify({ type: 'comment', note: 'x'.repeat(LEGACY_LIMIT) })}\n`
     await writeFile(state.path, huge + SOURCE)
     expect((await read()).boundaryConsistent).toBe(false)
@@ -218,8 +206,6 @@ describe('Claude provider history source budget', () => {
       message: { role: 'user', content: 'appended' }
     })}\n`
     const torn = Math.floor(grown.length / 2)
-    // A torn last record: the proof's first attempt fails, and the retry is what
-    // sees both the repair AND the record the window has to report.
     await writeFile(state.path, SOURCE + grown.slice(0, torn))
     state.growth = grown.slice(torn)
 
@@ -229,7 +215,7 @@ describe('Claude provider history source budget', () => {
     // size would silently drop the record the proof just accepted.
     expect(result.boundaryConsistent).toBe(true)
     expect(result.items.map((item) => item.providerItemId)).toEqual(['latest', 'grown'])
-    // Failed graph pass, re-run graph pass, replay pass — all on the one descriptor.
+    // One failed proof, a refreshed proof, then replay.
     expect(state.streams).toBe(3)
     expect(state.opens).toBe(1)
   })

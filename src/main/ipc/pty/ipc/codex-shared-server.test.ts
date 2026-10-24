@@ -41,7 +41,6 @@ import { toAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from '../provider/ownership-state'
 import { installPtyCodexSharedServerIpcHandler } from './codex-shared-server'
 
-// Each channel with its answer for a local pane and its answer when it refuses one.
 const CHANNELS = [
   ['pty:isCodexOnSharedServer', { joined: true, openedBeforeWrapper: false }, { joined: false }],
   ['pty:disableCodexSharedServerAutoStart', true, false],

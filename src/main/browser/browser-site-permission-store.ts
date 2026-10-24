@@ -23,14 +23,12 @@ function parseSiteDecisions(value: unknown): SiteDecisions | null {
   return Object.keys(decisions).length > 0 ? decisions : null
 }
 
-/** Browser profile id → origin → remembered answers. */
 const store = createBrowserProfileSiteStore({
   fileName: BROWSER_SITE_PERMISSIONS_FILE_NAME,
   description: 'site permissions',
   parseEntry: parseSiteDecisions
 })
 
-/** Answers belong to the Orca profile whose browser profiles they name. */
 export function configureBrowserSitePermissionStore(profileDirectory: string): void {
   store.configure(profileDirectory)
 }

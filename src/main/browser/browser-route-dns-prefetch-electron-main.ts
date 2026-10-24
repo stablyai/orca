@@ -36,15 +36,14 @@ async function probe() {
     webPreferences: { partition, sandbox: true, nodeIntegration: false, contextIsolation: true }
   })
   await window.loadURL('probe://page/')
-  // Why: PrefetchDNS is fire-and-forget with no page-visible completion, so the resolver needs time to log a job.
+  // DNS prefetch has no completion signal; allow time for the resolver job to appear in netLog.
   await settle(4000)
   window.destroy()
   await routeSession.netLog.stopLogging()
   return { resolvedProxy }
 }
 
-// Why: destroying the probe window awaits stopLogging, which yields long enough for the default
-// window-all-closed quit (non-macOS) to exit 0 before the result is written.
+// Prevent automatic quit while stopLogging() yields before the result is written.
 app.on('window-all-closed', () => {})
 
 async function run() {

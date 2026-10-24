@@ -67,6 +67,32 @@ outputs:
 runs:
   using: composite
   steps:
+    # The image resets HOME during login; shell fixtures intentionally use temporary homes.
+    - name: Preserve explicit login-shell homes on Blacksmith
+      if: runner.os == 'Linux' && startsWith(runner.name, 'blacksmith-') && job.container.id == ''
+      shell: bash
+      run: |
+        sudo python3 - <<'PYTHON'
+        from pathlib import Path
+        profile = Path('/etc/profile.d/blacksmith.sh')
+        if profile.exists():
+            original = profile.read_text()
+            updated = original.replace('export HOME="$RUNNER_HOME"', 'export HOME="${HOME:-$RUNNER_HOME}"')
+            if updated != original:
+                profile.write_text(updated)
+        PYTHON
+        fixture_home="$(mktemp -d)"
+        trap 'rm -rf "$fixture_home"' EXIT
+        printf 'export ORCA_CI_PROFILE_LOADED=1\n' > "$fixture_home/.bash_profile"
+        HOME="$fixture_home" ORCA_CI_FIXTURE_HOME="$fixture_home" /bin/bash -lc '
+          test "$HOME" = "$ORCA_CI_FIXTURE_HOME" && test "$ORCA_CI_PROFILE_LOADED" = 1
+        ' || {
+          echo '::error::Runner login profile overrides fixture HOME'
+          grep -nH 'HOME' /etc/profile /etc/profile.d/*.sh || true
+          HOME="$fixture_home" /bin/bash -lc 'printf "Observed HOME=%s\n" "$HOME"'
+          exit 1
+        }
+
     - name: Resolve pnpm store mode
       id: pnpm-store-mode
       if: >-

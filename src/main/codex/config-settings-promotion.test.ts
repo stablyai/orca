@@ -17,7 +17,7 @@ import type * as Os from 'node:os'
 import { join } from 'node:path'
 import type * as CodexFsUtils from '../codex-accounts/fs-utils'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Bypass platform-specific socket paths so asserted config bytes stay host-independent.
 vi.mock('./codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config
@@ -56,8 +56,7 @@ import {
   upsertTopLevelSettingsInContent
 } from './codex-config-settings-upsert'
 
-// The exact [tui] block codex 0.144.6 writes via config/batchWrite (all four
-// promoted keys single-line, theme a string).
+// Exact [tui] block written by Codex 0.144.6 config/batchWrite.
 const CODEX_TUI_BLOCK =
   '[tui]\nstatus_line = ["model-with-reasoning", "task-progress"]\nstatus_line_use_colors = true\nterminal_title = ["model"]\ntheme = "dark-photon"\n'
 
@@ -73,8 +72,6 @@ beforeEach(() => {
   homedirMock.mockReturnValue(tmpHome)
   promotionTestState.failAtomicWrite = false
   promotionTestState.atomicWritePaths.length = 0
-  // Why: promotion writes into homedir()/.codex — if the mock ever fails to
-  // intercept, these tests would rewrite the developer's real Codex config.
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }
@@ -120,8 +117,6 @@ function readRuntimeConfig(): string {
   return readFileSync(runtimeConfigPath(), 'utf-8')
 }
 
-// Mimics how Codex (toml_edit) persists a /model or /approvals change: the
-// top-level key line is rewritten in place, or created when absent.
 function simulateCodexSettingWrite(key: string, rawValue: string): void {
   mkdirSync(runtimeHomeDir(), { recursive: true })
   const existing = existsSync(runtimeConfigPath()) ? readFileSync(runtimeConfigPath(), 'utf-8') : ''
@@ -133,8 +128,6 @@ function simulateCodexSettingWrite(key: string, rawValue: string): void {
   writeFileSync(runtimeConfigPath(), next, 'utf-8')
 }
 
-// Codex reads then rewrites the whole runtime config; simulate that by writing
-// a known runtime config directly (its EOL is normalized by the mirror anyway).
 function setRuntimeConfig(content: string): void {
   mkdirSync(runtimeHomeDir(), { recursive: true })
   writeFileSync(runtimeConfigPath(), content, 'utf-8')
@@ -186,7 +179,6 @@ describe('codex settings write-back promotion', () => {
   it('does not promote on the first pass without a baseline, then promotes after one', () => {
     writeSystemConfig('model = "gpt-5"\n')
     mkdirSync(runtimeHomeDir(), { recursive: true })
-    // Pre-upgrade state: runtime already diverged, but no baseline exists.
     writeFileSync(runtimeConfigPath(), 'model = "user-changed-before-upgrade"\n', 'utf-8')
 
     syncSystemConfigIntoManagedCodexHome()
@@ -247,8 +239,6 @@ describe('codex settings write-back promotion', () => {
   })
 
   it('bootstraps a baseline while the system config is missing so promotion still arms', () => {
-    // Why: WSL and per-account homes seed a runtime config before any mirror runs,
-    // so skipping without a baseline would leave promotion inert forever.
     setRuntimeConfig('model = "seeded"\n\n[features]\nhooks = true\n')
 
     syncSystemConfigIntoManagedCodexHome()
@@ -258,8 +248,6 @@ describe('codex settings write-back promotion', () => {
     expect(readRuntimeConfig()).toContain('[features]')
 
     simulateCodexSettingWrite('model', '"o4"')
-    // The source finally appears holding the value the runtime was seeded from,
-    // so the in-Codex change is the only side that moved and must promote.
     writeSystemConfig('model = "seeded"\n')
     syncSystemConfigIntoManagedCodexHome()
 
@@ -280,13 +268,10 @@ describe('codex settings write-back promotion', () => {
   })
 
   it('creates ~/.codex/config.toml when a user without one changes a setting', () => {
-    // Why: no mkdir of ~/.codex here — a genuinely fresh host has neither the
-    // config nor its directory, and promotion must create both.
     expect(existsSync(join(tmpHome, '.codex'))).toBe(false)
     syncSystemConfigIntoManagedCodexHome()
     expect(existsSync(baselinePath())).toBe(true)
 
-    // Codex itself creates the runtime config.toml on the first /model write.
     simulateCodexSettingWrite('model', '"gpt-5.5-codex"')
     syncSystemConfigIntoManagedCodexHome()
 
@@ -295,9 +280,6 @@ describe('codex settings write-back promotion', () => {
   })
 
   it('keeps runtime-only settings when promotion has to create ~/.codex/config.toml', () => {
-    // Why: `codex mcp add` inside an Orca-launched Codex writes into the runtime
-    // home. Seeding ~/.codex from the promoted keys alone made the next mirror
-    // treat that skeleton as authoritative and delete the MCP server for good.
     expect(existsSync(join(tmpHome, '.codex'))).toBe(false)
     syncSystemConfigIntoManagedCodexHome()
 
@@ -310,7 +292,6 @@ describe('codex settings write-back promotion', () => {
     expect(readRuntimeConfig()).toContain('[mcp_servers.linear]')
     expect(readRuntimeConfig()).toContain('[features]')
     expect(readRuntimeConfig()).toContain('model = "o4"')
-    // Trust stays runtime-owned; Orca must not write it into the real ~/.codex.
     expect(readRuntimeConfig()).toContain('[projects."/repo"]')
     expect(readSystemConfig()).not.toContain('[projects."/repo"]')
     expect(readSystemConfig()).toContain('[mcp_servers.linear]')
@@ -407,8 +388,7 @@ describe('codex settings write-back promotion', () => {
       syncSystemConfigIntoManagedCodexHome()
 
       expect(statSync(systemConfigPath()).mode & 0o777).toBe(0o600)
-      // The created ~/.codex itself is owner-only — it will also hold
-      // auth.json once the user signs in.
+      // The home may later hold auth.json, so directory permissions must also be private.
       expect(statSync(join(tmpHome, '.codex')).mode & 0o777).toBe(0o700)
     }
   )
@@ -493,7 +473,6 @@ describe('codex [tui] settings write-back promotion', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
 
-    // The user customizes the status line/theme inside Orca-launched Codex.
     writeFileSync(runtimeConfigPath(), `${readRuntimeConfig()}\n${CODEX_TUI_BLOCK}`, 'utf-8')
     syncSystemConfigIntoManagedCodexHome()
 
@@ -553,7 +532,6 @@ describe('codex [tui] settings write-back promotion', () => {
     writeSystemConfig('model = "gpt-5"\ntui.theme = "dark"\n')
     syncSystemConfigIntoManagedCodexHome()
 
-    // toml_edit preserves the dotted form when codex rewrites the value.
     setRuntimeConfig('model = "gpt-5"\ntui.theme = "light"\n')
     syncSystemConfigIntoManagedCodexHome()
 
@@ -586,8 +564,7 @@ describe('codex [tui] settings write-back promotion', () => {
   })
 
   it('inserts dotted beside a non-promoted dotted tui key instead of creating a [tui] table', () => {
-    // Why: any dotted tui.* key already defines the implicit tui table, so a
-    // fresh [tui] table at EOF would be a duplicate-definition parse error.
+    // A dotted tui key already defines the table; appending [tui] would duplicate it.
     writeSystemConfig('model = "gpt-5"\ntui.pet = "cat"\n')
     syncSystemConfigIntoManagedCodexHome()
 
@@ -666,9 +643,7 @@ describe('codex [tui] settings write-back promotion', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
 
-    // In-Codex tui change racing an outside edit that adds an inline tui table:
-    // appending [tui] would make the system config unparseable, so the change
-    // is dropped instead.
+    // An inline tui table prevents appending [tui] for the concurrent runtime edit.
     setRuntimeConfig('model = "gpt-5"\n\n[tui]\ntheme = "dark-photon"\n')
     writeSystemConfig('model = "gpt-5"\ntui = { animations = false }\n')
     promotionTestState.atomicWritePaths.length = 0

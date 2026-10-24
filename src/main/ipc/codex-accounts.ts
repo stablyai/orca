@@ -41,8 +41,7 @@ export function registerCodexAccountHandlers(
   )
   ipcMain.handle('codexAccounts:cancelPendingLogin', () => codexAccounts.cancelPendingLogin())
   ipcMain.handle('codexAccounts:pendingLoginUrl', () => codexAccounts.getPendingLoginUrl())
-  // Why: Settings can open after the login already printed its link, so the
-  // renderer reads the current value on mount and this only carries changes.
+  // Settings reads the current link on mount; broadcasts carry later changes.
   codexAccounts.onPendingLoginUrlChanged(broadcastCodexPendingLoginUrl)
   codexAccounts.setWslLoginUrlOpener((url) => openAccountSignInLink('codex', url))
   ipcMain.handle(
@@ -59,9 +58,7 @@ export function registerCodexAccountHandlers(
     'codexAccounts:select',
     (_event, args: { accountId: string | null } & CodexAccountSelectionTarget) => {
       if (!args.runtime) {
-        // Why: older renderer surfaces selected by account id only. Let the
-        // service infer the account's runtime instead of treating missing
-        // runtime as Windows/host and rejecting valid WSL accounts.
+        // Legacy renderers omit runtime; infer it from the account so valid WSL selection still works.
         return codexAccounts.selectAccount(args.accountId)
       }
       return codexAccounts.selectAccountForTarget(args.accountId, args)

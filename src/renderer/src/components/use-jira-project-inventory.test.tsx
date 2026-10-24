@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraProject } from '../../../shared/jira-types'
+import type { JiraProject } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
 import { useJiraProjectInventory } from './use-jira-project-inventory'

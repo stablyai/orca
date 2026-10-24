@@ -107,8 +107,6 @@ describe('AgentBrowserBridge', () => {
     expect(b.getActiveWebContentsId()).toBe(1)
   })
 
-  // ── Worktree filtering ──
-
   describe('worktree filtering', () => {
     it('returns only matching worktree tabs', () => {
       const tabs = new Map([
@@ -158,8 +156,6 @@ describe('AgentBrowserBridge', () => {
         })
       )
 
-      // Why: an agent driving the browser must see the structured cert failure,
-      // not just chrome-error:// from getURL().
       expect(b.tabList().tabs[0]).toMatchObject({
         url: 'https://localhost:3443/',
         loadError,
@@ -202,20 +198,14 @@ describe('AgentBrowserBridge', () => {
     })
   })
 
-  // ── Tab switch ──
-
   it('throws on out-of-range tab index', async () => {
     await expect(bridge.tabSwitch(99)).rejects.toThrow('Tab index 99 out of range')
   })
-
-  // ── No tab error ──
 
   it('throws browser_no_tab when no tabs registered', async () => {
     const b = new AgentBrowserBridge(mockBrowserManager(new Map()))
     await expect(b.snapshot()).rejects.toThrow('No browser tab open')
   })
-
-  // ── Tab close clears active ──
 
   it('clears activeWebContentsId on tab close', async () => {
     succeedWith({ snapshot: 'tree' })
@@ -253,7 +243,6 @@ describe('AgentBrowserBridge', () => {
     ).resolveTabIdSafe.bind(b)
     const targetWebContentsId = 20_000 + tabCount - 1
 
-    // The old forward scan inspected 1,000,000 entries for this repeated last-tab lookup.
     for (let lookup = 0; lookup < tabCount; lookup += 1) {
       expect(resolveTabIdSafe(targetWebContentsId)).toBe(`tab-${tabCount - 1}`)
     }
@@ -313,8 +302,6 @@ describe('AgentBrowserBridge', () => {
     expect(b.getActiveWebContentsId()).toBe(200)
     expect(b.tabList('wt-1').tabs).toMatchObject([{ browserPageId: 'tab-a', active: true }])
   })
-
-  // ── tabSwitch success ──
 
   it('switches active tab and returns switched index', async () => {
     const tabs = new Map([

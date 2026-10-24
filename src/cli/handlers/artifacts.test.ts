@@ -106,7 +106,6 @@ describe('artifact CLI handlers', () => {
         json: false
       })
     ).rejects.toThrow(/too large/)
-    // The capability preflight is the only permitted call; the oversized body never ships.
     expect(call).not.toHaveBeenCalledWith('artifacts.share', expect.anything())
   })
 

@@ -33,7 +33,6 @@ export type WorktreeCardProps = {
   contentIndent?: number
   flushSurface?: boolean
   lineageChildCount?: number
-  lineageChildWorktreeIds?: readonly string[]
   lineageCollapsed?: boolean
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties

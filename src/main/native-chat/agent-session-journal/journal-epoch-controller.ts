@@ -25,9 +25,7 @@ export class JournalEpochController {
       readOnly: () => boolean
       highestFence: () => number
       state: () => JournalReducerState
-      /** What of the live epoch's Stop and Resume a replacement restates. */
       queuePauseRestatement: () => JournalQueuePauseRestatement
-      /** The cards a new epoch writes again (`retainedQueueFacts`). */
       queueRestatement: () => JournalQueueRestatement
       cursor: () => AgentJournalCursor
       adopt: (loaded: JournalLoad) => void
@@ -47,13 +45,7 @@ export class JournalEpochController {
     })
   }
 
-  /**
-   * Every reason takes the same writable guard: a newer Orca's database refuses a roll like any
-   * other write, and `schema_unreadable` has no production caller.
-   *
-   * Serialized like every other write, so the discard cannot land between an
-   * admitted append's sequence assignment and its commit.
-   */
+  /** Serialize rollover with appends and apply the same writable guard as every other journal write. */
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)

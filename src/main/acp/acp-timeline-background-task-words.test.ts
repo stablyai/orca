@@ -68,12 +68,12 @@ describe('what a background task row says', () => {
           Result: { task_id: 'watch-1', command, status: 'completed', exit_code: 0 }
         }
       })
+      const [task] = await taskBlocks(fixture)
+      expect(task).toMatchObject({ kind: 'monitor', state: 'done' })
+      expect(task && backgroundTaskFallbackText(task)).toBe(
+        'Background monitor "Watch three tick echoes" finished'
+      )
     }
-    const [task] = await taskBlocks(fixture)
-    expect(task).toMatchObject({ kind: 'monitor', state: 'done' })
-    expect(task && backgroundTaskFallbackText(task)).toBe(
-      'Background monitor "Watch three tick echoes" finished'
-    )
   })
 
   it('reads a monitor from its output command alone, and a named kind still wins', async () => {

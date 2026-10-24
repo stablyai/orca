@@ -215,11 +215,24 @@ describe('omittedHostIds selector annotation', () => {
         hostScope: { hostIds: ['local'], omittedHostIds: [] }
       })
     )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['terminal', 'list', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('terminal.list', {
+      worktree: undefined,
+      limit: undefined,
+      includeVisualLayouts: false
+    })
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: {
+        terminals: [TERMINAL_ROW],
+        totalCount: 1,
+        truncated: false,
+        hostScope: { hostIds: ['local'], omittedHostIds: [] }
+      }
+    })
   })
 })
 

@@ -66,7 +66,7 @@ export class BrowserRouteSessionRegistry {
     this.maxPagesPerPartition = dependencies.maxPagesPerPartition ?? DEFAULT_MAX_PAGES_PER_PARTITION
   }
 
-  /** True while a partition is prepared or preparing; its storage must not be destroyed. */
+  /** Include preparing partitions so eviction cannot race admission. */
   isPartitionRetained(partition: string): boolean {
     return this.live.has(partition) || this.pending.has(partition)
   }
@@ -236,8 +236,7 @@ export class BrowserRouteSessionRegistry {
     proxyEndpoint: ProxyEndpoint
   ): void {
     if (state.bindingFingerprint !== derived.bindingFingerprint) {
-      // Why: a re-paired server's binding follows its new pairing while its jar is still open;
-      // the persisted binding, not the fingerprint seen at open, decides who owns the jar.
+      // Re-pairing can change a live jar's owner; trust the persisted binding over its opening fingerprint.
       if (this.dependencies.bindingStore.get(derived.partition) !== derived.bindingFingerprint) {
         throw new Error('browser_route_partition_binding_conflict')
       }

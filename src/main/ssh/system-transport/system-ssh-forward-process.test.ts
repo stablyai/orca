@@ -442,6 +442,52 @@ describe('system SSH forward process', () => {
     await expect(pending).resolves.toBeUndefined()
   })
 
+  // Why: a slow ProxyCommand outlasts the grace period, and a caller that dials the port next needs it listening.
+  it('waits past the grace period for a listener when a listener timeout is given', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+    let listening = false
+    connectMock.mockImplementation(() => {
+      const socket = createFakeSocket()
+      queueMicrotask(() =>
+        listening ? socket.emit('connect') : socket.emit('error', new Error('ECONNREFUSED'))
+      )
+      return socket
+    })
+
+    spawnMock.mockReturnValue(child)
+    const forward = await startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
+
+    let settled = false
+    const pending = waitForSystemSshForwardStartup(forward.process, 5173, 30_000).finally(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS * 4)
+    expect(settled).toBe(false)
+
+    listening = true
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS * 2)
+    await expect(pending).resolves.toBeUndefined()
+  })
+
+  it('rejects when no listener appears within the listener timeout', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+    connectMock.mockImplementation(() => {
+      const socket = createFakeSocket()
+      queueMicrotask(() => socket.emit('error', new Error('ECONNREFUSED')))
+      return socket
+    })
+
+    spawnMock.mockReturnValue(child)
+    const forward = await startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
+
+    const pending = waitForSystemSshForwardStartup(forward.process, 5173, 5_000)
+    const assertion = expect(pending).rejects.toThrow('did not listen on 127.0.0.1:5173')
+    await vi.advanceTimersByTimeAsync(5_000)
+    await assertion
+  })
+
   it('sends SIGTERM then SIGKILL when the process does not exit', async () => {
     vi.useFakeTimers()
     const child = createFakeProcess()

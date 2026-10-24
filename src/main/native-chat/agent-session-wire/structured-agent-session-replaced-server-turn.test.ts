@@ -40,7 +40,6 @@ const TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'cut-turn',
 const REPLY = { ...TURN, ordinal: 1 }
 const NEXT_TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'next-turn', ordinal: 2 }
 const NEXT_REPLY = { ...NEXT_TURN, ordinal: 3 }
-// The provider's identity cannot be proven either way: the recovery releases it with no proof.
 const UNPROVABLE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'probe unavailable' }
 
 let rig: RestTestRig
@@ -94,7 +93,7 @@ async function streamThenServerKilled(): Promise<void> {
   }
 }
 
-/** The server dies with no exit seen and no settle; a server process starts on the same host. */
+/** Restart after runtime death without observed exit or settlement. */
 async function startServer(options: { newProcess: boolean }): Promise<void> {
   const old = rig.host
   old.stopDelivery()
@@ -155,7 +154,6 @@ describe('a server replaced mid-turn on the same execution host', () => {
 
     await rig.host.reconcileRestartLeases()
     await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
-    // Nothing proved the provider gone: the lease keeps no death and no identity.
     const lease = rig.store.getRecord(SESSION)?.lease
     expect(lease).toMatchObject({ claimStatus: 'released', deathEvidence: null })
     expect(lease?.ownerProcess).toBeNull()
@@ -209,7 +207,7 @@ describe('a server replaced mid-turn on the same execution host', () => {
 
   it('revises a turn an earlier start left unverifiable once a new server replaces its owner', async () => {
     await streamThenServerKilled()
-    // The same process reopening its store replaced no runtime: nothing proves the turn over.
+    // Reopening in the same process replaces no runtime and proves no turn end.
     await startServer({ newProcess: false })
     await rig.host.restoreReadableSessions()
     await rig.host.reconcileRestartLeases()

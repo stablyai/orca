@@ -83,7 +83,7 @@ describe('persistent unit module cache boundary', () => {
       expect(() => readFileSync(join(identity.path, 'untrusted'))).toThrow()
     }
   )
-  it('restores a matching cache from an earlier source without copying evaluated state', async () => {
+  it('restores a matching cache produced from an earlier source', async () => {
     const identity = moduleCacheIdentity(options())
     mkdirSync(identity.path)
     writeFileSync(
@@ -136,11 +136,52 @@ it('uses an optional exact restore after install and saves successful scoped pro
   expect(steps[restore].uses).toBe('actions/cache/restore@v5')
   expect(steps[restore].with['restore-keys']).toBeUndefined()
   expect(steps[restore]['continue-on-error']).toBe(true)
-  expect(seal.if).toContain('success()')
-  expect(seal.if).toContain("github.event_name == 'pull_request'")
-  expect(seal.if).toContain("github.ref == 'refs/heads/main'")
-  expect(seal.if).toContain("github.event_name != 'pull_request'")
-  expect(seal.if).toContain("inputs.module_cache_seed && github.event_name == 'workflow_dispatch'")
+  const guard = seal.if
+    .replaceAll('steps.module-cache.outputs.key', 'steps["module-cache"].outputs.key')
+    .replaceAll(
+      'steps.module-cache-restore.outputs.cache-hit',
+      'steps["module-cache-restore"].outputs["cache-hit"]'
+    )
+  const producer = {
+    event: 'pull_request',
+    ref: 'refs/pull/1/merge',
+    success: true,
+    key: 'scoped',
+    hit: '',
+    seed: false
+  }
+  for (const [name, update, expected] of [
+    ['successful PR cache miss', {}, true],
+    ['successful main producer', { event: 'push', ref: 'refs/heads/main' }, true],
+    [
+      'successful manually seeded branch',
+      { event: 'workflow_dispatch', ref: 'refs/heads/experiment', seed: true },
+      true
+    ],
+    ['failed PR', { success: false }, false],
+    ['missing identity', { key: '' }, false],
+    ['exact restored hit', { hit: 'true' }, false],
+    ['ordinary branch push', { event: 'push', ref: 'refs/heads/experiment' }, false],
+    ['unseeded manual branch', { event: 'workflow_dispatch', ref: 'refs/heads/experiment' }, false],
+    [
+      'seed does not admit a nonmanual event',
+      { event: 'push', ref: 'refs/heads/experiment', seed: true },
+      false
+    ],
+    ['failed main producer', { event: 'push', ref: 'refs/heads/main', success: false }, false]
+  ]) {
+    const control = { ...producer, ...update }
+    const admitted = runInNewContext(guard, {
+      github: { event_name: control.event, ref: control.ref },
+      steps: {
+        'module-cache': { outputs: { key: control.key } },
+        'module-cache-restore': { outputs: { 'cache-hit': control.hit } }
+      },
+      inputs: { module_cache_seed: control.seed },
+      success: () => control.success
+    })
+    expect(admitted, name).toBe(expected)
+  }
   expect(save.if).toBe("steps.module-cache-seal.outputs.ready == 'true'")
   expect(save.with.key).toBe(steps[restore].with.key)
   expect(workflow.on.workflow_call.inputs.module_cache.default).toBe('off')
@@ -173,7 +214,7 @@ it('retains four workers on ARM and the four-core Blacksmith unit runner', () =>
   ).toBe('')
 })
 
-it('runs full same-source controls serially with five four-worker shards and included producer costs', () => {
+it('runs baseline, producer and warm controls serially with matching runtimes and shards', () => {
   const workflow = parse(readFileSync('.github/workflows/unit-module-cache-benchmark.yml', 'utf8'))
   const { baseline, producer, warm } = workflow.jobs
   expect(producer.needs).toBe('baseline')

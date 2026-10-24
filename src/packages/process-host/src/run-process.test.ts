@@ -148,6 +148,8 @@ describe('bounded output', () => {
       args: ['-e', 'process.stdout.write("x".repeat(8))'],
       maxOutputBytes: 8
     })
+    expect(result.stdout).toBe('xxxxxxxx')
+    expect(result.code).toBe(0)
     expect(result.outputTruncated).toBe(false)
   })
 })
@@ -167,7 +169,7 @@ describe('stderr streaming', () => {
 })
 
 describe('unkillable children', () => {
-  it('settles after the grace period rather than outliving its own deadline', async () => {
+  it('settles a timeout after the child reports ready', async () => {
     const result = await runProcess({
       program: process.execPath,
       args: [
@@ -182,7 +184,7 @@ describe('unkillable children', () => {
 })
 
 describe('abort', () => {
-  it('settles after the grace period when an aborted child ignores the signal', async () => {
+  it('settles an abort after the child reports ready', async () => {
     const controller = new AbortController()
     let stderr = ''
     const pending = runProcess({

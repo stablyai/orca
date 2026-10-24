@@ -92,12 +92,10 @@ export type CodexModelCatalogListing = {
   models: AgentSessionModelOption[]
   complete?: boolean
   configured?: { model?: string; effort?: string }
-  /** Installed tier universe retained while the current child's row overrides its controls. */
+  /** Retain installed tiers when the current child's model row overrides its controls. */
   listedServiceTiers?: readonly string[]
 }
 
-/** One paginated `model/list` pass. The provider fetch and the shaping of a
- *  session's answer are split so a host-cached listing can answer without one. */
 export async function fetchCodexModelCatalogListing(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   timeoutMs?: number
@@ -170,7 +168,6 @@ export async function fetchCodexModelCatalogListing(input: {
   }
 }
 
-/** Shapes one session's options answer from a listing, wherever it came from. */
 export function composeCodexSessionOptionCatalog(
   listing: CodexModelCatalogListing,
   input: {
@@ -226,7 +223,6 @@ export function composeCodexSessionOptionCatalog(
       ...(reportedTier !== undefined && input.current.serviceTier === undefined
         ? { confirmed: fastMode === undefined ? ['serviceTier'] : ['serviceTier', 'fastMode'] }
         : {}),
-      // The listing's default stands in for a thread that reported no model of its own.
       ...(input.current.model ? {} : { defaulted: ['model'] as const })
     }
   }

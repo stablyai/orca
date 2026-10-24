@@ -3,7 +3,10 @@ import type {
   RuntimeFileOpenPosition
 } from '../../shared/runtime-file-contracts'
 import type { JiraQuickFilterState } from '../../shared/jira-quick-filters'
-import type { JiraSavedFilterState, JiraSavedFilterMutation } from '../../shared/jira-saved-filters'
+import type {
+  JiraSavedFilterState,
+  JiraSavedFilterMutation
+} from '../../shared/jira/jira-saved-filters'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -18,6 +21,10 @@ import type {
   TerminalPaneRevealRequest
 } from '../../shared/terminal-pane-reveal'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type {
+  ProjectMovePauseRequest,
+  ProjectMovePauseResponse
+} from '../../shared/project-move-pause'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -136,6 +143,7 @@ export type UiCommandEventApi = {
   }) => void
   onNewTerminalTab: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
+  onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
   onReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onBrowserHistoryNavigate: (
@@ -280,6 +288,8 @@ export type UiCommandEventApi = {
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   /** Follow main's workspace sleep even when another client requested it. */
   onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
+  onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
+  respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onSystemResumed: (callback: () => void) => () => void

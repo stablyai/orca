@@ -65,8 +65,7 @@ describe('clean-exit confirmation retirement', () => {
     barrier.accept(passthrough(storm))
     barrier.flushPending()
 
-    // Past the 16-pass rescan bound the remainder is released verbatim; the
-    // bound trades scanner-model fidelity at teardown, never bytes.
+    // The rescan bound may sacrifice scanner state during teardown, but must preserve every byte.
     expect(barrier.released.join('')).toBe(storm)
   })
 })

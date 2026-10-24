@@ -218,7 +218,7 @@ describe('Claude accepted message choices', () => {
     expect(order).toEqual(['model:opus', 'effort:{"effortLevel":"high"}', 'prompt'])
   })
 
-  // The host reads the abort itself as never written, so a Stop there must not surface as a refusal.
+  // Host admission treats the original abort as never written.
   it('surfaces a Stop while it applies a choice as the abort, and a refusal as a refusal', async () => {
     let refuse = false
     const claude = fakeClaude({

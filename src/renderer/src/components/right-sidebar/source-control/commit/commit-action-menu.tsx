@@ -55,27 +55,25 @@ export function CommitActionMenu({
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex shrink-0">
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    className={cn(
-                      'rounded-l-none border-l border-border px-1.5 shrink-0',
-                      // Why: mirror the primary's disabled dimming for a unified look, but the chevron stays clickable (its push/fetch/pull stay valid when Commit is disabled).
-                      primaryAction.disabled && 'opacity-50'
-                    )}
-                    aria-label={moreCommitAndRemoteActionsLabel}
-                  >
-                    {showChevronSpinner ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <ChevronDown className="size-3.5" />
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-              </span>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className={cn(
+                    'rounded-l-none border-l border-border px-1.5 shrink-0',
+                    // Why: mirror the primary's disabled dimming for a unified look, but the chevron stays clickable (its push/fetch/pull stay valid when Commit is disabled).
+                    primaryAction.disabled && 'opacity-50'
+                  )}
+                  aria-label={moreCommitAndRemoteActionsLabel}
+                >
+                  {showChevronSpinner ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <ChevronDown className="size-3.5" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6}>
               {moreCommitAndRemoteActionsLabel}

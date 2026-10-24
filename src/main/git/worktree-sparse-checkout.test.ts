@@ -63,10 +63,7 @@ describe('sparse-checkout detection', () => {
       git(repoPath, ['sparse-checkout', 'set', 'keep'])
       git(repoPath, ['sparse-checkout', 'disable'])
 
-      // Regression guard: `git sparse-checkout disable` restores the full
-      // working tree but deliberately keeps <gitdir>/info/sparse-checkout so the
-      // checkout can be re-enabled. Detection must not treat the leftover file
-      // as "still sparse" (that produced a false "files are not on disk" badge).
+      // Disabling sparse checkout deliberately retains its pattern file for later re-enabling.
       const patternFile = path.join(repoPath, '.git', 'info', 'sparse-checkout')
       await expect(stat(patternFile)).resolves.toMatchObject({})
 
@@ -125,8 +122,7 @@ describe('sparse-checkout cache invalidation across the worktree lifecycle', () 
       const sparseRow = beforeRemoval.find((worktree) => worktree.branch.endsWith('sparse-branch'))
       expect(sparseRow?.isSparse).toBe(true)
 
-      // Removing through Orca's own removeWorktree (not a raw `git worktree remove`) exercises the
-      // cache-invalidation hook this listing now relies on instead of a fresh stat every time.
+      // Exercise Orca's invalidation hook rather than removing through raw Git.
       await removeWorktree(repoPath, linkedPath, true)
       git(repoPath, ['worktree', 'add', '-b', 'full-branch', linkedPath])
 
@@ -177,8 +173,7 @@ describe('parseCoreSparseCheckoutFlag', () => {
     expect(parseCoreSparseCheckoutFlag('[core]\n\tsparseCheckout = true # on\n')).toBe(true)
   })
 
-  // Git's config parser is character- not line-based, so a header may be followed on the same line
-  // by the assignment. Every expectation below was confirmed against `git config --file --get`.
+  // Git accepts an assignment immediately after its section header.
   it('reads an assignment on the same line as the section header', () => {
     expect(parseCoreSparseCheckoutFlag('[core] sparseCheckout = true\n')).toBe(true)
     expect(parseCoreSparseCheckoutFlag('[core] sparseCheckout = false\n')).toBe(false)
@@ -202,9 +197,7 @@ describe('parseCoreSparseCheckoutFlag', () => {
   })
 
   it('leaves [core] when a subsection header carries its own same-line assignment', () => {
-    // A `[section "sub"]key = value` line matched neither branch of the old anchored regex, so the
-    // parser never left `[core]` and credited the next indented line to it — a bogus sparse badge.
-    // Git reports core.sparseCheckout as unset here.
+    // A subsection must end [core] even when its header carries an assignment.
     expect(
       parseCoreSparseCheckoutFlag(
         '[core]\n[core "sub"]worktreeConfig = x\n\tsparseCheckout = true\n'
@@ -231,10 +224,7 @@ describe('parseCoreSparseCheckoutFlag', () => {
   })
 
   it('does not treat trailing junk as a second assignment', () => {
-    // Git parses this line fine and takes the whole tail as one value (`git config --list` reports
-    // `core.sparsecheckout=true bogus = false`) — a value runs to end of line, so only one
-    // assignment can share a line. Git then fails the boolean coercion outright, so reading the
-    // whole tail as the value keeps us on the conservative "not sparse" side.
+    // Git treats the full tail as one value; invalid boolean coercion must remain non-sparse.
     expect(parseCoreSparseCheckoutFlag('[core] sparseCheckout = true bogus = false\n')).toBe(false)
   })
 })

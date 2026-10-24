@@ -31,10 +31,8 @@ function harness(runs: AutomationRun[]) {
   const closed: string[] = []
   const forgotten: AutomationRun[] = []
   const use = new Map<string, 'used' | 'unused' | 'unknown'>()
-  // Runs whose shell is proven alone at its prompt; any other is unproven, as a live agent reads.
   const idleShell = new Set<string>()
   const dead = new Set<string>()
-  // Runs in a workspace made for them; their sleep succeeds unless it declines.
   const ownWorkspace = new Set<string>()
   const sleepDeclines = new Set<string>()
   const sleepAttempts: string[] = []
@@ -45,7 +43,6 @@ function harness(runs: AutomationRun[]) {
       runKeyedSerializedOperation(lanes, automationId, operation),
     listRuns: () => runs.filter((run) => !forgotten.some((gone) => gone.id === run.id)),
     terminalClientUse: (run) => use.get(run.id) ?? 'unused',
-    // A closed pane is gone for every run on it.
     runTerminalAlive: (run) => !dead.has(run.id) && !closed.includes(run.terminalPaneKey ?? ''),
     shellAloneAtPrompt: async (run) => idleShell.has(run.id),
     closeRunTerminal: async (run) => {
@@ -91,7 +88,6 @@ afterEach(() => {
 
 describe('headless run terminal retention', () => {
   it('closes finished run terminals past the grace period, keeping the newest few viewable', async () => {
-    // Six hourly runs of one automation, all finished.
     const runs = [0, 1, 2, 3, 4, 5].map((hour) => makeRun(`r${hour}`, hour * 3_600_000))
     const h = harness(runs)
 
@@ -183,7 +179,6 @@ describe('headless run terminal retention', () => {
     h.use.set('typed', 'used')
     h.use.set('adopted', 'unknown')
 
-    // Fresh runs, inside the grace period: an update still releases them.
     expect(await h.retention.drain()).toBe(5)
     expect(h.closed.toSorted()).toEqual([
       'tab-r0:1',
@@ -236,7 +231,6 @@ describe('headless run terminal retention', () => {
   it('keeps the newest three live terminals, not counting ones already gone', async () => {
     const runs = [0, 1, 2, 3, 4].map((n) => makeRun(`r${n}`, n))
     const h = harness(runs)
-    // The newest run's terminal was closed by hand: it must not take a keep slot.
     h.dead.add('r4')
     await h.retention.sweep()
     vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
@@ -260,7 +254,6 @@ describe('headless run terminal retention', () => {
   })
 
   it('keeps older runs linked to a reused pane until its newest run lets it go', async () => {
-    // Five reuse-session runs share one agent's pane; one older run had its own.
     const shared = [1, 2, 3, 4, 5].map((n) => ({
       ...makeRun(`r${n}`, n),
       terminalPaneKey: 'tab-shared:1'
@@ -275,7 +268,6 @@ describe('headless run terminal retention', () => {
 
     await h.retention.drain()
     expect(h.closed.toSorted()).toEqual(['tab-r0:1', 'tab-shared:1'])
-    // Once the pane is gone, the older records follow it.
     expect(h.forgotten.map((run) => run.id).toSorted()).toEqual([
       'r0',
       'r1',
@@ -293,7 +285,6 @@ describe('headless run terminal retention', () => {
     vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
 
     let finishDispatch = (): void => {}
-    // A reuse run picks r0's pane and records it before releasing the lane.
     const dispatch = runKeyedSerializedOperation(h.lanes, 'nightly', async () => {
       await new Promise<void>((resolve) => (finishDispatch = resolve))
       runs.push({ ...makeRun('reuse', 4, 'dispatched'), terminalPaneKey: 'tab-r0:1' })
@@ -305,7 +296,6 @@ describe('headless run terminal retention', () => {
     finishDispatch()
     await dispatch
     await sweeping
-    // r0's pane is the reuse run's now: r0 keeps its link, and the oldest other terminal closes.
     expect(h.closed).toEqual(['tab-r1:1'])
     expect(h.forgotten.map((run) => run.id)).toEqual(['r1'])
   })
@@ -339,7 +329,6 @@ describe('headless run terminal retention', () => {
     const sweeping = slow.sweep()
     await vi.advanceTimersByTimeAsync(0)
     expect(closeRunTerminal).toHaveBeenCalledTimes(1)
-    // The pane's close is still in flight; a dispatch waits for it.
     const sawForgotten = runKeyedSerializedOperation(h.lanes, 'nightly', async () =>
       h.forgotten.map((run) => run.id)
     )
@@ -359,7 +348,6 @@ describe('headless run terminal retention', () => {
     expect(h.closed).toEqual([])
     expect(h.forgotten).toEqual([])
 
-    // Later sweeps and an update's drain leave the slept pane to resume its agent.
     await h.retention.sweep()
     await h.retention.drain()
     expect(h.slept).toEqual(['r0'])

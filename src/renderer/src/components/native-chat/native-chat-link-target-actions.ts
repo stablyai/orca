@@ -22,10 +22,7 @@ import {
   resolveNativeChatHttpLinkSourceOwner
 } from './native-chat-http-link-source-owner'
 import { openNativeChatWebLink } from './native-chat-web-link-actions'
-import {
-  showFileLinkNotFoundToast,
-  showFileLinkUnverifiableToast
-} from './native-chat-file-link-toasts'
+import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
 
 /** Who owns a chat http(s) link and where it may open: the rows its popover and menu offer. */
 export function resolveNativeChatHttpLinkRouting(
@@ -53,10 +50,7 @@ export function nativeChatFileOpenDeps(
     worktreePath: context.worktreePath,
     runtimeEnvironmentId: context.runtimeEnvironmentId,
     sourceTabId: context.sourceTabId,
-    onOpenFailure: (failure) =>
-      failure.verdict === 'unverifiable'
-        ? showFileLinkUnverifiableToast(target.absolutePath, failure.error)
-        : showFileLinkNotFoundToast(target.absolutePath)
+    onOpenFailure: (failure) => showFileLinkOpenFailureToast(target.absolutePath, failure)
   }
 }
 

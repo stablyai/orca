@@ -18,7 +18,12 @@ describe('normalizeHermesEvent', () => {
   })
 
   it('flags only session start as a boundary, so a turn-end done cannot claim one', () => {
-    for (const eventName of ['post_llm_call', 'on_session_end', 'on_session_finalize']) {
+    for (const eventName of [
+      'post_llm_call',
+      'on_session_end',
+      'on_session_finalize',
+      'on_session_reset'
+    ]) {
       const parsed = normalize(eventName, { session_id: 's1' })
       expect(parsed).toMatchObject({ state: 'done' })
       expect(parsed?.sessionBoundary).toBeUndefined()

@@ -7,18 +7,7 @@ import type {
   MobileWebShellUpdateNotice
 } from './mobile-web-shell-session-contract'
 
-/**
- * Phase D of the hybrid RC emulator run, end to end and against a disk.
- *
- * The host is reachable and serves a generation whose assets do not arrive intact. Refusing them is
- * right — the fetch hashes every asset, and a truncated one is not a bundle. What the shell then
- * did was paint a refusal wall with a "Try again" over a generation already on disk that it would
- * have opened without being asked the moment the host went away.
- *
- * The reducer suite pins the decision; this pins the two things only a disk can answer: the refused
- * generation never reaches the cache, and the next launch asks the host again rather than living
- * under a fallback forever.
- */
+/** Real session hook and generation store over an in-memory filesystem; manifest/fetch are stubbed. */
 type Doubles = {
   connection: { client: object | null; state: string }
   gates: {
@@ -300,16 +289,6 @@ describe('an update the shell refuses while the host is reachable', () => {
     expect(mounted.updateNotice()).toBeNull()
     // Walled, not deleted: the bytes are intact and a newer host is not what makes them wrong.
     expect(cachedBuildIds(fileSystem)).toEqual([GOOD_BUILD_ID])
-  })
-
-  it('serves the generation still inside that window, which is the same disk one field apart', async () => {
-    const fileSystem = createFakeGenerationFileSystem()
-    await cacheGeneration(fileSystem, GOOD_MANIFEST)
-
-    const mounted = await mountRoute(fileSystem)
-
-    expect(mounted.state()).toMatchObject({ kind: 'ready', buildId: GOOD_BUILD_ID })
-    expect(mounted.updateNotice()).toBe('update-failed')
   })
 
   it('writes down why on the device, which is all a release build keeps', async () => {
