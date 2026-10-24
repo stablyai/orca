@@ -24,7 +24,12 @@ import { registerDaemonManagementHandlers } from './pty-management'
 beforeEach(() => {
   vi.clearAllMocks()
   provider.mockReturnValue({})
-  adapter.getDaemonIdentity.mockReturnValue({ pid: 123, launchNonce: 'original' })
+  // Real adapters return a fresh copy on every read.
+  adapter.getDaemonIdentity.mockImplementation(() => ({
+    pid: 123,
+    startedAtMs: 1,
+    launchNonce: 'original'
+  }))
   adapter.getAsyncIoHealth.mockResolvedValue({ state: 'stalled', pendingMs: 5000 })
   registerDaemonManagementHandlers()
 })
@@ -48,7 +53,11 @@ it('discards health evidence if the daemon changes while the check is pending', 
       })
   )
   const pending = read()
-  adapter.getDaemonIdentity.mockReturnValue({ pid: 456, launchNonce: 'replacement' })
+  adapter.getDaemonIdentity.mockReturnValue({
+    pid: 456,
+    startedAtMs: 2,
+    launchNonce: 'replacement'
+  })
   finish({ state: 'stalled', pendingMs: 5000 })
   expect(await pending).toEqual({ state: 'unverifiable' })
   expect(restart).not.toHaveBeenCalled()
