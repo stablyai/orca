@@ -137,15 +137,12 @@ describe('scrubbed Pi 1.0.4 RPC captures', () => {
     expect(transcript(result.rows)).toContain('STEER_CONSUMED')
     expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
   })
-  it('keeps the run when Pi sends a tool result too large to deliver', async () => {
-    const result = await replay(
-      'steer-followup',
-      (frame) =>
-        ['tool_execution_end', 'turn_end', 'agent_end'].includes(frame.type) ||
-        (frame.type === 'message_end' &&
-          z.object({ role: z.literal('toolResult') }).safeParse(frame.message).success)
+  it('keeps the run and consumed inputs when Pi sends records too large to deliver', async () => {
+    const result = await replay('steer-followup', (frame) =>
+      ['tool_execution_end', 'message_end', 'turn_end', 'agent_end'].includes(frame.type)
     )
     expect(result.failed).not.toHaveBeenCalled()
+    expect(result.accepted.mock.calls.map(([id]) => id)).toEqual(['send-1', 'send-2', 'send-3'])
     expect(result.turns.map((turn) => turn.outcome)).toEqual(['success'])
     expect(
       result.rows.filter((row) => row.body.kind === 'status' && row.body.tone === 'warning')

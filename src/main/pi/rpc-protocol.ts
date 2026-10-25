@@ -59,13 +59,37 @@ export const piRpcMessageEventSchema = z.object({
 })
 export type PiRpcMessageEvent = z.infer<typeof piRpcMessageEventSchema>
 
-/** Events whose payload the chat never shows; only their lifecycle step matters. */
-export const PI_RPC_LIFECYCLE_ONLY_EVENTS: ReadonlySet<string> = new Set([
+// The chat never shows these payloads; only their lifecycle step matters.
+const LIFECYCLE_ONLY_EVENTS: ReadonlySet<string> = new Set([
   'turn_end',
   'agent_end',
   'compaction_end',
   'auto_compaction_end'
 ])
+
+// Pi writes these fields before the payload, so they survive in an oversized record's prefix.
+const SKIPPED_TOOL_END_HEAD =
+  /^\{"type":"tool_execution_end","toolCallId":"([^"\\]+)","toolName":"([^"\\]+)"/
+const SKIPPED_MESSAGE_END_HEAD = /^\{"type":"message_end","message":\{"role":"([A-Za-z]+)"/
+
+/** What an event over the line limit still applies without its payload, and whether the chat lost content. */
+export function piRpcSkippedEvent(
+  type: string,
+  prefix: string
+): { head: { type: string; [field: string]: unknown } | null; contentLost: boolean } {
+  if (LIFECYCLE_ONLY_EVENTS.has(type)) {
+    return { head: { type }, contentLost: false }
+  }
+  const tool = SKIPPED_TOOL_END_HEAD.exec(prefix)
+  const role = SKIPPED_MESSAGE_END_HEAD.exec(prefix)?.[1]
+  // An oversized tool result is content, not a short error, so the call closes as completed.
+  const head = tool
+    ? { type, toolCallId: tool[1], toolName: tool[2] }
+    : role
+      ? { type, message: { role, content: [] } }
+      : null
+  return { head, contentLost: true }
+}
 
 export const piRpcToolEventSchema = z.object({
   type: z.enum(['tool_execution_start', 'tool_execution_update', 'tool_execution_end']),

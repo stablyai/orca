@@ -8,11 +8,11 @@ import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-record'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcContextUsage } from './rpc-context-usage'
-import { PiRpcMessages } from './rpc-messages'
+import { PiRpcMessages, piRpcSkippedEventNotice } from './rpc-messages'
 import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
 import { PiRpcIdleCheck } from './rpc-idle-check'
 import { piRpcRetryActivity } from './rpc-retry-activity'
-import { PI_RPC_LIFECYCLE_ONLY_EVENTS, piRpcMessageSchema } from './rpc-protocol'
+import { piRpcMessageSchema, piRpcSkippedEvent } from './rpc-protocol'
 
 export type PiRpcTurnDeps = {
   lane: JsonlRpcTimelineLane
@@ -204,12 +204,14 @@ export class PiRpcTurns {
     }
   }
 
-  /** Settlement rides on the small agent_settled; a skipped lifecycle event runs without its payload. */
+  /** Settlement rides on the small agent_settled; a skipped event still applies its head. */
   skipped(type: string, prefix: string): void {
-    if (PI_RPC_LIFECYCLE_ONLY_EVENTS.has(type)) {
-      this.receive({ type })
-    } else if (this.active && !this.ended) {
-      this.deps.lane.apply(this.messages.skipped(type, prefix, this.active))
+    const { head, contentLost } = piRpcSkippedEvent(type, prefix)
+    if (head) {
+      this.receive(head)
+    }
+    if (contentLost && this.active && !this.ended) {
+      this.deps.lane.apply([piRpcSkippedEventNotice(this.active)])
     }
   }
 
