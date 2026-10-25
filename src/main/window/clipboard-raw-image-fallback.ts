@@ -12,6 +12,27 @@ type ClipboardRawImageDeps = {
 
 const RAW_IMAGE_FORMATS = ['image/png', 'image/jpeg', 'image/tiff']
 
+/** Why: on macOS, availableFormats reports MIME names but readBuffer only finds bytes under
+ *  the pasteboard UTI (real-clipboard probe on Electron 43.8.1: readBuffer('image/png') is
+ *  empty while 'public.png' holds the bytes — exactly the CleanShot X shape of #26739).
+ *  The UTI retry is gated on the reader's own has() primitive (see
+ *  MAC_PASTEBOARD_IMAGE_TYPES in clipboard-image-source) so Windows/Linux, where the MIME
+ *  name already carries the bytes, never issue a speculative read. */
+const PASTEBOARD_UTI_BY_MIME: Record<string, string> = {
+  'image/png': 'public.png',
+  'image/jpeg': 'public.jpeg',
+  'image/tiff': 'public.tiff'
+}
+
+function readFlavorBuffer(clipboard: ClipboardImageReader, format: string): Buffer {
+  const buffer = clipboard.readBuffer(format)
+  if (buffer.byteLength > 0) {
+    return buffer
+  }
+  const uti = PASTEBOARD_UTI_BY_MIME[format]
+  return uti && clipboard.has(uti) ? clipboard.readBuffer(uti) : buffer
+}
+
 /** Decode the first raw image flavor when Electron's readImage came back empty:
  *  tools like CleanShot X put JPEG bytes under the public.png flavor (#26739),
  *  which readImage reports as an empty image. Converts the surviving decode to
@@ -28,7 +49,7 @@ export function readClipboardRawImageAsPng(
     if (!formats.includes(format)) {
       continue
     }
-    const buffer = clipboard.readBuffer(format)
+    const buffer = readFlavorBuffer(clipboard, format)
     if (buffer.byteLength === 0) {
       continue
     }

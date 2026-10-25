@@ -96,7 +96,9 @@ vi.mock('electron', () => ({
     readImage: clipboardReadImageMock,
     availableFormats: clipboardAvailableFormatsMock,
     writeImage: clipboardWriteImageMock,
-    writeBuffer: clipboardWriteBufferMock
+    writeBuffer: clipboardWriteBufferMock,
+    // UTI flavor probe used by the raw-image fallback; nothing on these boards.
+    has: vi.fn(() => false)
   },
   ipcMain: {
     removeHandler: removeHandlerMock,

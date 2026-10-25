@@ -7,7 +7,8 @@ import { readClipboardRawImageAsPng } from './clipboard-raw-image-fallback'
 function makeClipboard(formats: string[], buffers: Record<string, Buffer>) {
   return {
     availableFormats: vi.fn(() => formats),
-    readBuffer: vi.fn((format: string) => buffers[format] ?? Buffer.alloc(0))
+    readBuffer: vi.fn((format: string) => buffers[format] ?? Buffer.alloc(0)),
+    has: vi.fn((format: string) => format in buffers)
   }
 }
 
@@ -91,6 +92,35 @@ describe('readClipboardRawImageAsPng', () => {
       readClipboardRawImageAsPng(clipboard, {
         createImageFromBuffer: (buffer) =>
           buffer === tiff ? decodableImage(() => png) : emptyImage()
+      })
+    ).toBe(png)
+  })
+
+  it('falls back to the macOS UTI flavor when the MIME-named buffer is empty', () => {
+    // Real-macOS probe (Electron 43.8.1, CleanShot X shape from #26739): availableFormats
+    // reports 'image/png' but readBuffer('image/png') is empty — the JPEG bytes only answer
+    // to the 'public.png' pasteboard UTI.
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0])
+    const png = Buffer.from([7, 7, 7])
+    const clipboard = makeClipboard(['image/png'], { 'public.png': jpeg })
+    const readBuffer = clipboard.readBuffer as ReturnType<typeof vi.fn>
+    expect(
+      readClipboardRawImageAsPng(clipboard, {
+        createImageFromBuffer: (buffer) =>
+          buffer === jpeg ? decodableImage(() => png) : emptyImage()
+      })
+    ).toBe(png)
+    expect(readBuffer.mock.calls).toEqual([['image/png'], ['public.png']])
+  })
+
+  it('recovers PNG bytes mislabeled under the TIFF flavor via the UTI fallback', () => {
+    const junk = Buffer.from([0x49, 0x49, 0x2a, 0x00, 8, 0, 0, 0])
+    const png = Buffer.from([9, 9, 9])
+    const clipboard = makeClipboard(['image/tiff'], { 'public.tiff': junk })
+    expect(
+      readClipboardRawImageAsPng(clipboard, {
+        createImageFromBuffer: (buffer) =>
+          buffer === junk ? decodableImage(() => png) : emptyImage()
       })
     ).toBe(png)
   })
