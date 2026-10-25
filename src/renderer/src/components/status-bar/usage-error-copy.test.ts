@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fetchAntigravityRateLimits } from '../../../../main/rate-limits/antigravity-usage-fetcher'
-import { ANTIGRAVITY_LOCATION_REJECTION } from '../../../../main/rate-limits/antigravity-usage-location-rejection.test-fixtures'
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 const i18nState = vi.hoisted(() => ({ language: 'en' }))
 
@@ -80,24 +79,11 @@ describe('unavailable Antigravity usage', () => {
       'Antigravity usage is not available. The Antigravity CLI reports that Antigravity is not currently available in your location.',
     status: 'unavailable',
     usageMetadata: { failureKind: 'usage-unavailable' }
-  } as const
+  } as const satisfies ProviderRateLimits
 
-  it('labels the captured rejection and preserves the specific CLI reason through the fetcher', async () => {
-    const result = await fetchAntigravityRateLimits({
-      resolveCommand: async () => '/test/agy',
-      resolveEnvironment: async () => ({}),
-      runCommand: async (spec) => ({
-        signal: null,
-        timedOut: false,
-        ...(spec.args?.[0] === '--version'
-          ? { code: 0, stdout: '1.4.7', stderr: '' }
-          : ANTIGRAVITY_LOCATION_REJECTION)
-      })
-    })
-    expect(getProviderUsageStatusLabel(result)).toBe('Usage unavailable')
-    expect(getProviderUsageErrorMessage(result)).toContain(
-      'The Antigravity CLI reports that Antigravity is not currently available in your location.'
-    )
+  it('labels the shared unavailable contract and preserves its diagnostic', () => {
+    expect(getProviderUsageStatusLabel(locationRejection)).toBe('Usage unavailable')
+    expect(getProviderUsageErrorMessage(locationRejection)).toBe(locationRejection.error)
   })
 
   it('keeps unknown Antigravity refresh failures distinct', () => {
