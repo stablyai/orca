@@ -20674,6 +20674,16 @@
       "findInFolder": "Find in {{path}}",
       "folderLoadError": "Could not load this folder:",
       "emptyFolder": "No files in this folder"
+    },
+    "clipboard": {
+      "copyFailed": "Could not copy files",
+      "pasteFailed": "Could not paste files",
+      "copying": "Copying files…",
+      "localDestinationRequired": "Paste remote files into a local workspace",
+      "sourceChanged": "Reconnect to the source server and copy the files again",
+      "outsideWorkspace": "Source file is outside its workspace",
+      "sshUnsupported": "Copying from SSH workspaces is not supported",
+      "recursiveCopy": "Cannot copy a folder into itself"
     }
   },
   "sparsePreset": {

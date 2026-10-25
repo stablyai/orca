@@ -1,4 +1,5 @@
 import type { PathExistenceResult } from '../../shared/path-existence-batch'
+import type { RuntimeFileImportRequest } from '../../shared/runtime-file-import-request'
 import { ipcRenderer, webUtils } from 'electron'
 import type {
   PrepareDroppedPathsRequest,
@@ -205,6 +206,8 @@ export const fsApi = {
       access?: LocalFileAccess
     } & SshMutationExpectation
   ): Promise<{ results: ImportItemResult[] }> => ipcRenderer.invoke('fs:importExternalPaths', args),
+  importRuntimeFiles: (args: RuntimeFileImportRequest): Promise<{ results: ImportItemResult[] }> =>
+    ipcRenderer.invoke('fs:importRuntimeFiles', args),
   stageExternalPathsForRuntimeUpload: (args: {
     sourcePaths: string[]
     nameExtensionlessImages?: boolean

@@ -1,27 +1,6 @@
-import {
-  createNormalizedPathInsideOrEqualMatcher,
-  normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
 import type { TreeNode } from './file-explorer-types'
 
-// Why: skip descendants of other selected directories — deleting a parent
-// already removes the child, and issuing both requests races on the
-// now-missing path and produces spurious errors.
-export function selectDeletionRoots(nodes: TreeNode[]): TreeNode[] {
-  const directories = nodes
-    .filter((node) => node.isDirectory)
-    .map((node) => ({
-      node,
-      matches: createNormalizedPathInsideOrEqualMatcher(node.path)
-    }))
-  if (directories.length === 0) {
-    return [...nodes]
-  }
-  return nodes.filter((node) => {
-    const candidate = normalizeRuntimePathForComparison(node.path)
-    return !directories.some((other) => other.node !== node && other.matches(candidate))
-  })
-}
+export { selectFileExplorerSelectionRoots as selectDeletionRoots } from './file-explorer-selection'
 
 type RunBatchDeletionParams = {
   roots: TreeNode[]

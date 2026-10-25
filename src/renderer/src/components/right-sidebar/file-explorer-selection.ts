@@ -1,3 +1,7 @@
+import {
+  createNormalizedPathInsideOrEqualMatcher,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
 import type { TreeNode } from './file-explorer-types'
 
 export type FileExplorerSelectionState = {
@@ -173,4 +177,20 @@ export function formatFileExplorerPathsForClipboard(
   pathKind: 'absolute' | 'relative'
 ): string {
   return nodes.map((node) => (pathKind === 'absolute' ? node.path : node.relativePath)).join('\n')
+}
+
+export function selectFileExplorerSelectionRoots(nodes: TreeNode[]): TreeNode[] {
+  const directories = nodes
+    .filter((node) => node.isDirectory)
+    .map((node) => ({
+      node,
+      matches: createNormalizedPathInsideOrEqualMatcher(node.path)
+    }))
+  if (directories.length === 0) {
+    return [...nodes]
+  }
+  return nodes.filter((node) => {
+    const candidate = normalizeRuntimePathForComparison(node.path)
+    return !directories.some((other) => other.node !== node && other.matches(candidate))
+  })
 }

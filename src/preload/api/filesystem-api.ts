@@ -1,4 +1,5 @@
 import type { PathExistenceResult } from '../../shared/path-existence-batch'
+import type { RuntimeFileImportRequest } from '../../shared/runtime-file-import-request'
 import type { RuntimeFileReadChunkResult } from '../../shared/runtime-types'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import type {
@@ -197,6 +198,7 @@ export type FilesystemApi = {
         access?: LocalFileAccess
       } & SshMutationExpectation
     ) => Promise<{ results: ImportItemResult[] }>
+    importRuntimeFiles: (args: RuntimeFileImportRequest) => Promise<{ results: ImportItemResult[] }>
     stageExternalPathsForRuntimeUpload: (args: {
       sourcePaths: string[]
       nameExtensionlessImages?: boolean

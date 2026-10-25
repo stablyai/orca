@@ -30,8 +30,36 @@ import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from './runtime-upload-temp-sweep'
 import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { z } from 'zod'
+import { importRuntimeFiles } from './runtime-file-import'
 
 export function registerFilesystemMutationHandlers(store: Store): void {
+  ipcMain.handle('fs:importRuntimeFiles', async (event, input: unknown) => {
+    const args = z
+      .object({
+        environmentId: z.string().min(1),
+        worktree: z.string().min(1),
+        relativePaths: z.array(z.string().min(1)).min(1).max(10_000),
+        destinationDir: z.string().min(1),
+        expectedEnvironmentPairingRevision: z.number()
+      })
+      .parse(input)
+    const userDataPath = app.getPath('userData')
+    const destinationDir = await resolveDesktopAuthorizedPath(args.destinationDir, store)
+    const environmentId = resolveEnvironment(userDataPath, args.environmentId).id
+    const lifetime = abortWhenRendererGone(event.sender)
+    try {
+      return await importRuntimeFiles(
+        { ...args, environmentId, destinationDir },
+        userDataPath,
+        app.getPath('temp'),
+        lifetime.signal
+      )
+    } finally {
+      lifetime.dispose()
+    }
+  })
+
   ipcMain.handle(
     'fs:createFile',
     async (

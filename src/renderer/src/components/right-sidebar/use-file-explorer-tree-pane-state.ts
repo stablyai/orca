@@ -13,6 +13,7 @@ import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { useFileExplorerImport } from './useFileExplorerImport'
+import { useFileExplorerClipboard } from './use-file-explorer-clipboard'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { useFileExplorerNodeCommands } from './use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from './use-file-explorer-row-scrolling'
@@ -246,6 +247,18 @@ export function useFileExplorerTreePaneState({
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
     openFiles
+  })
+
+  useFileExplorerClipboard({
+    containerRef: rowScrolling.explorerShellRef,
+    worktreeId: activeWorktreeId,
+    worktreePath: visibleFilesWorktreePath,
+    displayRootPath,
+    operationOwner: rootCache?.operationOwner,
+    selectedPaths,
+    selectedNode,
+    rowProjection,
+    refreshDir
   })
 
   const handlers = useFileExplorerHandlers({

@@ -163,6 +163,9 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       }
     },
     importExternalPaths: async () => ({ results: [] }),
+    importRuntimeFiles: async () => {
+      throw new Error('Copying files to a local workspace requires the Orca desktop app')
+    },
     stageExternalPathsForRuntimeUpload: async () => ({ sources: [] }),
     // Why: the web client has no local filesystem to stream from, so staging
     // never yields a source for this to upload.
