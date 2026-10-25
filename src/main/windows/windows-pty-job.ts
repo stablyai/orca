@@ -255,3 +255,19 @@ export function __setConptyJobNativeForTests(loader?: () => ConptyNative | null)
   cachedNative = undefined
   hostJobAssigned = null
 }
+
+type UnreadyWindowsPty = IPty & { _agent?: { kill?: () => void } }
+
+/**
+ * Tears a ConPTY pane down now. node-pty defers its own kill() until the pane's first output, so
+ * a pane discarded before printing would keep its console host, input pipe and output worker.
+ * The agent's kill closes all three; node-pty's later deferred kill finds nothing left to close.
+ */
+export function killConptyNow(proc: IPty): void {
+  const pane: UnreadyWindowsPty = proc
+  try {
+    pane._agent?.kill?.()
+  } catch {
+    // Best effort; the host job still reaps the console host with the daemon.
+  }
+}

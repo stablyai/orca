@@ -8,6 +8,7 @@ import {
   getAgentPromptSubmitDelayMs,
   getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
+  isHeldAgentPromptDraft,
   iterateAgentPromptPasteChunks,
   resolveAgentPromptSubmitDelayForAgent,
   sanitizeAgentPromptText
@@ -148,5 +149,32 @@ describe('agent prompt injection bytes', () => {
       expect(Buffer.byteLength(chunk, 'utf8')).toBeLessThanOrEqual(31)
       expect(Buffer.from(chunk, 'utf8').toString('utf8')).toBe(chunk)
     }
+  })
+})
+
+describe('isHeldAgentPromptDraft', () => {
+  // 142 LFs, as in the measured 10,312-char dispatch that Windows Codex showed as 10,597 chars.
+  const prompt = Array.from({ length: 143 }, (_, line) => `${line}`.padEnd(71, 'x')).join('\n')
+
+  it.each([
+    ['the measured Windows count', `[Pasted Content ${prompt.length + 142 * 2 + 1} chars]`, true],
+    [
+      'a burst split into two placeholders',
+      '[Pasted Content 4000 chars][Pasted Content 6312 chars] #2',
+      true
+    ],
+    ['the prompt shown as text', prompt, true],
+    ['its tail in a scrolled composer', prompt.slice(-200), true],
+    ['a line from its middle', prompt.split('\n')[5], false],
+    [
+      'the user typing beside it',
+      `[Pasted Content ${prompt.length} chars] also fix the readme`,
+      false
+    ],
+    ['a larger unrelated paste', `[Pasted Content ${prompt.length * 2} chars]`, false],
+    ['a shorter paste', `[Pasted Content ${prompt.length - 1} chars]`, false],
+    ['a rotating placeholder', 'Explain this codebase', false]
+  ])('%s -> %s', (_case, draft, held) => {
+    expect(isHeldAgentPromptDraft(draft, prompt, 1)).toBe(held)
   })
 })

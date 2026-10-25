@@ -564,7 +564,26 @@ describe('input original queue, callback and private method contracts', () => {
     })
     Object.defineProperty(target, 'getPtyAgent', { value: read })
     await expect(
-      target['resubmitAgentPromptAfterRetryDelay'](PTY, 1, { inputKind: 'driving' })
+      target['resubmitHeldAgentPrompt'](
+        PTY,
+        1,
+        { inputKind: 'driving' },
+        {
+          baseline: {
+            generation: 1,
+            permissionSequence: 0,
+            workingSequence: 0,
+            explicitWorkingStartedAt: null,
+            outputSequence: 0,
+            status: null
+          },
+          readActivity: () => {
+            throw new Error('no read before the agent lookup')
+          },
+          prompt: undefined,
+          heldBudgetMs: 0
+        }
+      )
     ).resolves.toBe(0)
     expect(read).toHaveBeenCalledOnce()
   })

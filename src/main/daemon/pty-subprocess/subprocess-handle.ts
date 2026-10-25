@@ -11,6 +11,7 @@ import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
+import type { ConptyStartupEvents } from './conpty-startup-input-reader'
 
 type DisposableNativePty = pty.IPty & {
   destroy?: () => void
@@ -34,6 +35,8 @@ export function createDaemonPtySubprocessHandle(args: {
   requestedCwd?: string
   sessionId: string
   startupAgentRecognition: RecognizedAgentProcess | null
+  /** Output and exit buffered before this handle subscribed; replayed ahead of live events. */
+  startupEvents?: ConptyStartupEvents
 }): SubprocessHandle {
   const reportsChildExitStatus = args.reportsChildExitStatus
   const shellPath = args.shellPath
@@ -77,10 +80,12 @@ export function createDaemonPtySubprocessHandle(args: {
     isDead: () => dead
   })
 
-  proc.onData((data) => {
+  const acceptData = (data: string): void => {
     foreground.recordOutput(data)
     events.acceptData(data)
-  })
+  }
+  args.startupEvents?.data.forEach(acceptData)
+  proc.onData(acceptData)
   const retireMaster = (): void => {
     masterRetired = true
     if (dead || masterRetiredTimer) {
@@ -100,7 +105,11 @@ export function createDaemonPtySubprocessHandle(args: {
     }
   })
   nativeProc.on?.('close', retireMaster)
-  proc.onExit(({ exitCode, signal }) => {
+  // node-pty may have retired its master while Windows startup was confirmed, before these listeners.
+  if (args.startupEvents && nativeProc._writable === false) {
+    retireMaster()
+  }
+  const acceptExit = ({ exitCode, signal }: { exitCode: number; signal?: number }): void => {
     // Exit listeners may re-enter cleanup; retire signal authority before notifying them.
     dead = true
     clearMasterRetiredTimer()
@@ -114,7 +123,12 @@ export function createDaemonPtySubprocessHandle(args: {
       signal,
       hostReportsChildExitStatus: reportsChildExitStatus
     })
-  })
+  }
+  if (args.startupEvents?.exit) {
+    acceptExit(args.startupEvents.exit)
+  } else {
+    proc.onExit(acceptExit)
+  }
 
   const slavePath = readPtySlavePath(proc)
   return {

@@ -46,7 +46,7 @@ afterEach(() => {
 })
 
 describe('AutomationEditorPromptEditor', () => {
-  it('owns content through defaultValue so Monaco keeps undo history', () => {
+  it('passes the initial content as defaultValue rather than controlled value', () => {
     render(
       <AutomationEditorPromptEditor
         value="weekly audit"

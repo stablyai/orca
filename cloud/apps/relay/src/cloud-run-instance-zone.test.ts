@@ -15,7 +15,9 @@ describe('readCloudRunInstanceZone', () => {
   })
 
   it('returns undefined when the metadata server refuses or is unreachable', async () => {
-    await expect(readCloudRunInstanceZone(answering(404, 'not found'))).resolves.toBeUndefined()
+    await expect(
+      readCloudRunInstanceZone(answering(404, 'projects/123456/zones/us-central1-f'))
+    ).resolves.toBeUndefined()
     const unreachable: typeof fetch = vi.fn(async () => {
       throw new TypeError('fetch failed')
     })

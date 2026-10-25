@@ -113,6 +113,19 @@ describe('closing a pinned terminal tab of a server workspace', () => {
     expect(mocks.closeWebRuntimeSessionTab).not.toHaveBeenCalled()
   })
 
+  it("sends the close of another runtime's terminal in this workspace to that runtime", () => {
+    const state = serverWorkspaceState(false)
+    mocks.getState.mockReturnValue({
+      ...state,
+      tabsByWorktree: { 'wt-1': [{ id: 'local-tab-1', ptyId: 'remote:desktop-env@@term-9' }] }
+    })
+    closeTerminalTab('local-tab-1')
+
+    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'host-tab-1', environmentId: 'desktop-env' })
+    )
+  })
+
   it('never forces a pinned lifecycle close, even with the confirmation off', () => {
     mocks.getState.mockReturnValue(serverWorkspaceState(true, false))
     closeTerminalTab('local-tab-1', {

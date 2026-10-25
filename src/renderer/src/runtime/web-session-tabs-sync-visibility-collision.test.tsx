@@ -440,7 +440,13 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       authoritative: true
     })
     const tabId = toWebTerminalSurfaceTabId('host-tab-b')
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([tabId])
+    // Each host's rows are its own, so A's wait with the deferred repair instead of being wiped by B.
+    expect(
+      useAppStore
+        .getState()
+        .tabsByWorktree[WORKTREE]?.map((tab) => tab.id)
+        .sort()
+    ).toEqual([toWebTerminalSurfaceTabId('host-tab-a'), tabId])
     expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(2)
 
     newerRecovery.resolve(makeTerminalSnapshot('-b', 2))
@@ -488,16 +494,19 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       snapshots: [unrelatedSnapshot],
       authoritative: true
     })
+    const hostATabId = toWebTerminalSurfaceTabId('host-tab-a')
     const hostBTabId = toWebTerminalSurfaceTabId('host-tab-b')
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      hostBTabId
-    ])
+    const terminalTabIds = (): string[] | undefined =>
+      useAppStore
+        .getState()
+        .tabsByWorktree[WORKTREE]?.map((tab) => tab.id)
+        .sort()
+    // Each host's rows are its own, so A's stay until its omission is recorded.
+    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
 
     staleRecovery.resolve(makeTerminalSnapshot('-a', 2))
     await act(settle)
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      hostBTabId
-    ])
+    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
 
     slowInventoryRecovery.resolve(unrelatedSnapshot)
     await act(settle)
@@ -505,9 +514,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       type: 'updated',
       ...makeTerminalSnapshot('-a', 3)
     })
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      toWebTerminalSurfaceTabId('host-tab-a')
-    ])
+    expect(terminalTabIds()).toEqual([hostATabId, hostBTabId])
     hook.unmount()
   })
 
