@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 
 const { createLocalWatcherMock, statMock } = vi.hoisted(() => ({
   createLocalWatcherMock: vi.fn(),

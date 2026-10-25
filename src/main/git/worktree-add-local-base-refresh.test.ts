@@ -439,7 +439,9 @@ describe('addWorktree', () => {
       baseRef: 'origin/main',
       localBranch: 'main'
     })
-    expect(refreshGitMock.mock.calls).toHaveLength(4)
+    // The only call past the counts is the read-only shallow probe; nothing moves main.
+    expect(refreshGitMock.mock.calls).toHaveLength(5)
+    expect(refreshGitMock.mock.calls.at(-1)?.[0]).toEqual(['rev-parse', '--is-shallow-repository'])
   })
 
   it('reports not-fast-forward when local gained a commit after the inspection', async () => {

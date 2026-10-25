@@ -1,6 +1,6 @@
+
 # Existing production source files importing child_process outside @orca/process-host.
 # Migration debt: this list may only shrink; new callers use the package public API.
-
 src/cli/handlers/account.ts
 src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
@@ -63,16 +63,16 @@ src/main/ipc/filesystem/watcher-process/parcel-watcher-child-launch.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-child-messaging.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-child-recovery.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-child-termination.ts
+src/main/ipc/filesystem/watcher-process/parcel-watcher-host-subscriptions.ts
 src/main/ipc/filesystem/watcher-process/parcel-watcher-pending-cancellation.ts
+src/main/ipc/filesystem/watcher-process/parcel-watcher-process-supervisor.ts
+src/main/ipc/filesystem/watcher-process/parcel-watcher-supervisor-disposal.ts
+src/main/ipc/filesystem/watcher-process/parcel-watcher-supervisor-message.ts
+src/main/ipc/filesystem/watcher-process/parcel-watcher-supervisor-subscribe.ts
 src/main/ipc/local-network-connection-test.ts
 src/main/ipc/macos-keyboard-input-source.ts
 src/main/ipc/macos-keyboard-layout-snapshot.ts
 src/main/ipc/notification-authorization-status.ts
-src/main/ipc/parcel-watcher-host-subscriptions.ts
-src/main/ipc/parcel-watcher-process-supervisor.ts
-src/main/ipc/parcel-watcher-supervisor-disposal.ts
-src/main/ipc/parcel-watcher-supervisor-message.ts
-src/main/ipc/parcel-watcher-supervisor-subscribe.ts
 src/main/ipc/preflight-command-exec.ts
 src/main/ipc/repos/repo-clone-lifecycle.ts
 src/main/ipc/worktree-apfs-clone.ts

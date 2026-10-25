@@ -4,12 +4,12 @@ import type * as Fs from 'node:fs'
 import { mkdir, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { subscribeViaWatcherProcess } from '../ipc/parcel-watcher-process'
+import { subscribeViaWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks
-} from '../ipc/parcel-watcher-process-subscription'
-import type { WatcherProcessSubscribeOptions } from '../ipc/parcel-watcher-process-protocol'
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
+import type { WatcherProcessSubscribeOptions } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
 import {
   createAliasedWatcherRoot as createNativeAliasedWatcherRoot,
   removeAliasedWatcherRoot,
@@ -18,7 +18,9 @@ import {
 import { PluginDevWatcher } from './plugin-dev-watcher'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 
-vi.mock('../ipc/parcel-watcher-process', () => ({ subscribeViaWatcherProcess: vi.fn() }))
+vi.mock('../ipc/filesystem/watcher-process/parcel-watcher-process', () => ({
+  subscribeViaWatcherProcess: vi.fn()
+}))
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof Fs>('node:fs')
   return { ...actual, statSync: vi.fn(actual.statSync) }

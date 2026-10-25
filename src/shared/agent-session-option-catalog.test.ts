@@ -100,7 +100,7 @@ describe('agent session option catalog', () => {
     expect(parsed[2].options).toEqual([])
   })
 
-  it('keeps the Claude seed when list_models output is unsupported or malformed', () => {
+  it('returns no discovered models for unsupported or malformed Claude output', () => {
     const parse = getAgentSessionOptionCatalog('claude')!.listModels!.parse
     const unsupported =
       '{"type":"control_response","response":{"subtype":"error","request_id":"x","error":"Unsupported control request subtype: list_models"}}'
@@ -143,7 +143,7 @@ describe('agent session option catalog', () => {
     })
   })
 
-  it('passes unknown model and option values through launch mappings', () => {
+  it('passes unknown models through and applies effort only to cataloged models', () => {
     expect(
       resolveAgentSessionOptionLaunch('claude', {
         model: 'claude-future',

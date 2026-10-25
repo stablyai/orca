@@ -1,4 +1,4 @@
-import ts from 'typescript'
+import ts from 'typescript-api'
 
 /**
  * Reads what a Pressable's source says about itself, for the accessibility censuses that judge

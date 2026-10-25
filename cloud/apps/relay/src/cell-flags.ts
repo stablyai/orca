@@ -21,6 +21,8 @@ export type CellFlags = {
   reregisterInFlight?: number
   // Step 6: `memory` resumes paired phones from one device read; it acts only in reserve mode.
   phonePath: 'db' | 'memory'
+  // Reserve cells the dead-man may hold in db at once, fleet-wide; absent trips with no limit.
+  deadManTripSlots?: number
 }
 
 export const CELL_FLAG_DEFAULTS: CellFlags = {
@@ -56,7 +58,8 @@ const CellFlagsSchema = z.object({
   intakePerSec: z.number().positive().max(1_000).optional(),
   reserveDryRun: z.boolean().default(CELL_FLAG_DEFAULTS.reserveDryRun),
   reregisterInFlight: z.number().int().min(1).max(16).optional(),
-  phonePath: z.enum(['db', 'memory']).default(CELL_FLAG_DEFAULTS.phonePath)
+  phonePath: z.enum(['db', 'memory']).default(CELL_FLAG_DEFAULTS.phonePath),
+  deadManTripSlots: z.number().int().min(0).max(64).optional()
 })
 const KNOWN_FLAG_KEYS = new Set(Object.keys(CellFlagsSchema.shape))
 

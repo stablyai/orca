@@ -9,6 +9,7 @@
 import { logOrcadActivationOutcome } from '../managed-server/activation/orcad-activation-outcome-log'
 import { join } from 'node:path'
 import type { OrcadHostTransport } from './orcad-host-transport'
+import type { OrcadUpdateForce } from './orcad-update-plan'
 import { ORCAD_INSTALL_MODEL } from '../managed-server/install/remote-install-model'
 import {
   computeRemoteInstallDir,
@@ -74,7 +75,7 @@ export type OrcadDeployOptions = {
    * incumbent running. Best effort: the server reopens on its own once the fence lapses.
    */
   releaseIncumbentAdmission: () => Promise<void>
-  force?: boolean
+  force?: OrcadUpdateForce
   /** The Orca app version activating, recorded so an older client never downgrades the host. */
   appVersion?: string
   /**

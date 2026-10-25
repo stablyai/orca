@@ -1,4 +1,4 @@
-import type { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
+import type { WatcherProcessSupervisor } from './filesystem/watcher-process/parcel-watcher-process-supervisor'
 
 export type RuntimeWatcherPoolSupervisor = Pick<WatcherProcessSupervisor, 'dispose' | 'subscribe'> &
   Partial<Pick<WatcherProcessSupervisor, 'disposeAndWait'>>

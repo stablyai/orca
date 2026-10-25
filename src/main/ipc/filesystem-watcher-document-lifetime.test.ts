@@ -20,7 +20,9 @@ vi.mock('./filesystem-watcher-local-events', () => ({
   createLocalWatcher: createLocal,
   scheduleLocalBatchFlush: vi.fn()
 }))
-vi.mock('./parcel-watcher-process', () => ({ disposeWatcherProcess: vi.fn() }))
+vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({
+  disposeWatcherProcess: vi.fn()
+}))
 import { watcherLifecycleState as state } from './filesystem-watcher-lifecycle-state'
 import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'

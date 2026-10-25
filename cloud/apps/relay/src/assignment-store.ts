@@ -1,3 +1,4 @@
+import { claimDeadManTripSlot } from './cell-dead-man-trip-slot.js'
 import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
 import { HeapWindowReaper } from './heap-window-reaper.js'
 import { PlacementLoadBand } from './placement-load-band.js'
@@ -809,6 +810,14 @@ export class RelayAssignmentStore {
          updated_at = excluded.updated_at`,
       [input.cellId, input.cellIncarnation, input.mode, this.now()]
     )
+  }
+
+  async claimDeadManTripSlot(input: {
+    cellId: string
+    cellIncarnation: string
+    slots: number
+  }): Promise<boolean> {
+    return await claimDeadManTripSlot(this.database, { ...input, now: this.now() })
   }
 
   // Break glass flips only a cell that has stopped heartbeating, ready or not.

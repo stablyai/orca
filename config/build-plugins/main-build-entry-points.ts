@@ -45,7 +45,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
   // can't take down the main process (issue #7547).
-  'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
+  'parcel-watcher-process-entry': resolve(
+    'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts'
+  ),
   // Why: `orca serve` runs it under ELECTRON_RUN_AS_NODE so the CLI never bundles orcad prep.
   [ORCAD_LOCAL_SERVE_SELECTION_ENTRY]: resolve(
     'src/main/orcad/orcad-local-serve-selection-entry.ts'

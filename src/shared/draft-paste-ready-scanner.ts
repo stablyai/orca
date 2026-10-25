@@ -27,6 +27,14 @@ const GROK_COMPOSER_PROMPT = '❯'
 // means the composer specifically. Anchored on the alternate-screen switch for the same
 // reason as grok: a powerline shell prompt can also draw `╭`.
 const ZCODE_COMPOSER_BOX_CORNER = '╭'
+// Why: Claude Code's prompt-input mode indicator is `figures.pointer` + NBSP; its startup menus
+// (trust, theme) draw the same pointer followed by a cursor move, so the NBSP means the composer.
+const CLAUDE_COMPOSER_PROMPT = '❯\u00a0'
+// Why: Claude 2.1.310 turns on palette-change reports with bracketed paste and drops both on exit.
+// zsh/bash never send it, so their p10k/starship `❯` prompt cannot arm the marker; fish 4+ holds it
+// only while idle at its prompt, where a `❯` + NBSP glyph is unlikely.
+const DECSET_COLOR_PALETTE_UPDATES = '\x1b[?2031h'
+const DECRST_COLOR_PALETTE_UPDATES = '\x1b[?2031l'
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
@@ -86,6 +94,14 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     markerAnchor: DECSET_ALT_SCREEN,
     markerAnchorEnd: DECRST_ALT_SCREEN,
     marker: GROK_COMPOSER_PROMPT,
+    quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  // Why: Claude renders inline (no alt screen); the quiet window keeps the old delivery where the
+  // glyph differs (Windows `figures` fallback).
+  'claude-composer-prompt': {
+    markerAnchor: DECSET_COLOR_PALETTE_UPDATES,
+    markerAnchorEnd: DECRST_COLOR_PALETTE_UPDATES,
+    marker: CLAUDE_COMPOSER_PROMPT,
     quietAnchor: DECSET_BRACKETED_PASTE
   },
   'zcode-composer-prompt': {

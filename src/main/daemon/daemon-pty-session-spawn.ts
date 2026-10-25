@@ -267,7 +267,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     if (result.isNew && !attachOnly) {
       // Not awaited: the app-side read behind it can sit on an unanswered macOS folder prompt.
       void reportDaemonPtyCwdVerdict({
-        cwd: effectiveCwd,
+        cwd: context.effectiveCwd,
         cwdReadableByDaemon: result.cwdReadableByDaemon,
         pidPath: this.pidPath,
         daemonIdentity: this.client.getDaemonIdentity()

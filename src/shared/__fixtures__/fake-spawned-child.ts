@@ -85,6 +85,9 @@ export function fakeSpawnDispatch(
   return (program, args) => {
     const child = createFakeSpawnedChild()
     const outcome = resolve(program, args)
+    if ('spawnError' in outcome) {
+      Object.defineProperty(child, 'pid', { value: undefined })
+    }
     queueMicrotask(() => settleFakeSpawn(child, outcome))
     return child
   }

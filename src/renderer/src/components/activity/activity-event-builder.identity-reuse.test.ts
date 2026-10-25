@@ -310,7 +310,7 @@ import type { Tab } from '../../../../shared/tab-types'
   }
 
   describe('newestActivityHistoryEntries', () => {
-    it('takes only the newest cap-many eligible entries without scanning results past the cap', () => {
+    it('returns only the newest cap-many eligible history entries', () => {
       const history: AgentStateHistoryEntry[] = []
       for (let i = 0; i < 10_000; i += 1) {
         history.push(historyEntry(i + 1, i % 2 === 0 ? 'done' : 'working'))
