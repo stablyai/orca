@@ -5,6 +5,7 @@
 - **Test**: `pnpm test [path/to/file.test.ts]`
 - **Affected tests**: `pnpm test:changed [path] --maxWorkers=2` for uncommitted edits, or `pnpm test --changed=origin/main` for branch changes. Local runs cache loaded imports; cold caches run all tests in scope. Filesystem/subprocess inputs need explicit tests; see [test targeting](.github/CONTRIBUTING.md#targeting-local-tests).
 - **Lint**: `oxlint`, or `pnpm run check:code-quality:changed` for changed files (full `pnpm lint` is slow); format with `pnpm format`
+- **Custom rules**: JS-plugin rules run via `pnpm lint:js-plugins` (kept out of default `oxlint` for speed); structural rules live in `config/ast-grep/` (`pnpm lint:ast-grep`, `pnpm test:ast-grep`). Flaky-test patterns are ratcheted by `pnpm check:flaky-test-pattern-ratchet`
 - **Design system**: `pnpm run lint:design-system` for the full renderer report (not a gate); the changed-lines gate above is what CI enforces
 
 # Design System

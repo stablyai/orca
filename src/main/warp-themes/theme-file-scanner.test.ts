@@ -12,7 +12,7 @@ it('reuses one collator per directory while preserving capped scan order', async
     await mkdir(path.join(directory, 'nested'))
     await writeFile(path.join(directory, 'nested', 'theme.yaml'), '')
     const expected = (await readdir(directory))
-      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+      // ast-grep-ignore: no-repeated-collator -- Preserve the old comparator as the parity oracle.
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
       .map((name) => (name === 'nested' ? path.join(name, 'theme.yaml') : name))
     const NativeCollator = Intl.Collator

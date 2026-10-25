@@ -95,7 +95,7 @@ This keeps light/dark parity automatic.
 
 ### Chat type scale
 
-The native chat uses four steps and no others. Never write an arbitrary size (`text-[13px]`) inside `components/native-chat/`. `pnpm lint` enforces this, along with the softened-foreground and focus-ring rules below (`config/oxlint-plugins/native-chat-design-tokens.mjs`).
+The native chat uses four steps and no others. Never write an arbitrary size (`text-[13px]`) inside `components/native-chat/`. `pnpm lint` enforces this, along with the softened-foreground and focus-ring rules below (`config/ast-grep/rules/native-chat-*.yml`).
 
 | Step             | Default | Use it for                                                                                                 |
 | ---------------- | ------- | ---------------------------------------------------------------------------------------------------------- |

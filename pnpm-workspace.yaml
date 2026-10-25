@@ -59,6 +59,8 @@ supportedArchitectures:
     - current
 
 allowBuilds:
+  # Its postinstall only hardlinks the platform binary over the JS launcher.
+  '@ast-grep/cli': true
   '@parcel/watcher': true
   '@swc/core': false
   '@vscode/windows-process-tree': false

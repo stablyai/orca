@@ -148,7 +148,7 @@ describe('skillDeleteResultLines', () => {
 it('sorts deletion roots once with unchanged case, accent, and number ordering', () => {
   const labels = ['éclair', 'Eclair', 'item2', 'item10', 'Ångström', 'zebra', 'İstanbul']
   const expected = [...labels].sort((a, b) =>
-    // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+    // ast-grep-ignore: no-repeated-collator -- Preserve the old comparator as the parity oracle.
     a.localeCompare(b, undefined, { sensitivity: 'base' })
   )
   const NativeCollator = Intl.Collator

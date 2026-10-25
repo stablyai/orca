@@ -276,6 +276,24 @@ jobs:
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node node_modules/oxlint/bin/oxlint --format github
 
+      # JS plugins make Oxlint hand every AST to Node, so they run apart from the native root lint.
+      - name: Enforce JS-plugin lint rules
+        if: '!cancelled()'
+        id: js-plugin-lint
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node node_modules/oxlint/bin/oxlint --config config/oxlint-js-plugins.json --format github src config tests mobile native .github
+
+      - name: Enforce ast-grep rules
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: |
+          node_modules/.bin/ast-grep test --config config/sgconfig.yml --skip-snapshot-tests
+          node_modules/.bin/ast-grep scan --config config/sgconfig.yml --min-severity warning --format github src config tests mobile
+
       # Why the full tree: it takes ~2s, and the pre-commit hook is skippable.
       - name: Check formatting
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -532,6 +550,8 @@ jobs:
       - wait: process-host-imports
 
       - wait: main-sync-spawn-ratchet
+
+      - wait: js-plugin-lint
 
       - wait: unit-plan
 

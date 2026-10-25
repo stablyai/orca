@@ -282,6 +282,9 @@ describe('unloaded plugin directive unused warning', () => {
     withFixture(directive('anti-slop/no-module-mocking'), (diagnostic) => {
       expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(true)
     })
+    withFixture(directive('ime-enter-guard/require-ime-guard'), (diagnostic) => {
+      expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(true)
+    })
   })
 
   it('still reports an unused directive for a rule the root scan does load', () => {

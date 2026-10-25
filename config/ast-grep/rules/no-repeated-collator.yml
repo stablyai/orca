@@ -1,0 +1,61 @@
+# Resolving collation options inside a sort comparator repeats setup for every comparison.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: no-repeated-collator
+language: typescript
+severity: error
+message: Create one Intl.Collator before sorting and reuse its compare method; resolving collation options inside the comparator repeats setup for every comparison. Preserve the locale, options, and tie-breaker.
+rule:
+  any:
+    - pattern: $S.localeCompare($A, $L, $O)
+    - pattern: $S['localeCompare']($A, $L, $O)
+    - pattern: new Intl.Collator($$$ARGS)
+    - pattern: Intl.Collator($$$ARGS)
+  # The nearest enclosing function must be the comparator itself.
+  inside:
+    stopBy:
+      any:
+        - kind: arrow_function
+        - kind: function_expression
+        - kind: function_declaration
+        - kind: method_definition
+    any: [{ kind: arrow_function }, { kind: function_expression }]
+    nthChild: 1
+    inside:
+      kind: arguments
+      inside:
+        kind: call_expression
+        has:
+          field: function
+          any:
+            - { kind: member_expression, has: { field: property, regex: '^(sort|toSorted)$' } }
+            - { kind: subscript_expression, has: { field: index, regex: '^.(sort|toSorted).$' } }
+---
+id: no-repeated-collator-tsx
+language: tsx
+severity: error
+message: Create one Intl.Collator before sorting and reuse its compare method; resolving collation options inside the comparator repeats setup for every comparison. Preserve the locale, options, and tie-breaker.
+rule:
+  any:
+    - pattern: $S.localeCompare($A, $L, $O)
+    - pattern: $S['localeCompare']($A, $L, $O)
+    - pattern: new Intl.Collator($$$ARGS)
+    - pattern: Intl.Collator($$$ARGS)
+  # The nearest enclosing function must be the comparator itself.
+  inside:
+    stopBy:
+      any:
+        - kind: arrow_function
+        - kind: function_expression
+        - kind: function_declaration
+        - kind: method_definition
+    any: [{ kind: arrow_function }, { kind: function_expression }]
+    nthChild: 1
+    inside:
+      kind: arguments
+      inside:
+        kind: call_expression
+        has:
+          field: function
+          any:
+            - { kind: member_expression, has: { field: property, regex: '^(sort|toSorted)$' } }
+            - { kind: subscript_expression, has: { field: index, regex: '^.(sort|toSorted).$' } }
