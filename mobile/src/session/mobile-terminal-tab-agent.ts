@@ -267,7 +267,7 @@ function resolveTabDoneStamp(tab: {
   chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
 }): number | undefined {
   if (tab.type === 'terminal' && tab.agentStatus) {
-    return tab.agentStatus.updatedAt
+    return tab.agentStatus.stateStartedAt ?? tab.agentStatus.updatedAt
   }
   if (tab.type === 'agent-session' && tab.chatStatus) {
     return tab.chatStatus.updatedAt
@@ -544,28 +544,32 @@ export function buildRecentSessionCardFromTab(p: {
   worktreeId: string
   worktreeName: string
   tab: MobileSessionTab
+  hostAgentIdentity?: string | null
   now?: number
 }): RecentSessionCardSnapshot {
-  const { hostId, worktreeId, worktreeName, tab: t } = p
+  const { hostId, worktreeId, worktreeName, tab: t, hostAgentIdentity } = p
   const now = p.now ?? Date.now()
   const agentId =
     t.type === 'agent-session'
       ? t.agent
       : t.type === 'terminal'
-        ? resolveMobileTerminalTabAgentId(t)
+        ? resolveMobileTerminalTabAgentId(t, hostAgentIdentity)
         : undefined
   const rawState = resolveMobileSessionTabDotState(t, now)
   const agentState = rawState && rawState !== 'idle' ? rawState : undefined
   const leafId = t.type === 'terminal' && t.leafId ? t.leafId : undefined
   const terminalHandle = t.type === 'terminal' && t.terminal ? t.terminal : undefined
-  const base = { hostId, worktreeId, worktreeName, tabId: t.id, title: getMobileSessionTabTitle(t) }
-  const rest = { tabType: t.type, lastVisitedAt: now }
-  return Object.assign(
-    base,
-    rest,
-    agentId && { agentId },
-    agentState && { agentState },
-    leafId && { leafId },
-    terminalHandle && { terminalHandle }
-  )
+  return {
+    hostId,
+    worktreeId,
+    worktreeName,
+    tabId: t.id,
+    title: getMobileSessionTabTitle(t, hostAgentIdentity),
+    tabType: t.type,
+    lastVisitedAt: now,
+    ...(agentId ? { agentId } : {}),
+    ...(agentState ? { agentState } : {}),
+    ...(leafId ? { leafId } : {}),
+    ...(terminalHandle ? { terminalHandle } : {})
+  }
 }

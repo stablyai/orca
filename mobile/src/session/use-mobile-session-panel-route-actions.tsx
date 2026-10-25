@@ -197,7 +197,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
   }
 
   const openAgentSessionHistory = () => {
-    const params = new URLSearchParams({ name: worktreeName || '' })
+    const params = new URLSearchParams({ name: worktreeName || '', origin: 'session' })
     router.push(
       workspaceRouteHref(
         `/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`,
@@ -217,6 +217,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     showRecentSessionCardsAction || showAgentSessionHistoryAction || showChecksAction
   const [jumpingRecentCardKey, setJumpingRecentCardKey] = useState<string | null>(null)
   const jumpLockRef = useRef(false)
+  const recentCardsPollInFlightRef = useRef(false)
   const [, setRecentCardsRevision] = useState(0)
   useEffect(() => subscribeRecentSessionCards(() => setRecentCardsRevision((rev) => rev + 1)), [])
   const [recentCardsWorktrees, setRecentCardsWorktrees] = useState<readonly RecentCardWorktree[]>(
@@ -282,9 +283,20 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         })
       )
     }
-    void pollRecentCards()
+    const tick = async () => {
+      if (recentCardsPollInFlightRef.current) {
+        return
+      }
+      recentCardsPollInFlightRef.current = true
+      try {
+        await pollRecentCards()
+      } finally {
+        recentCardsPollInFlightRef.current = false
+      }
+    }
+    void tick()
     const timer = setInterval(() => {
-      void pollRecentCards()
+      void tick()
     }, 2000)
     return () => {
       cancelled = true
