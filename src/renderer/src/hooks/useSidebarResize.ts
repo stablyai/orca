@@ -7,6 +7,7 @@ type UseSidebarResizeOptions = {
   maxWidth: number
   deltaSign: 1 | -1
   renderedExtraWidth?: number
+  collapsedWidth?: number
   setWidth: (width: number) => void
   onDraftWidthChange?: (width: number) => void
 }
@@ -24,9 +25,10 @@ export function clampSidebarResizeWidth(width: number, minWidth: number, maxWidt
 export function getRenderedSidebarWidthCssValue(
   isOpen: boolean,
   width: number,
-  renderedExtraWidth: number
+  renderedExtraWidth: number,
+  collapsedWidth = 0
 ): string {
-  return isOpen ? `${width + renderedExtraWidth}px` : '0px'
+  return isOpen ? `${width + renderedExtraWidth}px` : `${collapsedWidth}px`
 }
 
 export function getNextSidebarResizeWidth({
@@ -55,6 +57,7 @@ export function useSidebarResize<T extends HTMLElement>({
   maxWidth,
   deltaSign,
   renderedExtraWidth = 0,
+  collapsedWidth = 0,
   setWidth,
   onDraftWidthChange
 }: UseSidebarResizeOptions): UseSidebarResizeResult<T> {
@@ -92,9 +95,14 @@ export function useSidebarResize<T extends HTMLElement>({
       // React props. Any unrelated rerender during a drag would otherwise
       // snap the DOM width back to the last persisted store value and make the
       // handle feel like it is lagging behind the pointer.
-      container.style.width = getRenderedSidebarWidthCssValue(isOpen, nextWidth, renderedExtraWidth)
+      container.style.width = getRenderedSidebarWidthCssValue(
+        isOpen,
+        nextWidth,
+        renderedExtraWidth,
+        collapsedWidth
+      )
     },
-    [isOpen, renderedExtraWidth]
+    [isOpen, renderedExtraWidth, collapsedWidth]
   )
 
   useLayoutEffect(() => {
