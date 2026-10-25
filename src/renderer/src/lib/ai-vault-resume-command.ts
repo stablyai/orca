@@ -9,16 +9,16 @@ import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
 import { getAiVaultResumePlatform } from '@/lib/ai-vault-resume-platform'
+import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
 import {
   buildAiVaultLocalResumeStartup,
-  getAiVaultAgentProviderSession,
   getAiVaultResumeCodexHome,
   type AiVaultResumeCommandSession,
   type AiVaultResumeHostShell,
   type AiVaultResumeStartup
 } from '../../../shared/ai-vault-resume-startup'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 
 export type {
   AiVaultResumeCommandSession,
@@ -108,7 +108,6 @@ function buildAiVaultResumeForWorktree(
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   assertAntigravityReferenceTarget(args)
-  const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
@@ -118,10 +117,11 @@ function buildAiVaultResumeForWorktree(
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
     !args.commandOverride?.trim()
   ) {
+    const remoteProviderSession = getAiVaultAgentProviderSession(args.session)
     return {
       command: args.session.resumeCommand,
       ...realHomeCodexResumeEnvDeletion(args.session),
-      ...(providerSession ? { providerSession } : {})
+      ...(remoteProviderSession ? { providerSession: remoteProviderSession } : {})
     }
   }
   const host = resolveAiVaultResumeHost(args)
@@ -160,6 +160,13 @@ export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVau
     !isLocalSession && args.session.executionHostPlatform
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
+  const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
+  // Why: a WSL-stored transcript is found under its UNC path, but Pi runs inside WSL and only knows the Linux one.
+  getAiVaultAgentProviderSession({
+    ...args.session,
+    filePath: resumeFilePath
+  })
+  // providerSession: computed for the remote-host path in buildAiVaultResumeForWorktree
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =
@@ -178,4 +185,46 @@ export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVau
     codexHome: getAiVaultResumeCodexHome(args.session.codexHome, platform),
     liveShell
   }
+}
+
+/**
+ * Build provider-session metadata for a single agent session.
+ *
+ * The transcript path (when present) is normalized to the WSL-visible Linux path
+ * so the target runtime can locate the stored session file.
+ */
+function getAiVaultAgentProviderSession(
+  session: { agent?: string; sessionId?: string; filePath?: string }
+): AgentProviderSessionMetadata | null {
+  const { agent, sessionId, filePath } = session
+  if (!agent) {
+    return null
+  }
+  if (isAntigravityReferenceSession({ agent, filePath })) {
+    return null
+  }
+  if (agent === 'antigravity' || agent === 'cursor') {
+    return { key: 'conversation_id', id: sessionId! }
+  }
+  if (agent === 'pi' || agent === 'prime-agent') {
+    return filePath
+      ? { key: 'session_id', id: sessionId!, transcriptPath: filePath }
+      : null
+  }
+  return { key: 'session_id', id: sessionId! }
+}
+
+/** Provider-session metadata spelled for the target workspace's runtime (local sessions only). */
+export function getAiVaultAgentProviderSessionForWorktree(args: {
+  state: AiVaultResumeWorktreeArgs['state']
+  worktreeId: string
+  session: { agent?: string; sessionId?: string; filePath?: string }
+}): AgentProviderSessionMetadata | null {
+  return getAiVaultAgentProviderSession({
+    ...args.session,
+    filePath: normalizeAiVaultResumeFilePath(
+      args.session.filePath,
+      getAiVaultResumePlatform(args.state, args.worktreeId)
+    )
+  })
 }
