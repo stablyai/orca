@@ -186,6 +186,7 @@ describe('presentSocketNotificationFallback', () => {
         content: expect.objectContaining({
           title: '✅ orca · main',
           subtitle: 'Work Laptop · Task complete',
+          body: 'Summarize the diff\nClaude finished',
           color: '#10b981',
           vibrate: COMPLETE_VIBRATION_PATTERN,
           data: expect.objectContaining({

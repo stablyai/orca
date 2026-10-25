@@ -57,6 +57,41 @@ function normalizeSingleLineText(raw: string | undefined): string {
   return raw?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
+export function notificationToneIcon(tone: NotificationTone, title?: string): string {
+  if (tone === 'urgent') {
+    return '⚡'
+  }
+  return title?.startsWith('Bell in ') ? '🔔' : '✅'
+}
+
+export function buildNotificationDisplayContent(input: {
+  tone: NotificationTone
+  title?: string
+  prompt?: string
+  reply?: string
+}): {
+  icon: string
+  title: string
+  prompt: string
+  reply: string
+  osTitle: string
+  osBody: string
+} {
+  const title = normalizeSingleLineText(input.title) || 'Orca'
+  const icon = notificationToneIcon(input.tone, title)
+  const prompt = normalizeSingleLineText(input.prompt)
+  const reply = normalizeSingleLineText(input.reply)
+  const osBody = [prompt, reply].filter((line) => line.length > 0).join('\n')
+  return {
+    icon,
+    title,
+    prompt,
+    reply,
+    osTitle: `${icon} ${title}`,
+    osBody
+  }
+}
+
 export function classifyNotificationTone(
   event: Pick<DesktopNotificationDispatchEvent, 'source' | 'agentState' | 'title' | 'body'>
 ): NotificationTone {
@@ -198,10 +233,12 @@ export async function presentSocketNotificationFallback(
     payload.worktreeId,
     payload.paneKey
   )
-  const prompt = normalizeSingleLineText(event.agentPrompt ?? fallbackContext.prompt)
-  const bannerBody = normalizeSingleLineText(
-    event.agentLastAssistantMessage || body || fallbackContext.lastAssistantMessage
-  )
+  const display = buildNotificationDisplayContent({
+    tone,
+    title,
+    prompt: event.agentPrompt ?? fallbackContext.prompt,
+    reply: event.agentLastAssistantMessage || body || fallbackContext.lastAssistantMessage
+  })
   const osNotificationIdentifier = payload.notificationId
     ? `${hostFingerprint}:${payload.notificationId}`
     : payload.worktreeId && payload.paneKey
@@ -217,9 +254,9 @@ export async function presentSocketNotificationFallback(
       tone,
       hostId,
       hostName,
-      title: title || 'Orca',
-      ...(prompt ? { prompt } : {}),
-      body: bannerBody,
+      title: display.title,
+      ...(display.prompt ? { prompt: display.prompt } : {}),
+      body: display.reply,
       osNotificationIdentifier,
       createdAt: Date.now()
     })
@@ -252,9 +289,9 @@ export async function presentSocketNotificationFallback(
   await Notifications.scheduleNotificationAsync({
     identifier: osNotificationIdentifier,
     content: {
-      title: `${tone === 'urgent' ? '⚡ ' : '✅ '}${title || 'Orca'}`,
+      title: display.osTitle,
       subtitle: `${hostName} · ${subtitleLabel}`,
-      body,
+      body: display.osBody,
       color: tone === 'urgent' ? '#f59e0b' : '#10b981',
       vibrate: tone === 'urgent' ? URGENT_VIBRATION_PATTERN : COMPLETE_VIBRATION_PATTERN,
       priority: 'max',

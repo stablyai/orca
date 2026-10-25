@@ -14,6 +14,7 @@ import {
 import { dispatchInPageNotificationNavigation } from './in-page-notification-navigation'
 import { getNotificationNavigationTarget } from './notification-routing'
 import { isViewingWorkspaceTarget } from './notification-viewing-policy'
+import { notificationToneIcon } from './push-socket-fallback'
 import { useOpenNotificationRoute } from './use-open-notification-route'
 
 const AUTO_DISMISS_MS = 12000
@@ -67,7 +68,7 @@ export function InAppNotificationBanner() {
   const isUrgent = banner.tone === 'urgent'
   const isTerminalBell = banner.title.startsWith('Bell in ')
   const accentColor = isUrgent ? colors.statusAmber : colors.statusGreen
-  const badgeIcon = isUrgent ? '⚡' : isTerminalBell ? '🔔' : '✅'
+  const badgeIcon = notificationToneIcon(banner.tone, banner.title)
   const badgeLabel = isUrgent ? 'Needs input' : isTerminalBell ? 'Terminal bell' : 'Completed'
   const canNavigate = Boolean(banner.hostId)
   const promptText = banner.prompt?.trim() ?? ''
