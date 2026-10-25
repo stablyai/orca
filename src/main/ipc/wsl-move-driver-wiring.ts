@@ -255,7 +255,8 @@ async function connectWslMoveHost(
   if (!service?.recordForEnvironment(environmentId)) {
     return null
   }
-  await service.ensureForRuntimeCall(environmentId)
+  // Why not ensureForRuntimeCall: after a relaunch a host with no open project has no visible work.
+  await service.ensureForUserRequest(environmentId)
   const environment = resolveEnvironment(userDataPath, environmentId)
   const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId)
   if (!status.ok) {

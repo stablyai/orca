@@ -148,7 +148,7 @@ export function writeWslHostDeployment(
   )
 }
 
-function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
+export function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
   return Boolean(
     environment.orcadDeployment ||
     environment.sshAccess ||
