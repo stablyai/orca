@@ -28,7 +28,8 @@
     "paste": "Вставить",
     "copy": "Копировать",
     "selectAll": "Выделить всё",
-    "quitApp": "Выйти из {{appName}}"
+    "quitApp": "Выйти из {{appName}}",
+    "toggleDevTools": "Показать/скрыть инструменты разработчика"
   },
   "tray": {
     "openOrca": "Открыть Orca",
@@ -17197,7 +17198,12 @@
             "copyImage": "Скопировать изображение",
             "copyImageAddress": "Скопировать адрес изображения",
             "searchSelection": "Найти «{{value1}}» в {{value0}}",
-            "inspect": "Исследовать элемент"
+            "inspect": "Исследовать элемент",
+            "devToolsTitle": "Инструменты разработчика",
+            "devToolsDockRight": "Закрепить справа",
+            "devToolsDockBottom": "Закрепить снизу",
+            "devToolsUndock": "Открыть в отдельном окне",
+            "devToolsClose": "Закрыть инструменты разработчика"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Отмена",
