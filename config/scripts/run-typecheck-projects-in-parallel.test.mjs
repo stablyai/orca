@@ -17,6 +17,7 @@ import {
   admissibleHeapGib,
   planTypecheckBatches,
   resolveProjectCompiler,
+  resolveTsrsCheckers,
   parseTypecheckOptions,
   selectTypecheckCompiler,
   typecheckBatches,
@@ -179,6 +180,25 @@ describe('local and CI compiler selection', () => {
       if (memoryBytes === 4 * 1024 ** 3) {
         expect(batches.every((batch) => batch.length === 1)).toBe(true)
       }
+    }
+  })
+
+  it.each([
+    [{ load: 0, projectsInFlight: 2 }, 8],
+    [{ load: 10, projectsInFlight: 2 }, 4],
+    [{ load: 35, projectsInFlight: 2 }, 4],
+    [{ load: 0, projectsInFlight: 1 }, 16],
+    [{ load: 0, projectsInFlight: 1, env: { ORCA_TYPECHECK_CHECKERS: '2' } }, 2],
+    [{ load: 35, projectsInFlight: 2, env: { ORCA_TYPECHECK_CHECKERS: '12' } }, 12]
+  ])('splits idle cores between concurrent tsrs checks: %o', (options, checkers) => {
+    expect(resolveTsrsCheckers({ env: {}, cores: 16, ...options })).toBe(checkers)
+  })
+
+  it('rejects a checker pin tsrs would misread', () => {
+    for (const pinned of ['0', '-1', '2.5', 'many']) {
+      expect(() =>
+        resolveTsrsCheckers({ env: { ORCA_TYPECHECK_CHECKERS: pinned }, cores: 16, load: 0 })
+      ).toThrow('ORCA_TYPECHECK_CHECKERS')
     }
   })
 
