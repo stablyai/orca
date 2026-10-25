@@ -1,4 +1,7 @@
-import { joinCreateProjectPath } from '../../../src/shared/create-project-location'
+import {
+  joinCreateProjectPath,
+  pathSeparatorFor
+} from '../../../src/shared/create-project-location'
 
 export const DEFAULT_PROJECT_PARENT = '~/orca/projects'
 
@@ -10,6 +13,6 @@ export function expandHostHomePath(pathValue: string, homeDir: string | null): s
   }
   const rest = trimmed.slice(2)
   // Keep a Windows home's separators so stored project paths do not mix / and \.
-  const nativeRest = homeDir.includes('\\') ? rest.replace(/\//g, '\\') : rest
+  const nativeRest = pathSeparatorFor(homeDir) === '\\' ? rest.replace(/\//g, '\\') : rest
   return rest ? joinCreateProjectPath(homeDir, nativeRest) : homeDir
 }
