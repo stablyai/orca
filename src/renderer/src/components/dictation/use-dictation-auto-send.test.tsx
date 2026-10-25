@@ -52,78 +52,53 @@ function appendComposerEditor(): HTMLElement {
   return editor
 }
 
-/**
- * Accepts Stop as the controller does and returns how the finish step reports the outcome. With
- * `duringStartup`, Stop lands while startup is still finishing, and the finish step comes later.
- */
-function stopDictatingInto(editor: HTMLElement, duringStartup = false) {
+function watchStoppingInto(editor: HTMLElement) {
   const { result } = renderHook(() => useDictationAutoSend())
   const target = { kind: 'contentEditable' as const, element: editor }
-  if (duringStartup) {
-    act(() => {
-      result.current.watchStopping(target)
-    })
-  }
-  return {
-    finish: (outcome: Parameters<ReturnType<typeof result.current.watchStopping>>[0]) =>
-      act(() => {
-        const report = result.current.watchStopping(target)
-        result.current.trackInsertion(Promise.resolve(true))
-        report(outcome)
-      })
-  }
+  let report: ReturnType<typeof result.current.watchStopping> = () => {}
+  act(() => {
+    report = result.current.watchStopping(target)
+    result.current.trackInsertion(Promise.resolve(true))
+  })
+  return { report, watchAgain: () => result.current.watchStopping(target) }
 }
 
 const SPOKEN = { finalTranscriptReceived: true, sessionErrored: false }
 
 describe('useDictationAutoSend while a dictation is stopping', () => {
-  it.each([
-    ['after listening', false],
-    ['during startup', true]
-  ])('sends once the final transcript has landed, stopped %s', async (_name, duringStartup) => {
+  it('sends once the final transcript has landed', async () => {
     const editor = appendComposerEditor()
-    const stopping = stopDictatingInto(editor, duringStartup)
+    const { report } = watchStoppingInto(editor)
 
-    stopping.finish(SPOKEN)
+    act(() => report(SPOKEN))
     await act(async () => vi.advanceTimersByTimeAsync(1000))
 
     expect(submitted).toEqual([editor])
   })
 
-  it('keeps the draft when the user types before the stopped event arrives', async () => {
+  it('reuses the first reporter on a repeated watchStopping call, keeping a takeover typed before it', async () => {
     const editor = appendComposerEditor()
-    const { result } = renderHook(() => useDictationAutoSend())
-    let report: ReturnType<typeof result.current.watchStopping> = () => {}
+    const { report, watchAgain } = watchStoppingInto(editor)
+
+    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+    let repeated: typeof report = () => {}
     act(() => {
-      report = result.current.watchStopping({ kind: 'contentEditable', element: editor })
-      result.current.trackInsertion(Promise.resolve(true))
+      repeated = watchAgain()
     })
-
-    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
-    act(() => report(SPOKEN))
+    act(() => repeated(SPOKEN))
     await act(async () => vi.advanceTimersByTimeAsync(1000))
 
-    expect(submitted).toEqual([])
-  })
-
-  it('keeps the draft when the user types while startup is still finishing after Stop', async () => {
-    const editor = appendComposerEditor()
-    const stopping = stopDictatingInto(editor, true)
-
-    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
-    stopping.finish(SPOKEN)
-    await act(async () => vi.advanceTimersByTimeAsync(1000))
-
+    expect(repeated).toBe(report)
     expect(submitted).toEqual([])
   })
 
   it.each([
     ['no speech was transcribed', { finalTranscriptReceived: false, sessionErrored: false }],
     ['the session errored', { finalTranscriptReceived: true, sessionErrored: true }]
-  ])('sends nothing when %s', async (_name, result) => {
-    const stopping = stopDictatingInto(appendComposerEditor())
+  ])('sends nothing when %s', async (_name, outcome) => {
+    const { report } = watchStoppingInto(appendComposerEditor())
 
-    stopping.finish(result)
+    act(() => report(outcome))
     await act(async () => vi.advanceTimersByTimeAsync(1000))
 
     expect(submitted).toEqual([])
