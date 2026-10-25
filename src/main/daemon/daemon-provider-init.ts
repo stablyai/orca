@@ -42,7 +42,11 @@ import {
   type DaemonProcessHandle
 } from './daemon-spawner'
 import { tryInstallLegacyFallbackOnCurrentFailure } from './daemon-legacy-fallback-init'
-import { clearSeveredDaemon, installSeveredDaemonController } from './daemon-host-image-state'
+import {
+  clearSeveredDaemon,
+  getSeveredDaemon,
+  installSeveredDaemonController
+} from './daemon-host-image-state'
 import {
   createSeveredDaemonController,
   hasSeveredDaemonBeenReplaced
@@ -129,7 +133,9 @@ export async function initDaemonPtyProvider(
   try {
     info = await newSpawner.ensureRunning()
   } catch (error) {
-    const quarantine = newSpawner.getHandle()?.quarantine
+    const quarantine =
+      newSpawner.getHandle()?.quarantine ??
+      (getSeveredDaemon() ? ('host-image-severed' as const) : undefined)
     await tryInstallLegacyFallbackOnCurrentFailure({
       error,
       signal,

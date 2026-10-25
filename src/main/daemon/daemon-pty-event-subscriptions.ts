@@ -191,6 +191,14 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     await this.disconnectOnlyPromise
   }
 
+  /** Reopens respawn and disconnect fences after a failed-startup cleanup disconnects an idle adapter. */
+  rearmAfterDisconnectOnly(): void {
+    this.disconnectOnlyPromise = null
+    if (this.idleRetirementState !== 'retiring' && this.idleRetirementState !== 'unverifiable') {
+      this.respawnAdoptionClosed = false
+    }
+  }
+
   protected async finishDisconnectOnly(keepHistoryShutdowns: Promise<void>[]): Promise<void> {
     // Let admitted sleep shutdowns finish recovery and kill RPCs before disconnecting their client.
     await Promise.allSettled(keepHistoryShutdowns)

@@ -50,7 +50,13 @@ export async function tryInstallLegacyFallbackOnCurrentFailure(
     legacy: legacyAdapters,
     fallback: getLocalPtyProvider(),
     currentAvailable: false,
-    probeCurrentDaemonSpawn: input.probeCurrentDaemonSpawn
+    probeCurrentDaemonSpawn: async () => {
+      const canSpawn = await input.probeCurrentDaemonSpawn()
+      if (canSpawn) {
+        input.newAdapter.rearmAfterDisconnectOnly?.()
+      }
+      return canSpawn
+    }
   })
   try {
     await degradedProvider.discoverDaemonSessions()
