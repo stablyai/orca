@@ -145,6 +145,8 @@ export function AddProjectSheet({
         afterCloseRef.current = null
         next?.()
       }}
+      // The drawer cannot see the folder list's own scroll offset, so scrolling it would read as a dismiss drag.
+      dragContentToDismiss={!browsing}
     >
       {content}
     </BottomDrawer>
