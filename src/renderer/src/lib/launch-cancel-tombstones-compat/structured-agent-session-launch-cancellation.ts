@@ -6,7 +6,7 @@ import {
   readStructuredAgentLaunchCancellationTombstoneSessionIds,
   retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted,
   retireStructuredAgentLaunchCancellationTombstonePersisted
-} from '../structured-agent-session-launch-persistence'
+} from '../agent-session/launch/structured-agent-session-launch-persistence'
 
 type CancellationRetirement = {
   retireAfterInventory: number | null

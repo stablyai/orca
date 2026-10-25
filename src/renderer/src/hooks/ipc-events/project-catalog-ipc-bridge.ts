@@ -89,7 +89,8 @@ export function registerProjectCatalogIpcBridge(
       // Why: every event without a live meter (a phase change, or null when git finished) clears it.
       useAppStore.getState().updatePendingWorktreeCreation(data.creationId, {
         phase: data.phase,
-        checkoutProgress: data.checkout ?? undefined
+        checkoutProgress: data.checkout ?? undefined,
+        ...(data.worktreeId ? { worktreeId: data.worktreeId } : {})
       })
     }) ?? (() => {})
   )

@@ -19,7 +19,8 @@ const agentProviderSessionSchema = z.preprocess(
     key: z.enum(['session_id', 'conversation_id']),
     id: z.string().min(1).max(512),
     // Pi resume requires its persisted authoritative transcript path.
-    transcriptPath: z.string().min(1).optional()
+    transcriptPath: z.string().min(1).optional(),
+    cwd: z.string().min(1).optional()
   })
 )
 
@@ -62,7 +63,7 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
   z.record(z.string(), z.string())
 )
 
-const sleepingAgentLaunchConfigBaseSchema = z.object({
+export const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
   agentEnv: sleepingAgentLaunchEnvSchema,

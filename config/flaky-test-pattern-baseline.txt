@@ -165,7 +165,6 @@
 1 test-no-real-time-wait:mobile/src/terminal/terminal-web-document-mount.test.ts
 1 test-no-real-time-wait:mobile/src/terminal/terminal-webview-tap-routing.test.ts
 1 test-no-real-time-wait:mobile/src/transport/cellular-handshake-stall-real-socket.test.ts
-1 test-no-real-time-wait:mobile/src/transport/mobile-relay-pairing-journal-store.test.ts
 1 test-no-real-time-wait:mobile/src/transport/mobile-relay-runtime-failover.test.ts
 4 test-no-real-time-wait:mobile/src/transport/rpc-client-live-recovery.test.ts
 1 test-no-real-time-wait:mobile/src/transport/rpc-operation-barrier.test.ts
@@ -268,16 +267,15 @@
 1 test-no-real-time-wait:src/main/gitlab/work-item-details.test.ts
 1 test-no-real-time-wait:src/main/grok/grok-hook-stdin-no-eof.test.ts
 1 test-no-real-time-wait:src/main/ipc/created-worktree-reconciliation.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem-auth.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem/filesystem-content-search-cancellation.test.ts
+1 test-no-real-time-wait:src/main/ipc/filesystem/filesystem-auth.test.ts
 5 test-no-real-time-wait:src/main/ipc/filesystem/local-disk-write-precondition.test.ts
 2 test-no-real-time-wait:src/main/ipc/folder-repo-git-upgrade.test.ts
 2 test-no-real-time-wait:src/main/ipc/native-chat.test.ts
 1 test-no-real-time-wait:src/main/ipc/parcel-watcher-shallow-file-subscription.test.ts
-1 test-no-real-time-wait:src/main/ipc/pty-agent-launch-pane-attach.test.ts
-1 test-no-real-time-wait:src/main/ipc/pty-daemon-controller-teardown.test.ts
-1 test-no-real-time-wait:src/main/ipc/pty-launch-parity.test.ts
-2 test-no-real-time-wait:src/main/ipc/pty-spawn-cwd-fallback-hung-folder.test.ts
+1 test-no-real-time-wait:src/main/ipc/pty/pty-agent-launch-pane-attach.test.ts
+1 test-no-real-time-wait:src/main/ipc/pty/pty-daemon-controller-teardown.test.ts
+1 test-no-real-time-wait:src/main/ipc/pty/pty-launch-parity.test.ts
+2 test-no-real-time-wait:src/main/ipc/pty/pty-spawn-cwd-fallback-hung-folder.test.ts
 1 test-no-real-time-wait:src/main/ipc/pty/host-env/spawn-cwd-hung-folder.test.ts
 1 test-no-real-time-wait:src/main/ipc/rebinding-file-watch-noise.test.ts
 1 test-no-real-time-wait:src/main/ipc/rebinding-file-watch.test.ts
@@ -370,7 +368,7 @@
 6 test-no-real-time-wait:src/main/runtime/rpc/ws-transport.test.ts
 1 test-no-real-time-wait:src/main/runtime/runtime-rpc-client-activity.test.ts
 1 test-no-real-time-wait:src/main/runtime/runtime-rpc-dispatch-inject-long-poll.test.ts
-8 test-no-real-time-wait:src/main/runtime/runtime-rpc-long-poll-transport.test.ts
+6 test-no-real-time-wait:src/main/runtime/runtime-rpc-long-poll-transport.test.ts
 1 test-no-real-time-wait:src/main/runtime/sidebar-inputs/paired-server-rows-producer.test.ts
 1 test-no-real-time-wait:src/main/runtime/sidebar-inputs/workspace-rows-producer.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-agent-session-legacy-send-behind-command.test.ts
@@ -386,7 +384,6 @@
 1 test-no-real-time-wait:src/main/runtime/workspaces/persisted-surfaces/restored-terminal-placement.test.ts
 4 test-no-real-time-wait:src/main/runtime/worktree-teardown-unstopped-pty.test.ts
 3 test-no-real-time-wait:src/main/skills/skill-bundle-process-termination.integration.test.ts
-1 test-no-real-time-wait:src/main/skills/skill-candidate-concurrency.test.ts
 1 test-no-real-time-wait:src/main/skills/skill-cloud-direct-upload.test.ts
 1 test-no-real-time-wait:src/main/skills/skill-process-contention-child.test.ts
 1 test-no-real-time-wait:src/main/skills/skill-process-contention.integration.test.ts
@@ -431,7 +428,6 @@
 1 test-no-real-time-wait:src/renderer/src/components/dashboard-popout/useDashboardSnapshot.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
-2 test-no-real-time-wait:src/renderer/src/components/mobile/MobilePage.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-lifecycle.test.tsx
 6 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-store.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/NativeChatModelCombobox.test.tsx
@@ -484,7 +480,6 @@
 1 test-no-real-time-wait:src/shared/darwin-terminal-names.test.ts
 5 test-no-real-time-wait:src/shared/fish-query-reply-child-stdin.node-pty.test.ts
 1 test-no-real-time-wait:src/shared/git-branch-line-total-soft-deadline.test.ts
-2 test-no-real-time-wait:src/shared/git-fetch-head-lock.test.ts
 1 test-no-real-time-wait:src/shared/osc52-clipboard.test.ts
 1 test-no-real-time-wait:src/shared/priority-semaphore.test.ts
 4 test-no-real-time-wait:src/shared/pty-reply-echo-shapes.node-pty.test.ts
@@ -703,7 +698,7 @@
 1 test-no-wall-clock:mobile/src/components/MobileHostCard-truthful-status.test.tsx
 1 test-no-wall-clock:mobile/src/components/MobileHostCard.test.ts
 1 test-no-wall-clock:mobile/src/components/pr-sidebar/pr-comment-card-web-avatar.test.tsx
-1 test-no-wall-clock:mobile/src/session/mobile-native-chat-pending-echo.test.ts
+1 test-no-wall-clock:mobile/src/session/native-chat/mobile-native-chat-pending-echo.test.ts
 1 test-no-wall-clock:mobile/src/session/mobile-structured-send-new-action.test.ts
 2 test-no-wall-clock:mobile/src/session/use-mobile-native-chat-message-send-draft-lifetime.test.ts
 1 test-no-wall-clock:mobile/src/session/use-mobile-native-chat-message-send.test.ts
@@ -1114,7 +1109,7 @@
 1 test-no-wall-clock:src/renderer/src/lib/browser-history-match.performance.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/paired-runtime-closed-tab-resume.test.ts
 2 test-no-wall-clock:src/renderer/src/lib/settled-worker-wake-policy.test.ts
-2 test-no-wall-clock:src/renderer/src/lib/structured-agent-session-launch-persistence.test.ts
+2 test-no-wall-clock:src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-persistence.test.ts
 2 test-no-wall-clock:src/renderer/src/lib/use-tab-agent-observed-signal-dispatch.test.tsx
 2 test-no-wall-clock:src/renderer/src/lib/wake-sleeping-agents-live-unmounted-pane.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/workspace-activation-path-gate.test.ts

@@ -1071,6 +1071,7 @@ jobs:
       - release-preflight
       - release-javascript
       - build-mac
+      - verify-mac-build
     # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
     if: >-
       !cancelled() &&
@@ -1080,6 +1081,7 @@ jobs:
       needs.release-preflight.result == 'success' &&
       needs.release-javascript.result == 'success' &&
       needs.build-mac.result == 'success' &&
+      needs.verify-mac-build.result == 'success' &&
       (needs.orcad-template.result == 'success' ||
         (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
     env:
@@ -1467,7 +1469,7 @@ jobs:
           path: signing-stage/**
           if-no-files-found: error
 
-      # Unsigned packaging overlaps macOS; only successful macOS builds may consume signing quota.
+      # Recheck the exact successful macOS run before consuming signing quota.
       - name: Require macOS success before Windows signing
         id: mac-signing-gate
         if: matrix.platform == 'win' && github.run_attempt == 1
@@ -2078,6 +2080,7 @@ jobs:
         (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
     # Keep every SignPath workflow job GitHub-hosted; separate release-mac-build allows Blacksmith outside Windows provenance.
     runs-on: ubuntu-latest
+    timeout-minutes: 185
     permissions:
       actions: write
       contents: read
@@ -2106,20 +2109,20 @@ jobs:
           RELEASE_MAC_BUILD_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+          RELEASE_MAC_BUILD_OBSERVE_MINUTES: '180'
 
   verify-mac-build:
     needs:
       - cut
       - build-mac
-      - build
-    # Qualify macOS even when a sibling build fails; publication still requires every build.
+    # Finish the shared deadline before starting the Windows signing job's six-hour budget.
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
       needs.cut.outputs.should_release == 'true' &&
       needs.build-mac.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 95
+    timeout-minutes: 215
     permissions:
       actions: read
       contents: read

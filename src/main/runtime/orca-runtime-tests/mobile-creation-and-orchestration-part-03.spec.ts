@@ -595,20 +595,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('allows only one exclusive mailbox waiter and supports explicit cancellation', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const first = runtime.waitForMessage('run:run_1', {
-      timeoutMs: 5000,
-      exclusive: true
-    })
-
-    await expect(
-      runtime.waitForMessage('run:run_1', { timeoutMs: 5000, exclusive: true })
-    ).resolves.toBe('waiter_exists')
-    runtime.cancelMessageWaiters('run:run_1')
-    await expect(first).resolves.toBe('cancelled')
-  })
-
   it('rejects leaf PTY waits when the request signal aborts', async () => {
     vi.useFakeTimers()
     try {

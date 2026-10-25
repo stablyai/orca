@@ -21,7 +21,7 @@ export async function openStructuredAgentSessionProviderChild(
   if (!context.runtimeState.startupAttempts.onClock(sessionId, child)) {
     return
   }
-  const attempt = context.runtimeState.acquireAborts.begin(sessionId)
+  const attempt = context.runtimeState.acquireAborts.begin(sessionId, false, false, true)
   const openedAt = context.now()
   try {
     attempt.signal.throwIfAborted()

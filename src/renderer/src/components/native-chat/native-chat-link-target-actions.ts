@@ -85,12 +85,35 @@ export function nativeChatLinkActions(
   return {
     destination: route.url,
     kind: 'url',
-    ...buildHttpLinkActions(routing.destinations, (destination) =>
-      openNativeChatWebLink(
-        route.url,
-        { worktreeId: context.worktreeId, sourceOwner: routing.sourceOwner },
-        destination
-      )
+    ...buildHttpLinkActions(
+      routing.destinations,
+      (destination) =>
+        openNativeChatWebLink(
+          route.url,
+          {
+            worktreeId: context.worktreeId,
+            sourceTabId: context.sourceTabId,
+            sourceOwner: routing.sourceOwner
+          },
+          destination
+        ),
+      {
+        worktreeId: context.worktreeId,
+        sourceTabId: context.sourceTabId,
+        sourceOwner: routing.sourceOwner,
+        url: route.url,
+        openInSourceGroup: () =>
+          openNativeChatWebLink(
+            route.url,
+            {
+              worktreeId: context.worktreeId,
+              sourceTabId: context.sourceTabId,
+              sourceOwner: routing.sourceOwner
+            },
+            'orca',
+            true
+          )
+      }
     )
   }
 }

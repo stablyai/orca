@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { claudeDiffPanelMayAutoOpen } from '../../../claude/claude-diff-panel-auto-open'
 import { probeRecentClaudeCliVersion } from '../../../claude/claude-hook-event-versions'

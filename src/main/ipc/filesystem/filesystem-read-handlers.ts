@@ -1,4 +1,4 @@
-import { classifyFilesystemDirectoryEntries } from '../filesystem-symlink-directory-entries'
+import { classifyFilesystemDirectoryEntries } from './filesystem-symlink-directory-entries'
 import { markdownDocumentsFromRelativePaths } from '../../../shared/markdown-document-paths'
 import {
   capturePathExistence,
@@ -16,7 +16,7 @@ import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath
 } from '../local-file-access-resolution'
-import { isPathAbsentError } from '../filesystem-path-containment'
+import { isPathAbsentError } from './filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'

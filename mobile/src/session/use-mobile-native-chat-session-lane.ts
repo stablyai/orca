@@ -4,7 +4,7 @@ import type { ConnectionState } from '../transport/types'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
 
 // Run both hooks in fixed order and starve the inactive lane’s identity so flips preserve cached transcripts.
 export function useMobileNativeChatSessionLane({

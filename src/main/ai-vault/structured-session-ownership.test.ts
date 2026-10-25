@@ -4,12 +4,15 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import {
   assertLegacyAiVaultResumeAllowed,
   assertLegacyAiVaultResumeCommandAllowed,
+  findResumeOwnership,
   OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSearchResponse,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
 import type { AiVaultSearchHit, AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import {
+  codexChatHolding,
+  installChats,
   installOwnership,
   listResult,
   PROVIDER_SESSION
@@ -106,6 +109,39 @@ describe('structured AI Vault ownership', () => {
       expect(projectStructuredAiVaultSessions(merged, () => false).sessions).toEqual([remote])
     }
   )
+
+  it('names the chat continuing a conversation first, while every link still refuses a terminal', async () => {
+    const movedOn = codexChatHolding('session-moved', [PROVIDER_SESSION, OTHER_SESSION])
+    const owned = (records: ReturnType<typeof codexChatHolding>[]) => {
+      installChats(records)
+      return projectStructuredAiVaultSessions(listResult(), OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
+        ?.structuredSession?.sessionId
+    }
+    expect(owned([movedOn, codexChatHolding('session-now', [PROVIDER_SESSION])])).toBe(
+      'session-now'
+    )
+    expect(owned([movedOn])).toBe('session-moved')
+    expect(
+      findResumeOwnership({ agent: 'codex', sessionId: PROVIDER_SESSION, filePath: '' })
+    ).toMatchObject({
+      sessionId: 'session-moved',
+      role: 'earlier'
+    })
+    expect(() =>
+      assertLegacyAiVaultResumeAllowed({
+        agent: 'codex',
+        filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
+        codexHome: null,
+        executionHostId: 'local'
+      })
+    ).toThrow('agent_session_conflict')
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `codex resume ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).rejects.toThrow('agent_session_conflict')
+  })
 
   it('derives typed refusals from the single writer predicate for live and proving leases', async () => {
     installOwnership()

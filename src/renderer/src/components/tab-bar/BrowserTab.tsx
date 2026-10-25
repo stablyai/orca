@@ -31,6 +31,8 @@ import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
+import { AgentCursorGlyph } from '../browser-pane/agent-cursor/agent-cursor-glyph'
+import { useBrowserAgentDrivesAnyPage } from '../browser-pane/agent-cursor/browser-agent-activity-state'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 import { useAppStore } from '@/store'
@@ -125,6 +127,8 @@ export default function BrowserTab({
   const toggleAudioMutedLabel = audioMuted
     ? translate('components.tab.bar.BrowserTab.unmuteTab', 'Unmute Tab')
     : translate('components.tab.bar.BrowserTab.muteTab', 'Mute Tab')
+  const agentDriving = useBrowserAgentDrivesAnyPage(tab.pageIds ?? [tab.activePageId])
+  const agentDrivingLabel = translate('browserTab.agentDriving', 'An agent is using this page')
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -180,12 +184,24 @@ export default function BrowserTab({
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {/* Keep browser identity distinct on inactive tabs too; muted icons look disabled. */}
-      <BrowserFavicon
-        faviconUrl={tab.faviconUrl}
-        loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
-        className="size-3 mr-1"
-        fallbackClassName="text-blue-500"
-      />
+      {agentDriving ? (
+        // Why: the dimmed favicon keeps the site recognizable under the agent's arrow.
+        <span role="img" aria-label={agentDrivingLabel} className="relative mr-1 size-3 shrink-0">
+          <BrowserFavicon
+            faviconUrl={tab.faviconUrl}
+            className="size-3 opacity-30"
+            fallbackClassName="text-blue-500"
+          />
+          <AgentCursorGlyph className="pointer-events-none absolute inset-0 size-3" />
+        </span>
+      ) : (
+        <BrowserFavicon
+          faviconUrl={tab.faviconUrl}
+          loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
+          className="size-3 mr-1"
+          fallbackClassName="text-blue-500"
+        />
+      )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {showAudioControl && (
@@ -240,9 +256,11 @@ export default function BrowserTab({
             title={tabLabel}
             icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
             programName={
-              isBlankBrowserTab(tab)
-                ? translate('tabHoverCard.browser', 'Browser')
-                : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
+              agentDriving
+                ? agentDrivingLabel
+                : isBlankBrowserTab(tab)
+                  ? translate('tabHoverCard.browser', 'Browser')
+                  : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
             }
           >
             {tabRoot}

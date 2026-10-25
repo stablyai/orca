@@ -126,7 +126,7 @@ export function failDispatch(
   this: OrchestrationDb,
   ctxId: string,
   error: string,
-  options: { workerProcessExited?: boolean; terminationReason?: string } = {}
+  options: { workerProcessExited?: boolean; terminationReason?: string; workerStage?: string } = {}
 ): DispatchContextRow | undefined {
   // Reserve the WAL writer before reading to prevent SQLITE_BUSY_SNAPSHOT.
   const transaction = beginLifecycleWriteTransaction(this.db, FAIL_DISPATCH_SAVEPOINT)
@@ -195,7 +195,7 @@ export function failDispatch(
         from: worker.state,
         to: 'failed',
         projection: {
-          stage: 'process_exited',
+          stage: options.workerStage ?? 'process_exited',
           last_error: error,
           updated_at: new Date().toISOString()
         }

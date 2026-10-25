@@ -267,8 +267,8 @@ jobs:
       matrix:
         arch: [x64, arm64]
     runs-on: blacksmith-12vcpu-macos-15
-    # Allow 150min for install 3×10 + publish 2×45 + ~25 setup/build/verify; outer timeout would prevent cleanup.
-    timeout-minutes: 150
+    # Allow 360min: 180 for a cold patched-runtime build + 150 for install/publish retries and setup.
+    timeout-minutes: 360
     env:
       JOBS: max
       NODE_OPTIONS: --max-old-space-size=4096
@@ -308,7 +308,7 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
-      # Cache bundled host Node by exact pin, without restore keys, so bumps cannot restore old archives.
+      # Cache the patched host Node by exact pin and patch, without restore keys.
       - name: Locate the pinned Node runtime cache
         shell: bash
         run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
@@ -317,7 +317,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/orca-node-runtime
-          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts', 'config/node-runtime-patches/**', 'config/scripts/build-darwin-terminal-node.mjs', 'config/scripts/pinned-node-downloads.mjs', 'config/scripts/update-node-runtime-pin.mjs', 'config/scripts/macos-terminal-host-bundle.cjs') }}
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -337,6 +337,15 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+
+      # Why: older refs predate the source build and package the pinned download instead.
+      - name: Build and verify the patched terminal runtimes
+        if: hashFiles('config/scripts/build-darwin-terminal-node.mjs') != ''
+        timeout-minutes: 180
+        run: |
+          pnpm run build:packages
+          ORCA_BACKGROUND_LAUNCH=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/verify-darwin-terminal-node.mjs --arch=arm64
+          ORCA_BACKGROUND_LAUNCH=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/verify-darwin-terminal-node.mjs --arch=x64
 
       # Build required out/mobile-web after installing its React Native/Expo dependencies.
       - uses: ./.github/actions/install-mobile-dependencies
@@ -423,7 +432,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac dmg zip --${{ matrix.arch }} --publish never
+          command: if [ ! -f config/scripts/build-darwin-terminal-node.mjs ]; then node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64; fi && node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac dmg zip --${{ matrix.arch }} --publish never
         env:
           ORCA_ADHOC_BUILD_VERSION: ${{ needs.orcad-template-support.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ needs.orcad-template-support.outputs.commit }}
@@ -656,12 +665,12 @@ jobs:
       fast_release: true
       javascript_source_sha: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
 
-  # Prefetch the installer during notarization; the publisher still waits for Mac success.
+  # Wait outside the publisher runner so cold runtime builds cannot exhaust its timeout.
   publish-adhoc-win:
-    needs: [orcad-template-support, build-adhoc-win]
+    needs: [orcad-template-support, build-adhoc-win, build-adhoc-mac]
     if: >-
       !cancelled() && needs.orcad-template-support.result == 'success' &&
-      needs.build-adhoc-win.result == 'success'
+      needs.build-adhoc-win.result == 'success' && needs.build-adhoc-mac.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -670,4 +679,3 @@ jobs:
     with:
       channel: adhoc
       tag: v${{ needs.orcad-template-support.outputs.version }}
-      wait_for_mac_job: build-adhoc-mac

@@ -309,7 +309,7 @@ describe('git history loader', () => {
 describe('symbolic full-name resolution', () => {
   // --symbolic-full-name echoes --end-of-options (unlike --verify); treating it as the ref misclassified branches/tags as commits.
   function executorEmitting(symbolicStdout: string): GitHistoryExecutor {
-    return vi.fn(async (args: string[]) => {
+    return vi.fn<GitHistoryExecutor>(async (args: string[]) => {
       if (args[0] === 'rev-parse' && args.includes('--symbolic-full-name')) {
         return { stdout: symbolicStdout }
       }
@@ -326,7 +326,7 @@ describe('symbolic full-name resolution', () => {
         return { stdout: logRecord({ hash: HEAD_OID, message: 'only' }) }
       }
       return { stdout: '' }
-    }) as unknown as GitHistoryExecutor
+    })
   }
 
   it('categorizes a branch when git echoes the option marker', async () => {

@@ -1,3 +1,8 @@
+import {
+  recordTerminalLaunchMetadata,
+  resolveTerminalLaunchResult,
+  terminalLaunchPublicFacts
+} from './terminal-launch-result'
 import { revealCreatedTerminal } from './terminal-create-reveal'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
@@ -124,6 +129,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
+            launchConfig: effectiveLaunchConfig,
+            ...(launchToken ? { launchToken } : {}),
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,
@@ -132,6 +139,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               agentTeamsPlan?.envToDelete
             ),
             resumeProviderSession: launchOpts.resumeProviderSession,
+            ...(launchOpts.resumeOrigin ? { resumeOrigin: launchOpts.resumeOrigin } : {}),
             telemetry: launchOpts.telemetry,
             connectionId: workspace.connectionId,
             worktreeId: workspace.id,
@@ -195,6 +203,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         })
         if (adoptedBeforeLaunch) {
           result = dependencies.materializedStablePaneReply(adoptedBeforeLaunch, preAllocatedHandle)
+          Object.assign(result, this.getTerminalLaunchResult(result.id))
         } else if (!ptyController.adoptStablePane) {
           result = await spawnFresh({ mustExist: false })
         }
@@ -204,28 +213,18 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         restoreHint.consume()
         const savedStartupCwd = result.savedStartupCwd ?? cwd
         // Why here: refused before a handle, snapshot or reveal could pose the live PTY as new.
-        const adoptedStablePane = dependencies.admitStablePaneAdoption(result, launchOpts)
-        if (result.agentSessionEnsure) {
-          const canonicalSurface = result.agentSessionEnsure.owner.surface
-          preAllocatedHandle = canonicalSurface.terminalHandle
-          tabId = canonicalSurface.tabId
-          leafId = canonicalSurface.leafId
-          paneKey = dependencies.makePaneKey(tabId, leafId)
-        } else if (result.stablePaneOwner) {
-          preAllocatedHandle = result.stablePaneOwner.handle
-          tabId = result.stablePaneOwner.tabId
-          leafId = result.stablePaneOwner.leafId
+        const launch = resolveTerminalLaunchResult(result, {
+          ...launchOpts,
+          launchConfig: effectiveLaunchConfig,
+          launchToken
+        })
+        if (launch.surface) {
+          ;({ terminalHandle: preAllocatedHandle, tabId, leafId } = launch.surface)
           paneKey = dependencies.makePaneKey(tabId, leafId)
         }
-        try {
-          this.assertPtyDidNotExitBeforeRegistration(result.id, result.incarnationId)
-        } catch (error) {
-          if (error instanceof Error && error.message === 'agent_session_exited_during_start') {
-            this.releaseRejectedPtyRegistrationFence(result.id, result.incarnationId)
-          }
-          throw error
-        }
-        if (!adoptedStablePane) {
+        this.assertCreatedPtyRegistrationAllowed(result.id, result.incarnationId)
+        // Provider reattachment still needs this runtime's handle and workspace binding.
+        if (!result.stablePaneOwner) {
           this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
           if (result.wslDistro) {
             this.preparePtyExecutionContext(result.id, result.wslDistro)
@@ -240,29 +239,29 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
           pty.runtimeSessionOwned = true
-          if (!adoptedStablePane) {
-            seedPtyLaunchTitle(pty, launchOpts.title, launchTitleAt, (title, at) =>
+          if (!launch.adoptedStablePane) {
+            seedPtyLaunchTitle(pty, launch.effectiveTitle, launchTitleAt, (title, at) =>
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
-            pty.launchConfig = effectiveLaunchConfig
-              ? dependencies.copySleepingAgentLaunchConfig(effectiveLaunchConfig)
-              : null
-            pty.launchToken = launchToken ?? null
-            pty.launchIncarnationId = launchToken ? pty.incarnationId : null
-            pty.launchAgent = launchOpts.launchAgent ?? null
-            pty.launchCommandAgent = resolveLaunchCommandPaneAgent(launchOpts.command)
+          }
+          recordTerminalLaunchMetadata(pty, result, launch)
+          if (!launch.adoptedStablePane) {
+            pty.launchCommandAgent = result.agentResumeRefused
+              ? null
+              : resolveLaunchCommandPaneAgent(launchOpts.command)
+            this.rememberSavedTerminalLaunchResult(result.id, result)
           }
           recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-        if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
+        if (pty && !launch.adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
             leafId,
-            title: launchOpts.title ?? null,
+            title: launch.effectiveTitle ?? null,
             activate: presentation === 'focused',
             selectIfNoActiveTab: presentation !== 'background',
-            ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+            ...(launch.effectiveViewMode ? { viewMode: launch.effectiveViewMode } : {}),
             ...(savedStartupCwd !== workspace.path ? { startupCwd: savedStartupCwd } : {})
           })
         }
@@ -272,29 +271,31 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ptyId: result.id,
           handle,
           cwd: savedStartupCwd,
-          launchOpts,
-          effectiveLaunchConfig,
-          launchToken,
+          launchOpts: {
+            ...launchOpts,
+            title: pty?.title ?? launch.effectiveTitle ?? undefined,
+            launchAgent: pty?.launchAgent ?? undefined,
+            viewMode: launch.effectiveViewMode
+          },
+          effectiveLaunchConfig: pty?.launchConfig ?? undefined,
+          launchToken: pty?.launchToken ?? undefined,
           presentation,
           opts,
           tabId,
           leafId
         })
         const { surface, warning } = reveal instanceof Promise ? await reveal : reveal
-        const agentSessionDisposition = result.agentSessionEnsure?.disposition
         return {
+          ...terminalLaunchPublicFacts(result, launch.adoptedStablePane, pty),
           handle,
           savedStartupCwd,
           tabId,
           paneKey,
           ptyId: result.id,
           worktreeId: workspace.id,
-          title: pty?.title ?? launchOpts.title ?? null,
+          title: pty?.title ?? launch.effectiveTitle ?? null,
           ...this.getPtyExecutionHostMetadata(result.id),
           surface,
-          ...(result.pid ? { processId: result.pid } : {}),
-          ...(result.agentSessionEnsure ? { agentSessionDisposition } : {}),
-          ...(adoptedStablePane ? { isReattach: true as const } : {}),
           ...(result.startupCwdFallback ? { startupCwdFallback: result.startupCwdFallback } : {}),
           ...(warning ? { warning } : {})
         }

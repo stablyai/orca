@@ -1,6 +1,6 @@
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { retireStructuredAgentSessionTab } from '@/runtime/structured-agent-session-tab-retirement'
-import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+import { deleteStructuredAgentLaunchRecord } from './agent-session/launch/structured-agent-session-launch-persistence'
 
 // Chats a cancel closed on this machine's host; session ids are never reused.
 const closedByLocalCancel = new Set<string>()

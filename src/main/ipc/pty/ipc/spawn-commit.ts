@@ -7,6 +7,7 @@ import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { resumeSpawnRefusal, savedResumeResult } from '../host-env/saved-resume-admission'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {
@@ -97,11 +98,22 @@ function ipcSpawnPaneBinding(ctx: PtyIpcSpawnState): PtySpawnPaneBinding | undef
 }
 
 function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
+  const args = ctx.args
   const { startupCwdSource: _startupCwdSource, ...providerResult } = ctx.result
   const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
   return {
     ...providerResult,
-    // Kitty flags and their proven sequence boundary must be published together.
+    ...(!ctx.result.isReattach && !resumeSpawnRefusal(ctx.resumeAdmission)
+      ? {
+          launchAgent: args.launchAgent,
+          launchToken: typeof args.launchToken === 'string' ? args.launchToken : undefined,
+          resumeProviderSession: ctx.codexResumeLaunch.droppedResumeArgv
+            ? undefined
+            : args.resumeProviderSession
+        }
+      : {}),
+    // Why both or neither: a pane can only adopt proven kitty flags together
+    // with the sequence boundary they describe.
     ...(typeof ctx.result.snapshotKittyKeyboardFlags === 'number' &&
     ctx.reconciledSnapshotSeq !== null &&
     ctx.snapshotKittyFlagsCoverReconciledSeq
@@ -111,9 +123,22 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),
     ...(startupCwdFallback ? { startupCwdFallback } : {}),
-    // Only a fresh launch can report dropped resume; reattach never ran this command.
-    ...(ctx.codexResumeLaunch.notifyResumeUnavailable && !ctx.result.isReattach
+    ...resumeDisposition(ctx)
+  }
+}
+
+/** What became of a requested resume, on every result the renderer receives. */
+function resumeDisposition(ctx: PtyIpcSpawnState) {
+  // Why: the pane asked to resume and got a fresh session instead; only the
+  // renderer can say so, and a reattach never ran this launch command.
+  if (ctx.result.isReattach) {
+    return {}
+  }
+  const refusal = resumeSpawnRefusal(ctx.resumeAdmission)
+  return {
+    ...(ctx.codexResumeLaunch.notifyResumeUnavailable || refusal
       ? { agentResumeUnavailable: true as const }
-      : {})
+      : {}),
+    ...savedResumeResult(ctx.resumeAdmission)
   }
 }

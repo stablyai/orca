@@ -1,6 +1,10 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  buildXtermConptyOptions,
+  parseWindowsBuildNumber
+} from '../../../../shared/xterm-conpty-options'
 
 export type WindowsPtyCompatibilityContext = {
   userAgent?: string
@@ -22,25 +26,6 @@ function isWslShellOverride(shellOverride: string | null | undefined): boolean {
   return /(?:^|[/\\])wsl(?:\.exe)?$/i.test(shellOverride ?? '')
 }
 
-function parseWindowsBuildNumber(osRelease: string | null | undefined): number | undefined {
-  const build = osRelease?.split('.')[2]
-  if (!build) {
-    return undefined
-  }
-  const parsed = Number.parseInt(build, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
-}
-
-function buildXtermWindowsPtyOptions(
-  buildNumber: number | undefined
-): NonNullable<ITerminalOptions['windowsPty']> {
-  // Old ConPTY lacks reliable wrap markers; low build numbers make xterm misclassify full-width rows as wrapped.
-  if (buildNumber === undefined || buildNumber < 21376) {
-    return { backend: 'conpty' }
-  }
-  return { backend: 'conpty', buildNumber }
-}
-
 /** Apply ConPTY options only to genuine local Windows panes. executionHostId excludes serve/runtime panes that look local to raw connectionId/cwd heuristics. */
 export function buildWindowsPtyCompatibilityOptions(
   context: WindowsPtyCompatibilityContext & { executionHostId: ExecutionHostId }
@@ -55,7 +40,7 @@ export function buildWindowsPtyCompatibilityOptions(
 export function buildLocalConptyTerminalOptions(
   osRelease: string | null | undefined
 ): Partial<ITerminalOptions> {
-  return { windowsPty: buildXtermWindowsPtyOptions(parseWindowsBuildNumber(osRelease)) }
+  return { windowsPty: buildXtermConptyOptions(parseWindowsBuildNumber(osRelease)) }
 }
 
 /** Match main’s effectiveShellOverride/isNativeWindowsLocalPtySpawn: tab override wins, else global Windows setting, so global WSL classifies identically. */

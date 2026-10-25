@@ -70,6 +70,24 @@ export const daemonAdoptedSchema = z
   })
   .strict()
 
+export const DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS = ['<1m', '1-5m', '5-30m', '30m+'] as const
+
+// Why: measures whether #29133's runtime patch makes daemon worker-pool stalls recover.
+const daemonAsyncIoHealthBase = {
+  protocol_generation: z.number().int().positive().max(1_000),
+  app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH)
+}
+export const daemonAsyncIoHealthSchema = z.discriminatedUnion('transition', [
+  z.object({ transition: z.literal('stalled'), ...daemonAsyncIoHealthBase }).strict(),
+  z
+    .object({
+      transition: z.literal('recovered'),
+      ...daemonAsyncIoHealthBase,
+      stalled_for_bucket: z.enum(DAEMON_ASYNC_IO_STALL_DURATION_BUCKETS)
+    })
+    .strict()
+])
+
 // Denied means proven app/daemon cwd-access divergence; readable is the TCC-folder-only control (#17696).
 export const daemonPtyCwdVerdictSchema = z
   .object({ cwd_class: z.enum(DAEMON_PTY_CWD_CLASSES), ...daemonOriginProps })

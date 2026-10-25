@@ -6,8 +6,8 @@ import {
   PATH_ACCESS_DENIED_MESSAGE,
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
-} from './filesystem-auth'
-import { isDescendantOrEqual } from './filesystem-path-containment'
+} from './filesystem/filesystem-auth'
+import { isDescendantOrEqual } from './filesystem/filesystem-path-containment'
 import { PREVIEWABLE_BINARY_MIME_TYPES } from './filesystem/filesystem-file-content-inspection'
 import { getDefaultFloatingWorkspacePath } from './floating-workspace-directory'
 import {

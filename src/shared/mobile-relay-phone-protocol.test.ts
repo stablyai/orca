@@ -15,6 +15,13 @@ describe('relay phone outer protocol', () => {
       RelayPhoneHelloSchema.safeParse({
         type: 'relay-hello',
         ok: false,
+        code: 4404
+      }).success
+    ).toBe(true)
+    expect(
+      RelayPhoneHelloSchema.safeParse({
+        type: 'relay-hello',
+        ok: false,
         code: 4404,
         cellUrl: 'https://untrusted.example'
       }).success

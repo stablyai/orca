@@ -39,6 +39,32 @@ const question = {
 }
 
 describe('ACP dialect request and turn boundaries', () => {
+  it('separates anonymous output across a suppressed user echo within one prompt', async () => {
+    const { rig, translator, apply, notification } = await dialectRig()
+    apply(translator.openPrompt('send-1', 1000).events)
+    for (const [sessionUpdate, text] of [
+      ['user_message_chunk', 'root echo'],
+      ['agent_message_chunk', 'A'],
+      ['user_message_chunk', 'followup echo'],
+      ['agent_message_chunk', 'B']
+    ]) {
+      notification('session/update', {
+        sessionId: 'provider-1',
+        _meta: { promptId: 'prompt:send-1' },
+        update: { sessionUpdate, content: { type: 'text', text } }
+      })
+    }
+    apply(translator.promptResult('send-1', { stopReason: 'end_turn' }, 1200))
+    const messages = (await rig.rows()).flatMap((row) =>
+      row.body.kind === 'message' ? [{ role: row.body.role, text: messageText(row.body) }] : []
+    )
+    expect(messages).toEqual([
+      { role: 'assistant', text: 'A' },
+      { role: 'assistant', text: 'B' }
+    ])
+    expect(await rig.turns()).toHaveLength(1)
+  })
+
   it('preserves provider permission labels, validates selected ids, and cancels unanswered rows on turn end', async () => {
     const { rig, translator, apply } = await dialectRig()
     apply(translator.openPrompt('send-1', 1000).events)

@@ -226,10 +226,17 @@ export function projectRuntimeMobileSessionTabs(
     const hasLiveAgentSignal =
       normalizedTabAgentStatus?.interactivePrompt != null ||
       normalizedTabAgentStatus?.toolName != null
+    // A title renew already dated against the hook (e.g. ConPTY's spawn-time shell title) cannot re-demote it (#32467).
+    const hookOutlivedAdjudicatedTitle =
+      normalizedTabAgentStatus?.state !== 'done' &&
+      statusPty?.lastOscTitleEpochMs != null &&
+      liveTitleEvidence === (statusPty.lastOscTitle?.trim() || null)
     // Only shell/management proves release; neutral Terminal/editor/cwd titles cannot justify done that fights clients' live status.
     const keepFullAgentStatus =
       normalizedTabAgentStatus &&
-      (!terminalTitleBlocksExplicitAgentStatus(liveTitleEvidence) || hasLiveAgentSignal)
+      (hookOutlivedAdjudicatedTitle ||
+        !terminalTitleBlocksExplicitAgentStatus(liveTitleEvidence) ||
+        hasLiveAgentSignal)
     const agentStatus = keepFullAgentStatus
       ? { agentStatus: normalizedTabAgentStatus }
       : // Idle titles drop stale working spinners but retain transcript identity for native chat.

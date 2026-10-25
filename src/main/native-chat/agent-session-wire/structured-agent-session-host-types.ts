@@ -143,7 +143,10 @@ export type StructuredAgentSessionHostDeps = {
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string) => void
-  /** Required to report failures that never reach the UI. */
+  /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
+  assertNoTerminalWriter?: (record: AgentSessionRecord) => Promise<void>
+  /** Where every failure the host carries on past is reported. Required: a host without one would
+   *  drop exactly the failures nobody sees in the UI. */
   logger: StructuredAgentSessionLogger
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
   /** replay distinguishes restored/projected state from fresh journal events. */

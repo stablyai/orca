@@ -144,6 +144,8 @@ export type CreateWorktreeProgressEvent = {
   creationId?: string
   phase: 'fetching' | 'creating'
   checkout?: WorktreeCheckoutProgress | null
+  /** Local creates name the checkout before Git publishes it. */
+  worktreeId?: string
 }
 
 export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {

@@ -284,6 +284,49 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('does not revive a kept window past its reset when a live post carries only the other one', async () => {
+    vi.useFakeTimers()
+    try {
+      const startedAt = Date.now()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...okProvider('claude', 18),
+          session: {
+            usedPercent: 18,
+            windowMinutes: 300,
+            resetsAt: startedAt + 3 * 60 * 60 * 1000,
+            resetDescription: null
+          }
+        }))
+        .mockImplementation(async () => ({
+          ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+          usageMetadata: { failureKind: 'stale-token' }
+        }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000)
+      await service.refresh()
+      expect(service.getState().claude?.session?.usedPercent).toBe(18)
+
+      // The kept 5h window resets before the next live post, which carries only the weekly one.
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000)
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: null,
+        sevenDay: { used_percentage: 41 }
+      })
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('ok')
+      expect(claude?.session).toBeNull()
+      expect(claude?.weekly?.usedPercent).toBe(41)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('attributes statusline posts to System Default when it inherits CLAUDE_CONFIG_DIR', async () => {
     vi.useFakeTimers()
     try {

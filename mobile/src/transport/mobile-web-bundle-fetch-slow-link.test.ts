@@ -181,6 +181,9 @@ describe('fetchMobileWebBundle over a slow link', () => {
 
     expect(isMobileWebBundleTransportFailure(outcome.error)).toBe(true)
     expect(String(outcome.error)).toContain('stalled')
+    expect(outcome.settledAt - startedAt).toBe(
+      2 * ONE_WAY_LATENCY_MS + MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
+    )
     // Fail against fetch-wide inactivity, not the per-read backstop.
     expect(outcome.settledAt - startedAt).toBeLessThan(MOBILE_WEB_BUNDLE_WINDOW_STALL_MS + 1_000)
     expect(host.delivered()).toBe(1)

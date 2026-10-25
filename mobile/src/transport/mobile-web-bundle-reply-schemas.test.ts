@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-  MOBILE_WEB_BUNDLE_ERROR_CODES
-} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
-  MobileWebBundleAssetSchema,
   MobileWebBundleRouteSchema,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
@@ -25,6 +21,9 @@ import {
   MobileWebBundleManifestReplySchema
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcReadResult } from './rpc-operation-contract'
+import { runRpcOperation } from './rpc-operation'
+import { RpcIncompatibleReplyError } from './rpc-incompatible-reply-error'
+import type { RpcResponse } from './types'
 
 const ASSET_SHA = 'b'.repeat(64)
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
@@ -40,9 +39,8 @@ function asset(overrides: Record<string, unknown> = {}) {
 }
 
 // Derive ids after fixture asset edits unless the test explicitly selects its own buildId.
-function contentIdOf(assets: unknown): string {
-  const parsed = MobileWebBundleAssetSchema.array().safeParse(assets)
-  return parsed.success ? computeMobileWebBundleId(parsed.data) : 'a'.repeat(64)
+function contentIdOf(assets: ReturnType<typeof asset>[]): string {
+  return computeMobileWebBundleId(assets)
 }
 
 const BUILD_ID = contentIdOf([asset()])
@@ -331,9 +329,15 @@ describe('mobile web bundle chunk reply reader', () => {
 })
 
 describe('mobile web bundle error codes', () => {
-  it('maps every code the host declares, from both positions one can occupy', () => {
-    expect(MOBILE_WEB_BUNDLE_ERROR_CODES).toHaveLength(6)
-    for (const code of MOBILE_WEB_BUNDLE_ERROR_CODES) {
+  it('reads released wire codes bare, wrapped, and followed by diagnostic prose', () => {
+    for (const code of [
+      'mobile_web_bundle_unavailable',
+      'mobile_web_bundle_build_changed',
+      'mobile_web_bundle_asset_unknown',
+      'mobile_web_bundle_asset_changed',
+      'mobile_web_bundle_offset_invalid',
+      'mobile_web_bundle_read_limited'
+    ]) {
       expect(readMobileWebBundleErrorCode(new Error(`invalid_argument: ${code}`))).toBe(code)
       expect(readMobileWebBundleErrorCode(new Error(code))).toBe(code)
       expect(readMobileWebBundleErrorCode(new Error(`invalid_argument: ${code}: no bundle`))).toBe(
@@ -378,11 +382,29 @@ describe('mobile web bundle error codes', () => {
 })
 
 describe('mobile web bundle operation descriptors', () => {
-  it('accepts no reply but a result', () => {
-    // Whole-result policy must refuse immediately rather than salvage a corrupt partial bundle.
-    for (const operation of [mobileWebBundleManifestRead, mobileWebBundleChunkRead]) {
-      expect(operation.acceptance).toBe('require-result-or-throw')
-      expect(operation.barrier).toBe('on-settle')
+  it('rejects host refusals and unreadable successful results for both reads', async () => {
+    let reply: RpcResponse = {
+      id: 'read-1',
+      ok: false,
+      error: { code: 'invalid_argument', message: 'mobile_web_bundle_unavailable' },
+      _meta: { runtimeId: 'host-1' }
+    }
+    const client = { sendRequest: async () => reply }
+    const reads = [
+      () => runRpcOperation(client, mobileWebBundleManifestRead, null),
+      () =>
+        runRpcOperation(client, mobileWebBundleChunkRead, {
+          buildId: BUILD_ID,
+          path: 'index.html',
+          offset: 0
+        })
+    ]
+    for (const read of reads) {
+      await expect(read()).rejects.toThrow('invalid_argument: mobile_web_bundle_unavailable')
+    }
+    reply = { id: 'read-1', ok: true, result: null, _meta: { runtimeId: 'host-1' } }
+    for (const read of reads) {
+      await expect(read()).rejects.toBeInstanceOf(RpcIncompatibleReplyError)
     }
   })
 })
@@ -399,7 +421,7 @@ describe('which side a bundle read failed on', () => {
   })
 
   it.each([
-    ['a host refusal', `invalid_argument: ${MOBILE_WEB_BUNDLE_ERROR_CODES[0]}`],
+    ['a host refusal', 'invalid_argument: mobile_web_bundle_unavailable'],
     ['bytes that do not hash', 'bundle asset index.html hashed aa, not bb'],
     ['a build that changed mid-fetch', 'bundle build changed mid-fetch: asked aa, served bb'],
     ['an unread reply', 'The host sent a reply this app could not read (mobileWeb.bundle.manifest)']

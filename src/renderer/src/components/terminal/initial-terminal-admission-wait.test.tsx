@@ -10,12 +10,14 @@ const mocks = vi.hoisted(() => {
     createTab: vi.fn(),
     createUnifiedTab: vi.fn(),
     begin: vi.fn(),
+    select: (selector: (state: { pendingWorktreeCreations: Record<string, never> }) => unknown) =>
+      selector({ pendingWorktreeCreations: {} }),
     answers
   }
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign(() => 'none', {
+  useAppStore: Object.assign(mocks.select, {
     getState: () => ({
       activeWorktreeId: 'wt-1',
       tabsByWorktree: {},

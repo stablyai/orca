@@ -79,8 +79,10 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         getDisplayTitle: (pty) => getLatestPtyTitle(this.getPtyDisplayRecord(pty)),
         replayPersistedSurface: (pty, tabId, paneKey) =>
           recordPtySurface(pty, tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING),
-        recordAdoptedSurface: (pty, tabId, paneKey) =>
-          recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence)),
+        recordAdoptedSurface: (pty, tabId, paneKey) => {
+          recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))
+          this.followExportedPaneKeys()
+        },
         getMobileSnapshots: () => this.mobileSessionTabsByWorktree.values(),
         getSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
         setSession: (worktreeId, next) => this.setWorkspaceSessionForWorktree(worktreeId, next),

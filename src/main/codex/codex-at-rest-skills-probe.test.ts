@@ -62,7 +62,8 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
       ['--disable', 'plugins', '-c', 'features.test=true', 'app-server'],
       ['--disable', 'plugins', '-c', 'features.test=true', 'app-server']
     ])
-    expect(invocations.map(({ cwd }) => cwd)).toEqual(['/work/one', '/work/two'])
+    // A settling probe must not hold the folder open, or Windows cannot remove the worktree.
+    expect(invocations.map(({ cwd }) => cwd?.startsWith('/work'))).toEqual([false, false])
     expect(invocations.every((invocation) => invocation.treeKillOnFinish)).toBe(true)
     expect(invocations[0]?.env).toMatchObject({
       CODEX_HOME: '/home/me/.codex',

@@ -256,6 +256,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     acquisition?: StructuredAgentSessionAcquisitionReceipt
   ): void => {
     if (!acquisition || this.stoppedAcquisition(sessionId) === acquisition) {
+      this.routes
+        .get(sessionId)
+        ?.registration.adapter.acknowledgeSessionRelease?.(sessionId, acquisition)
       this.routes.delete(sessionId)
     }
   }

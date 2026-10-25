@@ -49,7 +49,8 @@ jobs:
     if: ${{ !cancelled() && (!inputs.qualification_only || needs.qualification-template.result == 'success') && github.repository == 'stablyai/orca' }}
     # Keep Blacksmith mac notarization outside SignPath’s GitHub-hosted Windows provenance.
     runs-on: blacksmith-6vcpu-macos-15
-    timeout-minutes: 60
+    # Includes the 180-minute cold runtime build and the existing packaging retry budget.
+    timeout-minutes: 360
     # actions: read fetches the release-cut run's artifacts.
     permissions:
       actions: read
@@ -95,7 +96,7 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
-      # Cache bundled host Node by exact pin, without restore keys.
+      # Cache the patched host Node by exact pin and patch, without restore keys.
       - name: Locate the pinned Node runtime cache
         shell: bash
         run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
@@ -104,7 +105,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/orca-node-runtime
-          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts', 'config/node-runtime-patches/**', 'config/scripts/build-darwin-terminal-node.mjs', 'config/scripts/pinned-node-downloads.mjs', 'config/scripts/update-node-runtime-pin.mjs', 'config/scripts/macos-terminal-host-bundle.cjs') }}
 
       # Cache Electron/builder tool downloads to save ~30–90s.
       - name: Cache electron-builder downloads
@@ -125,6 +126,15 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+
+      # Why: older refs predate the source build and package the pinned download instead.
+      - name: Build and verify the patched terminal runtimes
+        if: hashFiles('config/scripts/build-darwin-terminal-node.mjs') != ''
+        timeout-minutes: 180
+        run: |
+          pnpm run build:packages
+          ORCA_BACKGROUND_LAUNCH=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/verify-darwin-terminal-node.mjs --arch=arm64
+          ORCA_BACKGROUND_LAUNCH=1 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/verify-darwin-terminal-node.mjs --arch=x64
 
       # Build required out/mobile-web using mobile’s React Native/Expo install.
       - uses: ./.github/actions/install-mobile-dependencies
@@ -225,7 +235,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 3
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_RELEASE=1 node config/scripts/build-mac-notarization-overlap.mjs --publish "$ORCA_MAC_PUBLISH" --draft; else ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish "$ORCA_MAC_PUBLISH" -c.publish.releaseType=draft; fi
+          command: if [ ! -f config/scripts/build-darwin-terminal-node.mjs ]; then node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64; fi && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_RELEASE=1 node config/scripts/build-mac-notarization-overlap.mjs --publish "$ORCA_MAC_PUBLISH" --draft; else ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish "$ORCA_MAC_PUBLISH" -c.publish.releaseType=draft; fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ORCA_REQUIRE_ORCAD_TEMPLATE: '1'

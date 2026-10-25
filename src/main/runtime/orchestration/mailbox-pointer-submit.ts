@@ -42,6 +42,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
     leaf: OrchestrationMailboxLeaf
     mailboxHandle: string
     messages: readonly { id: string; type: string }[]
+    heldDeliveryId?: string
     newestSequence: number
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
@@ -92,7 +93,9 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       } else if (
         (exactTarget.leaf.lastAgentStatusObservedLive &&
           exactTarget.leaf.lastAgentStatus === null) ||
-        deps.isPtyAwaitingUserInput(input.ptyId)
+        deps.isPtyAwaitingUserInput(input.ptyId) ||
+        // As in chat: a mid-turn Enter would spend a held batch's newer mail's only nudge.
+        (input.heldDeliveryId !== undefined && exactTarget.leaf.lastAgentStatus === 'working')
       ) {
         // A neutral title can outlive the foreground check, and an open dialog would take the
         // Enter as its answer; no Enter has been attempted yet.

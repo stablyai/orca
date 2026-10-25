@@ -209,8 +209,9 @@ describe('AgentsPane', () => {
       })
 
       expect(detectedAgentsMock.lastTarget).toBeUndefined()
-      expect(markup).toContain('Loading agent settings…')
-      expect(markup).not.toContain('Default Agent')
+      expect(markup).toContain('<fieldset disabled=""')
+      expect(markup).toContain('aria-label="Permissions"')
+      expect(markup).not.toContain('Installed')
     } finally {
       initialState.runtimeEnvironments = priorRuntimeEnvironments
     }

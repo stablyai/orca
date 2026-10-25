@@ -50,6 +50,7 @@ jobs:
       windows_process_probe: ${{ steps.filter.outputs.windows_process_probe }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       layout_oracle: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.layout_oracle }}
+      darwin_terminal_node: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.darwin_terminal_node }}
       dependency_isolation: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.dependency_isolation }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
@@ -76,6 +77,7 @@ jobs:
             /config/.bun-version
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
+            /config/scripts/pr-darwin-terminal-node-route.mjs
             /.oxfmtrc.json
             /config/scripts/pr-package-test-paths.mjs
             /config/scripts/pr-layout-oracle-route.mjs
@@ -1494,6 +1496,34 @@ jobs:
             *) echo "node_modules/zod is not in the isolated store"; exit 1 ;;
           esac
 
+  darwin_terminal_node:
+    name: mac terminal worker wakeup (${{ matrix.os }})
+    needs: [code_paths, preflight]
+    if: >-
+      !cancelled() && needs.preflight.result == 'success' &&
+      needs.code_paths.outputs.darwin_terminal_node == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - uses: actions/cache@v5
+        with:
+          path: out/node-runtime-cache
+          key: darwin-terminal-node-${{ runner.arch }}-${{ hashFiles('src/shared/node-runtime-pin.ts', 'config/node-runtime-patches/**', 'config/scripts/build-darwin-terminal-node.mjs', 'config/scripts/pinned-node-downloads.mjs', 'config/scripts/update-node-runtime-pin.mjs', 'config/scripts/macos-terminal-host-bundle.cjs') }}
+      - name: Build and verify the shipping terminal runtime
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/verify-darwin-terminal-node.mjs
+
   verify:
     name: PR checks passed
     # Publish an explicit result after every required dependency settles.
@@ -1511,6 +1541,7 @@ jobs:
       - managed_hook_node18
       - package
       - package_windows
+      - darwin_terminal_node
       - layout_oracle
       - dependency_isolation
     # Report settled results without competing with the GitHub-hosted test queue.
@@ -1547,6 +1578,8 @@ jobs:
           PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
+          DARWIN_TERMINAL_NODE: ${{ needs.darwin_terminal_node.result }}
+          DARWIN_TERMINAL_NODE_SHOULD_RUN: ${{ needs.code_paths.outputs.darwin_terminal_node }}
           LAYOUT_ORACLE: ${{ needs.layout_oracle.result }}
           LAYOUT_ORACLE_SHOULD_RUN: ${{ needs.code_paths.outputs.layout_oracle }}
           DEPENDENCY_ISOLATION: ${{ needs.dependency_isolation.result }}
@@ -1592,6 +1625,7 @@ jobs:
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
+          check_job darwin_terminal_node "$DARWIN_TERMINAL_NODE" "$DARWIN_TERMINAL_NODE_SHOULD_RUN"
           check_job layout_oracle "$LAYOUT_ORACLE" "$LAYOUT_ORACLE_SHOULD_RUN"
           check_job dependency_isolation "$DEPENDENCY_ISOLATION" "$DEPENDENCY_ISOLATION_SHOULD_RUN"
           exit "$failed"

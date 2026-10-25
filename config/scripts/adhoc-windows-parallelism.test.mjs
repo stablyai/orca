@@ -117,15 +117,20 @@ describe('adhoc Windows compilation overlaps Mac without publishing early', () =
   })
 
   it.each(['success', 'failure', 'cancelled', 'skipped', ''])(
-    'prefetches only after Windows compilation succeeds: %s',
+    'publishes only after both Windows compilation and macOS publication succeed: %s',
     (result) => {
       const run = compileAggregateExpression(publish.if)
       const needs = {
         'orcad-template-support': { result: 'success' },
-        'build-adhoc-win': { result: 'success' }
+        'build-adhoc-win': { result: 'success' },
+        'build-adhoc-mac': { result: 'success' }
       }
-      expect(publish.needs).toEqual(['orcad-template-support', 'build-adhoc-win'])
-      expect(publish.with.wait_for_mac_job).toBe('build-adhoc-mac')
+      expect(publish.needs).toEqual([
+        'orcad-template-support',
+        'build-adhoc-win',
+        'build-adhoc-mac'
+      ])
+      expect(publish.with.wait_for_mac_job).toBeUndefined()
       expect(run({ needs }).coerceString()).toBe('true')
       expect(run({ needs }, true).coerceString()).toBe('false')
       for (const job of publish.needs) {

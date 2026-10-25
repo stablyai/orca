@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
+import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './native-chat/mobile-native-chat-send'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
 const reportWorkerTerminalUserInput = vi.fn()

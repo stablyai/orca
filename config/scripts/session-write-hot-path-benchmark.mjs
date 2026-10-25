@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Benchmark production capTerminalScrollbackSessionBuffer/remapPaneKeys against equivalent pre-change baselines on every-write CPU paths.
+// Benchmark production scrollback capping and pane-key remapping against scan/rebuild baselines.
 // Snapshot disk rewrite is measured separately (#18764).
 import { spawnSync } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
@@ -65,7 +65,8 @@ const { isTerminalLeafId, makePaneKey, parsePaneKey } = await import(
 
 function median(samples) {
   const sorted = [...samples].sort((left, right) => left - right)
-  return sorted[Math.floor(sorted.length / 2)]
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
 }
 
 function timeRounds(run) {
@@ -87,7 +88,7 @@ function report(label, baselineMs, currentMs, extra = '') {
   return speedup
 }
 
-// Verbatim pre-change capTerminalScrollbackSessionBuffer; measureUtf8ByteLength itself is unchanged.
+// Scan UTF-8 bytes before clamping; compare with the production budget probe.
 function baselineCapScrollbackBuffer(buffer) {
   if (
     buffer.length <= TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT &&
@@ -149,7 +150,7 @@ for (let index = 0; index < PANE_KEYS; index += 1) {
   leaves.set(leafId, leafId)
 }
 
-// Verbatim pre-change remapPaneKeys: parses every key, then rebuilds the object regardless.
+// Parse every key and rebuild the object; compare steady-state reuse.
 function baselineRemapPaneKeys(values, remap) {
   if (!values || Object.keys(values).length === 0) {
     return { values, changed: false }

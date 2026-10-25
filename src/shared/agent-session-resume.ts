@@ -1,4 +1,5 @@
 import type { AgentHookSource } from './agent-hook-relay'
+import type { AgentStatusCacheIdentity, RefusedPaneResume } from './agent-status-ipc-payload'
 import type { AgentStatusState } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { TuiAgent } from './tui-agent'
@@ -41,6 +42,8 @@ export type AgentProviderSessionMetadata = {
   id: string
   /** Prefer hook-reported transcript paths: recent Claude filenames differ from session_id. Claude/Codex still resume by ID; Pi uses session_file as its --session locator. */
   transcriptPath?: string
+  /** Folder the agent ran in; resume runs there, not the pane's start folder (#16960). */
+  cwd?: string
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -131,8 +134,8 @@ function readSessionId(record: Record<string, unknown>, keys: readonly string[])
   return null
 }
 
-/** Read the hook-reported transcript path; recent Claude filenames cannot be reconstructed from session ID. */
-function readTranscriptPathFromKeys(
+/** Read a hook-reported path; recent Claude transcript filenames cannot be reconstructed from session ID. */
+export function readPathFromKeys(
   record: Record<string, unknown>,
   keys: readonly string[]
 ): string | undefined {
@@ -154,7 +157,7 @@ function withTranscriptPath(
   payload: Record<string, unknown>,
   keys: readonly string[] = ['transcript_path', 'transcriptPath']
 ): AgentProviderSessionMetadata {
-  const transcriptPath = readTranscriptPathFromKeys(payload, keys)
+  const transcriptPath = readPathFromKeys(payload, keys)
   return transcriptPath ? { ...metadata, transcriptPath } : metadata
 }
 
@@ -176,8 +179,22 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
     return null
   }
   // Persisted/relay paths cross trust boundaries too; reject controls as for hook paths.
-  const transcriptPath = readTranscriptPathFromKeys(record, ['transcriptPath'])
-  return transcriptPath ? { key, id, transcriptPath } : { key, id }
+  const transcriptPath = readPathFromKeys(record, ['transcriptPath'])
+  const cwd = readPathFromKeys(record, ['cwd'])
+  return {
+    key,
+    id,
+    ...(transcriptPath ? { transcriptPath } : {}),
+    ...(cwd ? { cwd } : {})
+  }
+}
+
+/** Older hosts' strict ensureAgentSession schema rejects the newer `cwd` field. */
+export function agentProviderSessionForEnsure(
+  providerSession: AgentProviderSessionMetadata
+): AgentProviderSessionMetadata {
+  const { cwd: _cwd, ...identity } = providerSession
+  return identity
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.
@@ -291,3 +308,45 @@ export function extractAgentProviderSession(
 
 // Preserve the existing import path.
 export { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'
+
+/** A host home check for this exact saved continuation, not a terminal writer claim. */
+export type SavedResumeDecision = {
+  agent: string
+  providerSession: AgentProviderSessionMetadata
+  verdict: 'admitted' | 'chat-home' | 'chat-writing' | 'unverifiable'
+}
+
+/** Effective facts of a terminal launch; a refused shell carries no rejected agent metadata. */
+export type TerminalLaunchResult = {
+  savedResumeDecision?: SavedResumeDecision
+  agentResumeUnavailable?: true
+  agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
+  refusedResume?: RefusedPaneResume
+  launchConfig?: SleepingAgentLaunchConfig
+  launchAgent?: TuiAgent
+  launchToken?: string
+  resumeProviderSession?: AgentProviderSessionMetadata
+}
+
+/** Runtime-only source shared by copies of one saved startup. Never persisted or sent to a host. */
+export type SavedResumeStartupSource = {
+  cancelled: boolean
+  record?: SleepingAgentSessionRecord
+  expectedStatus?: AgentStatusCacheIdentity
+}
+
+/** Forward only effective launch facts through each existing terminal envelope. */
+export function terminalLaunchFacts(result: TerminalLaunchResult): TerminalLaunchResult {
+  return {
+    ...(result.savedResumeDecision ? { savedResumeDecision: result.savedResumeDecision } : {}),
+    ...(result.agentResumeUnavailable
+      ? { agentResumeUnavailable: result.agentResumeUnavailable }
+      : {}),
+    ...(result.agentResumeRefused ? { agentResumeRefused: result.agentResumeRefused } : {}),
+    ...(result.refusedResume ? { refusedResume: result.refusedResume } : {}),
+    ...(result.launchConfig ? { launchConfig: result.launchConfig } : {}),
+    ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
+    ...(result.launchToken ? { launchToken: result.launchToken } : {}),
+    ...(result.resumeProviderSession ? { resumeProviderSession: result.resumeProviderSession } : {})
+  }
+}

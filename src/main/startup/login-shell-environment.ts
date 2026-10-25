@@ -50,24 +50,30 @@ function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.Proces
   )
 }
 
+const POWERSHELL_ENVIRONMENT_DUMP =
+  `$values = @{}; [Environment]::GetEnvironmentVariables().GetEnumerator() | ` +
+  `ForEach-Object { $values[[string]$_.Key] = [string]$_.Value }; ` +
+  `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
+  `[Console]::Write('${START_MARKER}'); ` +
+  `[Console]::Write(($values | ConvertTo-Json -Compress)); ` +
+  `[Console]::Write('${END_MARKER}')`
+
 function shellProbe(shell: string): string[] | null {
-  if (process.platform !== 'win32' || resolveWindowsShellStartupFamily(shell) === 'posix') {
+  if (process.platform !== 'win32') {
     const command =
       `printf '\\0${START_MARKER}\\0'; /usr/bin/env -0; ` + `printf '\\0${END_MARKER}\\0'`
     return ['-ilc', command]
+  }
+  if (resolveWindowsShellStartupFamily(shell) === 'posix') {
+    // Git Bash's own env holds MSYS paths (/c/..., TEMP=/tmp); a native child sees the converted values native agents get.
+    const encoded = Buffer.from(POWERSHELL_ENVIRONMENT_DUMP, 'utf16le').toString('base64')
+    return ['-ilc', `powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ${encoded}`]
   }
   const basename = pathWin32.basename(shell).toLowerCase()
   if (basename !== 'powershell.exe' && basename !== 'pwsh.exe') {
     return null
   }
-  const command =
-    `$values = @{}; [Environment]::GetEnvironmentVariables().GetEnumerator() | ` +
-    `ForEach-Object { $values[[string]$_.Key] = [string]$_.Value }; ` +
-    `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
-    `[Console]::Write('${START_MARKER}'); ` +
-    `[Console]::Write(($values | ConvertTo-Json -Compress)); ` +
-    `[Console]::Write('${END_MARKER}')`
-  return ['-NoLogo', '-Command', command]
+  return ['-NoLogo', '-Command', POWERSHELL_ENVIRONMENT_DUMP]
 }
 
 function parsePosixEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
@@ -148,7 +154,7 @@ function spawnShellAndReadEnvironment(
     child.on('close', () => {
       const output = Buffer.concat(chunks)
       finish(
-        process.platform === 'win32' && resolveWindowsShellStartupFamily(shell) !== 'posix'
+        process.platform === 'win32'
           ? parsePowerShellEnvironment(output)
           : parsePosixEnvironment(output)
       )

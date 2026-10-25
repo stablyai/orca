@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -67,7 +67,7 @@ describe('handleOscLink', () => {
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
     // The browser is the surface; activation must not seed a shell into an emptied workspace.
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true
     })
   })

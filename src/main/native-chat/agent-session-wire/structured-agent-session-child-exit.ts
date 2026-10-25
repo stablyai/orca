@@ -68,7 +68,7 @@ export type StructuredAgentSessionChildExitContext<
   wakeDelivery?: (sessionId: string) => void
   startupAttempts?: Pick<StructuredAgentSessionStartupAttempts, 'childEnded'>
   /** Retain exits between background-start spawn and publication. */
-  startFlights?: Pick<StructuredAgentSessionStartFlights, 'deferExit'>
+  startFlights?: Pick<StructuredAgentSessionStartFlights, 'deferExit' | 'ownsChild'>
   abortOpen?: (sessionId: string) => void
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
@@ -245,7 +245,12 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
           )),
       ...(startFailure ? { exitFailure: startFailure } : {}),
       ...(startFailed && child.generation
-        ? { exitedDuringStartup: { generation: child.generation } }
+        ? {
+            exitedDuringStartup: {
+              generation: child.generation,
+              flightOwned: context.startFlights?.ownsChild(sessionId, child)
+            }
+          }
         : {}),
       exit: watched,
       ...(unrunRejection ? { unrunRejection } : {})

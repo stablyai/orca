@@ -51,7 +51,10 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 
 export class AcpStructuredOptions {
   constructor(
-    private readonly dialect: Pick<AcpDialect, 'modelEfforts' | 'withheldCommands'> = {}
+    private readonly dialect: Pick<
+      AcpDialect,
+      'modelEfforts' | 'clampsUnlistedEffort' | 'withheldCommands'
+    > = {}
   ) {}
 
   private configOptions: SessionConfigOption[] = []
@@ -158,7 +161,13 @@ export class AcpStructuredOptions {
     const models: AgentSessionModelOption[] = listed.map((model) => {
       const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
       const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
-      const sessionMenu = { efforts: model.id === currentModel ? sessionEfforts : [] }
+      // A clamping agent's session menu says nothing about another model's menu: unknown, not none.
+      const sessionMenu =
+        model.id === currentModel
+          ? { efforts: sessionEfforts }
+          : this.dialect.clampsUnlistedEffort && effortOption && !advertised
+            ? { efforts: [], effortsKnown: false as const }
+            : { efforts: [] }
       return {
         ...model,
         isDefault: false,

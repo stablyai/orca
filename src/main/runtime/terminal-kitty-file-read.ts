@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { lstat, open, realpath } from 'node:fs/promises'
 import { isAbsolute, win32 } from 'node:path'
-import { isDescendantOrEqual } from '../ipc/filesystem-path-containment'
+import { isDescendantOrEqual } from '../ipc/filesystem/filesystem-path-containment'
 import {
   parseWslUncPath,
   toLinuxPath,

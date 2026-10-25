@@ -135,7 +135,7 @@ vi.mock('../../shared/secret-store', () => ({
   }
 }))
 vi.mock('../host/electron-secret-store')
-vi.mock('../ipc/pty-host-bindings')
+vi.mock('../ipc/pty/pty-host-bindings')
 vi.mock('../host/electron-runtime-desktop-surface')
 vi.mock('../runtime/runtime-desktop-surface')
 vi.mock('../host/electron-browser-commands')

@@ -114,6 +114,15 @@ describe('mobile relay pairing journal store', () => {
     expect(asyncStorage.setItem.mock.invocationCallOrder[0]).toBeLessThan(
       secureStore.setItemAsync.mock.invocationCallOrder[0]!
     )
+    expect(asyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:mobile-relay:pairing-journal:v1',
+      JSON.stringify(journal.metadata)
+    )
+    expect(secureStore.setItemAsync).toHaveBeenCalledWith(
+      'orca.mobile-relay.pairing-journal.v1',
+      JSON.stringify(journal.secrets),
+      expect.objectContaining({ keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' })
+    )
     expect(metadataRaw).not.toContain(offer.deviceToken)
     expect(metadataRaw).not.toContain(offer.relay.inviteToken)
     expect(metadataRaw).not.toContain(journal.secrets.pendingResumeToken)
@@ -238,12 +247,17 @@ describe('mobile relay pairing journal store', () => {
     const secretReadGate = new Promise<void>((resolve) => {
       releaseSecretRead = resolve
     })
+    let enteredSecretRead = () => {}
+    const secretReadStarted = new Promise<void>((resolve) => {
+      enteredSecretRead = resolve
+    })
     secureStore.getItemAsync.mockImplementationOnce(async () => {
+      enteredSecretRead()
       await secretReadGate
       return secretRaw
     })
     const loading = loadMobileRelayPairingJournal()
-    await vi.waitFor(() => expect(secureStore.getItemAsync).toHaveBeenCalled())
+    await secretReadStarted
 
     const replacement = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
@@ -379,33 +393,38 @@ describe('mobile relay pairing journal store', () => {
   })
 
   it('makes a superseding scan wait for a publication in progress, and refuses a stale claim', async () => {
-    const created = createMobileRelayPairingJournal({
-      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
-      hostId: 'host-1',
-      hostName: 'Blue Whale',
-      randomBytes: (length) => new Uint8Array(length).fill(10)
-    })
-    await saveMobileRelayPairingJournal(created)
-    releaseMobileRelayPairingJournal(created.metadata.journalId)
-    const release = await claimMobileRelayPairingJournalPublication(created.metadata.journalId)
-    const replacement = createMobileRelayPairingJournal({
-      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
-      hostId: 'host-2',
-      hostName: 'Red Panda',
-      randomBytes: (length) => new Uint8Array(length).fill(12)
-    })
-    let saved = false
-    const save = saveMobileRelayPairingJournal(replacement).then(() => (saved = true))
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(saved).toBe(false)
+    vi.useFakeTimers()
+    try {
+      const created = createMobileRelayPairingJournal({
+        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+        hostId: 'host-1',
+        hostName: 'Blue Whale',
+        randomBytes: (length) => new Uint8Array(length).fill(10)
+      })
+      await saveMobileRelayPairingJournal(created)
+      releaseMobileRelayPairingJournal(created.metadata.journalId)
+      const release = await claimMobileRelayPairingJournalPublication(created.metadata.journalId)
+      const replacement = createMobileRelayPairingJournal({
+        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+        hostId: 'host-2',
+        hostName: 'Red Panda',
+        randomBytes: (length) => new Uint8Array(length).fill(12)
+      })
+      let saved = false
+      const save = saveMobileRelayPairingJournal(replacement).then(() => (saved = true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(saved).toBe(false)
 
-    await clearMobileRelayPairingJournal(created.metadata.journalId)
-    release()
-    await save
-    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
-    await expect(
-      claimMobileRelayPairingJournalPublication(created.metadata.journalId)
-    ).rejects.toThrow(/stale/)
+      await clearMobileRelayPairingJournal(created.metadata.journalId)
+      release()
+      await save
+      await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+      await expect(
+        claimMobileRelayPairingJournalPublication(created.metadata.journalId)
+      ).rejects.toThrow(/stale/)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('self-heals an undecryptable Android secret so the next QR scan can pair', async () => {

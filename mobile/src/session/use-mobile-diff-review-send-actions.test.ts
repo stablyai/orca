@@ -10,7 +10,7 @@ import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
-} from './mobile-native-chat-stale-input'
+} from './native-chat/mobile-native-chat-stale-input'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
 
 function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {

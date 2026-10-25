@@ -72,10 +72,6 @@ function dependencies(journal: MobileRelayDirectUpgradeJournal | null = null) {
 describe('existing direct pairing relay upgrade', () => {
   it('persists pending material before install and publishes only after committed status', async () => {
     const deps = dependencies()
-    let journal: MobileRelayDirectUpgradeJournal | null = null
-    deps.writeJournal.mockImplementation(async (next) => {
-      journal = next
-    })
     const client = clientWith([
       success({ v: 1, relay }),
       success({
@@ -105,13 +101,34 @@ describe('existing direct pairing relay upgrade', () => {
 
     const result = await upgradeDirectMobileRelay({ client, host, dependencies: deps })
 
-    expect(journal).not.toBeNull()
+    expect(deps.writeJournal).toHaveBeenCalledOnce()
+    const journal = deps.writeJournal.mock.calls[0]?.[0]
+    if (!journal) {
+      throw new Error('Upgrade did not persist pending material')
+    }
+    expect(client.sendRequest).toHaveBeenNthCalledWith(1, 'pairing.getEndpoints', {
+      installReqId: journal.reqId
+    })
+    expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'pairing.getEndpoints', {
+      installReqId: journal.reqId
+    })
+    expect(deps.writeBundle).toHaveBeenCalledWith({
+      v: 1,
+      hostId: host.id,
+      deviceToken: host.deviceToken,
+      current: {
+        token: journal.pendingResumeToken,
+        hash: journal.pendingResumeTokenHash,
+        version: 1,
+        expiresAt: 9_999_999
+      }
+    })
     expect(deps.writeJournal.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(client.sendRequest).mock.invocationCallOrder[0]!
     )
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'pairing.provisionRelay', {
-      reqId: journal!.reqId,
-      newResumeTokenHash: journal!.pendingResumeTokenHash
+      reqId: journal.reqId,
+      newResumeTokenHash: journal.pendingResumeTokenHash
     })
     expect(deps.writeBundle).toHaveBeenCalledBefore(deps.setRelayRouting)
     expect(deps.setRelayRouting).toHaveBeenCalledWith(host.id, relay)

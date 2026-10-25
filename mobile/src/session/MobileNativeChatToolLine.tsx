@@ -13,12 +13,12 @@ import {
   mcpToolIdentity,
   toolWebSearchResults,
   type NativeChatWebSearchResult
-} from '../../../src/shared/native-chat-tool-identity'
-import { nativeChatToolIconName } from '../../../src/shared/native-chat-tool-icon'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-identity'
+import { nativeChatToolIconName } from '../../../src/shared/native-chat/tools/native-chat-tool-icon'
 import {
   NATIVE_CHAT_TOOL_ROW_VERB_COPY,
   nativeChatToolLineLabel
-} from '../../../src/shared/native-chat-tool-line-label'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import {
   isToolCallBlock,
   type NativeChatToolCallBlock,
@@ -206,7 +206,7 @@ export function MobileNativeChatToolLine({
         <View style={[styles.iconSlot, { width: iconSize }]}>
           {call ? (
             <MobileNativeChatToolGlyph
-              name={nativeChatToolIconName(call.name, call.mcpIdentity)}
+              name={nativeChatToolIconName(call.name, call.mcpIdentity, call.input)}
               size={iconSize}
               color={failed ? colors.statusRed : colors.textMuted}
             />

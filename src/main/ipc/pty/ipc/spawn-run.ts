@@ -28,6 +28,13 @@ import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-ma
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
+import {
+  captureSavedResumeCleanup,
+  admitColdRestoreReattach,
+  forgetRefusedResume,
+  resumeSpawnRefusal,
+  savedResumeRecord
+} from '../host-env/saved-resume-admission'
 
 function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
   if (!ctx.agentTeamsLeaderHandle) {
@@ -81,11 +88,41 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       }
       try {
         await executePtyIpcSpawn(ctx)
+        if (!ctx.resumeAdmission) {
+          ctx.resumeAdmission = await admitColdRestoreReattach(
+            deps.runtime,
+            ctx.result,
+            { paneKey: ctx.stablePaneKey, saved: savedResumeRecord(deps.store, ctx.stablePaneKey) },
+            ctx.expectedWslDistro
+          )
+          await captureSavedResumeCleanup(
+            deps.runtime,
+            deps.store,
+            ctx.stablePaneKey,
+            ctx.resumeAdmission,
+            args.worktreeId
+          )
+        }
         const committed = await commitPtyIpcSpawn(ctx)
+        const refusal = resumeSpawnRefusal(ctx.resumeAdmission)
+        forgetRefusedResume(ctx.stablePaneKey, refusal)
+        if (args.worktreeId && ctx.stablePaneKey && refusal && refusal.verdict !== 'unverifiable') {
+          void deps.runtime
+            ?.forgetRefusedSavedResume?.(
+              args.worktreeId,
+              ctx.stablePaneKey,
+              refusal.refused,
+              refusal.sourceRecord
+            )
+            .catch((error: unknown) => console.warn('[pty] refused resume cleanup failed', error))
+        }
         endPaneAgentLaunch(
           ctx,
           ctx.exitedBeforeRegistration ? { exitedDuringStart: true } : { started: true }
         )
+        if (!ctx.result.isReattach) {
+          deps.runtime?.rememberSavedTerminalLaunchResult?.(committed.id, committed)
+        }
         return committed
       } finally {
         if (ctx.pendingRegistrationPtyId) {
@@ -126,7 +163,9 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       if (adopted) {
         releaseAbandonedAgentTeamsLeader(ctx)
       }
-      return adopted?.result ?? completed!
+      return adopted
+        ? { ...adopted.result, ...deps.runtime?.getTerminalLaunchResult?.(adopted.result.id) }
+        : completed!
     }
     return complete(operation)
   }
@@ -178,7 +217,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
         ...codexReattachedHomeRouteField(ctx.reattachedCodexHomeRoutes, adopted.result.id, true)
       })
       endPaneAgentLaunch(ctx, { started: true })
-      return adopted.result
+      return { ...adopted.result, ...deps.runtime?.getTerminalLaunchResult?.(adopted.result.id) }
     }
     return freshResult!
   } catch (caught) {

@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
-import type * as FilesystemPathContainmentModule from '../../ipc/filesystem-path-containment'
+import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
@@ -349,7 +349,7 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/filesystem-auth', () => ({
+vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
@@ -362,9 +362,9 @@ vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
 }))
 
 // Relay-rebuilt ENOENT errors may retain only the message.
-vi.mock('../../ipc/filesystem-path-containment', async () => {
+vi.mock('../../ipc/filesystem/filesystem-path-containment', async () => {
   const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
-    '../../ipc/filesystem-path-containment'
+    '../../ipc/filesystem/filesystem-path-containment'
   )
   return { isENOENT: actual.isENOENT }
 })

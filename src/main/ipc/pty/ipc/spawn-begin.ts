@@ -5,15 +5,15 @@ import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launc
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
 import { agentLaunchPaneLiveness } from '../pane/agent-launch-pane-evidence'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
-import { createPtySpawnTiming } from '../../pty-spawn-timing'
+import { createPtySpawnTiming } from '../pty-spawn-timing'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
 import { snapshotCodexPaneHomeRoutes } from '../host-env/codex-home'
 import { getAppPtyId } from '../provider/registry'
 import {
   makePaneSpawnReservationKey,
-  pendingRuntimePaneCreatesByOwnerKey
+  pendingRuntimePaneCreatesByOwnerKey,
+  type PaneSpawnReservationResult
 } from '../pane/spawn-reservation'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
@@ -38,7 +38,7 @@ export function resolveEarlyPaneSpawnReservationKey(args: PtySpawnIpcArgs): stri
 
 export async function beginPtyIpcSpawn(
   ctx: PtyIpcSpawnState
-): Promise<PtySpawnResult | { isReattach: true } | null> {
+): Promise<PaneSpawnReservationResult | void> {
   const args = ctx.args
   // Launch panes adopt their agent instead of starting a shell; explicit restarts already own the reservation.
   const launchPaneKey = ctx.paneSpawnReservation ? null : resolveEarlyPaneKey(args)
@@ -147,6 +147,4 @@ export async function beginPtyIpcSpawn(
   // Bytes arriving during spawn can postdate proven flags; do not let old flags erase their live negotiation.
   ctx.snapshotKittyFlagsCoverReconciledSeq = true
   ctx.preparedProvisionalExecutionContext = false
-
-  return null
 }

@@ -141,7 +141,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build-mac')
     expect(releaseWorkflow.jobs['publish-release'].needs).toContain('verify-mac-build')
     const macVerification = releaseWorkflow.jobs['verify-mac-build']
-    expect(macVerification.needs).toEqual(['cut', 'build-mac', 'build'])
+    expect(macVerification.needs).toEqual(['cut', 'build-mac'])
     expect(macVerification.if).toContain('!cancelled()')
     expect(macVerification.if).not.toContain('needs.build.result')
     expect(macVerification.permissions).toEqual({ actions: 'read', contents: 'read' })

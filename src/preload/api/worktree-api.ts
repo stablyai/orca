@@ -89,6 +89,8 @@ export type WorktreeApi = {
   sleepReopened: (worktreeId: string) => Promise<void>
   /** True once running, so the renderer's subsequent spawn reattaches. */
   resumeSleptPane: (pane: { worktreeId: string; tabId: string; leafId: string }) => Promise<boolean>
+  /** Drops main's workspace-sleep record only while no tab holds its pane. */
+  retireStrandedSleepRecord: (args: { worktreeId: string; paneKey: string }) => Promise<void>
   remove: (args: {
     worktreeId: string
     hostId?: ExecutionHostId

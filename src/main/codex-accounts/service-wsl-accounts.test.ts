@@ -514,7 +514,9 @@ describe('CodexAccountService config sync', () => {
     let clearSelectionDuringLogin = (): void => {}
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
-      expect(args).toEqual(buildWslCodexLoginArgs('Ubuntu', wslLinuxHomePath))
+      expect(args).toEqual(
+        buildWslCodexLoginArgs('Ubuntu', `${wslLinuxHomePath}/.orca-reauth-login`)
+      )
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough
         stderr: PassThrough
@@ -525,7 +527,7 @@ describe('CodexAccountService config sync', () => {
       child.kill = vi.fn()
       clearSelectionDuringLogin()
       writeFileSync(
-        join(wslManagedHomePath, 'auth.json'),
+        join(wslManagedHomePath, '.orca-reauth-login', 'auth.json'),
         JSON.stringify({
           tokens: {
             id_token: `header.${Buffer.from(JSON.stringify({ email: 'new@example.com' })).toString(
@@ -546,7 +548,12 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
-        path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
+        path.startsWith(wslManagedHomePath)
+          ? {
+              distro: 'Ubuntu',
+              linuxPath: `${wslLinuxHomePath}${path.slice(wslManagedHomePath.length).replaceAll('\\', '/')}`
+            }
+          : null
     }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: () => wslManagedHomePath
@@ -654,7 +661,9 @@ describe('CodexAccountService config sync', () => {
     })
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
-      expect(args).toEqual(buildWslCodexLoginArgs('Ubuntu', wslLinuxHomePath))
+      expect(args).toEqual(
+        buildWslCodexLoginArgs('Ubuntu', `${wslLinuxHomePath}/.orca-reauth-login`)
+      )
       expect(readFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'utf-8')).toBe(
         'account-1\n'
       )
@@ -667,7 +676,7 @@ describe('CodexAccountService config sync', () => {
       child.stderr = new PassThrough()
       child.kill = vi.fn()
       writeFileSync(
-        join(wslManagedHomePath, 'auth.json'),
+        join(wslManagedHomePath, '.orca-reauth-login', 'auth.json'),
         createCodexAuthJson('new-wsl@example.com', 'provider-wsl-1', 'refresh-token'),
         'utf-8'
       )
@@ -682,7 +691,12 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
-        path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
+        path.startsWith(wslManagedHomePath)
+          ? {
+              distro: 'Ubuntu',
+              linuxPath: `${wslLinuxHomePath}${path.slice(wslManagedHomePath.length).replaceAll('\\', '/')}`
+            }
+          : null
     }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: () => wslManagedHomePath

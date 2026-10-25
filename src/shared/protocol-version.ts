@@ -119,7 +119,11 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 ] as const
 
 // Each area lists what it publishes in its own module; a new capability edits only that module.
+export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
+  'agent-session.saved-resume-origin.v1' as const
+
 export const RUNTIME_CAPABILITIES = [
+  SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
   ...HOST_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,
   ...MOBILE_RUNTIME_CAPABILITIES,

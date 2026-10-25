@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 vi.mock('@/lib/client-creation-action-policy', () => ({
-  getClientCreationActionPolicy: () => ({ 'managed-browser': mocks.browserAvailability })
+  getWorkspaceClientCreationActionPolicy: () => ({ 'managed-browser': mocks.browserAvailability })
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({

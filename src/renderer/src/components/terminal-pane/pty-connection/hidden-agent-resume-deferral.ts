@@ -32,6 +32,9 @@ export function deferHiddenAgentResume(
     ptyId: session.transport.getPtyId(),
     record: recordEntry.record,
     wake: (): Promise<string | null> => {
+      if (startup?.resumeSource?.cancelled) {
+        return Promise.resolve(null)
+      }
       session.hiddenAgentResumeReleased = true
       return start().then((ptyId) => {
         // Why the transport: a held reattach resolves before it binds, and the hold must cover its fallback.

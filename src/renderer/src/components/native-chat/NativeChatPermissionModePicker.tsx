@@ -27,7 +27,10 @@ import {
 } from './native-chat-permission-mode-labels'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
 
-function ModeName(props: { mode: AgentChatPermissionMode; truncate?: boolean }): React.JSX.Element {
+export function NativeChatPermissionModeName(props: {
+  mode: AgentChatPermissionMode
+  truncate?: boolean
+}): React.JSX.Element {
   const Icon = NATIVE_CHAT_PERMISSION_MODE_ICONS[props.mode]
   const label = nativeChatPermissionModeLabel(props.mode)
   const body = (
@@ -40,6 +43,36 @@ function ModeName(props: { mode: AgentChatPermissionMode; truncate?: boolean }):
     <span className="flex min-w-0 items-center gap-1.5 text-status-warning">{body}</span>
   ) : (
     <span className="flex min-w-0 items-center gap-1.5">{body}</span>
+  )
+}
+
+export function NativeChatPermissionModeItems({
+  modes,
+  agent,
+  disabled,
+  onSelect
+}: Pick<
+  NativeChatPermissionModePickerProps,
+  'modes' | 'agent' | 'disabled' | 'onSelect'
+>): React.JSX.Element {
+  return (
+    <>
+      {modes.map((mode) => (
+        <DropdownMenuRadioItem
+          key={mode}
+          value={mode}
+          disabled={disabled}
+          onSelect={() => onSelect(mode)}
+        >
+          <div className="min-w-0 py-0.5">
+            <NativeChatPermissionModeName mode={mode} />
+            <div className="text-xs font-normal text-muted-foreground">
+              {nativeChatPermissionModeDescription(mode, agent)}
+            </div>
+          </div>
+        </DropdownMenuRadioItem>
+      ))}
+    </>
   )
 }
 
@@ -77,7 +110,7 @@ function NativeChatPermissionModePickerInner({
               )}
               className="max-w-40 min-w-0 shrink"
             >
-              <ModeName mode={current} truncate />
+              <NativeChatPermissionModeName mode={current} truncate />
               <ChevronDown className="size-3" />
             </Button>
           </DropdownMenuTrigger>
@@ -88,21 +121,12 @@ function NativeChatPermissionModePickerInner({
       </Tooltip>
       <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-72">
         <DropdownMenuRadioGroup aria-label={title} value={current}>
-          {modes.map((mode) => (
-            <DropdownMenuRadioItem
-              key={mode}
-              value={mode}
-              disabled={disabled}
-              onSelect={() => onSelect(mode)}
-            >
-              <div className="min-w-0 py-0.5">
-                <ModeName mode={mode} />
-                <div className="text-xs font-normal text-muted-foreground">
-                  {nativeChatPermissionModeDescription(mode, agent)}
-                </div>
-              </div>
-            </DropdownMenuRadioItem>
-          ))}
+          <NativeChatPermissionModeItems
+            modes={modes}
+            agent={agent}
+            disabled={disabled}
+            onSelect={onSelect}
+          />
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

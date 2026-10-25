@@ -38,7 +38,7 @@ describe('HostAccountSignInFlows', () => {
     const flows = new HostAccountSignInFlows(runner.run, 'linux')
     const started = flows.start('device-a', 'claude')
     expect(started.phase).toBe('starting')
-    await vi.waitFor(() => expect(runner.run).toHaveBeenCalledOnce())
+    expect(runner.run).toHaveBeenCalledOnce()
 
     runner.channel().onPrompt({ ...PROMPT, needsCode: true })
     const waiting = await flows.wait('device-a', started.flowId, started.revision)
@@ -77,7 +77,7 @@ describe('HostAccountSignInFlows', () => {
     const runner = controllableRunner()
     const flows = new HostAccountSignInFlows(runner.run, 'linux')
     const { flowId } = flows.start('device-a', 'claude')
-    await vi.waitFor(() => expect(runner.run).toHaveBeenCalledOnce())
+    expect(runner.run).toHaveBeenCalledOnce()
     expect((await flows.cancel('device-a', flowId)).phase).toBe('cancelled')
     expect(runner.channel().signal.aborted).toBe(true)
     await expect(runner.channel().nextCode()).rejects.toThrow()
@@ -115,7 +115,7 @@ describe('HostAccountSignInFlows', () => {
     const runner = controllableRunner()
     const flows = new HostAccountSignInFlows(runner.run, 'linux')
     const { flowId, revision } = flows.start('device-a', 'claude')
-    await vi.waitFor(() => expect(runner.run).toHaveBeenCalledOnce())
+    expect(runner.run).toHaveBeenCalledOnce()
     runner
       .channel()
       .onPrompt({ url: 'https://evil.test/?code=true', userCode: null, needsCode: true })

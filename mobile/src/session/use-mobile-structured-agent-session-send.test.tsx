@@ -23,7 +23,7 @@ import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-jou
 import {
   useMobileNativeChatSendError,
   type MobileNativeChatSendErrorDetails
-} from './use-mobile-native-chat-send-error'
+} from './native-chat/use-mobile-native-chat-send-error'
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),

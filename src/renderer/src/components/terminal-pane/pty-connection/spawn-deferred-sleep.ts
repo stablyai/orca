@@ -149,17 +149,26 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
   session.pendingSpawnDeferral = null
   session.deferredSpawn = null
 
+  /** Keeps the resume handle of a restore the host did not run, so a later restore tries again. */
+  session.keepUnrunResumeHandle = (
+    startupOverride: PendingStartupCommand | null | undefined
+  ): void => {
+    const captured =
+      startupOverride?.resumeSource?.record ?? session.paneStartup?.resumeSource?.record
+    const record = captured ?? deferredResumeRecord(session, startupOverride)
+    if (record && !useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]) {
+      // Why left after a later resume: the next quit capture replaces it, and a pane with a live PTY owns it.
+      useAppStore.getState().rememberSleepingAgentSession(record)
+    }
+  }
+
   session.enterSpawnDeferredSleep = (
     reason: SpawnDeferralReason,
     startupOverride: PendingStartupCommand | null | undefined,
     options: FreshSpawnOptions,
     visibleAtSpawn: boolean
   ): void => {
-    const record = deferredResumeRecord(session, startupOverride)
-    if (record) {
-      // Why left after a later resume: the next quit capture replaces it, and a pane with a live PTY owns it.
-      useAppStore.getState().rememberSleepingAgentSession(record)
-    }
+    session.keepUnrunResumeHandle(startupOverride)
     session.deferredSpawn = { reason, startupOverride, options }
     const deferral = { reason, resume: () => void session.resumeDeferredSpawn() }
     setPaneSpawnDeferral(session.cacheKey, deferral)

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   buildChecksPanelEligibilityGitFingerprint,
   shouldClearChecksPanelGitStatusSnapshot,
@@ -157,7 +158,6 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     }
     let stale = false
     const requestContextKey = panelContextKey
-    const connectionId = activeConnectionId ?? undefined
     // Worktree-keyed global maps only invalidate; fetch an owner-scoped local snapshot.
     if (gitStatusSnapshotRetryTimerRef.current) {
       clearTimeout(gitStatusSnapshotRetryTimerRef.current)
@@ -166,12 +166,18 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     setGitStatusSnapshot((snapshot) =>
       shouldClearChecksPanelGitStatusSnapshot(snapshot, requestContextKey) ? null : snapshot
     )
+    // Why one resolution: a same-path twin must not get this copy's transport, SSH target or answer.
+    const copy = resolveWorktreeGitCopyNow(activeWorktreeId)
+    if (!copy) {
+      return
+    }
     const context = {
-      target: ownerTarget,
+      target: copy.transport,
       worktreeId: activeWorktreeId,
       worktreePath: activeWorktreePath,
-      connectionId
+      connectionId: copy.connectionId
     }
+    const ownerHostId = copy.hostId
     const runRequest = async (): Promise<void> => {
       try {
         const status = await getRuntimeGitStatus(context, { admissionTier: 'status' })
@@ -180,10 +186,14 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
           shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
         ) {
           // Checks may be the sole Git surface; commit branch identity before upstream refresh can fail.
-          updateWorktreeGitIdentity(activeWorktreeId, {
-            head: status.head,
-            branch: status.branch ?? (status.head ? null : undefined)
-          })
+          updateWorktreeGitIdentity(
+            activeWorktreeId,
+            {
+              head: status.head,
+              branch: status.branch ?? (status.head ? null : undefined)
+            },
+            ownerHostId
+          )
         }
         let freshRemoteStatus = status.upstreamStatus
         if (activeWorktreePushTarget) {

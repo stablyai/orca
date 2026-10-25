@@ -209,7 +209,8 @@
           "microphone": "マイクロフォン",
           "location": "場所",
           "notifications": "通知",
-          "clipboard": "クリップボード"
+          "clipboard": "クリップボード",
+          "localNetwork": "ローカル ネットワーク"
         },
         "description": "サイトはカメラ、マイク、位置情報などを使用する前に許可を求めます。サイトごとに許可またはブロックした内容を変更できます。",
         "profile": "ブラウザプロファイル",
@@ -310,6 +311,7 @@
     "view": "表示",
     "reload": "リロード",
     "forceReload": "強制リロード",
+    "toggleDevTools": "開発者ツールの切り替え",
     "resetSize": "サイズをリセット",
     "zoomIn": "ズームイン",
     "zoomOut": "ズームアウト",
@@ -4221,10 +4223,6 @@
               "waiting": {
                 "label": "Claude の実行時に更新",
                 "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
-              },
-              "expired": {
-                "label": "サインインの有効期限切れ",
-                "message": "Claude の使用状況が期限切れです。このアカウントで Claude を起動して更新してください。"
               }
             },
             "remoteOwnerNotConfigured": "{{server}} では未構成",
@@ -16938,7 +16936,12 @@
             "copyImage": "画像をコピー",
             "copyImageAddress": "画像アドレスをコピー",
             "searchSelection": "{{value0}} で「{{value1}}」を検索",
-            "inspect": "検証"
+            "inspect": "検証",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "右側にドッキング",
+            "devToolsDockBottom": "下部にドッキング",
+            "devToolsUndock": "別ウィンドウで開く",
+            "devToolsClose": "DevTools を閉じる"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",
@@ -18364,6 +18367,7 @@
             "notifications": "通知",
             "clipboard": "クリップボード",
             "idleDetection": "デバイスの使用",
+            "localNetwork": "ローカル ネットワーク",
             "windowManagement": "ウィンドウ管理",
             "midi": "MIDIデバイス"
           },
@@ -18375,6 +18379,7 @@
             "camera": "カメラを使用する",
             "location": "位置情報を取得する",
             "idleDetection": "このデバイスを操作中かどうかを検出する",
+            "localNetwork": "このデバイス上のアプリとローカル ネットワーク上のデバイスにアクセスする",
             "windowManagement": "すべてのディスプレイ上のウィンドウを管理",
             "clipboard": "クリップボードにコピーされたテキストと画像を読み取る",
             "midi": "MIDI デバイスを使用する"
@@ -18669,6 +18674,8 @@
         "claudeAccountSetupFailed": "選択した Claude アカウントを設定できませんでした。もう一度試すか、別のアカウントを選択してください。",
         "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
         "runtimeNotInstalled": "{{agent}} はこのチャットを実行しているコンピューターにインストールされていません。最新バージョンの Orca でチャットからインストールしてください。",
+        "conversationOpenElsewhere": "Codex がまだこの会話を開いたままにしています。少し待ってからもう一度試すか、ほかの Codex ターミナルを閉じてください。",
+        "conversationOpenInTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じて、ここで続けてください。",
         "chooseClaudeAccount": "Claude アカウントの設定で選択または追加してください。",
         "chooseClaudeAccountThenRunCommand": "Claude アカウントの設定で選択または追加してから、/{{command}} をもう一度実行してください。",
         "chooseClaudeAccountThenSend": "Claude アカウントの設定で選択または追加してから、メッセージをもう一度送信してください。",
@@ -18753,7 +18760,6 @@
         "notDoneAnswer": "回答は送信されませんでした。",
         "notDoneOption": "設定は変更されませんでした。",
         "notDoneCommand": "コマンドは実行されませんでした。",
-        "notDoneGoal": "目標は変更されませんでした。",
         "notDoneQueuedEdit": "編集内容は保存されていません。",
         "restartFailed": "Agent を再起動できませんでした。",
         "capacity": "このチャットを実行しているコンピューターの Orca がリクエストの上限に達しました。そのコンピューターで Orca を更新してから、もう一度お試しください。",
@@ -18999,6 +19005,8 @@
         "runFileChangeMany": "編集された{{value0}}ファイル",
         "runWebSearchOne": "ウェブを 1 回検索しました",
         "runWebSearchMany": "ウェブを{{value0}}回検索しました",
+        "runBrowserOne": "ブラウザを使用しました",
+        "runBrowserMany": "ブラウザを{{value0}}回使用しました",
         "runIntegrationOne": "使用済み 1 連携",
         "runIntegrationMany": "{{value0}} 連携を使用しました",
         "runAgentOne": "Agent を 1 人実行しました",
@@ -19021,6 +19029,8 @@
         "runLiveFileChangeMany": "{{value0}} ファイルの編集",
         "runLiveWebSearchOne": "ウェブ検索 1 回",
         "runLiveWebSearchMany": "ウェブを{{value0}}回検索しています",
+        "runLiveBrowserOne": "ブラウザを使用しています",
+        "runLiveBrowserMany": "ブラウザを{{value0}}回使用しています",
         "runLiveIntegrationOne": "1 つの連携を使用する",
         "runLiveIntegrationMany": "{{value0}} 連携の使用",
         "runLiveAgentOne": "1 つの Agent を実行中",
@@ -19028,7 +19038,9 @@
         "runLivePlanOne": "計画を更新する",
         "runLivePlanMany": "計画を{{value0}}回更新しています",
         "runLiveToolOne": "1つのツールを使用する",
-        "runLiveToolMany": "{{value0}} ツールの使用"
+        "runLiveToolMany": "{{value0}} ツールの使用",
+        "showBrowserPage": "表示",
+        "showBrowserPageLabel": "{{value0}} を表示"
       },
       "status": {
         "responding": "Agent が応答中です",
@@ -19060,8 +19072,8 @@
       "resumeInNewChat": {
         "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
         "cannotResume": "この {{agent}} の会話はネイティブチャットで再開できません。",
-        "exitUnconfirmedFromTerminal": "Orca は {{agent}} がターミナルで終了したことを確認できません。実行中の処理を停止するかターミナルを閉じてから、セッション履歴でこの会話を開いてください。",
-        "exitUnconfirmed": "Orca は、{{agent}} がターミナルで終了したことを確認できません。そこで実行されているものを停止するか、ターミナルを閉じてから、もう一度試してください。"
+        "exitUnconfirmedFromTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。",
+        "exitUnconfirmed": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。"
       },
       "state": {
         "loading": {
@@ -21179,5 +21191,8 @@
       "pending": "削除が進行中です。"
     },
     "rowActions": "{{name}} の操作"
+  },
+  "browserTab": {
+    "agentDriving": "Agent がこのページを使用中です"
   }
 }

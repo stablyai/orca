@@ -5,6 +5,7 @@ import type { PullRequestGenerationOutcome } from '../create-pull-request-dialog
 import { settlePullRequestGenerationRequest } from '../pull-request-generation-request-outcome'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   generateRuntimePullRequestFields,
   cancelRuntimeGeneratePullRequestFields
@@ -86,10 +87,13 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         return undefined
       }
       const requestId = allocatePullRequestGenerationRequestId()
+      // Why one resolution: the result must land on this copy, not a same-path twin.
+      const copy = activeWorktreeId ? resolveWorktreeGitCopyNow(activeWorktreeId) : null
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath: activeWorktreePath,
-        connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        connectionId: copy ? copy.connectionId : (getConnectionId(activeWorktreeId) ?? undefined),
+        ownerHostId: copy?.hostId ?? null,
         jiraIssueKey:
           (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
           activeWorktreeId
@@ -102,7 +106,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         requestId,
         repoId: repo.id,
         branch,
-        runtimeTarget: ownerTarget
+        runtimeTarget: copy?.transport ?? ownerTarget
       }
       const seed = { ...fields }
       const previousRequiresPushBeforeCreate =

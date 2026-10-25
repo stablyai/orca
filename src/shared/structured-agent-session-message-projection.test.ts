@@ -9,7 +9,10 @@ import type {
 } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { structuredAgentSessionSendBody } from './structured-agent-session-send-mutation'
-import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+import {
+  projectStructuredAgentSessionMessages,
+  structuredAgentSessionRejectedShownInPlace
+} from './structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from './native-chat-transcript-projection'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -262,4 +265,42 @@ describe('a not-sent row', () => {
     )
     expect(shown.at(-1)).toMatchObject({ queued: true })
   })
+})
+
+// Later evidence uses its maximum time, independent of its own display eligibility.
+it('keeps rejected-copy scope, equality, withdrawal and forward order with nonmonotone times', () => {
+  const copy = (id: string, fingerprint: string, fields: Partial<AgentJournalSubmission> = {}) =>
+    rejected({ clientMessageId: id, payloadFingerprint: fingerprint, resolvedAt: 80, ...fields })
+  const submissions = [
+    copy('old-a', 'a'),
+    copy('old-b', 'b'),
+    copy('old-c', 'c', { acceptedSequence: 50 }),
+    copy('old-d', 'd', { resolvedAt: 100 }),
+    copy('old-e', 'e'),
+    copy('unresolved', 'f', { resolvedAt: null }),
+    copy('near-a', 'a', { submittedAt: 10, dispatchState: 'accepted' }),
+    copy('far-a', 'a', { submittedAt: 90, keptAsQueuedMessageId: 'card' }),
+    copy('withdrawn-b', 'b', { submittedAt: 100, rejection: { kind: 'cancelled' } }),
+    copy('new-context-c', 'c', {
+      submittedAt: 100,
+      acceptedSequence: 51,
+      dispatchState: 'accepted'
+    }),
+    copy('command-d', 'd', { submittedAt: 100 }),
+    copy('queued-e', 'e', { submittedAt: 100, queuedMessageId: 'queued' }),
+    copy('later-f', 'f', { submittedAt: 100, dispatchState: 'accepted' })
+  ]
+  const before = structuredClone(submissions)
+  expect([
+    ...structuredAgentSessionRejectedShownInPlace(
+      submissions,
+      new Set([agentJournalSubmissionKey('command-d')]),
+      [50]
+    )
+  ]).toEqual([
+    agentJournalSubmissionKey('old-b'),
+    agentJournalSubmissionKey('old-c'),
+    agentJournalSubmissionKey('unresolved')
+  ])
+  expect(submissions).toEqual(before)
 })

@@ -12,7 +12,10 @@ import {
   type AgentSessionWriteNoticePart,
   type AgentSessionWriteNoticeSentence
 } from '../../../../shared/agent-session-write-notice-copy'
-import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
+import {
+  agentSessionWriteFailureText,
+  agentSessionWriteNoticeText
+} from './agent-session-write-notice-text'
 
 const SENTENCES = Object.keys(AGENT_SESSION_WRITE_NOTICE_COPY).filter(
   (key): key is AgentSessionWriteNoticeSentence => key in AGENT_SESSION_WRITE_NOTICE_COPY
@@ -34,6 +37,22 @@ describe('desktop words for a write that did not happen', () => {
 
   it('keeps the English catalog in step with the shared copy', () => {
     expect(en.components['native-chat'].writeNotice).toEqual(AGENT_SESSION_WRITE_NOTICE_COPY)
+  })
+
+  it('does not promise the old goal survived a refused replacement, including older translations', async () => {
+    for (const language of ['en', 'fr']) {
+      await i18n.changeLanguage(language)
+      expect(
+        agentSessionWriteFailureText(
+          {
+            kind: 'refused',
+            code: 'agent_session_operation_invalid',
+            details: { reason: 'providerRejected' }
+          },
+          'goal'
+        )
+      ).toContain("Couldn't finish changing the goal. Check the chat.")
+    }
   })
 
   it('translates each sentence whole and shows a provider reason as written', async () => {

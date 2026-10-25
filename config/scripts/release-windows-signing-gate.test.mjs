@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm'
 import { runProcess } from '@orca/process-host'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { readReleaseMacBuildWorkflowOptions } from './run-release-mac-build-workflow.mjs'
 
 const { jobs } = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
 const { steps } = jobs.build
@@ -35,12 +36,39 @@ function signingAllowed(submission, outcome, attempt = 1, platform = 'win', uplo
 }
 
 describe('Windows release signing waits for macOS success', () => {
-  it('packages concurrently, then verifies the exact dispatched macOS run before signing', () => {
+  it('covers the cold runtime and packaging budget in two hosted observation jobs', () => {
+    const child = parse(readFileSync('.github/workflows/release-mac-build.yml', 'utf8')).jobs[
+      'build-mac'
+    ]
+    const dispatch = jobs['build-mac'].steps.find((step) => step.id === 'dispatch')
+    const options = readReleaseMacBuildWorkflowOptions({
+      GITHUB_REPOSITORY: 'stablyai/orca',
+      GITHUB_RUN_ID: '1',
+      GITHUB_TOKEN: 'test',
+      RELEASE_MAC_BUILD_REF: 'main',
+      RELEASE_MAC_BUILD_TAG: 'v1.2.3',
+      ...dispatch.env
+    })
+    const observationMinutes = Number(dispatch.env.RELEASE_MAC_BUILD_OBSERVE_MINUTES)
+    expect(child['timeout-minutes']).toBe(360)
+    expect(options.timeoutMinutes).toBeGreaterThanOrEqual(child['timeout-minutes'] + 30)
+    expect(observationMinutes).toBe(180)
+    expect(jobs['build-mac']['timeout-minutes']).toBeGreaterThan(observationMinutes)
+    expect(jobs['verify-mac-build']['timeout-minutes']).toBeGreaterThan(
+      options.timeoutMinutes - observationMinutes
+    )
+    for (const job of [jobs['build-mac'], jobs['verify-mac-build'], jobs.build]) {
+      expect(job['timeout-minutes']).toBeLessThanOrEqual(360)
+    }
+  })
+
+  it('waits outside the Windows runner, then verifies the exact macOS run before signing', () => {
     expect(jobs.build.needs).toContain('build-mac')
     expect(jobs.build.if).toContain("needs.build-mac.result == 'success'")
-    expect(jobs.build.needs).not.toContain('verify-mac-build')
+    expect(jobs.build.needs).toContain('verify-mac-build')
+    expect(jobs.build.if).toContain("needs.verify-mac-build.result == 'success'")
     expect(jobs['build-mac'].needs).not.toContain('build')
-    expect(jobs['verify-mac-build'].needs).toContain('build')
+    expect(jobs['verify-mac-build'].needs).not.toContain('build')
     const windows = jobs.build.strategy.matrix.include.find((entry) => entry.platform === 'win')
     expect(windows.release_command).toMatch(
       /^node config\/scripts\/ensure-native-runtime\.mjs --runtime=electron; if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}; pnpm exec electron-builder /

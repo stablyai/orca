@@ -167,6 +167,7 @@ export function normalizeHookPayload(
       },
       incoming: source,
       incomingProcess: agentProcess,
+      incomingSession: providerSession?.id,
       now: Date.now()
     }).inheritedFromActivePane
   ) {

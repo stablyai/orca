@@ -1,4 +1,5 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
 export type PullRequestFieldRevisions = Record<PullRequestFieldName, number>
@@ -20,6 +21,8 @@ export type PullRequestGenerationContext = {
   jiraIssueKey?: string | null
   /** The worktree owner's transport, captured when the request started. */
   runtimeTarget: RuntimeClientTarget
+  /** The copy `runtimeTarget` answers for, so a same-path twin isn't patched with its result. */
+  ownerHostId?: ExecutionHostId | null
 }
 
 export type PullRequestGenerationStatus = 'idle' | 'running' | 'canceled' | 'failed' | 'succeeded'

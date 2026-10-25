@@ -7,7 +7,7 @@ import {
 } from '../../../src/shared/native-chat-picker-items'
 import { sessionReportedSkills } from '../../../src/shared/native-chat-slash-commands'
 import { structuredSessionSlashCommands } from '../../../src/shared/structured-agent-session-composer'
-import { getMobileNativeChatCommands } from './mobile-native-chat-send-classification'
+import { getMobileNativeChatCommands } from './native-chat/mobile-native-chat-send-classification'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.

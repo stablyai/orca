@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredLaunchState } from '@/lib/structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
 import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
@@ -72,7 +72,7 @@ import * as menuRows from './use-new-tab-agent-menu-rows'
 import {
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState
-} from '@/lib/structured-agent-session-launch-registry'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
 

@@ -1,4 +1,9 @@
+import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type {
+  BrowserAgentActivityEvent,
+  BrowserAgentCursorEvent
+} from '../../shared/browser-agent-activity-contract'
 import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
 import type {
   BrowserPageSiteDisplay,
@@ -98,11 +103,23 @@ export type BrowserApi = {
   onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
   onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
-  /** `inspectAt` (guest viewport coordinates) selects the element there. */
+  /** Docks DevTools in the pane unless `detach`; `inspectAt` (the context-menu point, in window coordinates) selects the element there. */
   openDevTools: (args: {
     browserPageId: string
     inspectAt?: { x: number; y: number }
+    detach?: boolean
   }) => Promise<boolean>
+  closeDevTools: (args: { browserPageId: string }) => Promise<void>
+  /** Places docked DevTools over the pane's slot (renderer CSS px); null hides them, and with
+   *  `snapshot` resolves to their last frame as a data URL. */
+  setDevToolsDockBounds: (args: {
+    browserPageId: string
+    bounds: BrowserDevToolsDockBounds | null
+    snapshot?: boolean
+  }) => Promise<string | null>
+  onDevToolsDockChanged: (
+    callback: (event: { browserPageId: string; docked: boolean }) => void
+  ) => () => void
   addWordToDictionary: (args: { browserPageId: string; word: string }) => Promise<boolean>
   copyImageAt: (args: {
     browserPageId: string
@@ -173,6 +190,11 @@ export type BrowserApi = {
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void
   ) => () => void
   agentInputFocusGuardReady: (token: string, composing: boolean) => void
+  /** Main marks the pages an agent drives; the tab strip badges them. */
+  onAgentActivity: (callback: (data: BrowserAgentActivityEvent) => void) => () => void
+  /** Main shows the agent's pointer before its input; `agentCursorArrived` answers awaited moves. */
+  onAgentCursor: (callback: (data: BrowserAgentCursorEvent) => void) => () => void
+  agentCursorArrived: (sequence: number) => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void

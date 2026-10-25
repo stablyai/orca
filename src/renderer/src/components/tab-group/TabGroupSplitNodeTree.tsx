@@ -9,13 +9,15 @@ import { setGroupRatioThroughLayoutOwner } from './tab-group-layout-owner-comman
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
 
-function ResizeHandle({
+export function ResizeHandle({
   direction,
   onResizeStart,
+  onResizeEnd,
   onRatioChange
 }: {
   direction: 'horizontal' | 'vertical'
   onResizeStart: () => void
+  onResizeEnd?: () => void
   onRatioChange: (ratio: number) => void
 }): React.JSX.Element {
   const isHorizontal = direction === 'horizontal'
@@ -78,6 +80,7 @@ function ResizeHandle({
         }
         cleaned = true
         resizeObserver.disconnect()
+        onResizeEnd?.()
         if (draggedRatio !== null) {
           onRatioChange(draggedRatio)
         }
@@ -124,7 +127,7 @@ function ResizeHandle({
       handle.addEventListener('lostpointercapture', onLostPointerCapture)
       activeResizeCleanupRef.current = cleanup
     },
-    [isHorizontal, onRatioChange, onResizeStart]
+    [isHorizontal, onRatioChange, onResizeStart, onResizeEnd]
   )
 
   return (

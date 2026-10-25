@@ -211,6 +211,8 @@ export const TerminalCreateParams = z.object({
     })
     .optional(),
   resumeProviderSession: ResumeProviderSessionParam.optional(),
+  // Older hosts drop it and resume as before.
+  resumeOrigin: z.literal('saved').optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),

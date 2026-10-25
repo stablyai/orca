@@ -1,4 +1,5 @@
 import { RateLimitServiceFetchTargets } from './service-fetch-targets'
+import { withoutResetWindows } from './service-result-policy'
 import {
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
   MIN_REFETCH_MS,
@@ -141,9 +142,11 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     if (!freshSession && !freshWeekly) {
       return
     }
+    // Kept snapshots can outlive a reset; never relabel a past-reset window as live.
+    const inherited = previous ? withoutResetWindows(previous, now) : null
     // Partial statusline payloads leave unreported windows unchanged.
-    const session = freshSession ?? previous?.session ?? null
-    const weekly = freshWeekly ?? previous?.weekly ?? null
+    const session = freshSession ?? inherited?.session ?? null
+    const weekly = freshWeekly ?? inherited?.weekly ?? null
     // Stale posts that repeat the surviving window must not refresh live-feed age.
     const droppedStale = (incomingSession && !freshSession) || (incomingWeekly && !freshWeekly)
     if (
@@ -170,7 +173,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         session,
         weekly,
         // Statusline lacks Fable scope; retain the latest OAuth value.
-        fableWeekly: previous?.fableWeekly ?? null,
+        fableWeekly: inherited?.fableWeekly ?? null,
         updatedAt: Date.now(),
         error: null,
         status: 'ok',

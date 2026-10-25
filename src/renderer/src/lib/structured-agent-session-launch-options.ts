@@ -14,13 +14,13 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionLaunchCancelledError,
   type StructuredAgentLaunchReceipt
-} from './structured-agent-session-launch-recovery'
+} from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners,
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,

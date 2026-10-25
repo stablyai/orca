@@ -11,7 +11,7 @@ import {
   type NativeChatEditFile,
   type NativeChatEditLine
 } from '../../../src/shared/native-chat/tools/native-chat-edit-model'
-import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat-tool-line-label'
+import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'

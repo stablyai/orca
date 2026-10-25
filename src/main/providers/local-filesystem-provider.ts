@@ -3,10 +3,13 @@ import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { readAuthorizedDocPreviewFile } from '../../shared/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
-import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem-auth'
-import { isENOENT } from '../ipc/filesystem-path-containment'
-import { assertNotExists, rethrowWithUserMessage } from '../ipc/filesystem-create-path-guards'
-import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem-symlink-directory-entries'
+import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import {
+  assertNotExists,
+  rethrowWithUserMessage
+} from '../ipc/filesystem/filesystem-create-path-guards'
+import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem/filesystem-symlink-directory-entries'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { listMarkdownDocuments } from '../ipc/markdown-documents'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'

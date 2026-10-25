@@ -144,17 +144,17 @@ vi.mock('./native-chat/composer/use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
 // Keep the real timeout constant available to stale-input heal through the partial send mock.
-vi.mock('./mobile-native-chat-send', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./mobile-native-chat-send')>()),
+vi.mock('./native-chat/mobile-native-chat-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof NativeChatSend>()),
   sendMobileNativeChatMessageWithOutcome: vi.fn()
 }))
 
-import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import * as NativeChatSend from './native-chat/mobile-native-chat-send'
 import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
-} from './mobile-native-chat-stale-input'
+} from './native-chat/mobile-native-chat-stale-input'
 import {
   useMobileNativeChatController,
   type MobileNativeChatController
@@ -163,7 +163,7 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
-const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
+const sendWithOutcome = vi.mocked(NativeChatSend.sendMobileNativeChatMessageWithOutcome)
 
 const ORIGIN = {
   draftKey: 'h\0w\0tab-1',

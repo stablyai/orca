@@ -1,11 +1,38 @@
+import type { RateLimitWindow } from '../../../shared/rate-limit-types'
 import { RateLimitServiceFetchControl } from './service-fetch-control'
 import {
+  LONG_STALE_THRESHOLD_MS,
   MAX_ACTIVE_FAILURE_STREAK,
-  RATE_LIMITED_STALE_THRESHOLD_MS,
   STALE_THRESHOLD_MS,
   type ActiveRateLimitProvider,
   type ProviderRateLimits
 } from './service-types'
+
+export function hasUsageWindows(limits: ProviderRateLimits): boolean {
+  return Boolean(
+    limits.session ||
+    limits.weekly ||
+    limits.fableWeekly ||
+    limits.monthly ||
+    (limits.buckets && limits.buckets.length > 0)
+  )
+}
+
+// Why: a window past its reset no longer describes the account, and 0% would hide use on another device.
+export function withoutResetWindows(limits: ProviderRateLimits, now: number): ProviderRateLimits {
+  const isCurrent = (window: RateLimitWindow): boolean =>
+    typeof window.resetsAt !== 'number' || window.resetsAt > now
+  const current = (window: RateLimitWindow | null | undefined): RateLimitWindow | null =>
+    window && isCurrent(window) ? window : null
+  return {
+    ...limits,
+    session: current(limits.session),
+    weekly: current(limits.weekly),
+    ...(limits.fableWeekly ? { fableWeekly: current(limits.fableWeekly) } : {}),
+    ...(limits.monthly ? { monthly: current(limits.monthly) } : {}),
+    ...(limits.buckets ? { buckets: limits.buckets.filter(isCurrent) } : {})
+  }
+}
 
 export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetchControl {
   protected applyStalePolicy(
@@ -28,29 +55,30 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       return fresh
     }
 
-    const previousHasData = Boolean(
-      previous?.session ||
-      previous?.weekly ||
-      previous?.fableWeekly ||
-      previous?.monthly ||
-      (previous?.buckets && previous.buckets.length > 0)
-    )
-
-    if (!previous || !previousHasData) {
+    if (!previous) {
       return fresh
     }
 
+    const failureKind = fresh.usageMetadata?.failureKind
+    // Only Claude's lapsed token renews itself when its CLI next runs; others may be a real expiry.
     const staleThresholdMs =
-      fresh.usageMetadata?.failureKind === 'rate-limited'
-        ? RATE_LIMITED_STALE_THRESHOLD_MS
+      failureKind === 'rate-limited' ||
+      (failureKind === 'stale-token' && fresh.provider === 'claude')
+        ? LONG_STALE_THRESHOLD_MS
         : STALE_THRESHOLD_MS
-    if (Date.now() - previous.updatedAt > staleThresholdMs) {
+    const now = Date.now()
+    if (now - previous.updatedAt > staleThresholdMs) {
+      return fresh
+    }
+
+    const current = withoutResetWindows(previous, now)
+    if (!hasUsageWindows(current)) {
       return fresh
     }
 
     // Preserve recent display through transient errors until stale expiry, avoiding empty-bar flashes.
     return {
-      ...previous,
+      ...current,
       error: fresh.error,
       status: 'error',
       usageMetadata: {

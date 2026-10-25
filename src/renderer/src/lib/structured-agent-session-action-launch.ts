@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import type { Tab } from '../../../shared/tab-types'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'

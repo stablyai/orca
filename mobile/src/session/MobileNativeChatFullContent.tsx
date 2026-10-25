@@ -3,7 +3,7 @@ import { Pressable, Text, View, type TextStyle } from 'react-native'
 import {
   truncateToolDetail,
   MAX_TOOL_DETAIL_LENGTH
-} from '../../../src/shared/native-chat-tool-summary'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock

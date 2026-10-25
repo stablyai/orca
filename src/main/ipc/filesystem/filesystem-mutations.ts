@@ -14,17 +14,17 @@ import { resolveLocalDroppedPathsForAgent } from '../dropped-path-resolution'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/connection/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../../destination-serialized-local-rename'
-import { assertNotExists, rethrowWithUserMessage } from '../filesystem-create-path-guards'
+import { assertNotExists, rethrowWithUserMessage } from './filesystem-create-path-guards'
 import type {
   ImportItemResult,
   ResolveDroppedPathsResult,
   StagedExternalImportSource
 } from '../../../shared/filesystem-import-result-types'
-import { importOneSource } from '../filesystem-import-local'
+import { importOneSource } from './filesystem-import-local'
 import {
   stagedRuntimeUploadByteLength,
   stageOneSourceForRuntimeUpload
-} from '../filesystem-runtime-upload-staging'
+} from './filesystem-runtime-upload-staging'
 import { streamExternalFileToRuntime } from '../runtime-upload-file-stream'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from '../runtime-upload-temp-sweep'

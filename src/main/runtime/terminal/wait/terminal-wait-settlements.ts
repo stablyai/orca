@@ -164,7 +164,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (this.deliveryRecheckTimersByLeafKey.has(leafKey)) {
       return
     }
-    const live = this.leaves.get(leafKey)
+    const live = this.leaves.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.pty
     // Only quiet-window refusal expires with time; schedule just beyond it and re-arm from fresher output if still streaming.
     const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
     // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
@@ -174,7 +174,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
         : Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByLeafKey.delete(leafKey)
-      const current = this.leaves.get(leafKey)
+      const current = this.leaves.get(leafKey) ?? this.getPtyLaneMailboxTarget(leafKey)?.leaf
       if (!current) {
         return
       }
@@ -189,13 +189,23 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
 
   /** Pointer plus Enter requires the same readiness ranking as waits; name-only titles can occur mid-turn (#6011). Callers separately require live status evidence. */
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
-    const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!live || (live.ptyId && this.isPtyHoldingDelivery(live.ptyId))) {
+    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    const live = this.leaves.get(leafKey)
+    // A pane no window publishes (headless serve) carries its evidence on its PTY record.
+    const lanePty = live ? null : this.getPtyLaneMailboxTarget(leafKey)?.pty
+    const evidence = live
+      ? leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
+          buildTerminalWaitText(live.tailBuffer, live.tailPartialLine, live.preview)
+        )
+      : lanePty
+        ? ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, lanePty, () =>
+            buildTerminalWaitText(lanePty.tailBuffer, lanePty.tailPartialLine, lanePty.preview)
+          )
+        : null
+    const ptyId = live ? live.ptyId : lanePty?.ptyId
+    if (!evidence || (ptyId && this.isPtyHoldingDelivery(ptyId))) {
       return false
     }
-    const evidence = leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
-      buildTerminalWaitText(live.tailBuffer, live.tailPartialLine, live.preview)
-    )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
     return isTuiIdleReadyVerdict(

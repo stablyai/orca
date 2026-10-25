@@ -28,10 +28,7 @@ import { StructuredAgentSessionEventRecovery } from './structured-agent-session-
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
-import {
-  createStructuredAgentSessionRestartResume,
-  type StructuredAgentSessionRestartResume
-} from './structured-agent-session-restart-resume-host'
+import * as resume from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import * as conversation from './structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
@@ -67,7 +64,8 @@ export class StructuredAgentSessionHost {
     this.queued,
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
     (sessionId) => this.backgroundTasks.publish(sessionId),
-    (sessionId) => this.backgroundTasks.read(sessionId)
+    (sessionId) => this.backgroundTasks.read(sessionId),
+    (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -78,7 +76,7 @@ export class StructuredAgentSessionHost {
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
-  readonly restartResume: StructuredAgentSessionRestartResume
+  readonly restartResume: resume.StructuredAgentSessionRestartResume
 
   constructor(readonly deps: HostTypes.StructuredAgentSessionHostDeps) {
     // Collaborators share a logger wrapper that cannot fail the operation it reports.
@@ -114,6 +112,7 @@ export class StructuredAgentSessionHost {
       startProviderChild: (sessionId, startedFor) =>
         agentStart.claimStructuredAgentSessionAgent(this.attachContext(), sessionId, startedFor),
       deliveryOrder: this.runtimeState.deliveryOrder,
+      startFlights: this.runtimeState.startFlights,
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),
       // Retire at rest; the next start refreshes login and permission mode.
       stopOutgrownAgent: (id) => this.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
@@ -144,7 +143,7 @@ export class StructuredAgentSessionHost {
       failStartingChild: (...args) => this.lifetime.failStartingChild(...args),
       trackOpen: (open) => this.tasks.trackAttach(open)
     })
-    this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
+    this.restartResume = resume.createStructuredAgentSessionRestartResume(deps, this.sessions, {
       ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
       readChildWork: this.clientDelivery.readChildWork,
       childWorkOpen: this.clientDelivery.childWorkOpen,

@@ -17,6 +17,7 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(saved)
   Object.assign(runtimeStore, { getWorkspaceSessionHostIds: () => ['local'] })
   const runtime = new OrcaRuntimeService(runtimeStore)
+  let profileId = 'default'
   const livePages: string[] = []
   const createTab = vi.fn(async ({ browserPageId }: { browserPageId?: string }) => {
     livePages.push(browserPageId!)
@@ -30,6 +31,7 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
       tabList: vi.fn(() => ({
         tabs: livePages.map((browserPageId, index) => ({
           browserPageId,
+          profileId,
           index,
           url: 'https://example.com/',
           title: 'Example',
@@ -46,7 +48,14 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
       }))
     } as never
   )
-  return { runtime, createTab, getSession }
+  return {
+    runtime,
+    createTab,
+    getSession,
+    setProfileId: (id: string) => {
+      profileId = id
+    }
+  }
 }
 
 function savedServeTabs(): WorkspaceSessionState {
@@ -135,6 +144,26 @@ describe('a saved browser tab on a host with no window', () => {
       title: 'Example'
     })
     expect(createTab).not.toHaveBeenCalled()
+    const browserTab = listed.tabs.find((tab) => tab.type === 'browser')
+    expect(browserTab?.type === 'browser' && browserTab.browserProfileId).toBeUndefined()
+  })
+
+  it('publishes the registered page profile and refreshes when only that identity changes', async () => {
+    const { runtime, setProfileId } = restartedServe()
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'page-1')
+    const initial = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(initial.tabs.find((tab) => tab.id === 'page-1')).toMatchObject({
+      browserProfileId: 'default'
+    })
+
+    setProfileId('registered-login')
+    const changed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(changed.tabs.find((tab) => tab.id === 'page-1')).toMatchObject({
+      browserProfileId: 'registered-login'
+    })
+    expect(changed.snapshotVersion).toBeGreaterThan(initial.snapshotVersion)
+    const dormant = changed.tabs.find((tab) => tab.id === 'page-2')
+    expect(dormant?.type === 'browser' && dormant.browserProfileId).toBeUndefined()
   })
 
   it('starts its page once, at its saved address, when a client opens it', async () => {

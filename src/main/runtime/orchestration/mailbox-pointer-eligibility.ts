@@ -25,16 +25,23 @@ export function hasUnfilteredOrchestrationWaiter(
   return false
 }
 
+export type OrchestrationPointerBatch = {
+  messages: MessageRow[]
+  /** The consumer's unacked batch; set means the nudge waits for its idle edge and names it. */
+  heldDeliveryId: string | undefined
+}
+
 /** Both delivery lanes share this synchronous SQL selection; unfiltered waiters preempt all pointers.
- * Concrete waiter types are excluded byte-exactly in SQL; no JavaScript post-filter is needed. */
+ * Concrete waiter types are excluded byte-exactly in SQL; no JavaScript post-filter is needed.
+ * An unacked batch defers rather than drops: only mail it does not hold is eligible, once each. */
 export function selectOrchestrationPointerBatch(input: {
   db: OrchestrationDb
   mailboxHandle: string
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
   reservedTypes: ReadonlySet<string> | undefined
-}): MessageRow[] {
+}): OrchestrationPointerBatch {
   if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
-    return []
+    return { messages: [], heldDeliveryId: undefined }
   }
   const excludedTypes = new Set(input.reservedTypes)
   for (const waiter of input.waiters ?? []) {
@@ -42,10 +49,15 @@ export function selectOrchestrationPointerBatch(input: {
       excludedTypes.add(type)
     }
   }
-  return input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
-    excludeTypes: [...excludedTypes],
-    limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
-  })
+  const held = input.db.getOutstandingMailboxDelivery?.(input.mailboxHandle)
+  return {
+    messages: input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
+      excludeTypes: [...excludedTypes],
+      excludeIds: held?.messageIds,
+      limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
+    }),
+    heldDeliveryId: held?.id
+  }
 }
 
 export function shouldReleaseOrchestrationPointer(
@@ -54,7 +66,9 @@ export function shouldReleaseOrchestrationPointer(
   messages: readonly { id: string; type: string }[],
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
 ): boolean {
-  if (db?.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
+  // A check that took this pointer's mail into a batch already showed it to the agent.
+  const held = db?.getOutstandingMailboxDelivery?.(mailboxHandle)
+  if (held && messages.some((message) => held.messageIds.includes(message.id))) {
     return true
   }
   if (messages.some((message) => messageTypeHasOrchestrationWaiter(waiters, message.type))) {

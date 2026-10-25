@@ -15,7 +15,7 @@ import {
   launchAndReconcile,
   reconcileUnknownLaunch,
   type StructuredAgentLaunchReceipt
-} from '@/lib/structured-agent-session-launch-recovery'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import {
   addStructuredLaunchCaller,
@@ -33,9 +33,9 @@ import {
   setStructuredLaunchState,
   structuredLaunchIdentity,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
-import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
-import { getJoinableStructuredLaunchState } from './structured-agent-session-launch-holders'
+} from './agent-session/launch/structured-agent-session-launch-registry'
+import { restorePersistedStructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-reload'
+import { getJoinableStructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-holders'
 import {
   prepareStructuredLaunchCreateMessage,
   publishStructuredLaunchCreateOptions
@@ -43,11 +43,11 @@ import {
 import {
   maybeCleanupLaunchState,
   trackLaunchSettlement
-} from './structured-agent-session-launch-outcome-tracking'
+} from './agent-session/launch/structured-agent-session-launch-outcome-tracking'
 import {
   trackStructuredLaunchPromptOutcome,
   trackStructuredLaunchConfirmationDeadline
-} from './structured-agent-session-launch-prompt-outcome'
+} from './agent-session/launch/structured-agent-session-launch-prompt-outcome'
 import { repeatedStructuredLaunchAttempt } from './structured-agent-session-launch-request'
 import { initialStructuredLaunchSelection } from './structured-agent-session-launch-options'
 import { releaseStructuredLaunchSource } from './structured-agent-session-launch-source-handoff'
@@ -65,7 +65,7 @@ export {
   useStructuredAgentSessionLaunchLifecycle,
   type StructuredAgentLaunchStatus,
   type StructuredAgentSessionLaunchLifecycle
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 export * from './structured-agent-session-launch-status'
 export { useStructuredAgentSessionLaunchSelection } from './structured-agent-session-launch-options'
 

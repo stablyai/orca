@@ -209,7 +209,8 @@
           "microphone": "micrófono",
           "location": "ubicación",
           "notifications": "notificaciones",
-          "clipboard": "portapapeles"
+          "clipboard": "portapapeles",
+          "localNetwork": "red local"
         },
         "profile": "Perfil del navegador",
         "ask": "Preguntar de nuevo",
@@ -310,6 +311,7 @@
     "view": "Vista",
     "reload": "Recargar",
     "forceReload": "Forzar recarga",
+    "toggleDevTools": "Alternar herramientas para desarrolladores",
     "resetSize": "Restablecer tamaño",
     "zoomIn": "Acercar",
     "zoomOut": "Alejar",
@@ -4236,10 +4238,6 @@
               "waiting": {
                 "label": "Se actualiza cuando Claude se ejecuta",
                 "message": "El uso de Claude se actualizará la próxima vez que ejecutes Claude."
-              },
-              "expired": {
-                "label": "Inicio de sesión caducado",
-                "message": "El uso de Claude ha caducado. Inicia Claude en esta cuenta para actualizarlo."
               }
             },
             "remoteOwnerNotConfigured": "No configurado en {{server}}",
@@ -16869,6 +16867,11 @@
             "copyImageAddress": "Copiar dirección de la imagen",
             "searchSelection": "Buscar “{{value1}}” en {{value0}}",
             "inspect": "Inspeccionar",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "Acoplar a la derecha",
+            "devToolsDockBottom": "Acoplar abajo",
+            "devToolsUndock": "Abrir en una ventana aparte",
+            "devToolsClose": "Cerrar DevTools",
             "1ded0d3168": "Copiar captura de pantalla",
             "f30d2d35a7": "Captura de pantalla",
             "fa6ea61de3": "Cancelar",
@@ -18377,7 +18380,8 @@
             "clipboard": "Portapapeles",
             "midi": "Dispositivos MIDI",
             "windowManagement": "Gestión de ventanas",
-            "idleDetection": "Uso del dispositivo"
+            "idleDetection": "Uso del dispositivo",
+            "localNetwork": "Red local"
           },
           "allow": "Permitir",
           "block": "Bloquear",
@@ -18389,7 +18393,8 @@
             "camera": "Usar la cámara",
             "midi": "Usar tus dispositivos MIDI",
             "windowManagement": "Gestionar ventanas en todas tus pantallas",
-            "idleDetection": "Detectar cuándo estás usando este dispositivo"
+            "idleDetection": "Detectar cuándo estás usando este dispositivo",
+            "localNetwork": "Acceder a las apps de este dispositivo y a los dispositivos de tu red local"
           },
           "localFiles": "Archivos locales",
           "title": "{{site}} solicita permiso para",
@@ -18639,6 +18644,8 @@
         "claudeAccountSetupFailed": "No se pudo configurar la cuenta de Claude seleccionada. Vuelva a intentarlo o elija otra cuenta.",
         "agentCommandNotRunnable": "{{agent}}: el Comando en Ajustes → Agentes debe ser la ruta o el nombre de un programa que Orca pueda encontrar, sin argumentos ni variables. Cámbielo o restablézcalo con Reiniciar.",
         "runtimeNotInstalled": "{{agent}} no está instalado en el equipo que ejecuta este chat. Instálelo desde el chat en una versión actual de Orca.",
+        "conversationOpenElsewhere": "Codex sigue manteniendo abierta esta conversación. Inténtalo de nuevo en un momento o cierra otras terminales de Codex.",
+        "conversationOpenInTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal para continuar aquí.",
         "chooseClaudeAccount": "Elija o agregue una en la configuración de Cuentas de Claude.",
         "chooseClaudeAccountThenRunCommand": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a ejecutar /{{command}}.",
         "chooseClaudeAccountThenSend": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a enviar su mensaje.",
@@ -18723,7 +18730,6 @@
         "notDoneAnswer": "Su respuesta no se envió.",
         "notDoneOption": "La configuración no se cambió.",
         "notDoneCommand": "El comando no se ejecutó.",
-        "notDoneGoal": "El objetivo no se cambió.",
         "notDoneQueuedEdit": "Tu edición no se guardó.",
         "restartFailed": "El agente no pudo reiniciarse.",
         "capacity": "Orca en el equipo que ejecuta este chat alcanzó un límite de solicitudes. Actualice Orca en ese equipo y vuelva a intentarlo.",
@@ -18970,6 +18976,8 @@
         "runFileChangeMany": "Se editaron {{value0}} archivos",
         "runWebSearchOne": "Se buscó en la web 1 vez",
         "runWebSearchMany": "Se buscó en la web {{value0}} veces",
+        "runBrowserOne": "Se usó el navegador",
+        "runBrowserMany": "Se usó el navegador {{value0}} veces",
         "runIntegrationOne": "Se usó 1 integración",
         "runIntegrationMany": "Se usaron {{value0}} integraciones",
         "runAgentOne": "Se ejecutó 1 agente",
@@ -18991,6 +18999,8 @@
         "runLiveFileChangeMany": "Editando {{value0}} archivos",
         "runLiveWebSearchOne": "Buscando en la web 1 vez",
         "runLiveWebSearchMany": "Buscando en la web {{value0}} veces",
+        "runLiveBrowserOne": "Usando el navegador",
+        "runLiveBrowserMany": "Usando el navegador {{value0}} veces",
         "runLiveIntegrationOne": "Usando 1 integración",
         "runLiveIntegrationMany": "Usando {{value0}} integraciones",
         "runLiveAgentOne": "Ejecutando 1 agente",
@@ -18998,7 +19008,9 @@
         "runLivePlanOne": "Actualizando el plan",
         "runLivePlanMany": "Actualizando el plan {{value0}} veces",
         "runLiveToolOne": "Usando 1 herramienta",
-        "runLiveToolMany": "Usando {{value0}} herramientas"
+        "runLiveToolMany": "Usando {{value0}} herramientas",
+        "showBrowserPage": "Mostrar",
+        "showBrowserPageLabel": "Mostrar {{value0}}"
       },
       "status": {
         "responding": "El agente está respondiendo",
@@ -19030,8 +19042,8 @@
       "resumeInNewChat": {
         "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
         "cannotResume": "Esta conversación de {{agent}} no se puede reanudar en un chat nativo.",
-        "exitUnconfirmed": "Orca no puede confirmar que {{agent}} haya salido de su terminal. Detenga lo que se está ejecutando allí o cierre la terminal y vuelva a intentarlo.",
-        "exitUnconfirmedFromTerminal": "Orca no puede confirmar que {{agent}} haya salido de su terminal. Detenga lo que se está ejecutando allí o cierre la terminal, luego abra esta conversación desde el Historial de sesiones."
+        "exitUnconfirmed": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones.",
+        "exitUnconfirmedFromTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones."
       },
       "state": {
         "loading": {
@@ -21180,5 +21192,8 @@
       "pending": "La eliminación está en curso."
     },
     "rowActions": "Acciones para {{name}}"
+  },
+  "browserTab": {
+    "agentDriving": "Un agente está usando esta página"
   }
 }

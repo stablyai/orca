@@ -1,3 +1,5 @@
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
@@ -88,6 +90,21 @@ export async function openCodexThread(
       )
     } catch (error) {
       throwIfSignalAborted(signal)
+      if (
+        isCodexAppServerRequestError(error) &&
+        error.method === 'thread/resume' &&
+        error.code === -32600 &&
+        /\bthread\s+(\S+)\s+already has an active writer\b/i.exec(error.message)?.[1] ===
+          resumeThreadId
+      ) {
+        throw withProviderDiagnostic(
+          Object.assign(
+            new AgentSessionAcquisitionRefusal(error.message, 'conversationOpenElsewhere'),
+            { cause: error }
+          ),
+          providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
+        )
+      }
       if (!launch.supersedeIfUnsaved || !isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }

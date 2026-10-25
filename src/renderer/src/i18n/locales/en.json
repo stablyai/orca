@@ -441,7 +441,8 @@
           "microphone": "microphone",
           "location": "location",
           "notifications": "notifications",
-          "clipboard": "clipboard"
+          "clipboard": "clipboard",
+          "localNetwork": "local network"
         }
       },
       "profileScope": {
@@ -460,6 +461,11 @@
       }
     },
     "agents": {
+      "permissionsTitle": "Permissions",
+      "permissionsResetExplanation": "Picking a mode here resets agents you set separately.",
+      "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
+      "permissionEachOwn": "Each agent's own settings",
+      "permissionEachOwnDescription": "Orca adds nothing; each CLI uses its own config",
       "codexTerminalServerIsolation": {
         "title": "Run each Codex terminal on its own server",
         "description": "Keeps Orca's status and closing tabs working correctly. Turn off to use Codex's shared server and its agents overview. Applies to new terminals."
@@ -553,6 +559,7 @@
     "view": "View",
     "reload": "Reload",
     "forceReload": "Force Reload",
+    "toggleDevTools": "Toggle Developer Tools",
     "resetSize": "Reset Size",
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",
@@ -4559,10 +4566,6 @@
               "waiting": {
                 "label": "Updates when Claude runs",
                 "message": "Claude usage updates the next time Claude runs."
-              },
-              "expired": {
-                "label": "Sign-in expired",
-                "message": "Claude usage has expired. Start Claude in this account to refresh it."
               }
             }
           },
@@ -17282,7 +17285,12 @@
             "copyImage": "Copy Image",
             "copyImageAddress": "Copy Image Address",
             "searchSelection": "Search {{value0}} for “{{value1}}”",
-            "inspect": "Inspect"
+            "inspect": "Inspect",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "Dock to right",
+            "devToolsDockBottom": "Dock to bottom",
+            "devToolsUndock": "Open in separate window",
+            "devToolsClose": "Close DevTools"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
@@ -18661,7 +18669,8 @@
             "clipboard": "Clipboard",
             "midi": "MIDI devices",
             "windowManagement": "Window management",
-            "idleDetection": "Device use"
+            "idleDetection": "Device use",
+            "localNetwork": "Local network"
           },
           "ask": {
             "camera": "Use your camera",
@@ -18671,7 +18680,8 @@
             "clipboard": "See text and images copied to the clipboard",
             "midi": "Use your MIDI devices",
             "windowManagement": "Manage windows on all your displays",
-            "idleDetection": "Know when you are actively using this device"
+            "idleDetection": "Know when you are actively using this device",
+            "localNetwork": "Access apps on this device and devices on your local network"
           },
           "title": "{{site}} wants to",
           "allow": "Allow",
@@ -18969,6 +18979,8 @@
         "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+        "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
+        "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
         "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
         "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
         "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
@@ -19054,7 +19066,7 @@
         "notDoneAnswer": "Your answer was not sent.",
         "notDoneOption": "The setting wasn't changed.",
         "notDoneCommand": "The command didn't run.",
-        "notDoneGoal": "The goal wasn't changed.",
+        "notDoneGoalChangeIncomplete": "Couldn't finish changing the goal. Check the chat.",
         "notDoneQueuedEdit": "Your edit wasn't saved.",
         "restartFailed": "The agent couldn't restart.",
         "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
@@ -19350,6 +19362,8 @@
         "runFileChangeMany": "Edited {{value0}} files",
         "runWebSearchOne": "Searched the web 1 time",
         "runWebSearchMany": "Searched the web {{value0}} times",
+        "runBrowserOne": "Used the browser",
+        "runBrowserMany": "Used the browser {{value0}} times",
         "runIntegrationOne": "Used 1 integration",
         "runIntegrationMany": "Used {{value0}} integrations",
         "runAgentOne": "Ran 1 agent",
@@ -19372,6 +19386,8 @@
         "runLiveFileChangeMany": "Editing {{value0}} files",
         "runLiveWebSearchOne": "Searching the web 1 time",
         "runLiveWebSearchMany": "Searching the web {{value0}} times",
+        "runLiveBrowserOne": "Using the browser",
+        "runLiveBrowserMany": "Using the browser {{value0}} times",
         "runLiveIntegrationOne": "Using 1 integration",
         "runLiveIntegrationMany": "Using {{value0}} integrations",
         "runLiveAgentOne": "Running 1 agent",
@@ -19379,7 +19395,9 @@
         "runLivePlanOne": "Updating the plan",
         "runLivePlanMany": "Updating the plan {{value0}} times",
         "runLiveToolOne": "Using 1 tool",
-        "runLiveToolMany": "Using {{value0}} tools"
+        "runLiveToolMany": "Using {{value0}} tools",
+        "showBrowserPage": "Show",
+        "showBrowserPageLabel": "Show {{value0}}"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -19458,8 +19476,8 @@
         "showTerminal": "Show terminal"
       },
       "resumeInNewChat": {
-        "exitUnconfirmedFromTerminal": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then open this conversation from Session History.",
-        "exitUnconfirmed": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then try again.",
+        "exitUnconfirmedFromTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal, then open this conversation from Session History.",
+        "exitUnconfirmed": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal, then open this conversation from Session History.",
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
         "cannotResume": "This {{agent}} conversation can't be resumed in a native chat."
       },
@@ -21273,6 +21291,9 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "browserTab": {
+    "agentDriving": "An agent is using this page"
   },
   "nativeChat": {
     "math": {

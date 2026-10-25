@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import {
   waitForStructuredAgentSessionStart,
   type StructuredAgentSessionStartReadiness
@@ -72,6 +73,8 @@ type Tracked = {
   expired: boolean
   /** Defer expiry reporting until aborted spawn settles; successful readiness overrides it. */
   expiry: StructuredAgentSessionStartupSettled | null
+  failure?: SubmissionRejectionFact
+  retry?: boolean
   readiness: PromiseWithResolvers<'ready' | 'ended'>
 }
 
@@ -95,17 +98,35 @@ export class StructuredAgentSessionStartupAttempts {
     this.now = deps.now ?? Date.now
   }
 
-  begin(sessionId: string, attemptId: string): void {
-    this.register(sessionId, attemptId)
+  /** A start registered before its first wait: its ceiling runs from now. */
+  begin(sessionId: string, attemptId: string, registeredAt = this.now()) {
+    const result = this.register(sessionId, attemptId, registeredAt)
+    return { ended: result.readiness.promise, result, registeredAt }
   }
 
-  private register(sessionId: string, attemptId: string): Tracked {
+  pastCeiling(registeredAt: number): boolean {
+    return this.now() - registeredAt >= this.limits.ceilingMs
+  }
+
+  childFailed(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity,
+    failure: SubmissionRejectionFact,
+    retry: boolean
+  ): void {
+    const tracked = this.open.get(sessionId)
+    if (tracked?.child && sameProviderChild(tracked.child, child)) {
+      Object.assign(tracked, { failure, retry })
+    }
+  }
+
+  private register(sessionId: string, attemptId: string, registeredAt = this.now()): Tracked {
     this.end(sessionId)
     const tracked: Tracked = {
       attemptId,
       attempt: null,
       child: null,
-      registeredAt: this.now(),
+      registeredAt,
       spawnedAt: null,
       timer: null,
       expired: false,
@@ -163,11 +184,11 @@ export class StructuredAgentSessionStartupAttempts {
     if (tracked?.attemptId !== attemptId) {
       return
     }
+    tracked.child = { generation: child.generation, fence: child.fence }
     if (child.phase === 'ready') {
       this.settle(sessionId, tracked, 'ready')
       return
     }
-    tracked.child = { generation: child.generation, fence: child.fence }
     if (tracked.expired) {
       this.expire(sessionId, tracked, null)
       return

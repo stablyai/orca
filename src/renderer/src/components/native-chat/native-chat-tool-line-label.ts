@@ -3,7 +3,7 @@ import {
   nativeChatToolLineLabel as sharedToolLineLabel,
   type NativeChatToolLineLabel,
   type NativeChatToolRowVerb
-} from '../../../../shared/native-chat-tool-line-label'
+} from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock

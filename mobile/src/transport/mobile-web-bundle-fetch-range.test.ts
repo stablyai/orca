@@ -174,15 +174,6 @@ function rangeHost(
     calls,
     wireBase64Bytes: () => wireBase64Bytes,
     peakInFlight: () => peakInFlight,
-    // Drain to quiescence so missing sibling stops become extra requests instead of hidden pending work.
-    drain: async (): Promise<void> => {
-      let quiet = 0
-      for (let tick = 0; tick < 2000 && quiet < 10; tick += 1) {
-        const sent = calls.length
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        quiet = inFlight === 0 && calls.length === sent ? quiet + 1 : 0
-      }
-    },
     inflations: (): Inflation[] =>
       inflationLog
         .filter((entry) => sentGzipBodies.has(encodeBase64(entry.body)))
@@ -285,26 +276,32 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
 
   // Bound a gzip bomb at one byte over its slot; enough planned reads expose continued dispatch after refusal.
   it('refuses a gzip bomb at one byte over the window and sends little after it', async () => {
-    const bomb = encodeBase64(gzipSync(new Uint8Array(4 * 1024 * 1024), { level: 9 }))
-    const many = Object.fromEntries(
-      Array.from({ length: 10 }, (_, index) => [
-        `assets/part-${String(index)}.js`,
-        scriptBytes(RANGE_GRID * 2, index)
-      ])
-    )
-    const host = rangeHost(many, {
-      tamper: (call, body) =>
-        call.params.path === 'assets/part-0.js' && call.params.offset === 0 ? bomb : body
-    })
+    vi.useFakeTimers()
+    try {
+      const bomb = encodeBase64(gzipSync(new Uint8Array(4 * 1024 * 1024), { level: 9 }))
+      const many = Object.fromEntries(
+        Array.from({ length: 10 }, (_, index) => [
+          `assets/part-${String(index)}.js`,
+          scriptBytes(RANGE_GRID * 2, index)
+        ])
+      )
+      const host = rangeHost(many, {
+        tamper: (call, body) =>
+          call.params.path === 'assets/part-0.js' && call.params.offset === 0 ? bomb : body
+      })
 
-    expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('chunk-oversize')
-    await host.drain()
-    const window = RANGE_GRID + 1
-    expect(host.inflations().filter((inflation) => inflation.resultLength === window)).toEqual([
-      { outLength: window, resultLength: window }
-    ])
-    // Sibling stop permits only in-flight work and immediate follow-ups, never the full planned grid.
-    expect(readsOf(host.calls, 'mobileWeb.bundle.range').length).toBeLessThanOrEqual(8)
+      const refusal = refusalOf(fetchMobileWebBundle({ client: host.client }))
+      await vi.runAllTimersAsync()
+      expect(await refusal).toBe('chunk-oversize')
+      const window = RANGE_GRID + 1
+      expect(host.inflations().filter((inflation) => inflation.resultLength === window)).toEqual([
+        { outLength: window, resultLength: window }
+      ])
+      // Sibling stop permits only in-flight work and immediate follow-ups, never the full planned grid.
+      expect(readsOf(host.calls, 'mobileWeb.bundle.range').length).toBeLessThanOrEqual(8)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('refuses a range that inflates short of its window as short', async () => {

@@ -35,6 +35,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import { structuredLaunchSeedOnSavedListing } from '../../session-tabs/structured-launch-seed-listing'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
+import { seedOptionsAdmittedOnSavedListing } from '../../agent-session-record-options'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -165,13 +166,23 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
           await catalogFolder()
         )
       : undefined
+  // Fit remembered values to the saved row instead of refusing the create (#31493).
+  const admittedSeed =
+    options && catalogModels && !args.options?.model
+      ? seedOptionsAdmittedOnSavedListing(
+          resolved.provider,
+          options,
+          catalogModels,
+          new Set(Object.keys(args.options ?? {}))
+        )
+      : options
   return {
     host,
     ...(catalogModels ? { catalogModels } : {}),
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
-      ...(options ? { options } : {}),
+      ...(admittedSeed ? { options: admittedSeed } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,

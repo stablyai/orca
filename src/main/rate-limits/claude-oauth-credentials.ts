@@ -16,6 +16,8 @@ export type ClaudeOAuthCredentialSource =
 export type ClaudeOAuthCredentialReadResult = {
   token: string | null
   hasRefreshableCredentials: boolean
+  /** Epoch ms; Claude Code 2.1.x records it beside the refresh token. */
+  refreshTokenExpiresAt?: number
   source: ClaudeOAuthCredentialSource
   keychainUnavailable?: boolean
   unavailable?: boolean
@@ -30,7 +32,8 @@ const schema = z.object({
   claudeAiOauth: z
     .object({
       accessToken: z.string().optional(),
-      refreshToken: z.string().optional()
+      refreshToken: z.string().optional(),
+      refreshTokenExpiresAt: z.unknown().optional()
     })
     .optional()
 })
@@ -44,6 +47,9 @@ export function parseClaudeOAuthCredentialsJson(
     return {
       token: oauth?.accessToken || null,
       hasRefreshableCredentials: Boolean(oauth?.refreshToken),
+      ...(typeof oauth?.refreshTokenExpiresAt === 'number'
+        ? { refreshTokenExpiresAt: oauth.refreshTokenExpiresAt }
+        : {}),
       source
     }
   } catch {
