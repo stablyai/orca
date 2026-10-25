@@ -32,6 +32,7 @@ export type WorkspaceTabCommand =
       skipEmptyCheck?: boolean
       bulk?: boolean
       floatingPanelGuestOwned?: boolean
+      autoDeleteEligible?: boolean
     }
   | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
   | { type: 'previous-recent' }
@@ -124,7 +125,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       if (!target.browserWorkspaceId) {
         return false
       }
-      const whenEmptied = captureWorkspaceEmptiedReaction(target.worktreeId)
+      const whenEmptied = captureWorkspaceEmptiedReaction(target.worktreeId, {
+        autoDeleteEligible: command.autoDeleteEligible
+      })
       const plan = closeWorkspaceBrowserTab(target.worktreeId, target.browserWorkspaceId)
       if (
         plan.closesLocally &&
@@ -152,7 +155,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       command.bulk || command.skipEmptyCheck
         ? undefined
         : captureWorkspaceEmptiedReaction(target.worktreeId, {
-            floatingPanelGuestOwned: command.floatingPanelGuestOwned
+            floatingPanelGuestOwned: command.floatingPanelGuestOwned,
+            autoDeleteEligible: command.autoDeleteEligible,
+            hostId: tab.executionHostId
           })
     const close = () =>
       commands.closeItem(tab.id, { whenEmptied, skipRunningProcessConfirm: command.bulk })

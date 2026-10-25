@@ -45,6 +45,8 @@ export function handleGuestWindowCloseMessage(
     type: 'close',
     target: tab
       ? { kind: 'tab', worktreeId: owner.worktreeId, tabId: tab.id }
-      : { kind: 'browser-source', sourceId: pageId }
+      : { kind: 'browser-source', sourceId: pageId },
+    // Why: the page script closed it, not the user, so it must not delete the workspace.
+    autoDeleteEligible: false
   })
 }
