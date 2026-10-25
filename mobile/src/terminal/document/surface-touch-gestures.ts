@@ -22,10 +22,9 @@ import {
 import { updateTransform } from './viewport-transform'
 import { viewportPoint } from './viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
+import { reportSwipeDown } from './surface-swipe-down'
 
 const RELEASE_VELOCITY_MAX_AGE_MS = 100
-// A release this far below its start, mostly vertical, reads as "swipe down" (the host may dismiss the keyboard).
-const SWIPE_DOWN_MIN_PX = 56
 
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
@@ -70,20 +69,6 @@ export function getDistance(a: Touch, b: Touch) {
 
 function pinchMidpoint(scope: TerminalDocumentScope, a: Touch, b: Touch) {
   return viewportPoint(scope, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2)
-}
-
-// The swipe still scrolls scrollback; the host only learns the gesture happened.
-function reportSwipeDown(scope: TerminalDocumentScope) {
-  const { swipeStartX, swipeStartY, lastX, lastY } = scope.touchGesture
-  scope.touchGesture.swipeStartX = null
-  scope.touchGesture.swipeStartY = null
-  if (swipeStartX === null || swipeStartY === null) {
-    return
-  }
-  const dy = lastY - swipeStartY
-  if (dy >= SWIPE_DOWN_MIN_PX && dy > 2 * Math.abs(lastX - swipeStartX)) {
-    notify(scope, { type: 'terminal-swipe-down' })
-  }
 }
 
 export function attachSurfaceEventHandlers(
@@ -272,7 +257,10 @@ export function attachSurfaceEventHandlers(
       }
 
       if (touches.length === 0) {
-        reportSwipeDown(scope)
+        reportSwipeDown(
+          scope,
+          e.changedTouches ? touchesInRoot(scope.root, e.changedTouches)[0] : undefined
+        )
         scope.touchGesture.active = false
         // A finger resting after its last move has no remaining momentum to launch.
         const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS
