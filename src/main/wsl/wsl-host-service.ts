@@ -4,7 +4,10 @@
  * or while a project or terminal the user has open needs it; never for background work.
  */
 import { errorMessage } from '../../shared/error-message'
-import { removeWslHostEnvironment } from '../../shared/runtime-environment-wsl-host-store'
+import {
+  reconcileWslHostBridgePorts,
+  removeWslHostEnvironment
+} from '../../shared/runtime-environment-wsl-host-store'
 import {
   readWslHostDeployments,
   type WslHostDeploymentRecord
@@ -227,7 +230,16 @@ export class WslHostService {
    * Before a call to a WSL host: a live connection serves it; otherwise connect only for open
    * work, and say why not instead of letting the call fail as an unreachable network server.
    */
-  async ensureForRuntimeCall(environmentId: string): Promise<void> {
+  ensureForRuntimeCall(environmentId: string): Promise<void> {
+    return this.ensureConnected(environmentId, false)
+  }
+
+  /** The user asked for work on this host (a move): like Connect, it may boot the distro. */
+  ensureForUserRequest(environmentId: string): Promise<void> {
+    return this.ensureConnected(environmentId, true)
+  }
+
+  private async ensureConnected(environmentId: string, userRequested: boolean): Promise<void> {
     const record = this.recordForEnvironment(environmentId)
     const connector = this.connector
     if (!record || !connector || (await connector.isReachable(record.distro, environmentId))) {
@@ -237,7 +249,7 @@ export class WslHostService {
     if (refusal || this.removing.has(environmentId)) {
       throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
     }
-    if (!this.visible.has(environmentId)) {
+    if (!userRequested && !this.visible.has(environmentId)) {
       throw new Error(wslHostNotConnectedMessage(record.distro))
     }
     await connector.connect(record.distro)
@@ -272,6 +284,14 @@ export class WslHostService {
 
   /** Startup: keep the holders a previous run left, without booting anything. */
   async start(): Promise<void> {
+    // Synchronous, before the window first lists its servers.
+    try {
+      for (const environmentId of reconcileWslHostBridgePorts(this.deps.userDataPath())) {
+        console.warn(`[wsl-hosts] Realigned ${environmentId}'s bridge port with its pairing.`)
+      }
+    } catch (error) {
+      console.warn('[wsl-hosts] Could not check WSL host records against their pairings:', error)
+    }
     if (!this.connector || !this.canRun() || this.records().length === 0) {
       return
     }

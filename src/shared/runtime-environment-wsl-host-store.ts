@@ -19,6 +19,7 @@ import {
 import { resolveEnvironmentFromStore } from './runtime-environment-store'
 import { findCollidingEnvironmentName } from './runtime-environment-name-collision'
 import {
+  hasNonWslOwner,
   readWslHostDeployments,
   writeWslHostDeployment,
   type WslHostDeploymentRecord
@@ -120,6 +121,8 @@ export function refreshWslHostPairing(
   if (!record) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not a WSL host.')
   }
+  // Why read first: once the record holds the new port, the overlay sees the old pairing conflict.
+  const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
   if (record.localPort !== args.localPort || record.remotePort !== args.remotePort) {
     writeWslHostDeployment(userDataPath, environmentId, {
       ...record,
@@ -127,9 +130,11 @@ export function refreshWslHostPairing(
       remotePort: args.remotePort
     })
   }
-  const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
   if (samePairing(getPreferredPairingOffer(current), offer)) {
-    return { environment: current, pairingChanged: false }
+    return {
+      environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId),
+      pairingChanged: false
+    }
   }
   const store = readPersistedEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, environmentId)
@@ -156,6 +161,30 @@ export function refreshWslHostPairing(
     environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId),
     pairingChanged: true
   }
+}
+
+/**
+ * A crash between refreshWslHostPairing's writes leaves the record's bridge port off the pairing,
+ * so the overlay drops the WSL link. The record follows the pairing, which stays as saved: its
+ * port is only where the next connect listens, and that connect saves both. Returns repaired ids.
+ */
+export function reconcileWslHostBridgePorts(userDataPath: string): string[] {
+  const environments = readEnvironmentStore(userDataPath).environments
+  const repaired: string[] = []
+  for (const record of readWslHostDeployments(userDataPath).deployments) {
+    const environment = environments.find((entry) => entry.id === record.environmentId)
+    // A WSL link that overlaid cleanly reads as an owner too, and needs nothing.
+    if (!environment || hasNonWslOwner(environment)) {
+      continue
+    }
+    const port = getPreferredLoopbackRuntimePort(environment)
+    if (port === null || port === record.localPort) {
+      continue
+    }
+    writeWslHostDeployment(userDataPath, record.environmentId, { ...record, localPort: port })
+    repaired.push(record.environmentId)
+  }
+  return repaired
 }
 
 /** Environment first: a crash between the writes leaves an ownerless record, never a bare server. */
