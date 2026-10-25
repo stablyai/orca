@@ -1,7 +1,11 @@
 import { app, type BrowserWindow, type Event } from 'electron'
 import type { Store } from '../persistence'
 import { uiZoomFactorFromLevel } from '../../shared/ui-zoom-level'
-import { isWindowlessLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
+import {
+  isBackgroundLaunch,
+  isWindowlessLaunch,
+  showWindowWithoutStealingFocus
+} from './foreground-activation-policy'
 import { MIN_HEIGHT, MIN_WIDTH, syncTrafficLightPosition } from './main-window-visual-lifecycle'
 
 export type MainWindowStateLifecycle = {
@@ -67,7 +71,7 @@ export function installMainWindowStateLifecycle(args: {
       mainWindow.maximize()
     }
     showWindowWithoutStealingFocus(mainWindow)
-    if (savedFullscreen) {
+    if (savedFullscreen && !isBackgroundLaunch()) {
       mainWindow.setFullScreen(true)
     }
   }

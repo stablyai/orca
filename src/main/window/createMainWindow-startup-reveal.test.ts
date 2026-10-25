@@ -63,6 +63,7 @@ describe('createMainWindow', () => {
       maximize: vi.fn(),
       setFullScreen: vi.fn(),
       show: vi.fn(),
+      showInactive: vi.fn(),
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
@@ -113,6 +114,22 @@ describe('createMainWindow', () => {
       } finally {
         vi.unstubAllEnvs()
       }
+    }
+  )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'does not enter fullscreen during an inactive headful launch on %s',
+    (platform) => {
+      vi.stubEnv('ORCA_E2E_HEADFUL', '1')
+      const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+      withPlatform(platform, () => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Startup reads only the UI/settings and updateUI supplied by this store fixture.
+        createMainWindow(createStartupRevealStore(false, true) as never)
+        windowHandlers['ready-to-show']()
+      })
+      expect(browserWindowInstance.showInactive).toHaveBeenCalledOnce()
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.setFullScreen).not.toHaveBeenCalled()
     }
   )
 

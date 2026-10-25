@@ -7,6 +7,7 @@ const { appMock } = await vi.hoisted(async () => {
 })
 vi.mock('electron', () => ({ app: appMock }))
 vi.mock('./foreground-activation-policy', () => ({
+  isBackgroundLaunch: () => true,
   isWindowlessLaunch: () => true,
   showWindowWithoutStealingFocus: vi.fn()
 }))
