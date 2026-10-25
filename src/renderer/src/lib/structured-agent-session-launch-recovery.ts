@@ -129,6 +129,25 @@ async function retrySameIntent(
   }
 }
 
+/** The create succeeded, so the chat exists: a tab the inventory does not list yet is a
+ *  confirmation gap, not a launch to start again. Re-read the chat the create made and, failing
+ *  that, leave the launch unconfirmed for Retry rather than creating a second chat beside it. */
+async function confirmCreatedSession(
+  state: StructuredLaunchRecoveryState,
+  priorError: unknown
+): Promise<StructuredAgentLaunchReceipt> {
+  try {
+    return await recoverPublishedSessionReceipt(state)
+  } catch (error) {
+    if (state.cancelled) {
+      throw new StructuredAgentSessionLaunchCancelledError()
+    }
+    state.visibilityUnknown = true
+    state.onVisibilityChanged?.()
+    throw priorError ?? error
+  }
+}
+
 export async function launchAndReconcile(
   state: StructuredLaunchRecoveryState
 ): Promise<StructuredAgentLaunchReceipt> {
@@ -164,7 +183,7 @@ export async function launchAndReconcile(
     if (state.cancelled) {
       throw new StructuredAgentSessionLaunchCancelledError()
     }
-    return retrySameIntent(state, error)
+    return confirmCreatedSession(state, error)
   }
 }
 
