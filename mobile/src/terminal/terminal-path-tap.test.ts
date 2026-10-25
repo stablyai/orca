@@ -257,6 +257,27 @@ describe('matchFilePathAtColumn', () => {
     ).toEqual(expected)
   })
 
+  it('reconstructs a 5-row TUI-wrapped Windows path with CJK prefix and short hyphen row', () => {
+    const rows = [
+      { text: '  纯路径文本：C:/Users/zhangxaochen260423/.', isWrapped: false },
+      { text: '  gemini/antigravity-cli/brain/0b183352-', isWrapped: false },
+      { text: '  a8fd-43fe-ab03-', isWrapped: false },
+      { text: '  3ff674bc67a9/ai_era_early_childhood_educa', isWrapped: false },
+      { text: '  tion.md', isWrapped: false }
+    ]
+    const expected = {
+      pathText:
+        'C:/Users/zhangxaochen260423/.gemini/antigravity-cli/brain/0b183352-a8fd-43fe-ab03-3ff674bc67a9/ai_era_early_childhood_education.md',
+      line: null,
+      column: null
+    }
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const col = rowIndex === 0 ? colOf(rows[0]!.text, 'Users') : 4
+      expect(matchWrappedFilePathAtRowColumn(rows, rowIndex, col, 46)).toEqual(expected)
+      expect(documentMatchWrappedFilePathAtRowColumn(rows, rowIndex, col, 46)).toEqual(expected)
+    }
+  })
+
   it('does not join a following status row onto an unwrapped path', () => {
     const rows = [{ text: '  Created /tmp/out' }, { text: '  Done' }]
     const expected = {

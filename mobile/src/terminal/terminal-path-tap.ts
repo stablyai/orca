@@ -169,9 +169,36 @@ type WrappedRowSlice = {
   content: string
   contentStart: number
   contentEnd: number
+  visualEnd: number
   leadingToken: string
   trailingToken: string
   stoppedBeforeBoxBorder: boolean
+}
+
+function visualColumnWidth(text: string): number {
+  let width = 0
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.codePointAt(i) ?? 0
+    if (code > 0xffff) {
+      i += 1
+    }
+    width +=
+      code >= 0x1100 &&
+      (code <= 0x115f ||
+        code === 0x2329 ||
+        code === 0x232a ||
+        (code >= 0x2e80 && code <= 0xa4cf && code !== 0x303f) ||
+        (code >= 0xac00 && code <= 0xd7a3) ||
+        (code >= 0xf900 && code <= 0xfaff) ||
+        (code >= 0xfe10 && code <= 0xfe19) ||
+        (code >= 0xfe30 && code <= 0xfe6f) ||
+        (code >= 0xff00 && code <= 0xff60) ||
+        (code >= 0xffe0 && code <= 0xffe6) ||
+        (code >= 0x20000 && code <= 0x3fffd))
+        ? 2
+        : 1
+  }
+  return width
 }
 
 function sliceWrappedRow(text: string): WrappedRowSlice {
@@ -183,6 +210,7 @@ function sliceWrappedRow(text: string): WrappedRowSlice {
     content,
     contentStart,
     contentEnd,
+    visualEnd: visualColumnWidth(text.slice(0, contentEnd)),
     leadingToken: /^[A-Za-z0-9._~\-/%+@:\\#()[\]]+/.exec(content)?.[0] ?? '',
     trailingToken: /[A-Za-z0-9._~\-/%+@:\\#()[\]]+$/.exec(content)?.[0] ?? '',
     stoppedBeforeBoxBorder: /[ \t]{3,}[│┃║╎╏┆┇┊┋|][ \t]*$/.test(text)
@@ -205,19 +233,22 @@ function hasReachedWrapWidth(
   next: WrappedRowSlice,
   terminalCols?: number
 ): boolean {
-  if (prev.contentEnd < 35 || prev.stoppedBeforeBoxBorder) {
+  if (prev.visualEnd < 12 || prev.stoppedBeforeBoxBorder) {
+    return false
+  }
+  const nextBreakIndex = next.leadingToken.indexOf('-')
+  const wrapSlack = /[\\/\-.]$/.test(prev.trailingToken)
+    ? nextBreakIndex >= 0
+      ? nextBreakIndex + 1
+      : next.leadingToken.length
+    : 0
+  if (prev.visualEnd + wrapSlack < 35) {
     return false
   }
   if (!terminalCols || terminalCols <= 35) {
     return true
   }
-  const nextBreakIndex = next.leadingToken.indexOf('-')
-  const hyphenWrapSlack = prev.trailingToken.endsWith('-')
-    ? nextBreakIndex >= 0
-      ? nextBreakIndex + 1
-      : next.leadingToken.length
-    : 0
-  return prev.contentEnd + hyphenWrapSlack >= Math.max(35, terminalCols - 8)
+  return prev.visualEnd + wrapSlack >= Math.max(35, terminalCols - 8)
 }
 
 function canRowContinueWrappedPath(
