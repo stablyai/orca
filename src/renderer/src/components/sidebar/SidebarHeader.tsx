@@ -56,7 +56,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   )
 
   return (
-    <div className="mt-2 flex h-8 min-w-0 items-center justify-between gap-1.5 px-2">
+    <div className="mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">
       <div className="flex min-w-0 items-center gap-1">
         <span
           // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
@@ -163,12 +163,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
             </div>
           </PopoverContent>
         </Popover>
-        {agentsViewActive ? (
-          <div ref={activityOptionsTarget} className="flex items-center" />
-        ) : null}
         <SidebarHeaderActions
           onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}
           agentsViewActive={agentsViewActive}
+          activityOptionsTarget={activityOptionsTarget}
         />
       </div>
     </div>
