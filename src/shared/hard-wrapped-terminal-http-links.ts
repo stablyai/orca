@@ -14,6 +14,9 @@ const HARD_WRAP_CONTINUATION_SUFFIX_PATTERN = /[/?&=#%+:-]$/
 const LAYOUT_SUFFIX_CHAR_PATTERN = /[\s│┃║╎╏┆┇┊┋|]/
 const MIN_HARD_WRAPPED_HTTP_ROWS = 3
 const MIN_HARD_WRAP_FILL_RATIO = 0.8
+// Why: a two-row URL in the left table column has no blank sibling cell to
+// prove the continuation, so its start row must end at the cell border instead.
+const MIN_HARD_WRAP_BORDER_FILL_RATIO = 0.95
 
 type TranslatedLine = ReturnType<typeof translateLineWithColumns>
 
@@ -114,7 +117,9 @@ function buildCandidateFromStart(
   let rightFrameColumn: number | null = null
   let previousRowCanContinue = true
   let startRowFilled = false
+  let startRowFillRatio = 0
   let blankCellContinuationRows = 0
+  let blankTrailingCellRows = 0
   const rows: WrappedLogicalLine['rows'] = []
 
   for (let rowY = startY; rowY < startY + TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS; rowY++) {
@@ -166,6 +171,13 @@ function buildCandidateFromStart(
     }
     rightFrameColumn ??= currentRightFrameColumn
 
+    // Why: a wrapped cell leaves the cells right of it blank, which marks a
+    // continuation row even when the left prefix is unchanged (first column).
+    const trailingCells = translated.text.slice(currentRightFrameIndex + 1)
+    const rowHasBlankTrailingCells =
+      VERTICAL_LAYOUT_FRAME_PATTERN.test(trailingCells) &&
+      !NON_LAYOUT_SUFFIX_PATTERN.test(trailingCells)
+
     if (text.length + fragment.length > TERMINAL_HTTP_URL_MAX_LENGTH) {
       return null
     }
@@ -183,12 +195,17 @@ function buildCandidateFromStart(
     if (fragmentStart.blankCellContinuation) {
       blankCellContinuationRows++
     }
+    if (rowY > startY && rowHasBlankTrailingCells) {
+      blankTrailingCellRows++
+    }
 
     const contentWidth = currentRightFrameColumn - fragmentStartColumn
     const fragmentWidth = translated.columns[fragmentEnd]! - fragmentStartColumn
-    const fillsRow = contentWidth > 0 && fragmentWidth / contentWidth >= MIN_HARD_WRAP_FILL_RATIO
+    const fillRatio = contentWidth > 0 ? fragmentWidth / contentWidth : 0
+    const fillsRow = fillRatio >= MIN_HARD_WRAP_FILL_RATIO
     if (rowY === startY) {
       startRowFilled = fillsRow
+      startRowFillRatio = fillRatio
     }
     previousRowCanContinue = HARD_WRAP_CONTINUATION_SUFFIX_PATTERN.test(fragment) || fillsRow
   }
@@ -197,7 +214,9 @@ function buildCandidateFromStart(
   // stronger evidence than the row count for a URL wrapped onto a second row.
   const hasRowCountEvidence =
     rows.length >= MIN_HARD_WRAPPED_HTTP_ROWS ||
-    (blankCellContinuationRows > 0 && blankCellContinuationRows === rows.length - 1)
+    (blankCellContinuationRows > 0 && blankCellContinuationRows === rows.length - 1) ||
+    (startRowFillRatio >= MIN_HARD_WRAP_BORDER_FILL_RATIO &&
+      blankTrailingCellRows === rows.length - 1)
   if (rows.length > 1 && (!startRowFilled || !hasRowCountEvidence)) {
     // A complete URL may end in /; one adjacent framed token alone cannot prove continuation.
     rows.splice(1)

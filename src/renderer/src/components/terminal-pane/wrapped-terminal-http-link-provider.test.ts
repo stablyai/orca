@@ -483,6 +483,34 @@ describe('wrapped terminal HTTP link provider', () => {
     }
   })
 
+  it('links a two-row URL wrapped inside the first table column', async () => {
+    const url = `https://example.com/${'a'.repeat(20)}`
+    const cellWidth = 28
+    const fragments = url.match(new RegExp(`.{1,${cellWidth}}`, 'g'))!
+    const row = (cells: [string, string]) =>
+      `│ ${cells[0].padEnd(cellWidth)} │ ${cells[1].padEnd(4)} │`
+    const { terminal, linksAt } = await terminalWithRows(
+      [
+        '┌──────────────────────────────┬──────┐',
+        row(['URL', 'note']),
+        '├──────────────────────────────┼──────┤',
+        ...fragments.map((fragment, index) => row([fragment, index === 0 ? '1' : ''])),
+        '└──────────────────────────────┴──────┘'
+      ],
+      60
+    )
+    try {
+      for (const [index] of fragments.entries()) {
+        expect((await linksAt(4 + index))?.[0]).toMatchObject({
+          text: url,
+          range: { start: { x: 3, y: 4 + index } }
+        })
+      }
+    } finally {
+      terminal.dispose()
+    }
+  })
+
   it('maps a padded wide-character continuation to its terminal cells', async () => {
     const firstRow = `https://example.com/${'a'.repeat(18)}`
     const continuation = '界文档/路径'

@@ -175,6 +175,36 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
     ).toBe(`${first}${second}`)
   })
 
+  it('joins a two-row URL that starts in the first table column', () => {
+    const first = 'https://example.com/aaaaaaaaaa'
+    const second = 'bbbb'
+    const rows = [`│ ${first} │ ok │`, `│ ${second.padEnd(first.length)} │    │`].map(
+      bufferLineWithCellColumns
+    )
+
+    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)[0]?.text).toBe(
+      `${first}${second}`
+    )
+  })
+
+  it('keeps a single-column two-row URL unjoined without a blank neighbour cell', () => {
+    const first = 'https://example.com/aaaaaaaaaa'
+    const rows = [`│ ${first} │`, `│ ${'bbbb'.padEnd(first.length)} │`].map(
+      bufferLineWithCellColumns
+    )
+
+    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)).toEqual([])
+  })
+
+  it('does not glue the next table row onto a left-column URL', () => {
+    const first = 'https://example.com/aaaaaaaaaa'
+    const rows = [`│ ${first} │ ok   │`, `│ unrelated-value │ todo │`].map(
+      bufferLineWithCellColumns
+    )
+
+    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)).toEqual([])
+  })
+
   it('joins a URL wrapped inside one cell of a multi-column table', () => {
     const first = 'https://example.com/aaaaaaaaaaaaaaaaaa/'
     const second = 'tail'
