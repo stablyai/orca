@@ -32,9 +32,9 @@ Use a test file or directory when you know the relevant suites. For dependency-b
 feedback, Vitest can select tests affected by your edits:
 
 ```bash
-pnpm test:changed src/main/runtime --maxWorkers=2
-pnpm test --changed=origin/main --maxWorkers=2
-pnpm test src/shared/app-version.test.ts --maxWorkers=2
+pnpm test:changed src/main/runtime
+pnpm test --changed=origin/main
+pnpm test src/shared/app-version.test.ts src/shared/branch-name-from-work.test.ts
 ```
 
 `test:changed` considers staged, unstaged, and untracked files. `--changed=origin/main`
@@ -62,15 +62,36 @@ Vitest also supports [`related --run <source-files>`](https://vitest.dev/guide/c
 and dependency-aware watch mode. `pnpm test --changed` uses Git to provide the source
 inputs automatically and exits after one run.
 
-To reduce main-process rebuild CPU and memory when you do not need its source maps,
-set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev`. In Bash/zsh:
+Batch known test paths in one command to share Vitest startup work. Explicit one-shot
+path filters also scope runtime classification to the selected files. Local runs reuse
+the Zod bundle while its inputs and output remain unchanged. These optimizations apply
+to ordinary agent test commands automatically, without reducing worker counts.
+
+### Incremental Local Builds
+
+`pnpm build:cli` uses incremental tsrs checks on Apple Silicon macOS and x64/arm64 Linux,
+then emits with TypeScript only when the checked inputs or output have changed.
+Other platforms and CI retain the full Bun check followed by TypeScript emission.
+Use `ORCA_CLI_BUILD_COMPILER=bun` to request that full build locally.
+
+Keep `.cache/build/` between commands to reuse CLI state and test bundles. CLI builds
+validate previously emitted files, repair missing or modified output, and remove obsolete
+files they own after source renames. `build:packages` also skips the process-host compiler
+when its sources, configuration, dependencies, and emitted output are unchanged; its
+state lives in `src/packages/process-host/.cache/`. Delete these caches for a fresh run.
+
+### Development Source Maps
+
+Development main-process source maps are off by default to reduce rebuild CPU and
+memory during agent work. Enable them when debugging main-process stack traces or
+breakpoints. In Bash/zsh:
 
 ```bash
-ORCA_DEV_MAIN_SOURCEMAPS=0 pnpm dev
+ORCA_DEV_MAIN_SOURCEMAPS=1 pnpm dev
 ```
 
-In PowerShell, use `$env:ORCA_DEV_MAIN_SOURCEMAPS='0'` before `pnpm dev`.
-Remove the variable when debugging the main process with source maps. Renderer and
+In PowerShell, use `$env:ORCA_DEV_MAIN_SOURCEMAPS='1'` before `pnpm dev`.
+Unset the variable (or set it to `0`) to restore the faster default. Renderer and
 preload settings are unaffected; production builds always keep their hidden main maps.
 
 Local installs use pnpm's global virtual store: each package version is one slot

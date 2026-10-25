@@ -355,9 +355,9 @@ export default defineConfig(({ command }) => {
         ...electronViteConfig.main?.build,
         minify: false,
         sourcemap:
-          process.env.ORCA_DEV_MAIN_SOURCEMAPS === '0'
-            ? false
-            : electronViteConfig.main?.build?.sourcemap
+          process.env.ORCA_DEV_MAIN_SOURCEMAPS === '1'
+            ? electronViteConfig.main?.build?.sourcemap
+            : false
       }
     }
   }

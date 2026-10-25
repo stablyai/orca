@@ -70,6 +70,8 @@ desktop.ini
 /.cache/vite/
 /.cache/vite.lock/
 /.cache/typecheck/
+/.cache/build/
+/src/packages/process-host/.cache/
 
 # Logs
 *.log

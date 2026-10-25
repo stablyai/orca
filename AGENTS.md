@@ -3,7 +3,9 @@
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
 - Local typechecks use incremental tsrs on Apple Silicon macOS and x64/arm64 Linux; other platforms use Bun. Keep `.cache/typecheck/` between checks; delete it to force a fresh local check. `pnpm typecheck:ci` explicitly uses Bun; `pnpm tc --compiler=native` uses TypeScript.
 - **Test**: `pnpm test [path/to/file.test.ts]`
-- **Affected tests**: `pnpm test:changed [path] --maxWorkers=2` for uncommitted edits, or `pnpm test --changed=origin/main` for branch changes. Local runs cache loaded imports; cold caches run all tests in scope. Filesystem/subprocess inputs need explicit tests; see [test targeting](.github/CONTRIBUTING.md#targeting-local-tests).
+- **Affected tests**: `pnpm test:changed [path]` for uncommitted edits, or `pnpm test --changed=origin/main` for branch changes. Batch known test paths into one invocation to share startup work. Local runs cache loaded imports; cold caches run all tests in scope. Filesystem/subprocess inputs need explicit tests; see [test targeting](.github/CONTRIBUTING.md#targeting-local-tests).
+- **Local builds**: `pnpm build:cli` uses incremental tsrs on supported platforms; CI and unsupported platforms use Bun. Keep `.cache/build/` and `src/packages/process-host/.cache/` between runs. Missing or modified output is repaired automatically. Use `ORCA_CLI_BUILD_COMPILER=bun` to force the full build.
+- **Main source maps**: Development defaults off; set `ORCA_DEV_MAIN_SOURCEMAPS=1` for main-process debugging. Production retains hidden source maps.
 - **Lint**: `oxlint`, or `pnpm run check:code-quality:changed` for changed files (full `pnpm lint` is slow); format with `pnpm format`
 - **Design system**: `pnpm run lint:design-system` for the full renderer report (not a gate); the changed-lines gate above is what CI enforces
 

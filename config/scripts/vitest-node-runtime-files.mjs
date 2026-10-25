@@ -197,6 +197,6 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/vitest-node-runtime-pool.test.ts'
 ]
 
-export function getNodeRuntimeInclude() {
-  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests()]
+export function getNodeRuntimeInclude(options) {
+  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests(options)]
 }

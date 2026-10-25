@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -7,7 +7,8 @@ import {
   realpathSync,
   renameSync,
   rmSync,
-  rmdirSync
+  rmdirSync,
+  writeFileSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -19,6 +20,58 @@ const LOCK_PATH = '.dist-build.lock'
 const LOCK_STALE_MS = 30_000
 const COMPILE_TIMEOUT_MS = 120_000
 const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
+
+function fileDigest(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex')
+}
+
+function outputDigests(directory) {
+  return listFiles(directory)
+    .sort()
+    .map((file) => [file, fileDigest(join(directory, file))])
+}
+
+function buildIdentity(packageDir) {
+  if (/"extends"\s*:/.test(readFileSync(join(packageDir, 'tsconfig.json'), 'utf8'))) {
+    return null
+  }
+  const compiler = resolvePackageCompiler(packageDir)
+  const require = createRequire(join(packageDir, 'package.json'))
+  const inputs = [
+    ['policy', fileDigest(import.meta.filename)],
+    ['compiler', compiler, fileDigest(compiler)],
+    ['package.json', fileDigest(join(packageDir, 'package.json'))],
+    ['tsconfig.json', fileDigest(join(packageDir, 'tsconfig.json'))],
+    ...outputDigests(join(packageDir, 'src'))
+  ]
+  for (const dependency of ['typescript', '@types/node']) {
+    try {
+      const manifest = require.resolve(`${dependency}/package.json`)
+      inputs.push([dependency, manifest, fileDigest(manifest)])
+    } catch {
+      // Fixture packages can omit Node types.
+    }
+  }
+  for (let directory = packageDir; ; directory = dirname(directory)) {
+    const lock = join(directory, 'pnpm-lock.yaml')
+    if (existsSync(lock)) {
+      inputs.push(['dependencies', fileDigest(lock)])
+      break
+    }
+    if (directory === dirname(directory)) {
+      break
+    }
+  }
+  return createHash('sha256').update(JSON.stringify(inputs)).digest('hex')
+}
+
+function readBuildState(file) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+}
 
 function resolvePackageCompiler(packageDir) {
   const manifestPath = createRequire(join(packageDir, 'package.json')).resolve(
@@ -111,12 +164,6 @@ async function syncCompiledOutput(stagingDir, distDir, assertLockHeld) {
 }
 
 async function compileAndSync(packageDir, assertLockHeld) {
-  // Only the lock holder stages, so any staging directory left here is from a killed build.
-  for (const name of readdirSync(packageDir)) {
-    if (name.startsWith(STAGING_PREFIX)) {
-      rmSync(join(packageDir, name), { recursive: true, force: true })
-    }
-  }
   // Same depth as dist so emitted source-map paths are identical once moved.
   const stagingDir = join(packageDir, `${STAGING_PREFIX}${randomUUID().slice(0, 8)}`)
   try {
@@ -158,8 +205,40 @@ export async function buildPackageDist(packageDir) {
     }
   }
   try {
+    for (const name of readdirSync(packageDir)) {
+      if (name.startsWith(STAGING_PREFIX)) {
+        rmSync(join(packageDir, name), { recursive: true, force: true })
+      }
+    }
+    const stateFile = join(packageDir, '.cache', 'dist-build.json')
+    const identity = buildIdentity(packageDir)
+    const previous = readBuildState(stateFile)
+    if (
+      identity !== null &&
+      previous?.identity === identity &&
+      Array.isArray(previous.outputs) &&
+      JSON.stringify(previous.outputs) === JSON.stringify(outputDigests(join(packageDir, 'dist')))
+    ) {
+      return { written: 0, removed: 0, unchanged: previous.outputs.length }
+    }
     const result = await compileAndSync(packageDir, assertLockHeld)
     assertLockHeld()
+    if (identity !== null && buildIdentity(packageDir) === identity) {
+      const temporary = `${stateFile}.${process.pid}`
+      try {
+        mkdirSync(dirname(stateFile), { recursive: true })
+        writeFileSync(
+          temporary,
+          JSON.stringify({ identity, outputs: outputDigests(join(packageDir, 'dist')) })
+        )
+        assertLockHeld()
+        renameSync(temporary, stateFile)
+      } catch {
+        assertLockHeld()
+      } finally {
+        rmSync(temporary, { force: true })
+      }
+    }
     return result
   } finally {
     // proper-lockfile already untracks compromised locks; releasing one could affect its new owner.

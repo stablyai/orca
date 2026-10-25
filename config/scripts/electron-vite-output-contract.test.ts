@@ -107,15 +107,15 @@ describe('Electron Vite output contract', () => {
     }
   })
 
-  it('can skip main source maps during development without changing build output settings', () => {
+  it('opts in to main source maps during development and retains production maps', () => {
     try {
       vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', undefined)
       const defaults = configureElectronVite({ command: 'serve', mode: 'development' })
-      expect(defaults.main?.build?.sourcemap).toBe('hidden')
+      expect(defaults.main?.build?.sourcemap).toBe(false)
       expect(defaults.main?.build?.minify).toBe(false)
-      vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', '0')
+      vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', '1')
       const development = configureElectronVite({ command: 'serve', mode: 'development' })
-      expect(development.main?.build?.sourcemap).toBe(false)
+      expect(development.main?.build?.sourcemap).toBe('hidden')
       expect(development.main?.build?.minify).toBe(false)
       expect(development.main?.build?.rollupOptions).toBe(
         electronViteConfig.main?.build?.rollupOptions

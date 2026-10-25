@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { basename, dirname, join, resolve } from 'node:path'
 import { defaultExclude } from 'vitest/config'
 import { UNIT_INCLUDE } from './ci-unit-files.mjs'
+import { matchesVitestFileFilters } from './vitest-file-filters.mjs'
 
 const require = createRequire(import.meta.url)
 const root = resolve(import.meta.dirname, '../..')
@@ -87,16 +88,21 @@ function readCache(version) {
 }
 
 /** Unit tests that load Node SQLite through a direct import, as repo-relative paths. */
-export function findSqliteRuntimeTests() {
+export function findSqliteRuntimeTests({ filters = [] } = {}) {
   // Why: reading every test costs about a second; unchanged files reuse their last verdict.
   const version = createHash('sha256')
     .update(readFileSync(import.meta.filename))
     .digest('hex')
   const cached = readCache(version)
-  const files = {}
+  const files = { ...cached }
+  const selected = []
   let changed = false
   for (const file of globSync(UNIT_INCLUDE, { cwd: root, exclude: defaultExclude })) {
     const path = file.replaceAll('\\', '/')
+    if (!matchesVitestFileFilters(path, filters, root)) {
+      continue
+    }
+    selected.push(path)
     const { mtimeMs, size } = statSync(resolve(root, path))
     const entry = cached[path]
     if (
@@ -115,7 +121,16 @@ export function findSqliteRuntimeTests() {
     ]
     changed = true
   }
-  if (changed || Object.keys(cached).length !== Object.keys(files).length) {
+  if (!filters.length) {
+    const present = new Set(selected)
+    for (const file of Object.keys(files)) {
+      if (!present.has(file)) {
+        delete files[file]
+        changed = true
+      }
+    }
+  }
+  if (changed) {
     try {
       mkdirSync(dirname(CACHE_FILE), { recursive: true })
       const temporary = `${CACHE_FILE}.${process.pid}`
@@ -126,7 +141,5 @@ export function findSqliteRuntimeTests() {
       // The cache only saves time; the verdicts above are already complete.
     }
   }
-  return Object.keys(files)
-    .filter((path) => files[path][2])
-    .sort()
+  return selected.filter((path) => files[path][2]).sort()
 }

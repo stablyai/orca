@@ -51,7 +51,7 @@ console.log(JSON.stringify({ loaded: Object.hasOwn(require.cache, require.resolv
     const resolved = await resolveMainConfig('serve', watch)
 
     expect(resolved.build.minify).toBe(false)
-    expect(resolved.build.sourcemap).toBe('hidden')
+    expect(resolved.build.sourcemap).toBe(false)
     expect(resolved.build.reportCompressedSize).toBe(false)
     expect(Boolean(resolved.build.watch)).toBe(watch)
   })
@@ -74,13 +74,13 @@ console.log(JSON.stringify({ loaded: Object.hasOwn(require.cache, require.resolv
   })
 
   it('honors the development source-map override alongside unminified compilation', async () => {
-    vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', '0')
+    vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', '1')
 
     const development = await resolveMainConfig('serve')
     const production = await resolveMainConfig('build')
 
     expect(development.build.minify).toBe(false)
-    expect(development.build.sourcemap).toBe(false)
+    expect(development.build.sourcemap).toBe('hidden')
     expect(production.build.minify).toBe('oxc')
     expect(production.build.sourcemap).toBe('hidden')
   })

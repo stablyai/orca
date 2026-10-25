@@ -1,17 +1,20 @@
 import {
   mkdirSync,
   existsSync,
+  globSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
+  renameSync,
+  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess, runProcessSync } from '@orca/process-host'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { buildCli } from './build-cli.mjs'
 import { resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 import { resolveProjectCompiler } from './run-typecheck-projects-in-parallel.mjs'
@@ -20,7 +23,9 @@ import { supportsTsrs } from './tsrs-typecheck-compiler.mjs'
 const ROOT = process.cwd()
 const resolveBunExecutable = () => resolvePinnedBunExecutable(ROOT, runProcessSync)
 const directories = []
+beforeEach(() => vi.stubEnv('ORCA_CLI_BUILD_COMPILER', 'bun'))
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -213,5 +218,59 @@ it.skipIf(!supportsTsrs())(
       'CLI compilation failed'
     )
     expect(existsSync(join(root, 'failed'))).toBe(false)
+  }
+)
+
+it.skipIf(!supportsTsrs())(
+  'defaults locally to incremental builds and repairs missing or stale output',
+  async () => {
+    vi.stubEnv('CI', '')
+    vi.stubEnv('ORCA_CLI_BUILD_COMPILER', undefined)
+    const root = fixture()
+    const outDir = 'optimized'
+    const compile = () => buildCli({ root, outDir })
+    await compile()
+    const entry = join(root, outDir, 'entry.js')
+    const bytes = readFileSync(entry)
+    const before = statSync(entry).mtimeMs
+    await compile()
+    expect(statSync(entry).mtimeMs).toBe(before)
+    rmSync(entry)
+    await compile()
+    expect(readFileSync(entry)).toEqual(bytes)
+    writeFileSync(entry, 'corrupted output')
+    await compile()
+    expect(readFileSync(entry)).toEqual(bytes)
+    const source = join(root, 'src', 'entry.ts')
+    const validSource = readFileSync(source, 'utf8')
+    writeFileSync(source, `${validSource}\nexport const changed = 42\n`)
+    await compile()
+    expect(readFileSync(entry, 'utf8')).toContain('42')
+    const changedTime = statSync(entry).mtimeMs
+    await compile()
+    expect(statSync(entry).mtimeMs).toBe(changedTime)
+    writeFileSync(source, validSource)
+    await compile()
+    writeFileSync(source, 'export const value: number = "wrong"\n')
+    await expect(compile()).rejects.toThrow('CLI compilation failed')
+    expect(readFileSync(entry)).toEqual(bytes)
+    writeFileSync(source, validSource)
+    await compile()
+    writeFileSync(join(root, outDir, 'other-build.txt'), 'owned by another build')
+    renameSync(join(root, 'src', 'constants.ts'), join(root, 'src', 'renamed.ts'))
+    writeFileSync(source, readFileSync(source, 'utf8').replace('./constants', './renamed'))
+    await compile()
+    expect(existsSync(join(root, outDir, 'constants.js'))).toBe(false)
+    expect(existsSync(join(root, outDir, 'renamed.js'))).toBe(true)
+    expect(readFileSync(join(root, outDir, 'other-build.txt'), 'utf8')).toBe(
+      'owned by another build'
+    )
+    const info = globSync('.cache/build/cli/**/cli.tsbuildinfo', { cwd: root })
+    expect(info).toHaveLength(1)
+    for (const corrupt of ['{', '{}']) {
+      writeFileSync(join(root, info[0]), corrupt)
+      await compile()
+      expect(readFileSync(entry)).toEqual(bytes)
+    }
   }
 )

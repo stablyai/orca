@@ -163,6 +163,45 @@ beforeAll(async () => {
 afterAll(() => releaseSeed?.())
 
 describe('process-host dist build', () => {
+  it('skips compiler launches on cache hits and repairs deleted or corrupted output', async () => {
+    const packageDir = fixture()
+    const compilerDir = join(packageDir, 'node_modules', 'typescript')
+    rmSync(compilerDir)
+    mkdirSync(join(compilerDir, 'bin'), { recursive: true })
+    writeFileSync(
+      join(compilerDir, 'package.json'),
+      JSON.stringify({ name: 'typescript', bin: { tsc: 'bin/tsc' } })
+    )
+    const compilerManifest = JSON.parse(readFileSync(join(realCompilerDir, 'package.json'), 'utf8'))
+    const compiler = join(
+      realCompilerDir,
+      typeof compilerManifest.bin === 'string' ? compilerManifest.bin : compilerManifest.bin.tsc
+    )
+    writeFileSync(
+      join(compilerDir, 'bin', 'tsc'),
+      `
+      require('node:fs').appendFileSync('compiler-runs', 'run\\n')
+      const result = require('node:child_process').spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...process.argv.slice(2)], { stdio: 'inherit' })
+      process.exit(result.status ?? 1)
+    `
+    )
+    await build(packageDir)
+    await build(packageDir)
+    expect(readFileSync(join(packageDir, 'compiler-runs'), 'utf8').trim().split('\n')).toHaveLength(
+      1
+    )
+    const entry = join(packageDir, 'dist', 'entry.js')
+    const bytes = readFileSync(entry)
+    rmSync(entry)
+    await build(packageDir)
+    expect(readFileSync(entry)).toEqual(bytes)
+    writeFileSync(entry, 'corrupted output')
+    await build(packageDir)
+    expect(readFileSync(entry)).toEqual(bytes)
+    expect(readFileSync(join(packageDir, 'compiler-runs'), 'utf8').trim().split('\n')).toHaveLength(
+      3
+    )
+  })
   it('leaves an up-to-date dist untouched on repeated builds', async () => {
     const packageDir = fixture(undefined, seededDist)
     const before = distSnapshot(packageDir)

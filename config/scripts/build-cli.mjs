@@ -1,11 +1,11 @@
 import { availableParallelism } from 'node:os'
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runProcess, runProcessSync } from '@orca/process-host'
 import { resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 import { describeProcessFailure } from './process-failure-message.mjs'
 import { isDirectInvocation } from './script-entry-detection.mjs'
+import { resolveTsrsCompiler } from './tsrs-typecheck-compiler.mjs'
+import { runIncrementalCliBuild } from './cli-build-state.mjs'
 import {
   resolveProjectCompiler,
   runTypecheckProjects,
@@ -20,12 +20,13 @@ export async function buildCli({
   outDir = 'out',
   check = runTypecheckProjects,
   execute = runProcess,
-  compiler = process.env.ORCA_CLI_BUILD_COMPILER ?? 'bun',
+  compiler = process.env.ORCA_CLI_BUILD_COMPILER ?? (process.env.CI ? 'bun' : 'auto'),
   resolveBunExecutable = (directory) => resolvePinnedBunExecutable(directory, runProcessSync)
 } = {}) {
-  if (compiler !== 'bun' && compiler !== 'tsrs') {
+  if (!['auto', 'bun', 'tsrs'].includes(compiler)) {
     throw new Error(`Invalid ORCA_CLI_BUILD_COMPILER: ${compiler}`)
   }
+  const selection = selectTypecheckCompiler(compiler, { root, resolveBunExecutable })
   const emitArguments = [
     '-p',
     CONFIG,
@@ -36,21 +37,16 @@ export async function buildCli({
     '--incremental',
     'false'
   ]
-  if (compiler === 'tsrs') {
-    const manifest = createRequire(join(root, 'package.json')).resolve('tsrs/package.json')
-    const result = await execute({
-      program: process.execPath,
-      args: [join(dirname(manifest), 'bin', 'tsrs'), ...emitArguments, '--noEmitOnError'],
-      cwd: root,
-      stdio: 'inherit',
-      timeoutMs: null
+  if (selection.compiler === 'tsrs') {
+    return runIncrementalCliBuild({
+      root,
+      outDir,
+      config: CONFIG,
+      compiler: resolveTsrsCompiler(root),
+      emitter: { program: process.execPath, args: [resolveProjectCompiler(CONFIG, root)] },
+      execute
     })
-    if (result.code !== 0) {
-      throw new Error(`CLI compilation failed: ${describeProcessFailure(result)}`)
-    }
-    return
   }
-  const selection = selectTypecheckCompiler('bun', { root, resolveBunExecutable })
   const failures = await check({
     ...selection,
     root,

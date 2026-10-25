@@ -6,10 +6,13 @@ import { UNIT_INCLUDE, UNIT_EXCLUDE, UNIT_SETUP_FILES } from './scripts/ci-unit-
 import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/vitest-node-runtime-files.mjs'
+import { vitestCliFileFilters } from './scripts/vitest-file-filters.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
 
-const nodeRuntimeInclude = process.versions.bun ? getNodeRuntimeInclude() : []
+const nodeRuntimeInclude = process.versions.bun
+  ? getNodeRuntimeInclude({ filters: vitestCliFileFilters() })
+  : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
 const paletteMeasurementFile =
