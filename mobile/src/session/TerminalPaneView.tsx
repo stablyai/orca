@@ -102,7 +102,7 @@ export function TerminalPaneView({
 
 const styles = StyleSheet.create({
   terminalPane: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   terminalPaneHidden: {
     opacity: 0

@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md
   },
   sizingLabel: { opacity: 0 },
-  buttonLabel: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  buttonLabel: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   troubleshootLink: { alignSelf: 'flex-start', paddingVertical: spacing.sm },
   linkText: {
     color: colors.textSecondary,

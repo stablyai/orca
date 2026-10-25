@@ -4,4 +4,8 @@ export type ScheduleTimer = (handler: () => void, ms: number) => ReturnType<type
 
 // Why: browsers throw Illegal invocation when a global timer is called with a non-global receiver; Hermes does not.
 export const defaultScheduleTimer: ScheduleTimer = (handler, ms) => setTimeout(handler, ms)
-export const defaultCancelTimer: typeof clearTimeout = (handle) => clearTimeout(handle)
+export const defaultCancelTimer: typeof clearTimeout = (handle) => {
+  if (handle !== null && handle !== undefined) {
+    clearTimeout(handle)
+  }
+}

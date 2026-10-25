@@ -1,5 +1,12 @@
+import {
+  type ViewInstance,
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  ActivityIndicator
+} from 'react-native'
 import { useCallback, useState, type ReactNode } from 'react'
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   ChevronLeft,
@@ -42,7 +49,7 @@ export function TroubleshootView({
   onConnectionLog,
   developerRow
 }: {
-  rootRef?: (node: View | null) => void
+  rootRef?: (node: ViewInstance | null) => void
   diagnosticStatus: DiagnosticStatus
   checks: CheckResult[]
   runDiagnostics: () => void

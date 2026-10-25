@@ -5,7 +5,7 @@
  */
 import { act } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Image, ImageLoadEvent, View } from 'react-native'
+import type { ImageInstance, ImageLoadEvent, ViewInstance } from 'react-native'
 import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
@@ -107,9 +107,9 @@ function mountPacer() {
   })
   for (const layer of [0, 1] as const) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: on RN Web a ref is the DOM node, which is what the `.web.ts` writers take; the binding's signature is still the native one.
-    pacer.layers[layer].attachView(layerViews[layer] as unknown as View)
+    pacer.layers[layer].attachView(layerViews[layer] as unknown as ViewInstance)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same mismatch, for the image host the source writer takes.
-    pacer.layers[layer].attachImage(imageHosts[layer] as unknown as Image)
+    pacer.layers[layer].attachImage(imageHosts[layer] as unknown as ImageInstance)
   }
   const background = (layer: 0 | 1): string => {
     const surface = imageHosts[layer].firstElementChild
@@ -294,7 +294,7 @@ describe('the browser frame pacer', () => {
 
     pane.pacer.layers[1].attachImage(null)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: on RN Web a ref is the DOM node the writers take.
-    pane.pacer.layers[1].attachImage(mountImageHost() as unknown as Image)
+    pane.pacer.layers[1].attachImage(mountImageHost() as unknown as ImageInstance)
     await finishDecodes()
     await pane.push(2)
     await finishDecodes()

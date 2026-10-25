@@ -11,4 +11,9 @@ vi.mock('react-native-svg', () => ({
   Stop: 'Stop'
 }))
 
+vi.mock('react-native-reserved-regions', () => ({
+  ReservedRegionsProvider: 'View',
+  useReservedRegions: () => []
+}))
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })

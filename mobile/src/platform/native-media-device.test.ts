@@ -27,7 +27,7 @@ vi.mock('expo-file-system', () => ({
       this.uri = parts.join('/')
     }
     create(): void {}
-    write(content: string | Uint8Array): void {
+    writeSync(content: string | Uint8Array): void {
       if (typeof content !== 'string') {
         expo.copiedBytes.push({ uri: this.uri, bytes: [...content] })
       }

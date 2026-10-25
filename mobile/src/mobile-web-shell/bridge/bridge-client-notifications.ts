@@ -15,6 +15,10 @@ import {
 import { captureBridgeError } from './bridge-error-capture'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import {
+  BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
+  BRIDGE_TERMINAL_KEY_RAIL_GRANT
+} from './bridge-terminal-key'
 
 /**
  * Everything the page posts and hears nothing back about.
@@ -59,6 +63,7 @@ export type BridgeClientNotifications = {
   notifyPageFault: (error: unknown) => boolean
   notifyPagePainted: () => void
   notifyBackClaim: (claimed: boolean) => void
+  notifyTerminalKeyRailClaim: (claimed: boolean) => void
 }
 
 export function createBridgeClientNotifications(
@@ -144,6 +149,17 @@ export function createBridgeClientNotifications(
     },
     notifyBackClaim: (claimed) => {
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed })
+    },
+    // Only to a shell that granted the rail: any other refuses the name, and has no rail to draw.
+    notifyTerminalKeyRailClaim: (claimed) => {
+      if (deps.hasGrant(BRIDGE_TERMINAL_KEY_RAIL_GRANT)) {
+        post({
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
+          claimed
+        })
+      }
     }
   }
 }

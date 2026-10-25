@@ -41,7 +41,7 @@ function fakeFile(bytes: Uint8Array): NativeMediaFile {
         set offset(next: number | null) {
           cursor = next ?? 0
         },
-        readBytes: (length: number) => {
+        readBytes: async (length: number) => {
           const slice = bytes.subarray(cursor, cursor + length)
           cursor += slice.byteLength
           return slice

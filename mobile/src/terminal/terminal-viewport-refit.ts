@@ -279,7 +279,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     if (Platform.OS !== 'ios') {
       return
     }
-    let previousAppState: AppStateStatus | null = AppState.currentState
+    let previousAppState: typeof AppState.currentState = AppState.currentState
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const shouldRefit = shouldRecoverTerminalOnAppStateChange(
         previousAppState,

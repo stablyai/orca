@@ -49,6 +49,12 @@ export const MOBILE_WEB_APP_SHIMS = [
     appliesTo: (options) => options.alias?.['react-native'] === 'react-native-web'
   },
   {
+    // SVG 15.16 still imports the removed native registry; share RN Web's numeric image IDs.
+    name: 'web-asset-registry',
+    appliesTo: (options) =>
+      options.alias?.['@react-native/assets-registry/registry'] === MOBILE_WEB_ASSET_REGISTRY
+  },
+  {
     // RN ships untranspiled JSX inside .js files (expo-router's own build/ included).
     name: 'js-as-jsx',
     appliesTo: (options) => options.loader?.['.js'] === 'jsx'
@@ -178,6 +184,15 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
  * the `module` field here, which is the same ESM entry the package's `import` condition names.
  */
 const MOBILE_ZOD_PACKAGE = join(mobileDir, 'node_modules', 'zod')
+const MOBILE_WEB_ASSET_REGISTRY = join(
+  mobileDir,
+  'node_modules',
+  'react-native-web',
+  'dist',
+  'modules',
+  'AssetRegistry',
+  'index.js'
+)
 
 /**
  * Zod's compiled path, off before any module runs.
@@ -305,6 +320,7 @@ export function mobileWebAppBuildOptions(routes) {
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: {
       'react-native': 'react-native-web',
+      '@react-native/assets-registry/registry': MOBILE_WEB_ASSET_REGISTRY,
       '@react-native-async-storage/async-storage': PAGE_ASYNC_STORAGE_MODULE,
       zod: MOBILE_ZOD_PACKAGE
     },

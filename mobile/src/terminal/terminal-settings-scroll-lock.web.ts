@@ -1,5 +1,5 @@
+import type { ScrollViewInstance } from 'react-native'
 import type { RefObject } from 'react'
-import type { ScrollView } from 'react-native'
 
 /**
  * RN Web renders a ScrollView as a div and drives its overflow from a class, so clearing the
@@ -7,7 +7,7 @@ import type { ScrollView } from 'react-native'
  * `touch-action`, which stops a touch drag but leaves the wheel and the trackpad scrolling.
  */
 export function setTerminalSettingsScrollEnabled(
-  ref: RefObject<ScrollView | null>,
+  ref: RefObject<ScrollViewInstance | null>,
   enabled: boolean
 ): void {
   const node = ref.current

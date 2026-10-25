@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  type TextInputInstance,
   ActivityIndicator,
   FlatList,
-  InteractionManager,
   Pressable,
   Text,
   TextInput,
   View
 } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
@@ -28,6 +28,7 @@ import {
 import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors } from '../theme/mobile-theme'
+import { scheduleInputFocus } from '../platform/schedule-input-focus'
 import { BottomDrawer } from './BottomDrawer'
 import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
@@ -71,7 +72,7 @@ export function SmartWorkspaceSourceDrawer({
   const availableModes = useMemo(() => resolveAvailableSmartModes(availability), [availability])
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<TextInputInstance>(null)
   // Why: read latest availability inside the open effect without making it a
   // reactive dep (the object is recreated each render), so re-seeding happens
   // only on open, not on every availability recompute.
@@ -91,18 +92,7 @@ export function SmartWorkspaceSourceDrawer({
     if (!visible) {
       return
     }
-    let timeout: ReturnType<typeof setTimeout> | undefined
-    const task = InteractionManager.runAfterInteractions(() => {
-      timeout = setTimeout(() => {
-        inputRef.current?.focus()
-      }, SOURCE_INPUT_FOCUS_DELAY_MS)
-    })
-    return () => {
-      task.cancel()
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-    }
+    return scheduleInputFocus(() => inputRef.current?.focus(), SOURCE_INPUT_FOCUS_DELAY_MS)
   }, [visible])
 
   // Snap the chosen mode back into the available set if availability changes.
@@ -275,7 +265,7 @@ export function SmartWorkspaceSourceDrawer({
                 <Text style={styles.empty}>{emptyHint || 'No results found.'}</Text>
               ) : rows.length === 0 && effectiveMode === 'text' ? (
                 <Text style={styles.empty}>Type a workspace name in the field below.</Text>
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => (
               <SmartWorkspaceSourceRow row={item} onPress={() => handleSelectRow(item)} />

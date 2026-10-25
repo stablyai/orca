@@ -1,4 +1,4 @@
-import type { Image, View } from 'react-native'
+import type { ViewInstance, ImageInstance } from 'react-native'
 import type { FrameLayer } from './mobile-browser-frame-state'
 
 /** Told when a frame the pane has already handed to a layer is safe to show, or never will be. */
@@ -8,7 +8,7 @@ export type BrowserFrameDisplayHandlers = {
 }
 
 export function updateBrowserLayerVisibility(
-  layers: [View | null, View | null],
+  layers: [ViewInstance | null, ViewInstance | null],
   visible: FrameLayer
 ): void {
   for (const [index, layer] of layers.entries()) {
@@ -16,7 +16,7 @@ export function updateBrowserLayerVisibility(
   }
 }
 
-export function updateBrowserImageSource(image: Image | null, uri: string): void {
+export function updateBrowserImageSource(image: ImageInstance | null, uri: string): void {
   // Why: browser frames are large strings; mutating only the native Image
   // source avoids re-rendering the whole tab view for every streamed frame.
   const source = [{ uri }]

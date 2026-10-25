@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
 import {
+  type TextInputInstance,
   ActivityIndicator,
   Pressable,
   StyleSheet,
@@ -9,6 +9,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
@@ -38,7 +39,7 @@ export function MobileNativeChatQueuedMessageEditor({
   /** The card's "From <name>" line, kept above the text. */
   attribution: string | null
 }): React.JSX.Element {
-  const input = useRef<TextInput>(null)
+  const input = useRef<TextInputInstance>(null)
   // Grows from one line to four, then scrolls inside.
   const contentHeight = useTextInputContentHeight(input, editor.text)
   const [focused, setFocused] = useState(false)

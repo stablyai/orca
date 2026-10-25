@@ -1,5 +1,12 @@
+import {
+  type ScrollViewInstance,
+  ScrollView,
+  StyleSheet,
+  View,
+  type ScrollViewProps,
+  type ViewStyle
+} from 'react-native'
 import type { Ref } from 'react'
-import { ScrollView, StyleSheet, View, type ScrollViewProps, type ViewStyle } from 'react-native'
 
 /** The page's scroller, anchored at its end: scrollTop is 0 at the newest message and negative above
  *  it, so rows added above the reader never move what they read and the end needs no pin. The
@@ -9,7 +16,7 @@ export function MobileNativeChatPageScroll({
   children,
   contentContainerStyle,
   ...props
-}: ScrollViewProps & { ref?: Ref<ScrollView> }) {
+}: ScrollViewProps & { ref?: Ref<ScrollViewInstance> }) {
   return (
     <ScrollView
       ref={ref}

@@ -1,5 +1,5 @@
+import type { TextInputInstance } from 'react-native'
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { bindTerminalTextFieldSubmit } from './terminal-text-field-submit-binding'
 
@@ -20,10 +20,10 @@ import { bindTerminalTextFieldSubmit } from './terminal-text-field-submit-bindin
  * closure after each commit, which is what it is for.
  */
 export function useTerminalTextFieldSubmitBinding(
-  fieldRef: RefObject<TextInput | null>,
+  fieldRef: RefObject<TextInputInstance | null>,
   onSubmit: () => void,
   onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
-): (node: TextInput | null) => void {
+): (node: TextInputInstance | null) => void {
   const onSubmitRef = useRef(onSubmit)
   const onKeyChordRef = useRef(onKeyChord)
   useEffect(() => {
@@ -33,7 +33,7 @@ export function useTerminalTextFieldSubmitBinding(
   const unbindRef = useRef<(() => void) | null>(null)
 
   return useCallback(
-    (node: TextInput | null): void => {
+    (node: TextInputInstance | null): void => {
       fieldRef.current = node
       unbindRef.current?.()
       unbindRef.current = node

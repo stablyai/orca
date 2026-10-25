@@ -1,4 +1,15 @@
 import {
+  type ScrollViewInstance,
+  Animated,
+  Pressable,
+  Platform,
+  Text,
+  useWindowDimensions,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent
+} from 'react-native'
+import {
   useCallback,
   useContext,
   useEffect,
@@ -7,17 +18,6 @@ import {
   useRef,
   useState
 } from 'react'
-import {
-  Animated,
-  Pressable,
-  Platform,
-  type ScrollView,
-  Text,
-  useWindowDimensions,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent
-} from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
   describeLatestToolCall,
@@ -128,7 +128,7 @@ function ToolRunMembers({
   const [remembered] = useState(() =>
     memoryKey === undefined ? undefined : runScroll?.get(memoryKey)
   )
-  const scroller = useRef<ScrollView>(null)
+  const scroller = useRef<ScrollViewInstance>(null)
   const followsEnd = useRef(remembered?.followsEnd ?? startsAtEnd)
   const pendingRestore = useRef(remembered !== undefined && !remembered.followsEnd)
   // Desktop's rule: follow when the work changes, and only if the reader was at the end before

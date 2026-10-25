@@ -26,7 +26,7 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     backgroundColor: colors.bgBase
   },
   browserImageHost: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden'
@@ -36,7 +36,7 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     height: '100%'
   },
   browserImageLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -56,7 +56,7 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     backgroundColor: colors.bgBase
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
@@ -76,7 +76,7 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     overflow: 'hidden'
   },
   dialogOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 30,
     alignItems: 'center',
     justifyContent: 'center',
