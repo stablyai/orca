@@ -260,6 +260,39 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
     })
   })
 
+  it('does not delete a checkout that now contains a registered worktree', async () => {
+    await withPlatform('darwin', async () => {
+      listWorktreesStrictMock.mockResolvedValue([
+        {
+          path: '/Users/dev/orca/workspaces/feature/nested',
+          head: 'def456',
+          branch: 'refs/heads/nested',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      const closeWatcher = vi.fn().mockResolvedValue(undefined)
+
+      await expect(
+        recoverPartialLocalWorktreeRemoval({
+          error: Object.assign(new Error('git worktree remove failed'), {
+            stderr:
+              "error: failed to delete '/Users/dev/orca/workspaces/feature': Directory not empty"
+          }),
+          force: true,
+          canonicalWorktreePath: '/Users/dev/orca/workspaces/feature',
+          repoPath: '/Users/dev/repo',
+          localWorktreeGitOptions: {},
+          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
+          deleteBranch: true,
+          closeWatcher
+        })
+      ).resolves.toBeUndefined()
+      expect(closeWatcher).not.toHaveBeenCalled()
+      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
+    })
+  })
+
   it('does not recover a locked registration after a filesystem removal failure', async () => {
     await withPlatform('win32', async () => {
       const registeredWorktree = {

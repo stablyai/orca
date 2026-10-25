@@ -6,6 +6,7 @@ import { areWorktreePathsEqual } from './git/worktree-path-comparison'
 import { formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
+import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
 
 type LocalPartialRemovalRecoveryArgs = {
   error: unknown
@@ -138,6 +139,8 @@ async function isRecoverablePartialRemovalFailure(
 
   try {
     const worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
+    // A worktree registered inside the checkout during Git's delete must not be removed with it.
+    assertWorktreeDoesNotContainRegisteredWorktree(args.canonicalWorktreePath, worktrees)
     // Localized error text cannot prove removal started; require the Git row to be absent.
     return !worktrees.some((worktree) =>
       areWorktreePathsEqual(worktree.path, args.canonicalWorktreePath)
