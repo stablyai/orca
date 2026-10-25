@@ -426,6 +426,63 @@ describe('wrapped terminal HTTP link provider', () => {
     }
   })
 
+  it('links a URL wrapped inside a table cell without cutting it at the cell edge', async () => {
+    const url = 'https://example.com/a/very/long/path/that/keeps/going/and/going'
+    const cellWidth = 20
+    const fragments = url.match(new RegExp(`.{1,${cellWidth}}`, 'g'))!
+    const row = (left: string, cell: string) => `│ ${left.padEnd(3)} │ ${cell.padEnd(cellWidth)} │`
+    const { terminal, linksAt } = await terminalWithRows(
+      [
+        '┌─────┬──────────────────────┐',
+        row('Key', 'URL'),
+        '├─────┼──────────────────────┤',
+        ...fragments.map((fragment, index) => row(index === 0 ? 'doc' : '', fragment)),
+        '└─────┴──────────────────────┘'
+      ],
+      60
+    )
+    try {
+      for (const [index] of fragments.entries()) {
+        expect((await linksAt(4 + index))?.[0]).toMatchObject({
+          text: url,
+          range: { start: { x: 9, y: 4 + index } }
+        })
+      }
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('links a URL wrapped inside a non-final table cell', async () => {
+    const url = 'https://example.com/a/very/long/path/that/keeps/going'
+    const cellWidth = 18
+    const fragments = url.match(new RegExp(`.{1,${cellWidth}}`, 'g'))!
+    const row = (cells: string[]) =>
+      `│ ${cells.map((cell, index) => cell.padEnd(index === 1 ? cellWidth : 3)).join(' │ ')} │`
+    const { terminal, linksAt } = await terminalWithRows(
+      [
+        '┌─────┬────────────────────┬───────┐',
+        row(['ID', 'URL', 'State']),
+        '├─────┼────────────────────┼───────┤',
+        ...fragments.map((fragment, index) =>
+          row([index === 0 ? '1' : '', fragment, index === 0 ? 'done' : ''])
+        ),
+        '└─────┴────────────────────┴───────┘'
+      ],
+      60
+    )
+    try {
+      for (const [index] of fragments.entries()) {
+        expect((await linksAt(4 + index))?.[0]).toMatchObject({
+          text: url,
+          range: { start: { x: 9, y: 4 + index } }
+        })
+      }
+    } finally {
+      terminal.dispose()
+    }
+  })
+
   it('maps a padded wide-character continuation to its terminal cells', async () => {
     const firstRow = `https://example.com/${'a'.repeat(18)}`
     const continuation = '界文档/路径'

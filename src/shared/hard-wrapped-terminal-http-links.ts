@@ -47,23 +47,36 @@ function hasFrameAtColumn(translated: TranslatedLine, frameColumn: number): bool
   return frameIndex !== -1 && VERTICAL_LAYOUT_FRAME_PATTERN.test(translated.text[frameIndex] ?? '')
 }
 
+type FramedFragmentStart = { startIndex: number; blankCellContinuation: boolean }
+
 // Overlay rows share the frame column and inner padding; the uncovered gutter can differ.
 function findOverlayFragmentStart(
   translated: TranslatedLine,
   frameColumn: number,
   outerFrameColumn: number | null,
   framedPrefix: string
-): number {
-  // A second stable left frame under a changed prefix denotes adjacent table cells.
-  if (outerFrameColumn !== null && hasFrameAtColumn(translated, outerFrameColumn)) {
-    return -1
-  }
+): FramedFragmentStart | null {
   const frameIndex = translated.columns.indexOf(frameColumn)
   if (frameIndex === -1) {
-    return -1
+    return null
   }
   const prefixEnd = frameIndex + framedPrefix.length
-  return translated.text.slice(frameIndex, prefixEnd) === framedPrefix ? prefixEnd : -1
+  if (translated.text.slice(frameIndex, prefixEnd) !== framedPrefix) {
+    return null
+  }
+  const outerFrameIndex =
+    outerFrameColumn === null || !hasFrameAtColumn(translated, outerFrameColumn)
+      ? -1
+      : translated.columns.indexOf(outerFrameColumn)
+  if (outerFrameIndex === -1) {
+    return { startIndex: prefixEnd, blankCellContinuation: false }
+  }
+  // Why: a wrapped table cell leaves its sibling cells blank, so a blank gutter
+  // continues the same URL, while a labelled gutter is an adjacent table cell.
+  const gutter = translated.text.slice(outerFrameIndex + 1, frameIndex)
+  return NON_LAYOUT_SUFFIX_PATTERN.test(gutter)
+    ? null
+    : { startIndex: prefixEnd, blankCellContinuation: true }
 }
 
 function buildCandidateFromStart(
@@ -101,6 +114,7 @@ function buildCandidateFromStart(
   let rightFrameColumn: number | null = null
   let previousRowCanContinue = true
   let startRowFilled = false
+  let blankCellContinuationRows = 0
   const rows: WrappedLogicalLine['rows'] = []
 
   for (let rowY = startY; rowY < startY + TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS; rowY++) {
@@ -118,30 +132,35 @@ function buildCandidateFromStart(
     translatedLines.set(rowY, translated)
     const fragmentStart =
       rowY === startY || translated.text.slice(0, schemeIndex) === rowPrefix
-        ? schemeIndex
+        ? { startIndex: schemeIndex, blankCellContinuation: false }
         : findOverlayFragmentStart(translated, frameColumn, outerFrameColumn, framedPrefix)
-    if (fragmentStart === -1) {
+    if (!fragmentStart) {
       break
     }
-    const fragmentStartColumn = translated.columns[fragmentStart]
+    const fragmentStartColumn = translated.columns[fragmentStart.startIndex]
     if (fragmentStartColumn === undefined) {
       break
     }
 
-    const fragment = translated.text.slice(fragmentStart).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
+    const fragment =
+      translated.text.slice(fragmentStart.startIndex).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
     if (!fragment || (rowY > startY && HTTP_SCHEME_START_PATTERN.test(fragment))) {
       break
     }
-    const fragmentEnd = fragmentStart + fragment.length
+    const fragmentEnd = fragmentStart.startIndex + fragment.length
     const layoutSuffix = translated.text.slice(fragmentEnd)
     const rightFrameOffset = layoutSuffix.search(VERTICAL_LAYOUT_FRAME_PATTERN)
     const currentRightFrameIndex = rightFrameOffset === -1 ? -1 : fragmentEnd + rightFrameOffset
     const currentRightFrameColumn = translated.columns[currentRightFrameIndex]
+    // Why: a URL that fills one cell of a multi-column table is followed by the
+    // sibling cells, so only the padding inside its own cell must be blank.
+    const cellSuffix =
+      rightFrameOffset === -1 ? layoutSuffix : layoutSuffix.slice(0, rightFrameOffset)
     if (
       currentRightFrameIndex === -1 ||
       currentRightFrameColumn === undefined ||
       (rightFrameColumn !== null && currentRightFrameColumn !== rightFrameColumn) ||
-      NON_LAYOUT_SUFFIX_PATTERN.test(layoutSuffix)
+      NON_LAYOUT_SUFFIX_PATTERN.test(cellSuffix)
     ) {
       break
     }
@@ -155,12 +174,15 @@ function buildCandidateFromStart(
       y: rowY,
       text: fragment,
       sourceText: translated.text,
-      columns: translated.columns.slice(fragmentStart, fragmentEnd + 1),
+      columns: translated.columns.slice(fragmentStart.startIndex, fragmentEnd + 1),
       startIndex: text.length,
       isWrapped: line.isWrapped,
       lineLength: line.length
     })
     text += fragment
+    if (fragmentStart.blankCellContinuation) {
+      blankCellContinuationRows++
+    }
 
     const contentWidth = currentRightFrameColumn - fragmentStartColumn
     const fragmentWidth = translated.columns[fragmentEnd]! - fragmentStartColumn
@@ -171,7 +193,12 @@ function buildCandidateFromStart(
     previousRowCanContinue = HARD_WRAP_CONTINUATION_SUFFIX_PATTERN.test(fragment) || fillsRow
   }
 
-  if (rows.length > 1 && (rows.length < MIN_HARD_WRAPPED_HTTP_ROWS || !startRowFilled)) {
+  // Why: a URL wrapped inside one table cell blanks its sibling cells, which is
+  // stronger evidence than the row count for a URL wrapped onto a second row.
+  const hasRowCountEvidence =
+    rows.length >= MIN_HARD_WRAPPED_HTTP_ROWS ||
+    (blankCellContinuationRows > 0 && blankCellContinuationRows === rows.length - 1)
+  if (rows.length > 1 && (!startRowFilled || !hasRowCountEvidence)) {
     // A complete URL may end in /; one adjacent framed token alone cannot prove continuation.
     rows.splice(1)
     text = rows[0]?.text ?? ''
