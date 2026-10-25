@@ -1,3 +1,4 @@
+import { AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
@@ -36,7 +37,7 @@ const {
   stageRemoteOrcadMigrationCatalog
 } = await import('./orcad-migration-catalog-client')
 
-function manifest(extraAgentArgs?: string): OrcadMigrationManifest {
+function manifest(extraAgentArgs?: string, webhook = false): OrcadMigrationManifest {
   const unsigned = {
     version: ORCAD_MIGRATION_MANIFEST_VERSION,
     migrationId: 'migration-1',
@@ -58,7 +59,15 @@ function manifest(extraAgentArgs?: string): OrcadMigrationManifest {
         sparsePresets: [],
         retiredWorktreeNames: [],
         retiredWorktreeNamespaces: [],
-        automations: [{ ...DORMANT_AUTOMATION, ...(extraAgentArgs ? { extraAgentArgs } : {}) }]
+        automations: [
+          {
+            ...DORMANT_AUTOMATION,
+            ...(extraAgentArgs ? { extraAgentArgs } : {}),
+            ...(webhook
+              ? { webhook: { enabled: false, secretMode: 'token' as const, secret: 'test-secret' } }
+              : {})
+          }
+        ]
       }
     }
   }
@@ -108,5 +117,25 @@ describe('orcad migration of automations with extra agent args', () => {
       stageRemoteOrcadMigrationCatalog(pairingCode, manifest('--model opus'))
     ).rejects.toThrow('sent')
     expect(sendRequest).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('orcad webhook migration capability', () => {
+  it.each([stageRemoteOrcadMigrationCatalog, commitRemoteOrcadMigrationCatalog])(
+    'refuses old hosts before sending webhook configuration',
+    async (request) => {
+      await expect(request(pairingCode, manifest(undefined, true))).rejects.toThrow(
+        'orcad_migration_destination_webhook_unsupported'
+      )
+      expect(sendRequest).not.toHaveBeenCalled()
+    }
+  )
+  it('sends to a host that supports webhook automation state', async () => {
+    status.capabilities.push(AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY)
+    sendRequest.mockResolvedValue({ ok: false, error: { code: 'x', message: 'sent' } })
+    await expect(
+      stageRemoteOrcadMigrationCatalog(pairingCode, manifest(undefined, true))
+    ).rejects.toThrow('sent')
+    expect(sendRequest).toHaveBeenCalledOnce()
   })
 })

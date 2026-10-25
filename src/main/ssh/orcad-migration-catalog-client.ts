@@ -1,3 +1,4 @@
+import { AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
 import { z } from 'zod'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import {
@@ -243,6 +244,16 @@ async function request(
     requiredOrcadMigrationSourceCapability(manifest.source),
     // A destination without the blob channel would strip the field and commit unchecked.
     (capabilities) => {
+      const dormant = manifest.payload.dormantState
+      const carriesWebhook =
+        (operation === 'stage' || operation === 'commit') &&
+        (dormant?.automations?.some((automation) => automation.webhook != null) ||
+          dormant?.automationRuns?.some((run) => run.trigger === 'webhook'))
+      if (carriesWebhook && !capabilities.includes(AUTOMATION_WEBHOOK_RUNTIME_CAPABILITY)) {
+        throw new Error(
+          'orcad_migration_destination_webhook_unsupported:Update Orca on this host to move webhook automations.'
+        )
+      }
       const unsupported = findUnsupportedMigrationBlobKind(expectedBlobs, capabilities)
       if (unsupported) {
         throw new Error(orcadMigrationBlobKindUnsupportedBlocker(unsupported))

@@ -4,6 +4,7 @@ import type {
   AutomationDispatchResult,
   AutomationPrecheckResult,
   AutomationRun,
+  WebhookServerEndpoint,
   ExternalAutomationManager
 } from '../../shared/automations-types'
 import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
@@ -37,6 +38,8 @@ export type AutomationsApi = {
     hostId: ExecutionHostId
     displayName: string
   }) => Promise<number>
+  getWebhookEndpoint: () => Promise<WebhookServerEndpoint | null>
+  generateWebhookSecret: () => Promise<string>
   rendererReady: () => Promise<void>
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
   onChanged: (callback: (payload: AutomationsChangedPayload) => void) => () => void

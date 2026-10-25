@@ -1,3 +1,4 @@
+import { AutomationWebhookEditor } from './AutomationWebhookEditor'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { translate } from '@/i18n/i18n'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
@@ -31,6 +32,8 @@ type AutomationEditorSettingsSidebarProps = {
   worktrees: Worktree[]
   settings: GlobalSettings | null
   draft: AutomationDraft
+  automationId?: string | null
+  localWebhookEndpoint?: boolean
   visibleAgents: AgentCatalogEntry[]
   pickerTriggerClassName: string
   segmentedGroupClassName: string
@@ -52,6 +55,8 @@ export function AutomationEditorSettingsSidebar({
   worktrees,
   settings,
   draft,
+  automationId = null,
+  localWebhookEndpoint = true,
   visibleAgents,
   pickerTriggerClassName,
   segmentedGroupClassName,
@@ -164,6 +169,14 @@ export function AutomationEditorSettingsSidebar({
             />
           </div>
         </div>
+        <AutomationWebhookEditor
+          draft={draft}
+          automationId={automationId}
+          localWebhookEndpoint={localWebhookEndpoint}
+          pickerTriggerClassName={pickerTriggerClassName}
+          toggleItemClassName={segmentedItemClassName}
+          onDraftChange={onDraftChange}
+        />
         <AutomationSetupDecisionField
           draft={draft}
           repos={repos}

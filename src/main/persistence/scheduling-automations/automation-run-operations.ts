@@ -6,7 +6,8 @@ import type {
   AutomationDispatchResult,
   AutomationRun,
   AutomationRunsPage,
-  AutomationRunTrigger
+  AutomationRunTrigger,
+  AutomationWebhookDelivery
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
@@ -71,10 +72,14 @@ export function createAutomationRun(
   operations: AutomationRunOperations,
   automation: Automation,
   scheduledFor: number,
-  trigger: AutomationRunTrigger = 'scheduled'
+  trigger: AutomationRunTrigger = 'scheduled',
+  webhookDelivery: AutomationWebhookDelivery | null = null
 ): AutomationRun {
   const existing = (operations.state.automationRuns ?? []).find(
-    (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
+    (run) =>
+      trigger !== 'webhook' &&
+      run.automationId === automation.id &&
+      run.scheduledFor === scheduledFor
   )
   if (existing) {
     return existing
@@ -104,6 +109,7 @@ export function createAutomationRun(
     outputSnapshot: null,
     precheckResult: null,
     usage: null,
+    webhookDelivery,
     error: null,
     startedAt: null,
     dispatchedAt: null,

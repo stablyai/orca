@@ -100,6 +100,7 @@ function runTouchesScope(run: AutomationRun, scope: OrcadMigrationSourceScope): 
 function automationCanTransfer(automation: Automation, scope: OrcadMigrationSourceScope): boolean {
   return (
     automation.enabled === false &&
+    automation.webhook?.enabled !== true &&
     automation.executionTargetType === 'ssh' &&
     automation.executionTargetId === scope.targetId &&
     automation.schedulerOwner === 'ssh_bridge' &&

@@ -4,6 +4,7 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
   AutomationSchedulePreset,
+  AutomationWebhookSecretMode,
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -57,6 +58,9 @@ export type AutomationDraft = {
   savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
+  webhookEnabled?: boolean
+  webhookSecretMode?: AutomationWebhookSecretMode
+  webhookSecret?: string
 }
 
 type AutomationEditorDialogProps = {
@@ -72,6 +76,8 @@ type AutomationEditorDialogProps = {
   worktrees: Worktree[]
   settings: GlobalSettings | null
   draft: AutomationDraft
+  automationId?: string | null
+  localWebhookEndpoint?: boolean
   /** Present only while creating an Orca automation. */
   createDestination?: AutomationCreateDestinationControl
   /** Present only while editing an Orca automation; selecting another host moves the record. */
@@ -103,6 +109,8 @@ export function AutomationEditorDialog({
   worktrees,
   settings,
   draft,
+  automationId = null,
+  localWebhookEndpoint = true,
   createDestination,
   editDestination,
   notice,
@@ -179,6 +187,8 @@ export function AutomationEditorDialog({
             onDismiss={() => onOpenChange(false)}
           />
           <AutomationEditorSettingsSidebar
+            automationId={automationId}
+            localWebhookEndpoint={localWebhookEndpoint}
             destination={destination}
             repos={repos}
             projectHostSetups={projectHostSetups}

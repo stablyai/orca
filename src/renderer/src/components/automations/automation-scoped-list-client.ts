@@ -40,6 +40,7 @@ import {
 import {
   assertAuthorityCapability,
   assertExtraAgentArgsSupported,
+  assertWebhookSupported,
   assertOwnerFencingSupported,
   assertAutomationCreateIdempotencySupported,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
@@ -220,6 +221,7 @@ async function updateFenced(
   destination?: AutomationDestination
 ): Promise<Automation> {
   await assertOwnerFencingSupported(authority)
+  await assertWebhookSupported(authority, updates.webhook)
   await assertExtraAgentArgsSupported(authority, updates.extraAgentArgs)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
     id,
@@ -324,6 +326,7 @@ export async function createAutomationForDestination(
   }
   await assertOwnerFencingSupported(authority)
   // Why before create: a move is create-then-delete and must refuse before mutating anything.
+  await assertWebhookSupported(authority, input.webhook)
   await assertExtraAgentArgsSupported(authority, input.extraAgentArgs)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
     ...toRuntimeAutomationCreateInput(input),

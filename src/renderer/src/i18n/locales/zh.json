@@ -13094,7 +13094,8 @@
           "searchPlaceholder": "搜索构建...",
           "noMatches": "没有匹配的版本。",
           "searchLabel": "搜索构建"
-        }
+        },
+        "WebhookServerSetting": {}
       },
       "right": {
         "sidebar": {
@@ -17560,7 +17561,8 @@
           "useFreshSessions": "使用新会话",
           "helper": "每次新会话时附加到此主机的默认参数之后。",
           "detailLabel": "额外参数"
-        }
+        },
+        "AutomationWebhookSection": {}
       },
       "agent": {
         "AgentCombobox": {

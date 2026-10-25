@@ -13094,7 +13094,8 @@
           "searchLabel": "ビルドの検索",
           "searchPlaceholder": "ビルドを検索…",
           "noMatches": "一致するビルドはありません。"
-        }
+        },
+        "WebhookServerSetting": {}
       },
       "right": {
         "sidebar": {
@@ -17560,7 +17561,8 @@
           "useFreshSessions": "新しいセッションを使用",
           "helper": "新しいセッションごとに、このホストのデフォルト引数に追加されます。",
           "detailLabel": "追加の引数"
-        }
+        },
+        "AutomationWebhookSection": {}
       },
       "agent": {
         "AgentCombobox": {

@@ -59,6 +59,10 @@ function build(headless: boolean) {
     )
   }
   const store = {
+    onSettingsChanged: vi.fn(() => vi.fn()),
+    getSettings: () => ({
+      webhookServer: { enabled: false, bindAddress: '127.0.0.1', port: 8473 }
+    }),
     listAutomationRuns: vi.fn(() => finishedRuns(5)),
     listAutomations: () => [],
     getWorktreeMeta: vi.fn(

@@ -1,5 +1,9 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { normalizeSourceControlAiSettings } from '../../../shared/source-control-ai'
+import {
+  mergeLegacyCommitMessageAiIntoSourceControlAi,
+  normalizeSourceControlAiSettings,
+  projectSourceControlAiToLegacyCommitMessageAi
+} from '../../../shared/source-control-ai'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_TEXT_ACTION_IDS
@@ -43,4 +47,30 @@ export function retireLegacyInstructionsForClearedTextActionRecipes(
   }
 
   return changed ? { ...sourceControlAi, instructionsByOperation } : sourceControlAi
+}
+
+export function applySourceControlAiSettingsUpdate(
+  sanitizedUpdates: Partial<GlobalSettings>,
+  previousSettings: GlobalSettings
+): void {
+  if ('sourceControlAi' in sanitizedUpdates) {
+    sanitizedUpdates.sourceControlAi = retireLegacyInstructionsForClearedTextActionRecipes(
+      sanitizedUpdates.sourceControlAi,
+      previousSettings
+    )
+    const normalizedSourceControlAi = normalizeSourceControlAiSettings(
+      sanitizedUpdates.sourceControlAi,
+      previousSettings.commitMessageAi
+    )
+    sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
+    sanitizedUpdates.commitMessageAi = projectSourceControlAiToLegacyCommitMessageAi(
+      normalizedSourceControlAi,
+      previousSettings.commitMessageAi
+    )
+  } else if ('commitMessageAi' in sanitizedUpdates) {
+    sanitizedUpdates.sourceControlAi = mergeLegacyCommitMessageAiIntoSourceControlAi(
+      previousSettings.sourceControlAi,
+      sanitizedUpdates.commitMessageAi
+    )
+  }
 }

@@ -1,3 +1,4 @@
+import { getDefaultWebhookServerSettings } from './webhook-server-settings'
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { VoiceSettings } from './speech-types'
@@ -30,6 +31,7 @@ export function buildDefaultSettings(args: {
 }): GlobalSettings {
   return {
     workspaceDir: args.workspaceDir,
+    webhookServer: getDefaultWebhookServerSettings(),
     worktreeVisibilityDefaults: { external: 'hide' },
     nestWorkspaces: true,
     workspaceDirHistory: [],

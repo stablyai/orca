@@ -530,6 +530,10 @@
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "description": "Receive inbound webhooks that trigger automations."
     }
   },
   "menu": {
@@ -13426,6 +13430,17 @@
           "manualDeleteWarning": "Only do this if no other machine sharing this home runs Orca for this profile.",
           "close": "Close",
           "reclaimedNotStarted": "The lock was cleared, but Orca’s server did not start."
+        },
+        "WebhookServerSetting": {
+          "08a0db238d": "0.0.0.0 exposes the receiver to your whole network. Set a per-automation secret on each webhook trigger.",
+          "fabf4be778": "Listener is not running.",
+          "657a5c0ffb": "Listening on {{value0}}:{{value1}}.",
+          "56f3edce73": "Listener error: {{value0}}",
+          "029f99d666": "Port",
+          "0471c7e071": "Use 127.0.0.1 for local only, or a LAN IP / 0.0.0.0 to accept requests from other hosts.",
+          "2c8ce1e9b1": "Bind address",
+          "d799d4c875": "Let incoming webhooks trigger automations.",
+          "fde97ffd63": "Enable webhook receiver"
         }
       },
       "right": {
@@ -17612,7 +17627,9 @@
           "tableLastRun": "Last run",
           "noListMatches": "No automations match.",
           "destinationProjectUnavailable": "Choose a project owned by the selected automation destination.",
-          "ownerChanged": "This automation changed hosts. Refresh and try again."
+          "ownerChanged": "This automation changed hosts. Refresh and try again.",
+          "c31810054d": "Could not generate a secret.",
+          "42677009ba": "Add a secret for token or HMAC verification, or choose No verification."
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "Loading automations"
@@ -17892,6 +17909,27 @@
           "useFreshSessions": "Use fresh sessions",
           "helper": "Added to this host's default arguments for each fresh session.",
           "detailLabel": "Extra arguments"
+        },
+        "AutomationWebhookSection": {
+          "684540740d": "Used to verify the request body signature (X-Hub-Signature-256 / X-Gitea-Signature).",
+          "e501cb7525": "Sent by the provider as a token header (X-Gitlab-Token or X-Webhook-Token).",
+          "fee8c4240e": "Copy secret",
+          "9ebd9e13cd": "Generate a new secret",
+          "0edb757986": "Shared secret",
+          "800e24053b": "Secret",
+          "ef7a29878b": "HMAC SHA-256 (e.g. GitHub, Gitea)",
+          "8691ec4306": "Shared token (e.g. GitLab)",
+          "ae89a70e09": "No verification",
+          "b638783b07": "Verification",
+          "5ef250560e": "Copy webhook URL",
+          "2ece8e0bc1": "Webhook URL",
+          "3e0c1dbf7b": "An incoming POST runs this automation with the request body appended to the prompt.",
+          "c56469bd09": "On",
+          "dad1ed1360": "Off",
+          "3a6a84f68c": "Webhook trigger",
+          "8bf8cbbbbd": "Could not copy to clipboard.",
+          "a3bd440808": "Copied to clipboard.",
+          "f9cc4a7f5e": "With no verification, anyone who learns this URL can trigger the automation. The receiver is bound to a non-local address — set a token or HMAC secret."
         }
       },
       "agent": {
@@ -21239,5 +21277,14 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "automations": {
+    "webhook": {
+      "urlRequiresSave": "Save the automation to get its webhook URL.",
+      "urlRequiresReceiver": "Enable the webhook receiver in Settings → Advanced to get a URL.",
+      "urlReplaceHost": "Replace YOUR-HOST with this machine’s address reachable by the sender.",
+      "urlProviderHint": "Point your provider’s webhook at this URL (POST).",
+      "urlOnHost": "Configure the receiver and copy its URL on the automation host."
+    }
   }
 }

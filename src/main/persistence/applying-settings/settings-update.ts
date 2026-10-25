@@ -1,3 +1,4 @@
+import { normalizeWebhookServerSettings } from '../../../shared/webhook-server-settings'
 import { normalizeAgentNativeChatPermissionModes } from '../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -29,16 +30,11 @@ import {
   normalizeMobilePairingCustomAddresses
 } from '../../../shared/mobile-pairing-custom-address'
 import {
-  mergeLegacyCommitMessageAiIntoSourceControlAi,
-  normalizeSourceControlAiSettings,
-  projectSourceControlAiToLegacyCommitMessageAi
-} from '../../../shared/source-control-ai'
-import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
 } from '../../protected-secret-persistence'
 import { normalizeNotificationSettings } from './onboarding-normalization'
-import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
+import { applySourceControlAiSettingsUpdate } from './source-control-settings'
 import {
   buildWorkspaceDirHistoryForUpdate,
   stripRetiredGlobalSettings
@@ -185,6 +181,12 @@ export function updateSettings(
       updates.sourceControlGroupOrder
     )
   }
+  if ('webhookServer' in updates) {
+    sanitizedUpdates.webhookServer = normalizeWebhookServerSettings(
+      updates.webhookServer,
+      operations.state.settings.webhookServer
+    )
+  }
   if ('appIcon' in updates) {
     sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
   }
@@ -241,26 +243,7 @@ export function updateSettings(
     sanitizedUpdates.telemetry !== undefined
       ? { ...operations.state.settings.telemetry, ...sanitizedUpdates.telemetry }
       : operations.state.settings.telemetry
-  if ('sourceControlAi' in sanitizedUpdates) {
-    sanitizedUpdates.sourceControlAi = retireLegacyInstructionsForClearedTextActionRecipes(
-      sanitizedUpdates.sourceControlAi,
-      operations.state.settings
-    )
-    const normalizedSourceControlAi = normalizeSourceControlAiSettings(
-      sanitizedUpdates.sourceControlAi,
-      operations.state.settings.commitMessageAi
-    )
-    sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
-    sanitizedUpdates.commitMessageAi = projectSourceControlAiToLegacyCommitMessageAi(
-      normalizedSourceControlAi,
-      operations.state.settings.commitMessageAi
-    )
-  } else if ('commitMessageAi' in sanitizedUpdates) {
-    sanitizedUpdates.sourceControlAi = mergeLegacyCommitMessageAiIntoSourceControlAi(
-      operations.state.settings.sourceControlAi,
-      sanitizedUpdates.commitMessageAi
-    )
-  }
+  applySourceControlAiSettingsUpdate(sanitizedUpdates, operations.state.settings)
   const previousSettings = operations.state.settings
   operations.state.settings = {
     ...operations.state.settings,

@@ -13094,7 +13094,8 @@
           "noMatches": "일치하는 빌드가 없습니다.",
           "searchPlaceholder": "빌드 검색…",
           "searchLabel": "빌드 검색"
-        }
+        },
+        "WebhookServerSetting": {}
       },
       "right": {
         "sidebar": {
@@ -17560,7 +17561,8 @@
           "useFreshSessions": "새 세션 사용",
           "helper": "새 세션마다 이 호스트의 기본 인수 뒤에 추가됩니다.",
           "detailLabel": "추가 인수"
-        }
+        },
+        "AutomationWebhookSection": {}
       },
       "agent": {
         "AgentCombobox": {

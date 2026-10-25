@@ -51,6 +51,15 @@ export const AutomationPrecheck = z
   .nullable()
   .optional()
 
+const AutomationWebhook = z
+  .object({
+    enabled: z.boolean(),
+    secretMode: z.enum(['none', 'token', 'hmac_sha256']),
+    secret: z.union([z.string(), z.null()])
+  })
+  .nullable()
+  .optional()
+
 export const OptionalNullablePlainString = z
   .unknown()
   .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
@@ -206,6 +215,7 @@ export const AutomationCreate = z.object({
   dtstart: requiredNumber('Missing trigger start time'),
   enabled: OptionalBoolean,
   missedRunGraceMinutes: OptionalPositiveInt,
+  webhook: AutomationWebhook,
   destination: Destination
 })
 
@@ -228,7 +238,8 @@ export const AutomationUpdateFields = z.object({
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
   enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
+  missedRunGraceMinutes: OptionalPositiveInt,
+  webhook: AutomationWebhook
 })
 
 export const AutomationUpdate = z.object({

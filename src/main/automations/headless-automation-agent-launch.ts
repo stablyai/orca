@@ -1,3 +1,4 @@
+import { composeAutomationDispatchPrompt } from '../../shared/automation-webhook'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
 import type {
@@ -31,14 +32,14 @@ export async function launchHeadlessAutomationAgent(
   runtime: OrcaRuntimeService,
   request: {
     automation: Automation
-    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
+    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'webhookDelivery'>
     target: Extract<AutomationRunTargetResult, { ok: true }>
     runs: readonly AutomationRun[]
   }
 ): Promise<HeadlessAutomationAgentLaunch> {
   const { automation, run, target } = request
   const agent = automation.agentId
-  const text = automation.prompt?.trim()
+  const text = composeAutomationDispatchPrompt(automation, run)?.trim()
   if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
     const reused = await sendToReusableSession(runtime, { ...request, text })
     if (reused) {

@@ -14,6 +14,9 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
   return {
     name: automation.name,
     prompt: automation.prompt,
+    webhookEnabled: automation.webhook?.enabled ?? false,
+    webhookSecretMode: automation.webhook?.secretMode ?? 'none',
+    webhookSecret: automation.webhook?.secret ?? '',
     agentId: automation.agentId,
     extraAgentArgs: automation.extraAgentArgs ?? '',
     projectId: getAutomationRunRepoId(automation),

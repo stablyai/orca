@@ -1,3 +1,5 @@
+import { bindAutomationWebhookLifecycle } from '../webhooks/automation-webhook-lifecycle'
+
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence'
@@ -60,6 +62,7 @@ export function createRuntimeAutomationService(input: {
         }
       : undefined
   })
+  bindAutomationWebhookLifecycle(service, store)
   runtime.setAutomationService(service)
   if (input.headless) {
     bindHeadlessRunTerminalRetention(service, store, runtime)

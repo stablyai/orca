@@ -152,6 +152,14 @@ export function AutomationsPageSurface({
         showAutomationDetails={showAutomationDetails}
       />
       <AutomationEditorDialog
+        automationId={editingAutomationId}
+        localWebhookEndpoint={
+          editingAutomationId === null
+            ? destination.createDestination.control.resolution.status === 'ready' &&
+              destination.createDestination.control.resolution.authority.kind === 'desktop'
+            : destinationForm.editHostResolution.status === 'ready' &&
+              destinationForm.editHostResolution.authority.kind === 'desktop'
+        }
         open={createOpen}
         isEditing={editingAutomationId !== null}
         isSaving={isSaving}

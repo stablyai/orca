@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../shared/constants'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -70,8 +71,18 @@ describe('orcad automations', () => {
   })
 
   it('lets a host with no enabled schedule and no unsettled run idle out', () => {
-    const store = { listAutomations: () => [], listAutomationRuns: () => [] }
+    const store = {
+      getSettings: () => getDefaultSettings('/fixture'),
+      listAutomations: () => [],
+      listAutomationRuns: () => []
+    }
     expect(orcadAutomationsKeepHostBusy(store)).toBe(false)
+  })
+
+  it('keeps a host with an enabled webhook receiver available for incoming requests', () => {
+    const store = createStore()
+    store.updateSettings({ webhookServer: { enabled: true, bindAddress: '127.0.0.1', port: 8473 } })
+    expect(orcadAutomationsKeepHostBusy(store)).toBe(true)
   })
 
   // Booting orcad here would need its whole runtime; the wiring is pinned by the entry point's text.

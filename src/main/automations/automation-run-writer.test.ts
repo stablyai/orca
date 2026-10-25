@@ -54,6 +54,27 @@ describe('automation run writer publications', () => {
     expect(publish).not.toHaveBeenCalled()
   })
 
+  it('persists webhook deliveries before publishing the run', async () => {
+    const { store, writer, publish } = writerWith(SSH_SELECTOR)
+    const delivery = {
+      body: '{"event":"push"}',
+      contentType: 'application/json',
+      truncated: false,
+      receivedAt: 1
+    }
+    const acknowledgement = Promise.withResolvers<void>()
+    store.flushPendingOrThrowAsync.mockReturnValue(acknowledgement.promise)
+    const settled = vi.fn()
+    const pending = writer.createRun(automation, 1, 'webhook', delivery).then(settled)
+    await Promise.resolve()
+    expect(store.createAutomationRun).toHaveBeenCalledWith(automation, 1, 'webhook', delivery)
+    expect(publish).not.toHaveBeenCalled()
+    expect(settled).not.toHaveBeenCalled()
+    acknowledgement.resolve()
+    await pending
+    expect(publish).toHaveBeenCalledOnce()
+  })
+
   it('names the host a created run belongs to', async () => {
     const { writer, publish } = writerWith(SSH_SELECTOR)
     await writer.createRun(automation, 0, 'scheduled')

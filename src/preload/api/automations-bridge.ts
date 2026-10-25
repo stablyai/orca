@@ -5,6 +5,7 @@ import type {
   AutomationDispatchRequest,
   AutomationDispatchResult,
   AutomationRun,
+  WebhookServerEndpoint,
   AutomationPrecheckResult
 } from '../../shared/automations-types'
 import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
@@ -35,6 +36,10 @@ export const automationsApi = {
     hostId: ExecutionHostId
     displayName: string
   }): Promise<number> => ipcRenderer.invoke('automations:snapshotWorkspaceName', args),
+  getWebhookEndpoint: (): Promise<WebhookServerEndpoint | null> =>
+    ipcRenderer.invoke('automations:webhookEndpoint'),
+  generateWebhookSecret: (): Promise<string> =>
+    ipcRenderer.invoke('automations:generateWebhookSecret'),
   rendererReady: (): Promise<void> => ipcRenderer.invoke('automations:rendererReady'),
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>

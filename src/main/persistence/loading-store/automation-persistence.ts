@@ -5,6 +5,7 @@ import type {
   AutomationDispatchResult,
   AutomationRun,
   AutomationRunTrigger,
+  AutomationWebhookDelivery,
   AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type {
@@ -172,13 +173,15 @@ export class AutomationPersistence {
   createAutomationRun(
     automation: Automation,
     scheduledFor: number,
-    trigger: AutomationRunTrigger = 'scheduled'
+    trigger: AutomationRunTrigger = 'scheduled',
+    webhookDelivery: AutomationWebhookDelivery | null = null
   ): AutomationRun {
     return createAutomationRunOperation(
       getAutomationRunOperations(this),
       automation,
       scheduledFor,
-      trigger
+      trigger,
+      webhookDelivery
     )
   }
 

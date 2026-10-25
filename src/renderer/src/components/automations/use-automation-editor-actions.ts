@@ -68,6 +68,9 @@ export function useAutomationEditorActions({
       customSchedule: '',
       missedRunGraceMinutes: '720',
       savedSchedule: null,
+      webhookEnabled: false,
+      webhookSecretMode: 'none',
+      webhookSecret: '',
       scheduleWarning: null
     }
     const nextDraft = template

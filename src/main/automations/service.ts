@@ -1,3 +1,4 @@
+import { getWebhookAutomationForDispatch } from './webhook-run-target'
 import {
   AutomationDispatchCancelledError,
   requestAutomationDispatch,
@@ -10,16 +11,15 @@ import {
   type Automation,
   type AutomationDispatchResult,
   type AutomationPrecheckResult,
-  type AutomationRun
+  type AutomationRun,
+  type AutomationWebhookDelivery,
+  type WebhookServerEndpoint
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
-import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
-import {
-  captureLegacyRunTarget,
-  resolveAutomationRunTarget,
-  type AutomationRunTargetResult
-} from './run-target-resolution'
+import { runStoredAutomationPrecheck } from './automation-run-precheck'
+import { captureLegacyRunTarget, resolveAutomationRunTarget } from './run-target-resolution'
+import type { AutomationRunTargetResult } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
@@ -142,6 +142,23 @@ export class AutomationService {
     this.timer = null
   }
 
+  getWebhookEndpoint: (() => WebhookServerEndpoint) | null = null
+
+  async triggerWebhook(
+    automationId: string,
+    delivery: AutomationWebhookDelivery
+  ): Promise<AutomationRun> {
+    const generation = this.dispatchGeneration
+    const automation = getWebhookAutomationForDispatch(
+      this.store,
+      automationId,
+      this.allowRemoteHostScheduling
+    )
+    const target = this.resolveTarget(automation)
+    const run = await this.runs.createRun(automation, Date.now(), 'webhook', delivery)
+    return await this.requestDispatch(automation, run, target, generation)
+  }
+
   async runNow(automationId: string): Promise<AutomationRun> {
     const generation = this.dispatchGeneration
     const listed = this.store.listAutomations().find((entry) => entry.id === automationId)
@@ -167,27 +184,11 @@ export class AutomationService {
   }
 
   async runPrecheck(automationId: string, runId: string): Promise<AutomationPrecheckResult | null> {
-    const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
-    if (!automation) {
-      throw new Error('Automation not found.')
-    }
-    const run = this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
-    if (!run) {
-      throw new Error('Automation run not found.')
-    }
-    if (run.trigger !== 'scheduled' || !automation.precheck) {
-      return null
-    }
-    const target = this.resolveTarget(automation)
-    if (!target.ok) {
-      return failedPrecheckResult(automation.precheck, Date.now(), target.error)
-    }
-    return await runAutomationPrecheck({
-      precheck: automation.precheck,
-      target:
-        automation.executionTargetType === 'ssh'
-          ? { type: 'ssh', cwd: target.cwd, connectionId: automation.executionTargetId }
-          : { type: 'local', cwd: target.cwd }
+    return await runStoredAutomationPrecheck({
+      store: this.store,
+      automationId,
+      runId,
+      resolveTarget: (automation) => this.resolveTarget(automation)
     })
   }
 

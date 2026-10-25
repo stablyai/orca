@@ -13110,7 +13110,8 @@
           "searchLabel": "Buscar compilaciones",
           "noMatches": "No hay compilaciones coincidentes.",
           "searchPlaceholder": "Buscar compilaciones…"
-        }
+        },
+        "WebhookServerSetting": {}
       },
       "right": {
         "sidebar": {
@@ -17576,7 +17577,8 @@
           "useFreshSessions": "Usar sesiones nuevas",
           "helper": "Se añaden a los argumentos predeterminados de este host en cada sesión nueva.",
           "detailLabel": "Argumentos adicionales"
-        }
+        },
+        "AutomationWebhookSection": {}
       },
       "agent": {
         "AgentCombobox": {

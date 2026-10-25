@@ -1,3 +1,4 @@
+import type { WebhookGlobalSettings } from './webhook-server-settings'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
@@ -9,6 +10,7 @@ import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choic
 export type GlobalSettingsBase = NativeChatGlobalSettings &
   WorktreeDeletionPreferences &
   ClaudeAccountSwitchSettings &
+  WebhookGlobalSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings
