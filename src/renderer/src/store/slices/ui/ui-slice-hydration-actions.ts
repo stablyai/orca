@@ -159,6 +159,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           agentsHideCliCreatedWorkspaces: ui.agentsHideCliCreatedWorkspaces === true,
           agentsShowChildAgents: ui.agentsShowChildAgents === true,
           agentsCompactMode: ui.agentsCompactMode !== false,
+          agentsAlwaysShowSessionHost: ui.agentsAlwaysShowSessionHost === true,
           agentsShowSearch: ui.agentsShowSearch !== false,
           agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
           agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),

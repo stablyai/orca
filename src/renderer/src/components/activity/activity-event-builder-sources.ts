@@ -2,6 +2,7 @@ import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migra
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ActivityLiveAgentSnapshot, ActivityEvent } from './activity-thread-types'
@@ -19,7 +20,12 @@ export function appendUnsupportedAndRetainedEvents(context: {
     context: { worktreeId: string; tab: TerminalTab },
     entry: AgentStatusEntry,
     terminalPtyId?: string | null
-  ) => { worktree: Worktree; repo: Repo | null; knownWorktree: boolean }
+  ) => {
+    worktree: Worktree
+    repo: Repo | null
+    knownWorktree: boolean
+    executionHostId?: ExecutionHostId
+  }
   pushPaneEvents: (paneEvents: ActivityEvent[], rowEntry: AgentStatusEntry) => void
 }): void {
   const {
@@ -57,6 +63,7 @@ export function appendUnsupportedAndRetainedEvents(context: {
         orchestration: undefined,
         worktree: owner.worktree,
         repo: owner.repo,
+        executionHostId: owner.executionHostId,
         tab: tabEntry.tab,
         agentType: entry.agentType ?? 'unknown',
         agentAlive: false,
@@ -94,6 +101,7 @@ export function appendUnsupportedAndRetainedEvents(context: {
         orchestration: args.runtimeAgentOrchestrationByPaneKey?.[paneKey],
         worktree: owner.worktree,
         repo: owner.repo,
+        executionHostId: owner.executionHostId,
         tab: retained.tab,
         agentType: retained.agentType,
         agentAlive: false,

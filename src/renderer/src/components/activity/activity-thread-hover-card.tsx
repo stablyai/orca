@@ -228,7 +228,6 @@ function ActivityThreadHoverCardContent({
       <SelectedTextCopyMenu className="space-y-3">
         <ActivityThreadHoverCardSummary
           thread={thread}
-          settings={foundation.settings}
           onJumpToWorkspace={
             onJumpToWorkspace ? dismissAndRun(() => onJumpToWorkspace(thread)) : undefined
           }

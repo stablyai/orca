@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
 import { ActivityThreadHoverCard } from './activity-thread-hover-card'
+import { ActivityThreadSessionHost } from './activity-thread-host'
 import { activityThreadRowCopy } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
 import type { ActivityThreadClickEvent } from './use-activity-thread-selection'
@@ -87,6 +89,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
     activityThreadRowCopy(thread)
   const showMarkdownStatus = statusKind === 'message'
   const agentLabel = formatAgentTypeLabel(thread.agentType)
+  const showSessionHost = useAppStore((s) => s.agentsAlwaysShowSessionHost)
 
   return (
     <ActivityThreadHoverCard
@@ -162,6 +165,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               <span className="min-w-0 flex-1 truncate" title={workspaceLabel}>
                 {workspaceLabel}
               </span>
+              {showSessionHost ? <ActivityThreadSessionHost thread={thread} /> : null}
               {canJump && showJumpAction ? (
                 <ActivityThreadRowAction
                   label={translate(

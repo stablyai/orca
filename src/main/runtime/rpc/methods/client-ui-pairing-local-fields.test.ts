@@ -52,6 +52,7 @@ describe('client UI RPC pairing-local field seams', () => {
     agentsHideCliCreatedWorkspaces: true,
     agentsShowChildAgents: true,
     agentsCompactMode: false,
+    agentsAlwaysShowSessionHost: true,
     agentsShowSearch: false,
     agentsReadFilter: 'unread',
     agentsGroupBy: 'project',

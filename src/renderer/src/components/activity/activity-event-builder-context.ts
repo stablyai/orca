@@ -3,6 +3,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   getConnectionExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -20,7 +21,13 @@ import type { BuildActivityEventsArgs } from './activity-event-builder'
 import { standaloneActivityWorktree } from './activity-standalone-worktree'
 
 export type ActivityTabContext = { worktreeId: string; tab: TerminalTab }
-export type ActivityEventOwner = { worktree: Worktree; repo: Repo | null; knownWorktree: boolean }
+export type ActivityEventOwner = {
+  worktree: Worktree
+  repo: Repo | null
+  knownWorktree: boolean
+  /** Remote host the session itself names; absent defers to the worktree/repo owner. */
+  executionHostId?: ExecutionHostId
+}
 export type ActivityTabHostIndex = Map<string, Map<string, ExecutionHostId | null>>
 
 // Cache derived tab context by stable source identity so agent-session/missing-tab rows can reuse pane builds.
@@ -107,9 +114,8 @@ export function buildActivityTabHostIndex(
   return index
 }
 
-export function resolveActivityExecutionHostId(
+function resolveTabOrRuntimeHostId(
   context: ActivityTabContext,
-  entry: AgentStatusEntry,
   terminalPtyId: string | null | undefined,
   tabHostIndex: ActivityTabHostIndex
 ): ExecutionHostId | undefined {
@@ -119,8 +125,34 @@ export function resolveActivityExecutionHostId(
   }
   // Resolve runtime PTY ownership before null connectionId can be mistaken for local.
   const runtimeEnvironmentId = getRemoteRuntimePtyEnvironmentId(terminalPtyId ?? '')
-  if (runtimeEnvironmentId) {
-    return toRuntimeExecutionHostId(runtimeEnvironmentId)
+  return runtimeEnvironmentId ? toRuntimeExecutionHostId(runtimeEnvironmentId) : undefined
+}
+
+/**
+ * The remote host a session's own stamps name. `local` and status-entry connection ids are excluded:
+ * `local` is relative to its owning runtime, and a nested SSH id is relative to its server.
+ */
+export function resolveSessionOwnedExecutionHostId(
+  context: ActivityTabContext,
+  terminalPtyId: string | null | undefined,
+  tabHostIndex: ActivityTabHostIndex
+): ExecutionHostId | undefined {
+  const connectionId = parseAppSshPtyId(terminalPtyId ?? '')?.connectionId
+  const hostId =
+    resolveTabOrRuntimeHostId(context, terminalPtyId, tabHostIndex) ??
+    (connectionId ? toSshExecutionHostId(connectionId) : undefined)
+  return hostId === LOCAL_EXECUTION_HOST_ID ? undefined : hostId
+}
+
+export function resolveActivityExecutionHostId(
+  context: ActivityTabContext,
+  entry: AgentStatusEntry,
+  terminalPtyId: string | null | undefined,
+  tabHostIndex: ActivityTabHostIndex
+): ExecutionHostId | undefined {
+  const stampedHostId = resolveTabOrRuntimeHostId(context, terminalPtyId, tabHostIndex)
+  if (stampedHostId) {
+    return stampedHostId
   }
   if (entry.connectionId !== undefined) {
     return getConnectionExecutionHostId(entry.connectionId)
@@ -143,8 +175,9 @@ export function resolveActivityEventOwner(
     terminalPtyId,
     tabHostIndex
   )
+  const sessionHostId = resolveSessionOwnedExecutionHostId(context, terminalPtyId, tabHostIndex)
   // Memoize per build by workspace/host; misses otherwise rescan detected worktrees for each pane.
-  const ownerCacheKey = `${context.worktreeId}\0${executionHostId ?? ''}`
+  const ownerCacheKey = `${context.worktreeId}\0${executionHostId ?? ''}\0${sessionHostId ?? ''}`
   const cached = ownerCache.get(ownerCacheKey)
   if (cached) {
     return cached
@@ -171,7 +204,8 @@ export function resolveActivityEventOwner(
     repo: repo ?? args.repoMap.get(worktree.repoId) ?? null,
     knownWorktree: Boolean(
       resolvedWorktree || mappedWorktree || args.tabsByWorktree[context.worktreeId]
-    )
+    ),
+    ...(sessionHostId ? { executionHostId: sessionHostId } : {})
   }
   ownerCache.set(ownerCacheKey, owner)
   return owner

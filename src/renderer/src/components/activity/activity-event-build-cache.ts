@@ -4,6 +4,7 @@ import type {
   AgentStatusOrchestrationContext,
   AgentType
 } from '../../../../shared/agent-status-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -21,6 +22,7 @@ type PaneActivityCacheEntry = {
   clearedAt: number
   worktree: Worktree
   repo: Repo | null
+  executionHostId: ExecutionHostId | undefined
   tab: TerminalTab
   events: ActivityEvent[]
   live: ActivityLiveAgentSnapshot | null
@@ -42,6 +44,7 @@ export type PaneBuildRequest = {
   orchestration: AgentStatusOrchestrationContext | undefined
   worktree: Worktree
   repo: Repo | null
+  executionHostId?: ExecutionHostId
   tab: TerminalTab
   agentType: AgentType
   agentAlive: boolean
@@ -66,6 +69,7 @@ export function resolvePaneBuild(
     cached.clearedAt === request.clearedAt &&
     cached.worktree === request.worktree &&
     cached.repo === request.repo &&
+    cached.executionHostId === request.executionHostId &&
     cached.tab === request.tab
   const rowEntry = inputsUnchanged
     ? cached.rowEntry
@@ -92,6 +96,7 @@ export function resolvePaneBuild(
     entry: rowEntry,
     worktree: request.worktree,
     repo: request.repo,
+    executionHostId: request.executionHostId,
     tab: request.tab,
     agentType: request.agentType,
     agentAlive: request.agentAlive,
@@ -110,6 +115,7 @@ export function resolvePaneBuild(
           repo: request.repo,
           entry: rowEntry,
           tab: request.tab,
+          executionHostId: request.executionHostId,
           agentType: request.agentType
         }
 
@@ -120,6 +126,7 @@ export function resolvePaneBuild(
     clearedAt: request.clearedAt,
     worktree: request.worktree,
     repo: request.repo,
+    executionHostId: request.executionHostId,
     tab: request.tab,
     events,
     live,

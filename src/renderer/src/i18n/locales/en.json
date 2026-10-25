@@ -17987,7 +17987,8 @@
           "filtersSection": "Filters",
           "viewSection": "View",
           "threadListOptionsActive": "Thread list options ({{value0}} active)",
-          "activityOptionsActive": "Activity options ({{value0}})"
+          "activityOptionsActive": "Activity options ({{value0}})",
+          "alwaysShowSessionHost": "Always show session host"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",

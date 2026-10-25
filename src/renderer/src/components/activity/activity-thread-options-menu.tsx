@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { OptionsFilterCountBadge } from '@/components/sidebar/options-filter-count-badge'
 import { formatActiveFilterLabel } from '../../../../shared/workspace-view/workspace-row-filters'
 import {
@@ -80,6 +81,8 @@ export function ActivityThreadOptionsMenu({
   onUnreadOnlyChange?: (unreadOnly: boolean) => void
 }): React.JSX.Element {
   const skipCloseAutoFocusRef = React.useRef(false)
+  const alwaysShowSessionHost = useAppStore((s) => s.agentsAlwaysShowSessionHost)
+  const setAlwaysShowSessionHost = useAppStore((s) => s.setAgentsAlwaysShowSessionHost)
   const activeFilterCount =
     useActivityScopeFilterCount() + (onUnreadOnlyChange && unreadOnly ? 1 : 0)
   const activeFilterLabel = formatActiveFilterLabel(activeFilterCount)
@@ -208,6 +211,16 @@ export function ActivityThreadOptionsMenu({
           onSelect={(event) => event.preventDefault()}
         >
           {translate('auto.components.activity.ActivityPrototypePage.f70e4bec47', 'Compact mode')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={alwaysShowSessionHost}
+          onCheckedChange={(checked) => setAlwaysShowSessionHost(checked === true)}
+          onSelect={(event) => event.preventDefault()}
+        >
+          {translate(
+            'auto.components.activity.ActivityPrototypePage.alwaysShowSessionHost',
+            'Always show session host'
+          )}
         </DropdownMenuCheckboxItem>
         {onShowSearchChange ? (
           <DropdownMenuCheckboxItem

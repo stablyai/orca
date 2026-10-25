@@ -620,9 +620,18 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().agentsHideCliCreatedWorkspaces).toBe(false)
     expect(store.getState().agentsShowChildAgents).toBe(false)
     expect(store.getState().agentsCompactMode).toBe(true)
+    expect(store.getState().agentsAlwaysShowSessionHost).toBe(false)
     expect(store.getState().agentsShowSearch).toBe(true)
     expect(store.getState().agentsReadFilter).toBe('all')
     expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('restores the persisted always-show-session-host preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ agentsAlwaysShowSessionHost: true }))
+
+    expect(store.getState().agentsAlwaysShowSessionHost).toBe(true)
   })
 
   it('restores the agents workspace-origin filters independently of the workspace-nav ones', () => {
