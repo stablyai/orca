@@ -7,7 +7,7 @@ import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TaskItem } from '@tiptap/extension-list'
-import { RichMarkdownTable } from './rich-markdown-table'
+import { createRichMarkdownTable } from './rich-markdown-table'
 import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { createRichMarkdownExtension } from './rich-markdown-extension'
@@ -232,7 +232,7 @@ export function createRichMarkdownExtensions({
       nested: true
     }),
     ...createOrcaDetailsExtensions(),
-    RichMarkdownTable.configure({
+    createRichMarkdownTable(codec).configure({
       resizable: false
     }),
     TableRow,

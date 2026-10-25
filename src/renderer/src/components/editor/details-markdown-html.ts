@@ -103,6 +103,8 @@ export function createDetailsMatcher(content: string): (start: number) => Detail
 export function matchDetailsHtmlBlock(
   content: string,
   start: number,
+  // Ranges depend only on `content`, so callers scanning one body repeatedly
+  // compute them once and share them across sibling matches.
   precomputedFenceRanges?: MarkdownFenceRanges
 ): DetailsHtmlBlock | null {
   const openingMatch = content.slice(start).match(/^<details\b[^>]*>/i)

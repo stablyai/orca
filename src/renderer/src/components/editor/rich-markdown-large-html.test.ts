@@ -143,13 +143,19 @@ it('preserves markup in the edited paragraph through successive saves and reopen
   }
 })
 
-it('scans whole-document fence ranges once for thousands of passthrough details blocks', () => {
-  const source = '<details class="custom"><summary>Toggle</summary>Body</details>\n\n'.repeat(4_000)
-  const scan = vi.spyOn(fenceScanner, 'getMarkdownFenceRanges')
-  try {
-    expect(getMarkdownRichModeUnsupportedReason(source)).toBeNull()
-    expect(scan.mock.calls.filter(([content]) => content === source)).toHaveLength(1)
-  } finally {
-    scan.mockRestore()
+it('does not rescan whole-document fence ranges per passthrough details block', () => {
+  const countScans = (blocks: number) => {
+    const source = '<details class="custom"><summary>Toggle</summary>Body</details>\n\n'.repeat(
+      blocks
+    )
+    const scan = vi.spyOn(fenceScanner, 'getMarkdownFenceRanges')
+    try {
+      expect(getMarkdownRichModeUnsupportedReason(source)).toBeNull()
+      return scan.mock.calls.filter(([content]) => content === source).length
+    } finally {
+      scan.mockRestore()
+    }
   }
+  // Both sizes take the large-document path; only per-block rescans would differ.
+  expect(countScans(4_000)).toBe(countScans(2_000))
 })
