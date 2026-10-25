@@ -1,4 +1,4 @@
-import type { ConnectionVerdict } from '../transport/connection-health'
+import { isConnectionOutage, type ConnectionVerdict } from '../transport/connection-health'
 import type { ConnectionState } from '../transport/types'
 
 export type HostWorkspaceListStateInput = {
@@ -25,9 +25,7 @@ export function selectHostWorkspaceListState(
   // An outage with nothing cached must say so; a spinner there never ends (STA-11382).
   if (
     displayCount === 0 &&
-    (connState === 'disconnected' ||
-      connectionVerdict.kind === 'warning' ||
-      connectionVerdict.kind === 'unreachable')
+    (connState === 'disconnected' || isConnectionOutage(connectionVerdict))
   ) {
     return 'unreachable'
   }

@@ -1,4 +1,8 @@
-import { classifyConnection, verdictDisplayLabel } from '../transport/connection-health'
+import {
+  classifyConnection,
+  isConnectionOutage,
+  verdictDisplayLabel
+} from '../transport/connection-health'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
@@ -56,8 +60,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     lastConnectedAt,
     endpoint: hostEndpoint
   })
-  const connectionEscalated =
-    connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
+  const connectionEscalated = isConnectionOutage(connectionVerdict)
   const showConnectionRetry = connectionEscalated && forceReconnectHost !== null
 
   // Delay reconnect header changes so brief self-healing drops cannot flicker the label.

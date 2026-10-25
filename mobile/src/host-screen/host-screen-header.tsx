@@ -15,7 +15,7 @@ import {
   X
 } from 'lucide-react-native'
 import { StatusDot } from '../components/StatusDot'
-import type { ConnectionVerdict } from '../transport/connection-health'
+import { isConnectionOutage, type ConnectionVerdict } from '../transport/connection-health'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
 import { colors } from '../theme/mobile-theme'
 import { hostScreenStyles as styles } from './host-screen-styles'
@@ -71,30 +71,18 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             </Text>
           ) : null}
         </View>
-        {connState !== 'connected' &&
-          (() => {
-            // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
-            // Null on the page, where the shell owns the connection and nothing here re-dials.
-            if (
-              !isErrorVerdict(connectionVerdict) ||
-              !hostId ||
-              connectionVerdict.kind === 'auth-failed' ||
-              forceReconnectHost === null
-            ) {
-              return null
-            }
-            return (
-              <Pressable
-                style={styles.reconnectButton}
-                onPress={() => void forceReconnectHost(hostId)}
-                accessibilityRole="button"
-                accessibilityLabel="Reconnect"
-                hitSlop={8}
-              >
-                <Text style={styles.reconnectButtonText}>Reconnect</Text>
-              </Pressable>
-            )
-          })()}
+        {/* auth-failed has its own banner; the page cannot re-dial the connection the shell owns. */}
+        {isConnectionOutage(connectionVerdict) && hostId && forceReconnectHost !== null ? (
+          <Pressable
+            style={styles.reconnectButton}
+            onPress={() => void forceReconnectHost(hostId)}
+            accessibilityRole="button"
+            accessibilityLabel="Reconnect"
+            hitSlop={8}
+          >
+            <Text style={styles.reconnectButtonText}>Reconnect</Text>
+          </Pressable>
+        ) : null}
         {!embedded && floatingWorkspaceEnabled ? (
           <Pressable
             style={[

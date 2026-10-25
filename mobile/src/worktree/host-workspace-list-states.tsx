@@ -1,6 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { verdictDisplayLabel } from '../transport/connection-health'
+import { isConnectionOutage, verdictDisplayLabel } from '../transport/connection-health'
 import {
   selectHostWorkspaceListState,
   type HostWorkspaceListStateInput
@@ -26,7 +26,7 @@ export function HostWorkspaceListStates(
       <View style={styles.centered}>
         <Text style={styles.emptyText}>{verdictDisplayLabel(connectionVerdict)}</Text>
         <Text style={styles.catalogErrorDetail}>
-          {('detail' in connectionVerdict ? connectionVerdict.detail : undefined) ??
+          {(isConnectionOutage(connectionVerdict) ? connectionVerdict.detail : undefined) ??
             'Check that your computer is awake and Orca is running'}
         </Text>
       </View>
