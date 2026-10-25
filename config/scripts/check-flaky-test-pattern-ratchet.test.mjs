@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { countFindings } from './check-flaky-test-pattern-ratchet.mjs'
+import { changedFileScope, countFindings } from './check-flaky-test-pattern-ratchet.mjs'
 
 describe('countFindings', () => {
   it('counts each rule per file, folding TSX twins and Windows separators', () => {
@@ -20,5 +20,15 @@ describe('countFindings', () => {
       ['test-no-wall-clock:src/b.test.tsx', 1],
       ['test-no-real-time-wait:src/a.test.ts', 1]
     ])
+  })
+})
+
+describe('changedFileScope', () => {
+  it('limits enforcement to findings in changed files', () => {
+    const inScope = changedFileScope(new Set(['src/a.test.ts']))
+
+    expect(inScope('test-no-wall-clock:src/a.test.ts')).toBe(true)
+    expect(inScope('test-no-wall-clock:src/b.test.ts')).toBe(false)
+    expect(changedFileScope(null)).toBeUndefined()
   })
 })

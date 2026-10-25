@@ -1,6 +1,8 @@
+import { execFileSync } from 'node:child_process'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { baseRuleId, scanAstGrep } from './ast-grep-scan.mjs'
+import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { listTrackedFiles, runCountRatchet } from './ratchet-baseline.mjs'
 
 // Ratchet on the flaky-test ast-grep rules in config/ast-grep/rules/flaky-tests: wall-clock reads,
@@ -34,6 +36,47 @@ export function collectFlakyTestPatternCounts(root = process.cwd()) {
   return countFindings(scanAstGrep(root, { filter: RULE_FILTER }), (file) => tracked.has(file))
 }
 
+function git(root, args) {
+  return execFileSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore']
+  })
+}
+
+// Why: these patterns are common, so a whole-tree count breaks every PR as soon as any merge adds
+// one. Enforce only the files this change touches; unchanged files keep their grandfathered counts.
+export function listChangedFiles(root = process.cwd()) {
+  if (process.env.ORCA_FLAKY_TEST_RATCHET_ALL === '1') {
+    return null
+  }
+  let base
+  try {
+    const mergeBase = git(root, ['merge-base', 'HEAD', 'origin/main']).trim()
+    base = resolvePullRequestDiffBase(root, mergeBase)
+  } catch {
+    try {
+      base = resolvePullRequestDiffBase(root, undefined)
+    } catch {
+      return null
+    }
+  }
+  if (!base) {
+    return null
+  }
+  const changed = git(root, ['diff', '--name-only', '--no-renames', base])
+    .split('\n')
+    .filter(Boolean)
+  return new Set(changed)
+}
+
+export function changedFileScope(changed) {
+  if (!changed) {
+    return undefined
+  }
+  return (key) => changed.has(key.slice(key.indexOf(':') + 1))
+}
+
 export function main(root = process.cwd(), arg = undefined) {
   return runCountRatchet(
     {
@@ -41,6 +84,7 @@ export function main(root = process.cwd(), arg = undefined) {
       baselinePath: BASELINE_PATH,
       header: HEADER,
       collect: collectFlakyTestPatternCounts,
+      scope: (dir) => changedFileScope(listChangedFiles(dir)),
       unit: 'flaky-test finding(s)',
       fix: [
         'Wait on the condition (expect.poll, vi.waitFor, locator assertions) instead of sleeping or',

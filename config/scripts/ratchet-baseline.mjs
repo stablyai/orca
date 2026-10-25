@@ -188,7 +188,9 @@ export function runCountRatchet(ratchet, root, arg) {
   const baseline = parseCountBaseline(
     fs.existsSync(baselineFile) ? fs.readFileSync(baselineFile, 'utf8') : ''
   )
-  const { grown, shrunk } = diffCounts(current, baseline)
+  const inScope = ratchet.scope?.(root)
+  const keep = (counts) => (inScope ? new Map([...counts].filter(([key]) => inScope(key))) : counts)
+  const { grown, shrunk } = diffCounts(keep(current), keep(baseline))
   for (const { file, now, allowed } of grown) {
     console.error(`${file}: ${now} ${ratchet.unit}, baseline allows ${allowed}.`)
   }
