@@ -48,9 +48,19 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     }
   }
 
-  /** Remote views own delivered query replies; pause readers return dropped output to main. Release is idempotent. */
-  registerRemoteTerminalViewSubscriber(ptyId: string, isOutputPaused?: () => boolean): () => void {
-    return this.terminalViewSubscribers.registerRemote(ptyId, isOutputPaused)
+  /** Remote views own delivered query replies; paused streams and unelected phones leave them to main. Release is idempotent. */
+  registerRemoteTerminalViewSubscriber(
+    ptyId: string,
+    isOutputPaused?: () => boolean,
+    mobileClientId?: string
+  ): () => void {
+    const isSilent =
+      mobileClientId === undefined
+        ? isOutputPaused
+        : () =>
+            isOutputPaused?.() === true ||
+            !this.isMobileTerminalQueryReplyAuthority(ptyId, mobileClientId)
+    return this.terminalViewSubscribers.registerRemote(ptyId, isSilent)
   }
 
   /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */
@@ -72,9 +82,9 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     return this.terminalViewSubscribers.hasRaw(ptyId)
   }
 
-  /** Whether a remote view will receive this PTY's output now, and so answers its queries. */
+  /** Whether a remote view answers this PTY's queries now. */
   hasRemoteTerminalViewSubscriber(ptyId: string): boolean {
-    return this.terminalViewSubscribers.hasRemoteReceivingOutput(ptyId)
+    return this.terminalViewSubscribers.hasRemoteAnsweringQueries(ptyId)
   }
 
   isMobileTerminalQueryReplyAuthority(ptyId: string, clientId: string): boolean {

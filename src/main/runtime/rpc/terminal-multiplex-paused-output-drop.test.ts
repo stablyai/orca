@@ -34,7 +34,7 @@ async function subscribePausable(
     registerRemoteTerminalViewSubscriber: (ptyId, isOutputPaused) =>
       viewSubscribers.registerRemote(ptyId, isOutputPaused),
     isSoleRemoteTerminalQueryOwner: (ptyId) =>
-      viewSubscribers.remoteReceivingOutputCount(ptyId) === 1,
+      viewSubscribers.remoteAnsweringQueriesCount(ptyId) === 1,
     answerYieldedTerminalQueries
   })
   await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
@@ -91,7 +91,7 @@ async function subscribePausable(
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   }
-  const remoteViewHoldsAuthority = (): boolean => viewSubscribers.hasRemoteReceivingOutput('pty-1')
+  const remoteViewHoldsAuthority = (): boolean => viewSubscribers.hasRemoteAnsweringQueries('pty-1')
   return {
     subscribed: subscribedEvent(),
     setPaused,

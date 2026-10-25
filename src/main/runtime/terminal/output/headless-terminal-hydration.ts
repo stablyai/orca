@@ -186,7 +186,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   /** True when this PTY's queries go unanswered unless its single receiving remote view answers them. */
   isSoleRemoteTerminalQueryOwner(ptyId: string): boolean {
     return (
-      this.terminalViewSubscribers.remoteReceivingOutputCount(ptyId) === 1 &&
+      this.terminalViewSubscribers.remoteAnsweringQueriesCount(ptyId) === 1 &&
       shouldModelAnswerHiddenPtyQueries({
         ptyId,
         settings: this.store?.getSettings(),

@@ -5,11 +5,11 @@ type RuntimeTerminalViewSubscriberDependencies = {
   attachProvider: (ptyId: string) => Promise<boolean> | null
 }
 
-type PausableRemoteView = { isOutputPaused: () => boolean }
+type SilenceableRemoteView = { isSilent: () => boolean }
 
 export class RuntimeTerminalViewSubscribers {
   private readonly remoteCounts = new Map<string, number>()
-  private readonly pausableRemoteViews = new Map<string, Set<PausableRemoteView>>()
+  private readonly silenceableRemoteViews = new Map<string, Set<SilenceableRemoteView>>()
   private readonly rawCounts = new Map<string, number>()
   private readonly providerAttaches = new Map<string, Promise<boolean>>()
   private readonly attachInventoryWaiters = new Set<string>()
@@ -30,25 +30,25 @@ export class RuntimeTerminalViewSubscribers {
   // Why: exit drops subscribers only; attach/publish state survives until the respawn advances the generation.
   clearSubscribers(ptyId: string): void {
     this.remoteCounts.delete(ptyId)
-    this.pausableRemoteViews.delete(ptyId)
+    this.silenceableRemoteViews.delete(ptyId)
     this.rawCounts.delete(ptyId)
   }
 
-  registerRemote(ptyId: string, isOutputPaused?: () => boolean): () => void {
+  registerRemote(ptyId: string, isSilent?: () => boolean): () => void {
     this.remoteCounts.set(ptyId, (this.remoteCounts.get(ptyId) ?? 0) + 1)
-    const view = isOutputPaused ? { isOutputPaused } : null
+    const view = isSilent ? { isSilent } : null
     if (view) {
-      const views = this.pausableRemoteViews.get(ptyId) ?? new Set()
+      const views = this.silenceableRemoteViews.get(ptyId) ?? new Set()
       views.add(view)
-      this.pausableRemoteViews.set(ptyId, views)
+      this.silenceableRemoteViews.set(ptyId, views)
     }
     this.ensureProviderAttach(ptyId)
     this.deps.notifyPresenceChanged(ptyId)
     return this.releaseOnce(() => {
       this.decrement(this.remoteCounts, ptyId)
-      const views = this.pausableRemoteViews.get(ptyId)
+      const views = this.silenceableRemoteViews.get(ptyId)
       if (view && views?.delete(view) && views.size === 0) {
-        this.pausableRemoteViews.delete(ptyId)
+        this.silenceableRemoteViews.delete(ptyId)
       }
       this.deps.notifyPresenceChanged(ptyId)
     })
@@ -71,21 +71,19 @@ export class RuntimeTerminalViewSubscribers {
     return (this.remoteCounts.get(ptyId) ?? 0) > 0 || this.deps.hasMobileSubscribers(ptyId)
   }
 
-  /** A remote view that will receive output now; a paused one drops it, so cannot answer its queries. */
-  hasRemoteReceivingOutput(ptyId: string): boolean {
-    return this.remoteReceivingOutputCount(ptyId) > 0
+  /** A remote view answering queries now; silent views leave them to main. */
+  hasRemoteAnsweringQueries(ptyId: string): boolean {
+    return this.remoteAnsweringQueriesCount(ptyId) > 0
   }
 
-  /** Mobile subscribers count once: callers only distinguish none, one, or several. */
-  remoteReceivingOutputCount(ptyId: string): number {
-    let paused = 0
-    for (const view of this.pausableRemoteViews.get(ptyId) ?? []) {
-      if (view.isOutputPaused()) {
-        paused += 1
+  remoteAnsweringQueriesCount(ptyId: string): number {
+    let silent = 0
+    for (const view of this.silenceableRemoteViews.get(ptyId) ?? []) {
+      if (view.isSilent()) {
+        silent += 1
       }
     }
-    const mobile = this.deps.hasMobileSubscribers(ptyId) ? 1 : 0
-    return (this.remoteCounts.get(ptyId) ?? 0) - paused + mobile
+    return (this.remoteCounts.get(ptyId) ?? 0) - silent
   }
 
   isKnownUnattachedLocal(ptyId: string): boolean {
