@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { checkAgentLaunchModelPreferences } from './agent-launch-model-preferences'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { buildAgentStartupPlan, agentPromptRidesLaunchCommand } from './tui-agent-startup'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
@@ -13,11 +14,19 @@ describe('ZCode orchestration and send-to-agent contract', () => {
     expect(recognizeAgentProcess('zcode-cli')?.agent).toBe('zcode')
   })
 
-  it('has no session-option catalog, so worker --model is refused rather than swallowed', () => {
-    // Why: ZCode's CLI exposes no `--model` flag at all — the model comes from its own
-    // config and its in-TUI picker. Same position as opencode: a catalog here would accept
-    // `--model` and then silently drop it, which is worse than a clear refusal.
-    expect(getAgentSessionOptionCatalog('zcode')).toBeNull()
+  it('offers GLM models only as a /model session command, so worker --model is refused', () => {
+    // Why: ZCode's interactive CLI exposes no `--model` flag. The catalog may type
+    // `/model provider/model` into the running session, but a launch catalog that
+    // accepted `--model` and then dropped it would be worse than this refusal.
+    const catalog = getAgentSessionOptionCatalog('zcode')
+    expect(catalog?.modelApply.launchArgs).toBeUndefined()
+    expect(catalog?.supportsWorkerLaunchPreferences).toBeUndefined()
+    expect(
+      checkAgentLaunchModelPreferences({
+        agent: 'zcode',
+        model: 'account:zai-individual-coding-plan/GLM-5.3'
+      })
+    ).toMatchObject({ refusal: { code: 'invalid_argument' } })
   })
 
   it("bypasses permissions with ZCode's own yolo mode, not a --yolo flag", () => {

@@ -13103,7 +13103,7 @@
         "ZcodeCliSetupSection": {
           "title": "Use GLM with ZCode",
           "description": "Sign in to use GLM as a coding agent. The quota API key above only monitors usage; ZCode owns its own sign-in and model selection.",
-          "help": "Choose browser sign-in for your plan site, or use ZCode’s masked API-key setup. After signing in, start ZCode and use /model to choose a GLM model.",
+          "help": "Choose browser sign-in for your plan site, or use ZCode’s masked API-key setup. After signing in, choose a GLM model in Orca’s model menu. Orca types /model into that ZCode session and does not add a launch flag.",
           "zai": "Z.AI browser sign-in",
           "bigmodel": "BigModel browser sign-in",
           "apiKey": "ZCode API-key setup",
