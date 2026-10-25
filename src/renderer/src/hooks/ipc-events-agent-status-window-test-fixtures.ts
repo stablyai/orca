@@ -82,6 +82,7 @@ export function buildWindowApi(args: {
         onSwitchTabAcrossAllTypes: () => () => {},
         onSwitchRecentTab: () => () => {},
         onSwitchTerminalTab: () => () => {},
+        onFocusTabGroup: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},

@@ -6,6 +6,7 @@ import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { focusTabGroupInDirection } from '@/lib/tab-group-directional-focus'
 import {
   createFloatingWorkspaceTerminalTab,
   isFloatingWorkspacePanelFocused,
@@ -97,6 +98,9 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
     }),
     window.api.ui.onSwitchTerminalTab((direction) => {
       dispatchWorkspaceTabCommand({ type: 'switch', direction, scope: 'terminal' })
+    }),
+    window.api.ui.onFocusTabGroup((direction) => {
+      focusTabGroupInDirection(direction)
     })
   )
 }

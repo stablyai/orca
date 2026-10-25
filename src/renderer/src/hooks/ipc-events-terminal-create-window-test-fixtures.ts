@@ -145,6 +145,7 @@ export function buildTerminalCreateWindow(args: {
         onSwitchTabAcrossAllTypes: () => () => {},
         onSwitchRecentTab: () => () => {},
         onSwitchTerminalTab: () => () => {},
+        onFocusTabGroup: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},

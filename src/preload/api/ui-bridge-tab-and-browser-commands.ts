@@ -6,6 +6,7 @@ import type {
   BrowserPageCommandTarget
 } from '../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
+import type { TabGroupFocusDirection } from '../../shared/workspace-layout/tab-group-neighbor'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
@@ -153,6 +154,12 @@ export const uiTabAndBrowserCommandsApi = {
     const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
     ipcRenderer.on('ui:switchTerminalTab', listener)
     return () => ipcRenderer.removeListener('ui:switchTerminalTab', listener)
+  },
+  onFocusTabGroup: (callback: (direction: TabGroupFocusDirection) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, direction: TabGroupFocusDirection) =>
+      callback(direction)
+    ipcRenderer.on('ui:focusTabGroup', listener)
+    return () => ipcRenderer.removeListener('ui:focusTabGroup', listener)
   },
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { shiftKey: boolean }) =>

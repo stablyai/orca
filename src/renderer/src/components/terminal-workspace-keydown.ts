@@ -29,6 +29,11 @@ import {
 } from './agent-tab-launch-context'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import { focusTabGroupInDirection } from '@/lib/tab-group-directional-focus'
+import {
+  matchTabGroupFocusDirection,
+  tabGroupFocusActionId
+} from '../../../shared/workspace-layout/tab-group-neighbor'
 
 export function handleTerminalWorkspaceKeyDown(
   event: KeyboardEvent,
@@ -237,6 +242,19 @@ export function handleTerminalWorkspaceKeyDown(
   if (matchShortcut('tab.previousRecent')) {
     if (claimTabSwitch()) {
       dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+    }
+    return
+  }
+  const groupFocusDirection = matchTabGroupFocusDirection(matchShortcut)
+  if (groupFocusDirection !== null) {
+    // Why: swallow repeats too so a held chord never leaks escape bytes into the terminal.
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    // Why: the floating panel has no split groups; consume the chord so it can't type into its terminal.
+    if (!event.repeat && !floatingWorkspaceFocused) {
+      notifyTerminalCapture(tabGroupFocusActionId(groupFocusDirection))
+      focusTabGroupInDirection(groupFocusDirection)
     }
     return
   }

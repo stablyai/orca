@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import { useAppStore } from '../store'
 import { focusTerminalTabSurface } from '../lib/focus-terminal-tab-surface'
+import { EDITOR_SURFACE_FOCUS_SELECTORS } from '../lib/tab-group-directional-focus'
 import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,
@@ -78,11 +79,7 @@ export function useModalReturnFocus(visible: boolean): {
     if (focusCapturedElement()) {
       return
     }
-    focusFirstMatchingSurface([
-      '.monaco-editor textarea',
-      '.rich-markdown-editor[contenteditable="true"]',
-      '.markdown-preview'
-    ])
+    focusFirstMatchingSurface([...EDITOR_SURFACE_FOCUS_SELECTORS])
   }, [focusCapturedElement, focusFirstMatchingSurface])
 
   const focusSimulatorSurface = useCallback((): void => {

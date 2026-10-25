@@ -10,6 +10,7 @@ import type {
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TabGroupFocusDirection } from '../../shared/workspace-layout/tab-group-neighbor'
 import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
@@ -161,6 +162,7 @@ export type UiCommandEventApi = {
   onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
   onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
+  onFocusTabGroup: (callback: (direction: TabGroupFocusDirection) => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
   onCtrlTabKeyUp: (callback: () => void) => () => void
   onToggleStatusBar: (callback: () => void) => () => void
