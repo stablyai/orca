@@ -260,6 +260,29 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
     })
   })
 
+  it('leaves an orphaned checkout to the orphan cleanup instead of deleting it', async () => {
+    await withPlatform('darwin', async () => {
+      const closeWatcher = vi.fn().mockResolvedValue(undefined)
+
+      await expect(
+        recoverPartialLocalWorktreeRemoval({
+          error: Object.assign(new Error('git worktree remove failed'), {
+            stderr: "fatal: '/Users/dev/orca/workspaces/feature' is not a working tree"
+          }),
+          force: true,
+          canonicalWorktreePath: '/Users/dev/orca/workspaces/feature',
+          repoPath: '/Users/dev/repo',
+          localWorktreeGitOptions: {},
+          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
+          deleteBranch: true,
+          closeWatcher
+        })
+      ).resolves.toBeUndefined()
+      expect(closeWatcher).not.toHaveBeenCalled()
+      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
+    })
+  })
+
   it('does not delete a checkout that now contains a registered worktree', async () => {
     await withPlatform('darwin', async () => {
       listWorktreesStrictMock.mockResolvedValue([
