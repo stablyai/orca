@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from './agent-session-journal-types'
-import type { AgentMessageSource } from './agent-session-message-source'
+import type { AgentMessageSource } from './agent-session/agent-session-message-source'
 import { AgentJournalSubmissionSchema } from './agent-session-journal-submission-schema'
 import { SendParams } from './rpc-contract/structured-agent-session-params'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'

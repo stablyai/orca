@@ -1,5 +1,5 @@
 import { handleMsg, type TerminalHostMessage } from './host-message-router'
-import { notify, reportEngineError, type TerminalEngineError } from './host-notify'
+import { notify, reportEngineError } from './host-notify'
 import { laidOutCellBox } from './laid-out-cell-box'
 import { prepareTerminal } from './terminal-init'
 import { refreshTerminalSurface } from './webgl-recovery'
@@ -29,8 +29,7 @@ export function handleIncomingMessage(
     reportEngineError(
       scope,
       msg && msg.type === 'init' ? 'terminal init failed' : 'terminal message failed',
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a catch binding is `unknown`; the reporter reads only `message` and falls back to String().
-      ex as TerminalEngineError,
+      ex,
       msg && msg.type === 'init' && !scope.everReady
     )
   }

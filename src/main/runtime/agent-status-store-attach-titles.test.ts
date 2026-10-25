@@ -17,7 +17,7 @@ function hookStore() {
 }
 
 describe("main's tab titles from the attached hook store", () => {
-  it('follows its rows once, and stops on detach', () => {
+  it('subscribes once to enriched status and unsubscribes on detach', () => {
     const { runtime } = setupMainOwnedWorkspace()
     const store = hookStore()
 

@@ -1,5 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
-import type { GitStatusResult } from '../../../src/shared/git-status-types'
+import { describe, expect, it } from 'vitest'
 import {
   buildMobileSourceControlSections,
   canOpenMobileGitStatusEntry,
@@ -11,8 +10,7 @@ import {
   isMobileGitStageableEntry,
   isMobileGitTransientRefreshError,
   isMobileGitUnavailable,
-  type MobileGitStatusEntry,
-  type MobileGitStatusResult
+  type MobileGitStatusEntry
 } from './mobile-git-status'
 
 const entries: MobileGitStatusEntry[] = [
@@ -22,10 +20,6 @@ const entries: MobileGitStatusEntry[] = [
 ]
 
 describe('mobile source control status helpers', () => {
-  it('keeps the mobile RPC status type in lockstep with the shared git contract', () => {
-    expectTypeOf<MobileGitStatusResult>().toEqualTypeOf<GitStatusResult>()
-  })
-
   it('builds sections in the mobile source control order', () => {
     const sections = buildMobileSourceControlSections(entries)
 

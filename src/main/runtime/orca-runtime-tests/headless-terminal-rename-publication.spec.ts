@@ -13,8 +13,7 @@ function headlessRuntime() {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements every method these headless paths call; it is the shared runtime spec fixture.
-  return { runtime: new OrcaRuntimeService(runtimeStore as never), getSession }
+  return { runtime: new OrcaRuntimeService(runtimeStore), getSession }
 }
 
 describe('headless terminal rename publication', () => {

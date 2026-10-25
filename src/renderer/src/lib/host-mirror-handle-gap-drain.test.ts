@@ -8,6 +8,7 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 
 // What this file pins, and why it is separate from host-mirror-handle-gap-resume.test.ts: that file
 // drives the waiter through the real resume sweep, so it cannot choose what a replay DOES. These
@@ -33,13 +34,12 @@ function seedRows(): void {
   // Layout bindings are seeded because a verdict names the PANE by the environment-minted PTY it
   // held at park time. A pane with no binding never reaches the park path in production, and its
   // verdict deliberately refuses to answer, so a fixture without one models nothing real.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     ptyIdsByTabId: {},
     tabsByWorktree: {
       [WORKTREE_ID]: [
-        { id: FIRST_TAB_ID, title: 'one' },
-        { id: SECOND_TAB_ID, title: 'two' }
+        makeTerminalTab({ id: FIRST_TAB_ID, worktreeId: WORKTREE_ID, title: 'one' }),
+        makeTerminalTab({ id: SECOND_TAB_ID, worktreeId: WORKTREE_ID, title: 'two' })
       ]
     },
     terminalLayoutsByTabId: {
@@ -56,18 +56,17 @@ function seedRows(): void {
         ptyIdsByLeafId: { 'leaf-2': `remote:${ENVIRONMENT_ID}@@term_2` }
       }
     }
-  } as never)
+  })
 }
 
 /** The host publishes both panes' PTY handles on one frame: both waiters come due together. */
 function publishBothHandles(): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     ptyIdsByTabId: {
       [FIRST_TAB_ID]: [`remote:${ENVIRONMENT_ID}@@term_1`],
       [SECOND_TAB_ID]: [`remote:${ENVIRONMENT_ID}@@term_2`]
     }
-  } as never)
+  })
 }
 
 describe('host-mirror handle-gap drain', () => {
@@ -158,15 +157,14 @@ describe('host-mirror handle-gap drain', () => {
   it('does not release on retraction evidence a mid-drain adoption has already made stale', () => {
     const adoptedReplay = vi.fn()
     const ADOPTING_WORKTREE_ID = 'repo-1::/workspace/adopted'
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       tabsByWorktree: {
         [ADOPTING_WORKTREE_ID]: [
-          { id: FIRST_TAB_ID, title: 'one' },
-          { id: SECOND_TAB_ID, title: 'two' }
+          makeTerminalTab({ id: FIRST_TAB_ID, worktreeId: ADOPTING_WORKTREE_ID, title: 'one' }),
+          makeTerminalTab({ id: SECOND_TAB_ID, worktreeId: ADOPTING_WORKTREE_ID, title: 'two' })
         ]
       }
-    } as never)
+    })
     // Parked first so the drain reaches it first: `Map` preserves insertion order, and this pane's
     // replay is what makes the next entry's snapshot verdict stale. If that order ever inverted the
     // test would fail rather than pass quietly — the second pane would release before the adoption.
@@ -185,10 +183,9 @@ describe('host-mirror handle-gap drain', () => {
     // The frame that starts the drain. The second tab is absent from the worktree its waiter is
     // filed under, so the snapshot reads retraction — evidence the adoption above makes obsolete
     // before the release loop reaches it.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       ptyIdsByTabId: { [FIRST_TAB_ID]: [`remote:${ENVIRONMENT_ID}@@term_1`] }
-    } as never)
+    })
 
     expect(adoptedReplay).not.toHaveBeenCalled()
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)

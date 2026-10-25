@@ -1,8 +1,8 @@
 // What a chat shows a message's sender as: the name Orca shows for that agent (its chat tab, or its
 // sidebar agent row), else the task it was dispatched, else its agent's generic label.
 
-import type { AgentMessageSender } from '../../../shared/agent-session-message-source'
-import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
+import type { AgentMessageSender } from '../../../shared/agent-session/agent-session-message-source'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import {
   getAgentRowConversationName,
   type ConversationNameTab

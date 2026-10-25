@@ -89,7 +89,6 @@ function boot(
     }
   }
   document.body.innerHTML = bodyMarkup()
-  // eslint-disable-next-line no-new-func
   // The bundle the WebView loads, run as the WebView runs it.
   new Function(TERMINAL_DOCUMENT_SCRIPT)()
   window.dispatchEvent(

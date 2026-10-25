@@ -11,7 +11,7 @@ import {
   markHiddenRendererPty,
   setRendererPtyDeliveryInterest,
   unmarkHiddenRendererPty
-} from '../ipc/pty-hidden-delivery-gate'
+} from '../ipc/pty/delivery/pty-hidden-delivery-gate'
 import {
   _resetTerminalModelQueryAuthorityForTest,
   markNativeWindowsConptyPty

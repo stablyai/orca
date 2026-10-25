@@ -354,8 +354,12 @@ const BASELINE_HEADER = [
 const ADVICE =
   "Route by the resource's owner. Only a creation flow with no source row may use defaultCreationHost."
 
+// Why test support too: harnesses and fixtures seed settings for tests; they never route host work.
+const TEST_SUPPORT_PATH =
+  /(?:\.(?:test|spec)(?:-fixture|-support)?|-test-(?:harness|fixtures?))\.tsx?$/
+
 export function isScannedPath(rel) {
-  return /\.(ts|tsx)$/.test(rel) && !/\.(test|spec)(?:-fixture)?\.tsx?$/.test(rel)
+  return /\.(ts|tsx)$/.test(rel) && !TEST_SUPPORT_PATH.test(rel)
 }
 
 // One read and one discovery per root per run; `--prune` then `main` reuse them.

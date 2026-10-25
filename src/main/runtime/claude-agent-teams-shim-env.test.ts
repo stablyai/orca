@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildClaudeAgentTeamsLaunchPlan,
@@ -107,6 +107,8 @@ describe('claude agent teams shim env', () => {
       }
     }
 
+    const relativeRoot = relative(process.cwd(), root)
+    expect(resolveClaudeAgentTeamsShimBin({ PATH: relativeRoot })).toBeNull()
     expect(resolveClaudeAgentTeamsShimBin({ PATH: '.' })).toBeNull()
     expect(resolveClaudeAgentTeamsShimBin({ PATH: '' })).toBeNull()
     expect(

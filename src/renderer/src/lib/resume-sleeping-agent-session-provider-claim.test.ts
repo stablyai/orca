@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
-import { useAppStore } from '@/store'
+import { useAppStore, type AppState } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -43,7 +45,7 @@ function makeRecord(
   }
 }
 
-function makeTerminalTab(id: string): Record<string, unknown> {
+function makeTerminalTab(id: string): TerminalTab {
   return {
     id,
     ptyId: null,
@@ -60,7 +62,7 @@ function makeWorkingStatus(
   paneKey: string,
   tabId: string,
   record: SleepingAgentSessionRecord
-): Record<string, unknown> {
+): AgentStatusEntry {
   return {
     paneKey,
     tabId,
@@ -75,7 +77,7 @@ function makeWorkingStatus(
   }
 }
 
-function makePreservedPaneState(record: SleepingAgentSessionRecord): Record<string, unknown> {
+function makePreservedPaneState(record: SleepingAgentSessionRecord): Partial<AppState> {
   return {
     activeWorktreeId: 'wt-1',
     activeTabType: 'terminal',
@@ -101,7 +103,7 @@ describe('resume sleeping agent provider claims', () => {
       ...makePreservedPaneState(record),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
       agentStatusByPaneKey: { [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -122,7 +124,7 @@ describe('resume sleeping agent provider claims', () => {
       agentStatusByPaneKey: {
         [otherPaneKey]: makeWorkingStatus(otherPaneKey, 'tab-2', record)
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -141,7 +143,7 @@ describe('resume sleeping agent provider claims', () => {
       activeTabIdByWorktree: {},
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
       agentStatusByPaneKey: { [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -161,7 +163,6 @@ describe('resume sleeping agent provider claims', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
     const record = makeRecord(paneKey)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
@@ -179,7 +180,7 @@ describe('resume sleeping agent provider claims', () => {
       agentStatusByPaneKey: {
         [peerPaneKey]: { ...makeWorkingStatus(peerPaneKey, 'tab-peer', record), state: 'done' }
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
@@ -192,7 +193,6 @@ describe('resume sleeping agent provider claims', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
     const record = makeRecord(paneKey)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
@@ -215,7 +215,7 @@ describe('resume sleeping agent provider claims', () => {
           state: 'done'
         }
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -229,7 +229,6 @@ describe('resume sleeping agent provider claims', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
     const record = makeRecord(paneKey)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
@@ -251,7 +250,7 @@ describe('resume sleeping agent provider claims', () => {
           state: 'done'
         }
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
   })

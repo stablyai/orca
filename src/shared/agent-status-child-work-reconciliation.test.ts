@@ -384,7 +384,7 @@ describe('structured child-work reconciliation', () => {
     ])
   })
 
-  it('keeps every settled child until the parent row goes', () => {
+  it('retains 100 settled children without evicting the oldest', () => {
     const { store, apply } = harness()
     for (let index = 0; index < 100; index += 1) {
       apply(live(child(`done-${index}`), 200 + index), {

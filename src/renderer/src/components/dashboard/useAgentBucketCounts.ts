@@ -105,7 +105,7 @@ export function useAgentBucketCounts(): AgentBucketCounts {
     // Why Date.now() is read here and not a dep: idle-decay tracks agentStatusEpoch
     // ticks (carried in `state`), matching useDashboardData. That epoch doubles as the
     // cache generation, so a stale-boundary tick recounts every decayed bucket.
+    // oxlint-disable-next-line react/purity -- wall time is sampled per epoch tick, as explained above.
     return buildDashboardBucketCounts(state, Date.now(), cacheRef.current, state.agentStatusEpoch)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
 }

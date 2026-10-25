@@ -316,6 +316,8 @@ describe('relay observability', () => {
       stickySqlMsP99: 198,
       stickyStatementsP50: 14,
       stickyStatementsMax: 14,
+      // 50 statements at 300 ms and 100 at 5-6 ms: the pooled median is the fast connection's.
+      stickyStatementMsP50: 6,
       stickySqlByConnection: {
         '1': {
           requests: 50,
@@ -330,6 +332,20 @@ describe('relay observability', () => {
     })
     expect(entries[1]).not.toHaveProperty('stickySlotsDelta')
     expect(entries[1]).not.toHaveProperty('stickySqlByConnection')
+  })
+
+  it('stamps the instance zone once it is known', () => {
+    const entries: Record<string, unknown>[] = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    observability.flush(counts)
+    observability.setInstanceZone('us-central1-a')
+    observability.flush(counts)
+
+    expect(entries[0]).not.toHaveProperty('instanceZone')
+    expect(entries[1]).toMatchObject({ instanceZone: 'us-central1-a' })
   })
 
   it('bounds the per-connection sticky summary', () => {

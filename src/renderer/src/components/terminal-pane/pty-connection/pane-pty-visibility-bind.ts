@@ -129,6 +129,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     // frame-level sync often runs before that async result arrives.
     scheduleRuntimeGraphSync()
     session.agentCompletionCoordinator.startProcessTracking()
+    session.onAgentPreReadyDraftPtyBound?.(ptyId, session.spawnedFreshPtyId === ptyId)
     // Why: fresh spawns normally rely on a future OSC 133 command-start read to
     // identify the launched agent; only adopted or restored PTYs may already be
     // inside Codex with no new foreground signal. But no-OSC shells (Git Bash,

@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({ toast: { error: toastError } }))
 import NodeDistMirrorDialog from './NodeDistMirrorDialog'
 import { SshHostNodeMirrorAction } from './SshHostNodeMirrorAction'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const blocked: SshManagedServerStatus = {
   kind: 'relay',
@@ -28,8 +29,7 @@ const settingsSet = vi.fn(async (updates: Partial<GlobalSettings>) => ({
 const connect = vi.fn(async () => ({ targetId: 'ssh-1', status: 'connected' }))
 
 function settingsWithMirror(nodeDistMirrorUrl: string): GlobalSettings {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these components read only nodeDistMirrorUrl.
-  return { nodeDistMirrorUrl } as GlobalSettings
+  return { ...getDefaultSettings('/tmp'), nodeDistMirrorUrl }
 }
 
 function Host({ status }: { status: SshManagedServerStatus }) {

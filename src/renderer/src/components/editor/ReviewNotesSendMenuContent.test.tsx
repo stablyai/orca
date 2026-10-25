@@ -1,5 +1,6 @@
 import React from 'react'
 import { toast } from 'sonner'
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -35,7 +36,7 @@ const harness = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -162,8 +163,8 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
 }))
 
 // Why: real sonner state, so tests see which toast type a settled toast ends up with.
-vi.mock('sonner', async () => {
-  const actual = await vi.importActual<typeof import('sonner')>('sonner') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('sonner'), async (importOriginal) => {
+  const actual = await importOriginal()
   const realMessage = actual.toast.message
   const message: typeof realMessage = (...args) => {
     harness.toastMessage(...args)

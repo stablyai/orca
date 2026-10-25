@@ -6,6 +6,7 @@ import type { RuntimeTerminalSummary } from '../../shared/runtime-terminal-contr
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -32,8 +33,7 @@ describe('manually started DeepSeek Build terminals', () => {
   afterEach(() => vi.useRealTimers())
 
   it('publishes title-only identity from captured release PTY bytes', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the store subset used by terminal observations.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     runtime.setPtyController({
       spawn: async () => ({ id: 'pty-dsb' }),
       write: () => true,
@@ -55,8 +55,7 @@ describe('manually started DeepSeek Build terminals', () => {
   it.each(['✦', '⏲', '◇', '✋'])(
     'preserves Build title and identity through OSC normalization with task glyph %s',
     async (glyph) => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the store subset used by terminal observations.
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
       runtime.setPtyController({
         spawn: async () => ({ id: 'pty-dsb' }),
         write: () => true,
@@ -75,8 +74,7 @@ describe('manually started DeepSeek Build terminals', () => {
 
   it('publishes observed DSB identity and sends a prompt with generic input behavior', async () => {
     vi.useFakeTimers()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the store subset exercised by terminal recognition and prompt submission.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     const writes: string[] = []
     runtime.setPtyController({
       spawn: async () => ({ id: 'pty-dsb' }),

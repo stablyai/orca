@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
   createTerminalAccessoryLayoutPreference,
   getDefaultTerminalAccessoryBuiltInIds,
   getDefaultTerminalAccessoryLayout,
@@ -307,13 +306,12 @@ describe('terminal accessory layout', () => {
     })
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
-      TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
-      JSON.stringify(
-        createTerminalAccessoryLayoutPreference({
-          orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
-          visibleBuiltInIds: ['tab']
-        })
-      )
+      'orca:terminal-accessory-layout',
+      JSON.stringify({
+        version: 2,
+        orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+        visibleBuiltInIds: ['tab']
+      })
     )
   })
 

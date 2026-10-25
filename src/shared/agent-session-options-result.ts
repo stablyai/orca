@@ -1,5 +1,5 @@
 import type { AgentJournalCursor, AgentJournalThreadGoal } from './agent-session-journal-types'
-import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { AgentSessionRewindSupport } from './agent-session-rewind'
 import type {

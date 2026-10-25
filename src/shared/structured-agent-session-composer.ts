@@ -8,7 +8,7 @@ import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion
 } from './native-chat-slash-commands'
-import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from './agent-session-wire'
 
 const MODEL_COMMAND: SlashCommandSuggestion = {

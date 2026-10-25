@@ -21,6 +21,7 @@ import type {
 } from './jira-issue-sorter'
 import { jiraListPrioritiesForTarget } from '@/runtime/runtime-jira-client'
 import { loadJiraLinkedView, saveJiraLinkedView } from './jira-linked-view-storage'
+import { loadJiraViewMode, saveJiraViewMode, type JiraViewMode } from './jira-view-mode-storage'
 import {
   fallbackJiraSortColumn,
   loadJiraListColumnIds,
@@ -103,7 +104,11 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     items: JiraStatusCatalogItem[]
   } | null>(null)
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
-  const [jiraViewMode, setJiraViewMode] = useState<'list' | 'board'>('list')
+  const [jiraViewMode, setJiraViewModeState] = useState<JiraViewMode>(loadJiraViewMode)
+  const setJiraViewMode = useCallback((mode: JiraViewMode) => {
+    setJiraViewModeState(mode)
+    saveJiraViewMode(mode)
+  }, [])
   const [jiraCurrentSprint, setJiraCurrentSprint] = useState(false)
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
   const [jiraProjectStatusOrder, setJiraProjectStatusOrder] = useState<{

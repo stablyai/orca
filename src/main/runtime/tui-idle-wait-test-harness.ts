@@ -121,17 +121,14 @@ export function makeTuiIdleRuntime(options: TuiIdleRuntimeOptions): OrcaRuntimeS
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; the wait path reads only the members defined above.
     makeStore(options.repoPath) as never
   )
-  runtime.setPtyController(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial controller double; the wait path calls only the members listed here.
-    {
-      spawn: async () => ({ id: 'fixture-pty' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: options.getForegroundProcess,
-      listProcesses: async () => [],
-      hasPty: () => true
-    } as never
-  )
+  runtime.setPtyController({
+    spawn: async () => ({ id: 'fixture-pty' }),
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: options.getForegroundProcess,
+    listProcesses: async () => [],
+    hasPty: () => true
+  })
   return runtime
 }
 

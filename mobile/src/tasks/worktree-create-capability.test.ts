@@ -7,10 +7,7 @@ import {
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
-import {
-  WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS,
-  WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS
-} from './worktree-create-idempotency-policy'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 
 type StatusOutcome =
   | 'cutover'
@@ -24,6 +21,7 @@ type StatusOutcome =
 function statusClient(outcomes: StatusOutcome[]): RpcClient {
   let call = 0
   return {
+    ...createFakeRpcClient(),
     sendRequest: async () => {
       const outcome = outcomes[Math.min(call, outcomes.length - 1)]!
       call += 1
@@ -43,7 +41,7 @@ function statusClient(outcomes: StatusOutcome[]): RpcClient {
         _meta: { runtimeId: 'r' }
       }
     }
-  } as unknown as RpcClient
+  }
 }
 
 describe('readNewWorktreeRuntimeCapabilities', () => {
@@ -129,7 +127,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
       readNewWorktreeRuntimeCapabilities(statusClient([['worktree.create-idempotency.v1']]))
     ).resolves.toEqual({
       tasksSupported: false,
-      worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS },
+      worktreeCreateIdempotency: { dedupeTtlMs: 60_000 },
       agentLaunch: false,
       hostPlatform: 'darwin'
     })
@@ -191,7 +189,7 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
       )
     ).resolves.toEqual({
       tasksSupported: false,
-      worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS },
+      worktreeCreateIdempotency: { dedupeTtlMs: 60_000 },
       agentLaunch: false,
       hostPlatform: 'darwin'
     })

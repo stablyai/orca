@@ -103,6 +103,7 @@ export async function launchHeadlessAutomationAgent(
           agent,
           prompt: startupPrompt ?? '',
           title: run.title,
+          suppressStartupUpdatePrompt: true,
           ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
         })
         terminal = launched

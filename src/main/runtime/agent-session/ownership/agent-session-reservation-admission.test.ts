@@ -143,7 +143,7 @@ describe('adopted conversation ownership', () => {
     ).not.toThrow()
   })
 
-  it('exempts the requesting session so a committed create can be re-run', () => {
+  it('preserves the adopted chain and launch pin when retrying an existing reservation', () => {
     // Pins the guard's own contract. No wire shape reaches it today: `adopt` is accepted only on
     // create-by-intent, which always carries a null expected fence, and an existing record with a
     // null expected fence is refused a few lines below anyway.

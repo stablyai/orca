@@ -79,3 +79,11 @@ export type ContextMenuSpelling = {
 export type BrowserContextMenuDismissedEvent = {
   browserPageId: string
 }
+
+export type BrowserTargetUrlChangedEvent = {
+  browserPageId: string
+  /** Link under the pointer or keyboard focus; empty when it leaves the link. */
+  url: string
+  screenX: number
+  screenY: number
+}

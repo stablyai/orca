@@ -12,6 +12,7 @@ import {
   modifierStateMatches,
   keyMatches,
   digitKeyMatches,
+  isShiftAgnosticKeyToken,
   resolveModifierToken
 } from './matching-key'
 import {
@@ -57,7 +58,7 @@ export function keybindingConflictIdentityForParsed(
     modifiers.meta ? 'Meta' : '',
     modifiers.control ? 'Control' : '',
     modifiers.alt ? 'Alt' : '',
-    modifiers.shift ? 'Shift' : '',
+    modifiers.shift && !isShiftAgnosticKeyToken(parsed.key) ? 'Shift' : '',
     parsed.key
   ].join('+')
 }

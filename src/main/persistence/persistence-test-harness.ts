@@ -119,10 +119,18 @@ export function writeDataFile(data: unknown): void {
   writeFileSync(dataFile(), json, 'utf-8')
 }
 
-/** Restore aliases omitted by serialization, as Store.load does; use readPersistedStateJson for raw state. */
+/** Raw stored state, without the aliases Store.load restores. */
+export function readPersistedState(
+  path = dataFile(),
+  profileId = 'persistence-test'
+): PersistedState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: tests read back a snapshot their own Store serialized from PersistedState.
+  return JSON.parse(readPersistedStateJson(path, profileId)) as PersistedState
+}
+
+/** Restore aliases omitted by serialization, as Store.load does; use readPersistedState for raw state. */
 export function readDataFile(): unknown {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Store exports use PersistedState; this fixture reader restores only its omitted aliases.
-  const parsed = JSON.parse(readPersistedStateJson()) as PersistedState
+  const parsed = readPersistedState()
   hydrateWorktreeMetaAliasProjection(parsed)
   return parsed
 }

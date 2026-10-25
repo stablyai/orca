@@ -69,7 +69,7 @@ import {
   settle,
   setDocumentVisibility,
   tabIds
-} from './host-session-mirror-frame-ordering-harness'
+} from './host-session-mirror-frame-ordering-test-harness'
 import { clearWebSessionTabsTrackingForEnvironment } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './web-session-tabs-sync/state'

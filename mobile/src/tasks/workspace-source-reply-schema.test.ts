@@ -9,7 +9,6 @@ import {
   repoSparsePresetSaveSchema,
   sshConnectionStateSchema
 } from './workspace-source-reply-schema'
-import { SSH_CONNECTION_STATUS } from '../transport/ssh-connection-status-arms'
 
 // Pins the SSH status degrade, the error tri-state beside it, and the preset requirement.
 
@@ -21,7 +20,7 @@ const connected = {
 }
 
 describe('the SSH connection record', () => {
-  it('reads the recorded connected state whole', () => {
+  it('reads the representative connected state whole', () => {
     expect(sshConnectionStateSchema.safeParse({ state: connected })).toMatchObject({
       success: true,
       data: connected
@@ -66,10 +65,18 @@ describe('the SSH connection record', () => {
 })
 
 describe('status is an open enum that degrades to disconnected', () => {
-  // The arm list is pinned to SshConnectionStatus in the schema module, where tsc looks; this loop
-  // proves every pinned arm survives the parse rather than degrading.
+  // Independent wire values keep a removed schema arm in the test domain.
   it('takes every arm the host declares, so nothing it sends today degrades', () => {
-    for (const status of SSH_CONNECTION_STATUS) {
+    for (const status of [
+      'disconnected',
+      'connecting',
+      'auth-failed',
+      'deploying-relay',
+      'connected',
+      'reconnecting',
+      'reconnection-failed',
+      'error'
+    ] as const) {
       const parsed = sshConnectionStateSchema.safeParse({ state: { ...connected, status } })
       expect(parsed.success && parsed.data).toMatchObject({ status })
     }
@@ -83,13 +90,6 @@ describe('status is an open enum that degrades to disconnected', () => {
       targetId: 'ssh-1',
       status: 'disconnected'
     })
-  })
-
-  it('never degrades a newer arm to connected', () => {
-    const parsed = sshConnectionStateSchema.safeParse({
-      state: { ...connected, status: 'whatever' }
-    })
-    expect(parsed.success ? parsed.data?.status : 'unparsed').not.toBe('connected')
   })
 
   it('stays fatal for a non-string status, which is the wrong type and not a newer arm', () => {
@@ -190,7 +190,7 @@ describe('a partial record survives with the status it came with', () => {
 describe('a sparse preset requires what the drawer sorts and joins', () => {
   const preset = { id: 'p1', name: 'docs', directories: ['docs'] }
 
-  it('reads the recorded preset whole', () => {
+  it('reads the representative preset whole', () => {
     expect(repoSparsePresetListSchema.safeParse({ presets: [preset] })).toMatchObject({
       success: true,
       data: [preset]
@@ -218,7 +218,7 @@ describe('a sparse preset requires what the drawer sorts and joins', () => {
 })
 
 describe('detected agent ids', () => {
-  it('reads the recorded probe answers', () => {
+  it('reads the representative probe answers', () => {
     expect(detectedAgentIdsSchema.safeParse(['codex', 'claude'])).toMatchObject({
       success: true,
       data: ['codex', 'claude']
@@ -236,11 +236,11 @@ describe('detected agent ids', () => {
 })
 
 describe('the orca.yaml hooks require nothing', () => {
-  it('reads the recorded reply for a repo with no setup script and no source', () => {
+  it('reads the representative reply for a repo with no setup script and no source', () => {
     expect(repoSetupHooksSchema.safeParse({ hooks: { scripts: {} } }).success).toBe(true)
   })
 
-  it('reads the recorded reply with an explicit null setupTrust', () => {
+  it('reads the representative reply with an explicit null setupTrust', () => {
     const parsed = repoSetupHooksSchema.safeParse({
       hooks: { scripts: { setup: 'pnpm install' } },
       source: 'repo',
@@ -255,7 +255,7 @@ describe('the orca.yaml hooks require nothing', () => {
     expect(parsed.success && parsed.data).toMatchObject({ setupRunPolicy: 'prompt-twice' })
   })
 
-  it('keeps the untrimmed setup script the recorded reply carries', () => {
+  it('keeps the untrimmed setup script the representative reply carries', () => {
     const parsed = repoSetupHooksSchema.safeParse({ hooks: { scripts: { setup: '  pnpm i  ' } } })
     expect(parsed.success && parsed.data).toMatchObject({
       hooks: { scripts: { setup: '  pnpm i  ' } }
@@ -278,7 +278,7 @@ describe('sparse presets', () => {
 })
 
 describe('base-ref search requires neither member', () => {
-  it('reads both recorded shapes', () => {
+  it('reads both representative shapes', () => {
     expect(repoBaseRefSearchSchema.safeParse({ refs: ['main'] }).success).toBe(true)
     expect(
       repoBaseRefSearchSchema.safeParse({

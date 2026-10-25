@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   OrcadMigrationCatalogAbortResult,
   OrcadMigrationCatalogReferenceAbortResult,
-  OrcadMigrationCatalogState,
-  OrcadMigrationManifest
+  OrcadMigrationCatalogState
 } from '../../shared/orcad-migration/orcad-migration-manifest'
+import { orcadMigrationCutoverFixture } from '../ssh/orcad-migration-cutover-fixture'
 import {
   abortStagedOrcadMigrationCatalogByReferenceDurably,
   abortStagedOrcadMigrationCatalogDurably,
@@ -12,11 +12,17 @@ import {
   stageOrcadMigrationCatalogDurably
 } from './orcad-migration-catalog-import'
 
+const { manifest } = orcadMigrationCutoverFixture()
+const reference = { migrationId: manifest.migrationId, manifestSha256: manifest.manifestSha256 }
+
 describe('durable orcad migration catalog import', () => {
   it('does not acknowledge staging until its dormant manifest is durable', async () => {
     const diskError = new Error('disk full')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the durable wrappers only pass these values through to the stubbed store.
-    const staged = { state: 'staged' } as OrcadMigrationCatalogState
+    const staged: OrcadMigrationCatalogState = {
+      state: 'staged',
+      ...reference,
+      stagedAt: '2026-10-01T00:00:01.000Z'
+    }
     const stage = vi.fn().mockReturnValue(staged)
     const flush = vi.fn().mockRejectedValueOnce(diskError).mockResolvedValueOnce(undefined)
     const args = {
@@ -24,8 +30,7 @@ describe('durable orcad migration catalog import', () => {
         stageOrcadMigrationCatalog: stage,
         flushPendingOrThrowAsync: flush
       },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the durable wrappers only pass these values through to the stubbed store.
-      manifest: {} as OrcadMigrationManifest
+      manifest
     }
 
     await expect(stageOrcadMigrationCatalogDurably(args)).rejects.toBe(diskError)
@@ -36,8 +41,19 @@ describe('durable orcad migration catalog import', () => {
 
   it('publishes a committed catalog only after its receipt is durable', async () => {
     const diskError = new Error('disk full')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the durable wrappers only pass these values through to the stubbed store.
-    const committed = { state: 'committed' } as OrcadMigrationCatalogState
+    const committed: OrcadMigrationCatalogState = {
+      state: 'committed',
+      ...reference,
+      receipt: {
+        version: manifest.version,
+        ...reference,
+        source: manifest.source,
+        importedAt: '2026-10-01T00:00:02.000Z',
+        repositoryIds: [],
+        projectGroupIds: [],
+        folderWorkspaceIds: []
+      }
+    }
     const commit = vi.fn().mockReturnValue(committed)
     const flush = vi.fn().mockRejectedValueOnce(diskError).mockResolvedValueOnce(undefined)
     const onDurableCommit = vi.fn()
@@ -46,8 +62,7 @@ describe('durable orcad migration catalog import', () => {
         commitStagedOrcadMigrationCatalog: commit,
         flushPendingOrThrowAsync: flush
       },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the durable wrappers only pass these values through to the stubbed store.
-      manifest: {} as OrcadMigrationManifest,
+      manifest,
       onDurableCommit
     }
 
@@ -58,10 +73,12 @@ describe('durable orcad migration catalog import', () => {
   })
 
   it('reflushes an already-absent abort after the first flush failed', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the durable wrappers only pass these values through to the stubbed store.
-    const aborted = { state: 'absent', aborted: true } as OrcadMigrationCatalogAbortResult
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the durable wrappers only pass these values through to the stubbed store.
-    const unchanged = { state: 'absent', aborted: false } as OrcadMigrationCatalogAbortResult
+    const aborted: OrcadMigrationCatalogAbortResult = {
+      state: 'absent',
+      ...reference,
+      aborted: true
+    }
+    const unchanged: OrcadMigrationCatalogAbortResult = { ...aborted, aborted: false }
     const abort = vi.fn().mockReturnValueOnce(aborted).mockReturnValueOnce(unchanged)
     const flush = vi.fn().mockRejectedValueOnce(new Error('disk full')).mockResolvedValue(undefined)
     const args = {
@@ -69,8 +86,7 @@ describe('durable orcad migration catalog import', () => {
         abortStagedOrcadMigrationCatalog: abort,
         flushPendingOrThrowAsync: flush
       },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the durable wrappers only pass these values through to the stubbed store.
-      manifest: {} as OrcadMigrationManifest
+      manifest
     }
 
     await expect(abortStagedOrcadMigrationCatalogDurably(args)).rejects.toThrow('disk full')
@@ -82,7 +98,6 @@ describe('durable orcad migration catalog import', () => {
   })
 
   it('answers an abort by reference absent only once its flush succeeds', async () => {
-    const reference = { migrationId: 'migration-1', manifestSha256: 'a'.repeat(64) }
     const aborted: OrcadMigrationCatalogReferenceAbortResult = {
       ...reference,
       state: 'absent',

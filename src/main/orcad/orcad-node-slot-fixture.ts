@@ -6,7 +6,11 @@ import type * as NodePty from 'node-pty'
 import { join, resolve } from 'node:path'
 import { it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
+import {
+  NODE_RUNTIME_ASSETS,
+  SERVER_TARGETS,
+  type ServerTarget
+} from '../../shared/node-runtime-pin'
 import {
   ORCAD_NODE_PTY_DIR,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -17,12 +21,11 @@ import { detectNativeHostAbi, nativeSlotName } from './native-host-abi'
 
 export function hostServerTarget(): ServerTarget {
   const slot = nativeSlotName(detectNativeHostAbi())
-  const target = Object.keys(NODE_RUNTIME_ASSETS).find((candidate) => candidate === slot)
+  const target = SERVER_TARGETS.find((candidate) => candidate === slot)
   if (!target) {
     throw new Error(`No pinned Node runtime for host slot ${slot}`)
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: found among NODE_RUNTIME_ASSETS keys, which are ServerTargets.
-  return target as ServerTarget
+  return target
 }
 
 /** The pinned Node the runner (run-node-server-tests.mjs) or `build:orcad` provided, if any. */

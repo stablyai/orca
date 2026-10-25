@@ -9,7 +9,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'

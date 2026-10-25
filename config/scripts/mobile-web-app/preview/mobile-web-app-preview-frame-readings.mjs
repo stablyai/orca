@@ -14,7 +14,7 @@
  */
 import { PNG } from 'pngjs'
 import { reportedDirectives } from './mobile-web-app-preview-csp-reports.mjs'
-import { previewFrame } from './mobile-web-app-preview-frame-readiness.mjs'
+import { POLL_MS, abandonAfter, previewFrame } from './mobile-web-app-preview-frame-readiness.mjs'
 
 /**
  * One RGB triple from the page, clipped to where the frame sits.
@@ -25,6 +25,25 @@ import { previewFrame } from './mobile-web-app-preview-frame-readiness.mjs'
 export async function probePreviewPixel(page, clip) {
   const png = PNG.sync.read(await page.screenshot({ clip }))
   return `${png.data[0]},${png.data[1]},${png.data[2]}`
+}
+
+/** Long enough for a loaded runner to composite a parsed frame; a frame that never paints still reds. */
+const PAINT_MS = 10_000
+
+/**
+ * The pixel once the frame has painted `expected`, or the last reading when it never does.
+ *
+ * Parsed is not painted: Chromium runs the sandboxed frame in its own process, and the embedder
+ * composites that process's surface a frame or more after the document is complete.
+ */
+export async function waitForPaintedPreview(page, clip, expected, signal) {
+  const started = Date.now()
+  let pixel = await probePreviewPixel(page, clip)
+  while (pixel !== expected && !signal?.aborted && Date.now() - started < PAINT_MS) {
+    await abandonAfter(POLL_MS)
+    pixel = await probePreviewPixel(page, clip)
+  }
+  return pixel
 }
 
 /** What the toolbar emits into the DOM, not what the component was handed: react-native-web

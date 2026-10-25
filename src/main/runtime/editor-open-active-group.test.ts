@@ -1,6 +1,5 @@
 import './orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeStore } from './runtime-store-contract'
 import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import {
   TEST_WORKTREE_ID,
@@ -30,8 +29,7 @@ function twoGroupHost() {
   ])
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(saved)
   Object.assign(runtimeStore, { getWorkspaceSessionHostIds: () => ['local'] })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The shared fixture supplies RuntimeStore methods; its legacy Mock return type loses callable signatures.
-  const runtime = new RuntimeWithEditorOpenGroup(runtimeStore as RuntimeStore)
+  const runtime = new RuntimeWithEditorOpenGroup(runtimeStore)
   const open = () =>
     openEditorFileThroughLayoutOwner(
       {

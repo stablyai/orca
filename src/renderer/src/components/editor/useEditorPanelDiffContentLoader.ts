@@ -96,8 +96,7 @@ export function useEditorPanelDiffContentLoader({
         }
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every branch resolves a git diff result, which DiffContent mirrors.
-          const promise = (
+          const promise: Promise<DiffContent> =
             effectiveDiffSource === 'commit'
               ? commitCompare
                 ? getRuntimeGitCommitDiff(
@@ -147,7 +146,6 @@ export function useEditorPanelDiffContentLoader({
                       compareAgainstHead
                     }
                   )
-          ) as Promise<DiffContent>
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightDiffReads.set(key, pending)
           queueMicrotask(() => {

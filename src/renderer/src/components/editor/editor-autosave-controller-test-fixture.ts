@@ -99,7 +99,7 @@ export function stubEditorWindow(): ReturnType<typeof vi.fn> {
 
 export function createEditorStore(): StoreApi<AppState> {
   // Why the record middleware: views of one file share a record only through it, as in the app.
-  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
+  // oxlint-disable-next-line typescript/no-explicit-any -- a partial store; tests read only the slices it builds.
   const create = withEditorBufferRecords<any>(
     (...args: any[]) => ({
       ...emptyTabLayoutState(),

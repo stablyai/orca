@@ -1,6 +1,5 @@
 import type { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs as MergePreservedHeadlessMobileSessionTabsMethods } from './mobile-session-preservation'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
-/* eslint-disable unicorn/no-useless-spread */
 import { OrcaRuntimeWithWriteOrchestrationPointerPty } from '../orchestration/terminal-authority/write-orchestration-pointer-pty'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -215,7 +214,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
         )
       })
     }
-    for (const [worktreeId, existing] of [...this.mobileSessionTabsByWorktree.entries()]) {
+    for (const [worktreeId, existing] of Array.from(this.mobileSessionTabsByWorktree)) {
       if (!nextWorktrees.has(worktreeId)) {
         const preserved = this.buildPreservedHeadlessMobileSessionSnapshot(existing)
         if (preserved) {

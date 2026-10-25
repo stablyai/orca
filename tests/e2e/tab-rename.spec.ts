@@ -48,9 +48,8 @@ test.describe('Tab Rename (Inline)', () => {
     const tabs = await getWorktreeTabs(page, worktreeId)
     const tab = tabs.find((entry) => entry.id === activeId)
     expect(tab).toBeDefined()
-    // Why: mirror what the UI renders (customTitle ?? title) so locators that
-    // key off the tab's visible text match what's actually on screen.
-    return tab!.customTitle ?? tab!.title ?? ''
+    // Why: getWorktreeTabs already folds customTitle into title, matching what the UI renders.
+    return tab!.title ?? ''
   }
 
   function tabLocatorByTitle(

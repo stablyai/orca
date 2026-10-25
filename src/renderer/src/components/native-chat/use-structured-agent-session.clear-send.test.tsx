@@ -40,7 +40,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../shared/agent-session-conversation-command'
+import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../shared/agent-session/agent-session-conversation-command'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 import { structuredAgentSessionSendOut } from './structured-agent-session-pending-sends'

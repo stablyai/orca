@@ -573,7 +573,7 @@ describe('host-store list mutations', () => {
   })
 
   it('awaits cleanup scheduling after metadata commit', async () => {
-    let resolveSchedule: (() => void) | null = null
+    let resolveSchedule: (() => void) | undefined
     scheduleCleanupMock.mockReturnValue(
       new Promise<void>((resolve) => {
         resolveSchedule = resolve
@@ -598,7 +598,7 @@ describe('host-store list mutations', () => {
   })
 
   it('applies concurrent rename and remove without clobbering either', async () => {
-    let releaseReads: (() => void) | null = null
+    let releaseReads: (() => void) | undefined
     const readsReleased = new Promise<void>((resolve) => {
       releaseReads = resolve
     })

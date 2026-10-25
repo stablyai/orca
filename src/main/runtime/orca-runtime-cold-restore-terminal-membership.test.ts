@@ -489,7 +489,6 @@ describe('a surface the host retired stays retired when a restored sibling regis
         sessions.set(SSH_HOST.hostId, makeSshSession(['tab-x']))
       })
     } as never)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close path kills and inventories only; the remote kill lands asynchronously.
     runtime.setPtyController({
       write: () => true,
       kill,
@@ -497,7 +496,7 @@ describe('a surface the host retired stays retired when a restored sibling regis
         [SSH_PTY_X, SSH_PTY_Y].map((id) => ({ id, cwd: '/worktree', title: 'shell' }))
       ),
       getForegroundProcess: async () => null
-    } as never)
+    })
     publishSshRendererFrame(runtime)
     registerBound(runtime, SSH_HOST.hostId, SSH_PTY_Y, 'ssh-1', {
       tabId: 'tab-y',

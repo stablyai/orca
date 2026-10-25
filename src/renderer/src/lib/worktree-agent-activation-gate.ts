@@ -105,11 +105,19 @@ function sessionBelongsToWorkspace(sessionId: string, worktreeId: string): boole
 function liveSleepingAgentClaims(
   store: ActivationStore,
   worktreeId: string,
-  livePtyIds: ReadonlySet<string>,
+  liveSessions: readonly PtyListedSession[],
   structuredInventory: StructuredActivationInventory | null
 ): { keys: Set<string>; claimedPtyIds: Set<string> } {
   const keys = new Set<string>()
   const claimedPtyIds = new Set<string>()
+  const livePtyIds = new Set(liveSessions.map((session) => session.id))
+  // Why: the host can re-key a live PTY onto a new tab (#21235), or a paired client spawned it for a
+  // pane this renderer never had; the spawn pane key is still the one the agent reports from.
+  const livePtyIdBySpawnPaneKey = new Map(
+    liveSessions.flatMap((session) =>
+      session.paneKey ? [[session.paneKey, session.id] as const] : []
+    )
+  )
   for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
     if (record.worktreeId !== worktreeId) {
       continue
@@ -129,8 +137,12 @@ function liveSleepingAgentClaims(
       continue
     }
     const persistedPtyId = layoutPtyId ?? (tabPtyIds?.length === 1 ? tabPtyIds[0] : undefined)
-    if (persistedPtyId && livePtyIds.has(persistedPtyId)) {
-      claimedPtyIds.add(persistedPtyId)
+    const livePtyId =
+      persistedPtyId && livePtyIds.has(persistedPtyId)
+        ? persistedPtyId
+        : livePtyIdBySpawnPaneKey.get(record.paneKey)
+    if (livePtyId) {
+      claimedPtyIds.add(livePtyId)
       keys.add(getProviderSessionClaimKey(record))
     }
   }
@@ -197,7 +209,6 @@ export async function runWorktreeAgentActivationGate(
       (session.worktreeId !== undefined && worktreeIdsEqual(session.worktreeId, worktreeId)) ||
       sessionBelongsToWorkspace(session.id, worktreeId)
   )
-  const liveWorkspacePtyIds = new Set(liveWorkspaceSessions.map((session) => session.id))
   // Why: a session the host is killing was closed by the user (often just before a quit); a
   // surface for it would bring the closed pane back. It still counts as live work below.
   const adoptablePtyIds = liveWorkspaceSessions
@@ -234,7 +245,7 @@ export async function runWorktreeAgentActivationGate(
   const claims = liveSleepingAgentClaims(
     store,
     worktreeId,
-    liveWorkspacePtyIds,
+    liveWorkspaceSessions,
     structuredInventory
   )
   const hasUnclaimedRecovery = Object.values(store.sleepingAgentSessionsByPaneKey).some(

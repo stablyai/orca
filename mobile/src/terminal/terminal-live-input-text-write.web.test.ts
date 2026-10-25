@@ -19,13 +19,7 @@ function mountInput(): HTMLInputElement {
   return input
 }
 
-describe('the native live-input write against an RN Web ref', () => {
-  it('throws, because a DOM node has no setNativeProps', () => {
-    expect(() => writeTerminalLiveInputText(refTo(mountInput()), 'typed')).toThrow(
-      /setNativeProps is not a function/
-    )
-  })
-
+describe('the native live-input write with an unmounted ref', () => {
   // Why this one matters: it is the case the session route is in before a terminal attaches, and
   // it is why the browser render check on that route stayed green on the defect above.
   it('writes nothing at all when the field has not mounted', () => {

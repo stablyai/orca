@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/no-useless-spread */
 import { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal } from '../launch/mobile-terminal-owned-create'
 import type { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
 import type {
@@ -218,7 +217,7 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
       ...(pending.viewMode ? { viewMode: pending.viewMode } : {})
     })
     // Why: check closures normally drain only inside syncWindowGraph; a main-side publish must drain them too or the pending wait misses the insertion.
-    for (const cb of [...this.graphSyncCallbacks]) {
+    for (const cb of Array.from(this.graphSyncCallbacks)) {
       cb()
     }
     return this.findMobileTerminalSurface(worktreeId, tabId)

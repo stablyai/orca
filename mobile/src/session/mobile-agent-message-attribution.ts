@@ -3,7 +3,7 @@
 import {
   agentMessageSendersShown,
   type AgentMessageSource
-} from '../../../src/shared/agent-session-message-source'
+} from '../../../src/shared/agent-session/agent-session-message-source'
 
 const UNNAMED_SENDER = 'an agent'
 

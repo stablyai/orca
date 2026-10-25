@@ -414,7 +414,11 @@ test.describe('Browser Tab', () => {
         webview.setZoomLevel(0.5)
         for (let reload = 0; reload < 3; reload += 1) {
           await new Promise<void>((resolve) => {
-            webview.addEventListener('dom-ready', () => resolve(), { once: true })
+            const onReady = (): void => {
+              webview.removeEventListener('dom-ready', onReady)
+              resolve()
+            }
+            webview.addEventListener('dom-ready', onReady)
             if (reload === 1) {
               webview.reloadIgnoringCache()
             } else {
@@ -447,6 +451,7 @@ test.describe('Browser Tab', () => {
         .poll(async () => readBrowserInputValue(orcaPage, browserTab!.id), { timeout: 5_000 })
         .not.toBeNull()
 
+      const zoomModifier: 'meta' | 'control' = process.platform === 'darwin' ? 'meta' : 'control'
       await orcaPage.evaluate(
         async ({ browserTabId, browserPageId, modifier }) => {
           const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
@@ -465,7 +470,7 @@ test.describe('Browser Tab', () => {
         {
           browserTabId: browserTab!.id,
           browserPageId: browserTab!.pageId ?? browserTab!.id,
-          modifier: process.platform === 'darwin' ? 'meta' : 'control'
+          modifier: zoomModifier
         }
       )
       await expect
@@ -524,7 +529,11 @@ test.describe('Browser Tab', () => {
           const untouchedA = webviewA.getZoomLevel()
 
           await new Promise<void>((resolve) => {
-            webviewA.addEventListener('dom-ready', () => resolve(), { once: true })
+            const onReady = (): void => {
+              webviewA.removeEventListener('dom-ready', onReady)
+              resolve()
+            }
+            webviewA.addEventListener('dom-ready', onReady)
             webviewA.reload()
           })
 

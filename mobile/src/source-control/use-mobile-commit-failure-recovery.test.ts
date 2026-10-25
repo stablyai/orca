@@ -19,6 +19,7 @@ vi.mock('../components/host-protocol-gates-context', () => ({
 }))
 
 import { useMobileCommitFailureRecovery } from './use-mobile-commit-failure-recovery'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 type Recovery = ReturnType<typeof useMobileCommitFailureRecovery>
 
@@ -47,8 +48,7 @@ function hostClient(launchReply: () => Promise<RpcResponse>) {
     }
     return launchReply()
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reaches the client only through sendRequest.
-  return { client: { sendRequest } as unknown as RpcClient, sendRequest }
+  return { client: stubRpcClient({ sendRequest }), sendRequest }
 }
 
 const FAILURE: MobileCommitFailureRecovery = {

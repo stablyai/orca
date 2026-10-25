@@ -197,9 +197,6 @@ export function salvagedField<T extends z.ZodType>(
 export function salvagedOptional<T extends z.ZodType>(
   name: string,
   schema: T
-): z.ZodType<z.output<T> | undefined, unknown> {
-  return salvaged(name, schema, () => undefined).optional() as z.ZodType<
-    z.output<T> | undefined,
-    unknown
-  >
+): z.ZodOptional<z.ZodType<z.output<T> | undefined, unknown>> {
+  return salvagedField(name, schema.optional(), () => undefined).optional()
 }

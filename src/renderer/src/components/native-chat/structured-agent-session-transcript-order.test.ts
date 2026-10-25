@@ -4,7 +4,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import { projectAgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import { projectAgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'

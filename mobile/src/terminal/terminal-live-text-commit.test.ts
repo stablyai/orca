@@ -129,7 +129,7 @@ describe('terminal live accessory local edit text', () => {
     let visits = 0
     const iterator = vi.spyOn(String.prototype, Symbol.iterator).mockImplementation(function* (
       this: string
-    ) {
+    ): Generator<string, undefined> {
       for (const codePoint of originalIterator.call(this)) {
         visits += 1
         yield codePoint

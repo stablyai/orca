@@ -80,11 +80,10 @@ describe('federation host agent-death liveness', () => {
       name === 'orchestration.federationFleetSnapshot'
         ? { dispatchIds: [DISPATCH_ID] }
         : { dispatchId: DISPATCH_ID }
-    return method.handler(
-      method.params!.parse(params),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers read only the runtime and caller.
-      { runtime, authenticatedCallerFingerprint: HOME_FINGERPRINT } as never
-    )
+    return method.handler(method.params!.parse(params), {
+      runtime,
+      authenticatedCallerFingerprint: HOME_FINGERPRINT
+    })
   }
 
   async function snapshotObservation() {

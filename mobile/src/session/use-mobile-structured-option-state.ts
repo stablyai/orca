@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import type {
   AgentSessionOptionsResult,
   AgentSessionModelCatalogResult

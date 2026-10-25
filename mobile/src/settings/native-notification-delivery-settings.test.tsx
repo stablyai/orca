@@ -2,6 +2,7 @@ import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NativeNotificationDeliverySettings } from './native-notification-delivery-settings'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({
   load: vi.fn(),
@@ -48,7 +49,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => renderer?.unmount())
 })
-const section = () => renderer.root.findByType('Delivery').props
+const section = () => findByHostType(renderer.root, 'Delivery').props
 it('keeps stored controls visible but disabled without consent and explains an old host', async () => {
   await act(async () => {
     renderer = create(createElement(NativeNotificationDeliverySettings, { enabled: false }))

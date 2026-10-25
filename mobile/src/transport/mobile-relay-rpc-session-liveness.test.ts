@@ -6,7 +6,7 @@ const fakes = vi.hoisted(() => ({
     onText(value: string): void
     onBinary(value: Uint8Array): void
   },
-  sendText: vi.fn(() => true),
+  sendText: vi.fn((_frame: string) => true),
   close: vi.fn()
 }))
 
@@ -90,8 +90,8 @@ async function authenticateSession(onLog?: ConnectionLogSink) {
 }
 
 function sentRequests(): Array<{ id: string; method: string }> {
-  return fakes.sendText.mock.calls.map(
-    ([value]) => JSON.parse(value as string) as { id: string; method: string }
+  return fakes.sendText.mock.calls.map(([value]): { id: string; method: string } =>
+    JSON.parse(value)
   )
 }
 

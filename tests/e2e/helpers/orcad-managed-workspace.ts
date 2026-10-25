@@ -14,6 +14,7 @@ import { waitForSessionReady, waitForStartupWorktreeRefresh } from './store'
 import { dismissTransientAnnouncement } from './ssh-config-host-picker'
 import { focusActiveTerminalInput } from './terminal'
 import { toRuntimeExecutionHostId } from '../../../src/shared/execution-host'
+import { getManagedOrcadSshTargetId } from '../../../src/shared/managed-orcad-execution-host'
 
 export const ORCAD_TEMPLATE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 
@@ -136,7 +137,7 @@ export async function relaunchManagedApp(
 
 export async function managedEnvironmentId(page: Page, targetId: string): Promise<string> {
   const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-    (entry) => entry.orcadDeployment?.sshTargetId === targetId
+    (entry) => getManagedOrcadSshTargetId(entry) === targetId
   )
   if (!environment) {
     throw new Error(`No managed server registered for ${targetId}`)

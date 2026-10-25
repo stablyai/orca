@@ -1,3 +1,7 @@
+import {
+  stripAnsiEscapeSequences,
+  TERMINAL_CONTROL_CHARACTER_PATTERN
+} from './ansi-escape-sequences'
 import type { GitStatusEntry } from './git-status-types'
 
 const FALLBACK_COMMIT_FAILURE_SUMMARY = 'Commit failed.'
@@ -9,23 +13,15 @@ const COMMIT_FAILURE_PROMPT_OUTPUT_LIMIT = 12_000
 const COMMIT_FAILURE_REPLY_INSTRUCTION =
   'Reply with the root cause, files changed, validation run, final git status, and anything left for the user.'
 
-const ANSI_PATTERN =
-  // eslint-disable-next-line no-control-regex
-  /[\u001b\u009b][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
-const CONTROL_PATTERN =
-  // eslint-disable-next-line no-control-regex
-  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g
 const LOW_SIGNAL_LINE_PATTERN =
   /^(?:npm\s+(?:warn|warning)\b.*(?:env|config)|npm\s+notice\b|husky\s+-\s+deprecated\b)/i
 const HOOK_PATTERN = /\b(?:pre-commit|precommit|husky|lint-staged)\b/i
 const LINT_PATTERN = /\b(?:eslint|oxlint|lint-staged|lint)\b/i
 
 function normalizeCommitFailure(raw: string): string {
-  return raw
-    .slice(0, COMMIT_FAILURE_SUMMARY_SCAN_CODE_UNITS)
-    .replace(ANSI_PATTERN, '')
+  return stripAnsiEscapeSequences(raw.slice(0, COMMIT_FAILURE_SUMMARY_SCAN_CODE_UNITS))
     .replace(/\r\n?/g, '\n')
-    .replace(CONTROL_PATTERN, '')
+    .replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
     .trim()
 }
 

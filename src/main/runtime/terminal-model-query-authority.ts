@@ -13,7 +13,7 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   isHiddenPtyDeliveryGateEnabled,
   shouldDropHiddenRendererPtyData
-} from '../ipc/pty-hidden-delivery-gate'
+} from '../ipc/pty/delivery/pty-hidden-delivery-gate'
 
 export type TerminalModelQueryAuthoritySettings = Pick<
   GlobalSettings,

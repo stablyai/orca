@@ -19,6 +19,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionForegroundWritePathTests(): void {
   let mockStoreState: StoreState
@@ -67,7 +68,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
 
@@ -92,7 +93,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       await flushAsyncTicks()
       const onDataMock = pane.terminal.onData as unknown as {
         mock: { calls: [[(data: string) => void] | []] }
@@ -120,7 +121,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       await flushAsyncTicks()
       const onDataMock = pane.terminal.onData as unknown as {
         mock: { calls: [[(data: string) => void] | []] }
@@ -145,12 +146,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       transportFactoryQueue.push(transport)
       const deferPtyInput = vi.fn()
 
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The dependency fixture provides the input-forwarding hooks exercised by this test.
-        createDeps({ deferPtyInput }) as never
-      )
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps({ deferPtyInput })))
       await flushAsyncTicks()
       sendTerminalInputThroughPane(pane, 'a')
 
@@ -168,7 +164,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       const transport = createMockTransport('pty-1')
       transportFactoryQueue.push(transport)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       await flushAsyncTicks()
       sendTerminalInputThroughPane(pane, 'a')
 
@@ -188,11 +184,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps() as never
-      ) as unknown as { markShortcutTerminalInputSent: () => void }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       await flushAsyncTicks()
       binding.markShortcutTerminalInputSent()
 
@@ -216,7 +208,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
 
@@ -261,7 +253,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
@@ -307,7 +299,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
@@ -353,7 +345,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
@@ -397,7 +389,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
@@ -451,7 +443,7 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()

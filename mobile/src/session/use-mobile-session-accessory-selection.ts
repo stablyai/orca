@@ -133,7 +133,6 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       } catch (e) {
         triggerError()
         const err = e as { name?: string; message?: string }
-        // eslint-disable-next-line no-console
         console.warn('[mobile-clip] setString failed', {
           name: err.name,
           message: err.message
@@ -163,7 +162,6 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       if (handle !== activeHandleRef.current) {
         return
       }
-      // eslint-disable-next-line no-console
       console.warn('[mobile-clip] selection evicted')
       showToast('Selection cleared (scrolled out of buffer)', 1500)
       setSelectModeActive(false)
@@ -208,8 +206,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     }
     const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
     const repoResponse = await newTabRepoListRead.request(client)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const repos = (newTabRepoListRead.interpret(repoResponse) as MobileRuntimeRepoSummary[]) ?? []
+    const repos: MobileRuntimeRepoSummary[] = newTabRepoListRead.interpret(repoResponse)
     return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null
   }, [client, isFloatingWorkspaceRoute, worktreeId])
 

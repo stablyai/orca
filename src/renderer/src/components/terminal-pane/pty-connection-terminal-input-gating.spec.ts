@@ -474,7 +474,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('does not infer interrupts when mobile presence lock blocks terminal input', async () => {
+    it('blocks terminal writes while mobile presence lock owns the PTY', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
@@ -702,7 +702,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('remounts a connected pane when main reports its daemon write unavailable', async () => {
+    it('requests a connected pane remount when main reports its daemon write unavailable', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()

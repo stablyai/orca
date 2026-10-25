@@ -7,13 +7,13 @@ import { pairedRuntimeConnectionToken } from '../../shared/paired-runtime-connec
 import { DeviceRegistry } from '../runtime/device-registry'
 import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../shared/orcad-terminal-census'
 import { emptyOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
-import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import type { OrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
 import { readWslOrcadIncumbent, type WslOrcadIncumbentDependencies } from './wsl-orcad-incumbent'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
+import { unusedOrcadHostTransport } from '../ssh/unused-host-transport.test-fixture'
 
 const host = getRemoteHostPlatform('linux-x64')
 const KEY = Buffer.alloc(32, 7).toString('base64')
@@ -53,8 +53,7 @@ const target: WslOrcadHostTarget = {
   distro: 'Ubuntu',
   label: 'Ubuntu'
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every host call is a dependency stub.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 
 function context(active: string | null = '1.4.0+aa'): OrcadRemoteContext<WslOrcadHostTarget> {
   return {

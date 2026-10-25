@@ -11287,14 +11287,14 @@
       "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, shell-visible size, and the runtime mirror's parse dimensions must converge or enter explicit degraded state, and mirror resize reflow must stay ordered with queued output writes.",
       "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, hidden-to-visible activation, and window wake. It asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, visibility resume reasserts real drift without hot listSessions, one settled wake produces one geometry-only readback, and SSH relay readback is authoritative with bounded fallback. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/runtime/orca-runtime.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty/delivery/pty-applied-size-reporting.test.ts src/main/runtime/orca-runtime.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
         "src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts",
         "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
-        "src/main/ipc/pty-applied-size-reporting.test.ts",
+        "src/main/ipc/pty/delivery/pty-applied-size-reporting.test.ts",
         "src/main/runtime/orca-runtime.test.ts"
       ],
       "assertionRefs": [
@@ -11329,7 +11329,7 @@
           ]
         },
         {
-          "file": "src/main/ipc/pty-applied-size-reporting.test.ts",
+          "file": "src/main/ipc/pty/delivery/pty-applied-size-reporting.test.ts",
           "assertions": [
             "accepted desktop resizes fan out to the runtime after provider resize",
             "rejected desktop resizes do not fan out to the runtime",
@@ -11350,6 +11350,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/runtime/orca-runtime.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty/delivery/pty-applied-size-reporting.test.ts src/main/runtime/orca-runtime.test.ts",
           "result": "passed",
           "durationSeconds": 18.54,
           "summary": "8 test files passed, 1,272 tests passed on the PR branch."
@@ -12229,7 +12230,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-tabs-inventory-publication.test.ts src/main/runtime/rpc/methods/session-tabs-inventory-census-race.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/renderer/src/runtime/host-session-mirror-empty-inventory-settle.test.ts src/main/daemon/terminal-host-agent-session.test.ts tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-ipc-hidden-delivery-gate.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/delivery/pty-ipc-hidden-delivery-gate.test.ts",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=10 --max-failures=1",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -12266,7 +12267,7 @@
         "src/renderer/src/runtime/host-session-mirror-empty-inventory-settle.test.ts",
         "src/main/daemon/terminal-host-agent-session.test.ts",
         "tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts",
-        "src/main/ipc/pty-ipc-hidden-delivery-gate.test.ts",
+        "src/main/ipc/pty/delivery/pty-ipc-hidden-delivery-gate.test.ts",
         "src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
@@ -12375,7 +12376,7 @@
           ]
         },
         {
-          "file": "src/main/ipc/pty-ipc-hidden-delivery-gate.test.ts",
+          "file": "src/main/ipc/pty/delivery/pty-ipc-hidden-delivery-gate.test.ts",
           "assertions": [
             "foregrounds a preserved daemon PTY after handler recreation loses sync memory exactly once"
           ]
@@ -12593,6 +12594,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-ipc-hidden-delivery-gate.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/delivery/pty-ipc-hidden-delivery-gate.test.ts",
           "result": "passed",
           "durationSeconds": 5.84,
           "summary": "The full PTY IPC file passed 449 tests, including one first-observation foreground sync after handler recreation and deduplication of the repeated presence signal."
@@ -13033,7 +13035,7 @@
       "invariant": "High-volume terminal output must stay bounded across daemon socket writes, SSH relay writer/decoder/source retention/reconnect, main model and projection admission, runtime metadata, detectors, and tail checks, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input. Every new SSH session offers V1 and every same-build relay supports it; legacy delivery is reachable only when capability negotiation proves the peer cannot use V1. Negotiated SSH spans remain exact and contiguous through activation, exit, cancellation, recovery, desktop projection, and required remote replacement; provisional activation data cannot project, reconnect may release it only into the exact attempt's private recovery quarantine after contract validation, and exit seals that quarantine against later same-token frames until ordered admission or exact cancellation proof. Reconnect checkpoint capture freezes exact provider-generation/PTy admission, cancels queued old work, and waits for the running raw completion before exposing its accepted checkpoint; timeout or failure detaches only that PTy's old model, makes the checkpoint unavailable, and releases the bounded fence without closing the shared provider, while the same failure outside an active exact migration remains generation-fatal and overlapping reconnects preserve any earlier outstanding fence. Pending renderer projection IDs are capped and compacted across split remainders, exit preparation owns its renderer fence through finalization, exit-time cancellation transfers published projections before proof commit, generation close fences late proof while draining exact projection waiters, closed-generation identity compacts without weakening stale rejection, canceled source-delivery retirement retains at most one ordered token per PTY, and pause/resume targets only the exact provider generation. Additional subscribers cannot stall the owner, while the required legacy primary retains backpressure.",
       "oracle": "The current executable slice injects main-process renderer backlog pressure, then asserts unchanged path-provenance history reuse for pathless output, ordinary terminal-wait detection without a joined-tail allocation and with full prompt-family continuity, per-PTY and total pending-output caps, a 1,024-ID projection cap with split-remainder compaction, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, exact provider-generation pause ownership, renderer exit/data ordering, and ACK-gated in-flight bounds. The negotiation seam proves every initial connection and reconnect offers V1, the same-build relay advertises V1 without launch flags, old clients remain token-free, and method-not-found peers fall back without installing source ACK publication. The joined source-intake/multiplex oracle blocks renderer or headless serialization, admits one snapshot-covered span and one trailing span, requires replacement reservation only after the authoritative sequence is known, advances upstream ACK eligibility exactly to the covered boundary after SnapshotEnd, and delivers then ACKs the trailing span through the ordinary live path without cancellation. Source-range ledger and multiplex seams additionally require cumulative byte ACK 40 then 100 for one 100-byte frame to release exact byte credit without early source settlement, admit a contiguous higher-generation recovered token while the prior token remains unsettled, and reject stale stream or source generations without releasing in-flight byte credit. Replacement reservation rolls back every earlier span on a later failure, commit requires the exact frozen transfer states, and an authoritatively reclaimed covered span rejects commit without local trim authority while rollback removes the reservation idempotently. The exit-deadline oracle publishes a source-backed desktop projection, advances a fake clock to cancellation, and requires one projection transfer, proof commit, preparation, and final exit with no provider close, retained obligation, duplicate finalization, or process-lifetime cancellation tombstone; a second controlled proof remains pending across generation close and must never publish final exit, while both paths release the renderer preparation lease exactly once. The model-migration oracle accepts span A, blocks span B's raw emulator completion, begins disconnect migration, and proves no checkpoint or reconnect attach can remain at A; releasing B advances the exact checkpoint to B and projects B once. Its fake-clock arm reaches the 10-second deadline, requires checkpoint-unavailable, one exact model reset, zero retained admission charge and timers, and no effect from late raw settlement. Its two-PTY failure arm rejects one running raw callback under an active exact migration and requires one checkpoint-unavailable result, one model reset, zero provider closes, retained sibling checkpoint and transport liveness, zero charges and timers, and an unaffected other generation; a non-migrating sibling oracle still requires generation close. The intake additionally closes 2,048 sequential provider generations into one exact range, rejects stale events across that range, and preserves an out-of-order live gap until its own close. Direct-SSH contracts additionally prove activation-response settlement before the first source frame, claim-gated projection under same-decoder-turn response/data delivery, exact early-ACK reservation through send settlement or same-token retry, recovery completion visible before lease-held frames transfers those frames only into the private quarantine and admits no output until exact checkpoint-to-recoveryEnd coverage, invalid-checkpoint restore retention through response settlement followed by fresh-token retry and one live source frame, isolated saturated-subscriber eviction with healthy owner liveness, preserved legacy-primary backpressure, one-write ownership across write(false)/drain, control selection ahead of queued ordinary PTY input with FIFO lanes and bounded fairness, liveness rebasing, failed-exit retention through late ACK or exact recovery, response-settlement cancellation authority, token-scoped exit cancellation, exact checkpoint-to-recoveryEnd continuity, stale-owner one-shot retry, no physical PTY teardown on recovery failure, exact provider-generation closure and once-only cleanup when recovery cancellation publication or proof rejects, 16 MiB-plus-1 MiB decoder caps, charged per-PTY/session retention budgets, and eight-wide isolated reattach. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-renderer-inflight-credit.test.ts src/main/ipc/pty-global-renderer-credit.test.ts src/main/ipc/pty-output-batching-drain.test.ts src/main/ipc/pty-pending-output-cap.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/delivery/pty-renderer-inflight-credit.test.ts src/main/ipc/pty/delivery/pty-global-renderer-credit.test.ts src/main/ipc/pty/delivery/pty-output-batching-drain.test.ts src/main/ipc/pty/delivery/pty-pending-output-cap.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/protocol-backpressure.test.ts --reporter=dot",
@@ -13046,10 +13048,10 @@
         // Historical evidence commands; the override is ignored after the always-on transition.
       ],
       "testFiles": [
-        "src/main/ipc/pty-renderer-inflight-credit.test.ts",
-        "src/main/ipc/pty-global-renderer-credit.test.ts",
-        "src/main/ipc/pty-output-batching-drain.test.ts",
-        "src/main/ipc/pty-pending-output-cap.test.ts",
+        "src/main/ipc/pty/delivery/pty-renderer-inflight-credit.test.ts",
+        "src/main/ipc/pty/delivery/pty-global-renderer-credit.test.ts",
+        "src/main/ipc/pty/delivery/pty-output-batching-drain.test.ts",
+        "src/main/ipc/pty/delivery/pty-pending-output-cap.test.ts",
         "src/main/runtime/orca-runtime-path-candidate-history.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
@@ -13064,19 +13066,19 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/main/ipc/pty-renderer-inflight-credit.test.ts",
+          "file": "src/main/ipc/pty/delivery/pty-renderer-inflight-credit.test.ts",
           "assertions": ["total renderer in-flight output is capped across many PTYs"]
         },
         {
-          "file": "src/main/ipc/pty-global-renderer-credit.test.ts",
+          "file": "src/main/ipc/pty/delivery/pty-global-renderer-credit.test.ts",
           "assertions": ["active PTY pending output is prioritized during renderer backpressure"]
         },
         {
-          "file": "src/main/ipc/pty-output-batching-drain.test.ts",
+          "file": "src/main/ipc/pty/delivery/pty-output-batching-drain.test.ts",
           "assertions": ["combined pending output exceeding the interactive size limit is batched"]
         },
         {
-          "file": "src/main/ipc/pty-pending-output-cap.test.ts",
+          "file": "src/main/ipc/pty/delivery/pty-pending-output-cap.test.ts",
           "assertions": [
             "reconnect replacement cannot redirect pause or resume away from the exact provider generation"
           ]
@@ -13171,7 +13173,7 @@
           "result": "passed",
           "durationSeconds": 1.5,
           "summary": "1 test file(s) passed, 209 tests passed on main@1282f5c2d in a clean checkout.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-renderer-inflight-credit.test.ts src/main/ipc/pty-global-renderer-credit.test.ts src/main/ipc/pty-output-batching-drain.test.ts src/main/ipc/pty-pending-output-cap.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/delivery/pty-renderer-inflight-credit.test.ts src/main/ipc/pty/delivery/pty-global-renderer-credit.test.ts src/main/ipc/pty/delivery/pty-output-batching-drain.test.ts src/main/ipc/pty/delivery/pty-pending-output-cap.test.ts"
         },
         {
           "date": "2026-07-10",
@@ -18335,16 +18337,16 @@
       "invariant": "After a renderer lifecycle reset (main-frame did-start-navigation / render-process-gone / destroyed), no surviving PTY remains delivery-gated by pre-reset unacked bytes: main's in-flight counters and pending backlog equal the true state of the new page (zero in-flight, zero pending). Delivery then resumes only once the reloaded page's pty:data dispatcher re-registers and signals pty:rendererDispatcherReady; during the boot window before that handshake main holds all sends (data accrues losslessly in the capped pending backlog) so bytes cannot be dropped into a listener-less page and re-pin the gate. The hold itself cannot become a permanent freeze: a one-shot ~10s watchdog armed on each reset force-opens the gate (incrementing rendererDispatcherReadyForcedCount) if the handshake is lost, and the real handshake or a re-registration cancels it. The reset fires only for a new-document main-frame navigation: did-start-navigation carries exact frame and same-document details, so overlapping subframe or in-page navigation never clears accounting or holds the gate on the still-alive page. If a renderer lifecycle edge is otherwise missed, a backstop still recovers: because the handshake is one-shot per page load, receiving pty:rendererDispatcherReady while the gate is already open proves a reset was missed (or the watchdog force-opened the gate), so the handler reconciles by clearing the stale accounting before re-opening. The renderer sends that handshake exactly once per page load, after its pty:data listener registers.",
       "oracle": "Ingest more than 512 KB of PTY output with no renderer ACKs and assert the per-PTY gate closes (sends stop at the 512 KB high-water, remainder accrues as pending). Fire the registered main-frame did-start-navigation listener and assert rendererInFlightChars and pendingChars are zero and the new diagnostics record the reset (rendererLifecycleResetCount 1, lastLifecycleResetClearedChars 512 KB). Then, before any dispatcher-ready handshake, ingest another chunk and assert it is NOT sent and NOT counted in-flight (held for the boot window, accruing in pending). Finally fire the pty:rendererDispatcherReady handshake and assert the held chunk is delivered to the renderer. Counters-zero without proving both the boot-window hold and that delivery resumes is insufficient. Additional cases prove the boot-window hold also covers the interactive direct-send fast path (input-primed keystroke echo is held, not sent, until the handshake) and that the self-heal watchdog force-opens the gate (rendererDispatcherReadyForcedCount 1) when no handshake arrives, while a timely handshake cancels the watchdog and leaves no orphaned timer. A further case opens the new page with a main-frame navigation and dispatcher handshake, then fires an overlapping subframe navigation and asserts the gate stays ready, the reset count stays at exactly one, and fresh output delivers without the watchdog — proving an iframe cannot reclose the live page. A backstop case saturates the gate, then fires pty:rendererDispatcherReady while the gate is still open (ready true) with no preceding reset — modeling a missed lifecycle edge — and asserts the handler reconciles: in-flight and pending clear, rendererLifecycleResetCount increments, and fresh output flows immediately (a straggler ACK is clamped and cannot underflow). A renderer-side case (pty-dispatcher-pi-routing.test.ts) asserts ensurePtyDispatcher() sends pty:rendererDispatcherReady exactly once across two attach calls — proving the send fires (it is optional-chained) and the one-shot guard holds.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-renderer-lifecycle-delivery-reset.test.ts src/main/ipc/pty-dispatcher-handshake-osc-answers.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/delivery/pty-renderer-lifecycle-delivery-reset.test.ts src/main/ipc/pty-dispatcher-handshake-osc-answers.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts"
       ],
       "testFiles": [
-        "src/main/ipc/pty-renderer-lifecycle-delivery-reset.test.ts",
+        "src/main/ipc/pty/delivery/pty-renderer-lifecycle-delivery-reset.test.ts",
         "src/main/ipc/pty-dispatcher-handshake-osc-answers.test.ts",
         "src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/ipc/pty-renderer-lifecycle-delivery-reset.test.ts",
+          "file": "src/main/ipc/pty/delivery/pty-renderer-lifecycle-delivery-reset.test.ts",
           "assertions": [
             "a PTY saturated past the 512 KB per-PTY high-water with no ACKs stops sending and accrues pending output (gate closed)",
             "firing the registered main-frame did-start-navigation listener zeroes rendererInFlightChars and pendingData and records rendererLifecycleResetCount and lastLifecycleResetClearedChars",
@@ -18375,6 +18377,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-renderer-lifecycle-delivery-reset.test.ts src/main/ipc/pty-dispatcher-handshake-osc-answers.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/delivery/pty-renderer-lifecycle-delivery-reset.test.ts src/main/ipc/pty-dispatcher-handshake-osc-answers.test.ts src/renderer/src/components/terminal-pane/pty-dispatcher-pi-routing.test.ts",
           "result": "passed",
           "durationSeconds": 5,
           "summary": "439 tests passed including the lifecycle-reset, boot-window (dispatcher-ready handshake), interactive-gate hold, watchdog self-heal, exact-navigation filter (overlapping subframe navigation is ignored), missed-reset reconcile backstop (handshake-while-open), cross-registration watchdog-cancel, and renderer-side one-shot handshake-send regressions. Removing the reset call reproduces the reload freeze (rendererInFlightChars stays 524288); removing the send-hold reproduces the boot-window leak; removing the interactive-path flag check sends keystroke echo into the not-yet-ready page; removing the watchdog arm leaves the gate held forever; removing the watchdog cancel leaves an orphaned timer after the handshake; switching back to aggregate did-start-loading state lets an overlapping iframe load reclose the gate; removing the handshake-while-open reconcile leaves the survivors pinned at 524288 after a missed lifecycle edge."

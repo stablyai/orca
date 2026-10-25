@@ -19,10 +19,12 @@ const SQLITE_HARNESSES = new Set([
   'persistence-test-harness',
   'agent-session-record-store-test-harness',
   'structured-agent-session-rest-test-rig',
-  'journal-host-database-test-support'
+  'journal-host-database-test-support',
+  'acknowledged-terminal-tab-retirement-fixture'
 ])
 export const SQLITE_MODULES = [
   'src/main/sqlite/sync-database',
+  'src/main/persistence/profile-state/profile-state-sqlite-authority',
   'src/main/native-chat/agent-session-journal/journal-host-database',
   'src/main/runtime/orchestration/db',
   'src/main/runtime/orchestration/db/orchestration-db',
@@ -86,7 +88,7 @@ function readCache(version) {
   }
 }
 
-/** Unit tests that load Node SQLite through a direct import, as repo-relative paths. */
+/** Unit tests that import a SQLite module or harness directly, as repo-relative paths. */
 export function findSqliteRuntimeTests() {
   // Why: reading every test costs about a second; unchanged files reuse their last verdict.
   const version = createHash('sha256')

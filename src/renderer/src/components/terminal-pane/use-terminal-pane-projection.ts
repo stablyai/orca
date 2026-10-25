@@ -100,8 +100,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     setTerminalErrorsByPaneId((current) =>
       mapPaneTerminalErrors(current, stripSshReconnectOwnedErrorLines)
     )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [sshReconnectOwnsTerminalErrors])
+  }, [sshReconnectOwnsTerminalErrors, setTerminalError, setTerminalErrorsByPaneId])
   const visibleTerminalError = terminalErrorForPane(
     terminalError,
     terminalErrorsByPaneId,

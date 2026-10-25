@@ -9,7 +9,6 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { fixture } from '../../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../orca-runtime'
-import type { RuntimeStore } from '../runtime-store-contract'
 import type { ResolvedWorktreeRepoScans } from '../workspaces/resolved-worktree-scan-join'
 import { requireSwitchedOn } from './require-switched-on'
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
@@ -52,8 +51,7 @@ describe('workspace rows publish cost', () => {
     store.addRepo(repo)
     // Checkouts outside the workspace directory count as external; show them, as a long-time user does.
     store.updateSettings({ worktreeVisibilityDefaults: { external: 'show' } })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real Store is a RuntimeStore.
-    const runtime = new CachedGitRuntime(store as unknown as RuntimeStore)
+    const runtime = new CachedGitRuntime(store)
     const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
     const phone = new TestPhone(feed, 'conn-1')
     phone.refresh()

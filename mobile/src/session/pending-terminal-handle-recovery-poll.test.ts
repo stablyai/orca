@@ -75,7 +75,7 @@ function makeHarness() {
   )
   const client = { sendRequest, subscribe } as unknown as RpcClient
   const consumeAcceptedSessionTabs = () => {}
-  const fetchTerminals = async () => {}
+  const fetchTerminals = async () => true
   const getPendingTerminalRecoveryContextKey = () => contextKey
   const hasRecoveryNeed = () => otherRecoveryNeeded
   const onPendingTerminalRecoveryParked = (key: string | null) => parkedContexts.push(key)
@@ -89,6 +89,7 @@ function makeHarness() {
       client,
       connState,
       worktreeId: 'repo::worktree',
+      terminalInventoryRecoveryScopeKey: 'repo::worktree',
       applySessionTabs,
       consumeAcceptedSessionTabs,
       fetchTerminals,

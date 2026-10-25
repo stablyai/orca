@@ -1,4 +1,4 @@
-import { resetHiddenRendererPtyDeliveryDebugCounters } from '../../pty-hidden-delivery-gate'
+import { resetHiddenRendererPtyDeliveryDebugCounters } from './pty-hidden-delivery-gate'
 import {
   setReadPtyRendererDeliveryDebugSnapshot,
   setResetPtyRendererDeliveryDebugSnapshot,

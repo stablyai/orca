@@ -1,6 +1,6 @@
 import {
   closeTestStores,
-  readPersistedStateJson,
+  readPersistedState,
   testState,
   createStore,
   dataFile,
@@ -413,7 +413,7 @@ describe('Store', () => {
   })
 
   describe('concurrent write serialization', () => {
-    it('chains debounced writes via pendingWrite so they run sequentially', async () => {
+    it('persists both repo additions across debounced writes', async () => {
       vi.useFakeTimers()
       try {
         const store = await createStore()
@@ -423,8 +423,7 @@ describe('Store', () => {
         vi.advanceTimersByTime(1000)
         await store.waitForPendingWrite()
 
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-        const persisted = JSON.parse(readPersistedStateJson()) as { repos: Repo[] }
+        const persisted = readPersistedState()
         expect(persisted.repos.map((r) => r.id).sort()).toEqual(['first', 'second'])
       } finally {
         vi.useRealTimers()

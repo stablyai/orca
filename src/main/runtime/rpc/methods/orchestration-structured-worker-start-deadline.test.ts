@@ -88,8 +88,7 @@ it('leaves the preamble only what the setup gate did not use of the caller’s t
   }
 
   const receipt = await startLocalWorker({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fields this start reads; the rest are optional.
-    params: { from: 'term_c', timeoutMs: 300_000, agent: 'claude' } as never,
+    params: { from: 'term_c', timeoutMs: 300_000, agent: 'claude' },
     mode: {
       mode: 'structured',
       preferred: 'structured',

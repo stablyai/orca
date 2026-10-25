@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
 import { dispatchPreambleSendOptions } from './preamble'
 import {

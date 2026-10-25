@@ -17,7 +17,8 @@ import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import { linearIssueAttributeFilterSignature } from '../../../../../shared/linear/issue-attribute-filter'
 import { reconcileTaskPageLinearIssuesAfterLandingRefresh } from './task-page-linear-cache-selectors'
-import { LINEAR_ITEM_LIMIT, TASK_SEARCH_DEBOUNCE_MS } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) {
   const {
     setTaskResumeState,
@@ -59,16 +60,8 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     lastLinearRequestRef,
     landingLinearRefreshKeysRef
   } = model
-  // Why: debounce the Linear search input so we don't fire a request per keystroke (300ms, matching GitHub search).
-  useEffect(() => {
-    if (!taskResumeApplied) {
-      return
-    }
-    const timeout = window.setTimeout(() => {
-      setAppliedLinearSearch(linearSearchInput)
-    }, TASK_SEARCH_DEBOUNCE_MS)
-    return () => window.clearTimeout(timeout)
-  }, [linearSearchInput, taskResumeApplied, setAppliedLinearSearch])
+  // Why: debounce the Linear search input so we don't fire a request per keystroke (matching GitHub search).
+  useTaskSearchDebouncedApply(linearSearchInput, taskResumeApplied, setAppliedLinearSearch)
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -280,8 +273,6 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     return () => {
       cancelled = true
     }
-    // Why: searchLinearIssues/listLinearIssues are stable selectors; adding them would re-run the effect on unrelated store updates.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
     linearMode,
@@ -291,10 +282,20 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     linearIssueLimit,
     linearRefreshNonce,
     linearAttributeFilter,
+    linearAttributeFilterWorkspaceId,
     linearListInvalidationVersionForSource,
     taskResumeApplied,
     getCachedLinearIssues,
-    linearTaskSourceContext
+    searchLinearIssues,
+    listLinearIssues,
+    linearTaskSourceContext,
+    linearAttributeFilterReadRef,
+    lastLinearRequestRef,
+    landingLinearRefreshKeysRef,
+    setLinearError,
+    setLinearIssues,
+    setLinearIssuesHasMore,
+    setLinearLoading
   ])
 
   // Why: Has Worktree loads Linear tickets linked on local worktrees, not a Linear list/search query.

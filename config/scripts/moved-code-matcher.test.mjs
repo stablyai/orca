@@ -5,9 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as quality from './check-changed-code-quality.mjs'
 
 const processCalls = vi.hoisted(() => ({ execFileSync: vi.fn(), spawnSync: vi.fn() }))
-// oxlint-disable-next-line anti-slop/no-module-mocking -- Test-only external process boundary; actual main executes.
 vi.mock('node:child_process', () => processCalls)
-// oxlint-disable-next-line anti-slop/no-module-mocking -- Resolve only the external executable used by this fixture.
 vi.mock('./oxlint-cli-invocation.mjs', () => ({
   resolveOxlintInvocation: () => ({ command: 'fixture-oxlint', prefixArgs: [] })
 }))

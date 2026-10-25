@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
@@ -115,9 +115,9 @@ function terminalInputBytes(postMessage: ReturnType<typeof vi.fn>): string {
 describe('terminal WebView external pointer wheel scrolling', () => {
   let animationFrames: Array<() => void>
   let buffer: BufferState
-  let postMessage: ReturnType<typeof vi.fn>
+  let postMessage: Mock<(data: string) => void>
   let registeredWindowListeners: RegisteredWindowListener[]
-  let scrollLines: ReturnType<typeof vi.fn>
+  let scrollLines: Mock<(lines: number) => void>
   let terminals: TerminalStub[]
 
   function boot(): void {
@@ -145,7 +145,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     animationFrames = []
     buffer = { baseY: 0, type: 'normal', viewportY: 0 }
     registeredWindowListeners = []
-    scrollLines = vi.fn()
+    scrollLines = vi.fn<(lines: number) => void>()
     terminals = []
     const addWindowEventListener = window.addEventListener.bind(window)
     vi.spyOn(window, 'addEventListener').mockImplementation(((
@@ -163,7 +163,7 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     vi.stubGlobal('cancelAnimationFrame', () => {})
     Object.defineProperty(window, 'innerWidth', { value: 381, configurable: true })
     Object.defineProperty(window, 'innerHeight', { value: 612, configurable: true })
-    postMessage = vi.fn()
+    postMessage = vi.fn<(data: string) => void>()
     const webWindow = window as unknown as {
       Terminal: new () => TerminalStub
       ReactNativeWebView: { postMessage: (data: string) => void }

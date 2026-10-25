@@ -373,12 +373,12 @@ describe('useMobileStructuredAgentSession', () => {
       throw new Error('hook not ready')
     }
 
-    await vi.waitFor(() => expect(hook.permission).not.toBeNull())
-    await vi.waitFor(() => expect(hook.question).not.toBeNull())
+    await vi.waitFor(() => expect(hook!.permission).not.toBeNull())
+    await vi.waitFor(() => expect(hook!.question).not.toBeNull())
     // The seed paints first; the session's own list is what a pick is checked against.
     await vi.waitFor(() => {
-      expect(listedModelIds(hook.optionSnapshot)).toContain('gpt-slow')
-      expect(hook.optionSnapshot.find((descriptor) => descriptor.id === 'model')).toMatchObject({
+      expect(listedModelIds(hook!.optionSnapshot)).toContain('gpt-slow')
+      expect(hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')).toMatchObject({
         settable: true
       })
     })
@@ -400,7 +400,7 @@ describe('useMobileStructuredAgentSession', () => {
     expect(hook.optionSurface.getSnapshot()).toEqual(hook.optionSnapshot)
 
     await act(async () => {
-      expect(await hook.setStructuredOption('model', 'gpt-fast')).toBe(true)
+      expect(await hook!.setStructuredOption('model', 'gpt-fast')).toBe(true)
     })
     expect(sendRequest).toHaveBeenCalledWith(
       'agentSession.setOption',
@@ -423,7 +423,7 @@ describe('useMobileStructuredAgentSession', () => {
     })
 
     await act(async () => {
-      expect(await hook.respondPermission(hook.permission!.options[0]!.send)).toBe(true)
+      expect(await hook!.respondPermission(hook!.permission!.options[0]!.send)).toBe(true)
     })
     expect(sendRequest).toHaveBeenCalledWith(
       'agentSession.respondToApproval',
@@ -440,7 +440,7 @@ describe('useMobileStructuredAgentSession', () => {
 
     await act(async () => {
       expect(
-        await hook.respondQuestion(formatQuestionFreeTextAnswer(hook.question!, 'custom answer'))
+        await hook!.respondQuestion(formatQuestionFreeTextAnswer(hook!.question!, 'custom answer'))
       ).toBe(true)
     })
     expect(sendRequest).toHaveBeenCalledWith(
@@ -466,7 +466,7 @@ describe('useMobileStructuredAgentSession', () => {
 
     let outcome: MobileNativeChatSendOutcome = 'rejected'
     await act(async () => {
-      outcome = await hook.sendWithOutcome('look at this', undefined, undefined, [
+      outcome = await hook!.sendWithOutcome('look at this', undefined, undefined, [
         { path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
       ])
     })

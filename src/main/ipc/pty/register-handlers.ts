@@ -8,7 +8,7 @@ import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/termi
 import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
-} from '../pty-hidden-delivery-gate'
+} from './delivery/pty-hidden-delivery-gate'
 import { localProvider, type ResolvedPtyHost } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'

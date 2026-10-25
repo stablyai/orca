@@ -95,12 +95,9 @@ installFakeCli('gh', fakeGhSource)
 installFakeCli('claude', fakeClaudeSource)
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
+  }
 })
 
 test.afterAll(() => {

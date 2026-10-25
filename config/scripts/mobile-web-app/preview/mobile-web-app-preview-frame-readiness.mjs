@@ -18,7 +18,7 @@
 import { describePreviewFrame, untilAborted } from './mobile-web-app-preview-frame-diagnosis.mjs'
 import { pollReportsUntil } from './mobile-web-app-preview-csp-reports.mjs'
 
-const POLL_MS = 25
+export const POLL_MS = 25
 const EVALUATE_MS = 1000
 
 /** The mounted preview frame, or null before one exists. */
@@ -26,7 +26,7 @@ export function previewFrame(page) {
   return page.frames().find((one) => one !== page.mainFrame()) ?? null
 }
 
-const abandonAfter = (ms) =>
+export const abandonAfter = (ms) =>
   new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), ms)
     timer.unref?.()
@@ -150,6 +150,40 @@ export async function waitForLoadedFrame(
     )
   }
   return previewFrame(page)
+}
+
+/** How long a painted frame may go on handing its input to the embedder before the arm gives up. */
+const INPUT_ROUTING_MS = 10_000
+
+/**
+ * Returns once a pointer over the frame reaches the frame rather than the embedder.
+ *
+ * Painted is not routed either. Chromium sends input into the frame's own process only once the
+ * browser holds that frame's hit-test region, and until then an event at the frame's coordinates
+ * is the embedder's, targeted at its `<iframe>` element. Playwright's checks all pass inside the
+ * frame, so its click reports landing while nothing in the artifact is activated.
+ *
+ * So the pointer is moved onto the frame until the embedder's own count of events on an `<iframe>`
+ * stops rising. Two alternating points, because a move to where the pointer already is need not
+ * dispatch anything. An engine that keeps the frame in-process never shows the embedder those
+ * events, so it passes on the first move.
+ */
+export async function waitForFrameInputRouting(page, clip, signal, arm) {
+  const started = Date.now()
+  const embedderSaw = async () => await page.evaluate(() => window.__embedderFramePointer ?? 0)
+  for (let step = 0; !signal?.aborted; step += 1) {
+    const before = await embedderSaw()
+    await page.mouse.move(clip.x + (step % 2), clip.y)
+    if ((await embedderSaw()) === before) {
+      return
+    }
+    if (Date.now() - started > INPUT_ROUTING_MS) {
+      throw new Error(
+        `[html-preview-render] ${arm} still handed its pointer input to the embedder after ${String(Date.now() - started)}ms`
+      )
+    }
+    await abandonAfter(POLL_MS)
+  }
 }
 
 /** The two the widened `img-src` admits; the font beside them stays an absence. */

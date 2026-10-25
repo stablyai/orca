@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS,
   type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
-} from '../../../../shared/agent-session-conversation-command'
+} from '../../../../shared/agent-session/agent-session-conversation-command'
 import type {
   StructuredAgentSessionWrite,
   StructuredAgentSessionWriteOutcome

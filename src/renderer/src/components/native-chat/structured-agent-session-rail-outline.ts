@@ -7,7 +7,7 @@
 // the gap would silently skip messages. That outline is stale: the rail shows
 // loaded messages only until a fresh one arrives.
 
-import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 
 export type StructuredRailOutlineWindow = {

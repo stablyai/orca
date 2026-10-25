@@ -136,14 +136,16 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     // Why ptyRecoveryStatesByPaneId: a host-retired pane whose PTY has not yet
     // finished ending is kept until this re-run, when its transport reports a new
     // recovery state and its PTY has cleared.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     executeClosePane,
     isActive,
     paneCount,
     persistLayoutSnapshot,
     ptyRecoveryStatesByPaneId,
-    restoredLayout
+    restoredLayout,
+    hostRetiredLeafIdsRef,
+    managerRef,
+    paneTransportsRef
   ])
 
   useLayoutEffect(() => {
@@ -186,8 +188,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     }
     const frame = scheduleRefit()
     return () => cancelAnimationFrame(frame)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [isolatedPaneKey, paneCount, tabId])
+  }, [isolatedPaneKey, paneCount, tabId, activityIsolationSnapshotRef, containerRef, managerRef])
 
   useEffect(() => {
     const snapshots = activityIsolationSnapshotRef.current
@@ -195,8 +196,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
       restoreExpandedLayoutFrom(snapshots)
       cancelPendingPaneSizeRefreshFrames({ pendingPaneSizeRefreshFrameIdsRef })
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  }, [activityIsolationSnapshotRef, pendingPaneSizeRefreshFrameIdsRef])
 
   const processExitActions = useTerminalPaneProcessExitActions(controller)
 

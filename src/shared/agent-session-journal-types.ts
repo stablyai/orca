@@ -20,7 +20,7 @@ import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
-import type { AgentMessageSource } from './agent-session-message-source'
+import type { AgentMessageSource } from './agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
 
 export { type AgentType }

@@ -159,7 +159,7 @@ function createRuntimeClosePath(
       pendingShutdowns.push(shutdown)
       return true
     },
-    listProcesses: (options) => router.listProcesses(options),
+    listProcesses: (_hostId, options) => router.listProcesses(options),
     hasPty: (ptyId) => router.hasPty(ptyId),
     getForegroundProcess: (ptyId) => router.getForegroundProcess(ptyId)
   })
@@ -270,6 +270,9 @@ async function main(): Promise<void> {
         router.dispose()
       }
       router = await connectThroughDesktopDiscovery(config, burst)
+    }
+    if (!router) {
+      throw new Error('Reconnect fixture needs at least one reconnect burst')
     }
     await connectParallelRuntimeClients(config)
     const { dispatcher, targets, pendingShutdowns } = await createRuntimeClosePath(config, router)

@@ -81,6 +81,8 @@ export type TerminalCreateOptions = {
    * the runtime still builds, so overriding them does not take the launch away from it.
    */
   agentArgs?: string | null
+  /** Main-internal: Orca, not a user, types into this `startupAgent` once it starts. */
+  suppressStartupUpdatePrompt?: boolean
   /** Main-internal: the runtime fact this agent's command was quoted for; its spawn takes the PTY
    *  shell from it. Set by the host planner or a host caller that quoted with it, never a client. */
   launchRuntime?: AgentLaunchRuntime

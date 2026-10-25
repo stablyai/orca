@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type * as I18nModule from '@/i18n/i18n'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
@@ -25,7 +26,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 }))
 
 vi.mock('@/i18n/i18n', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/i18n/i18n')>() // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.mock requires an inline import
+  const actual = await importOriginal<typeof I18nModule>()
   return {
     ...actual,
     translate: (_key: string, fallback: string, options?: { value0?: string }) =>

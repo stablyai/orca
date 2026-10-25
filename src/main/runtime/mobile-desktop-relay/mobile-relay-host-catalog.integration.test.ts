@@ -21,6 +21,7 @@ import {
 } from '../runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import { partialRuntimeStore } from '../runtime-store-partial-fixture'
 
 vi.mock('../../git/worktree', () => {
   const worktrees = [
@@ -49,8 +50,7 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
   })
 
   async function startRuntime() {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store carries the surface these RPCs read, as in the sibling relay tests.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath: mkdtempSync(join(tmpdir(), 'orca-relay-hosts-')),

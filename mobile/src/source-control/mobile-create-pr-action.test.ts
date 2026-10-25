@@ -1,22 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  HostedReviewCreationBlockedReason,
-  HostedReviewCreationEligibility
-} from '../../../src/shared/hosted-review'
+import type { HostedReviewCreationBlockedReason } from '../../../src/shared/hosted-review'
+import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import {
   buildMobileCreatePrAction,
   type MobileCreatePrEligibilityState
 } from './mobile-create-pr-action'
 
 function eligibility(
-  overrides: Partial<HostedReviewCreationEligibility> = {}
-): HostedReviewCreationEligibility {
+  overrides: Partial<MobileHostedReviewEligibilityReply> = {}
+): MobileHostedReviewEligibilityReply {
   return {
     provider: 'github',
     review: null,
     canCreate: true,
     blockedReason: null,
     nextAction: null,
+    reviewLookupOutcome: 'not_found',
     defaultBaseRef: 'main',
     title: 'feature',
     body: '',
@@ -27,7 +26,7 @@ function eligibility(
 function action(
   overrides: {
     branch?: string | null
-    eligibility?: HostedReviewCreationEligibility | null
+    eligibility?: MobileHostedReviewEligibilityReply | null
     busyAction?: string | null
   } = {}
 ) {
@@ -60,7 +59,7 @@ describe('buildMobileCreatePrAction', () => {
 
   it('uses merge-request copy for GitLab', () => {
     const { descriptor } = action({
-      eligibility: eligibility({ provider: 'gitlab' as HostedReviewProvider })
+      eligibility: eligibility({ provider: 'gitlab' })
     })
 
     expect(descriptor.label).toBe('Create Merge Request')

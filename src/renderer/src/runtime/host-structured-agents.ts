@@ -2,7 +2,7 @@ import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult,
   type AgentSessionRegisteredAgent
-} from '../../../shared/agent-session-registered-agents'
+} from '../../../shared/agent-session/agent-session-registered-agents'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'

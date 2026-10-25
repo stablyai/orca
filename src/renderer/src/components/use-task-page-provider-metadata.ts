@@ -51,7 +51,6 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
     linearConnected,

@@ -133,7 +133,10 @@ describe('createBlankWorkspace', () => {
     // terminal IS the agent and the user's structured-chat default can never apply.
     const calls: Call[] = []
     const client = fakeClient(
-      () => ({ worktreeId: 'wt-9', outcome: { kind: 'structured' } }),
+      () => ({
+        worktreeId: 'wt-9',
+        outcome: { kind: 'structured', sessionId: 'session-9', handle: 'agent-session:session-9' }
+      }),
       calls
     )
 

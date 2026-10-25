@@ -1,4 +1,3 @@
-// oxlint-disable anti-slop/no-module-mocking -- Test-only mocks shared by PTY connection registration suites.
 import type * as React from 'react'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'

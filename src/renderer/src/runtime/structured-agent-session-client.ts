@@ -7,8 +7,8 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
-import type { AgentSessionConversationOutline } from '../../../shared/agent-session-conversation-outline'
-import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
+import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session/agent-session-conversation-command'
 import {
   AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,

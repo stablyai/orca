@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 // A parked paired pane closes its stream, the PTY's last viewer. On a windowless host the PTY must
 // keep that viewer's grid, while other viewers and phones can still take it (#15997).
@@ -15,10 +16,8 @@ function createRuntime({ headless }: { headless: boolean }) {
     getWorktreeMeta: () => undefined,
     getSettings: () => ({ workspaceDir: '/tmp/workspaces', mobileAutoRestoreFitMs: 5_000 })
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub covers the settings and repo reads the viewer floor reaches; the rest of Store is unreached.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   const sizes = new Map([[PTY, { ...SPAWN_GRID }]])
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resize and getSize are the only controller members the layout queue drives here.
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
@@ -28,7 +27,7 @@ function createRuntime({ headless }: { headless: boolean }) {
       return true
     },
     getSize: (ptyId: string) => sizes.get(ptyId) ?? null
-  } as never)
+  })
   if (headless) {
     publishHeadlessRuntimeGraph(runtime)
   } else {

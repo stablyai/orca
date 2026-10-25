@@ -31,7 +31,7 @@ const ref = <T>(current: T) => ({ current })
 const renderers: ReactTestRenderer[] = []
 function clientFixture() {
   return {
-    sendRequest: vi.fn(async (method: string) => ({
+    sendRequest: vi.fn(async (method: string, _params?: unknown) => ({
       id: 'rpc',
       ok: true as const,
       result:

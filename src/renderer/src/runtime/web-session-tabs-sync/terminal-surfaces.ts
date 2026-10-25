@@ -4,7 +4,7 @@ import type {
   RuntimeMobileSessionAgentTab
 } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import { defaultAgentChatLabel } from '../../../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'

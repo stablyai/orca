@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 // Execute generated host guards in real local shells.
 const shell = vi.hoisted((): { env: NodeJS.ProcessEnv | undefined } => ({ env: undefined }))
@@ -53,8 +54,7 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
     const fence = join(root, '.install-lock')
     const journal = join(root, 'transaction.json')
     const launched = join(home, 'launched-by-stale-holder')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-    const conn = {} as never
+    const conn = unusedOrcadHostTransport()
     const options = { conn, host: getRemoteHostPlatform('linux-x64'), remoteHome: home }
 
     let resumeStale!: () => void
@@ -120,8 +120,7 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
       `#!/bin/sh\nif [ "$1" = '${journal}' ] && [ ! -f '${ready}' ]; then touch '${ready}'; while [ ! -f '${resume}' ]; do sleep 0.05; done; fi\nexec /bin/mv "$@"\n`
     )
     chmodSync(join(bin, 'mv'), 0o755)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-    const conn = {} as never
+    const conn = unusedOrcadHostTransport()
     const options = { conn, host: getRemoteHostPlatform('linux-x64'), remoteHome: home }
     shell.env = { ...process.env, PATH: `${bin}:/usr/bin:/bin` }
     let finishSuccessor: (() => void) | undefined
@@ -170,8 +169,7 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
     mkdirSync(join(root, 'profiles'), { recursive: true })
     writeFileSync(join(lockDir, '.orca-fence-owner'), 'successor')
     writeFileSync(join(root, 'profiles', 'state.json'), 'successor-state')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-    const conn = {} as never
+    const conn = unusedOrcadHostTransport()
     const options = { conn, host: getRemoteHostPlatform('linux-x64'), remoteHome: home }
     await expect(
       runWithOrcadFence({ lockDir, token: 'stale' }, () =>

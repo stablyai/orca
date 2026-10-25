@@ -36,7 +36,7 @@ import {
 
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
-import { readAgentMessageSource } from './agent-session-message-source'
+import { readAgentMessageSource } from './agent-session/agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
 import type { StructuredAgentSessionWorkScope } from './structured-agent-session-main-agent-working'

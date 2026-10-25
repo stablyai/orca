@@ -7,7 +7,10 @@ import type {
   BrowserSitePermission,
   BrowserSitePermissionDecision
 } from '../../shared/browser-site-permission'
-import type { BrowserContextMenuRequestedEvent } from '../../shared/browser-guest-events'
+import type {
+  BrowserContextMenuRequestedEvent,
+  BrowserTargetUrlChangedEvent
+} from '../../shared/browser-guest-events'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
@@ -23,6 +26,12 @@ export const browserPageInteractionAndSessionsApi = {
       callback(data)
     ipcRenderer.on('browser:context-menu-dismissed', listener)
     return () => ipcRenderer.removeListener('browser:context-menu-dismissed', listener)
+  },
+  onTargetUrlChanged: (callback: (event: BrowserTargetUrlChangedEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserTargetUrlChangedEvent) =>
+      callback(data)
+    ipcRenderer.on('browser:target-url-changed', listener)
+    return () => ipcRenderer.removeListener('browser:target-url-changed', listener)
   },
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void

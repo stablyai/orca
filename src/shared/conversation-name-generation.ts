@@ -1,4 +1,4 @@
-import { normalizeAgentSessionConversationName } from './agent-session-conversation-name'
+import { normalizeAgentSessionConversationName } from './agent-session/agent-session-conversation-name'
 import { cleanGeneratedCommitMessage } from './commit-message-agent-output'
 import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
 

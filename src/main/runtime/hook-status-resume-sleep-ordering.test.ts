@@ -66,10 +66,7 @@ function makeRuntimeWithSlowFirstWrite() {
       return { ok: true, result: {} }
     }
   )
-  const runtime = new OrcaRuntimeService(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-    Object.assign(runtimeStore, { applyLayoutCommand }) as never
-  )
+  const runtime = new OrcaRuntimeService(Object.assign(runtimeStore, { applyLayoutCommand }))
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, getSession, releaseFirstWrite }
 }

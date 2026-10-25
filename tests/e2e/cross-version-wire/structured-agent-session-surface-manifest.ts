@@ -71,9 +71,14 @@ export function envelope(args: {
   }
 }
 
-export function attachParams(fence: number | null): Record<string, unknown> {
-  const params = {
-    envelope: { sessionId: SESSION, clientOperationId: operationId(), expectedRuntimeFence: fence },
+export function attachParams(fence: number | null): AgentSessionAttachParams {
+  const params: AgentSessionAttachParams = {
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: operationId(),
+      expectedRuntimeFence: fence,
+      payloadFingerprint: ''
+    },
     location: {
       executionHostId: 'local',
       wslDistro: null,
@@ -93,7 +98,7 @@ export function attachParams(fence: number | null): Record<string, unknown> {
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.attach',
         sessionId: SESSION,
-        fields: attachFingerprintFields(params as unknown as AgentSessionAttachParams)
+        fields: attachFingerprintFields(params)
       })
     }
   }

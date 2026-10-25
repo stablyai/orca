@@ -4,7 +4,6 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
@@ -30,6 +29,7 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 import { buildRuntimeSessionMirrorEnvironmentKeys } from './use-runtime-session-mirror-environment-key'
+import { publicRuntimeEnvironment } from './paired-runtime-environment-test-fixture'
 
 const ENV_A = 'env-a'
 const WORKTREE = 'repo-a::worktree-a'
@@ -153,10 +153,9 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     resetWebSessionTabsSnapshotFreshnessForTests()
     clearHostLiveTerminalProbesForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror scan and revision ledger read only id, createdAt and pairingRevision.
     const runtimeEnvironments = [
-      { id: ENV_A, createdAt: 100, pairingRevision: REVISION_A }
-    ] as PublicKnownRuntimeEnvironment[]
+      publicRuntimeEnvironment({ id: ENV_A, createdAt: 100, pairingRevision: REVISION_A })
+    ]
     replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
     useAppStore.setState(
       {

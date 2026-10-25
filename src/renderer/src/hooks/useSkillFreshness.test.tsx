@@ -61,6 +61,11 @@ function Probe({
   return null
 }
 
+function installBundledPlan(bundledPlan: Window['api']['skills']['bundledPlan']): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook calls only skills.bundledPlan on the preload API.
+  window.api = { skills: { bundledPlan } } as unknown as Window['api']
+}
+
 describe('useSkillFreshness', () => {
   beforeEach(() => {
     _skillFreshnessCacheForTests.reset()
@@ -90,8 +95,7 @@ describe('useSkillFreshness', () => {
       .fn()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
 
     await act(async () => root?.render(<Probe />))
     expect(bundledPlan).toHaveBeenCalledTimes(1)
@@ -107,8 +111,7 @@ describe('useSkillFreshness', () => {
   it('does not scan, subscribe, or refresh while local freshness is disabled', async () => {
     const bundledPlan = vi.fn().mockResolvedValue(plan(1))
     const addEventListener = vi.spyOn(window, 'addEventListener')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
 
     await act(async () => root?.render(<Probe enabled={false} />))
     await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
@@ -129,8 +132,7 @@ describe('useSkillFreshness', () => {
       .fn()
       .mockResolvedValueOnce(plan(1, ['orca-cli']))
       .mockReturnValueOnce(second.promise)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
     const renderProbes = (enabled: boolean): void => {
       root?.render(
         <StrictMode>
@@ -170,8 +172,7 @@ describe('useSkillFreshness', () => {
       .fn()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
 
     await act(async () => root?.render(<Probe />))
     await act(async () => first.resolve(plan(1)))
@@ -194,8 +195,7 @@ describe('useSkillFreshness', () => {
       .fn()
       .mockResolvedValueOnce(plan(1, ['orca-cli']))
       .mockReturnValueOnce(second.promise)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
 
     await act(async () => root?.render(<Probe />))
     expect(state?.plan?.skills.map((skill) => skill.name)).toEqual(['orca-cli'])
@@ -215,8 +215,7 @@ describe('useSkillFreshness', () => {
     const first = deferred<BundledSkillPlan>()
     const second = deferred<BundledSkillPlan>()
     const bundledPlan = vi.fn().mockReturnValueOnce(first.promise).mockReturnValue(second.promise)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
 
     await act(async () =>
       root?.render(
@@ -237,8 +236,7 @@ describe('useSkillFreshness', () => {
   it('publishes a manual refresh to every consumer', async () => {
     const second = deferred<BundledSkillPlan>()
     const bundledPlan = vi.fn().mockResolvedValueOnce(plan(1)).mockReturnValueOnce(second.promise)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
 
     await act(async () =>
       root?.render(
@@ -269,8 +267,7 @@ describe('useSkillFreshness', () => {
   it('fails closed when an invalidation scan rejects', async () => {
     const second = deferred<BundledSkillPlan>()
     const bundledPlan = vi.fn().mockResolvedValueOnce(plan(1)).mockReturnValueOnce(second.promise)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
 
     await act(async () => root?.render(<Probe />))
     expect(state?.plan?.planDigest).toBe(digest(1))
@@ -288,10 +285,7 @@ describe('useSkillFreshness', () => {
   it('installs one event-listener pair for multiple consumers and cleans it up', async () => {
     const addEventListener = vi.spyOn(window, 'addEventListener')
     const removeEventListener = vi.spyOn(window, 'removeEventListener')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = {
-      skills: { bundledPlan: vi.fn().mockResolvedValue(plan(1)) }
-    } as never
+    installBundledPlan(vi.fn().mockResolvedValue(plan(1)))
 
     await act(async () =>
       root?.render(
@@ -319,8 +313,7 @@ describe('useSkillFreshness', () => {
 
   it('re-plans a new host without ever showing the previous host’s plan', async () => {
     const bundledPlan = vi.fn().mockResolvedValueOnce(plan(1, ['orca-cli']))
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = { skills: { bundledPlan } } as never
+    installBundledPlan(bundledPlan)
 
     await act(async () => root?.render(<Probe />))
     expect(state?.plan?.planDigest).toBe(digest(1))

@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import {
   endedRunningAgentJournalToolCall,
   interruptedAgentJournalToolCall
@@ -9,7 +10,11 @@ import {
 import type { AgentJournalItemIdentity } from '../../../src/shared/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import {
+  importReleaseCheckoutModule,
+  materializeReleaseCheckout,
+  releaseModuleExport
+} from './release-checkout'
 
 // A release that predates a tool call's `endedAs`. Pinned, not the newest tag: what it must do is
 // read the cut-short call as failed, which no later release will contradict.
@@ -19,15 +24,6 @@ const SESSION = 'session-interrupted-tool'
 
 function call(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
-}
-
-function releaseExport<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the pinned release exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an export the pinned release has; each caller names the shape it uses, and a changed one fails the test.
-  return value as T
 }
 
 type OldRenderItem = { itemId: string; body: { kind: string; [field: string]: unknown } }
@@ -49,7 +45,7 @@ test('an older host and client read a call a stop cut short as the failure they 
         workspaceId: 'ws-1',
         hostId: 'host-1',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       stateDirectory: directory,
       now: () => 1_000
@@ -88,27 +84,27 @@ test('an older host and client read a call a stop cut short as the failure they 
         'src/shared/native-chat-tool-run-outcome.ts'
       ].map((path) => importReleaseCheckoutModule(checkout, path))
     )
-    const createState = releaseExport<(sessionId: string, epoch: string) => unknown>(
+    const createState = releaseModuleExport<(sessionId: string, epoch: string) => unknown>(
       reducer,
       'createJournalReducerState'
     )
-    const applyRow = releaseExport<(state: unknown, row: JournalRow) => void>(
+    const applyRow = releaseModuleExport<(state: unknown, row: JournalRow) => void>(
       reducer,
       'applyJournalRow'
     )
-    const render = releaseExport<(state: unknown) => { items: OldRenderItem[] }>(
+    const render = releaseModuleExport<(state: unknown) => { items: OldRenderItem[] }>(
       reducer,
       'renderJournalState'
     )
-    const renderItemSchema = releaseExport<{ parse: (value: unknown) => OldRenderItem }>(
+    const renderItemSchema = releaseModuleExport<{ parse: (value: unknown) => OldRenderItem }>(
       schemas,
       'AgentJournalRenderItemSchema'
     )
-    const project = releaseExport<(item: unknown) => OldMessage>(
+    const project = releaseModuleExport<(item: unknown) => OldMessage>(
       projection,
       'projectStructuredItemToNativeChat'
     )
-    const runOutcome = releaseExport<OldRunOutcome>(outcome, 'nativeChatToolRunOutcome')
+    const runOutcome = releaseModuleExport<OldRunOutcome>(outcome, 'nativeChatToolRunOutcome')
     const settled = { activeTurnIsWorking: false }
 
     const blocksOf = (items: OldRenderItem[]) =>

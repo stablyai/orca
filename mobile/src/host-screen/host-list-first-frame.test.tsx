@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SIDEBAR_INPUTS_SEMANTICS_VERSION } from '../../../src/shared/sidebar-list/sidebar-inputs-feed-contract'
 import type { InstalledSidebarInputs } from '../../../src/shared/sidebar-list/sidebar-inputs-feed-installer'
-import type { RpcClient } from '../transport/rpc-client'
 import type { Section } from '../worktree/workspace-list-types'
 import type { SidebarFeedReaderRead } from '../../../src/shared/sidebar-feed-client/sidebar-feed-reader'
 import { installSidebarFeedSnapshot } from '../../../src/shared/sidebar-feed-client/sidebar-feed-snapshot'
@@ -36,6 +35,7 @@ vi.mock('../worktree/use-last-visited-worktree-on-host', () => ({
 import { useHostListSections } from './use-host-list-sections'
 import type { HostScreenState } from './use-host-screen-state'
 import { forgetRememberedSidebarFeeds, useHostSidebarFeed } from './use-host-sidebar-feed'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 /** worktree.ps's rows: flat, unpinned, in its own order — not the shape the desktop draws. */
 const LISTED = [
@@ -72,8 +72,7 @@ const STATE = {
   showPinnedInGroups: false
 } as unknown as HostScreenState
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked reader never sends.
-const CLIENT = {} as RpcClient
+const CLIENT = stubRpcClient()
 
 let drawn: Section[] = []
 let kind = ''

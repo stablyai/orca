@@ -210,6 +210,8 @@ type RelayMetricDeltas = {
   stickySlotStatements: number[]
   stickySlotByConnection: Map<number, StickyConnectionStatements>
   stickySlotConnectionSamplesDropped: number
+  stickyStatementMs: number[]
+  stickyStatementsObserved: number
   assign503sByCause: Record<string, number>
   dbLockWaitSamples: number
   dbLockWaitersByKey: Record<string, number>
@@ -305,6 +307,8 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   stickySlotStatements: [],
   stickySlotByConnection: new Map(),
   stickySlotConnectionSamplesDropped: 0,
+  stickyStatementMs: [],
+  stickyStatementsObserved: 0,
   assign503sByCause: {},
   dbLockWaitSamples: 0,
   dbLockWaitersByKey: {},
@@ -386,6 +390,7 @@ export class RelayObservability implements RelayRuntimeObserver {
   private deltas = emptyDeltas()
   private timer: ReturnType<typeof setInterval> | null = null
   private lastFlushAt = 0
+  private instanceZone: string | undefined
   private lastFlushedSafety = {
     sqlFailures: 0,
     reconnects: 0,
@@ -396,6 +401,10 @@ export class RelayObservability implements RelayRuntimeObserver {
     private readonly identity: { role: string; cellId: string; region: RelayRegion },
     private readonly write: MetricWriter = (entry) => console.log(JSON.stringify(entry))
   ) {}
+
+  setInstanceZone(zone: string | undefined): void {
+    this.instanceZone = zone
+  }
 
   recordAuth(success: boolean): void {
     if (success) this.deltas.authSuccesses++
@@ -457,6 +466,14 @@ export class RelayObservability implements RelayRuntimeObserver {
     deltas.stickySlotSqlMs.push(sample.sqlMs)
     deltas.stickySlotStatements.push(sample.statements)
     for (const [connectionId, samplesMs] of sample.statementMsByConnection) {
+      for (const durationMs of samplesMs) {
+        keepInReservoir(
+          deltas.stickyStatementMs,
+          deltas.stickyStatementsObserved++,
+          durationMs,
+          STICKY_STATEMENT_RESERVOIR_LIMIT
+        )
+      }
       let connection = deltas.stickySlotByConnection.get(connectionId)
       if (!connection) {
         if (deltas.stickySlotByConnection.size >= STICKY_CONNECTION_LIMIT) {
@@ -679,6 +696,8 @@ export class RelayObservability implements RelayRuntimeObserver {
       role: this.identity.role,
       cellId: this.identity.cellId,
       region: this.identity.region,
+      // Which zone this instance runs in; read once at boot, absent until then or off Cloud Run.
+      ...(this.instanceZone === undefined ? {} : { instanceZone: this.instanceZone }),
       ...counts,
       forwardedBytesDelta: deltas.forwardedBytes,
       authSuccessesDelta: deltas.authSuccesses,
@@ -871,6 +890,8 @@ function stickySlotFields(deltas: RelayMetricDeltas): Record<string, unknown> {
     stickySqlMsP99: sql.p99,
     stickyStatementsP50: statements.p50,
     stickyStatementsMax: statements.max,
+    // This instance's round-trip speed over every connection; slow-speed directors are the ones that stall.
+    stickyStatementMsP50: latencySummary(deltas.stickyStatementMs).p50,
     stickySqlByConnection: byConnection,
     // One per request-connection pair that found the window's table full.
     stickySqlConnectionSamplesDroppedDelta: deltas.stickySlotConnectionSamplesDropped

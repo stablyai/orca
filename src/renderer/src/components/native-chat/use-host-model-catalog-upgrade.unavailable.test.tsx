@@ -40,8 +40,7 @@ const HOST_CATALOG = {
   fetchedAt: 1_000
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no test here sends a pick, so mutate is never called.
-const mutate = vi.fn(async () => null) as unknown as StructuredAgentSessionMutate
+const mutate: StructuredAgentSessionMutate = vi.fn(async () => null)
 
 let sessionId = ''
 let sessionCount = 0

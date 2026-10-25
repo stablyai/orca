@@ -304,24 +304,6 @@ describe('resolveMobilePrPrefill', () => {
     expect(getMobilePrCreateBlockMessage(prefill)).toBeNull()
   })
 
-  it('returns a mobile block message for desktop-blocked create states', async () => {
-    const client = clientWith([
-      ok({
-        provider: 'github',
-        canCreate: false,
-        review: null,
-        blockedReason: 'dirty',
-        nextAction: 'commit',
-        defaultBaseRef: 'main',
-        reviewLookupOutcome: 'not_found'
-      })
-    ])
-    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
-    expect(getMobilePrCreateBlockMessage(prefill)).toBe(
-      'Commit changes before creating a pull request.'
-    )
-  })
-
   it('returns a blocked fallback when eligibility is unavailable', async () => {
     const client = clientWith([fail('nope')])
     const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)

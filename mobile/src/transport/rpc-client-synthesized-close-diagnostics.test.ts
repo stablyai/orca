@@ -1,7 +1,7 @@
 // Why: RN can swallow onclose for a wedged iOS transport, so the client synthesizes the close.
 // These cover the diagnostic clocks that synthesis has to keep honest, and prove synthesis
 // never costs us the auth-failed latch when the real close lands late.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { connect } from './rpc-client'
 import { diagnoseConnection } from '../diagnostics/connection-diagnostics-analysis'
 import type { ConnectionLogEntry } from './types'
@@ -79,14 +79,14 @@ function lastSocket(): WedgedWebSocket {
   return sockets[sockets.length - 1]!
 }
 
-function openConnectionLogs(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown>[] {
+function openConnectionLogs(spy: MockInstance<typeof console.log>): Record<string, unknown>[] {
   return spy.mock.calls
     .filter((call) => call[0] === '[net] openConnection')
     .map((call) => call[1] as Record<string, unknown>)
 }
 
 describe('synthesized close diagnostics', () => {
-  let logSpy: ReturnType<typeof vi.spyOn>
+  let logSpy: MockInstance<typeof console.log>
 
   beforeEach(() => {
     vi.useFakeTimers()

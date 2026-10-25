@@ -7,6 +7,7 @@ import { SURFACE_CLAIM_WITHOUT_STANDING } from './pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
   // #18191: a headless server publishes one empty placeholder graph at launch so status clients see
@@ -48,8 +49,7 @@ export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
 
   /** A headless host: no renderer ever attaches, and the only graph is the launch placeholder. */
   function makeHeadlessRuntime(): OrcaRuntimeService {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore returns the repo and session reads this suite drives; the rest of Store is unreached.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub carries the members this suite drives; the PTY stays live throughout.
     runtime.setPtyController({
       spawn: vi.fn(async () => ({ id: 'never' })),

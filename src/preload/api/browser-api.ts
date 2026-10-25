@@ -47,7 +47,8 @@ import type {
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent,
   BrowserPermissionDeniedEvent,
-  BrowserPopupEvent
+  BrowserPopupEvent,
+  BrowserTargetUrlChangedEvent
 } from '../../shared/browser-guest-events'
 import type {
   BrowserCertificateFailure,
@@ -122,6 +123,7 @@ export type BrowserApi = {
     browserPageId: string
     colorScheme: BrowserSiteColorScheme | null
   }) => Promise<BrowserPageSiteDisplay | null>
+  setPageAudioMuted: (args: { browserPageId: string; muted: boolean }) => Promise<boolean>
   reportViewportScrollState?: (args: {
     browserPageId: string
     state: BrowserViewportScrollState
@@ -138,6 +140,9 @@ export type BrowserApi = {
   onCertificateFailureChanged: (
     callback: (event: { browserPageId: string; failure: BrowserCertificateFailure | null }) => void
   ) => () => void
+  onAudioStateChanged: (
+    callback: (event: { browserPageId: string; audible: boolean }) => void
+  ) => () => void
   proceedCertificate: (args: {
     browserPageId: string
     challengeId: string
@@ -153,6 +158,7 @@ export type BrowserApi = {
   onContextMenuDismissed: (
     callback: (event: BrowserContextMenuDismissedEvent) => void
   ) => () => void
+  onTargetUrlChanged: (callback: (event: BrowserTargetUrlChangedEvent) => void) => () => void
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void

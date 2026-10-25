@@ -19407,7 +19407,9 @@
           "switchToChatView": "チャット UI で続ける"
         },
         "BrowserTab": {
-          "closeOthers": "その他を閉じる"
+          "closeOthers": "その他を閉じる",
+          "muteTab": "タブをミュート",
+          "unmuteTab": "タブのミュートを解除"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "その他を閉じる"

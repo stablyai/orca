@@ -153,6 +153,7 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from './structured-worker-identity'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 // A new agent goes last: its cases then shift only the configured ones' session ids.
 const AGENTS = [
@@ -582,10 +583,11 @@ beforeAll(async () => {
   process.env = inheritedEnvironment()
   installAppEnvironment()
   settings = defaultSettings()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host wiring reads only the store's getSettings method.
-  const runtime = new OrcaRuntimeService({
-    getSettings: () => settings
-  } as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getSettings: () => settings
+    })
+  )
   await runtime.ensureStructuredAgentSessionHost()
   const production = capture.productionDeps.at(-1)
   if (!production) {

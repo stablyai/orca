@@ -183,7 +183,16 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers every selectedRepos field read above (see its GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
+  }, [
+    taskSource,
+    gitlabView,
+    activeGitlabFilter,
+    gitlabRefreshNonce,
+    selectedReposKey,
+    setGitlabError,
+    setGitlabItems,
+    setGitlabLoading
+  ])
 
   // Why: Todos fetch has its own effect — different trigger (no chip filter) and data path (gl.todos is user-scoped, not repo-scoped).
   useEffect(() => {

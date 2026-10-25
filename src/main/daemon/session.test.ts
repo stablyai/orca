@@ -412,8 +412,10 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['first\n', 'second\n'])
     })
 
-    it('contains live color replies without releasing queued startup input', async () => {
-      const reply = '\x1b[?997;1n'
+    it.each([
+      ['color', '\x1b[?997;1n'],
+      ['XTVERSION', '\x1bP>|xterm.js(6.1.0)\x1b\\']
+    ])('contains live %s replies without releasing queued startup input', async (_, reply) => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
       session.write('codex\n')
 

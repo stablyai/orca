@@ -5,7 +5,7 @@ import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { loadHostCatalog } from '../transport/host-store'
 import { resolveHostIdForFingerprint } from './push-host-fingerprint'
 import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
-import type { Notification, NotificationBehavior } from 'expo-notifications'
+import type { NotificationBehavior } from 'expo-notifications'
 import { readNativeNotificationData } from './native-notification-data'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
 
@@ -45,9 +45,9 @@ export function resetForegroundPushClaimsForTests(): void {
   recentForegroundPushes.clear()
 }
 
-export async function foregroundNotificationBehavior(
-  notification: Pick<Notification, 'request'>
-): Promise<NotificationBehavior> {
+export async function foregroundNotificationBehavior(notification: {
+  request: Parameters<typeof readNativeNotificationData>[0]
+}): Promise<NotificationBehavior> {
   const data = readNativeNotificationData(notification.request)
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()

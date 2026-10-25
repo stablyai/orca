@@ -1,6 +1,7 @@
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
@@ -24,10 +25,6 @@ import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell
 // 5s binds there — but only for a profile that already blew the old budget, and
 // those users were otherwise stuck with a wrong PATH for the whole session.
 const SPAWN_TIMEOUT_MS = 10_000
-
-// ANSI escape sequences can leak into the captured output when the user's rc
-// files print banners or set colored prompts. Strip them before parsing.
-const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g // eslint-disable-line no-control-regex
 
 // Why: the discriminator lets telemetry classify *why* hydration failed, not
 // just whether it did. Five resolve sites in this file each tag the result
@@ -101,7 +98,8 @@ export const resolveProfileLoadingFallbackShell = (): string | null =>
   configuredWindowsFallbackShell
 
 function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): string[] {
-  const cleaned = stdout.replace(ANSI_RE, '')
+  // Why: rc-file banners and colored prompts can leak escapes into the captured output.
+  const cleaned = stripAnsiEscapeSequences(stdout)
   const first = cleaned.indexOf(DELIMITER)
   if (first === -1) {
     return []

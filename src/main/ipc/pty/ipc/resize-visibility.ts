@@ -11,7 +11,7 @@ import {
   recordHiddenRendererPtyDataDrop,
   setRendererPtyDeliveryInterest,
   shouldDropHiddenRendererPtyData
-} from '../../pty-hidden-delivery-gate'
+} from '../delivery/pty-hidden-delivery-gate'
 import { tryGetProviderForPty, closeStartupQueryAuthorityForPty } from '../provider/registry'
 import {
   activeRendererPtys,

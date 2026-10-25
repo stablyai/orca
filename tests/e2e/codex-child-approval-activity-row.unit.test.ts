@@ -16,7 +16,10 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../src/shared/agent-session-wire'
-import type { AgentJournalItemBody } from '../../src/shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../src/shared/agent-session-journal-types'
 import { parseAgentJournalItemKey } from '../../src/shared/agent-session-journal-item-key'
 import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
@@ -144,7 +147,13 @@ async function openHost() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
-      [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
+      [
+        SESSION,
+        indexedStatusFeedSession({
+          journal,
+          child: { phase: 'ready', generation: null, fence: 1 }
+        })
+      ]
     ]),
     getRecord: () => null,
     now: () => 1
@@ -194,7 +203,10 @@ async function openHost() {
         resolvedAt: tick()
       }
     }
-    await journal.appendItem(identity, resolved, { fence: 1 })
+    await journal.appendItem(identity, resolved, {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     publish()
     translator.resolvePrompt(itemId)
   }
@@ -227,7 +239,7 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
     await host.journal.appendItem(
       { provider: 'orca', clientMessageId: 'prompt-1' },
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     host.on(CODEX_THREAD, 'turn/started', { turn: { id: 'parent-turn' } })
     const spawn = {

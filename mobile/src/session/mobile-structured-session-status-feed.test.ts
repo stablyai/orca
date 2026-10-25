@@ -4,6 +4,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const REFUSAL = "Method 'agentSession.subscribeStatus' is not available to mobile clients"
 const FORBIDDEN = {
@@ -34,8 +35,7 @@ describe("the phone's status stream", () => {
     frames = []
     stateListeners = []
     // A fresh client per test: the stream is one per client for its life.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reaches the client only through subscribe and onStateChange.
-    client = {
+    client = stubRpcClient({
       subscribe: vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
         frames.push(onData)
         return () => {}
@@ -44,7 +44,7 @@ describe("the phone's status stream", () => {
         stateListeners.push(listener)
         return () => {}
       }
-    } as unknown as RpcClient
+    })
   })
 
   function read(): AgentSessionStatusSummary | undefined {

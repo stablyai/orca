@@ -64,9 +64,14 @@ test.describe('worktree visibility with a remote runtime active', () => {
 
     // Stage a remote runtime as active — the condition that triggered the drop.
     await orcaPage.evaluate(() => {
-      window.__store?.setState((current) => ({
-        settings: { ...current.settings, activeRuntimeEnvironmentId: 'e2e-fake-runtime' }
-      }))
+      window.__store?.setState((current) => {
+        if (!current.settings) {
+          throw new Error('Settings are not hydrated')
+        }
+        return {
+          settings: { ...current.settings, activeRuntimeEnvironmentId: 'e2e-fake-runtime' }
+        }
+      })
     })
 
     // The fix: a CLI-created worktree must still appear, with no app restart.

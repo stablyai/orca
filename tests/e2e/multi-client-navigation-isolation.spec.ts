@@ -294,14 +294,17 @@ test('shows only provider-backed creation actions in paired web', async ({
       .poll(() =>
         client.evaluate(() => {
           const state = window.__store?.getState()
+          if (!state) {
+            return false
+          }
           const worktree = state
-            ?.allWorktrees()
+            .allWorktrees()
             .find((candidate) => candidate.id === state.activeWorktreeId)
           const environmentId = worktree?.runtimeOwnerEnvironmentId
           return environmentId
             ? state.runtimeStatusByEnvironmentId
                 .get(environmentId)
-                ?.status.capabilities?.includes('browser.screencast.v1') === true
+                ?.status?.capabilities?.includes('browser.screencast.v1') === true
             : false
         })
       )

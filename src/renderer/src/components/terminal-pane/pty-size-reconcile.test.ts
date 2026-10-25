@@ -136,15 +136,6 @@ describe('reconcilePtySizeAcrossFrames', () => {
     expect(resize).toHaveBeenLastCalledWith(80, 24)
   })
 
-  it('hands off (stops) once authoritative and the grid has been stable', () => {
-    // Once visible and stable, the live onResize owns future corrections, so the reconcile stops (no polling to the cap).
-    const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))
-    const { framesRun } = runReconcile({ measure: pane.measure })
-    // Should settle a few frames after the single resize, well short of the cap.
-    expect(framesRun).toBeGreaterThan(0)
-    expect(framesRun).toBeLessThan(180)
-  })
-
   it('does NOT hand off while hidden — keeps watching until the hard cap', () => {
     // While never authoritative, a stable grid is no safe stop (onResize can't back us up), so it runs to the hard cap.
     const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))

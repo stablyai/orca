@@ -8,7 +8,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import type { AgentSessionJournal } from './journal-store'

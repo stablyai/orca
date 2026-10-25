@@ -135,7 +135,6 @@ describe('activateAndRevealWorktree', () => {
       queueTabInitialCwd: vi.fn(),
       queueTabIssueCommandSplit: vi.fn(),
       revealWorktreeInSidebar: vi.fn()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies only the activation slice used by the test.
     } as never)
 
     const result = activateAndRevealWorktree('wt-1')

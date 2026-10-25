@@ -15,4 +15,22 @@ export function initializePaneGeometry(session: ConnectPanePtySession): void {
   session.lastObservedDesktopGrid = null
   session.lastObservedPaneSize = readPaneSize(session)
   session.pendingPaneGeometryChanged = false
+  session.readProposedTerminalGrid = (): { cols: number; rows: number } | null => {
+    try {
+      const proposed = session.pane.fitAddon.proposeDimensions()
+      if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
+        return null
+      }
+      return proposed
+    } catch {
+      return null
+    }
+  }
+  session.terminalGridDriftedFromFit = (): boolean => {
+    const proposed = session.readProposedTerminalGrid()
+    return Boolean(
+      proposed &&
+      (session.pane.terminal.cols !== proposed.cols || session.pane.terminal.rows !== proposed.rows)
+    )
+  }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from 'react'
 import type { BundledSkillPlan } from '../../../shared/bundled-skill-plan'
 import { summarizeBundledSkillPlan } from '../../../shared/bundled-skill-summary'
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
@@ -244,9 +244,8 @@ export function useSkillFreshness(target: BundledSkillTarget | null): SkillFresh
     target ? getSnapshot : getDisabledSnapshot
   )
 
-  useEffect(() => {
-    const previousKey = previousKeyRef.current
-    previousKeyRef.current = targetKey
+  // Why an event: `targetKey` is the target's identity, so only a key change re-plans.
+  const planTarget = useEffectEvent((previousKey: string | null) => {
     if (!target) {
       return
     }
@@ -258,7 +257,11 @@ export function useSkillFreshness(target: BundledSkillTarget | null): SkillFresh
       return
     }
     ensurePlanLoaded()
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `targetKey` is the target's identity.
+  })
+  useEffect(() => {
+    const previousKey = previousKeyRef.current
+    previousKeyRef.current = targetKey
+    planTarget(previousKey)
   }, [targetKey])
 
   return {

@@ -20,6 +20,7 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import type { AgentProviderSessionKey } from '../../src/shared/agent-session-resume'
 
 const PROVIDER_SESSION_ID = 'e2e-live-force-exit-session'
 
@@ -191,7 +192,8 @@ async function captureOutputRow(page: Page, expected: string, proofPath: string)
 test.describe.configure({ mode: 'serial' })
 
 for (const agent of ['codex', 'cursor'] as const) {
-  const providerSessionKey = agent === 'cursor' ? 'conversation_id' : 'session_id'
+  const providerSessionKey: AgentProviderSessionKey =
+    agent === 'cursor' ? 'conversation_id' : 'session_id'
   test(`resumes a live ${agent} record after force-exit restart when pane PTY ownership is gone`, async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()

@@ -11,11 +11,10 @@ function projectionOf(settings: Partial<GlobalSettings>) {
 }
 
 function hostSettings(overrides: Record<string, unknown>): Partial<GlobalSettings> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the override deliberately carries the malformed on-disk shape the projection must tolerate.
   return {
     ...createGlobalSettingsFixture({ workspaceDir: '/w' }),
     ...overrides
-  } as Partial<GlobalSettings>
+  }
 }
 
 describe('RuntimeClientSettingsController Linear team selection projection', () => {

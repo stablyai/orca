@@ -33,6 +33,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 import { OrcaRuntimeService } from './orca-runtime'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { getLocalWorktreeScanGeneration } from '../local-worktree-scan-generation'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/Users/me/dev/app'
@@ -74,8 +75,7 @@ function makeStore() {
 }
 
 function makeRuntimeService(): OrcaRuntimeService {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every store member the local listing reaches is supplied above.
-  return new OrcaRuntimeService(makeStore() as never)
+  return new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 }
 
 function makeRuntime(): () => Promise<DetectedWorktreeListResult> {

@@ -21,12 +21,16 @@ vi.mock('../git/worktree', async (importOriginal) => ({
   listWorktreesStrict: listWorktreesStrictMock
 }))
 
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
+import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../../shared/worktree/host-qualified-identity'
+import { partialRuntimeStore, storeRepo, storeWorktreeMeta } from './runtime-store-partial-fixture'
 
 const REPO_ID = 'repo-remote'
 const REPO_PATH = '/home/user/projects/app'
@@ -34,39 +38,30 @@ const WORKTREE_PATH = '/home/user/projects/app-feature'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 const SCRATCH_ID = `${REPO_ID}::${REPO_PATH}/.claude/worktrees/scratch`
 const SSH_CONNECTION_ID = 'ssh-remote-1'
-const SSH_HOST_ID = `ssh:${SSH_CONNECTION_ID}`
+const SSH_HOST_ID = toSshExecutionHostId(SSH_CONNECTION_ID)
 const LOCAL_REPO_PATH = '/Users/me/dev/app'
 
-function makeMeta(overrides: Record<string, unknown> = {}) {
-  return {
+function makeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
+  return storeWorktreeMeta({
     displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
     linkedGitLabMR: null,
     linkedGitLabIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
     ...overrides
-  }
+  })
 }
 
 const MAIN_WORKTREE_ID = `${REPO_ID}::${REPO_PATH}`
 
 // Why: prune assertions only discriminate when the repo actually owns lineage rows a scan verdict could delete.
-function makeLineage() {
+function makeLineage(): Record<string, WorktreeLineage> {
   return {
     [WORKTREE_ID]: {
       worktreeId: WORKTREE_ID,
       worktreeInstanceId: 'child-instance',
       parentWorktreeId: MAIN_WORKTREE_ID,
       parentWorktreeInstanceId: 'parent-instance',
-      origin: 'agent' as const,
-      capture: 'env-workspace' as const,
+      origin: 'cli',
+      capture: { source: 'env-workspace', confidence: 'inferred' },
       createdAt: 1
     }
   }
@@ -74,8 +69,8 @@ function makeLineage() {
 
 type StoreOptions = {
   connectionId?: string
-  metaById?: Record<string, ReturnType<typeof makeMeta>>
-  removeWorktreeLineage?: ReturnType<typeof vi.fn>
+  metaById?: Record<string, WorktreeMeta>
+  removeWorktreeLineage?: (target: HostWorktreeTarget) => void
   /** Extra `getRepos()` rows appended after the primary one, for same-id-on-two-hosts coverage. */
   coHostedRepos?: { id: string; path: string; connectionId?: string }[]
 }
@@ -89,32 +84,38 @@ function makeStore(options: StoreOptions = {}) {
   const store = {
     getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
     getRepos: () => [
-      {
+      storeRepo({
         id: REPO_ID,
         path: REPO_PATH,
         displayName: 'app',
         badgeColor: 'blue',
         addedAt: 1,
         ...(options.connectionId === undefined ? {} : { connectionId: options.connectionId })
-      },
-      ...(options.coHostedRepos ?? []).map((repo) => ({
-        displayName: 'app',
-        badgeColor: 'blue',
-        addedAt: 1,
-        ...repo
-      }))
+      }),
+      ...(options.coHostedRepos ?? []).map((repo) =>
+        storeRepo({ displayName: 'app', badgeColor: 'blue', addedAt: 1, ...repo })
+      )
     ],
     getAllWorktreeMeta: vi.fn(() => metaById),
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
-      metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+      metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta }
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
     getAllWorktreeLineage: () => lineageById,
-    getAllWorkspaceLineage: () => ({ [`worktree:${WORKTREE_ID}`]: { parentWorkspaceKey: null } }),
+    getAllWorkspaceLineage: () => ({
+      [worktreeWorkspaceKey(WORKTREE_ID)]: {
+        childWorkspaceKey: worktreeWorkspaceKey(WORKTREE_ID),
+        childInstanceId: 'child-instance',
+        parentWorkspaceKey: worktreeWorkspaceKey(MAIN_WORKTREE_ID),
+        parentInstanceId: 'parent-instance',
+        origin: 'cli' as const,
+        capture: { source: 'env-workspace' as const, confidence: 'inferred' as const },
+        createdAt: 1
+      }
+    }),
     removeWorktreeLineage: options.removeWorktreeLineage ?? vi.fn(),
-    getGitHubCache: () => undefined as never,
     getSettings: () => ({
       workspaceDir: '/tmp/workspaces',
       nestWorkspaces: false,
@@ -145,7 +146,9 @@ describe('worktree.ps on a degraded repo scan', () => {
   it('keeps persisted worktrees when a remote scan stalls past the per-repo budget', async () => {
     vi.useFakeTimers()
     try {
-      const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
+      const runtime = new OrcaRuntimeService(
+        partialRuntimeStore(makeStore({ connectionId: 'ssh-remote-1' }))
+      )
 
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
@@ -156,7 +159,9 @@ describe('worktree.ps on a degraded repo scan', () => {
   })
 
   it('keeps persisted worktrees when a remote repo is unreachable', async () => {
-    const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore(makeStore({ connectionId: 'ssh-remote-1' }))
+    )
 
     const result = await runtime.getWorktreePs(10_000)
 
@@ -167,7 +172,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
@@ -181,7 +186,7 @@ describe('worktree.ps on a degraded repo scan', () => {
   // selector resolution for local repos the way a stall does.
   it('treats a rejected scan as a real answer instead of restoring persisted worktrees', async () => {
     listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 
     const result = await runtime.getWorktreePs(10_000)
 
@@ -190,7 +195,7 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('still reports selector_not_found for a local worktree when the scan rejects', async () => {
     listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 
     await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
       'selector_not_found'
@@ -202,7 +207,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockResolvedValue([])
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 
       await runtime.getWorktreePs(10_000)
       await vi.advanceTimersByTimeAsync(2_000)
@@ -218,7 +223,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockRejectedValue(new Error('spawn git EAGAIN'))
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 
       await runtime.getWorktreePs(10_000)
       await vi.advanceTimersByTimeAsync(2_000)
@@ -236,18 +241,20 @@ describe('worktree.ps on a degraded repo scan', () => {
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
       const runtime = new OrcaRuntimeService(
-        makeStore({
-          connectionId: SSH_CONNECTION_ID,
-          coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
-          metaById: {
-            [WORKTREE_ID]: makeMeta({ hostId: SSH_HOST_ID }),
-            [MAIN_WORKTREE_ID]: makeMeta({
-              displayName: 'main',
-              instanceId: 'parent-instance',
-              hostId: SSH_HOST_ID
-            })
-          }
-        }) as never
+        partialRuntimeStore(
+          makeStore({
+            connectionId: SSH_CONNECTION_ID,
+            coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
+            metaById: {
+              [WORKTREE_ID]: makeMeta({ hostId: SSH_HOST_ID }),
+              [MAIN_WORKTREE_ID]: makeMeta({
+                displayName: 'main',
+                instanceId: 'parent-instance',
+                hostId: SSH_HOST_ID
+              })
+            }
+          })
+        )
       )
 
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
@@ -265,16 +272,18 @@ describe('worktree.ps on a degraded repo scan', () => {
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
       const runtime = new OrcaRuntimeService(
-        makeStore({
-          metaById: {
-            [WORKTREE_ID]: makeMeta({ hostId: LOCAL_EXECUTION_HOST_ID }),
-            [MAIN_WORKTREE_ID]: makeMeta({
-              displayName: 'main',
-              instanceId: 'parent-instance',
-              hostId: LOCAL_EXECUTION_HOST_ID
-            })
-          }
-        }) as never
+        partialRuntimeStore(
+          makeStore({
+            metaById: {
+              [WORKTREE_ID]: makeMeta({ hostId: LOCAL_EXECUTION_HOST_ID }),
+              [MAIN_WORKTREE_ID]: makeMeta({
+                displayName: 'main',
+                instanceId: 'parent-instance',
+                hostId: LOCAL_EXECUTION_HOST_ID
+              })
+            }
+          })
+        )
       )
 
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
@@ -299,7 +308,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 
       await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
       await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
@@ -315,8 +324,9 @@ describe('worktree.ps on a degraded repo scan', () => {
     listWorktreesStrictMock.mockResolvedValue([
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
-    const runtime = new OrcaRuntimeService(makeStore({ removeWorktreeLineage }) as never)
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore(makeStore({ removeWorktreeLineage }))
+    )
 
     const result = await runtime.getWorktreePs(10_000)
 
@@ -331,8 +341,9 @@ describe('worktree.ps on a degraded repo scan', () => {
     try {
       const removeWorktreeLineage = vi.fn()
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
-      const runtime = new OrcaRuntimeService(makeStore({ removeWorktreeLineage }) as never)
+      const runtime = new OrcaRuntimeService(
+        partialRuntimeStore(makeStore({ removeWorktreeLineage }))
+      )
 
       await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
@@ -347,7 +358,7 @@ describe('worktree.ps on a degraded repo scan', () => {
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
     const store = makeStore()
-    const runtime = new OrcaRuntimeService(store as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
 
     await runtime.getWorktreePs(10_000)
 
@@ -359,12 +370,14 @@ describe('worktree.ps on a degraded repo scan', () => {
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
       const runtime = new OrcaRuntimeService(
-        makeStore({
-          metaById: {
-            [WORKTREE_ID]: makeMeta(),
-            [SCRATCH_ID]: makeMeta({ displayName: 'scratch' })
-          }
-        }) as never
+        partialRuntimeStore(
+          makeStore({
+            metaById: {
+              [WORKTREE_ID]: makeMeta(),
+              [SCRATCH_ID]: makeMeta({ displayName: 'scratch' })
+            }
+          })
+        )
       )
 
       const listed = await advancePastRepoScanBudget(runtime.listManagedWorktrees(`id:${REPO_ID}`))

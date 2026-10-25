@@ -26,6 +26,7 @@ vi.mock('../../src/main/providers/agent-foreground-process', () => ({
 
 import { createPtySubprocess } from '../../src/main/daemon/pty-subprocess'
 import { createPaneForegroundAgentTracker } from '../../src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker'
+import type { PaneForegroundAgentEntry } from '../../src/renderer/src/store/slices/pane-foreground-agent'
 
 function mockWindowsPty() {
   const exitListeners: ((event: { exitCode: number }) => void)[] = []
@@ -61,7 +62,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
     }
   })
 
-  async function createComposedTracker(publish: ReturnType<typeof vi.fn>) {
+  async function createComposedTracker(publish: (entry: PaneForegroundAgentEntry) => void) {
     const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
     const tracker = createPaneForegroundAgentTracker({
       getPtyId: () => 'pty-1',

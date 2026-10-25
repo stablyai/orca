@@ -32,7 +32,6 @@ import {
   useStructuredAgentSessionQueuedMessages,
   type StructuredAgentSessionQueuedMessagesController
 } from './use-structured-agent-session-queued-messages'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import type { AgentSessionQueuePause } from '../../../../shared/agent-session-queued-message-wire'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
@@ -127,8 +126,7 @@ function renderHeldQueue(
       hasPendingPrompt,
       isWorking: false,
       composerScopeKey: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list only awaits mutate; its answer is never read.
-      mutate: mutate as StructuredAgentSessionMutate,
+      mutate: mutate,
       editTransport: {
         target: { kind: 'local' },
         sessionId: 'session',

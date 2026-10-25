@@ -1,4 +1,4 @@
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'

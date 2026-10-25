@@ -329,11 +329,10 @@ describe('filesystem rg search timeout', () => {
     parseWslPathMock.mockReturnValue({ distro: 'Ubuntu' })
     registerFilesystemHandlers({} as never)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fs:search handlers return Promise<SearchResult>.
     const promise = handlers.get('fs:search')!(
       { sender: { id: 7 } },
       { rootPath: '\\\\wsl.localhost\\Ubuntu\\repo', query: 'ok' }
-    ) as Promise<unknown>
+    )
     await flushMicrotasks()
     child.emit('close', 1, null)
 

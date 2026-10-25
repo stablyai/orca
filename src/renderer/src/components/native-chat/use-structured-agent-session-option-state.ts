@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult

@@ -27,15 +27,7 @@ import { SessionId } from './structured-agent-session-params'
 import { isStructuredAgentSessionIdFor } from '../structured-agent-session-create'
 import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
-const LaunchAgent = z
-  .unknown()
-  .superRefine((value, ctx) => {
-    if (!isTuiAgent(value)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Unknown TUI agent' })
-    }
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the superRefine above rejects anything isTuiAgent refuses, so the transform only ever runs on a TuiAgent.
-  .transform((value): TuiAgent => value as TuiAgent)
+const LaunchAgent = z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' })
 
 /** The launch's fields without the cross-field check, for building an older host's shape in tests;
  *  every receiver parses `AgentLaunch` or `AgentLaunchReplay`. */

@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'

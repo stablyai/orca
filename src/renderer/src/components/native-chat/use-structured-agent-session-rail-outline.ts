@@ -9,7 +9,7 @@
 // transcript — without an outline the rail maps the loaded messages.
 
 import { useEffect, useState } from 'react'
-import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 import { agentSessionContextFloorSequence } from '../../../../shared/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'

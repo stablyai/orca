@@ -5,7 +5,7 @@ import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import {
   agentMessageSenderName,
   type AgentMessageSender
-} from '../../../shared/agent-session-message-source'
+} from '../../../shared/agent-session/agent-session-message-source'
 import type { OrchestrationDb } from './db'
 import { resolveOrchestrationParty } from './orchestration-party'
 

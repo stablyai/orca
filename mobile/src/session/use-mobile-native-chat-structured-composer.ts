@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatStructuredComposer } from './MobileNativeChatComposer'
 import type { MobileNativeChatFileAttachments } from './use-mobile-native-chat-file-attachments'

@@ -16,14 +16,18 @@ export function notify(scope: TerminalDocumentScope, msg: Record<string, unknown
   scope.postToHost(msg)
 }
 
-export function engineErrorText(err: TerminalEngineError) {
+export function engineErrorText(err: unknown) {
   if (!err) {
     return ''
   }
   if (typeof err === 'string') {
     return err
   }
-  if (err && typeof err.message === 'string') {
+  if (
+    (typeof err === 'object' || typeof err === 'function') &&
+    'message' in err &&
+    typeof err.message === 'string'
+  ) {
     return err.message
   }
   try {
@@ -41,7 +45,7 @@ export function chromeVersionText() {
 export function reportEngineError(
   scope: TerminalDocumentScope,
   context: string,
-  err: TerminalEngineError,
+  err: unknown,
   fatal?: unknown
 ) {
   const isFatal = fatal === undefined ? !scope.everReady : !!fatal

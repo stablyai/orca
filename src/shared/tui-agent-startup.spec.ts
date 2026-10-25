@@ -764,7 +764,7 @@ describe('tui agent startup plans', () => {
     })
   })
 
-  it('launches Devin with stdin-after-start prompt delivery', () => {
+  it('launches Devin with the prompt on argv behind a -- separator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'devin',
       prompt: 'fix the tests',
@@ -774,9 +774,10 @@ describe('tui agent startup plans', () => {
     })
     expect(plan).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
+      launchCommand:
+        "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false' -- 'fix the tests'",
       expectedProcess: 'devin',
-      followupPrompt: 'fix the tests',
+      followupPrompt: null,
       launchConfig: {
         agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
         agentArgs: '--permission-mode bypass --respect-workspace-trust false',

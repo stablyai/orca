@@ -3,7 +3,7 @@
 // the sender was addressed, and uses words that already exist.
 
 import { toast } from 'sonner'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
 import type {
   OrchestrationPartyLocation,

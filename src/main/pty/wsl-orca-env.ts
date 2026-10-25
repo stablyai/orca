@@ -1,4 +1,8 @@
 import {
+  ORCA_SCRUB_SAFE_PANE_ENV,
+  ORCA_SCRUB_SAFE_LAUNCH_ENV
+} from '../../shared/agent-hook-scrub-safe-env'
+import {
   ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
@@ -90,11 +94,13 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_CODEX_LAUNCH_PREFLIGHT/p',
     'ORCA_CODEX_ISOLATE/u',
     'ORCA_PANE_KEY/u',
+    `${ORCA_SCRUB_SAFE_PANE_ENV}/u`,
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
     // An id, never a path; agent wrappers and the guest CLI read it like ORCA_WORKTREE_ID.
     'ORCA_WORKSPACE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
+    `${ORCA_SCRUB_SAFE_LAUNCH_ENV}/u`,
     // The guest plugin uses this marker to select the OpenCode variant that
     // owns the pane when both native and WSL installations are present.
     'ORCA_OPENCODE_AGENT/u',

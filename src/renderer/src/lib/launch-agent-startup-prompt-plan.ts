@@ -30,10 +30,14 @@ export function planLaunchAgentStartupPrompt(args: {
 }): LaunchAgentStartupPromptPlan {
   const { base, prompt, promptDelivery, isFollowupPath } = args
   const hasPrompt = prompt.length > 0
-  const launchEmpty = (): AgentStartupPlan | null =>
-    buildAgentStartupPlan({ ...base, prompt: '', allowEmptyPromptLaunch: true })
   const pasteAfterReady = (submit: boolean): LaunchAgentStartupPromptPlan => ({
-    startupPlan: launchEmpty(),
+    startupPlan: buildAgentStartupPlan({
+      ...base,
+      prompt: '',
+      allowEmptyPromptLaunch: true,
+      // Why: Orca's own Enter must not answer a startup update prompt.
+      suppressStartupUpdatePrompt: submit
+    }),
     pasteDraftAfterLaunch: prompt,
     submitPastedPrompt: submit
   })
