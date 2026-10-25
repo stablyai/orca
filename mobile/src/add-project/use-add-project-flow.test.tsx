@@ -5,7 +5,7 @@ import type { AddProjectRpcSender } from './add-project-operations'
 import type { RpcResponse } from '../transport/types'
 import { useAddProjectFlow, type AddProjectFlow } from './use-add-project-flow'
 
-type Handler = (params: unknown) => RpcResponse
+type Handler = (params: unknown) => RpcResponse | Promise<RpcResponse>
 
 function ok(result: unknown): RpcResponse {
   return { id: 'reply', ok: true, result }
@@ -100,5 +100,45 @@ describe('useAddProjectFlow', () => {
     expect(current.flow!.error).toBe('"demo" already exists at this location and is not empty.')
     expect(current.flow!.step).toBe('choose')
     expect(onProjectAdded).not.toHaveBeenCalled()
+  })
+
+  it('keeps the form and a running clone when a reconnect swaps the client', async () => {
+    const repo = { id: 'r3', displayName: 'app', path: '/home/alice/orca/projects/app' }
+    let finishClone: (reply: RpcResponse) => void = () => undefined
+    const first = fakeClient({
+      ...HOST_HANDLERS,
+      'repo.clone': () =>
+        new Promise<RpcResponse>((resolve) => {
+          finishClone = resolve
+        })
+    })
+    const second = fakeClient(HOST_HANDLERS)
+    const current: { flow: AddProjectFlow | null } = { flow: null }
+    function Harness({ client }: { client: AddProjectRpcSender }) {
+      current.flow = useAddProjectFlow({ client, visible: true, onProjectAdded: vi.fn() })
+      return null
+    }
+    let root: ReturnType<typeof create> | null = null
+    await act(async () => {
+      root = create(createElement(Harness, { client: first.client }))
+    })
+
+    await act(async () => current.flow!.openStep('clone'))
+    await act(async () => current.flow!.setUrl('https://example.com/app.git'))
+    let cloning: Promise<void> = Promise.resolve()
+    await act(async () => {
+      cloning = current.flow!.submitClone()
+    })
+    await act(async () => root!.update(createElement(Harness, { client: second.client })))
+
+    expect(current.flow!.step).toBe('clone')
+    expect(current.flow!.url).toBe('https://example.com/app.git')
+    expect(current.flow!.busy).toBe(true)
+
+    await act(async () => {
+      finishClone(ok({ repo }))
+      await cloning
+    })
+    expect(current.flow!.step).toBe('added')
   })
 })

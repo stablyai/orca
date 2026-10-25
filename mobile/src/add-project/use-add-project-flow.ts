@@ -31,34 +31,41 @@ export function useAddProjectFlow(args: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [added, setAdded] = useState<AddedProject | null>(null)
-  // Each open or host change starts a new attempt; replies for an older one are dropped.
+  // Each open starts a new attempt; submit replies for an older one are dropped.
   const attemptRef = useRef(0)
   const onProjectAddedRef = useRef(onProjectAdded)
   useEffect(() => {
     onProjectAddedRef.current = onProjectAdded
   }, [onProjectAdded])
 
+  const [previousVisible, setPreviousVisible] = useState(visible)
+  if (visible !== previousVisible) {
+    setPreviousVisible(visible)
+    if (visible) {
+      setStep('choose')
+      setName('')
+      setUrl('')
+      setParent(DEFAULT_PROJECT_PARENT)
+      setExistingPath('')
+      setBusy(false)
+      setError('')
+      setAdded(null)
+    }
+  }
   useEffect(() => {
     attemptRef.current += 1
-    if (!visible) {
+  }, [visible])
+
+  // A reconnect swaps the client without closing the sheet; reload host facts but keep the form and any running submit.
+  useEffect(() => {
+    if (!visible || !client) {
       return
     }
-    setStep('choose')
-    setName('')
-    setUrl('')
-    setParent(DEFAULT_PROJECT_PARENT)
-    setExistingPath('')
-    setBusy(false)
-    setError('')
-    setAdded(null)
-    if (!client) {
-      return
-    }
-    const attempt = attemptRef.current
+    let stale = false
     void hostDirectoryBrowse
       .request(client, { path: '~' })
       .then((reply) => {
-        if (attempt === attemptRef.current) {
+        if (!stale) {
           setHomeDir(hostDirectoryBrowse.interpret(reply).resolvedPath)
         }
       })
@@ -67,11 +74,14 @@ export function useAddProjectFlow(args: {
       .request(client)
       .then((reply) => {
         const read = hostGitAvailabilityRead.interpret(reply)
-        if (attempt === attemptRef.current && read.accepted) {
+        if (!stale && read.accepted) {
           setGitAvailable(read.value)
         }
       })
       .catch(() => undefined)
+    return () => {
+      stale = true
+    }
   }, [client, visible])
 
   const openStep = useCallback((next: AddProjectStep) => {
