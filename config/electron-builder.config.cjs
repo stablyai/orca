@@ -8,6 +8,7 @@ const {
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
+  assertPackagedOrcadServeSelectionEntryExists,
   verifyPackagedDaemonEntryBoots,
   verifyPackagedMacTerminalHostBoots
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
@@ -519,6 +520,10 @@ module.exports = {
         `[verify-packaged-daemon-entry] skipped boot on cross-arch slice (target ${context.arch}, host ${process.arch})`
       )
     }
+    // Why: layout-only check, so it runs on every arch including cross-arch
+    // slices — a missing unpacked orcad entry is a packaging regression
+    // regardless of whether this host can boot the target arch.
+    assertPackagedOrcadServeSelectionEntryExists(resourcesDir)
     // Why: inspect electron-builder's real output so a broken extraResources
     // mapping fails packaging before bundled content reaches users.
     verifyPackagedPluginResources(resourcesDir)
