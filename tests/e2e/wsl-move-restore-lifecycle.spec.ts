@@ -128,6 +128,7 @@ async function readShownPane(page: Page, webTabId: string, marker: string): Prom
 test('a moved pane shows its own history once, in its folder, across three reloads, with its browser tab and draft', async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX fixture command')
+  // A move, three reloads and a restart, each booting a full app against a real daemon.
   test.setTimeout(900_000)
   const root = mkdtempSync(path.join(os.tmpdir(), 'orca-restore-lifecycle-repo-'))
   const repoPath = realpathSync(createMovedRepo(root))
@@ -151,14 +152,30 @@ test('a moved pane shows its own history once, in its folder, across three reloa
     // The pane before the move: a real daemon session that printed its history, then slept, so
     // its final checkpoint is on disk as the move's export reads it.
     const before = new Set(historyRoots(host.userDataDir).flatMap(sessionFolders))
-    await host.client.call('session.tabs.createTerminal', {
-      worktree: `id:${worktreeId}`,
-      command: [process.execPath, printerPath, marker].map(quotePosixShell).join(' '),
-      activate: false,
-      select: false,
-      navigation: 'caller'
-    })
-    await new Promise((resolve) => setTimeout(resolve, 5_000))
+    const created = await host.client.call<{ tab: { terminal: string } }>(
+      'session.tabs.createTerminal',
+      {
+        worktree: `id:${worktreeId}`,
+        command: [process.execPath, printerPath, marker].map(quotePosixShell).join(' '),
+        activate: false,
+        select: false,
+        navigation: 'caller'
+      }
+    )
+    const lastLine = `${marker} ${String(LINES).padStart(4, '0')}`
+    // The printer finishes its history before the pane sleeps.
+    await expect
+      .poll(
+        async () => {
+          const read = await host.client.call('terminal.read', {
+            terminal: created.result.tab.terminal,
+            screen: true
+          })
+          return JSON.stringify(read.result).includes(lastLine)
+        },
+        { timeout: 30_000, message: 'the printer never printed its last line' }
+      )
+      .toBe(true)
     await host.client.call('worktree.sleep', { worktree: `id:${worktreeId}` })
     let historyRoot = ''
     let sessionFolder = ''
@@ -356,6 +373,7 @@ test('a moved pane shows its own history once, in its folder, across three reloa
 test('"Use on this computer again" brings back a slept pane live, with its history once', async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX shell commands')
+  // A move, a restart and the undo's reload, each booting a full app.
   test.setTimeout(600_000)
   const root = mkdtempSync(path.join(os.tmpdir(), 'orca-restore-lifecycle-undo-'))
   const repoPath = realpathSync(createMovedRepo(root))
