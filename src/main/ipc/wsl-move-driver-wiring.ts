@@ -85,7 +85,7 @@ import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-envi
  * there. Only with the internal WSL hosts gate open, and only on Windows, where the bridge runs.
  */
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
-  registerWslSleepShellCwdReader()
+  registerWslSleepShellCwdReader(runtime)
   setWslMoveReloadableWindow(() => {
     const contents = getTrustedUIRendererWebContents()
     return contents && wslMoveReloadableWindow(contents)
@@ -98,12 +98,13 @@ export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService)
   )
 }
 
-function registerWslSleepShellCwdReader(): void {
+function registerWslSleepShellCwdReader(runtime: OrcaRuntimeService): void {
   if (process.platform !== 'win32' || !wslHostsGateOpen()) {
     return
   }
   setDaemonWslSleepCwdReader(async (sessionId, distro) => {
-    const paneKey = ptyPaneKey.get(sessionId)
+    // Why the layout too: a pane the window has not reopened since a relaunch has no spawn-time key.
+    const paneKey = ptyPaneKey.get(sessionId) ?? runtime.wslMovePaneKeyForPty(sessionId)
     const rows = paneKey ? await readWslGuestPaneProcesses(distro) : null
     return paneKey && rows ? readWslGuestPaneShellCwd(rows, paneKey) : null
   })
@@ -135,7 +136,7 @@ export function createWslMoveDriverDeps(
   const userDataPath = app.getPath('userData')
   const facts: WslMoveGateFactSources = {
     listTerminals: (workspaceIds) => runtime.listWslMoveLiveTerminals(workspaceIds),
-    paneKeyForPty: (ptyId) => ptyPaneKey.get(ptyId) ?? null,
+    paneKeyForPty: (ptyId) => ptyPaneKey.get(ptyId) ?? runtime.wslMovePaneKeyForPty(ptyId),
     inspect: async (ptyId) => {
       const provider = tryGetProviderForPty(ptyId)
       if (!provider) {

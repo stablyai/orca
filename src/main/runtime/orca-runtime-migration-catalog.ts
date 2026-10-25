@@ -203,6 +203,12 @@ export abstract class OrcaRuntimeWithMigrationCatalog extends OrcaRuntimeWithRes
     )
   }
 
+  /** The pane a live terminal shows, including one the window has not reopened since a relaunch. */
+  wslMovePaneKeyForPty(ptyId: string): string | null {
+    const pty = this.ptysById.get(ptyId)
+    return pty ? this.paneOfPty(pty).paneKey : null
+  }
+
   /** This desktop's live terminals in the workspaces, for a WSL move's gate and pause. */
   listWslMoveLiveTerminals(workspaceIds: readonly string[]): WslMoveLiveTerminal[] {
     const terminals = new Map<string, WslMoveLiveTerminal>()

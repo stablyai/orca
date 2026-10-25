@@ -645,6 +645,42 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    // awin verify-9, X2: panes cd'd before a relaunch and slept before the window reopened them
+    // reopened at the root; the relaunched adapter had never learned their distro.
+    it('keeps the shell folder of a WSL pane a relaunched app only listed, never reattached', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const reader = vi.fn(async () => '/home/jin/repo/deep')
+      setDaemonWslSleepCwdReader(reader)
+      const before = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      try {
+        const { id } = await before.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+          sessionId: 'repo::/repo@@relaunch'
+        })
+        await before.disconnectOnly()
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        expect((await historyAdapter.reconcileOnStartup(new Set(['repo::/repo']))).alive).toContain(
+          id
+        )
+
+        await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
+
+        expect(reader).toHaveBeenCalledWith(id, 'Ubuntu')
+        const checkpointPath = join(historyDir, getHistorySessionDirName(id), 'checkpoint.json')
+        expect(JSON.parse(readFileSync(checkpointPath, 'utf-8')).cwd).toBe(
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\deep'
+        )
+      } finally {
+        setDaemonWslSleepCwdReader(null)
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+    })
+
     it('cold restores the second sleep/wake cycle with post-wake output', async () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
