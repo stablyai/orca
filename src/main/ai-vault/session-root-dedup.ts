@@ -11,6 +11,10 @@ function sessionAliasKey(session: AiVaultSession): string | null {
       .join('/')
     return `antigravity\0${session.executionHostId}\0${antigravitySessionOrigin(session.filePath) ?? 'cli'}\0${root}\0${session.sessionId}`
   }
+  if (session.agent === 'pi' || session.agent === 'omp') {
+    // OMP inherits PI_CODING_AGENT_DIR, so both agents can walk the same transcript.
+    return `pi-omp\0${session.executionHostId}\0${session.filePath}`
+  }
   if (session.agent !== 'devin') {
     const codexKey = codexSessionAliasKey(session)
     return codexKey ? `codex\0${codexKey}` : null
@@ -30,6 +34,10 @@ function sessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boo
       return full(candidate.filePath)
     }
     return sessionSortTime(candidate) > sessionSortTime(best)
+  }
+  if (candidate.agent === 'pi' || candidate.agent === 'omp') {
+    // The Pi parse relabels OMP-written transcripts, so a surviving Pi label means Pi wrote it.
+    return candidate.agent === 'pi' && best.agent === 'omp'
   }
   if (candidate.agent !== 'devin') {
     return codexSessionAliasBeats(candidate, best)

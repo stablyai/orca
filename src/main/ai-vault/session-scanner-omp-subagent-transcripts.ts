@@ -74,7 +74,7 @@ export function withOmpSubagentTranscriptCount(
       const session = await state.finalize(platform, options)
       const ownsTranscriptDisk =
         !options?.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
-      if (!session || !ownsTranscriptDisk) {
+      if (session?.agent !== 'omp' || !ownsTranscriptDisk) {
         return session
       }
       return {

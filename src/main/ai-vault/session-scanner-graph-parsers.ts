@@ -1,4 +1,5 @@
 import { foldOmpTranscriptTitle, type OmpTranscriptTitle } from './session-scanner-omp-title'
+import { isOmpWrittenRecord } from './omp-written-record'
 import {
   remoteSessionContentLines,
   type RemoteSessionContent
@@ -221,6 +222,11 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
   if (!record) {
     return
   }
+  if (accumulator.agent === 'pi' && isOmpWrittenRecord(record)) {
+    accumulator.agent = 'omp'
+    accumulator.fallbackTitle = accumulator.title
+    accumulator.title = null
+  }
   updateTimeline(accumulator, extractString(record.timestamp))
   if (accumulator.agent === 'omp') {
     state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
@@ -277,8 +283,10 @@ export function createMessageGraphSessionResumeState(
     }),
     ompTitle: null
   })
-  // Only OMP has this task-artifact layout; avoid directory reads for the other graph agents.
-  return agent === 'omp' ? withOmpSubagentTranscriptCount(state, file.path) : state
+  // Only OMP has this task-artifact layout; a Pi-scanned transcript can turn out to be OMP's.
+  return agent === 'omp' || agent === 'pi'
+    ? withOmpSubagentTranscriptCount(state, file.path)
+    : state
 }
 
 function createMessageGraphResumeState(state: MessageGraphParseState): ResumableSessionParseState {
