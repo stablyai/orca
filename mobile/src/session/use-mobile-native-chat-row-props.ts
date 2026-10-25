@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import {
   projectMobileNativeChatRows,
   type MobileNativeChatRowProjection
@@ -86,20 +86,38 @@ export function useMobileNativeChatRowProps(
   lookups: MobileNativeChatRowLookups,
   scope: string
 ): MobileNativeChatRowProjection<MobileNativeChatRowProps> {
+  const source = lookups.itemSource
+  const detail = source?.messageDetail
+  const inputs: Readonly<Record<string, unknown>> = {
+    messages,
+    ...lookups,
+    detailClient: source?.client,
+    detailSession: source?.sessionId,
+    detailService: detail,
+    detailRaw: detail?.raw,
+    detailState: detail?.state,
+    detailLoad: detail?.load
+  }
   const committed = useRef<{
     scope: string
+    inputs: typeof inputs
     projection: MobileNativeChatRowProjection<MobileNativeChatRowProps>
   } | null>(null)
-  const projection = useMemo(
-    () =>
-      projectMobileNativeChatRows(
-        messages.map((message, index) => resolveMobileNativeChatRowProps(index, message, lookups)),
-        committed.current?.scope === scope ? committed.current.projection : undefined
-      ),
-    [messages, lookups, scope]
-  )
+  const previous = committed.current
+  const sameScope = previous !== null && previous.scope === scope
+  const projection =
+    sameScope &&
+    Object.keys(inputs).length === Object.keys(previous.inputs).length &&
+    Object.entries(inputs).every(([key, value]) => value === previous.inputs[key])
+      ? previous.projection
+      : projectMobileNativeChatRows(
+          messages.map((message, index) =>
+            resolveMobileNativeChatRowProps(index, message, lookups)
+          ),
+          sameScope ? previous.projection : undefined
+        )
   useLayoutEffect(() => {
-    committed.current = { scope, projection }
-  }, [projection, scope])
+    committed.current = { scope, inputs, projection }
+  })
   return projection
 }

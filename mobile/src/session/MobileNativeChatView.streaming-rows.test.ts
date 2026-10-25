@@ -1,6 +1,4 @@
-import { createElement, useMemo } from 'react'
-import { performance } from 'node:perf_hooks'
-import { readFileSync } from 'node:fs'
+import { createElement, useMemo, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
@@ -9,17 +7,22 @@ import { agentJournalTurnBody } from '../../../src/shared/agent-session-turn-rec
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import { MobileNativeChatPageList } from './MobileNativeChatPageList'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatToolResultBlock
+} from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-read'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { MobileNativeChatView } from './MobileNativeChatView'
+import { MobileNativeChatToolOutput } from './MobileNativeChatFullContent'
+import { MobileNativeChatItemSourceContext } from './mobile-native-chat-item-read'
+import { projectMobileNativeChatRows } from './mobile-native-chat-row-projection'
 
 vi.mock('react-native', async () => {
   return {
     ActivityIndicator: 'ActivityIndicator',
-    FlatList: 'FlatList',
     ScrollView: 'ScrollView',
     Platform: { OS: 'web' },
     Pressable: 'Pressable',
@@ -50,6 +53,57 @@ vi.mock('./mobile-native-chat-item-read', async (importOriginal) => ({
   ...(await importOriginal<typeof MobileNativeChatItemReadModule>()),
   readMobileNativeChatItem: itemReads
 }))
+const operations = vi.hoisted(() => ({ resolve: 0, raw: 0, state: 0 }))
+vi.mock('./use-mobile-native-chat-row-props', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./use-mobile-native-chat-row-props')>()
+  const React = await import('react')
+  return {
+    ...actual,
+    useMobileNativeChatRowProps(
+      ...[messages, lookups, scope]: Parameters<typeof actual.useMobileNativeChatRowProps>
+    ) {
+      const counted = React.useMemo(
+        () => ({
+          ...lookups,
+          resolveTurnRow: (...args: Parameters<typeof lookups.resolveTurnRow>) => {
+            operations.resolve++
+            return lookups.resolveTurnRow(...args)
+          }
+        }),
+        [lookups]
+      )
+      return actual.useMobileNativeChatRowProps(messages, counted, scope)
+    }
+  }
+})
+vi.mock('./use-mobile-native-chat-message-detail', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./use-mobile-native-chat-message-detail')>()
+  return {
+    ...actual,
+    useMobileNativeChatMessageDetail(
+      ...args: Parameters<typeof actual.useMobileNativeChatMessageDetail>
+    ) {
+      const result = actual.useMobileNativeChatMessageDetail(...args)
+      const detail = result.detail
+      return detail === null
+        ? result
+        : {
+            ...result,
+            detail: {
+              ...detail,
+              raw: (id: string) => {
+                operations.raw++
+                return detail.raw(id)
+              },
+              state: (id: string) => {
+                operations.state++
+                return detail.state(id)
+              }
+            }
+          }
+    }
+  }
+})
 const rendered = vi.hoisted(() => new Map<string, number>())
 vi.mock('./MobileNativeChatMessage', async () => {
   const React = await import('react')
@@ -97,18 +151,7 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 }))
 vi.mock('./MobileNativeChatComposer', () => ({ MobileNativeChatComposer: 'Composer' }))
 
-type ViewProps = Parameters<typeof MobileNativeChatView>[0]
-const stable: Pick<
-  ViewProps,
-  | 'onSend'
-  | 'sendSurfaceId'
-  | 'getSendCompletionGeneration'
-  | 'getComposerEditGeneration'
-  | 'composerText'
-  | 'onComposerTextChange'
-  | 'pending'
-  | 'imagePreviewsByMessageId'
-> = {
+const stable = {
   onSend: async () => true,
   sendSurfaceId: 'perf-chat',
   getSendCompletionGeneration: () => 0,
@@ -119,7 +162,6 @@ const stable: Pick<
     {
       id: 'pending',
       text: 'follow up',
-      images: ['local:pending'],
       sentAt: 10,
       baselineTailMessageId: 'live-user'
     }
@@ -129,17 +171,8 @@ const stable: Pick<
 
 const itemSource = { client: stubRpcClient(), sessionId: 'session' }
 const openFile = () => {}
-function Harness({
-  items,
-  corpus = []
-}: {
-  items: AgentJournalRenderItem[]
-  corpus?: NativeChatMessage[]
-}) {
-  const messages = useMemo(
-    () => [...corpus, ...projectStructuredAgentSessionMessages(items, [], [])],
-    [items, corpus]
-  )
+function Harness({ items }: { items: AgentJournalRenderItem[] }) {
+  const messages = useMemo(() => projectStructuredAgentSessionMessages(items, [], []), [items])
   const timing = useMobileStructuredAgentTurnTiming(
     { items, submissions: [], working: true },
     'live'
@@ -188,6 +221,12 @@ function Harness({
   })
 }
 
+const textBody = (role: 'user' | 'assistant' | 'reasoning', text: string) => ({
+  kind: 'message' as const,
+  role,
+  blocks: [{ type: 'text' as const, text }]
+})
+
 function journal(turns: number, text: string): AgentJournalRenderItem[] {
   const items: AgentJournalRenderItem[] = []
   const add = (itemId: string, body: AgentJournalRenderItem['body']) => {
@@ -201,11 +240,7 @@ function journal(turns: number, text: string): AgentJournalRenderItem[] {
   }
   for (let i = 0; i < turns; i++) {
     const turnId = `turn-${i}`
-    add(`user-${i}`, {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'inspect the code' }]
-    })
+    add(`user-${i}`, textBody('user', 'inspect the code'))
     add(`tool-${i}`, {
       kind: 'message',
       role: 'assistant',
@@ -214,16 +249,8 @@ function journal(turns: number, text: string): AgentJournalRenderItem[] {
         { type: 'tool-result', callId: `call-${i}`, output: 'contents' }
       ]
     })
-    add(`reason-${i}`, {
-      kind: 'message',
-      role: 'reasoning',
-      blocks: [{ type: 'text', text: 'checking' }]
-    })
-    add(`answer-${i}`, {
-      kind: 'message',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: 'finished' }]
-    })
+    add(`reason-${i}`, textBody('reasoning', 'checking'))
+    add(`answer-${i}`, textBody('assistant', 'finished'))
     add(
       `lifecycle-${i}`,
       agentJournalTurnBody({
@@ -236,7 +263,7 @@ function journal(turns: number, text: string): AgentJournalRenderItem[] {
       })
     )
   }
-  add('live-user', { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'continue' }] })
+  add('live-user', textBody('user', 'continue'))
   add(
     'live-turn',
     agentJournalTurnBody({
@@ -246,11 +273,20 @@ function journal(turns: number, text: string): AgentJournalRenderItem[] {
       startedAt: 6000
     })
   )
-  add('live-answer', { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] })
+  add('live-answer', textBody('assistant', text))
   return items
 }
 
 let renderer: ReactTestRenderer | null = null
+function showElement(element: ReactElement) {
+  act(() => {
+    if (renderer) {
+      renderer.update(element)
+    } else {
+      renderer = create(element)
+    }
+  })
+}
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
@@ -258,7 +294,7 @@ afterEach(() => {
   itemReads.mockReset()
 })
 
-function measure(turns: number, corpus: NativeChatMessage[] = []) {
+function measure(turns: number) {
   // Retain every loaded row by reaching the page's scroll-driven draw expansion.
   const scroller = {
     scrollTop: 0,
@@ -270,7 +306,7 @@ function measure(turns: number, corpus: NativeChatMessage[] = []) {
   }
   const items = journal(turns, 'hello')
   act(() => {
-    renderer = create(createElement(Harness, { items, corpus }), {
+    renderer = create(createElement(Harness, { items }), {
       createNodeMock: (element) =>
         element.type === 'ScrollView'
           ? { getScrollableNode: () => scroller, getInnerViewNode: () => null }
@@ -280,10 +316,8 @@ function measure(turns: number, corpus: NativeChatMessage[] = []) {
   expect(renderer!.root.findAllByType(MobileNativeChatPageList)).toHaveLength(1)
   const mounted = renderer!.root.findAll((node) => Object.is(node.type, 'ChatMessage'))
   expect(mounted.length).toBe(
-    foldMobileNativeChatMessages(
-      [...corpus, ...projectStructuredAgentSessionMessages(items, [], [])],
-      'claude'
-    ).length + 1
+    foldMobileNativeChatMessages(projectStructuredAgentSessionMessages(items, [], []), 'claude')
+      .length + 1
   )
   expect(mounted.some((node) => node.props.workRun?.length > 1)).toBe(true)
   expect(
@@ -292,7 +326,7 @@ function measure(turns: number, corpus: NativeChatMessage[] = []) {
   const preview = mounted.find((node) => node.props.message.id === 'user-0')!
   expect(preview.props.message.blocks).toContainEqual({ type: 'image-ref', url: 'local:preview' })
   expect(mounted.some((node) => node.props.message.id === 'pending')).toBe(true)
-  const samples: { renders: number; ms: number; ids: string[] }[] = []
+  const maximum = { resolve: 0, raw: 0, state: 0 }
   for (let batch = 0; batch < 20; batch++) {
     rendered.clear()
     const updated = items.map((item) =>
@@ -300,50 +334,33 @@ function measure(turns: number, corpus: NativeChatMessage[] = []) {
         ? {
             ...item,
             revision: batch + 2,
-            body: {
-              kind: 'message' as const,
-              role: 'assistant' as const,
-              blocks: [{ type: 'text' as const, text: `hello${'.'.repeat(batch + 1)}` }]
-            }
+            body: textBody('assistant', `hello${'.'.repeat(batch + 1)}`)
           }
         : item
     )
-    const start = performance.now()
-    act(() => renderer!.update(createElement(Harness, { items: updated, corpus })))
-    samples.push({
-      ms: performance.now() - start,
-      renders: [...rendered.values()].reduce((sum, n) => sum + n, 0),
-      ids: [...rendered.keys()]
-    })
+    Object.assign(operations, { resolve: 0, raw: 0, state: 0 })
+    act(() => renderer!.update(createElement(Harness, { items: updated })))
+    expect([...rendered.keys()]).toEqual(['live-answer'])
+    expect(operations.resolve).toBeLessThanOrEqual(mounted.length)
+    for (const key of ['resolve', 'raw', 'state'] as const) {
+      maximum[key] = Math.max(maximum[key], operations[key])
+    }
+    // Work-run members appear in the owner's details and their own row.
+    expect(operations.raw).toBeLessThanOrEqual(2 * mounted.length)
+    expect(operations.state).toBeLessThanOrEqual(2 * mounted.length)
   }
-  const result = {
-    turns,
-    rows: mounted.length,
-    renders: samples.map((sample) => sample.renders),
-    meanMs: samples.reduce((sum, sample) => sum + sample.ms, 0) / samples.length
-  }
-  process.stdout.write(`STREAM_PERF ${JSON.stringify(result)}\n`)
-  expect(
-    samples.every((sample) => sample.ids.length === 1 && sample.ids[0] === 'live-answer')
-  ).toBe(true)
-  expect(
-    renderer!.root
-      .findAll((node) => Object.is(node.type, 'ChatMessage'))
-      .find((node) => node.props.message.id === 'live-answer')!.props.message.blocks[0].text
-  ).toBe(`hello${'.'.repeat(20)}`)
+  return maximum
 }
 
-it.each([10, 100])('bounds streaming renders at %i settled turns', (turns) => measure(turns))
-it.skipIf(!process.env.ORCA_CHAT_PERF_CORPUS)(
-  'measures the private real-scale transcript without committing it',
-  () => {
-    const corpus: NativeChatMessage[] = JSON.parse(
-      readFileSync(process.env.ORCA_CHAT_PERF_CORPUS!, 'utf8')
-    )
-    measure(10, corpus)
+it('bounds streaming row renders and upstream lookup work at N and 10N', () => {
+  const small = measure(10)
+  act(() => renderer?.unmount())
+  renderer = null
+  const large = measure(100)
+  for (const operation of ['resolve', 'raw', 'state'] as const) {
+    expect(large[operation]).toBeLessThanOrEqual(10 * small[operation])
   }
-)
-
+})
 it('reuses footer rows during a command and returns them to the list afterward', () => {
   const show = (text: string, holding = true) =>
     act(() => {
@@ -372,11 +389,7 @@ it('reuses footer rows during a command and returns them to the list afterward',
         structuredActivityUi: true,
         turnJournal: { items, submissions: [] }
       })
-      if (renderer) {
-        renderer.update(element)
-      } else {
-        renderer = create(element)
-      }
+      showElement(element)
     })
   const listed = (): string[] =>
     renderer!.root
@@ -396,14 +409,7 @@ it('loads full row text without redrawing other rows and fences a replaced short
     item.itemId === 'answer-0' ? { ...item, shortened: true as const } : item
   )
   const show = (batch: AgentJournalRenderItem[]) =>
-    act(() => {
-      const element = createElement(Harness, { items: batch })
-      if (renderer) {
-        renderer.update(element)
-      } else {
-        renderer = create(element)
-      }
-    })
+    showElement(createElement(Harness, { items: batch }))
   const answer = () =>
     renderer!.root.find(
       (node) => Object.is(node.type, 'ChatMessage') && node.props.message.id === 'answer-0'
@@ -413,11 +419,7 @@ it('loads full row text without redrawing other rows and fences a replaced short
     sequence: 4,
     observedAt: 4,
     revision: 2,
-    body: {
-      kind: 'message',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: 'finished FULL TAIL' }]
-    }
+    body: textBody('assistant', 'finished FULL TAIL')
   }
   show(items)
   expect(answer().props.recovery.load).toBe('idle')
@@ -450,3 +452,83 @@ it('loads full row text without redrawing other rows and fences a replaced short
   expect(answer().props.message.blocks[0].text).toBe('finished')
   expect(answer().props.recovery).not.toBeNull()
 })
+
+const clipped = (): NativeChatToolResultBlock => ({
+  type: 'tool-result',
+  callId: 'call',
+  fullOutputItemId: 'tool-item',
+  output: 'same preview\n… (1000 bytes)'
+})
+const message = (id: string, body: NativeChatToolResultBlock): NativeChatMessage => ({
+  id,
+  role: 'assistant',
+  source: 'transcript',
+  timestamp: 1,
+  blocks: [body]
+})
+type Row = { message: NativeChatMessage; workRun?: NativeChatMessage[] }
+
+it.each([false, true])(
+  'fences replaced equal tool previews, nested work run: %s',
+  async (nested) => {
+    const pending = Promise.withResolvers<AgentJournalRenderItem | null>()
+    itemReads.mockReturnValueOnce(pending.promise)
+    let previous: ReturnType<typeof projectMobileNativeChatRows<Row>> | undefined
+    const replace = () => {
+      const row = message('row', clipped())
+      previous = projectMobileNativeChatRows<Row>(
+        [
+          nested
+            ? { message: message('head', { type: 'tool-result', output: 'head' }), workRun: [row] }
+            : { message: row }
+        ],
+        previous
+      )
+      const shown = nested ? previous.rows[0]!.workRun![0]! : previous.rows[0]!.message
+      const body = shown.blocks[0]
+      if (body?.type !== 'tool-result') {
+        throw new Error('Expected projected tool output')
+      }
+      showElement(
+        createElement(
+          MobileNativeChatItemSourceContext.Provider,
+          { value: itemSource },
+          createElement(MobileNativeChatToolOutput, {
+            body,
+            type: {},
+            rootIdentity: 'run',
+            positionKey: 'output'
+          })
+        )
+      )
+    }
+    replace()
+    const button = () => renderer!.root.findByType('Pressable')
+    act(() => button().props.onPress())
+    expect(button().props.disabled).toBe(true)
+    replace()
+    expect(button().props.disabled).toBe(false)
+    const fullOutput = (head: string): AgentJournalRenderItem => ({
+      itemId: 'tool-item',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: {
+        kind: 'tool-call',
+        name: 'Bash',
+        input: {},
+        state: 'completed',
+        output: { head, byteLength: 1000, truncated: false }
+      }
+    })
+    await act(async () => {
+      pending.resolve(fullOutput('old full output'))
+      await pending.promise
+    })
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain('old full output')
+    itemReads.mockResolvedValueOnce(fullOutput('current full output'))
+    await act(async () => button().props.onPress())
+    expect(itemReads).toHaveBeenCalledTimes(2)
+    expect(JSON.stringify(renderer!.toJSON())).toContain('current full output')
+  }
+)

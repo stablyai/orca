@@ -11,12 +11,20 @@ function isProjectionContainer(value: unknown): value is Fields {
   return Array.isArray(value) || prototype === Object.prototype || prototype === null
 }
 
+// Fetch/recovery freshness keys retain identity even when their previews compare equal.
+function isRecoveryFreshnessKey(value: Fields, field?: string): boolean {
+  return field === 'raw' || (value.type === 'tool-result' && value.fullOutputItemId !== undefined)
+}
+
 // Compare rebuilt projection containers; opaque state and callbacks must retain identity.
-function unchanged(previous: unknown, next: unknown, depth: number): boolean {
+function unchanged(previous: unknown, next: unknown, depth: number, field?: string): boolean {
   if (previous === next) {
     return true
   }
   if (depth < 0 || !isProjectionContainer(previous) || !isProjectionContainer(next)) {
+    return false
+  }
+  if (isRecoveryFreshnessKey(previous, field) || isRecoveryFreshnessKey(next, field)) {
     return false
   }
   if (Array.isArray(previous) || Array.isArray(next)) {
@@ -31,12 +39,7 @@ function unchanged(previous: unknown, next: unknown, depth: number): boolean {
   return (
     keys.length === Object.keys(next).length &&
     keys.every(
-      (key) =>
-        Object.hasOwn(next, key) &&
-        // Full-message requests are fenced by the original shortened row's identity.
-        (key === 'raw'
-          ? previous[key] === next[key]
-          : unchanged(previous[key], next[key], depth - 1))
+      (key) => Object.hasOwn(next, key) && unchanged(previous[key], next[key], depth - 1, key)
     )
   )
 }
