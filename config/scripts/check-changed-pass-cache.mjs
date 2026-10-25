@@ -18,8 +18,8 @@ const HASHED_CONFIG_FILES = [
   'config/scripts/check-changed-pass-cache.mjs'
 ]
 
-function git(root, args, encoding = 'utf8') {
-  return execFileSync('git', args, { cwd: root, encoding, maxBuffer: 512 * 1024 * 1024 })
+function git(root, args) {
+  return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
 }
 
 function splitNullDelimited(output) {
@@ -54,16 +54,11 @@ export function computePassHash(root, mergeBase) {
   field('version', String(CACHE_VERSION))
   field('runtime', `${process.platform} ${process.arch} ${process.version}`)
   field('base', mergeBase)
-  // `git diff <base>` compares the working tree, so it covers committed, staged, and unstaged edits.
-  field(
-    'diff',
-    git(root, ['diff', '--binary', '--no-color', '--no-ext-diff', mergeBase, '--'], 'buffer')
-  )
-  for (const file of splitNullDelimited(
-    git(root, ['ls-files', '--others', '--exclude-standard', '-z'])
-  )) {
-    field('untracked', file)
-    field('content', readIfFile(path.join(root, file)) ?? '')
+  // Base plus each changed path's working-tree bytes pins the tree like the diff does, but stays
+  // stable when an edit is staged or committed, so committing a passing change keeps its pass.
+  for (const file of collectChangedFiles(root, mergeBase)) {
+    field('changed', file)
+    field('content', readIfFile(path.join(root, file)) ?? '\0deleted')
   }
   for (const file of HASHED_CONFIG_FILES) {
     field('config', file)

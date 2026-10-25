@@ -59,6 +59,11 @@ it('keys the pass on every edit state and ignores its own cache file', () => {
   expect(computePassHash(root, base)).not.toBe(untracked)
   expect(collectChangedFiles(root, base)).toEqual(['new.ts', 'tracked.ts'])
 
+  const beforeCommit = computePassHash(root, base)
+  git('add', 'new.ts')
+  git('commit', '-qm', 'add')
+  expect(computePassHash(root, base)).toBe(beforeCommit)
+
   const beforeLockfile = computePassHash(root, base)
   writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 10\n')
   expect(computePassHash(root, base)).not.toBe(beforeLockfile)
