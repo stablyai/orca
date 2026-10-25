@@ -651,9 +651,15 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
   })
 
   it('ignores a reply whose request already timed out instead of self-closing', async () => {
+    vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { client, socket, onClose } = scriptedControl()
     await client.connect()
+    const invite = client
+      .createInvite('device-1', 'expired-req')
+      .catch((error: Error) => error.message)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await invite).toBe('relay_control_request_timeout')
 
     // A relay control-error carrying a reqId with no live waiter — e.g. a late
     // reply that arrived after the desktop's request deadline deleted it, or the
@@ -663,6 +669,7 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
     expect(client.isLive()).toBe(true)
     expect(socket.readyState).toBe(1)
     expect(onClose).not.toHaveBeenCalled()
+    client.closeNow()
     warn.mockRestore()
   })
 

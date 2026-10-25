@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import type { DiffLine } from './native-chat-diff'
+import type { NativeChatDiffLine as DiffLine } from '../../../../shared/native-chat/tools/native-chat-diff'
 
 /** Inline coloured diff, used for Edit/Write tool calls and diff-style tool
  *  results. Adds/dels use the git-decoration tokens with a faint tinted ground,

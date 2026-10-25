@@ -394,6 +394,7 @@ describe('Relay region preference', () => {
 
     await expect(resolver.resolve()).resolves.toBe('asia-east2')
     expect(fetch).not.toHaveBeenCalled()
+    expect(existsSync(cachePath(path))).toBe(false)
   })
 
   it('lets the environment override win and never self-heals its cache', async () => {

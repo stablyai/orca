@@ -545,7 +545,9 @@ describe('terminal input dispatch through the current runtime', () => {
     await expect(
       target.sendTerminal(HANDLE, { text: 'hello' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true, bytesWritten: 5 })
-    expect(writer).toHaveBeenCalledOnce()
+    expect(writer).toHaveBeenCalledExactlyOnceWith(PTY, { text: 'hello' }, 'hello', {
+      inputKind: 'driving'
+    })
   })
 })
 

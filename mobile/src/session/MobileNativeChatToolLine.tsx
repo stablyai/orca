@@ -3,8 +3,11 @@ import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
 import { agentJournalToolCallLifecycle } from '../../../src/shared/agent-journal-tool-call-lifecycle'
-import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
-import type { NativeChatDiffLine } from '../../../src/shared/native-chat-diff'
+import {
+  diffFromText,
+  diffFromToolCall
+} from '../../../src/shared/native-chat/tools/native-chat-diff'
+import type { NativeChatDiffLine } from '../../../src/shared/native-chat/tools/native-chat-diff'
 import {
   formatToolDuration,
   mcpToolIdentity,

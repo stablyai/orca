@@ -11,7 +11,7 @@ import {
   NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS
 } from '../../../../shared/native-chat-tool-run-sentence'
 import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../../shared/native-chat-tool-line-label'
-import { NATIVE_CHAT_DIFF_CARD_COPY } from '../../../../shared/native-chat-edit-cards'
+import { NATIVE_CHAT_DIFF_CARD_COPY } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import { NATIVE_CHAT_TASK_LIST_COPY } from '../../../../shared/native-chat-task-list'
 
 // The shared copy is desktop's i18n fallback and mobile's actual rendered string.

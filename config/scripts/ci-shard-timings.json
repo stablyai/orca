@@ -11559,7 +11559,7 @@
       "src/shared/native-chat-command-output.test.ts": 47,
       "src/shared/native-chat-context-usage.test.ts": 35,
       "src/shared/native-chat-cut-turn-notice.test.ts": 364,
-      "src/shared/native-chat-edit-normalize.test.ts": 419,
+      "src/shared/native-chat/tools/native-chat-edit-normalize.test.ts": 419,
       "src/shared/native-chat-href-routing.test.ts": 64,
       "src/shared/native-chat-image-transcript-markers.test.ts": 83,
       "src/shared/native-chat-live-line.test.ts": 67,

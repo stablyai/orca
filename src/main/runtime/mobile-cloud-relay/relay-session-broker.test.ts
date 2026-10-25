@@ -109,11 +109,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     fakes.transports.length = 0
     fakes.controlConnect.mockReset()
     fakes.exchange.mockReset().mockResolvedValue({ relayToken: 'relay-jwt', expiresAt: 1_000_000 })
-    fakes.assign.mockReset().mockResolvedValue({
-      cellUrl: 'https://relay.example.test',
-      assignmentEpoch: 1,
-      leaseExpiresAt: 60_000
-    })
+    fakes.assign.mockReset().mockResolvedValue(relayAssignment('https://relay.example.test', 1))
   })
 
   it('publishes the assigned cell with the status and drops it on close', async () => {
@@ -233,16 +229,8 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       controlResumeSecret: 'B'.repeat(43)
     })
     fakes.assign
-      .mockResolvedValueOnce({
-        cellUrl: 'https://relay-c1.example.test',
-        assignmentEpoch: 1,
-        leaseExpiresAt: 1_000_000
-      })
-      .mockResolvedValueOnce({
-        cellUrl: 'https://relay-c2.example.test',
-        assignmentEpoch: 2,
-        leaseExpiresAt: 2_000_000
-      })
+      .mockResolvedValueOnce(relayAssignment('https://relay-c1.example.test', 1))
+      .mockResolvedValueOnce(relayAssignment('https://relay-c2.example.test', 2))
     const resolvePreferredRegion = vi
       .fn()
       .mockResolvedValueOnce('asia-east2')
@@ -273,7 +261,6 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       relayDeviceId: 'device-1',
       attachDeadlineMs: 1_000
     })
-    expect(brokerBasisIds(broker)).toEqual(['old-basis'])
     fakes.controls[0]!.options.onDrain({
       type: 'drain',
       graceMs: 30_000,
@@ -289,7 +276,6 @@ describe('RelaySessionBroker lifecycle ownership', () => {
 
     expect(broker.endpoint?.cellUrl).toBe('https://relay-c2.example.test')
     expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()
-    expect(brokerBasisIds(broker)).toEqual(['old-basis'])
     expect(fakes.controls[0]!.closeNow).not.toHaveBeenCalled()
     expect(fakes.transports[0]!.stop).not.toHaveBeenCalled()
     await broker.confirmResume('old-basis', 'confirm-1')
@@ -317,18 +303,9 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       leaseExpiresAt: 2_000_000
     })
     fakes.assign
-      .mockResolvedValueOnce({
-        cellUrl: 'https://relay.example.test',
-        assignmentEpoch: 1,
-        leaseExpiresAt: 1_000_000
-      })
-      .mockResolvedValueOnce({
-        cellUrl: 'https://relay.example.test',
-        assignmentEpoch: 1,
-        leaseExpiresAt: 2_000_000
-      })
+      .mockResolvedValueOnce(relayAssignment('https://relay.example.test', 1))
+      .mockResolvedValueOnce(relayAssignment('https://relay.example.test', 1))
     const broker = await RelaySessionBroker.connect(brokerOptions())
-    expect(brokerBasisIds(broker)).toEqual(['existing-basis'])
     fakes.controls[0]!.options.onDrain({
       type: 'drain',
       graceMs: 5_000,
@@ -339,7 +316,6 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     expect(fakes.transports).toHaveLength(1)
     expect(fakes.controls[1]!.options.previousGeneration).toBe(7)
     expect(fakes.controls[1]!.options.controlResumeSecret).toBe('R'.repeat(43))
-    await vi.waitFor(() => expect(brokerBasisIds(broker)).toEqual(['existing-basis']))
     await broker.confirmResume('existing-basis', 'confirm-1')
     expect(fakes.controls[1]!.confirmResume).toHaveBeenCalledOnce()
   })
@@ -355,16 +331,8 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       pendingConns: []
     } satisfies RelayHostHelloAckMessage)
     fakes.assign
-      .mockResolvedValueOnce({
-        cellUrl: 'https://cell-a.relay.example.test',
-        assignmentEpoch: 1,
-        leaseExpiresAt: 1_000_000
-      })
-      .mockResolvedValueOnce({
-        cellUrl: 'https://cell-b.relay.example.test',
-        assignmentEpoch: 2,
-        leaseExpiresAt: 2_000_000
-      })
+      .mockResolvedValueOnce(relayAssignment('https://cell-a.relay.example.test', 1))
+      .mockResolvedValueOnce(relayAssignment('https://cell-b.relay.example.test', 2))
     const onAssignedCellActive = vi.fn()
 
     await RelaySessionBroker.connect(brokerOptions({ onAssignedCellActive }))
@@ -395,11 +363,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       // replay the phone waits out its 10s attach deadline and is closed 4404.
       pendingConns: [{ connId: 'straddling-basis', connTicket: 'T'.repeat(43) }]
     })
-    fakes.assign.mockResolvedValue({
-      cellUrl: 'https://relay.example.test',
-      assignmentEpoch: 1,
-      leaseExpiresAt: 2_000_000
-    })
+    fakes.assign.mockResolvedValue(relayAssignment('https://relay.example.test', 1))
     const broker = await RelaySessionBroker.connect(brokerOptions())
     fakes.controls[0]!.options.onConnectionOpen({
       connId: 'straddling-basis',
@@ -429,7 +393,11 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         attachDeadlineMs: 10_000
       })
     )
-    expect(brokerBasisIds(broker)).toEqual(['straddling-basis'])
+    await broker.confirmResume('straddling-basis', 'confirm-replay')
+    expect(fakes.controls[1]!.confirmResume).toHaveBeenCalledWith(
+      'straddling-basis',
+      'confirm-replay'
+    )
   })
 
   it('opens a fresh same-cell generation when process-local rebind state is lost', async () => {
@@ -452,16 +420,8 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         leaseExpiresAt: 2_000_000
       })
     fakes.assign
-      .mockResolvedValueOnce({
-        cellUrl: 'https://relay.example.test',
-        assignmentEpoch: 1,
-        leaseExpiresAt: 1_000_000
-      })
-      .mockResolvedValueOnce({
-        cellUrl: 'https://relay.example.test',
-        assignmentEpoch: 1,
-        leaseExpiresAt: 2_000_000
-      })
+      .mockResolvedValueOnce(relayAssignment('https://relay.example.test', 1))
+      .mockResolvedValueOnce(relayAssignment('https://relay.example.test', 1))
     const onStatus = vi.fn()
     const broker = await RelaySessionBroker.connect(brokerOptions({ onStatus }))
 
@@ -493,11 +453,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       }
       fakes.controlConnect.mockResolvedValue(ack)
       fakes.assign
-        .mockResolvedValueOnce({
-          cellUrl: 'https://relay.example.test',
-          assignmentEpoch: 1,
-          leaseExpiresAt: 1_000_000
-        })
+        .mockResolvedValueOnce(relayAssignment('https://relay.example.test', 1))
         .mockRejectedValue(new Error('director_unavailable'))
       const broker = await RelaySessionBroker.connect(brokerOptions({ random: () => 0.5 }))
       const drain = {
@@ -541,11 +497,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       }
       fakes.controlConnect.mockResolvedValue(ack)
       fakes.assign
-        .mockResolvedValueOnce({
-          cellUrl: 'https://relay.example.test',
-          assignmentEpoch: 1,
-          leaseExpiresAt: 1_000_000
-        })
+        .mockResolvedValueOnce(relayAssignment('https://relay.example.test', 1))
         .mockRejectedValue(new RelayHttpError('assignment', 503, 30_000))
       const broker = await RelaySessionBroker.connect(brokerOptions({ random: () => 0.5 }))
 
@@ -578,17 +530,9 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       }
       fakes.controlConnect.mockResolvedValue(ack)
       fakes.assign
-        .mockResolvedValueOnce({
-          cellUrl: 'https://relay-c1.example.test',
-          assignmentEpoch: 1,
-          leaseExpiresAt: 1_000_000
-        })
+        .mockResolvedValueOnce(relayAssignment('https://relay-c1.example.test', 1))
         .mockRejectedValueOnce(new Error('director_unavailable'))
-        .mockResolvedValueOnce({
-          cellUrl: 'https://relay-c2.example.test',
-          assignmentEpoch: 2,
-          leaseExpiresAt: 2_000_000
-        })
+        .mockResolvedValueOnce(relayAssignment('https://relay-c2.example.test', 2))
       const broker = await RelaySessionBroker.connect(brokerOptions({ random: () => 0.5 }))
 
       fakes.controls[0]!.options.onDrain({
@@ -631,11 +575,7 @@ describe('RelaySessionBroker renewal close reason', () => {
     } satisfies RelayHostHelloAckMessage)
     // An already-spent lease makes the renewal tick fire on the next turn.
     fakes.exchange.mockReset().mockResolvedValue({ relayToken: 'relay-jwt', expiresAt: 0 })
-    fakes.assign.mockReset().mockResolvedValue({
-      cellUrl: 'https://relay.example.test',
-      assignmentEpoch: 1,
-      leaseExpiresAt: 60_000
-    })
+    fakes.assign.mockReset().mockResolvedValue(relayAssignment('https://relay.example.test', 1))
   })
 
   // Only the renewal's own read observes the loss; nothing reconciles the coordinator.
@@ -670,9 +610,11 @@ describe('RelaySessionBroker renewal close reason', () => {
   })
 })
 
-function brokerBasisIds(broker: RelaySessionBroker): string[] {
-  const pool = (broker as unknown as { originPool: unknown }).originPool
-  return [...(pool as { basisOrigins: Map<string, unknown> }).basisOrigins.keys()]
+function relayAssignment(
+  cellUrl: string,
+  assignmentEpoch: number
+): RelayHttpClientModule.RelayAssignment {
+  return { v: 1, cellUrl, assignmentEpoch, lease: 'assignment-lease' }
 }
 
 function brokerOptions(

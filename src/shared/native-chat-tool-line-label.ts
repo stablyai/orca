@@ -1,5 +1,5 @@
 import { nativeChatCommandLanguage } from './native-chat/native-chat-command-language'
-import { isNativeChatFileCountPath } from './native-chat-edit-patch-files'
+import { isNativeChatFileCountPath } from './native-chat/tools/native-chat-edit-patch-files'
 import { nativeChatToolCategory } from './native-chat-tool-icon'
 import {
   nativeChatFullCommand,

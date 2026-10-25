@@ -8,13 +8,13 @@ import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-lin
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
 import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
-import { nativeChatEditFilePatchText } from '../../../../shared/native-chat-edit-cards'
+import { nativeChatEditFilePatchText } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import {
   unifiedLineNumber,
   type NativeChatEditFile,
   type NativeChatEditLine
-} from '../../../../shared/native-chat-edit-model'
+} from '../../../../shared/native-chat/tools/native-chat-edit-model'
 
 function VerbIcon({ kind }: { kind: NativeChatEditFile['changeKind'] }): React.JSX.Element {
   const className = 'size-3.5 shrink-0 text-chat-foreground-faint'

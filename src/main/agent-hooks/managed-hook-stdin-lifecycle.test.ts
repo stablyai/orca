@@ -291,7 +291,7 @@ describe('Windows managed hook stdin structure', () => {
     expect(warm, 'encoded PowerShell warm-up').toMatchObject({ code: 0, timedOut: false })
   }, 60_000)
 
-  it('exits immediately when Orca env is missing and keeps drain for other failures', async () => {
+  it('places missing-context guards before Windows stdin readers', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
     homedirMock.mockReturnValue(home)
     seedCmdAutoRunTarget(home)

@@ -1,5 +1,5 @@
 import { finalizeEditFile, type NativeChatEditFile } from './native-chat-edit-model'
-import { stripBoundedTextMarker } from './structured-agent-session-projection'
+import { stripBoundedTextMarker } from '../../structured-agent-session-projection'
 import {
   editLinesFromUnifiedPatch,
   summarizeUnifiedPatch,

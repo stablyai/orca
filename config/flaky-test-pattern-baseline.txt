@@ -353,7 +353,6 @@
 1 test-no-real-time-wait:src/main/runtime/launched-agent-foreground.test.ts
 1 test-no-real-time-wait:src/main/runtime/launched-agent-shell-handoff-readiness.test.ts
 3 test-no-real-time-wait:src/main/runtime/layout-command-pane-starts-layout-owner.test.ts
-1 test-no-real-time-wait:src/main/runtime/mobile-cloud-relay/relay-auth-coordinator.test.ts
 1 test-no-real-time-wait:src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.integration.test.ts
 1 test-no-real-time-wait:src/main/runtime/mobile-desktop-relay/mobile-desktop-relay.test.ts
 1 test-no-real-time-wait:src/main/runtime/orca-runtime-files-mobile-explorer-reads.test.ts

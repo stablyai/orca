@@ -33,7 +33,7 @@ import {
   nativeChatToolRunSentence
 } from '../../../src/shared/native-chat-tool-run-sentence'
 import { countToolCalls } from '../../../src/shared/native-chat-tool-summary'
-import { buildEditCards } from '../../../src/shared/native-chat-edit-cards'
+import { buildEditCards } from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
   isToolCallBlock,
   type NativeChatBlock,

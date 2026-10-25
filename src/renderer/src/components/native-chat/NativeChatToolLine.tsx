@@ -20,7 +20,10 @@ import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
 import { NativeChatDiffView } from './NativeChatDiffView'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
-import { diffFromText, diffFromToolCall } from './native-chat-diff'
+import {
+  diffFromText,
+  diffFromToolCall
+} from '../../../../shared/native-chat/tools/native-chat-diff'
 import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolOutput } from './NativeChatToolOutput'

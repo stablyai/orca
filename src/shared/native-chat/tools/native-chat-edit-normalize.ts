@@ -8,7 +8,7 @@ import {
 } from './native-chat-edit-model'
 import { editFilesFromPatchText, splitMoveMarker } from './native-chat-edit-patch-files'
 import { editLinesFromUnifiedPatch, editLinesFromWholeFile } from './native-chat-unified-patch'
-import type { NativeChatEditPatch } from './native-chat-types'
+import type { NativeChatEditPatch } from '../../native-chat-types'
 
 // `NotebookEdit` is deliberately absent: its input carries only the new cell
 // source, so a card would render an unchanged cell as wholly added. It falls

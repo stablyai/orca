@@ -5,12 +5,12 @@ import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from 'lucide-react-nativ
 import {
   NATIVE_CHAT_DIFF_CARD_COPY,
   nativeChatEditFilePatchText
-} from '../../../src/shared/native-chat-edit-cards'
+} from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
   unifiedLineNumber,
   type NativeChatEditFile,
   type NativeChatEditLine
-} from '../../../src/shared/native-chat-edit-model'
+} from '../../../src/shared/native-chat/tools/native-chat-edit-model'
 import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat-tool-line-label'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'

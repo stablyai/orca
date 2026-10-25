@@ -8,7 +8,7 @@ import { mcpToolIdentity, type NativeChatMcpIdentity } from './native-chat-tool-
  * changes, plus a trailing mark on failure. A row that swapped glyphs when it
  * finished would read as changing identity.
  */
-import { EDIT_TOOL_NAMES } from './native-chat-diff'
+import { EDIT_TOOL_NAMES } from './native-chat/tools/native-chat-diff'
 import { isCommandToolName } from './native-chat-tool-activity'
 import { toolInputCommand } from './native-chat-tool-summary'
 
