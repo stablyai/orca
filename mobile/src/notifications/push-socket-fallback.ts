@@ -15,7 +15,12 @@ import {
   dismissSupersededPaneTrayNotifications,
   isNotificationTargetConsumed
 } from './consumed-notification-tray-dismissal'
-import { readBridgeNotificationAgentContext } from './bridge-session-viewing-tracker'
+import {
+  ingestBridgeWorktreeListPayload,
+  readBridgeNotificationAgentContext
+} from './bridge-session-viewing-tracker'
+import { resumeWorktreeListRead } from '../agent-history/mobile-agent-history-operations'
+import type { MobilePushDismissalRpcSender } from './push-dismissal-operations'
 import {
   dismissInAppNotificationBannerById,
   publishInAppNotificationBanner,
@@ -111,7 +116,8 @@ export function resolveEventWorktreeId(
 export async function presentSocketNotificationFallback(
   event: DesktopNotificationDispatchEvent,
   hostId: string,
-  isDisposed?: () => boolean
+  isDisposed?: () => boolean,
+  client?: MobilePushDismissalRpcSender
 ): Promise<void> {
   const title = event.title?.trim() ?? ''
   const body = event.body?.trim() ?? ''
@@ -175,6 +181,18 @@ export async function presentSocketNotificationFallback(
   }
   const tone = classifyNotificationTone(event)
   const hostName = host.name?.trim() || hostId
+  if (!event.agentPrompt?.trim() && client && payload.worktreeId) {
+    const psResponse = await resumeWorktreeListRead
+      .request(client, {}, { timeoutMs: 2000 })
+      .catch(() => null)
+    const psAccepted = psResponse ? resumeWorktreeListRead.interpret(psResponse) : null
+    if (psAccepted?.accepted) {
+      ingestBridgeWorktreeListPayload(hostId, psAccepted.value)
+    }
+    if (isDisposed?.()) {
+      return
+    }
+  }
   const fallbackContext = readBridgeNotificationAgentContext(
     hostId,
     payload.worktreeId,

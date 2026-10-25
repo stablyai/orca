@@ -160,7 +160,8 @@ describe('subscribeToDesktopNotifications', () => {
     expect(presentSocketNotificationFallback).toHaveBeenCalledWith(
       notification,
       'host-1',
-      expect.any(Function)
+      expect.any(Function),
+      rpc
     )
     const isDisposed = vi.mocked(presentSocketNotificationFallback).mock.calls[0]?.[2]
     expect(isDisposed?.()).toBe(false)

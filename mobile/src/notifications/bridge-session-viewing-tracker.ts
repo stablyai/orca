@@ -112,11 +112,25 @@ function recordTerminalSelection(hostId: string, state: HostBridgeSessionState, 
   publishBridgeSessionViewing(hostId, state)
 }
 
+export function ingestBridgeWorktreeListPayload(hostId: string, payload: unknown): void {
+  const state = getOrCreateBridgeSessionState(normalizeHostKey(hostId))
+  const payloadObj = asRecord(payload)
+  const worktrees = Array.isArray(payloadObj?.worktrees) ? payloadObj.worktrees : Array.isArray(payload) ? payload : null
+  for (const item of worktrees ?? []) {
+    const rec = asRecord(item)
+    const wtId = nonEmptyString(rec?.worktreeId) ?? nonEmptyString(rec?.id)
+    if (wtId && Array.isArray(rec?.agents)) {
+      // SAFETY: worktree.ps / worktree.list returns agent snapshot objects with optional paneKey/prompt/lastAssistantMessage
+      state.worktreeAgentsByWorktree.set(wtId, rec.agents as readonly BridgeWorktreeAgentSnapshot[])
+    }
+  }
+}
+
 export function noteBridgeHostClientMessage(hostId: string, message: BridgeClientMessage, isConnected: () => boolean): void {
   const hostKey = normalizeHostKey(hostId)
   const state = getOrCreateBridgeSessionState(hostKey)
   const params = asRecord(message.params)
-  if (message.type === 'request' && message.method === 'worktree.list') {
+  if (message.type === 'request' && (message.method === 'worktree.list' || message.method === 'worktree.ps')) {
     state.worktreeListRequestsById.add(message.id)
     return
   }
@@ -213,16 +227,7 @@ export function noteBridgeHostServerPayload(hostId: string, id: string, payload:
     return
   }
   if (state.worktreeListRequestsById.delete(id)) {
-    const payloadObj = asRecord(payload)
-    const worktrees = Array.isArray(payloadObj?.worktrees) ? payloadObj.worktrees : Array.isArray(payload) ? payload : null
-    for (const item of worktrees ?? []) {
-      const rec = asRecord(item)
-      const wtId = nonEmptyString(rec?.id)
-      if (wtId && Array.isArray(rec?.agents)) {
-        // SAFETY: worktree.list returns agent snapshot objects with optional paneKey/prompt/lastAssistantMessage
-        state.worktreeAgentsByWorktree.set(wtId, rec.agents as readonly BridgeWorktreeAgentSnapshot[])
-      }
-    }
+    ingestBridgeWorktreeListPayload(hostId, payload)
     return
   }
   const streamMeta = state.tabsStreamsById.get(id)
@@ -287,7 +292,12 @@ export function readBridgeNotificationAgentContext(
     const tabs = state.tabsByWorktree.get(worktreeId)
     const tab = tabs ? (paneKey ? notificationPaneTab(tabs, paneKey) : tabs.find((t) => t.type === 'terminal' && Boolean(t.agentStatus))) : undefined
     if (tab?.type === 'terminal' && tab.agentStatus) {
-      prompt = prompt ?? (tab.agentStatus.prompt?.trim() || undefined)
+      const historyPrompt = tab.agentStatus.stateHistory
+        ?.slice()
+        .reverse()
+        .find((entry) => typeof entry.prompt === 'string' && entry.prompt.trim().length > 0)
+        ?.prompt?.trim()
+      prompt = prompt ?? (tab.agentStatus.prompt?.trim() || historyPrompt || undefined)
       const reply = tab.agentStatus.lastAssistantMessage ?? tab.agentStatus.lastCompletedAssistantMessage
       lastAssistantMessage = lastAssistantMessage ?? (reply?.trim() || undefined)
     }

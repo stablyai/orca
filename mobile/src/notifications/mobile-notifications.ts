@@ -38,7 +38,8 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a notification frame on this stream is the desktop dispatch event.
         event as DesktopNotificationDispatchEvent,
         hostId,
-        () => disposed
+        () => disposed,
+        client
       ).catch(() => {})
     }
   })
