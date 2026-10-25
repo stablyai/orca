@@ -77,6 +77,32 @@ describe('terminal bracketed paste policy', () => {
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
+  it('sends the draft separator outside a forced paste frame', () => {
+    const terminal = createTerminal(true)
+
+    pasteTerminalText(terminal, '/tmp/orca-paste-1760000000000-id.png', {
+      forceBracketedPaste: true,
+      separateFromDraft: true
+    })
+
+    expect(terminal.input).toHaveBeenCalledTimes(1)
+    expect(terminal.input).toHaveBeenCalledWith(
+      ' \x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+    )
+  })
+
+  it('sends the draft separator before an ordinary paste', () => {
+    const terminal = createTerminal(true)
+
+    pasteTerminalText(terminal, '/tmp/shot.png', { separateFromDraft: true })
+
+    expect(terminal.input).toHaveBeenCalledWith(' ')
+    expect(terminal.paste).toHaveBeenCalledWith('/tmp/shot.png')
+    expect(terminal.input.mock.invocationCallOrder[0]).toBeLessThan(
+      terminal.paste.mock.invocationCallOrder[0]
+    )
+  })
+
   it('forces bracketed paste behavior even when terminal mode is off', () => {
     const terminal = createTerminal(false)
     const observedIgnoreValues: (boolean | undefined)[] = []

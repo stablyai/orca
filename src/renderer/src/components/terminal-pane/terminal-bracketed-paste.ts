@@ -31,6 +31,7 @@ type PasteTerminal = BracketedPasteTerminal & {
 type PasteTerminalTextOptions = {
   forceBracketedPaste?: boolean
   windowsInputRecordNewline?: WindowsInputRecordNewline
+  separateFromDraft?: boolean
 }
 
 const interruptedBracketedPasteTerminals = new WeakSet<object>()
@@ -84,10 +85,10 @@ export function encodeWindowsInputRecordPasteText(
   return encoded
 }
 
-function forceBracketedPaste(terminal: PasteTerminal, text: string): void {
+function forceBracketedPaste(terminal: PasteTerminal, text: string, separator: string): void {
   // Why: forced callers already built the exact paste protocol bytes. Send
   // them as PTY input so xterm's DOM/native paste machinery cannot defer them.
-  terminal.input(wrapTerminalBracketedPasteText(text))
+  terminal.input(`${separator}${wrapTerminalBracketedPasteText(text)}`)
 }
 
 export function markTerminalBracketedPasteInterrupted(terminal: BracketedPasteTerminal): void {
@@ -117,17 +118,23 @@ export function pasteTerminalText(
   text: string,
   options?: PasteTerminalTextOptions
 ): void {
+  const separator = options?.separateFromDraft ? ' ' : ''
   if (options?.windowsInputRecordNewline) {
     // Why: input-record TUIs see bracket markers as keys; modified Enter preserves
     // pasted newlines without turning the first one into submit.
-    terminal.input(encodeWindowsInputRecordPasteText(text, options.windowsInputRecordNewline))
+    terminal.input(
+      `${separator}${encodeWindowsInputRecordPasteText(text, options.windowsInputRecordNewline)}`
+    )
     return
   }
   if (options?.forceBracketedPaste) {
     // Why: generated image paths are paste payloads, even when they are a
     // single line, so they must bypass stale Ctrl+C plain-text suppression.
-    forceBracketedPaste(terminal, text)
+    forceBracketedPaste(terminal, text, separator)
     return
+  }
+  if (separator) {
+    terminal.input(separator)
   }
   if (!interruptedBracketedPasteTerminals.has(terminal)) {
     terminal.paste(text)

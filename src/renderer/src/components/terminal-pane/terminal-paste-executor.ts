@@ -64,6 +64,7 @@ async function executeTerminalPastePlanNow(
     const pasteResult = await runTerminalPasteOperationWithTimeout(() => {
       return pasteText(plan.payload.plainText, {
         forceBracketedPaste: plan.mode === 'bracketed-terminal',
+        ...(plan.separateFromDraft ? { separateFromDraft: true } : {}),
         ...(plan.windowsInputRecordNewline
           ? { windowsInputRecordNewline: plan.windowsInputRecordNewline }
           : {})

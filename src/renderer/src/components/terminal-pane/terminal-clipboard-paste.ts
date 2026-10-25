@@ -85,7 +85,10 @@ export async function pasteTerminalClipboard({
       // Why: a generated clipboard-image path is terminal image injection, not
       // ordinary one-line text. Keep it off the Ctrl+C stale-text paste path.
       forceBracketedPaste: true,
-      recoverImagePasteWebglAtlas: true
+      recoverImagePasteWebglAtlas: true,
+      // Why: agent TUIs (e.g. Cursor CLI) only turn the path into an image
+      // attachment when it is its own token, not glued to typed text.
+      separateFromDraft: true
     })
     if (result === false) {
       return { status: 'skipped', reason: 'image-paste-rejected' }
