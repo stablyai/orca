@@ -16905,6 +16905,22 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "MarkdownBacklinksPanel": {
+          "title": "Backlinks",
+          "refresh": "Refresh backlinks",
+          "loading": "Searching…",
+          "empty": "No notes link here yet",
+          "truncated": "Search hit its result limit; some backlinks may be missing",
+          "graph": "Graph"
+        },
+        "MarkdownNoteGraphDialog": {
+          "title": "Note graph",
+          "description": "Notes in this workspace and the links between them. Scroll to zoom, drag to pan, click a note to open it.",
+          "loading": "Building graph…",
+          "empty": "No linked notes in this workspace yet",
+          "summary": "{{value0}} notes, {{value1}} links",
+          "partial": "Large workspace: showing the best-connected part of the graph"
         }
       },
       "diff": {
