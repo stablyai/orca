@@ -3,6 +3,9 @@ import type { View } from 'react-native'
 import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { loadHostCatalog, loadHosts } from '../transport/host-store'
+import { primeEndpointAuthHeaders } from '../transport/endpoint-auth-headers-store'
+import { endpointAuthMutationEpoch } from '../transport/endpoint-auth-headers'
+import { getHostCredentialWriteRevision } from '../transport/host-credential-write-revision'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
@@ -152,7 +155,20 @@ export function useTroubleshootDiagnostics() {
         if (!isCurrentRun()) {
           return
         }
-        const reachable = await testHostReachability(host.endpoint)
+        const epoch = endpointAuthMutationEpoch(host.id)
+        const revision = getHostCredentialWriteRevision(host.id)
+        const isCurrentProbe = () =>
+          isCurrentRun() &&
+          endpointAuthMutationEpoch(host.id) === epoch &&
+          getHostCredentialWriteRevision(host.id) === revision
+        const headers = await primeEndpointAuthHeaders(host.id, host.endpoint, isCurrentProbe)
+        if (!isCurrentRun()) {
+          return
+        }
+        if (!isCurrentProbe()) {
+          continue
+        }
+        const reachable = await testHostReachability(host.endpoint, headers)
         if (!isCurrentRun()) {
           return
         }
