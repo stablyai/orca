@@ -165,6 +165,12 @@ describe('DeleteWorktreeDialog unsaved edits', () => {
     expect(mocks.preventFocus).toHaveBeenCalled()
   })
 
+  it('leaves focus off Delete for a delete nobody asked for', () => {
+    mocks.state.modalData = { ...mocks.state.modalData, unprompted: true }
+    render(<DeleteWorktreeDialog />)
+    expect(mocks.preventFocus).not.toHaveBeenCalled()
+  })
+
   it('lists the files whose edits are discarded and leaves focus off Delete', async () => {
     mocks.state.openFiles = [
       dirty('a.ts', '/workspaces/wt/a.ts'),

@@ -204,6 +204,34 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       expect(manager.closePane).not.toHaveBeenCalled()
     })
 
+    it('never reports a shutdown or suppressed exit to the tab-level close owner', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const { markCommittedPtyShutdowns, settleDeferredPtyShutdownExits } =
+        await import('./pty-shutdown-exit-deferral')
+      for (const arm of ['pending', 'committed', 'suppressed'] as const) {
+        const ptyId = `pty-${arm}`
+        transportFactoryQueue.push(createMockTransport(ptyId))
+        let pending = arm === 'pending'
+        const deps = createDeps({
+          isPtyShutdownPending: vi.fn(() => pending),
+          consumeSuppressedPtyExit: vi.fn(() => arm === 'suppressed')
+        })
+        connectPanePty(createPane(2) as never, createManager(1) as never, deps as never)
+        const onPtyExit = createdTransportOptions.at(-1)?.onPtyExit as
+          | ((ptyId: string) => void)
+          | undefined
+        if (arm === 'committed') {
+          markCommittedPtyShutdowns([ptyId])
+        }
+        onPtyExit?.(ptyId)
+        if (arm === 'pending') {
+          pending = false
+          settleDeferredPtyShutdownExits([ptyId], 'committed')
+        }
+        expect(deps.onPtyExitRef.current, arm).not.toHaveBeenCalled()
+      }
+    })
+
     it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')

@@ -56,10 +56,16 @@ export function useTabGroupCloseScopeCommands({
   )
 
   const closeGroup = useCallback(() => {
-    const whenEmptied = captureWorkspaceEmptiedReaction(worktreeId)
     const items = [...(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])].filter(
       (item) => item.groupId === groupId
     )
+    // Why only a single host: mixed hosts leave it unknown, and the capture then refuses to guess.
+    const hostIds = new Set(items.map((item) => item.executionHostId))
+    const [hostId] = hostIds.size === 1 ? hostIds : []
+    const whenEmptied = captureWorkspaceEmptiedReaction(worktreeId, {
+      trigger: 'close',
+      ...(hostId ? { hostId } : {})
+    })
     for (const item of items) {
       closeItem(item.id, { skipEmptyCheck: true })
     }

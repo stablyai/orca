@@ -1317,6 +1317,25 @@
             }
           }
         }
+      },
+      "last": {
+        "tab": {
+          "auto": {
+            "delete": {
+              "last": {
+                "tab": {
+                  "auto": {
+                    "delete": {
+                      "queue": {
+                        "kept": "Espace de travail conservé : il a de nouveau des onglets ou la suppression automatique a été désactivée."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -10423,6 +10442,22 @@
             "omp": "OMP",
             "nodeDistMirror": "miroir",
             "nodeDistNodejs": "nodejs"
+          },
+          "last": {
+            "tab": {
+              "auto": {
+                "delete": {
+                  "search": {
+                    "3684b9708d": "Supprimer l'espace de travail à la fermeture de son dernier onglet",
+                    "b3c70b70de": "Lance la suppression habituelle de l'espace de travail lorsque la fermeture d'un onglet le laisse vide.",
+                    "de1a617f26": "dernier onglet",
+                    "d1510d050c": "quitter",
+                    "a798135810": "automatique",
+                    "ad36681f93": "retirer"
+                  }
+                }
+              }
+            }
           }
         },
         "git": {
@@ -13263,6 +13298,21 @@
           "searchPlaceholder": "Rechercher des versions…",
           "searchLabel": "Rechercher des versions",
           "noMatches": "Aucune version correspondante."
+        },
+        "LastTabAutoDeleteSettings": {
+          "3ee0224127": "Désactivé",
+          "5c40d319f9": "Quand je le ferme",
+          "b5728ff9e4": "Quand je le ferme ou que son processus se termine",
+          "32dac2fdaf": "Aussi quand un processus se termine dans un espace de travail en arrière-plan",
+          "487076ea0d": "Supprimer l'espace de travail à la fermeture de son dernier onglet",
+          "08de07fd0a": "Lance la suppression habituelle de l'espace de travail lorsque la fermeture d'un onglet le laisse vide.",
+          "08f6a8b79d": "Utilise la même confirmation que la suppression depuis la barre latérale. Avec les options de fin de processus, une suppression peut démarrer sans aucune touche, mais un espace de travail avec des modifications non validées demande toujours confirmation. L'espace de travail principal n'est jamais supprimé.",
+          "a5c235b455": "Ignorer les espaces de travail épinglés",
+          "61fb0b6bd1": "Conserve les espaces de travail épinglés à la fermeture de leur dernier onglet.",
+          "4fcf8e43fb": "Ignorer les espaces de travail de dossier",
+          "c27462f864": "Conserve les espaces de travail de dossier à la fermeture de leur dernier onglet. Leurs fichiers restent sur le disque dans tous les cas.",
+          "c9b7aeaf31": "Ignorer les espaces de travail SSH",
+          "f486c0aeac": "Conserve les espaces de travail sur des hôtes SSH à la fermeture de leur dernier onglet."
         }
       },
       "right": {

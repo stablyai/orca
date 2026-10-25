@@ -26,8 +26,14 @@ import { collectRemovalUnsavedFiles } from '@/components/editor/removal-unsaved-
 
 export { runWorktreeDeletesInParallel, runWorktreeDeleteWithToast }
 
-/** Standard Git-worktree deletion funnel; stale record/instance guards precede confirmation preferences. */
-export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOptions = {}): void {
+/**
+ * Standard Git-worktree deletion funnel; stale record/instance guards precede confirmation preferences.
+ * Resolves once a no-dialog delete settles; dialog routes resolve as soon as the modal opens.
+ */
+export function runWorktreeDelete(
+  worktreeId: string,
+  options: WorktreeDeleteOptions = {}
+): Promise<void> {
   const state = useAppStore.getState()
   // Qualify row actions by host to avoid deleting same-ID local checkouts; unqualified callers retain first-wins compatibility.
   const target = getWorktreeOnHostFromState(state, worktreeId, options.expectedHostId) ?? null
@@ -39,7 +45,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
       showWorkspaceListChangedToast()
     }
-    return
+    return Promise.resolve()
   }
   if (target.isMainWorktree) {
     const repo = findRepoForHost(state.repos, target.repoId, {
@@ -52,7 +58,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
       displayName: repo?.displayName ?? target.displayName,
       hostId: getWorktreeExecutionHostId(target, repo ?? undefined)
     })
-    return
+    return Promise.resolve()
   }
   if (target.hostId) {
     state.clearWorktreeDeleteState(worktreeId, target.hostId)
@@ -83,7 +89,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
       displayName: target.displayName,
       resolution: sshResolution
     })
-    return
+    return Promise.resolve()
   }
 
   const deleteLineage = getWorkspaceDeleteLineage(
@@ -94,11 +100,15 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const hasLineageChildren = deleteLineage.descendants.length > 0
   // Skip-confirm preferences never authorize discarding unsaved editor text.
   const skipConfirm =
+    !options.forceConfirm &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false) &&
     collectRemovalUnsavedFiles(useAppStore.getState, [target]).length === 0
   if (skipConfirm && !hasLineageChildren) {
-    void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName)
-    return
+    return runWorktreeDeleteWithToast(
+      toWorktreeRemovalTarget(target),
+      target.displayName,
+      options.assertBeforeDispatch ? { assertBeforeDispatch: options.assertBeforeDispatch } : {}
+    ).then(() => undefined)
   }
   state.openModal('delete-worktree', {
     worktreeId,
@@ -108,8 +118,10 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
           lineageDeleteIdentities: toWorktreeDeleteIdentities(deleteLineage.deleteAllTargets)
         }
       : {}),
-    ...(hasLineageChildren ? { allowSkipConfirm: false } : {})
+    ...(hasLineageChildren || options.forceConfirm ? { allowSkipConfirm: false } : {}),
+    ...(options.unprompted ? { unprompted: true } : {})
   })
+  return Promise.resolve()
 }
 
 export function runWorktreeBatchDelete(

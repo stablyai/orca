@@ -643,6 +643,57 @@ describe('delete worktree flow', () => {
     )
   })
 
+  it('settles its promise only after a no-dialog delete finishes', async () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+    let finishRemoval: (value: { ok: true }) => void = () => {}
+    mocks.state.removeWorktree.mockImplementationOnce(
+      () => new Promise((resolve) => (finishRemoval = resolve))
+    )
+    let settled = false
+
+    const done = runWorktreeDelete('wt-1').then(() => (settled = true))
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finishRemoval({ ok: true })
+    await done
+
+    expect(settled).toBe(true)
+  })
+
+  it('forceConfirm opens the dialog without its skip escape despite skip-confirm', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', instanceId: 'instance-1', displayName: 'one' }])
+
+    runWorktreeDelete('wt-1', {
+      expectedInstanceId: 'instance-1',
+      forceConfirm: true,
+      unprompted: true
+    })
+
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
+      worktreeId: 'wt-1',
+      worktreeDeleteIdentities: [{ id: 'wt-1', instanceId: 'instance-1' }],
+      allowSkipConfirm: false,
+      unprompted: true
+    })
+  })
+
+  it('hands a no-dialog delete its pre-dispatch check', async () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+    const assertBeforeDispatch = vi.fn()
+
+    await runWorktreeDelete('wt-1', { assertBeforeDispatch })
+
+    expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
+      { id: 'wt-1', executionHostId: null },
+      false,
+      expect.objectContaining({ assertBeforeDispatch })
+    )
+  })
+
   // Folder shortcuts use another funnel; missing Git worktree records must not imply their disappearance.
   it('stays silent for a folder workspace, which this funnel does not route', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }

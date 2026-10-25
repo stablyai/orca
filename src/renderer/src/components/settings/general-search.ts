@@ -5,6 +5,7 @@ import { searchKeywords, translateSearchKeyword } from './settings-search-keywor
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
+import { getLastTabAutoDeleteSearchEntries } from './general-last-tab-auto-delete-search'
 
 export { getGeneralEditorSearchEntries } from './general-editor-search'
 export { getGeneralSupportSearchEntries } from './general-support-search'
@@ -111,7 +112,8 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
         'file explorer'
       )
     ]
-  }
+  },
+  ...getLastTabAutoDeleteSearchEntries()
 ])
 
 export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [

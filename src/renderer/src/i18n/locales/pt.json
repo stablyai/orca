@@ -1940,6 +1940,25 @@
             }
           }
         }
+      },
+      "last": {
+        "tab": {
+          "auto": {
+            "delete": {
+              "last": {
+                "tab": {
+                  "auto": {
+                    "delete": {
+                      "queue": {
+                        "kept": "O espaço de trabalho foi mantido: ele tem abas novamente ou a exclusão automática foi desativada."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "components": {
@@ -3148,6 +3167,22 @@
             "browsing": "navegação",
             "nodeDistMirror": "espelho",
             "nodeDistNodejs": "nodejs"
+          },
+          "last": {
+            "tab": {
+              "auto": {
+                "delete": {
+                  "search": {
+                    "3684b9708d": "Excluir o Espaço de Trabalho ao Fechar sua Última Aba",
+                    "b3c70b70de": "Executa a exclusão normal do espaço de trabalho quando fechar uma aba o deixa vazio.",
+                    "de1a617f26": "última aba",
+                    "d1510d050c": "sair",
+                    "a798135810": "automático",
+                    "ad36681f93": "remover"
+                  }
+                }
+              }
+            }
           }
         },
         "AccountsPane": {
@@ -8943,6 +8978,21 @@
           "searchLabel": "Buscar builds",
           "searchPlaceholder": "Buscar builds…",
           "noMatches": "Nenhuma build encontrada."
+        },
+        "LastTabAutoDeleteSettings": {
+          "3ee0224127": "Desativado",
+          "5c40d319f9": "Quando eu fecho",
+          "b5728ff9e4": "Quando eu fecho ou seu processo termina",
+          "32dac2fdaf": "Também quando um processo termina em um espaço de trabalho em segundo plano",
+          "487076ea0d": "Excluir o Espaço de Trabalho ao Fechar sua Última Aba",
+          "08de07fd0a": "Executa a exclusão normal do espaço de trabalho quando fechar uma aba o deixa vazio.",
+          "08f6a8b79d": "Usa a mesma confirmação da exclusão pela barra lateral. Com as opções de término de processo, uma exclusão pode começar sem nenhuma tecla, mas um espaço de trabalho com alterações não confirmadas sempre pergunta antes. O espaço de trabalho principal nunca é excluído.",
+          "a5c235b455": "Ignorar Espaços de Trabalho Fixados",
+          "61fb0b6bd1": "Mantém os espaços de trabalho fixados ao fechar sua última aba.",
+          "4fcf8e43fb": "Ignorar Espaços de Trabalho de Pasta",
+          "c27462f864": "Mantém os espaços de trabalho de pasta ao fechar sua última aba. Os arquivos permanecem no disco de qualquer forma.",
+          "c9b7aeaf31": "Ignorar Espaços de Trabalho SSH",
+          "f486c0aeac": "Mantém os espaços de trabalho em hosts SSH ao fechar sua última aba."
         }
       },
       "right": {

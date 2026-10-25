@@ -1432,6 +1432,25 @@
             }
           }
         }
+      },
+      "last": {
+        "tab": {
+          "auto": {
+            "delete": {
+              "last": {
+                "tab": {
+                  "auto": {
+                    "delete": {
+                      "queue": {
+                        "kept": "Kept the workspace: it has tabs again or auto-delete was turned off."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "hooks": {
@@ -10590,6 +10609,22 @@
             "confirm": "confirm",
             "close": "close",
             "omp": "OMP"
+          },
+          "last": {
+            "tab": {
+              "auto": {
+                "delete": {
+                  "search": {
+                    "3684b9708d": "Delete Workspace When Its Last Tab Closes",
+                    "b3c70b70de": "Run the normal workspace delete when closing a tab leaves its workspace empty.",
+                    "de1a617f26": "last tab",
+                    "d1510d050c": "exit",
+                    "a798135810": "auto",
+                    "ad36681f93": "remove"
+                  }
+                }
+              }
+            }
           }
         },
         "git": {
@@ -13447,6 +13482,21 @@
           "manualDeleteWarning": "Only do this if no other machine sharing this home runs Orca for this profile.",
           "close": "Close",
           "reclaimedNotStarted": "The lock was cleared, but Orca’s server did not start."
+        },
+        "LastTabAutoDeleteSettings": {
+          "3ee0224127": "Off",
+          "5c40d319f9": "When I close it",
+          "b5728ff9e4": "When I close it or its process exits",
+          "32dac2fdaf": "Also when a process exits in a background workspace",
+          "487076ea0d": "Delete Workspace When Its Last Tab Closes",
+          "08de07fd0a": "Run the normal workspace delete when closing a tab leaves its workspace empty.",
+          "08f6a8b79d": "Uses the same confirmation as deleting from the sidebar. With the exit options a delete can start without a keypress, but a workspace with uncommitted changes always asks first. The main workspace is never deleted.",
+          "a5c235b455": "Skip Pinned Workspaces",
+          "61fb0b6bd1": "Keep pinned workspaces when their last tab closes.",
+          "4fcf8e43fb": "Skip Folder Workspaces",
+          "c27462f864": "Keep folder workspaces when their last tab closes. Their files stay on disk either way.",
+          "c9b7aeaf31": "Skip SSH Workspaces",
+          "f486c0aeac": "Keep workspaces on SSH hosts when their last tab closes."
         }
       },
       "right": {
