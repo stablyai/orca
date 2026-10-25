@@ -101,7 +101,7 @@ export function EntryActionRow({
   )
 
   // Only the filename-first rows hide information. Every other row already shows
-  // its detail in full, and STYLEGUIDE.md:162 rules out labelling those.
+  // its detail in full, and the STYLEGUIDE tooltip rule rules out labelling those.
   if (!presentation.prioritizeFilename) {
     return row
   }
