@@ -142,6 +142,11 @@ export function createMainWindow(
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
+  mainWindow.on('swipe', (_event, direction) => {
+    if (direction === 'left' || direction === 'right') {
+      mainWindow.webContents.send('ui:swipeNavigate', direction === 'left' ? 'back' : 'forward')
+    }
+  })
 
   // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
   if (process.platform === 'win32') {

@@ -231,6 +231,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
+    onSwipeNavigate: () => noopUnsubscribe,
     onNewBrowserTab: () => noopUnsubscribe,
     onNewMarkdownTab: () => noopUnsubscribe,
     onNewSimulatorTab: () => noopUnsubscribe,

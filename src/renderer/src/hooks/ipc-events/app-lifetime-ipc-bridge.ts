@@ -31,6 +31,7 @@ import { registerTerminalUiRoutingIpcBridge } from './terminal-ui-routing-ipc-br
 import { registerUpdaterStatusIpcBridge } from './updater-status-ipc-bridge'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
 import { registerWorkspaceShortcutIpcBridge } from './workspace-shortcut-ipc-bridge'
+import { registerSwipeNavigationIpcBridge } from './swipe-navigation-ipc-bridge'
 import { registerZoomIpcBridge } from './zoom-ipc-bridge'
 import { registerWslAccountNoticeIpcBridge } from './wsl-account-notice-ipc-bridge'
 import { registerWslHostIpcBridge } from './wsl-host-ipc-bridge'
@@ -87,6 +88,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerSettingsAndSidebarIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
+  registerSwipeNavigationIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
   registerWslAccountNoticeIpcBridge(unsubs)
   unsubs.push(
