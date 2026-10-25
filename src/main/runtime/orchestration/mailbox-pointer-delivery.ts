@@ -61,10 +61,23 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   ): void {
     const db = this.deps.getDb()
     const mailboxHandle = options.mailboxHandle
-    if (!db || (!mailboxHandle.startsWith('run:') && !mailboxHandle.startsWith('dispatch:'))) {
+    if (!db) {
       return
     }
-    if (!this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))) {
+    const terminalHandle = this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))
+    if (!terminalHandle) {
+      return
+    }
+    // A plain handle is accepted only as the direct mailbox the owner resolves for this leaf itself.
+    if (
+      !mailboxHandle.startsWith('run:') &&
+      !mailboxHandle.startsWith('dispatch:') &&
+      (mailboxHandle !== terminalHandle ||
+        this.deps.mailboxOwner.resolve(leaf, mailboxHandle, {
+          terminalHandle,
+          routeDirectMail: false
+        }) !== mailboxHandle)
+    ) {
       return
     }
     if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
@@ -113,12 +126,22 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
-    const unread = selectOrchestrationPointerBatch({
+    const batch = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,
       waiters,
       reservedTypes: options.reservedTypes
     })
+    // Run-owned rows stay undelivered so a later binding can still route them to their owner.
+    const owned =
+      mailboxHandle === terminalHandle
+        ? db.listRunOwnedDirectMessageIds(
+            terminalHandle,
+            batch.map((message) => message.id),
+            `${leaf.tabId}:${leaf.leafId}`
+          )
+        : undefined
+    const unread = owned ? batch.filter((message) => !owned.has(message.id)) : batch
     if (unread.length === 0 || !leaf.writable || !leaf.ptyId) {
       return
     }
