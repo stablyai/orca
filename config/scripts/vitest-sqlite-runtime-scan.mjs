@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
-import { globSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { basename, dirname, join, resolve } from 'node:path'
-import { defaultExclude } from 'vitest/config'
+import { basename, dirname, isAbsolute, join, posix, relative, resolve } from 'node:path'
 import { UNIT_INCLUDE } from './ci-unit-files.mjs'
 
 const require = createRequire(import.meta.url)
@@ -88,17 +87,70 @@ function readCache(version) {
   }
 }
 
-/** Unit tests that import a SQLite module or harness directly, as repo-relative paths. */
-export function findSqliteRuntimeTests() {
+function walkFiles(directory, files) {
+  let entries
+  try {
+    entries = readdirSync(resolve(root, directory), { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    const path = `${directory}/${entry.name}`
+    if (!entry.isDirectory()) {
+      files.push(path)
+    } else if (entry.name !== 'node_modules' && entry.name !== '.git') {
+      // Vitest's defaultExclude, pruned instead of matched per file.
+      walkFiles(path, files)
+    }
+  }
+}
+
+/** UNIT_INCLUDE files as repo-relative paths; a plain walk is several times faster than fs.globSync. */
+export function listUnitTestFiles() {
+  const files = []
+  for (const base of new Set(UNIT_INCLUDE.map((pattern) => pattern.split('/**')[0]))) {
+    walkFiles(base, files)
+  }
+  return files.filter((file) => UNIT_INCLUDE.some((pattern) => posix.matchesGlob(file, pattern)))
+}
+
+/**
+ * Vitest's CLI filter match (a case-insensitive path substring). Also tries each filter without
+ * a `:line` suffix, so the selection is never narrower than the one Vitest runs.
+ */
+export function matchesRunFilter(file, filters) {
+  const testFile = file.toLowerCase()
+  const absolute = resolve(root, file).replaceAll('\\', '/')
+  return filters.some((raw) =>
+    [raw, raw.replace(/(?::\d+)+$/, '')].some((filter) => {
+      const slashed = filter.replaceAll('\\', '/')
+      const relativePath = relative(process.cwd(), filter).replaceAll('\\', '/')
+      return (
+        (isAbsolute(filter) && absolute.startsWith(slashed)) ||
+        testFile.includes(slashed.toLowerCase()) ||
+        testFile.includes(relativePath.toLowerCase())
+      )
+    })
+  )
+}
+
+/**
+ * Unit tests that import a SQLite module or harness directly, as repo-relative paths. With CLI
+ * `filters`, only the tests those filters can select are classified.
+ */
+export function findSqliteRuntimeTests({ filters } = {}) {
   // Why: reading every test costs about a second; unchanged files reuse their last verdict.
   const version = createHash('sha256')
     .update(readFileSync(import.meta.filename))
     .digest('hex')
   const cached = readCache(version)
+  const scoped = Boolean(filters?.length)
+  const candidates = listUnitTestFiles()
   const files = {}
   let changed = false
-  for (const file of globSync(UNIT_INCLUDE, { cwd: root, exclude: defaultExclude })) {
-    const path = file.replaceAll('\\', '/')
+  for (const path of scoped
+    ? candidates.filter((file) => matchesRunFilter(file, filters))
+    : candidates) {
     const { mtimeMs, size } = statSync(resolve(root, path))
     const entry = cached[path]
     if (
@@ -117,11 +169,13 @@ export function findSqliteRuntimeTests() {
     ]
     changed = true
   }
-  if (changed || Object.keys(cached).length !== Object.keys(files).length) {
+  if (changed || (!scoped && Object.keys(cached).length !== Object.keys(files).length)) {
     try {
       mkdirSync(dirname(CACHE_FILE), { recursive: true })
       const temporary = `${CACHE_FILE}.${process.pid}`
-      writeFileSync(temporary, JSON.stringify({ version, files }))
+      // Only a full scan knows which files were deleted; a scoped one keeps verdicts it skipped.
+      const merged = scoped ? { ...cached, ...files } : files
+      writeFileSync(temporary, JSON.stringify({ version, files: merged }))
       // Why: parallel runs each rename a whole file, so a reader never sees a partial write.
       renameSync(temporary, CACHE_FILE)
     } catch {
