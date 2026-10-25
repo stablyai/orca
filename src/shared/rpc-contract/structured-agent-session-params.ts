@@ -15,12 +15,7 @@ import {
   MAX_ID_LENGTH,
   SessionId
 } from './structured-agent-session-identifiers'
-export {
-  Identifier,
-  JournalCursor,
-  MAX_ID_LENGTH,
-  SessionId
-} from './structured-agent-session-identifiers'
+export * from './structured-agent-session-identifiers'
 import { z } from 'zod'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
 import { isAgentSessionOptions } from '../agent-session-record'

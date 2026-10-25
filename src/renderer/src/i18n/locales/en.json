@@ -19465,6 +19465,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "Preparing saved chat context…",
       "handOffToAnotherAgent": "Hand Off to Another Agent",
       "dialogTitle": "Hand Off to Another Agent",
       "dialogDescription": "Start a fresh Agent session from this stopping point. The original session stays unchanged.",
@@ -19478,6 +19479,8 @@
       "context": "Context",
       "modeFocused": "Focused handoff (Recommended)",
       "modeFocusedDescription": "Uses the latest status and current workspace, reading older transcript details only when needed.",
+      "modeLoadedDescription": "Uses recent messages currently loaded in this chat and the current workspace.",
+      "modeCapturedDescription": "Uses captured text and the current workspace.",
       "modeFull": "Full session transcript",
       "modeFullDescription": "Asks the new Agent to read the complete saved session before continuing. This can take longer and use significant context, plan usage, or API credits.",
       "startsIn": "Starts in:",

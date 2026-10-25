@@ -33,6 +33,7 @@ type AgentComboboxSelectionProps =
   | { allowBlankTerminal?: false; onValueChange: (agent: TuiAgent) => void }
 
 type AgentComboboxProps = AgentComboboxSelectionProps & {
+  disabled?: boolean
   agents: AgentCatalogEntry[]
   value: TuiAgent | null
   onOpenManageAgents?: () => void
@@ -61,6 +62,7 @@ const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
 
 export default function AgentCombobox({
   agents,
+  disabled = false,
   value,
   onOpenManageAgents,
   defaultAgent,
@@ -107,13 +109,17 @@ export default function AgentCombobox({
   const activeCommandValue = selectionCleared && !query ? '' : pickedCommandValue
   const resolvedCommandState = resolveAgentComboboxCommandState(
     commandState,
-    open,
+    open && !disabled,
     activeCommandValue
   )
   if (resolvedCommandState !== commandState) {
     // Why: cmdk highlights should follow query/result changes before paint,
     // while manual hover selection remains intact until the active candidate changes.
     setCommandState(resolvedCommandState)
+  }
+  if (disabled && open) {
+    setOpen(false)
+    setQuery('')
   }
   const commandValue = resolvedCommandState.commandValue
 
@@ -157,15 +163,15 @@ export default function AgentCombobox({
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      setOpen(nextOpen)
-      if (nextOpen) {
+      setOpen(nextOpen && !disabled)
+      if (nextOpen && !disabled) {
         setCommandState(createAgentComboboxCommandState(openCommandValue))
         return
       }
       cancelFocusFrame()
       setQuery('')
     },
-    [cancelFocusFrame, openCommandValue]
+    [cancelFocusFrame, disabled, openCommandValue]
   )
 
   const closePicker = useCallback(() => {
@@ -192,7 +198,7 @@ export default function AgentCombobox({
   // query (treating the keystroke as the start of a new search).
   const handleTriggerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (open) {
+      if (disabled || open) {
         return
       }
       if (
@@ -223,14 +229,14 @@ export default function AgentCombobox({
         setOpen(true)
       }
     },
-    [open, onTriggerEnter, openCommandValue]
+    [disabled, open, onTriggerEnter, openCommandValue]
   )
 
   return (
     // Why: min-w-0 lets full-width form rows shrink; plain flex+items-center left the
     // trigger free to overflow its dialog column and look misaligned with Project/Name.
     <div className="relative min-w-0 w-full">
-      <Popover open={open} onOpenChange={handleOpenChange}>
+      <Popover open={open && !disabled} onOpenChange={handleOpenChange}>
         <AgentDefaultContextMenu
           isDefault={
             selectedDefaultPreference !== null && defaultAgent === selectedDefaultPreference
@@ -247,6 +253,7 @@ export default function AgentCombobox({
               type="button"
               variant="outline"
               role="combobox"
+              disabled={disabled}
               aria-expanded={open}
               onKeyDown={handleTriggerKeyDown}
               className={cn(
@@ -375,6 +382,7 @@ export default function AgentCombobox({
               type="button"
               variant="ghost"
               size="icon-xs"
+              disabled={disabled}
               className="absolute right-8 top-1/2 -translate-y-1/2"
               aria-label={translate(
                 'components.agentCombobox.clearSelection',

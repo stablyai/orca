@@ -180,6 +180,12 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.continuationContext':
+      return {
+        sessionId: SESSION,
+        workspaceId: WORKSPACE,
+        expectedCursor: { epoch: 'epoch-a', sequence: 0 }
+      }
     case 'agentSession.sleepWorkspace':
       return { workspaceId: WORKSPACE }
     case 'agentSession.currentRequests':

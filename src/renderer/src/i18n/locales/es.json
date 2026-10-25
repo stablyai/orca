@@ -19121,6 +19121,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "Preparando el contexto guardado del chat…",
       "handOffToAnotherAgent": "Pasar a otro agente",
       "dialogTitle": "Pasar a otro agente",
       "dialogDescription": "Inicia una sesión nueva del agente desde este punto. La sesión original no cambia.",
@@ -19134,6 +19135,8 @@
       "context": "Contexto",
       "modeFocused": "Traspaso enfocado (recomendado)",
       "modeFocusedDescription": "Usa el estado más reciente y el espacio de trabajo actual, y consulta detalles anteriores solo cuando hacen falta.",
+      "modeLoadedDescription": "Usa los mensajes recientes cargados en este chat y el espacio de trabajo actual.",
+      "modeCapturedDescription": "Usa el texto capturado y el espacio de trabajo actual.",
       "modeFull": "Transcripción completa de la sesión",
       "modeFullDescription": "Pide al nuevo agente que lea toda la sesión guardada antes de continuar. Puede tardar más y consumir una cantidad considerable de contexto, uso del plan o créditos de API.",
       "startsIn": "Se inicia en:",

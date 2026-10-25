@@ -1,3 +1,4 @@
+import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
 import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
@@ -166,6 +167,7 @@ export class StructuredAgentSessionHost {
       closeStatus: (sessionId, options) => this.clientDelivery.closeSession(sessionId, options),
       childWorkOpen: this.clientDelivery.childWorkOpen
     })
+    this.continuationContext = contextReader(deps, this.lifetime.conversation)
     this.runtimeState.startLeaseRenewal()
     this.lifetime.idleSweep.start()
   }
@@ -330,6 +332,8 @@ export class StructuredAgentSessionHost {
 
   history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request, scope) =>
     this.backgroundTasks.history(request, scope)
+
+  readonly continuationContext: ReturnType<typeof contextReader>
 
   /** The fully reduced timeline, for readers that cannot tolerate a page's ambiguity — rows are
    *  revised or tombstoned in place, so an item's ABSENCE from a bounded page proves nothing. */

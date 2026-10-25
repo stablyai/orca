@@ -9,6 +9,7 @@ import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/a
 import {
   AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
@@ -41,6 +42,15 @@ async function structuredAgentSessionHostSupports(
   } catch {
     return false
   }
+}
+
+export function supportsStructuredAgentSessionContinuationContext(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY
+  )
 }
 
 export function supportsStructuredAgentSessionPromptCancel(

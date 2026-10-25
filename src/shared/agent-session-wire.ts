@@ -457,3 +457,7 @@ export type AgentSessionSlashCommand = {
  *  surface: a host that predates it answers `method_not_found`, and the client
  *  keeps rendering its curated catalog. */
 export type AgentSessionCommandsResult = { commands?: AgentSessionSlashCommand[] }
+
+export type AgentSessionContinuationContext =
+  | { status: 'current'; capturedText?: string; transcriptPath?: string }
+  | { status: 'superseded' }

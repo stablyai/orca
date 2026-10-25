@@ -19237,6 +19237,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "Préparation du contexte enregistré du chat…",
       "handOffToAnotherAgent": "Transférer à un autre Agent",
       "dialogTitle": "Transférer à un autre Agent",
       "dialogDescription": "Démarrez une nouvelle session d'Agent depuis ce point d'arrêt. La session d'origine reste inchangée.",
@@ -19250,6 +19251,8 @@
       "context": "Contexte",
       "modeFocused": "Transfert ciblé (recommandé)",
       "modeFocusedDescription": "Utilise le statut le plus récent et l'espace de travail actuel, en ne lisant les détails anciens de la transcription qu'en cas de besoin.",
+      "modeLoadedDescription": "Utilise les messages récents chargés dans cette conversation et l’espace de travail actuel.",
+      "modeCapturedDescription": "Utilise le texte capturé et l’espace de travail actuel.",
       "modeFull": "Transcription complète de la session",
       "modeFullDescription": "Demande au nouvel Agent de lire la session sauvegardée complète avant de continuer. Cela peut prendre plus de temps et consommer beaucoup de contexte, d'utilisation du plan ou de crédits API.",
       "startsIn": "Démarre dans :",
