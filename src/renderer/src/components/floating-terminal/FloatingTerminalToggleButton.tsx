@@ -251,11 +251,17 @@ export function FloatingTerminalToggleButton({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>
-          {translate(
-            'auto.components.floating.terminal.FloatingTerminalToggleButton.bfe7809a70',
-            '{{value0}} floating workspace ({{value1}})',
-            { value0: open ? 'Minimize' : 'Show', value1: shortcutLabel }
-          )}
+          {open
+            ? translate(
+                'floatingWorkspace.minimizeWithShortcut',
+                'Minimize floating workspace ({{shortcut}})',
+                { shortcut: shortcutLabel }
+              )
+            : translate(
+                'floatingWorkspace.showWithShortcut',
+                'Show floating workspace ({{shortcut}})',
+                { shortcut: shortcutLabel }
+              )}
         </TooltipContent>
       </Tooltip>
     </FloatingTerminalIconContextMenu>

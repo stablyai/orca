@@ -142,11 +142,15 @@ export function buildDirectWorkItemStartupOpts(
 /** Timeout notice for the post-launch paste; the workspace itself is ready. */
 export function notifyDirectWorkItemAgentStartTimeout(agent: TuiAgent, submit: boolean): void {
   toast.message(
-    translate(
-      'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
-      'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
-      { value0: submit ? 'prompt' : 'work item context' }
-    )
+    submit
+      ? translate(
+          'agentLaunch.workItemTimeout.prompt',
+          'Agent took too long to start. The workspace is ready — paste the prompt when the agent is idle.'
+        )
+      : translate(
+          'agentLaunch.workItemTimeout.context',
+          'Agent took too long to start. The workspace is ready — paste the work item context when the agent is idle.'
+        )
   )
   // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
   // on the dashboard is the trigger to add one.

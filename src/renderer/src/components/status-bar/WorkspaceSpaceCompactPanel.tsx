@@ -59,7 +59,11 @@ export function WorkspaceSpaceCompactPanel({
                   ? translate(
                       'auto.components.status.bar.WorkspaceSpaceCompactPanel.3d8d47ce77',
                       '{{value0}} · last result kept',
-                      { value0: progressLabel ?? 'Scanning workspace sizes' }
+                      {
+                        value0:
+                          progressLabel ??
+                          translate('workspaceSpace.scanningSizes', 'Scanning workspace sizes')
+                      }
                     )
                   : analysis.unavailableWorktreeCount > 0
                     ? translate(

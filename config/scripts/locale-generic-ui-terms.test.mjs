@@ -115,6 +115,7 @@ describe('locale generic UI terms', () => {
   })
 
   it.each([
+    ['ru', 'idle', 'в ожидании'],
     ['ko', 'Commit', '커밋'],
     ['ja', 'repos', 'リポジトリ'],
     ['es', 'agents', 'agentes'],

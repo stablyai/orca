@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -60,6 +61,7 @@ function NativeChatPermissionModePickerInner({
   disabled = false,
   onSelect
 }: NativeChatPermissionModePickerProps): React.JSX.Element {
+  useTranslation()
   const title = nativeChatPermissionPickerTitle()
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (

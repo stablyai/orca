@@ -1,4 +1,5 @@
 import { formatResetDuration } from '../../../shared/rate-limit-reset-format'
+import { getIntlLocale } from '@/i18n/i18n'
 
 /**
  * Returns a short human-readable label for a usage window duration.
@@ -7,6 +8,21 @@ import { formatResetDuration } from '../../../shared/rate-limit-reset-format'
  * compatibility with the original StatusBar implementation.
  */
 export function formatWindowLabel(windowMinutes: number): string {
+  const locale = getIntlLocale()
+  if (locale.startsWith('ru')) {
+    const duration = (
+      [
+        [10080, 'week'],
+        [1440, 'day'],
+        [60, 'hour']
+      ] as const
+    ).find(([minutes]) => windowMinutes >= minutes && windowMinutes % minutes === 0)
+    return new Intl.NumberFormat(locale, {
+      style: 'unit',
+      unit: duration?.[1] ?? 'minute',
+      unitDisplay: 'short'
+    }).format(duration ? windowMinutes / duration[0] : windowMinutes)
+  }
   if (windowMinutes === 10080) {
     return 'wk'
   }

@@ -185,11 +185,10 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           // Why: surface a per-row marker so files with review notes are visible without opening the Notes tab.
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={translate(
-              'auto.components.right.sidebar.SourceControl.657e0c90ad',
-              '{{value0}} note{{value1}}',
-              { value0: commentCount, value1: commentCount === 1 ? '' : 's' }
-            )}
+            title={translate('sourceControl.noteCount', '{{count}} notes', {
+              count: commentCount,
+              defaultValue_one: '{{count}} note'
+            })}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>

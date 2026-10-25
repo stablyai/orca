@@ -57,12 +57,11 @@ function reportProjectGroupDeleteFailures(result: {
       ),
       {
         description: translate(
-          'auto.components.sidebar.WorktreeList.f94466bc39',
-          '{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.',
+          'projectGroups.delete.remainingProjects',
+          'Contained projects remaining after deleting the group: {{remaining}} of {{total}}.',
           {
-            value0: result.failedProjectRemovals.length,
-            value1: requestedCount,
-            value2: requestedCount === 1 ? '' : 's'
+            remaining: result.failedProjectRemovals.length,
+            total: requestedCount
           }
         )
       }

@@ -34,10 +34,10 @@ function SuggestionToastBody({
   deps: SuggestionToastDeps
 }): React.JSX.Element {
   const { updateSettings, getSettings, openSettingsPage, openSettingsTarget } = deps
-  const commitNoun =
-    suggestion.behind === 1
-      ? translate('auto.components.sidebar.local.base.ref.suggestion.toast.commit', 'commit')
-      : translate('auto.components.sidebar.local.base.ref.suggestion.toast.commits', 'commits')
+  const commitNoun = translate('localBaseRef.commitNoun', 'commits', {
+    count: suggestion.behind,
+    defaultValue_one: 'commit'
+  })
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
 
   const turnOn = (): void => {

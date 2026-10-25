@@ -77,11 +77,15 @@ export function TerminalMacKeyboardSection({
                         'auto.components.settings.TerminalPane.b62373091a',
                         'Both Option keys send Alt/Esc sequences.'
                       )
-                    : translate(
-                        'auto.components.settings.TerminalPane.ce3aadf0b2',
-                        'The {{value0}} Option key sends Alt/Esc; the other composes special characters.',
-                        { value0: settings.terminalMacOptionAsAlt }
-                      )}{' '}
+                    : settings.terminalMacOptionAsAlt === 'left'
+                      ? translate(
+                          'settings.terminal.leftOptionDescription',
+                          'The left Option key sends Alt/Esc; the other composes special characters.'
+                        )
+                      : translate(
+                          'settings.terminal.rightOptionDescription',
+                          'The right Option key sends Alt/Esc; the other composes special characters.'
+                        )}{' '}
               {translate(
                 'settings.terminal.optionShortcutHint',
                 'Choose Both for Option shortcuts, Off for accents and symbols, or Left/Right to use one Option key for each.'

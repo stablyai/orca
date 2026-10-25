@@ -35,16 +35,11 @@ type ImportedWorktreesVisibilityLineProps = {
 }
 
 const PREVIEW_LIMIT = 3
-const KEEP_HIDDEN_LABEL = 'Keep hidden - recover from the project menu'
 const GROUP_LIMIT = 5
 
 type ImportedWorktreePathGroup = {
   path: string
   worktrees: ImportedWorktreeVisibilityPreview[]
-}
-
-function pluralizeWorktree(count: number): string {
-  return count === 1 ? 'worktree' : 'worktrees'
 }
 
 function getWorktreeKey(
@@ -93,15 +88,26 @@ export default function ImportedWorktreesVisibilityLine({
   const [isExpanded, setIsExpanded] = useState(false)
   const [expandedGroupPathKeys, setExpandedGroupPathKeys] = useState<Set<string>>(new Set())
   const hiddenCount = hiddenWorktrees.length
-  const worktreeNoun = pluralizeWorktree(hiddenCount)
   const worktreeGroups = groupWorktreesByParentPath(hiddenWorktrees)
   const visibleWorktreeGroups = worktreeGroups.slice(0, GROUP_LIMIT)
   const remainingGroupCount = Math.max(0, worktreeGroups.length - visibleWorktreeGroups.length)
   // Why: two hosts checking out one project render two identical lines.
   const repoScopeLabel = hostContextLabel
-    ? `${repoDisplayName} on ${hostContextLabel}`
+    ? translate('importedWorktrees.repositoryOnHost', '{{repository}} on {{host}}', {
+        repository: repoDisplayName,
+        host: hostContextLabel
+      })
     : repoDisplayName
-  const keepHiddenAriaLabel = `Keep ${hiddenCount} discovered ${worktreeNoun} hidden for ${repoScopeLabel}; recover from the project menu`
+  const keepHiddenAriaLabel = translate(
+    'importedWorktrees.keepHiddenCount',
+    'Keep {{count}} discovered worktrees hidden for {{repository}}; recover from the project menu',
+    {
+      count: hiddenCount,
+      repository: repoScopeLabel,
+      defaultValue_one:
+        'Keep {{count}} discovered worktree hidden for {{repository}}; recover from the project menu'
+    }
+  )
 
   if (hiddenCount === 0) {
     return null
@@ -109,8 +115,19 @@ export default function ImportedWorktreesVisibilityLine({
 
   const lineText =
     placement === 'pinned-fallback'
-      ? `Hiding ${hiddenCount} discovered ${worktreeNoun} in ${repoScopeLabel}`
-      : `Hiding ${hiddenCount} discovered ${worktreeNoun}`
+      ? translate(
+          'importedWorktrees.hidingInRepository',
+          'Hiding {{count}} discovered worktrees in {{repository}}',
+          {
+            count: hiddenCount,
+            repository: repoScopeLabel,
+            defaultValue_one: 'Hiding {{count}} discovered worktree in {{repository}}'
+          }
+        )
+      : translate('importedWorktrees.hiding', 'Hiding {{count}} discovered worktrees', {
+          count: hiddenCount,
+          defaultValue_one: 'Hiding {{count}} discovered worktree'
+        })
 
   const toggleGroupExpanded = (path: string): void => {
     const key = normalizeRuntimePathForComparison(path)
@@ -142,11 +159,19 @@ export default function ImportedWorktreesVisibilityLine({
           size="icon-xs"
           disabled={pending}
           aria-expanded={isExpanded}
-          aria-label={translate(
-            'auto.components.sidebar.ImportedWorktreesVisibilityLine.f54f2bec5d',
-            '{{value0}} hidden worktrees for {{value1}}',
-            { value0: isExpanded ? 'Collapse' : 'Expand', value1: repoScopeLabel }
-          )}
+          aria-label={
+            isExpanded
+              ? translate(
+                  'importedWorktrees.collapse',
+                  'Collapse hidden worktrees for {{repository}}',
+                  { repository: repoScopeLabel }
+                )
+              : translate(
+                  'importedWorktrees.expand',
+                  'Expand hidden worktrees for {{repository}}',
+                  { repository: repoScopeLabel }
+                )
+          }
           onClick={() => setIsExpanded((value) => !value)}
           className="shrink-0 rounded-[4px] text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground"
         >
@@ -186,7 +211,10 @@ export default function ImportedWorktreesVisibilityLine({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {KEEP_HIDDEN_LABEL}
+              {translate(
+                'importedWorktrees.keepHiddenHint',
+                'Keep hidden - recover from the project menu'
+              )}
             </TooltipContent>
           </Tooltip>
         ) : null}
@@ -273,11 +301,10 @@ export default function ImportedWorktreesVisibilityLine({
           ))}
           {remainingGroupCount > 0 ? (
             <div className="py-1 pl-7 pr-2 text-[11px] leading-4 text-muted-foreground">
-              + {remainingGroupCount}{' '}
-              {translate(
-                'auto.components.sidebar.ImportedWorktreesVisibilityLine.b2bc47c080',
-                'more locations'
-              )}
+              {translate('importedWorktrees.moreLocations', '+ {{count}} more locations', {
+                count: remainingGroupCount,
+                defaultValue_one: '+ {{count}} more location'
+              })}
             </div>
           ) : null}
           <div className="grid gap-1 px-1.5 pb-1 pt-1">

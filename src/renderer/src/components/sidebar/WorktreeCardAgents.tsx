@@ -29,6 +29,7 @@ import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
+import { formatSummaryAgentCount } from './worktree-card-agent-summary'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -355,7 +356,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const summaryAgents = hasLineage ? rootAgents : agents
     // Why: compact cards collapse multiple agents to one status line, except in send-target mode where rows are the picker surface.
     const shouldUseSummaryRow = summaryAgents.length > 1 && !isAgentSendTargetModeActive
-    const subjectLabel = `${hasLineage ? rootAgents.length : agents.length} agents`
+    const subjectLabel = formatSummaryAgentCount(hasLineage ? rootAgents.length : agents.length)
 
     return (
       <div

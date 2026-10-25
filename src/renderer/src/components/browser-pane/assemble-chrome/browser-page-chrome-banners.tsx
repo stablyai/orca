@@ -89,7 +89,7 @@ export function BrowserPageChromeBanners({
               ? translate(
                   'auto.components.browser.pane.BrowserPane.4328a0a062',
                   'Grab failed: {{value0}}',
-                  { value0: grab.error ?? 'Unknown error' }
+                  { value0: grab.error ?? translate('browserGrab.unknownError', 'Unknown error') }
                 )
               : grabIntent === 'annotate'
                 ? pendingAnnotationPayload

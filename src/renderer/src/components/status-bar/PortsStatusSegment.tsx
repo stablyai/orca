@@ -105,9 +105,9 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={translate(
-                'auto.components.status.bar.PortsStatusSegment.b8bc3e420a',
-                'Ports, {{value0}} workspace {{value1}}',
-                { value0: workspacePortCount, value1: workspacePortCount === 1 ? 'port' : 'ports' }
+                'workspacePorts.statusCount',
+                'Ports, {{count}} workspace ports',
+                { count: workspacePortCount, defaultValue_one: 'Ports, {{count}} workspace port' }
               )}
             >
               {refreshing ? (

@@ -14,6 +14,7 @@ import {
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_PORTUGUESE,
+  UI_LANGUAGE_RUSSIAN,
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM
 } from './ui-language'
@@ -33,6 +34,16 @@ describe('ui-locale', () => {
   })
   it('falls back unsupported locales to English', () => {
     expect(normalizeSupportedUiLocale('de-DE')).toBe('en')
+  })
+
+  it.each(['ru', 'ru-RU', 'ru-KZ', 'ru_RU.UTF-8'])('resolves Russian %s', (tag) => {
+    expect(detectUiLanguage([tag], 'native')).toMatchObject({
+      locale: 'ru',
+      status: 'supported'
+    })
+    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, tag)).toBe('ru')
+    expect(resolveUiLocale(UI_LANGUAGE_RUSSIAN, 'en-US')).toBe('ru')
+    expect(shouldShowLanguageSwitcher(detectUiLanguage([tag], 'native'))).toBe(true)
   })
 
   it('does not map Traditional Chinese to Simplified yet', () => {

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
@@ -18,7 +19,6 @@ import {
   type PluginPanelsFetchStatus
 } from '@/store/plugin-panels'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 import type { ActivityBarItem } from './activity-bar-buttons'
 
@@ -35,6 +35,7 @@ export function useRightSidebarActivityItems({
 }: {
   rightSidebarOpen: boolean
 }): RightSidebarActivityItems {
+  const { t: translate } = useTranslation()
   const explorerShortcut = useShortcutLabel('sidebar.explorer.toggle')
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
@@ -127,6 +128,7 @@ export function useRightSidebarActivityItems({
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
     ],
     [
+      translate,
       checksShortcut,
       explorerShortcut,
       pluginPanelErrors,

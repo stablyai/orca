@@ -22,11 +22,13 @@ export function PRViewedCheckbox({
           type="button"
           role="checkbox"
           aria-checked={checked}
-          aria-label={translate(
-            'auto.components.GitHubItemDialog.2d89a38d9d',
-            '{{value0}} {{value1}} as viewed',
-            { value0: checked ? 'Unmark' : 'Mark', value1: filePath }
-          )}
+          aria-label={
+            checked
+              ? translate('github.viewed.unmarkFile', 'Unmark {{path}} as viewed', {
+                  path: filePath
+                })
+              : translate('github.viewed.markFile', 'Mark {{path}} as viewed', { path: filePath })
+          }
           disabled={pending}
           onClick={(event) => {
             event.stopPropagation()

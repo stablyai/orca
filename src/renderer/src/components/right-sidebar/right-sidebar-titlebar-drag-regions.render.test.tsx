@@ -12,6 +12,7 @@ import {
 } from './right-sidebar-titlebar-drag-regions'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
+import { setRendererUiLanguage, translate } from '@/i18n/i18n'
 
 const mockAppState = vi.hoisted(() => ({
   rightSidebarOpen: true,
@@ -235,6 +236,28 @@ describe('rendered right sidebar titlebar drag regions', () => {
     mockAppState.listeners.clear()
     mockAppState.snapshotCache.clear()
     mockAppState.cachedWorktree = null
+  })
+
+  it('updates cached activity labels when the language changes after mount', async () => {
+    await setRendererUiLanguage('en')
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(<RightSidebar />))
+      expect(container.querySelector('[aria-label^="Source Control"]')).not.toBeNull()
+      await act(() => setRendererUiLanguage('ru'))
+      const label = translate('auto.components.right.sidebar.index.0314901467', 'Source Control')
+      expect(label).not.toBe('Source Control')
+      expect(
+        [...container.querySelectorAll('button')].some((button) =>
+          button.getAttribute('aria-label')?.startsWith(label)
+        )
+      ).toBe(true)
+      expect(container.querySelector('[aria-label^="Source Control"]')).toBeNull()
+    } finally {
+      await act(async () => root.unmount())
+      await setRendererUiLanguage('en')
+    }
   })
 
   it('keeps the rendered top activity strip draggable, context-menuable, and only controls no-drag', () => {

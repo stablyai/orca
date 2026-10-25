@@ -1,4 +1,5 @@
 import { memo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
@@ -77,6 +78,7 @@ function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): 
 export const MessageRow = memo(function MessageRow(
   props: MessageRowProps
 ): React.JSX.Element | null {
+  useTranslation()
   const {
     message,
     agentName,

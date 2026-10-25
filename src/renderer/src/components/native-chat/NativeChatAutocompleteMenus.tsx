@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -22,6 +23,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   onChoose: (item: NativeChatPickerItem) => void
   onRetry: () => void
 }): React.JSX.Element {
+  useTranslation()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
   const commands = autocomplete.items.filter(
     (item): item is Extract<NativeChatPickerItem, { kind: 'command' }> => item.kind === 'command'
@@ -323,6 +325,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   listboxId: string
   onChoose: (path: string) => void
 }): React.JSX.Element {
+  useTranslation()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
   const { files } = mention
   const selectedIndex = Math.min(activeIndex, files.length - 1)

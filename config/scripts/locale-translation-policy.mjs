@@ -79,7 +79,6 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'claude',
   'markdown',
   'gh',
-  'idle',
   'jcode',
   'anthropic',
   'Discord',

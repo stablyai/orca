@@ -1,11 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react'
+import { Trans } from 'react-i18next'
 import { Check, Copy, Files } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type {
   PRConflictSummary,
   PRMergeableState
 } from '../../../../../shared/github/pull-request-types'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 export type ConflictReview = {
   mergeable: PRMergeableState
@@ -31,14 +32,19 @@ export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.J
   return (
     <div className="border-b border-border px-3 py-3">
       <div className="text-[11px] text-muted-foreground">
-        {pr.conflictSummary!.commitsBehind}{' '}
-        {translate('auto.components.right.sidebar.checks.panel.content.6fa7f8723f', 'commit')}
-        {pr.conflictSummary!.commitsBehind === 1 ? '' : 's'}{' '}
-        {translate(
-          'auto.components.right.sidebar.checks.panel.content.3916814392',
-          'behind (base commit:'
-        )}{' '}
-        <span className="font-mono text-[10px]">{pr.conflictSummary!.baseCommit}</span>)
+        <Trans
+          i18n={i18n}
+          defaults={translate(
+            'checks.conflicts.behindBase',
+            '{{count}} commits behind (base commit: <commit>{{commit}}</commit>)',
+            {
+              count: pr.conflictSummary!.commitsBehind,
+              defaultValue_one: '{{count}} commit behind (base commit: <commit>{{commit}}</commit>)'
+            }
+          )}
+          values={{ commit: pr.conflictSummary!.baseCommit }}
+          components={{ commit: <span className="font-mono text-[10px]" /> }}
+        />
       </div>
       <div className="mt-2 flex items-center gap-2">
         <Files className="size-3.5 shrink-0 text-muted-foreground" />

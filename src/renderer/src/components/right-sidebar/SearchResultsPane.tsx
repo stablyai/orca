@@ -72,13 +72,10 @@ export function SearchResultsPane({
          pinned at the top while the user scrolls through results. */}
       {!error && results && (rows.length > 0 || results.truncated) && (
         <div className="px-2 py-1 text-2xs text-muted-foreground border-b border-border">
-          {results.totalMatches}{' '}
-          {translate('auto.components.right.sidebar.Search.6aeda362ed', 'result')}
-          {results.totalMatches !== 1 ? 's' : ''}{' '}
-          {translate('auto.components.right.sidebar.Search.4107975b3a', 'in')}{' '}
-          {results.files.length}{' '}
-          {translate('auto.components.right.sidebar.Search.0b8104eaf2', 'file')}
-          {results.files.length !== 1 ? 's' : ''}
+          {translate('codeSearch.resultSummary', 'Results: {{results}} · files: {{files}}', {
+            results: results.totalMatches,
+            files: results.files.length
+          })}
           {results.truncated &&
             translate('auto.components.right.sidebar.Search.dcc294f28d', '(results truncated)')}
         </div>

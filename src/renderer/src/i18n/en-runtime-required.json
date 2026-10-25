@@ -29,6 +29,7 @@
       },
       "GitHubItemDialog": {
         "04539beb48": "issue",
+        "2d89a38d9d": "{{value0}} {{value1}} as viewed",
         "307c98e8e3": "Show {{value0}} more lines above",
         "3853476a97": "GitHub item",
         "3ab6ac0fc8": "Preview and edit the selected GitHub issue or pull request.",
@@ -37,6 +38,7 @@
         "68796dafa0": "pr",
         "88fd82474d": "page",
         "924c2fe05e": "destructive",
+        "a18f669c7a": "{{value0}} {{value1}} reaction{{value2}}",
         "b0b7344684": "Request up to 15 reviewers",
         "b1157c78ff": "sheet",
         "ce8a85d209": "default",
@@ -360,6 +362,9 @@
         }
       },
       "dashboard": {
+        "DashboardAgentChildDisclosure": {
+          "1b57ce9fa4": "{{value0}} {{value1}} child {{value2}}"
+        },
         "DashboardAgentRow": {
           "019b74d93a": "eligible",
           "92a7017987": "sending"
@@ -370,9 +375,18 @@
           "d5ac717d65": "uncommitted"
         },
         "CombinedDiffViewer": {
+          "0fb870a0fe": "notes",
+          "35cc27aeb2": "in Source Control",
+          "80a286d8f5": "from this worktree?",
           "8368d256ec": "combined-branch",
+          "8ab3248fd8": "note",
+          "e3b9a6ce02": "more",
           "skippedConflictsExcluded_one": "{{count}} unresolved conflict was excluded from this diff view.",
           "skippedConflictsExcluded_other": "{{count}} unresolved conflicts were excluded from this diff view."
+        },
+        "ConflictComponents": {
+          "4be41eaafc": "unresolved conflict",
+          "55d61a0ccd": "conflict ·"
         },
         "DiffSectionBody": {
           "bdbf02d5df": "binary"
@@ -418,7 +432,8 @@
           "edfcc64182": "Go"
         },
         "RichMarkdownDocLinkMenu": {
-          "142a7d51cd": "document"
+          "142a7d51cd": "document",
+          "e17b987473": "↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss"
         },
         "RichMarkdownSlashMenu": {
           "e2e12b0e98": "component"
@@ -517,6 +532,9 @@
         "terminal": {
           "FloatingTerminalPanel": {
             "25d7817f79": "terminal"
+          },
+          "FloatingTerminalToggleButton": {
+            "bfe7809a70": "{{value0}} floating workspace ({{value1}})"
           },
           "FloatingTerminalWindowControls": {
             "1e502f1284": "Open"
@@ -672,7 +690,8 @@
         "IntegrationsStep": {
           "93f0c49ad1": "not-authenticated",
           "a3bcf13694": "connected",
-          "a74c6d6b18": "not-installed"
+          "a74c6d6b18": "not-installed",
+          "b08a6ac93c": "{{value0}} workspace{{value1}} linked. Add another workspace or replace a restricted key any time."
         },
         "NotificationStep": {
           "2c47f5465f": "Turn on Allow notifications for Orca in System Settings. This step updates automatically once enabled.",
@@ -834,7 +853,10 @@
             "c57eda6822": "edit"
           },
           "Search": {
-            "1ec640c9c7": "match"
+            "0b8104eaf2": "file",
+            "1ec640c9c7": "match",
+            "4107975b3a": "in",
+            "6aeda362ed": "result"
           },
           "SourceControl": {
             "03d238218c": "Details",
@@ -847,13 +869,16 @@
             "3636d0f686": "ready",
             "383cf92c73": "tree",
             "3a231c845b": "unknown",
+            "413a3ba113": "conflict",
             "424ee0e5bf": "error",
             "48a003c1b1": "Staged Changes",
             "522f44dce5": "Untracked Files",
             "527e130b6f": "Stop generating",
+            "657e0c90ad": "{{value0}} note{{value1}}",
             "77afaa8152": "All",
             "783a808870": "Close",
             "7a09d7f9d2": "base",
+            "8eb3782a0c": "Failed to discard {{value0}} file{{value1}}",
             "901140f47d": "Review the prompt before starting an agent.",
             "9bb062a886": "uncommitted",
             "9febd8ab5f": "create_pr",
@@ -868,6 +893,7 @@
             "e59bca888a": "markdown",
             "f3a1b8c204": "upstream",
             "f62ce91ade": "origin",
+            "f99560ab29": "Abort {{value0}} failed",
             "tooManyChanges": "Too many changes detected. Only the first {{value0}} changes are shown."
           },
           "SourceControlAgentActionDialogForm": {
@@ -886,15 +912,19 @@
           "checks": {
             "panel": {
               "content": {
+                "3916814392": "behind (base commit:",
                 "07eccfa397": "No details are available for this check.",
                 "0fc6f743b3": "by",
                 "49ea0937e4": "Add comment to resolve list",
+                "5341023167": "check",
+                "6fa7f8723f": "commit",
                 "7c1f0a2b11": "Open",
                 "90206b6353": "comment",
                 "95ad090b01": "thread",
                 "9fecebb29d": "Add",
                 "a916648574": "Open details",
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+                "b652f38caf": "failing check",
                 "d098e5529a": "Output"
               },
               "empty": {
@@ -1046,14 +1076,21 @@
                   }
                 }
               },
+              "compare": {
+                "summary": {
+                  "dd72a6fd37": "{{value0}} commit{{value1}} ahead of {{value2}}"
+                }
+              },
               "discard": {
                 "confirmation": {
                   "1426c2efff": "This will revert all changes to this file. This cannot be undone.",
                   "40e9357b2a": "This will restore the file from HEAD and discard the deletion. This cannot be undone."
                 },
                 "dialog": {
+                  "42f89dd030": "files",
                   "48c5ef95d9": "area",
-                  "6de99d162b": "entry"
+                  "6de99d162b": "entry",
+                  "e7611dca35": "file"
                 }
               },
               "primary": {
@@ -1067,9 +1104,14 @@
             }
           },
           "useFileDeletion": {
+            "72691dfebc": "Failed to {{value0}} '{{value1}}'.",
             "74727df633": "'{{value0}}' deleted",
             "96affe1302": "'{{value0}}' moved to {{value1}}",
             "a76c74f105": "destructive"
+          },
+          "useFileExplorerImport": {
+            "132fd0e1e9": "Failed to import {{value0}} {{value1}}.",
+            "25919b2050": "Skipped {{value0}} {{value1}}."
           }
         }
       },
@@ -1682,6 +1724,7 @@
           "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
           "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
           "cc8c5ca224": "Windows default",
+          "ce3aadf0b2": "The {{value0}} Option key sends Alt/Esc; the other composes special characters.",
           "d23b43c5be": "Setup Script Location",
           "d78fc4fdef": "Loading distributions"
         },
@@ -2064,6 +2107,7 @@
           "serverName": "Server name",
           "sshConfigPickerBulkHint": "Bulk sync stays in Settings → SSH",
           "sshConfigPickerDescription": "Pick a host to fill the form. Nothing is saved until you click Save.",
+          "sshImportSynced": "Added {{value0}} host{{value1}} to Orca.",
           "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay."
         },
         "AddRepoHostSelector": {
@@ -2098,6 +2142,10 @@
         "HostSectionHeaderMenu": {
           "63f36455cc": "Reconnect"
         },
+        "ImportedWorktreesVisibilityLine": {
+          "b2bc47c080": "more locations",
+          "f54f2bec5d": "{{value0}} hidden worktrees for {{value1}}"
+        },
         "LinearAgentSkillSetupPrompt": {
           "missingBoth": "Orca CLI and Linear agent skill are missing.",
           "panelDescription": "Install the host agent skill for linked Linear task handoffs.",
@@ -2105,6 +2153,19 @@
         },
         "NewExternalWorktreesInboxLine": {
           "5e1b8d3f62": "Hide external worktrees permanently"
+        },
+        "OrcaYamlTrustDialog": {
+          "02b0ede5ad": "{{value0}}'s {{value1}} changed — run the new version?",
+          "531689199b": "Always trust",
+          "79afc6772b": "orca.yaml",
+          "831f2cd9f0": "runs on your machine",
+          "95bf974a1a": "{{value0}} script",
+          "9e52effffd": "New {{value0}} script",
+          "aa3ffb33fb": "This repository's",
+          "bf800b7e04": ". Only run if you trust",
+          "c494b3ccb1": "in",
+          "c55beddbf8": "changed since you last approved. Re-review before it runs",
+          "e4a51dc4b3": "Run {{value0}} from {{value1}}?"
         },
         "PreservedBranchBatchReviewDialog": {
           "a0f9863597_one": "Force Delete {{count}} Branch",
@@ -2180,7 +2241,8 @@
         },
         "WorktreeCardPorts": {
           "34f733dda2": "Go to Worktree",
-          "3e5f66564e": "Workspace unavailable"
+          "3e5f66564e": "Workspace unavailable",
+          "fed49903c9": "{{value0}} live {{value1}}"
         },
         "WorktreeCardReviewDetailSection": {
           "copyLink": "Copy link",
@@ -2208,7 +2270,8 @@
           "5fc9d1891b": "Deleting…",
           "84a2238242": "Show child workspaces",
           "ebadb7eadb": "{{value0}} {{value1}} child {{value2}}",
-          "ebc5c7dcef": "Hide child workspaces"
+          "ebc5c7dcef": "Hide child workspaces",
+          "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group."
         },
         "WorktreeMetaDialog": {
           "029ea5ec57": "Open GitHub issue",
@@ -2255,6 +2318,18 @@
         "index": {
           "b826a98b6f": "busy"
         },
+        "local": {
+          "base": {
+            "ref": {
+              "suggestion": {
+                "toast": {
+                  "commit": "commit",
+                  "commits": "commits"
+                }
+              }
+            }
+          }
+        },
         "preserved": {
           "branch": {
             "batch": {
@@ -2277,6 +2352,8 @@
           "card": {
             "compact": {
               "agents": {
+                "0c1debfe84": "Collapse {{value0}}",
+                "289a1d2ca7": "Expand {{value0}}. {{value1}}",
                 "a128d7006b": "{{value0}} {{value1}} child {{value2}}"
               }
             }
@@ -2359,8 +2436,10 @@
           "installAnotherMachine": "Install on another machine"
         },
         "SkillInstallReviewContent": {
+          "1b6ad2ca5c": "checked.",
           "27672470d9": "Opening the link does not install anything. Review the immutable version first.",
           "3d8421ca2f": "executable",
+          "3fc62a61eb": "placement",
           "87137bcb8d": "scripts",
           "8f9833d509": "Immutable version",
           "98ed90e523": "A skill contains instructions and may include scripts. Treat it as code from its author.",
@@ -2520,7 +2599,8 @@
           "PortsStatusSegment": {
             "4ae65d871a": "external",
             "9aa11005bf": "workspace ·",
-            "a11ed266ce": "workspace"
+            "a11ed266ce": "workspace",
+            "b8bc3e420a": "Ports, {{value0}} workspace {{value1}}"
           },
           "ResourceUsageStatusSegment": {
             "1b24a32d3a": "Memory",
@@ -2576,8 +2656,10 @@
           },
           "WorkspaceSpaceManagerPanel": {
             "02b27c2230": "workspace",
+            "131662ac65": "{{value0}} open",
             "1cc6cd4c0f": "workspaces",
             "433bb7f595": "ok",
+            "63efebe0e6": "{{value0}} {{value1}} removed from Space.",
             "83f1a0a932": "Reclaimable",
             "d254f04097": "cancelling",
             "d595295d7d": "{{value0}} can be reclaimed from linked worktrees."
@@ -2796,7 +2878,10 @@
           "terminal": {
             "drop": {
               "handler": {
-                "29c031b49a": "Uploading {{value0}} file{{value1}} to runtime…"
+                "1e072f611e": "Failed to upload {{value0}} {{value1}}.",
+                "29c031b49a": "Uploading {{value0}} file{{value1}} to runtime…",
+                "53f015fd85": "Skipped {{value0}} symlink{{value1}}.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}."
               }
             }
           }
@@ -2938,6 +3023,26 @@
         "symlink": "Symbolic links cannot be attached.",
         "unsupported": "Unsupported file type."
       },
+      "launch": {
+        "agent": {
+          "in": {
+            "new": {
+              "tab": {
+                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready."
+              }
+            }
+          }
+        },
+        "work": {
+          "item": {
+            "direct": {
+              "agent": {
+                "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
+              }
+            }
+          }
+        }
+      },
       "terminal": {
         "shortcut": {
           "capture": {
@@ -3021,6 +3126,20 @@
     },
     "sshRoute": {
       "errorDescription": "Pages in this workspace browse through its SSH host, and that connection is not available right now."
+    }
+  },
+  "checks": {
+    "conflicts": {
+      "behindBase_one": "{{count}} commit behind (base commit: <commit>{{commit}}</commit>)",
+      "behindBase_other": "{{count}} commits behind (base commit: <commit>{{commit}}</commit>)"
+    },
+    "triage": {
+      "failingCount_one": "{{count}} failing check",
+      "failingCount_other": "{{count}} failing checks",
+      "pendingCount_one": "{{count}} check pending",
+      "pendingCount_other": "{{count}} checks pending",
+      "unresolvedCount_one": "{{count}} check unresolved",
+      "unresolvedCount_other": "{{count}} checks unresolved"
     }
   },
   "components": {
@@ -3409,6 +3528,12 @@
     }
   },
   "dashboard": {
+    "childAgents": {
+      "hide_one": "Hide {{count}} child agent",
+      "hide_other": "Hide {{count}} child agents",
+      "show_one": "Show {{count}} child agent",
+      "show_other": "Show {{count}} child agents"
+    },
     "sidebar": {
       "closeActivity": "Turn off activity view",
       "label": "Agents",
@@ -3425,20 +3550,60 @@
       "title": "Agent dashboard"
     }
   },
+  "diffNotes": {
+    "clearConfirmation_one": "Clear {{count}} note from this worktree?",
+    "clearConfirmation_other": "Clear {{count}} notes from this worktree?",
+    "moreInSourceControl_one": "{{count}} more note in Source Control",
+    "moreInSourceControl_other": "{{count}} more notes in Source Control"
+  },
+  "editorConflicts": {
+    "unresolvedCount_one": "{{count}} unresolved conflict",
+    "unresolvedCount_other": "{{count}} unresolved conflicts"
+  },
   "fileExplorer": {
+    "import": {
+      "failedFiles_one": "Failed to import {{count}} file.",
+      "failedFiles_other": "Failed to import {{count}} files.",
+      "skippedFiles_one": "Skipped {{count}} file.",
+      "skippedFiles_other": "Skipped {{count}} files."
+    },
     "root": {
       "omittedFiles": "Files omitted by sparse checkout are not searched.",
       "viewOnly": "Sparse checkout · View changes do not change checked-out files.",
       "viewing": "Viewing: {{path}}"
     }
   },
+  "githubReactions": {
+    "namedCount_one": "{{count}} {{reaction}} reaction",
+    "namedCount_other": "{{count}} {{reaction}} reactions"
+  },
+  "importedWorktrees": {
+    "hidingInRepository_one": "Hiding {{count}} discovered worktree in {{repository}}",
+    "hidingInRepository_other": "Hiding {{count}} discovered worktrees in {{repository}}",
+    "hiding_one": "Hiding {{count}} discovered worktree",
+    "hiding_other": "Hiding {{count}} discovered worktrees",
+    "keepHiddenCount_one": "Keep {{count}} discovered worktree hidden for {{repository}}; recover from the project menu",
+    "keepHiddenCount_other": "Keep {{count}} discovered worktrees hidden for {{repository}}; recover from the project menu",
+    "moreLocations_one": "+ {{count}} more location",
+    "moreLocations_other": "+ {{count}} more locations"
+  },
   "jira": {
     "workspace": {
       "open": "Open workspace linked to {{key}}"
     }
   },
+  "localBaseRef": {
+    "commitNoun_one": "commit",
+    "commitNoun_other": "commits"
+  },
   "menu": {
     "quitApp": "Quit {{appName}}"
+  },
+  "projectViews": {
+    "error": {
+      "itemCountTooLarge_one": "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub.",
+      "itemCountTooLarge_other": "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub."
+    }
   },
   "resourceManager": {
     "pty": {
@@ -3472,11 +3637,49 @@
       }
     }
   },
+  "sourceControl": {
+    "actions": {
+      "fastForwardCount_one": "Fast-forward {{count}} commit",
+      "fastForwardCount_other": "Fast-forward {{count}} commits",
+      "forcePushCount_one": "Remote only has older copies of local commits. Force push {{count}} branch commit with lease to update {{upstream}}.",
+      "forcePushCount_other": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstream}}.",
+      "manualForcePushReplace_one": "Force push {{count}} local commit with lease to update {{upstream}} and replace remote-only commits.",
+      "manualForcePushReplace_other": "Force push {{count}} local commits with lease to update {{upstream}} and replace remote-only commits.",
+      "manualForcePush_one": "Force push {{count}} local commit with lease to update {{upstream}}.",
+      "manualForcePush_other": "Force push {{count}} local commits with lease to update {{upstream}}.",
+      "pullCount_one": "Pull {{count}} commit",
+      "pullCount_other": "Pull {{count}} commits",
+      "pushCount_one": "Push {{count}} commit",
+      "pushCount_other": "Push {{count}} commits",
+      "unpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
+      "unpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
+    },
+    "compare": {
+      "commitsAhead_one": "{{count}} commit ahead of {{baseRef}}",
+      "commitsAhead_other": "{{count}} commits ahead of {{baseRef}}"
+    },
+    "conflictCount_one": "{{count}} conflict",
+    "conflictCount_other": "{{count}} conflicts",
+    "discard": {
+      "failedFiles_one": "Failed to discard {{count}} file",
+      "failedFiles_other": "Failed to discard {{count}} files",
+      "fileCount_one": "{{count}} file",
+      "fileCount_other": "{{count}} files"
+    },
+    "noteCount_one": "{{count}} note",
+    "noteCount_other": "{{count}} notes"
+  },
   "sparsePreset": {
     "description": "Choose the folders a new workspace checks out.",
     "findPath": "Find a folder…",
     "finishEditing": "Save or cancel the preset to continue creating your workspace.",
     "pathHelp": "One repository-relative directory per line. Spaces within a path are preserved."
+  },
+  "sshConfig": {
+    "import": {
+      "addedHosts_one": "Added {{count}} host to Orca.",
+      "addedHosts_other": "Added {{count}} hosts to Orca."
+    }
   },
   "terminal": {
     "newerDaemonBanner": {
@@ -3488,15 +3691,51 @@
       "resumed_other": "{{count}} agent sessions resumed."
     }
   },
+  "terminalDrop": {
+    "failedUploads_one": "Failed to upload {{count}} file.",
+    "failedUploads_other": "Failed to upload {{count}} files.",
+    "skippedItems_one": "Skipped {{count}} item.",
+    "skippedItems_other": "Skipped {{count}} items.",
+    "skippedSymlinks_one": "Skipped {{count}} symlink.",
+    "skippedSymlinks_other": "Skipped {{count}} symlinks.",
+    "uploadingToRemote_one": "Uploading {{count}} file to remote…",
+    "uploadingToRemote_other": "Uploading {{count}} files to remote…",
+    "uploadingToRuntime_one": "Uploading {{count}} file to runtime…",
+    "uploadingToRuntime_other": "Uploading {{count}} files to runtime…"
+  },
   "workspace": {
     "links": {
       "manage": "Manage links…"
     }
   },
+  "workspacePorts": {
+    "statusCount_one": "Ports, {{count}} workspace port",
+    "statusCount_other": "Ports, {{count}} workspace ports"
+  },
   "workspaceSpace": {
     "chart": {
       "workspaceSizes": "Workspace sizes"
-    }
+    },
+    "decision": {
+      "activeAgents_one": "{{count}} active agent",
+      "activeAgents_other": "{{count}} active agents",
+      "changedFiles_one": "{{count}} changed file",
+      "changedFiles_other": "{{count}} changed files",
+      "completedAgents_one": "{{count}} completed agent",
+      "completedAgents_other": "{{count}} completed agents",
+      "liveTerminalTabs_one": "{{live}} live of {{count}} terminal tab",
+      "liveTerminalTabs_other": "{{live}} live of {{count}} terminal tabs",
+      "openBrowserTabs_one": "{{count}} browser tab open",
+      "openBrowserTabs_other": "{{count}} browser tabs open",
+      "openEditorFiles_one": "{{count}} editor file open",
+      "openEditorFiles_other": "{{count}} editor files open"
+    },
+    "deletedWorkspaces_one": "{{count}} workspace removed from Space.",
+    "deletedWorkspaces_other": "{{count}} workspaces removed from Space."
+  },
+  "worktreeAgentSummary": {
+    "agentCount_one": "{{count}} agent",
+    "agentCount_other": "{{count}} agents"
   },
   "worktreeJumpPalette": {
     "filter": {
@@ -3508,5 +3747,9 @@
     "matchLabel": {
       "automation": "Run"
     }
+  },
+  "worktreePorts": {
+    "liveCount_one": "{{count}} live port",
+    "liveCount_other": "{{count}} live ports"
   }
 }

@@ -4,6 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
+import { i18n } from '@/i18n/i18n'
+import russian from '@/i18n/test-resources/runtime-source-grammar.json'
 import type { AppState } from '@/store/types'
 import type { LocalBaseRefUpdateSuggestion } from '../../../../shared/worktree/base-ref-drift-types'
 import { showLocalBaseRefUpdateSuggestionToast } from './local-base-ref-suggestion-toast'
@@ -68,13 +70,32 @@ function clickButton(container: HTMLElement, label: string): void {
   })
 }
 
-afterEach(() => {
+afterEach(async () => {
   mountedRoots.splice(0).forEach((root) => act(() => root.unmount()))
   document.body.innerHTML = ''
   vi.clearAllMocks()
+  await i18n.changeLanguage('en')
 })
 
 describe('showLocalBaseRefUpdateSuggestionToast', () => {
+  it.each([
+    [0, 'коммитов'],
+    [1, 'коммит'],
+    [2, 'коммита'],
+    [5, 'коммитов'],
+    [21, 'коммит']
+  ] as const)(
+    'inflects %i commits behind inside the actual toast while preserving branch names',
+    async (behind, noun) => {
+      i18n.addResourceBundle('ru', 'translation', russian, true, true)
+      await i18n.changeLanguage('ru')
+      showLocalBaseRefUpdateSuggestionToast(
+        { ...SUGGESTION, localBranch: 'main & <raw>', behind },
+        makeDeps()
+      )
+      expect(renderToastBody().textContent).toContain(`main & <raw> отстаёт на ${behind} ${noun}`)
+    }
+  )
   it('does nothing without a suggestion', () => {
     showLocalBaseRefUpdateSuggestionToast(undefined, makeDeps())
     expect(toast.info).not.toHaveBeenCalled()

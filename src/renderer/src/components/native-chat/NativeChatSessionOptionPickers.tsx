@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -300,6 +301,7 @@ function NativeChatSessionOptionPickersInner({
   pickerRequest,
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
+  useTranslation()
   const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
   // Why: the session holds a request across composer remounts; one left standing reopens the
   // picker each time a prompt card gives the composer back. Dropped even when nothing could open.

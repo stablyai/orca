@@ -2,6 +2,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
+import { translate } from '@/i18n/i18n'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
@@ -31,27 +32,27 @@ export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
 export function formatSummaryStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'waiting':
-      return 'waiting'
+      return translate('worktreeAgentSummary.state.waiting', 'waiting')
     case 'blocked':
-      return 'blocked'
+      return translate('worktreeAgentSummary.state.blocked', 'blocked')
     case 'interrupted':
-      return 'interrupted'
+      return translate('worktreeAgentSummary.state.interrupted', 'interrupted')
     case 'failed':
-      return 'failed'
+      return translate('worktreeAgentSummary.state.failed', 'failed')
     case 'working':
-      return 'working'
+      return translate('worktreeAgentSummary.state.working', 'working')
     case 'monitoring':
-      return 'monitoring'
+      return translate('worktreeAgentSummary.state.monitoring', 'monitoring')
     case 'done':
-      return 'done'
+      return translate('worktreeAgentSummary.state.done', 'done')
     case 'idle':
-      return 'idle'
+      return translate('worktreeAgentSummary.state.idle', 'idle')
     case 'unverifiable':
-      return 'not reporting'
+      return translate('worktreeAgentSummary.state.unverifiable', 'not reporting')
     case 'unconfirmed':
-      return 'unconfirmed'
+      return translate('worktreeAgentSummary.state.unconfirmed', 'unconfirmed')
     case 'permission':
-      return 'needs attention'
+      return translate('worktreeAgentSummary.state.permission', 'needs attention')
   }
 }
 
@@ -73,34 +74,50 @@ export function buildSummaryAgentGroups(agents: DashboardAgentRowData[]): Summar
 }
 
 export function summarizeAgents(agents: DashboardAgentRowData[], subjectLabel: string): string {
-  const counts = new Map<AgentDotState, number>()
-  for (const agent of agents) {
-    const dotState = getAgentDotState(agent)
-    counts.set(dotState, (counts.get(dotState) ?? 0) + 1)
-  }
-  const parts = SUMMARY_STATE_ORDER.flatMap((state) => {
-    const count = counts.get(state) ?? 0
-    if (count === 0) {
-      return []
-    }
-    const label = formatSummaryStateLabel(state)
-    return `${count} ${label}`
-  })
-  if (parts.length === 1) {
-    const onlyStatusLabel = parts[0].replace(/^\d+\s+/, '')
+  const groups = buildSummaryAgentGroups(agents)
+  if (groups.length === 1) {
+    const state = formatSummaryStateLabel(groups[0].state)
     return agents.length === 1
-      ? `${subjectLabel} ${onlyStatusLabel}`
-      : `All ${subjectLabel} ${onlyStatusLabel}`
+      ? translate('worktreeAgentSummary.singleState', '{{subject}} {{state}}', {
+          subject: subjectLabel,
+          state
+        })
+      : translate('worktreeAgentSummary.allSameState', 'All {{subject}} {{state}}', {
+          subject: subjectLabel,
+          state
+        })
   }
-  return `${subjectLabel}: ${parts.join(', ')}`
+  const parts = groups.map((group) =>
+    translate('worktreeAgentSummary.stateCount', '{{count}} {{state}}', {
+      count: group.agents.length,
+      state: formatSummaryStateLabel(group.state)
+    })
+  )
+  return translate('worktreeAgentSummary.mixedStates', '{{subject}}: {{states}}', {
+    subject: subjectLabel,
+    states: parts.join(', ')
+  })
+}
+
+export function formatSummaryAgentCount(count: number): string {
+  return translate('worktreeAgentSummary.agentCount', '{{count}} agents', {
+    count,
+    defaultValue_one: '{{count}} agent'
+  })
 }
 
 export function summarizeAgentIdentities(agents: DashboardAgentRowData[]): string {
   return agents
     .map((agent) => {
-      const agentLabel = formatAgentTypeLabel(agent.agentType)
+      const agentLabel =
+        agent.agentType && agent.agentType !== 'unknown'
+          ? formatAgentTypeLabel(agent.agentType)
+          : translate('worktreeAgentSummary.unknownAgent', 'Agent')
       const stateLabel = formatSummaryStateLabel(getAgentDotState(agent))
-      return `${agentLabel} ${stateLabel}`
+      return translate('worktreeAgentSummary.identityState', '{{agent}} {{state}}', {
+        agent: agentLabel,
+        state: stateLabel
+      })
     })
     .join('; ')
 }

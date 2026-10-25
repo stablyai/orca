@@ -319,7 +319,9 @@
         "openManageSessions": "Open Manage Sessions",
         "administratorSearchDescription": "See Orca’s Windows permissions or restart with administrator approval.",
         "administratorApproval": "Windows will ask for approval. Use your usual account."
-      }
+      },
+      "leftOptionDescription": "The left Option key sends Alt/Esc; the other composes special characters.",
+      "rightOptionDescription": "The right Option key sends Alt/Esc; the other composes special characters."
     },
     "appearance": {
       "language": {
@@ -332,7 +334,8 @@
         "japanese": "日本語",
         "spanish": "Español",
         "french": "Français",
-        "portuguese": "Português (Brasil)"
+        "portuguese": "Português (Brasil)",
+        "russian": "Русский"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",
@@ -629,7 +632,8 @@
     "taskCreate": "Create workspace",
     "taskSearchLoading": "Searching tasks…",
     "taskSearchFailed": "Some task sources could not be searched",
-    "taskSearchRetry": "Retry"
+    "taskSearchRetry": "Retry",
+    "createActionAvailableClause": ", create worktree action available"
   },
   "auto": {
     "App": {
@@ -14961,7 +14965,9 @@
             "databaseCount_other": "{{value0}} databases",
             "scanning": "Scanning {{value0}}",
             "checking": "Checking {{value0}}",
-            "scanned": "Scanned {{value0}}"
+            "scanned": "Scanned {{value0}}",
+            "fileCount": "{{value0}} files",
+            "databaseCount": "{{value0}} databases"
           },
           "run": {
             "source": {
@@ -20272,6 +20278,14 @@
       "closeActivity": "Turn off activity view",
       "projects": "Projects",
       "workspaces": "Workspaces"
+    },
+    "childAgents": {
+      "hide": "Hide {{count}} child agents",
+      "show": "Show {{count}} child agents",
+      "hide_one": "Hide {{count}} child agent",
+      "hide_other": "Hide {{count}} child agents",
+      "show_one": "Show {{count}} child agent",
+      "show_other": "Show {{count}} child agents"
     }
   },
   "runtimeRpc": {
@@ -20381,10 +20395,65 @@
       "restoreStagedVersionDescription": "This will restore the last staged version and discard the deletion. This cannot be undone.",
       "unstagedChangesDescription": "This will revert the unstaged changes to this file. This cannot be undone.",
       "unstagedSelectionIncludingUntrackedDescription": "This will revert unstaged changes and permanently delete any untracked files in this selection. This cannot be undone.",
-      "unstagedFilesIncludingUntrackedDescription": "This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone."
+      "unstagedFilesIncludingUntrackedDescription": "This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone.",
+      "moreFailures": ", +{{count}} more",
+      "failedFiles": "Failed to discard {{count}} files",
+      "failedFiles_one": "Failed to discard {{count}} file",
+      "failedFiles_other": "Failed to discard {{count}} files",
+      "fileCount": "{{count}} files",
+      "fileCount_one": "{{count}} file",
+      "fileCount_other": "{{count}} files"
     },
     "unlinkedPr": {
       "status": "PR #{{number}} unlinked"
+    },
+    "conflictCount": "{{count}} conflicts",
+    "conflictCount_one": "{{count}} conflict",
+    "conflictCount_other": "{{count}} conflicts",
+    "noteCount": "{{count}} notes",
+    "noteCount_one": "{{count}} note",
+    "noteCount_other": "{{count}} notes",
+    "compare": {
+      "commitsAhead": "{{count}} commits ahead of {{baseRef}}",
+      "commitsAhead_one": "{{count}} commit ahead of {{baseRef}}",
+      "commitsAhead_other": "{{count}} commits ahead of {{baseRef}}"
+    },
+    "actions": {
+      "pushCount": "Push {{count}} commits",
+      "pushCount_one": "Push {{count}} commit",
+      "pushCount_other": "Push {{count}} commits",
+      "pullCount": "Pull {{count}} commits",
+      "pullCount_one": "Pull {{count}} commit",
+      "pullCount_other": "Pull {{count}} commits",
+      "fastForwardCount": "Fast-forward {{count}} commits",
+      "fastForwardCount_one": "Fast-forward {{count}} commit",
+      "fastForwardCount_other": "Fast-forward {{count}} commits",
+      "syncCounts": "Pull {{behind}}, push {{ahead}}",
+      "remoteBranch": "the remote branch",
+      "forcePushCount": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstream}}.",
+      "forcePushCount_one": "Remote only has older copies of local commits. Force push {{count}} branch commit with lease to update {{upstream}}.",
+      "forcePushCount_other": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstream}}.",
+      "forcePushBranch": "Remote only has older copies of local commits. Force push this branch with lease to update {{upstream}}.",
+      "manualForcePushReplace": "Force push {{count}} local commits with lease to update {{upstream}} and replace remote-only commits.",
+      "manualForcePushReplace_one": "Force push {{count}} local commit with lease to update {{upstream}} and replace remote-only commits.",
+      "manualForcePushReplace_other": "Force push {{count}} local commits with lease to update {{upstream}} and replace remote-only commits.",
+      "manualForcePush": "Force push {{count}} local commits with lease to update {{upstream}}.",
+      "manualForcePush_one": "Force push {{count}} local commit with lease to update {{upstream}}.",
+      "manualForcePush_other": "Force push {{count}} local commits with lease to update {{upstream}}.",
+      "unpublishedForcePushCount": "Force push {{count}} branch commits with lease and set an upstream if needed.",
+      "unpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
+      "unpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed.",
+      "unpublishedForcePushBranch": "Force push this branch with lease and set an upstream if needed."
+    },
+    "abort": {
+      "rebaseTitle": "Abort rebase?",
+      "mergeTitle": "Abort merge?",
+      "rebaseDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
+      "mergeDescription": "This cancels the merge in progress and can discard conflict resolutions made during this merge.",
+      "rebaseConfirm": "Abort rebase",
+      "mergeConfirm": "Abort merge",
+      "rebaseFailed": "Failed to abort rebase",
+      "mergeFailed": "Failed to abort merge"
     }
   },
   "agentsSidebarIntro": {
@@ -20651,6 +20720,20 @@
       "findInFolder": "Find in {{path}}",
       "folderLoadError": "Could not load this folder:",
       "emptyFolder": "No files in this folder"
+    },
+    "deleteFailed": "Failed to delete '{{name}}'.",
+    "recycleFailed": "Failed to move '{{name}}' to Recycle Bin.",
+    "trashFailed": "Failed to move '{{name}}' to Trash.",
+    "recycleBin": "Recycle Bin",
+    "trash": "Trash",
+    "import": {
+      "failedFiles": "Failed to import {{count}} files.",
+      "failedFiles_one": "Failed to import {{count}} file.",
+      "failedFiles_other": "Failed to import {{count}} files.",
+      "skippedFiles": "Skipped {{count}} files.",
+      "skippedFiles_one": "Skipped {{count}} file.",
+      "skippedFiles_other": "Skipped {{count}} files.",
+      "failed": "Failed to import files."
     }
   },
   "sparsePreset": {
@@ -20867,11 +20950,22 @@
   },
   "projectViews": {
     "layout": {
-      "board": "Board"
+      "board": "Board",
+      "roadmap": "Roadmap",
+      "table": "Table"
     },
     "unsupported": {
       "switchLayout": "Switch to a Table, Board, or Roadmap view to work with this project in Orca.",
-      "description": "Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet."
+      "description": "Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet.",
+      "layoutMessage": "Orca doesn't support {{layout}} project views yet."
+    },
+    "error": {
+      "tooManyItems": "This view has too many items to render in Orca. Narrow the view's filter on GitHub.",
+      "itemCountTooLarge": "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
+      "notFound": "Could not find this project or view.",
+      "schemaDrift": "Could not read this project view.",
+      "itemCountTooLarge_one": "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub.",
+      "itemCountTooLarge_other": "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub."
     }
   },
   "projectField": {
@@ -21157,7 +21251,45 @@
       "unmanaged": "This workspace is no longer managed by Orca.",
       "unavailable": "This workspace is protected or unavailable."
     },
-    "rowActions": "Actions for {{name}}"
+    "rowActions": "Actions for {{name}}",
+    "scanningSizes": "Scanning workspace sizes",
+    "deletedWorkspaces": "{{count}} workspaces removed from Space.",
+    "decision": {
+      "activeAgents": "{{count}} active agents",
+      "completedAgents": "{{count}} completed agents",
+      "retainedAgents": "{{agents}} retained",
+      "noAgents": "No tracked agents running",
+      "noTerminalTabs": "No terminal tabs",
+      "liveTerminalTabs": "{{live}} live of {{count}} terminal tabs",
+      "gitStatusUnavailable": "Git status unavailable: {{error}}",
+      "gitStatusNotLoaded": "Git status has not loaded yet",
+      "noUncommittedFiles": "No uncommitted files",
+      "changedFiles": "{{count}} changed files",
+      "noEditorFiles": "No editor files open",
+      "openEditorFiles": "{{count}} editor files open",
+      "dirtyEditorBuffers": "Unsaved editor buffers: {{dirty}}; open files: {{total}}",
+      "activeWorkspace": "This is the active workspace",
+      "mainWorktreeProtected": "Main worktree is protected",
+      "workspaceProtected": "Workspace is protected",
+      "canDelete": "Can be deleted after review",
+      "noLinkedIssue": "No linked issue",
+      "noLinkedPR": "No linked PR",
+      "openBrowserTabs": "{{count}} browser tabs open",
+      "activeAgents_one": "{{count}} active agent",
+      "activeAgents_other": "{{count}} active agents",
+      "completedAgents_one": "{{count}} completed agent",
+      "completedAgents_other": "{{count}} completed agents",
+      "liveTerminalTabs_one": "{{live}} live of {{count}} terminal tab",
+      "liveTerminalTabs_other": "{{live}} live of {{count}} terminal tabs",
+      "changedFiles_one": "{{count}} changed file",
+      "changedFiles_other": "{{count}} changed files",
+      "openEditorFiles_one": "{{count}} editor file open",
+      "openEditorFiles_other": "{{count}} editor files open",
+      "openBrowserTabs_one": "{{count}} browser tab open",
+      "openBrowserTabs_other": "{{count}} browser tabs open"
+    },
+    "deletedWorkspaces_one": "{{count}} workspace removed from Space.",
+    "deletedWorkspaces_other": "{{count}} workspaces removed from Space."
   },
   "onboarding": {
     "language": {
@@ -21178,6 +21310,9 @@
       "loadingSettings": "Loading settings…",
       "loading": "Loading language…",
       "saving": "Saving language…"
+    },
+    "integrations": {
+      "linkedWorkspaces": "Linked workspaces: {{count}}. Add another workspace or replace a restricted key any time."
     }
   },
   "resourceManager": {
@@ -21237,5 +21372,218 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "floatingWorkspace": {
+    "minimizeWithShortcut": "Minimize floating workspace ({{shortcut}})",
+    "showWithShortcut": "Show floating workspace ({{shortcut}})"
+  },
+  "githubReactions": {
+    "thumbsUp": "thumbs up",
+    "thumbsDown": "thumbs down",
+    "laugh": "laugh",
+    "confused": "confused",
+    "heart": "heart",
+    "hooray": "hooray",
+    "rocket": "rocket",
+    "eyes": "eyes",
+    "namedCount": "{{count}} {{reaction}} reactions",
+    "namedCount_one": "{{count}} {{reaction}} reaction",
+    "namedCount_other": "{{count}} {{reaction}} reactions"
+  },
+  "github": {
+    "viewed": {
+      "unmarkFile": "Unmark {{path}} as viewed",
+      "markFile": "Mark {{path}} as viewed"
+    }
+  },
+  "importedWorktrees": {
+    "repositoryOnHost": "{{repository}} on {{host}}",
+    "keepHiddenCount": "Keep {{count}} discovered worktrees hidden for {{repository}}; recover from the project menu",
+    "hidingInRepository": "Hiding {{count}} discovered worktrees in {{repository}}",
+    "hiding": "Hiding {{count}} discovered worktrees",
+    "collapse": "Collapse hidden worktrees for {{repository}}",
+    "expand": "Expand hidden worktrees for {{repository}}",
+    "keepHiddenHint": "Keep hidden - recover from the project menu",
+    "moreLocations": "+ {{count}} more locations",
+    "keepHiddenCount_one": "Keep {{count}} discovered worktree hidden for {{repository}}; recover from the project menu",
+    "keepHiddenCount_other": "Keep {{count}} discovered worktrees hidden for {{repository}}; recover from the project menu",
+    "hidingInRepository_one": "Hiding {{count}} discovered worktree in {{repository}}",
+    "hidingInRepository_other": "Hiding {{count}} discovered worktrees in {{repository}}",
+    "hiding_one": "Hiding {{count}} discovered worktree",
+    "hiding_other": "Hiding {{count}} discovered worktrees",
+    "moreLocations_one": "+ {{count}} more location",
+    "moreLocations_other": "+ {{count}} more locations"
+  },
+  "orcaYamlTrust": {
+    "script": {
+      "setup": "setup script",
+      "archive": "archive script",
+      "issueCommand": "issue command",
+      "vmRecipe": "VM recipe"
+    },
+    "trigger": {
+      "setup": "when this workspace is created",
+      "archive": "when this workspace is removed",
+      "issueCommand": "when this workspace launches with a linked issue",
+      "vmRecipe": "before provisioning a VM"
+    },
+    "thisRepository": "this repository",
+    "changedTitle": "{{script}} changed in {{repository}} — run the new version?",
+    "runTitle": "Run {{script}} from {{repository}}?",
+    "changedDescription": "<yaml>orca.yaml</yaml> changed since you last approved it. Review it again before it runs {{trigger}}.",
+    "runDescription": "This repository's <yaml>orca.yaml</yaml> runs on your machine {{trigger}}. Only run it if you trust {{repository}}.",
+    "newScript": "New version: {{script}}",
+    "alwaysTrust": "Always trust <yaml>orca.yaml</yaml> in {{repository}}"
+  },
+  "worktreePorts": {
+    "liveCount": "{{count}} live ports",
+    "unknownProcess": "Unknown process",
+    "liveCount_one": "{{count}} live port",
+    "liveCount_other": "{{count}} live ports"
+  },
+  "sshConfig": {
+    "import": {
+      "addedHosts": "Added {{count}} hosts to Orca.",
+      "addedHosts_one": "Added {{count}} host to Orca.",
+      "addedHosts_other": "Added {{count}} hosts to Orca."
+    }
+  },
+  "localBaseRef": {
+    "commitNoun": "commits",
+    "commitNoun_one": "commit",
+    "commitNoun_other": "commits"
+  },
+  "worktreeAgentSummary": {
+    "state": {
+      "waiting": "waiting",
+      "blocked": "blocked",
+      "interrupted": "interrupted",
+      "failed": "failed",
+      "working": "working",
+      "monitoring": "monitoring",
+      "done": "done",
+      "idle": "idle",
+      "unverifiable": "not reporting",
+      "unconfirmed": "unconfirmed",
+      "permission": "needs attention"
+    },
+    "singleState": "{{subject}} {{state}}",
+    "allSameState": "All {{subject}} {{state}}",
+    "stateCount": "{{count}} {{state}}",
+    "mixedStates": "{{subject}}: {{states}}",
+    "agentCount": "{{count}} agents",
+    "unknownAgent": "Agent",
+    "identityState": "{{agent}} {{state}}",
+    "collapse": "Collapse agent summary: {{subject}}",
+    "expand": "Expand agent summary: {{summary}}. {{identities}}",
+    "agentCount_one": "{{count}} agent",
+    "agentCount_other": "{{count}} agents"
+  },
+  "projectGroups": {
+    "delete": {
+      "remainingProjects": "Contained projects remaining after deleting the group: {{remaining}} of {{total}}."
+    }
+  },
+  "skills": {
+    "install": {
+      "checkedPlacements": "Checked installation locations: {{count}}."
+    }
+  },
+  "workspacePorts": {
+    "statusCount": "Ports, {{count}} workspace ports",
+    "statusCount_one": "Ports, {{count}} workspace port",
+    "statusCount_other": "Ports, {{count}} workspace ports"
+  },
+  "terminalDrop": {
+    "skippedSymlinks": "Skipped {{count}} symlinks.",
+    "skippedItems": "Skipped {{count}} items.",
+    "failedUploads": "Failed to upload {{count}} files.",
+    "uploadingToRuntime": "Uploading {{count}} files to runtime…",
+    "uploadFailed": "Failed to upload files.",
+    "resolveFailed": "Failed to resolve dropped files.",
+    "uploadingToRemote": "Uploading {{count}} files to remote…",
+    "skippedSymlinks_one": "Skipped {{count}} symlink.",
+    "skippedSymlinks_other": "Skipped {{count}} symlinks.",
+    "skippedItems_one": "Skipped {{count}} item.",
+    "skippedItems_other": "Skipped {{count}} items.",
+    "failedUploads_one": "Failed to upload {{count}} file.",
+    "failedUploads_other": "Failed to upload {{count}} files.",
+    "uploadingToRuntime_one": "Uploading {{count}} file to runtime…",
+    "uploadingToRuntime_other": "Uploading {{count}} files to runtime…",
+    "uploadingToRemote_one": "Uploading {{count}} file to remote…",
+    "uploadingToRemote_other": "Uploading {{count}} files to remote…"
+  },
+  "agentLaunch": {
+    "pasteTimeout": {
+      "prompt": "Your prompt wasn't sent — paste it once the agent is ready.",
+      "notes": "Your notes weren't sent — paste them once the agent is ready."
+    },
+    "workItemTimeout": {
+      "prompt": "Agent took too long to start. The workspace is ready — paste the prompt when the agent is idle.",
+      "context": "Agent took too long to start. The workspace is ready — paste the work item context when the agent is idle."
+    }
+  },
+  "webKeybindings": {
+    "unableToParseShortcut": "Unable to parse shortcut."
+  },
+  "codeSearch": {
+    "resultSummary": "Results: {{results}} · files: {{files}}"
+  },
+  "checks": {
+    "triage": {
+      "failingCount": "{{count}} failing checks",
+      "failingCount_one": "{{count}} failing check",
+      "failingCount_other": "{{count}} failing checks",
+      "pendingCount": "{{count}} checks pending",
+      "pendingCount_one": "{{count}} check pending",
+      "pendingCount_other": "{{count}} checks pending",
+      "unresolvedCount": "{{count}} checks unresolved",
+      "unresolvedCount_one": "{{count}} check unresolved",
+      "unresolvedCount_other": "{{count}} checks unresolved"
+    },
+    "conflicts": {
+      "behindBase": "{{count}} commits behind (base commit: <commit>{{commit}}</commit>)",
+      "behindBase_one": "{{count}} commit behind (base commit: <commit>{{commit}}</commit>)",
+      "behindBase_other": "{{count}} commits behind (base commit: <commit>{{commit}}</commit>)"
+    }
+  },
+  "editorConflicts": {
+    "unresolvedCount": "{{count}} unresolved conflicts",
+    "unresolvedCount_one": "{{count}} unresolved conflict",
+    "unresolvedCount_other": "{{count}} unresolved conflicts",
+    "kind": {
+      "bothModified": "Both modified",
+      "bothAdded": "Both added",
+      "deletedByUs": "Deleted by us",
+      "deletedByThem": "Deleted by them",
+      "addedByUs": "Added by us",
+      "addedByThem": "Added by them",
+      "bothDeleted": "Both deleted"
+    },
+    "hint": {
+      "bothModified": "Resolve the conflict markers",
+      "bothAdded": "Choose which version to keep, or combine them",
+      "deletedByUs": "Decide whether to restore the file",
+      "deletedByThem": "Decide whether to keep the file or accept deletion",
+      "addedByUs": "Review whether to keep the added file",
+      "addedByThem": "Review the added file before keeping it",
+      "bothDeleted": "Resolve in Git or restore one side before editing"
+    },
+    "unresolvedBanner": "Unresolved conflict · {{kind}}",
+    "resolvedBanner": "Conflict resolved locally · {{kind}}"
+  },
+  "browserGrab": {
+    "unknownError": "Unknown error"
+  },
+  "diffNotes": {
+    "moreInSourceControl": "{{count}} more notes in Source Control",
+    "moreInSourceControl_one": "{{count}} more note in Source Control",
+    "moreInSourceControl_other": "{{count}} more notes in Source Control",
+    "clearConfirmation": "Clear {{count}} notes from this worktree?",
+    "clearConfirmation_one": "Clear {{count}} note from this worktree?",
+    "clearConfirmation_other": "Clear {{count}} notes from this worktree?"
+  },
+  "documentLinks": {
+    "keyboardHint": "↑↓ navigate  ↵ select  esc dismiss"
   }
 }

@@ -1,11 +1,24 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatResetCountdown, formatResetDuration } from '../../../shared/rate-limit-reset-format'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from './window-label-formatter'
+
+const language = vi.hoisted(() => ({ locale: 'en-US' }))
+vi.mock('@/i18n/i18n', () => ({ getIntlLocale: () => language.locale }))
+beforeEach(() => {
+  language.locale = 'en-US'
+})
 
 const MIN = 60_000
 const HOUR = 60 * MIN
 
 describe('formatWindowLabel', () => {
+  it('uses Russian units for the provider’s actual window duration', () => {
+    language.locale = 'ru-RU'
+    expect(formatWindowLabel(300)).toBe('5 ч')
+    expect(formatWindowLabel(10080)).toMatch(/^1 нед\.?$/)
+    expect(formatWindowLabel(4320)).toMatch(/^3 дн\.?$/)
+    expect(formatWindowLabel(45)).toBe('45 мин')
+  })
   it('returns "5h" for 300 minutes', () => {
     expect(formatWindowLabel(300)).toBe('5h')
   })

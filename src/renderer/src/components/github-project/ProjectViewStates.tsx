@@ -46,11 +46,11 @@ function ProjectViewTab({
   const supported = isRenderableProjectViewLayout(view.layout)
   const layoutLabel =
     view.layout === 'BOARD_LAYOUT'
-      ? 'Board'
+      ? translate('projectViews.layout.board', 'Board')
       : view.layout === 'ROADMAP_LAYOUT'
-        ? 'Roadmap'
+        ? translate('projectViews.layout.roadmap', 'Roadmap')
         : view.layout === 'TABLE_LAYOUT'
-          ? 'Table'
+          ? translate('projectViews.layout.table', 'Table')
           : formatUnknownLayout(view.layout)
   const Icon =
     view.layout === 'BOARD_LAYOUT'
@@ -88,7 +88,11 @@ function ProjectViewTab({
   if (supported) {
     return tab
   }
-  const message = `Orca doesn't support ${layoutLabel} project views yet.`
+  const message = translate(
+    'projectViews.unsupported.layoutMessage',
+    "Orca doesn't support {{layout}} project views yet.",
+    { layout: layoutLabel }
+  )
   return (
     <HoverCard openDelay={200} closeDelay={100}>
       <HoverCardTrigger asChild>
@@ -155,7 +159,20 @@ export function ProjectViewErrorState({
   }
   const copy =
     error.type === 'too_large'
-      ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
+      ? totalCount === undefined
+        ? translate(
+            'projectViews.error.tooManyItems',
+            "This view has too many items to render in Orca. Narrow the view's filter on GitHub."
+          )
+        : translate(
+            'projectViews.error.itemCountTooLarge',
+            "This view has {{count}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
+            {
+              count: totalCount,
+              defaultValue_one:
+                "This view has {{count}} item — too large to render in Orca. Narrow the view's filter on GitHub."
+            }
+          )
       : error.type === 'unsupported_layout'
         ? // Why: an older paired host still reports roadmaps as unsupported, so this
           // copy must not name the layout — the tab strip already does that.
@@ -164,9 +181,9 @@ export function ProjectViewErrorState({
             'Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet.'
           )
         : error.type === 'not_found'
-          ? 'Could not find this project or view.'
+          ? translate('projectViews.error.notFound', 'Could not find this project or view.')
           : error.type === 'schema_drift'
-            ? 'Could not read this project view.'
+            ? translate('projectViews.error.schemaDrift', 'Could not read this project view.')
             : error.message
   return (
     <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
