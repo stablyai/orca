@@ -69,9 +69,9 @@ const LIFECYCLE_ONLY_EVENTS: ReadonlySet<string> = new Set([
 ])
 
 // Pi writes these fields before the payload, so they survive in an oversized record's prefix.
-const SKIPPED_TOOL_END_HEAD =
-  /^\{"type":"tool_execution_end","toolCallId":"([^"\\]+)","toolName":"([^"\\]+)"/
-const SKIPPED_MESSAGE_END_HEAD = /^\{"type":"message_end","message":\{"role":"([A-Za-z]+)"/
+const SKIPPED_TOOL_HEAD =
+  /^\{"type":"tool_execution_(?:start|update|end)","toolCallId":"([^"\\]+)","toolName":"([^"\\]+)"/
+const SKIPPED_MESSAGE_HEAD = /^\{"type":"message_(?:start|end)","message":\{"role":"([A-Za-z]+)"/
 
 /** What an event over the line limit still applies without its payload, and whether the chat lost content. */
 export function piRpcSkippedEvent(
@@ -81,14 +81,16 @@ export function piRpcSkippedEvent(
   if (LIFECYCLE_ONLY_EVENTS.has(type)) {
     return { head: { type }, contentLost: false }
   }
-  const tool = type === 'tool_execution_end' ? SKIPPED_TOOL_END_HEAD.exec(prefix) : null
-  const role = type === 'message_end' ? SKIPPED_MESSAGE_END_HEAD.exec(prefix)?.[1] : undefined
-  // An oversized tool result is content, not a short error, so the call closes as completed.
+  const tool = SKIPPED_TOOL_HEAD.exec(prefix)
+  const role = SKIPPED_MESSAGE_HEAD.exec(prefix)?.[1]
+  // An oversized tool result is content, not a short error, so an ended call closes as completed.
   const head = tool
     ? { type, toolCallId: tool[1], toolName: tool[2] }
     : role
       ? { type, message: { role, content: [] } }
-      : null
+      : type === 'message_update'
+        ? { type }
+        : null
   return { head, contentLost: true }
 }
 
