@@ -1,5 +1,6 @@
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import * as processHost from '@orca/process-host'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -13,6 +14,7 @@ import { readRemoteEdgeAuthFile } from './remote-edge-auth-file'
 
 const directories: string[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
   for (const dir of directories.splice(0)) {
     await removeTree(dir)
@@ -89,6 +91,69 @@ describe('CLI private edge credential input', () => {
     expect(() => readRemoteEdgeAuthFile(path, paired)).toThrow(
       'Invalid remote edge authentication file'
     )
+  })
+
+  it.skipIf(process.platform !== 'darwin').each([false, true])(
+    'refuses a 0600 file with a read-granting ACL (extended attributes: %s)',
+    (withAttributes) => {
+      const { path } = fixture()
+      if (withAttributes) {
+        expect(
+          processHost.runProcessSync({
+            program: '/usr/bin/xattr',
+            args: ['-w', 'com.orca.synthetic', 'synthetic-value', path]
+          }).code
+        ).toBe(0)
+      }
+      const changed = processHost.runProcessSync({
+        program: '/bin/chmod',
+        args: ['+a', 'everyone allow read', path]
+      })
+      expect(changed.code).toBe(0)
+      expect(statSync(path).mode & 0o777).toBe(0o600)
+      expect(() => readRemoteEdgeAuthFile(path, paired)).toThrow(
+        'Invalid remote edge authentication file'
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'darwin')(
+    'refuses unverifiable ACLs without exposing errors',
+    () => {
+      const { path } = fixture()
+      vi.spyOn(processHost, 'runProcessSync').mockImplementationOnce(() => {
+        throw new Error('synthetic-secret')
+      })
+      expect(() => readRemoteEdgeAuthFile(path, paired)).toThrow(
+        'Invalid remote edge authentication file'
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'darwin')('refuses a file changed during the ACL check', () => {
+    const { path } = fixture()
+    const run = processHost.runProcessSync
+    vi.spyOn(processHost, 'runProcessSync').mockImplementationOnce((spec) => {
+      const result = run(spec)
+      writeFileSync(path, 'synthetic-secret')
+      return result
+    })
+    expect(() => readRemoteEdgeAuthFile(path, paired)).toThrow(
+      'Invalid remote edge authentication file'
+    )
+  })
+
+  it.skipIf(process.platform !== 'darwin')('accepts extended attributes without an ACL', () => {
+    const { path } = fixture()
+    expect(
+      processHost.runProcessSync({
+        program: '/usr/bin/xattr',
+        args: ['-w', 'com.orca.synthetic', 'synthetic-value', path]
+      }).code
+    ).toBe(0)
+    expect(readRemoteEdgeAuthFile(path, paired).headers).toEqual({
+      'CF-Access-Client-Secret': 'synthetic-secret'
+    })
   })
 
   it.each(['pairing code', 'saved environment'])(

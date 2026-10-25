@@ -1,4 +1,5 @@
 import { statSync } from 'node:fs'
+import { runProcessSync } from '@orca/process-host'
 import { z } from 'zod'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
@@ -33,6 +34,30 @@ export function readRemoteEdgeAuthFile(
       ) {
         throw new Error('Unsafe permissions')
       }
+    } else if (stats.uid !== process.getuid?.() || (stats.mode & 0o077) !== 0) {
+      throw new Error('Unsafe permissions')
+    }
+    if (process.platform === 'darwin') {
+      // macOS ACLs can grant reads independently of the mode bits.
+      const listing = runProcessSync({
+        program: '/bin/ls',
+        args: ['-Lldeq', '--', filePath],
+        timeoutMs: 2000,
+        maxOutputBytes: 16384
+      })
+      const lines = listing.stdout.trimEnd().split('\n')
+      if (
+        listing.code !== 0 ||
+        listing.timedOut ||
+        listing.outputTruncated ||
+        listing.stderr.length > 0 ||
+        lines.length !== 1 ||
+        !/^-[rwxStTs-]{9}[@ ]\s/.test(lines[0] ?? '')
+      ) {
+        throw new Error('Unsafe or unverifiable ACL')
+      }
+    }
+    if (process.platform === 'win32' || process.platform === 'darwin') {
       const current = statSync(filePath)
       if (
         current.dev !== stats.dev ||
@@ -42,8 +67,6 @@ export function readRemoteEdgeAuthFile(
       ) {
         throw new Error('Credential file changed')
       }
-    } else if (stats.uid !== process.getuid?.() || (stats.mode & 0o077) !== 0) {
-      throw new Error('Unsafe permissions')
     }
     const input = FileSchema.parse(JSON.parse(buffer.toString('utf8')))
     const normalized = normalizeEndpointAuthHeaders(input.headers)
