@@ -9,6 +9,7 @@ import {
 } from '../session/mobile-session-tab-activation'
 import { sessionTabClose } from '../session/mobile-session-write-operations'
 import type { AiVaultSession, AiVaultSessionOpenTab } from '../../../src/shared/ai-vault-types'
+import { clearMobileAiVaultMemoryCache } from './mobile-ai-vault-session-cache'
 import { openHistorySession } from './worktree-navigation-actions'
 
 type OpenTabClient = Parameters<typeof activateMobileSessionTab>[0] &
@@ -30,26 +31,41 @@ type SnapshotTabCandidate = {
 }
 
 function recordOpenTabKey(
-  map: Map<string, AiVaultSessionOpenTab>,
+  exact: Map<string, AiVaultSessionOpenTab>,
+  aliases: Map<string, AiVaultSessionOpenTab | null>,
   rawId: string,
   target: AiVaultSessionOpenTab
 ): void {
   if (!rawId) {
     return
   }
-  if (!map.has(rawId)) {
-    map.set(rawId, target)
+  if (!exact.has(rawId)) {
+    exact.set(rawId, target)
   }
   const bare = rawId.includes(':') ? rawId.split(':').at(-1) : undefined
-  if (bare && !map.has(bare)) {
-    map.set(bare, target)
+  if (!bare) {
+    return
+  }
+  if (!aliases.has(bare)) {
+    aliases.set(bare, target)
+    return
+  }
+  const existing = aliases.get(bare)
+  if (
+    existing &&
+    (existing.worktreeId !== target.worktreeId ||
+      existing.tabId !== target.tabId ||
+      existing.leafId !== target.leafId)
+  ) {
+    aliases.set(bare, null)
   }
 }
 
 function extractOpenTabsFromSnapshot(
   worktreeId: string,
   rawSnapshot: unknown,
-  out: Map<string, AiVaultSessionOpenTab>
+  exact: Map<string, AiVaultSessionOpenTab>,
+  aliases: Map<string, AiVaultSessionOpenTab | null>
 ): void {
   if (!rawSnapshot || typeof rawSnapshot !== 'object') {
     return
@@ -67,7 +83,7 @@ function extractOpenTabsFromSnapshot(
       continue
     }
     if (tab.type === 'agent-session' && typeof tab.sessionId === 'string' && tab.sessionId) {
-      recordOpenTabKey(out, tab.sessionId, { worktreeId, tabId: tab.id })
+      recordOpenTabKey(exact, aliases, tab.sessionId, { worktreeId, tabId: tab.id })
       continue
     }
     if (tab.type === 'terminal') {
@@ -78,7 +94,7 @@ function extractOpenTabsFromSnapshot(
       const topTabId =
         typeof tab.parentTabId === 'string' && tab.parentTabId ? tab.parentTabId : tab.id
       const leafId = typeof tab.leafId === 'string' && tab.leafId ? tab.leafId : undefined
-      recordOpenTabKey(out, providerId, {
+      recordOpenTabKey(exact, aliases, providerId, {
         worktreeId,
         tabId: topTabId,
         ...(leafId ? { leafId } : {})
@@ -163,13 +179,19 @@ export function useMobileAgentHistoryOpenTabActions(input: {
     let cancelled = false
     void (async () => {
       const next = new Map<string, AiVaultSessionOpenTab>()
+      const aliases = new Map<string, AiVaultSessionOpenTab | null>()
       setFallbackOpenTabsPending(true)
       await Promise.allSettled(
         [...candidateIds].map(async (wtId) => {
           const reply = await sessionTabsListRead.request(client, { worktree: `id:${wtId}` })
-          extractOpenTabsFromSnapshot(wtId, sessionTabsListRead.interpret(reply), next)
+          extractOpenTabsFromSnapshot(wtId, sessionTabsListRead.interpret(reply), next, aliases)
         })
       )
+      for (const [alias, target] of aliases) {
+        if (target && !next.has(alias)) {
+          next.set(alias, target)
+        }
+      }
       if (!cancelled) {
         setFallbackOpenTabs(next)
         setFallbackOpenTabsPending(false)
@@ -278,6 +300,7 @@ export function useMobileAgentHistoryOpenTabActions(input: {
         )
         if (response.accepted) {
           setClosedSessionIds((prev) => new Set(prev).add(session.id))
+          clearMobileAiVaultMemoryCache()
           triggerSuccess()
           void onRefresh()
         } else {
