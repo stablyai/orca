@@ -47,10 +47,12 @@ vi.mock('./rate-limit', () => ({
   spendsSharedGitHubComQuota: vi.fn(() => true)
 }))
 
-import { getWorkItem, _resetMergeQueueCacheForTests, _resetOwnerRepoCache } from './client'
+import { getWorkItem } from './client/fetch/get-work-item'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { _resetOwnerRepoCache } from './gh-utils'
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// Why: only `pr view` is fixtured; the merge-metadata fan-out is best-effort and must not mask the summary.
+// Only fixture pr view; best-effort merge metadata failures must not hide its summary.
 function mockPullRequestDetail(payload: Record<string, unknown>): void {
   ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] !== 'pr' || args[1] !== 'view') {
@@ -81,7 +83,7 @@ describe('work item checksSummary', () => {
       updatedAt: '2026-04-01T00:00:00Z',
       statusCheckRollup: [
         { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SKIPPED' },
-        // Why: StatusContext carries no status/conclusion — only `state`.
+        // StatusContext supplies state instead of CheckRun's status/conclusion.
         { __typename: 'StatusContext', state: 'SUCCESS' },
         { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'NEUTRAL' }
       ]

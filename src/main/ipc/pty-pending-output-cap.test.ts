@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { acceptSshPtyOutputData } from './ssh-pty-output-intake-registry'
-import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { getPtyRendererDeliveryDebugSnapshot } from './pty/delivery/debug'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -73,28 +73,26 @@ describe('registerPtyHandlers', () => {
       const ackData = getPtyAckDataListener()
       mainWindow.webContents.send.mockClear()
 
-      // Saturate the renderer in-flight window (512 KB) with no ACKs — the frozen/starved-renderer shape from field reports.
+      // Model a frozen renderer: saturate its in-flight window without ACKs.
       mockProc.emitData('x'.repeat(600 * 1024))
       vi.advanceTimersByTime(2)
       for (let index = 0; index < 32; index++) {
         vi.advanceTimersByTime(1)
       }
 
-      // Keep flooding past the 2 MB per-PTY pending cap; main must not buffer unboundedly (previously: unbounded string concat).
       mockProc.emitData('y'.repeat(3 * 1024 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         pendingChars: 0
       })
 
-      // Later output while dropped must stay O(1), not start re-accumulating.
       mockProc.emitData('z'.repeat(64 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         pendingChars: 0
       })
 
-      // On recover+ACK, the flush must deliver the droppedOutput sentinel so the pane repaints from the main-owned snapshot.
+      // Restore from the main snapshot after the pending cap drops bytes.
       mainWindow.webContents.send.mockClear()
       ackData(null, { id: spawn.id, charCount: 512 * 1024 })
       vi.advanceTimersByTime(2)
@@ -104,7 +102,6 @@ describe('registerPtyHandlers', () => {
         droppedOutput: true
       })
 
-      // Fresh output after the sentinel flows normally again.
       mainWindow.webContents.send.mockClear()
       mockProc.emitData('back to normal')
       vi.advanceTimersByTime(2)
@@ -174,7 +171,7 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, cwd: '/tmp' })
       mainWindow.webContents.send.mockClear()
 
-      // Saturate the in-flight window with no ACKs, then buffer 3 MB — over the floor, under the scaled cap: retain, don't drop.
+      // Retain output above the floor but below the scrollback-scaled cap.
       mockProc.emitData('x'.repeat(600 * 1024))
       vi.advanceTimersByTime(2)
       for (let index = 0; index < 32; index++) {
@@ -183,7 +180,6 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData('y'.repeat(3 * 1024 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot().pendingChars).toBeGreaterThan(3 * 1024 * 1024)
 
-      // The scaled cap still bounds a runaway flood.
       mockProc.emitData('z'.repeat(4 * 1024 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
@@ -201,7 +197,7 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(mainWindow as never)
       mainWindow.webContents.send.mockClear()
 
-      // Flood in 64KB chunks like a `yes`-style producer honoring pause — node-pty pause() stops the fd read, so it stops emitting.
+      // Model node-pty pause stopping reads by withholding further chunks while paused.
       const chunk = 'x'.repeat(64 * 1024)
       let chunks = 0
       while (provider.pauseProducer.mock.calls.length === 0 && chunks < 100) {
@@ -209,18 +205,15 @@ describe('registerPtyHandlers', () => {
         chunks++
       }
 
-      // Pause fires exactly once, on the first chunk past the 256KB high watermark (the 5th 64KB chunk), not per chunk.
       expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
       expect(provider.pauseProducer).toHaveBeenCalledWith('flood-pty')
       expect(chunks).toBe(5)
-      // Bounded: main buffered at most HIGH + one chunk while paused.
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         pendingChars: 320 * 1024,
         peakPendingChars: 320 * 1024
       })
 
-      // Resume must fire exactly once at the 32KB low watermark, with no flapping across the 32-256KB hysteresis band.
       vi.runAllTimers()
       expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
       expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
@@ -230,67 +223,147 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
-  it('keeps negotiated source-credit overflow off the legacy PTY-global pause path', async () => {
+})
+
+describe('PTY producer flow control', () => {
+  const { mainWindow, installObservableDaemonTestProvider, getPtyDataSendCalls } =
+    setupPtyIpcSuite()
+
+  it('resumes a paused producer when the PTY exits before draining', async () => {
+    vi.useFakeTimers()
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      const finalPendingData = 'x'.repeat(320 * 1024)
+      provider.emitData('flood-pty', finalPendingData)
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+
+      // Exit must release pause even when pending output never drained.
+      provider.emitExit('flood-pty', 0)
+      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
+      expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('releases a paused producer when handlers re-register for a replacement window', () => {
+    vi.useFakeTimers()
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      provider.emitData('flood-pty', 'x'.repeat(320 * 1024))
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+
+      // Re-registration must reset the outgoing session before neutralizing its bridge, or the shell remains paused.
+      registerPtyHandlers(mainWindow as never)
+      expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('fences synchronous producer data and duplicate exit while releasing an exiting PTY', () => {
+    vi.useFakeTimers()
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      const finalPendingData = 'x'.repeat(320 * 1024)
+      provider.emitData('flood-pty', finalPendingData)
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+      provider.resumeProducer.mockImplementation((id: string) => {
+        provider.emitData(id, 'must-not-follow-exit')
+        provider.emitExit(id, 0)
+      })
+
+      provider.emitExit('flood-pty', 0)
+
+      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
+      expect(mainWindow.webContents.send.mock.calls).toEqual([
+        ['pty:data', { id: 'flood-pty', data: finalPendingData }],
+        ['pty:exit', { id: 'flood-pty', code: 0, hostId: 'local' }]
+      ])
+      expect(
+        getPtyDataSendCalls().some(
+          (call) => (call[1] as { data?: string } | undefined)?.data === 'must-not-follow-exit'
+        )
+      ).toBe(false)
+      expect(
+        mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+      ).toHaveLength(1)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 0,
+        rendererInFlightPtyCount: 0,
+        rendererInFlightChars: 0,
+        flushScheduled: false
+      })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('does not retry a complete payload after a synchronous renderer send failure', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const provider = installObservableDaemonTestProvider()
-      let modelSequence = 0
-      const runtime = {
-        setPtyController: vi.fn(),
-        setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
-        getPtyOutputSequence: vi.fn(() => modelSequence),
-        onPtyData: vi.fn(
-          (_id: string, data: string, _at: number, rawLength = data.length) =>
-            (modelSequence += rawLength)
-        ),
-        acceptPtyDataBounded: vi.fn(
-          (_id: string, _data: string, _at: number, rawLength: number) => {
-            modelSequence += rawLength
-            return { sequence: modelSequence, completion: Promise.resolve() }
-          }
-        )
-      }
-      registerPtyHandlers(mainWindow as never, runtime as never)
+      registerPtyHandlers(mainWindow as never)
       mainWindow.webContents.send.mockClear()
-
-      const sourceChunk = 's'.repeat(128 * 1024)
-      for (let index = 0; index < 17; index++) {
-        const sourceStartSu = index * sourceChunk.length
-        await acceptSshPtyOutputData({
-          id: 'source-credit-pty',
-          data: sourceChunk,
-          providerGeneration: 41,
-          ptyIncarnation: 'source-incarnation',
-          rawLength: sourceChunk.length,
-          transformed: false,
-          source: {
-            relayPtyId: 'relay-source-pty',
-            spanId: `source-token:${sourceStartSu}:${sourceStartSu + sourceChunk.length}`,
-            clientGeneration: 2,
-            ownerGeneration: 3,
-            deliveryToken: 'source-token',
-            sourceStartSu,
-            sourceEndSu: sourceStartSu + sourceChunk.length
+      let failed = false
+      let markerFailed = false
+      mainWindow.webContents.send.mockImplementation(
+        (channel: string, payload: { id?: string }) => {
+          if (channel === 'pty:data' && payload.id === 'send-fail-complete' && !failed) {
+            failed = true
+            throw new Error('synthetic send failure')
           }
-        })
-      }
+          if (channel === 'pty:modelRestoreNeeded' && !markerFailed) {
+            markerFailed = true
+            throw new Error('synthetic marker failure')
+          }
+        }
+      )
 
+      provider.emitData('send-fail-complete', 'lost-once')
+      vi.advanceTimersByTime(2)
+
+      expect(getPtyDataSendCalls()).toEqual([
+        ['pty:data', { id: 'send-fail-complete', data: 'lost-once' }]
+      ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-        pendingPtyCount: 1,
-        pendingChars: 0
+        pendingPtyCount: 0,
+        pendingChars: 0,
+        rendererInFlightPtyCount: 0,
+        rendererInFlightChars: 0,
+        flushScheduled: false
       })
-      expect(provider.pauseProducer).not.toHaveBeenCalledWith('source-credit-pty')
-      expect(provider.resumeProducer).not.toHaveBeenCalledWith('source-credit-pty')
+      expect(vi.getTimerCount()).toBe(0)
 
-      provider.emitData('legacy-pty', 'l'.repeat(320 * 1024))
-      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
-      expect(provider.pauseProducer).toHaveBeenCalledWith('legacy-pty')
-      expect(provider.pauseProducer).not.toHaveBeenCalledWith('unrelated-pty')
-
-      vi.runAllTimers()
-      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
-      expect(provider.resumeProducer).toHaveBeenCalledWith('legacy-pty')
+      provider.emitData('send-fail-complete', 'recovery')
+      vi.advanceTimersByTime(2)
+      expect(getPtyDataSendCalls()).toEqual([
+        ['pty:data', { id: 'send-fail-complete', data: 'lost-once' }],
+        ['pty:data', { id: 'send-fail-complete', data: 'recovery' }]
+      ])
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+        id: 'send-fail-complete',
+        reason: 'delivery-heal'
+      })
+      provider.emitData('send-fail-complete', 'after-marker-failure')
+      vi.advanceTimersByTime(2)
+      expect(
+        mainWindow.webContents.send.mock.calls.filter(
+          (call) => call[0] === 'pty:modelRestoreNeeded'
+        )
+      ).toHaveLength(2)
+      expect(getPtyDataSendCalls().at(-1)).toEqual([
+        'pty:data',
+        { id: 'send-fail-complete', data: 'after-marker-failure' }
+      ])
     } finally {
       errorSpy.mockRestore()
       vi.useRealTimers()

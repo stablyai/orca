@@ -30,7 +30,6 @@ function renderNavigation(): ReturnType<
   return renderHook(() =>
     useRemoteBrowserPageNavigation({
       browserTab: page(),
-      isActive: true,
       stagedPage: false,
       addressBarValue: 'about:blank',
       setAddressBarValueFromPage: vi.fn(),

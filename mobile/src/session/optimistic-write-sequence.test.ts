@@ -1,28 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createOptimisticField,
-  isLatest,
-  nextSeq,
-  type OptimisticSeqRef
-} from './optimistic-write-sequence'
-
-describe('nextSeq / isLatest', () => {
-  it('returns a monotonically increasing sequence', () => {
-    const ref: OptimisticSeqRef = { current: 0 }
-    expect(nextSeq(ref)).toBe(1)
-    expect(nextSeq(ref)).toBe(2)
-    expect(nextSeq(ref)).toBe(3)
-    expect(ref.current).toBe(3)
-  })
-
-  it('isLatest is true only for the most recent sequence', () => {
-    const ref: OptimisticSeqRef = { current: 0 }
-    const a = nextSeq(ref)
-    const b = nextSeq(ref)
-    expect(isLatest(ref, a)).toBe(false)
-    expect(isLatest(ref, b)).toBe(true)
-  })
-})
+import { createOptimisticField } from './optimistic-write-sequence'
 
 describe('OptimisticField — last-intent-wins', () => {
   it('renders optimistic when set, else authoritative', () => {
@@ -62,7 +39,7 @@ describe('OptimisticField — last-intent-wins', () => {
 
     // B fails as the latest — revert to authoritative (clear optimism).
     expect(field.settleFailure(seqB)).toBe(true)
-    expect(field.resolve(false)).toBe(false) // authoritative shows through
+    expect(field.resolve(true)).toBe(true) // authoritative shows through
   })
 
   it('a stale failure does not clear a newer optimistic value', () => {

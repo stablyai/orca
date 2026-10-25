@@ -1,15 +1,13 @@
 import type * as NodeFsModule from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import type * as NodeFsPromisesModule from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type * as NodeOsModule from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({
+const state = vi.hoisted((): { home: string; syncCalls: { name: string; target: string }[] } => ({
   home: '',
-  syncCalls: [] as { name: string; target: string }[],
-  blockAsyncReads: false
+  syncCalls: []
 }))
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -30,18 +28,6 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...wrapped, default: wrapped }
 })
 
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsPromisesModule>()
-  return {
-    ...actual,
-    default: actual,
-    readFile: (...args: Parameters<typeof actual.readFile>) =>
-      state.blockAsyncReads && String(args[0]).startsWith(state.home)
-        ? new Promise<never>(() => {})
-        : actual.readFile(...args)
-  }
-})
-
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeOsModule>()
   return { ...actual, default: actual, homedir: () => state.home }
@@ -60,13 +46,16 @@ function syncCallsUnderHome(): string[] {
 describe('managed hook script refresh stays off the main thread', () => {
   beforeEach(async () => {
     state.home = await mkdtemp(join(tmpdir(), 'orca-hook-refresh-main-thread-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', join(state.home, 'user-data'))
+    vi.stubEnv('GROK_HOME', undefined)
+    vi.stubEnv('KIMI_CODE_HOME', undefined)
+    vi.stubEnv('XDG_CONFIG_HOME', undefined)
     state.syncCalls = []
-    state.blockAsyncReads = false
   })
 
   afterEach(async () => {
-    state.blockAsyncReads = false
     await rm(state.home, { recursive: true, force: true })
+    vi.unstubAllEnvs()
   })
 
   it('uses no synchronous HOME filesystem calls for missing or stale scripts', async () => {
@@ -84,18 +73,30 @@ describe('managed hook script refresh stays off the main thread', () => {
     }
 
     expect(syncCallsUnderHome()).toEqual([])
+    const refreshed = await readFile(claudeScript, 'utf8')
+    expect(refreshed).not.toBe('stale')
+    expect(refreshed).toContain(process.platform === 'win32' ? 'echo {}' : 'printf "{}\\n"')
   })
 
-  it('keeps the event loop responsive while a HOME read is stalled', async () => {
-    state.blockAsyncReads = true
-    const refresh = MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS[0][1]()
-    let settled = false
-    void refresh.then(() => {
-      settled = true
-    })
+  it('keeps the Windows Claude entry and payload refresh off the main thread', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const hooksDir = join(state.home, '.orca', 'agent-hooks')
+      await mkdir(hooksDir, { recursive: true })
+      await writeFile(join(hooksDir, 'claude-hook.cmd'), 'stale', 'utf-8')
+      state.syncCalls = []
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      await MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS.find(([agent]) => agent === 'claude')![1]()
 
-    expect(settled).toBe(false)
+      expect(syncCallsUnderHome()).toEqual([])
+      const entry = await readFile(join(hooksDir, 'claude-hook.cmd'), 'utf8')
+      const payload = await readFile(join(hooksDir, 'claude-hook-impl.cmd'), 'utf8')
+      expect(entry).toContain('set "ORCA_CLAUDE_HOOK_IMPL=%~dp0claude-hook-impl.cmd"')
+      expect(payload).toContain('echo {}')
+      expect(payload).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0')
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
   })
 })

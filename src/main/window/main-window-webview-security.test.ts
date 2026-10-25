@@ -15,8 +15,8 @@ vi.mock('../browser/browser-manager', () => ({
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: { isAllowedPartition: mocks.isAllowedPartition }
 }))
-vi.mock('../plugins/plugin-panel-navigation-guard', () => ({
-  registerPluginPanelNavigationGuard: mocks.registerPluginGuard
+vi.mock('./host-frame-navigation-guard', () => ({
+  registerHostFrameNavigationGuard: mocks.registerPluginGuard
 }))
 vi.mock('./privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: mocks.installNavigationPolicy

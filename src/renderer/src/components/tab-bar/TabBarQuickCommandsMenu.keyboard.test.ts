@@ -58,6 +58,14 @@ vi.mock('../../../../shared/keybindings', () => ({
   keybindingMatchesAction: keybindingsMock.matchAction
 }))
 
+// Why: the stubbed window stands in for the app keyboard router's capture stage.
+vi.mock('@/lib/app-keyboard-router', () => ({
+  addAppKeyListener: (type: 'keydown' | 'keyup', handler: (e: KeyboardEvent) => void) =>
+    window.addEventListener(type, handler, { capture: true }),
+  removeAppKeyListener: (type: 'keydown' | 'keyup', handler: (e: KeyboardEvent) => void) =>
+    window.removeEventListener(type, handler, { capture: true })
+}))
+
 vi.mock('@/lib/shortcut-platform', () => ({
   getShortcutPlatform: () => 'darwin' as const
 }))
@@ -125,6 +133,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 function makeProps() {
   return {
+    isFocused: true,
     repoCommands: [] as never[],
     globalCommands: [] as never[],
     mostRecent: null,
@@ -164,7 +173,7 @@ beforeEach(() => {
   appStoreMock.state.keybindings = {}
   appStoreMock.state.settings.terminalShortcutPolicy = 'orca-first'
   vi.stubGlobal('window', {
-    addEventListener: vi.fn((type: string, handler: (e: KeyboardEvent) => void) => {
+    addEventListener: vi.fn((type: 'keydown' | 'keyup', handler: (e: KeyboardEvent) => void) => {
       windowListeners.set(type, handler)
     }),
     removeEventListener: vi.fn()
@@ -177,6 +186,37 @@ beforeEach(() => {
 })
 
 describe('TabBarQuickCommandsMenu keyboard shortcut', () => {
+  it('does not register either shortcut path for an unfocused group', async () => {
+    const { TabBarQuickCommandsMenu } = await import('./TabBarQuickCommandsMenu')
+    TabBarQuickCommandsMenu({ ...makeProps(), isFocused: false })
+
+    reactRuntime.effects[0]()
+    reactRuntime.effects[1]()
+
+    expect(window.addEventListener).not.toHaveBeenCalled()
+  })
+
+  it('closes an open menu when its group loses focus', async () => {
+    const { TabBarQuickCommandsMenu } = await import('./TabBarQuickCommandsMenu')
+    reactRuntime.states[0] = true
+    TabBarQuickCommandsMenu({ ...makeProps(), isFocused: false })
+
+    // Effect index 2 closes the menu for an inactive group.
+    reactRuntime.effects[2]()
+
+    expect(reactRuntime.states[0]).toBe(false)
+  })
+
+  it('keeps an open menu for the focused group', async () => {
+    const { TabBarQuickCommandsMenu } = await import('./TabBarQuickCommandsMenu')
+    reactRuntime.states[0] = true
+    TabBarQuickCommandsMenu(makeProps())
+
+    reactRuntime.effects[2]()
+
+    expect(reactRuntime.states[0]).toBe(true)
+  })
+
   it('registers a capturing keydown listener on mount', async () => {
     reactRuntime.index = 0
     const { TabBarQuickCommandsMenu } = await import('./TabBarQuickCommandsMenu')

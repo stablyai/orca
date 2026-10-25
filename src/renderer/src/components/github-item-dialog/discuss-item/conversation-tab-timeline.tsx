@@ -6,15 +6,7 @@ import type {
   GitHubIssueTimelineTarget
 } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
-import {
-  getTimelineStateReasonLabel,
-  getTimelineTargetLabel,
-  type IssueConversationEntry
-} from './issue-conversation-entries'
-import {
-  renderCommentCard,
-  type ConversationCommentCardContext
-} from './conversation-tab-comment-card'
+import { getTimelineStateReasonLabel, getTimelineTargetLabel } from './issue-conversation-entries'
 
 export function renderTimelineTarget(
   target: GitHubIssueTimelineTarget | undefined
@@ -152,15 +144,6 @@ export function renderTimelineActivity(activity: GitHubIssueTimelineItem): React
       </div>
     </div>
   )
-}
-
-export function renderIssueConversationEntry(
-  entry: IssueConversationEntry,
-  ctx: ConversationCommentCardContext
-): React.JSX.Element {
-  return entry.kind === 'comment'
-    ? renderCommentCard(entry.comment, false, ctx)
-    : renderTimelineActivity(entry.activity)
 }
 
 export function ConversationTabTimelineActivity({

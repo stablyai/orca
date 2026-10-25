@@ -1,6 +1,7 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
+  terminalAutoRestoreFitSchema,
   terminalSendAcceptedSchema,
   terminalViewportUpdatedSchema,
   terminalWriteUnreadReplySchema
@@ -38,6 +39,28 @@ export const terminalViewportUpdate = bindDeferredRpcOperation(
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('terminal-viewport-updated', terminalViewportUpdatedSchema)
+  })
+)
+
+/** Terminal settings' phone-fit restore delay. A refused or unreadable reply reads as null. */
+export const terminalAutoRestoreFitRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.auto-restore-fit-read',
+    method: 'terminal.getAutoRestoreFit',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-auto-restore-fit', terminalAutoRestoreFitSchema)
+  })
+)
+
+/** Saves the delay; the host answers with the value it stored after clamping. */
+export const terminalAutoRestoreFitSave = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.auto-restore-fit-save',
+    method: 'terminal.setAutoRestoreFit',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-auto-restore-fit', terminalAutoRestoreFitSchema)
   })
 )
 

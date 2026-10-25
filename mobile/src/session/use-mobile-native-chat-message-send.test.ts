@@ -404,7 +404,7 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send('  run the tests \n')
     })
     expect(sentArgs().text).toBe('  run the tests')
-    expect(captureSendOrigin).toHaveBeenCalledWith('  run the tests')
+    expect(captureSendOrigin).toHaveBeenCalledWith('  run the tests', undefined)
     expect(acceptSend.mock.calls[0]![1]).toBe('  run the tests')
   })
 
@@ -413,7 +413,7 @@ describe('useMobileNativeChatMessageSend', () => {
     await act(async () => {
       await api!.answerQuestion('\n 1 ')
     })
-    expect(sentArgs().text).toBe('\n 1')
+    expect(sentArgs().text).toBe('\x1b[200~\r 1\x1b[201~')
   })
 
   // #14819: the trim is a wire concern only. A rejected send hands the composer
@@ -427,7 +427,8 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send(draft)
     })
 
-    expect(sentArgs().text).toBe('first line\n\nsecond line')
+    // Framed like the desktop composer: raw multi-line keystrokes lost their start on Windows (#31206).
+    expect(sentArgs().text).toBe('\x1b[200~first line\r\rsecond line\x1b[201~')
     expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
     expect(clearDraftForSend.mock.calls[0]![1]).toBe(draft)
   })

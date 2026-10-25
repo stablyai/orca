@@ -2,8 +2,10 @@ import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { isWslDistroRunning } from '../wsl-background-distro-gate'
 import {
   getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
@@ -16,10 +18,8 @@ import {
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
 import {
   hasRecordedLegacySharedCodexPane,
-  getCodexPaneAccount,
-  type CodexPaneHomeRoute
+  getCodexPaneAccount
 } from '../codex/codex-pane-account-registry'
-import { isShellStartupEnvProbeSupported } from '../pty/shell-startup-env'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
@@ -28,28 +28,19 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
 
 export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
   getHostCodexHomePathsForSessionDiscovery(): string[] {
-    const homes = [this.getRuntimeHomePath()]
-    if (this.isHostSystemDefaultRealHome() || this.getSelfContainedManagedHostAccount()) {
-      // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
-      // Per-account lanes no longer bridge real-home history into the shared
-      // mirror, so include the real root for both directly-routed host lanes.
+    // Transcript polling must resolve the mirror path without creating it.
+    const homes = [resolveOrcaManagedCodexHomePath()]
+    if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
+      // Include real-home history even when nested Orca inherits a managed CODEX_HOME.
       homes.push(getSystemCodexHomePath())
     }
-    // Why: account-scoped rollouts live in each account's own home, including WSL.
     for (const perAccountHome of this.getManagedAccountHomesForSessionDiscovery()) {
       homes.push(perAccountHome)
     }
     return homes.filter((home, index) => homes.indexOf(home) === index)
   }
 
-  /**
-   * The account-owned CODEX_HOME the current HOST selection runs against, or
-   * null when the selection is not routed to one (system default, or a WSL
-   * account, whose home lives inside the distro).
-   *
-   * Read-only on purpose: session discovery ranks homes with this before any
-   * launch prep, so it must create no directories and sync no auth.
-   */
+  /** Read-only host-account home for session discovery; null means no trusted host-account home. */
   getSelectedHostAccountCodexHomePath(): string | null {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     return selfContainedAccount
@@ -57,13 +48,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       : null
   }
 
-  /**
-   * Same selection, but an unreadable home refuses instead of collapsing to
-   * `null`. Session resume must not read "no managed selection" out of a failed
-   * marker stat: another account's readable alias would then win the legacy
-   * rescan and the pane would resume under that account's credentials while the
-   * UI still shows this one (#STA-4422).
-   */
+  /** Refuse unreadable homes so resume cannot silently select another account's alias (#STA-4422). */
   resolveSelectedHostAccountCodexHomePathForResume(): string | null {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (!selfContainedAccount) {
@@ -93,13 +78,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       : { kind: 'skip' }
   }
 
-  getSelectedHostCodexHomeRoute(): CodexPaneHomeRoute {
-    if (this.getSelfContainedManagedHostAccount()) {
-      return 'account-home'
-    }
-    return this.isHostSystemDefaultRealHome() ? 'real-home' : 'shared-home'
-  }
-
   getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[] {
     const settings = this.store.getSettings()
     const homes = new Map<string, string>()
@@ -108,11 +86,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       if (!record || record.selectionKey !== 'host') {
         continue
       }
-      if (
-        record.homeRoute === undefined ||
-        record.homeRoute === 'shared-home' ||
-        record.homeRoute === 'custom-home'
-      ) {
+      if (record.homeRoute === undefined || record.homeRoute === 'shared-home') {
         const homePath = this.getRuntimeHomePath()
         homes.set(normalizeRuntimePathForComparison(homePath), homePath)
         continue
@@ -134,40 +108,47 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return [...homes.values()]
   }
 
-  // Why: the real-home hook installer flips this gate off when the trust-grant
-  // client reports the host incapable, keeping that host byte-identical to the
-  // managed lane instead of shipping status-blind panes.
-  protected realHomeLaneGate: () => boolean = () => true
-
-  setRealHomeLaneGate(gate: () => boolean): void {
-    this.realHomeLaneGate = gate
-  }
-
-  // Why: real-home routing applies only to the host system-default selection.
-  // Managed accounts run in their own homes; Windows (no shell-startup probe)
-  // and custom CODEX_HOMEs stay on the mirror until cleanup can be tracked
-  // across old homes.
+  // Custom CODEX_HOME overrides keep system-default launches on the mirror for legacy cleanup.
   isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean {
-    const settings = this.store.getSettings()
-    if (
-      normalizeCodexRuntimeSelection(settings).host !== null ||
-      !isShellStartupEnvProbeSupported()
-    ) {
-      return false
-    }
-    return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
-  }
-
-  isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
+    return (
+      normalizeCodexRuntimeSelection(this.store.getSettings()).host === null &&
+      !hasCustomCodexHomeOverrideForLaunch(launchEnv)
+    )
   }
 
   reconcileLegacySharedHomeForRetainedPanes(): void {
-    if (!this.isHostSystemDefaultRealHome() || !hasRecordedLegacySharedCodexPane()) {
+    if (!this.isHostSystemDefaultRealHomeSelected() || !hasRecordedLegacySharedCodexPane()) {
       return
     }
     this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
     syncLegacySharedCodexConfigForRetainedPanes()
+  }
+
+  // A null system baseline allows one mirror-login import; recording the baseline ends eligibility.
+  protected copyMirrorLoginIntoEmptySystemHome(): void {
+    if (process.platform !== 'win32') {
+      return
+    }
+    try {
+      const provenance = this.resolveSharedRuntimeAuthProvenanceStatus()
+      const runtimeAuth = this.readRuntimeAuthForProvenance()
+      if (
+        provenance.kind !== 'committed' ||
+        provenance.provenance.owner !== 'system-default' ||
+        provenance.provenance.authJson !== null ||
+        runtimeAuth === null
+      ) {
+        return
+      }
+      const copied = this.writeSystemDefaultAuth(runtimeAuth, { expectedContents: null })
+      // Record even declined copies so a later logout cannot resurrect this stale login (#5370).
+      this.persistSharedRuntimeAuthProvenance({ owner: 'system-default', authJson: runtimeAuth })
+      if (copied) {
+        this.captureSystemDefaultSnapshot({ force: true })
+      }
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to copy the mirror login into ~/.codex:', error)
+    }
   }
 
   /** Preserve refreshed auth from retained legacy WSL panes before restart. */
@@ -192,7 +173,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
           ? account.wslDistro?.trim() || null
           : selectedDistroKey.trim() || null
       if (distro) {
-        drains.push(this.startLegacyWslAuthDrain({ runtime: 'wsl', wslDistro: distro }))
+        // Stopped distros have no live panes to drain; their next launch drains before spawning.
+        drains.push(
+          isWslDistroRunning(distro).then((running) =>
+            running
+              ? this.startLegacyWslAuthDrain({ runtime: 'wsl', wslDistro: distro })
+              : undefined
+          )
+        )
       }
     }
     await Promise.all(drains)
@@ -240,7 +228,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (!systemHomePath || systemHomePath === runtimeHomePath) {
       return
     }
-    // Why: WSL uses a distro-local CODEX_HOME, so host resource mirroring can't provide the distro user's global instructions.
+    // Distro-local homes need the guest user's instructions, which host resource mirroring cannot supply.
     syncCodexGlobalInstructionsIntoManagedHome({
       systemHomePath,
       managedHomePath: runtimeHomePath
@@ -252,9 +240,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     })
   }
 
-  // Why: `null` is a real value here — it means "use the system-default lane".
-  // A skipped poll needs its own channel or the fetcher silently retargets the
-  // user's real ~/.codex (#STA-4422).
+  // A skipped poll needs a distinct result: null routes the fetcher to system default (#STA-4422).
   prepareForRateLimitFetch(target?: CodexAccountSelectionTarget): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
@@ -267,31 +253,41 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
-        // Why: the quota fetch reads the account's own auth.json in place; no
-        // shared-home hot-swap or per-poll resource relink (that is launch prep).
+        // Quota probes read account auth in place; resource synchronization belongs to launch prep.
         return { kind: 'ready', codexHomePath: resolved.homePath }
       }
       if (resolved.kind === 'indeterminate') {
-        // Why: returning null here would NOT skip — the fetcher maps null to
-        // ~/.codex and would probe the user's real home with a token-refreshing
-        // app-server. Skip the poll outright and keep the selection.
         return { kind: 'skip' }
       }
       this.clearSelfContainedManagedSelection(selfContainedAccount)
     }
-    if (this.isHostSystemDefaultRealHome()) {
-      // Why: null lets the fetcher fall back to the main process's inherited
-      // CODEX_HOME before ~/.codex. Nested Orca launches can inherit the
-      // managed home, restarting the background OAuth conflict (#5370), so
-      // pin this non-interactive lane to the native home explicitly.
+    if (this.isHostSystemDefaultRealHomeSelected()) {
+      this.copyMirrorLoginIntoEmptySystemHome()
       if (hasRecordedLegacySharedCodexPane()) {
         this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
       }
+      // Pin the native home so nested Orca cannot inherit a managed-home OAuth conflict (#5370).
       return { kind: 'ready', codexHomePath: getSystemCodexHomePath() }
     }
-    this.syncForCurrentSelection()
+    this.syncMirrorForReadOnlyAppServer()
+    return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
+  }
+
+  /** Sync shared-mirror credentials for catalog probes; per-account homes already own their auth. */
+  prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
+    if (
+      this.getSelfContainedManagedHostAccount() ||
+      normalizeRuntimePathForComparison(homePath) !==
+        normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
+    ) {
+      return
+    }
+    this.syncMirrorForReadOnlyAppServer(launchEnv)
+  }
+
+  private syncMirrorForReadOnlyAppServer(launchEnv?: NodeJS.ProcessEnv): void {
+    this.syncForCurrentSelection(undefined, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
-    return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
   }
 }

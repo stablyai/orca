@@ -20,20 +20,25 @@ vi.mock('./sync-runtime-graph/editor-draft-hash', async (importOriginal) => {
 
 const { stableHashString } = await import('./sync-runtime-graph/editor-draft-hash')
 const {
+  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS: AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS,
   buildRuntimeMobileAgentStatusProjectionForTests,
-  getRuntimeMobileSessionSyncKey,
-  resetRuntimeMobileAgentStatusProjectionCacheForTests,
-  resetRuntimeMobileSyncProjectionCachesForTests,
-  runtimeMobileSessionSyncKeysEqual
-} = await import('./sync-runtime-graph')
+  resetRuntimeMobileAgentStatusProjectionCacheForTests
+} = await import('./sync-runtime-graph/agent-status-projection')
+const { getRuntimeMobileSessionSyncKey, runtimeMobileSessionSyncKeysEqual } =
+  await import('./sync-runtime-graph/sync-key')
 const {
+  resetRuntimeMobileSyncProjectionCachesForTests,
   buildRuntimeMobileBrowserProjection,
   buildRuntimeMobileEditorDraftsProjection,
   buildRuntimeMobileOpenFilesProjection
 } = await import('./sync-runtime-graph/sync-projections')
-const { AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS } = await import('./sync-runtime-graph/graph-state')
 
 // ── Reference implementations: the pre-change bodies, kept verbatim ────────────────────
+
+type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
+function mainAgentKey(mainAgent: MainAgentStatus) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
 
 function referenceEditorDraftsProjection(editorDrafts: AppState['editorDrafts']): string {
   return JSON.stringify(
@@ -54,6 +59,7 @@ function referenceOpenFilesProjection(openFiles: AppState['openFiles']): string 
       mode: file.mode,
       diffSource: file.diffSource,
       isDirty: file.isDirty,
+      mirroredFromRuntimeSession: file.mirroredFromRuntimeSession,
       isUntitled: file.isUntitled,
       deleteUntouchedOnClose: file.deleteUntouchedOnClose,
       markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
@@ -106,20 +112,33 @@ function referenceAgentStatusProjection(map: AppState['agentStatusByPaneKey']): 
         prompt: entry.prompt,
         updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
         stateStartedAt: entry.stateStartedAt,
+        turnStartedAt: entry.turnStartedAt ?? null,
+        turnEndedAt: entry.turnEndedAt ?? null,
+        turnEndDisposition: entry.turnEndDisposition ?? null,
         agentType: entry.agentType ?? null,
         terminalTitle: entry.terminalTitle ?? null,
         stateHistory: entry.stateHistory.map((history) => ({
           state: history.state,
           prompt: history.prompt,
           startedAt: history.startedAt,
-          interrupted: history.interrupted ?? null
+          interrupted: history.interrupted ?? null,
+          mainAgent: mainAgentKey(history.mainAgent)
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-        interrupted: entry.interrupted ?? null
+        interrupted: entry.interrupted ?? null,
+        mainAgent: mainAgentKey(entry.mainAgent),
+        programStatus: entry.programStatus
+          ? [
+              entry.programStatus.state,
+              entry.programStatus.kind ?? null,
+              entry.programStatus.progress ?? null,
+              entry.programStatus.message ?? null
+            ]
+          : null
       }))
   )
 }
@@ -405,6 +424,7 @@ describe('open-files and browser projections', () => {
     const openFileCases: AppState['openFiles'][] = [
       [] as unknown as AppState['openFiles'],
       [makeOpenFile(0)] as unknown as AppState['openFiles'],
+      [makeOpenFile(0, { mirroredFromRuntimeSession: true })],
       [makeOpenFile(0, { isDirty: true })] as unknown as AppState['openFiles'],
       [
         makeOpenFile(0, { isDirty: true, diffSource: 'working' }),

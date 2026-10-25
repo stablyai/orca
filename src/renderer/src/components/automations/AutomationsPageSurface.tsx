@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AutomationEditorDialog } from './AutomationEditorDialog'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
@@ -49,8 +50,6 @@ export function AutomationsPageSurface({
     createOpen,
     editingAutomationId,
     isSaving,
-    editingExternalTarget,
-    createTarget,
     automationYamlHooksByRepoKey,
     draft,
     setCreateOpen,
@@ -66,8 +65,6 @@ export function AutomationsPageSurface({
     externalActionKey,
     activePaneTab,
     setActivePaneTab,
-    selectedExternalRunPage,
-    setSelectedExternalRunPage,
     setSelectedAutomationRunPageId,
     setSelectedAutomationRuns,
     setRunHistoryReloadToken,
@@ -120,18 +117,21 @@ export function AutomationsPageSurface({
     setPageView('run')
   }
   const showAutomationsList = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showRunsDashboard = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('runs')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showAutomationDetails = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(true)
@@ -156,12 +156,8 @@ export function AutomationsPageSurface({
         isEditing={editingAutomationId !== null}
         isSaving={isSaving}
         canSave={presentation.canSaveDraft}
-        isEditingExternal={editingExternalTarget !== null}
-        createTarget={createTarget}
         createDestination={destination.createDestination.control}
-        editDestination={
-          destinationForm.isOrcaForm ? destinationForm.editDestinationControl : undefined
-        }
+        editDestination={destinationForm.editDestinationControl}
         notice={editorNotice}
         onNoticeRecover={(action) => {
           const host = editorNoticeHost ?? destination.editorRecoveryHost
@@ -187,15 +183,13 @@ export function AutomationsPageSurface({
         onProjectChange={editorActions.handleProjectChange}
         getRepoHostLabel={presentation.getAutomationRepoHostLabel}
         allowAddProject={
-          !destinationForm.isOrcaForm ||
-          (editingAutomationId !== null
+          editingAutomationId !== null
             ? destinationForm.editHostResolution.status === 'ready'
               ? getAutomationAuthorityTarget(destinationForm.editHostResolution.authority).kind ===
                 'local'
               : destinationForm.automationDialogTarget.kind === 'local'
-            : destinationForm.automationDialogTarget.kind === 'local')
+            : destinationForm.automationDialogTarget.kind === 'local'
         }
-        onCreateTargetChange={draftEffects.handleCreateTargetChange}
         onOpenChange={(open) => {
           setCreateOpen(open)
           if (!open) {
@@ -238,6 +232,17 @@ export function AutomationsPageSurface({
           setPendingAutomationRunNavigation={setPendingAutomationRunNavigation}
           setIsDetailOpen={setIsDetailOpen}
         />
+      ) : pageView === 'run' && store.pendingAutomationRunNavigation?.runId ? (
+        <div
+          role="status"
+          className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"
+        >
+          <LoadingSpinner className="size-4" />
+          {translate(
+            'auto.components.automations.AutomationRunsDashboard.loading',
+            'Loading runs…'
+          )}
+        </div>
       ) : pageView === 'run' && selectedAutomationRunPage ? (
         <AutomationRunDetailsPage
           automation={selected}
@@ -263,7 +268,6 @@ export function AutomationsPageSurface({
         <AutomationsDetailPane
           selected={selected}
           selectedExternal={selectedExternal}
-          selectedExternalRunPage={selectedExternalRunPage}
           selectedRuns={setup.selectedRuns}
           selectedRunsNotice={setup.selectedRunsNotice}
           selectedHostEntry={destination.rowRecoveryHost(selectedRow?.key ?? null)}
@@ -295,12 +299,8 @@ export function AutomationsPageSurface({
           hostLabelById={presentation.hostLabelById}
           selectedRunNowAvailability={presentation.selectedRunNowAvailability}
           worktreeMap={selectedRunWorktreeMap}
-          fetchExternalAutomationRuns={externalActions.fetchExternalAutomationRuns}
           onActivePaneTabChange={setActivePaneTab}
-          onClearExternalRunPage={() => setSelectedExternalRunPage(null)}
           requestExternalAction={externalActions.requestExternalAction}
-          openExternalRunPage={externalActions.openExternalRunPage}
-          openEditExternalDialog={editorActions.openEditExternalDialog}
           runNow={() => runSelectedRowAction(runActions.runNow)}
           openEditDialog={() => runSelectedRowAction(editorActions.openEditDialog)}
           toggleAutomation={() => runSelectedRowAction(managementActions.toggleAutomation)}
@@ -311,7 +311,6 @@ export function AutomationsPageSurface({
           onBackToList={() => {
             setIsDetailOpen(false)
             setSelectedAutomationRunPageId(null)
-            setSelectedExternalRunPage(null)
             setActivePaneTab('overview')
           }}
         />

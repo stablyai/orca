@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { cleanup, renderHook } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useStructuredAgentSession } from './use-structured-agent-session'
+
+afterEach(cleanup)
 
 const items: AgentJournalRenderItem[] = [
   {
@@ -52,13 +54,12 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
-    blockedClientMessageId: null,
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 

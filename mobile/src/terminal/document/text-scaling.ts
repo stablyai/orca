@@ -1,8 +1,10 @@
-import { terminalTextScalePresets } from './document-constants'
-import { scope, scheduleDocumentFrame } from './document-scope'
-import { applyFitScale, getCellHeight } from './fit-scale'
-import { getCellWidth } from './viewport-transform'
-import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
+import { getCellHeight, getCellWidth } from './cell-metrics'
+import { elementInRoot } from './document-host-seams'
+import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
+import type { TerminalDocumentScope } from './document-scope'
+import { scheduleDocumentFrame } from './document-frame-registry'
+import { applyFitScale } from './fit-scale'
+import { fitDimensionsFromCell } from '../terminal-grid-fit'
 
 // Why: init() flips ready false on every re-init (live width reflow included)
 // while the old surface stays visible; a document-scoped latch drives the
@@ -18,7 +20,11 @@ import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 const BASE_FONT_PX = 13
 const MIN_FONT_PX = 6
 
-const TEXT_SCALE_PRESETS = terminalTextScalePresets
+const TEXT_SCALE_PRESETS: readonly number[] = TERMINAL_TEXT_SCALES
+
+/** The ends of the preset range, which a pinch is clamped to. */
+export const MIN_TEXT_SCALE = TEXT_SCALE_PRESETS[0]
+export const MAX_TEXT_SCALE = TEXT_SCALE_PRESETS[TEXT_SCALE_PRESETS.length - 1]
 
 export function snapToTextScalePreset(value: number) {
   let best = TEXT_SCALE_PRESETS[0],
@@ -44,48 +50,61 @@ export function isIOSWebView() {
 // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
 // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
 const TERMINAL_FONT_FALLBACKS =
-  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace'
+  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", monospace'
 
 // Why: change the real font size, then resize the grid to fit the viewport at
 // the new cell metrics so the text shows at its true size immediately. RN's
 // refit (measure → updateViewport) then makes the server reflow the PTY to the
 // same column count so the shell rewraps. cell metrics update on the frame
 // after fontSize changes, so the resize/fit is deferred one rAF.
-export function applyTextScale(scale: number) {
+export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
   scope.currentTextScale = scale
   if (!scope.term) {
     return
   }
   const px = fontPxForScale(scale)
   if (scope.term.options.fontSize === px) {
+    // Why: a pinch moved the drawn pitch; the fit commit is the one site that reports it.
+    applyFitScale(scope, 'text-scale')
     return
   }
   scope.term.options.fontSize = px
   // Ruling 21: the generation this frame was scheduled under. `scope.term` alone is not enough —
   // a mount that came and went leaves a live terminal here, and this would resize that one.
   const gen = scope.terminalGeneration
-  scheduleDocumentFrame(function () {
+  scheduleDocumentFrame(scope, function () {
     if (!scope.term || gen !== scope.terminalGeneration) {
       return
     }
-    const cellW = getCellWidth()
-    const cellH = getCellHeight()
+    const cellW = getCellWidth(scope)
+    const cellH = getCellHeight(scope)
+    // Why: fit the frame React Native laid out, by the same formula; init and measure give it. Before
+    // either, the pre-ready terminal stays hidden until the first init, which applies the font and resizes.
+    const frame = scope.hostFrame
+    if (!frame) {
+      return
+    }
     if (cellW > 0 && cellH > 0) {
-      const cols = Math.floor(window.innerWidth / cellW)
-      if (cols < scope.MIN_FIT_COLS) {
+      const fit = fitDimensionsFromCell(
+        { cellWidth: cellW, cellHeight: cellH },
+        frame.width,
+        frame.height
+      )
+      if (!fit) {
+        // Why: too narrow to resize the grid, but the fit still tracks the new cell size; hidden hosts hold it.
+        applyFitScale(scope, 'text-scale')
         return
       }
-      const rows = Math.max(8, Math.floor(window.innerHeight / cellH))
-      scope.term.resize(cols, rows)
-      emitKeyboardAvoidanceMetrics()
+      scope.term.resize(fit.cols, fit.rows)
     }
-    applyFitScale('text-scale')
+    applyFitScale(scope, 'text-scale')
   })
 }
 
-export function startTextScaling() {
-  scope.scrollIndicator = document.getElementById('scroll-indicator')
-  scope.scrollThumb = document.getElementById('scroll-thumb')
+export function startTextScaling(scope: TerminalDocumentScope) {
+  scope.currentTextScale = scope.start().textScale
+  scope.scrollIndicator = elementInRoot(scope.root, 'scroll-indicator')
+  scope.scrollThumb = elementInRoot(scope.root, 'scroll-thumb')
   scope.terminalFontFamily =
     (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS
 }

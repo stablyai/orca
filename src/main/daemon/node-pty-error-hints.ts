@@ -1,3 +1,10 @@
+import {
+  LEGACY_PTY_ALLOCATION_HINT,
+  LEGACY_TERMINAL_PROCESS_LIMIT_HINT,
+  PTY_ALLOCATION_HINT,
+  TERMINAL_PROCESS_LIMIT_HINT
+} from '../../shared/terminal-spawn-error-copy'
+
 export type NodePtyDiagnostic = {
   step: string
   errno: number
@@ -24,22 +31,6 @@ const RESOURCE_EXHAUSTION_ERRNOS = new Set([
   24, // EMFILE on macOS/Linux
   35 // EAGAIN on macOS
 ])
-
-const PTY_ALLOCATION_HINT = [
-  'Your system cannot allocate any more pty devices.',
-  '',
-  'Orca requires a pty device to launch a new terminal. This error is usually due to having too many terminal windows or terminal sessions open, either in Orca or another program.',
-  '',
-  'Free up some pty devices and try again.'
-].join('\n')
-
-const TERMINAL_PROCESS_LIMIT_HINT = [
-  'Your system cannot start another terminal process.',
-  '',
-  'This is usually due to having too many terminal sessions or other processes running.',
-  '',
-  'Close unused terminals or quit unused processes and try again.'
-].join('\n')
 
 export function parseNodePtyDiagnostic(message: string): NodePtyDiagnostic | null {
   const match =
@@ -70,18 +61,30 @@ export function getNodePtyRecoveryHint(diagnostic: NodePtyDiagnostic): string | 
   return null
 }
 
+function hasPtyAllocationHint(message: string): boolean {
+  return message.startsWith(PTY_ALLOCATION_HINT) || message.startsWith(LEGACY_PTY_ALLOCATION_HINT)
+}
+
 export function addNodePtyRecoveryHint(message: string): string {
   const diagnostic = parseNodePtyDiagnostic(message)
   if (!diagnostic) {
-    if (GENERIC_PTY_ALLOCATION_RE.test(message) && !message.startsWith(PTY_ALLOCATION_HINT)) {
-      return `${PTY_ALLOCATION_HINT} ${message}`
+    if (GENERIC_PTY_ALLOCATION_RE.test(message) && !hasPtyAllocationHint(message)) {
+      return `${PTY_ALLOCATION_HINT}\n${message}`
     }
     return message
   }
 
   const hint = getNodePtyRecoveryHint(diagnostic)
-  if (hint && message.startsWith(hint)) {
+  if (
+    !hint ||
+    message.startsWith(hint) ||
+    (hint === PTY_ALLOCATION_HINT && hasPtyAllocationHint(message)) ||
+    (hint === TERMINAL_PROCESS_LIMIT_HINT && message.startsWith(LEGACY_TERMINAL_PROCESS_LIMIT_HINT))
+  ) {
     return message
   }
-  return hint ? `${hint} ${message}` : message
+  // Older clients need both stale-daemon markers before their first-line IPC truncation.
+  const separator =
+    hint === PTY_ALLOCATION_HINT || hint === TERMINAL_PROCESS_LIMIT_HINT ? '\n' : ' '
+  return `${hint}${separator}${message}`
 }

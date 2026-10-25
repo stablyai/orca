@@ -1,24 +1,11 @@
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './build-rows'
-import { ALL_GROUP_META, getPRGroupKey, PINNED_GROUP_KEY } from './group-keys'
-import { getGroupKeyForWorktree } from './worktree-group-keys'
-import {
-  REPO_HEADER_ACTION_BUTTON_CLASS,
-  REPO_HEADER_ACTION_REVEAL_CLASS
-} from '../../repo-header-action-button-class'
+import { buildRows } from './build-rows.test-fixture'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { getPRGroupKey } from './pr-group-key'
+import { getGroupKeyForWorktree } from '../../../../../../shared/sidebar-list/worktree-group-keys'
 import { repo, worktree, repoMap } from '../../worktree-list-groups-test-fixtures'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-
-function readWorktreeListSource(): string {
-  return readFileSync(fileURLToPath(new URL('../../WorktreeList.tsx', import.meta.url)), 'utf8')
-}
-
-function readSectionHeaderRowSource(): string {
-  return readFileSync(fileURLToPath(new URL('../rows/SectionHeader.tsx', import.meta.url)), 'utf8')
-}
 
 describe('getPRGroupKey', () => {
   it('puts merged PRs in the done group', () => {
@@ -78,20 +65,6 @@ describe('getPRGroupKey', () => {
     expect(getPRGroupKey(worktree, repoMap, prCache)).toBe('closed')
   })
 
-  it('uses local PR cache for a known local repo while a runtime is focused', () => {
-    const prCache = {
-      'repo-1::feature/super-critical': {
-        data: { state: 'merged' }
-      }
-    }
-
-    expect(
-      getPRGroupKey(worktree, repoMap, prCache, {
-        activeRuntimeEnvironmentId: 'env-1'
-      } as never)
-    ).toBe('done')
-  })
-
   it('uses SSH-scoped PR cache entries instead of local entries for SSH repos', () => {
     const sshRepo = { ...repo, connectionId: 'ssh-1' }
     const sshRepoMap = new Map([[sshRepo.id, sshRepo]])
@@ -127,10 +100,10 @@ describe('buildRows with pinned worktrees', () => {
 
   it('emits Pinned and All headers in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
-    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', label: 'Pinned' })
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', icon: { kind: 'pinned' } })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
-    expect(rows[2]).toMatchObject({ type: 'header', key: 'all', label: 'All', count: 2 })
-    expect(rows[2]).toMatchObject({ type: 'header', icon: ALL_GROUP_META.icon })
+    expect(rows[2]).toMatchObject({ type: 'header', key: 'all', icon: { kind: 'all' }, count: 2 })
+    expect(rows[2]).toMatchObject({ type: 'header', icon: { kind: 'all' } })
   })
 
   it('uses worktree host ownership for pinned header host counts', () => {
@@ -166,7 +139,7 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'all', label: 'All' },
+      { type: 'header', key: 'all', icon: { kind: 'all' } },
       { type: 'item', worktree: { id: 'wt-1' } },
       { type: 'item', worktree: { id: 'wt-2' } }
     ])
@@ -380,42 +353,5 @@ describe('buildRows with pinned worktrees', () => {
       { key: 'workspace-status:blocked', label: 'Blocked' },
       { key: 'workspace-status:in-progress', label: 'Doing' }
     ])
-  })
-})
-
-describe('WorktreeList header styles', () => {
-  it('does not title-case workspace group labels', () => {
-    const source = readSectionHeaderRowSource()
-
-    expect(source).not.toContain('leading-none capitalize')
-  })
-
-  it('collapses repo header actions without reserving title width', () => {
-    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain('min-w-0 max-w-0 -ml-1.5')
-    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain('focus:ml-0 focus:max-w-5 focus:opacity-100')
-    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain(
-      'group-hover:ml-0 group-hover:max-w-5 group-hover:opacity-100'
-    )
-    expect(REPO_HEADER_ACTION_BUTTON_CLASS).toContain(
-      'transition-[margin,max-width,opacity,background-color,color]'
-    )
-    expect(REPO_HEADER_ACTION_BUTTON_CLASS).toContain(
-      'data-[state=open]:ml-0 data-[state=open]:max-w-5 data-[state=open]:opacity-100'
-    )
-  })
-
-  it('resolves repo header color from project group headers only', () => {
-    const source = readSectionHeaderRowSource()
-
-    expect(source).toContain('resolveProjectGroupHeaderColor({')
-    expect(source).toContain('headerKey: row.key')
-    expect(source).toContain('color={repoHeaderColor}')
-  })
-
-  it('adapts projected setup rows for sidebar project grouping', () => {
-    const source = readWorktreeListSource()
-
-    expect(source).toContain('const projectHostSetupProjection = useProjectHostSetupProjection()')
-    expect(source).toContain('projectHostSetups: projectHostSetupProjection.setups')
   })
 })

@@ -1,3 +1,6 @@
+export const DESKTOP_READ_WINDOW = 300
+export const UNFLUSHED_SETTLE_MS = 1_500
+
 import type {
   AgentType,
   NativeChatMessage,
@@ -13,14 +16,10 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
     messages: NativeChatMessage[],
     hasMore: boolean,
     beforeOffset: number,
-    /** Set when the initial drain could not deliver a transcript. */
     error?: string,
     lifecycle?: NativeChatTurnLifecycle
   ) => void
-  /** The transcript file does not exist yet (a session whose agent has not
-   *  flushed, or has not been prompted at all). Fires at most once, before any
-   *  snapshot, so a client can settle its view on the empty window it really
-   *  has instead of spinning — while still knowing the read is not settled. */
+  /** Report unflushed history once before snapshots so views can leave loading without claiming a settled read. */
   onTranscriptPending?: () => void
   onReplace?: (
     messages: NativeChatMessage[],
@@ -31,9 +30,7 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   initialLimit?: number
   filePath?: string
   debounceMs?: number
-  /** Test-only override for the production resolve-poll backoff. */
   resolvePollIntervalMs?: number
-  /** Test-only override for the host-side watcher reconciliation interval. */
   reconciliationIntervalMs?: number
 }
 

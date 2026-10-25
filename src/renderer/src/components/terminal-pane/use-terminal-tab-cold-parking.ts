@@ -365,7 +365,8 @@ export function useTerminalTabColdParking(args: {
   const parkedTerminalTabIds = useTerminalParkVerdictPin({
     records: parkVerdictRecordsRef,
     terminalTabs,
-    candidateParkedTabIds: candidateParkedTerminalTabIds
+    candidateParkedTabIds: candidateParkedTerminalTabIds,
+    allowSustainedPin: !isForceParked
   })
 
   // Why: runs in the same effect flush as the commit that parked/revealed the

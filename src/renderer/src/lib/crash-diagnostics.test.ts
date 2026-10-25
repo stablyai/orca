@@ -78,6 +78,7 @@ describe('renderer crash diagnostics', () => {
       name: 'renderer_memory',
       data: {
         reason: 'startup',
+        rendererSurface: 'main',
         usedHeapMB: 32,
         totalHeapMB: 64,
         heapLimitMB: 512,
@@ -135,6 +136,55 @@ describe('renderer crash diagnostics', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(2)
     expect(recordBreadcrumbMock).not.toHaveBeenCalled()
+  })
+
+  it('includes delivered and queued long tasks once in each memory sample', () => {
+    let now = 0
+    let deliver = (_durations: number[]): void => {}
+    const pending: { duration: number }[] = []
+    const observe = vi.fn()
+    vi.stubGlobal('performance', { now: () => now })
+    vi.stubGlobal(
+      'PerformanceObserver',
+      class {
+        static supportedEntryTypes = ['longtask']
+        constructor(callback: (list: { getEntries: () => { duration: number }[] }) => void) {
+          deliver = (durations) =>
+            callback({ getEntries: () => durations.map((duration) => ({ duration })) })
+        }
+        observe = observe
+        disconnect = vi.fn()
+        takeRecords = () => pending.splice(0)
+      }
+    )
+    diagnostics.installRendererCrashDiagnostics()
+    diagnostics.installRendererCrashDiagnostics()
+    expect(observe).toHaveBeenCalledTimes(1)
+    deliver([75, 100])
+    pending.push({ duration: 125 })
+    now = 90_000
+    const sample = setIntervalMock.mock.calls[0][0]
+    sample()
+    expect(recordBreadcrumbMock).toHaveBeenLastCalledWith({
+      name: 'renderer_memory',
+      data: expect.objectContaining({
+        longTaskMs: 300,
+        longTaskCount: 3,
+        longestTaskMs: 125,
+        sampleWindowMs: 90_000
+      })
+    })
+    now += 60_000
+    sample()
+    expect(recordBreadcrumbMock).toHaveBeenLastCalledWith({
+      name: 'renderer_memory',
+      data: expect.objectContaining({
+        longTaskMs: 0,
+        longTaskCount: 0,
+        longestTaskMs: 0,
+        sampleWindowMs: 60_000
+      })
+    })
   })
 
   it('records application errors that only mention a ResizeObserver loop', () => {

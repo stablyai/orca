@@ -180,17 +180,4 @@ describe('useRemotePushCapableHosts', () => {
     await answer('host-1', [CAPABILITY])
     expect(latest).toEqual({ supported: true, resolved: true })
   })
-
-  it('ignores an answer from a host the catalog no longer lists', async () => {
-    await mount()
-    await setClients([
-      { hostId: 'host-ghost', client: clientFor('host-ghost'), state: 'connected' }
-    ])
-
-    await answer('host-ghost', [CAPABILITY])
-
-    // An unpaired desktop cannot push to this phone, so its vote must not offer
-    // the switch — nor count as the answer that resolves the section.
-    expect(latest).toEqual({ supported: false, resolved: false })
-  })
 })

@@ -36,7 +36,6 @@ function createSnapshot(
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
-    closedTerminalTabTombstonesByTabId: {},
     ...overrides
   }
 }
@@ -205,8 +204,8 @@ describe('workspace session editor drafts', () => {
       })
     )
 
-    expect(payload.openFilesByWorktree?.['wt-1']?.[0]).toEqual(
-      expect.not.objectContaining({ readOnly: expect.anything() })
-    )
+    const persisted = payload.openFilesByWorktree?.['wt-1']?.[0]
+    expect(persisted).toEqual(expect.objectContaining({ filePath: '/tmp/clean.md' }))
+    expect(persisted).not.toHaveProperty('readOnly')
   })
 })

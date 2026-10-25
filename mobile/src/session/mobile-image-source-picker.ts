@@ -30,25 +30,27 @@ type MobileImageFile = {
 
 export type MobileImageFileFactory = (uri: string) => MobileImageFile
 
-function defaultMobileImageFileFactory(uri: string): MobileImageFile {
+export function defaultMobileImageFileFactory(uri: string): MobileImageFile {
   return new FsFile(uri)
 }
 
-async function readUriAsBase64(
+/** Reads a picked uri as base64 in chunks, refusing through `assertBytes` once it passes the cap. */
+export async function readUriAsBase64(
   uri: string,
-  declaredSize: number | undefined,
-  createFile: MobileImageFileFactory
+  declaredSize: number | undefined | null,
+  createFile: MobileImageFileFactory,
+  assertBytes: (byteLength: number) => void = assertClipboardImageByteLengthWithinLimit
 ): Promise<string> {
   if (typeof declaredSize === 'number' && Number.isFinite(declaredSize)) {
-    assertClipboardImageByteLengthWithinLimit(declaredSize)
+    assertBytes(declaredSize)
   }
 
   const file = createFile(uri)
-  assertClipboardImageByteLengthWithinLimit(file.size)
+  assertBytes(file.size)
   const handle = file.open()
   try {
     if (handle.size !== null) {
-      assertClipboardImageByteLengthWithinLimit(handle.size)
+      assertBytes(handle.size)
     }
     const accumulator = new MobileImageBase64Accumulator()
     let bytesRead = 0
@@ -62,7 +64,7 @@ async function readUriAsBase64(
         break
       }
       bytesRead += bytes.byteLength
-      assertClipboardImageByteLengthWithinLimit(bytesRead)
+      assertBytes(bytesRead)
       accumulator.append(bytes)
     }
     const base64 = accumulator.finish()

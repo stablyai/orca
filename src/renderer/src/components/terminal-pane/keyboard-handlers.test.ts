@@ -6,7 +6,7 @@ import {
   matchSearchNavigate,
   resolveTerminalKeyboardShortcutAction,
   runTerminalSearchNavigation
-} from './keyboard-handlers'
+} from './terminal-keyboard-shortcut-matching'
 
 function makeKeyEvent(
   overrides: Partial<{

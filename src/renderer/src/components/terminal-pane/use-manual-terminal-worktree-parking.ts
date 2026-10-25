@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import {
   MANUAL_TERMINAL_WORKTREE_PARK_EVENT,
   takeAllPendingManualTerminalWorktreeParks,

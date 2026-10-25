@@ -5,7 +5,7 @@ import type { PaneRenderingDiagnostics } from './pane-manager-types'
 type RegisteredPaneManager = {
   resetWebglTextureAtlases(): void
   clearWebglTextureAtlases?: () => void
-  presentForcedViewports?: () => void
+  presentViewports?: () => void
   fitAllPanes?: () => void
   refreshAllPanes?: () => void
   getRenderingDiagnostics?: () => PaneRenderingDiagnostics[]
@@ -60,8 +60,8 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
   }
   for (const manager of resetManagers) {
     try {
-      if (manager.presentForcedViewports) {
-        manager.presentForcedViewports()
+      if (manager.presentViewports) {
+        manager.presentViewports()
       } else {
         manager.refreshAllPanes?.()
       }

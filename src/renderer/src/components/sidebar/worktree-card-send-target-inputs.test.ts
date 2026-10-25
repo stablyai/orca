@@ -14,6 +14,7 @@ const BASE: SendTargetInputsState = {
   agentSendPopoverTargetMode: null,
   agentStatusByPaneKey: {},
   tabsByWorktree: {},
+  unifiedTabsByWorktree: {},
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
   runtimePaneTitlesByTabId: {}

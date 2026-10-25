@@ -172,6 +172,10 @@ export function useWorktreeJumpPaletteSections({
         })
       : null
     return {
+      // Whole-field equality outranks website navigation; exact words alone do not.
+      hasExactEntityDestination:
+        worktreeItems.some((item) => (item.match.rank?.destination ?? 3) <= 1) ||
+        openTabItems.some((item) => (item.result.rank?.destination ?? 3) <= 1),
       visibleWorktreeItems: worktrees.visible as PaletteItem[],
       worktreeOverflowCount: worktrees.overflowCount,
       visibleProjectTargetItems: projectTargets.visible as PaletteItem[],

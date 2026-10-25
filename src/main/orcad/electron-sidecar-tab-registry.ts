@@ -22,7 +22,7 @@ const ElectronSidecarResult = z
   })
   .passthrough()
 
-export type ElectronSidecarTab = z.infer<typeof ElectronSidecarTabSchema>
+type ElectronSidecarTab = z.infer<typeof ElectronSidecarTabSchema>
 
 export type ElectronSidecarPage = {
   publicPageId: string

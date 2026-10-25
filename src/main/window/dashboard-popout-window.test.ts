@@ -11,7 +11,7 @@ const {
   getAllDisplaysMock,
   installNavigationPolicyMock,
   sendToTrustedUIRendererMock,
-  isMock
+  appMock
 } = vi.hoisted(() => {
   const created: FakeWindow[] = []
 
@@ -112,7 +112,7 @@ const {
     ]),
     installNavigationPolicyMock: vi.fn(),
     sendToTrustedUIRendererMock: vi.fn(),
-    isMock: { dev: false } as { dev: boolean }
+    appMock: { isPackaged: true }
   }
 })
 
@@ -122,13 +122,18 @@ const {
   instances
 
 vi.mock('electron', () => ({
-  app: { on: appOnMock, removeListener: appRemoveListenerMock },
+  app: {
+    on: appOnMock,
+    removeListener: appRemoveListenerMock,
+    get isPackaged() {
+      return appMock.isPackaged
+    }
+  },
   BrowserWindow: BrowserWindowMock,
   nativeTheme: nativeThemeMock,
   screen: { getAllDisplays: getAllDisplaysMock }
 }))
 
-vi.mock('@electron-toolkit/utils', () => ({ is: isMock }))
 vi.mock('../ipc/ui', () => ({ sendToTrustedUIRenderer: sendToTrustedUIRendererMock }))
 vi.mock('./privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: installNavigationPolicyMock
@@ -182,7 +187,7 @@ afterEach(() => vi.unstubAllEnvs())
 describe('createOrFocusDashboardPopout', () => {
   beforeEach(() => {
     instances.length = 0
-    isMock.dev = false
+    appMock.isPackaged = true
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
     getAllDisplaysMock.mockReturnValue([{ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }])
   })
@@ -246,7 +251,7 @@ describe('createOrFocusDashboardPopout', () => {
   })
 
   it('loads the dev server URL when in dev', () => {
-    isMock.dev = true
+    appMock.isPackaged = false
     vi.stubEnv('ELECTRON_RENDERER_URL', RENDERER_URL)
     createOrFocusDashboardPopout(makeStore() as never)
     const win = instances[0]
@@ -321,6 +326,33 @@ describe('createOrFocusDashboardPopout', () => {
 
       store.updateUI.mockClear()
       win.bounds = { x: 10, y: 10, width: 100, height: 100 } // below minimum
+      win.emit('resize')
+      vi.advanceTimersByTime(500)
+      expect(store.updateUI).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps saving bounds after a vetoed quit and freezes them only on an allowed quit', () => {
+    vi.useFakeTimers()
+    try {
+      const store = makeStore()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The window fixture reads getUI, updateUI, and onUIChanged supplied by this store.
+      createOrFocusDashboardPopout(store as never)
+      const win = instances[0]
+      const freeze = appOnMock.mock.calls.find(([event]) => event === 'before-quit')?.[1]
+      expect(freeze).toBeTypeOf('function')
+      freeze({ defaultPrevented: true })
+      win.bounds = { x: 10, y: 20, width: 1200, height: 900 }
+      win.emit('resize')
+      vi.advanceTimersByTime(500)
+      expect(store.updateUI).toHaveBeenCalledWith({
+        dashboardPopoutBounds: { x: 10, y: 20, width: 1200, height: 900 }
+      })
+
+      store.updateUI.mockClear()
+      freeze({ defaultPrevented: false })
       win.emit('resize')
       vi.advanceTimersByTime(500)
       expect(store.updateUI).not.toHaveBeenCalled()

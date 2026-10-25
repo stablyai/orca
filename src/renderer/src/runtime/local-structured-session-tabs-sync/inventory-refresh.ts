@@ -9,8 +9,11 @@ import { applyStructuredSessionTabSnapshots } from './snapshot-apply'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
-} from '../../lib/structured-agent-session-launch-cancellation'
+} from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { callRuntimeRpc } from '../runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
 
 type StructuredSessionInventoryResponse = {
   snapshots?: RuntimeMobileSessionTabsResult[]
@@ -56,7 +59,7 @@ export function refreshLocalStructuredSessionTabs(
   // An explicit authoritative request can start cleanup before IPC. Otherwise wait until the
   // host labels the response authoritative so failed/retrying ordinary refreshes do not churn RPCs.
   if (options.authoritative) {
-    startStructuredAgentLaunchCancellationCleanup((sessionId) =>
+    startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
       closeStructuredAgentSession({ kind: 'local' }, sessionId)
     )
   }
@@ -69,7 +72,7 @@ export function refreshLocalStructuredSessionTabs(
       const result = isStructuredSessionInventoryResponse(response.result) ? response.result : {}
       const snapshots = result.snapshots ?? []
       if (options.authoritative === true || result.authoritative === true) {
-        startStructuredAgentLaunchCancellationCleanup((sessionId) =>
+        startStructuredAgentLaunchCancellationCleanup(LOCAL_EXECUTION_HOST_ID, (sessionId) =>
           closeStructuredAgentSession({ kind: 'local' }, sessionId)
         )
       }
@@ -82,4 +85,24 @@ export function refreshLocalStructuredSessionTabs(
       }
       return snapshots
     })
+}
+
+/** Re-reads one worktree from this machine's host. `reacceptCurrentVersion` is for a window that
+ *  removed a chat before the host answered its close: nothing republishes an unchanged list. */
+export async function refreshLocalStructuredSessionWorktreeTabs(
+  worktreeId: string,
+  options: { reacceptCurrentVersion?: boolean } = {}
+): Promise<RuntimeMobileSessionTabsResult | null> {
+  // Structured chat can be switched off mid-call, which wipes the mirror; a late answer must not re-seed it.
+  const expectedGeneration = localStructuredSessionGeneration()
+  const snapshot = await callRuntimeRpc<RuntimeMobileSessionTabsResult>(
+    { kind: 'local' },
+    'session.tabs.list',
+    { worktree: toRuntimeWorktreeSelector(worktreeId) }
+  )
+  if (!isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
+    return null
+  }
+  applyStructuredSessionTabSnapshots([snapshot], undefined, options)
+  return snapshot
 }

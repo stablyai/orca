@@ -33,7 +33,7 @@ describe('isAiVaultSessionResumableContent', () => {
     expect(isAiVaultSessionResumableContent(signal())).toBe(false)
   })
 
-  it('accepts conversation previews when the turn count is missing', () => {
+  it('accepts conversation previews when the turn count is zero', () => {
     // Some parsers (Grok, OpenCode fallback schemas) derive messageCount from
     // metadata that can be absent while real turns exist in previews.
     expect(isAiVaultSessionResumableContent(signal({ previewMessages: [preview('user')] }))).toBe(
@@ -84,5 +84,11 @@ describe('aiVaultSessionRecoverableSignalCount', () => {
         subagentTranscriptCount: 3
       })
     ).toBe(3)
+    expect(
+      aiVaultSessionRecoverableSignalCount({
+        queuedMessageCount: 4,
+        subagentTranscriptCount: -2
+      })
+    ).toBe(4)
   })
 })

@@ -9,7 +9,7 @@ const LOCAL_PROJECT = 'E2E Palette Local Project'
 const REMOTE_PROJECT = 'E2E Palette Remote Project'
 const REMOTE_WORKSPACE = 'E2E Palette Remote Workspace'
 const REMOTE_HOST = 'E2E Palette Builder'
-const SEARCH_PLACEHOLDER = 'Search chats, terminals, worktrees, settings, and actions...'
+const SEARCH_PLACEHOLDER = 'Search chats, terminals, workspaces, settings, and actions...'
 
 type PaletteFilterFixture = {
   localRepoId: string

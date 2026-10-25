@@ -104,7 +104,7 @@ export { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } 
  * The reply body is unread: use-mobile-tasks-github-reply-merge-actions.tsx:199 calls `interpret`
  * and discards what it returns, so there is no member to declare. The body is also where this
  * method refuses — the host answers a rejected update with an in-band `{ ok: false, error }` on an
- * otherwise successful envelope (src/main/ipc/linear-issue-handlers.ts:117), and
+ * otherwise successful envelope (src/main/ipc/linear/issue-handlers.ts:117), and
  * `require-result-or-throw-message` throws only on an outer refusal (rpc-operation.ts:129), so that
  * refusal reaches no `catch` and the screen moves the issue anyway. Main does the same: it read the
  * identical payload through `rpcUncheckedPayloadReader` and dropped it on the floor.

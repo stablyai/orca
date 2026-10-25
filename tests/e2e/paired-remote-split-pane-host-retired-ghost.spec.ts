@@ -14,13 +14,15 @@
  * no exit overlay and no restart control. The refutation-proof shape (verified
  * here) is that the client's store layout shrinks to one leaf while its DOM
  * keeps two panes. After the fix the client removes the retired pane and store
- * + DOM agree at exactly the surviving leaf.
+ * + DOM agree at exactly the surviving leaf. Exiting the original pane also
+ * moves the host's active leaf; the client must not write the retired pane back
+ * into its layout while that PTY is still ending.
  *
  * Run:
  *   pnpm exec playwright test tests/e2e/paired-remote-split-pane-host-retired-ghost.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=1
  */
-import type { Page } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
@@ -56,9 +58,11 @@ async function hostLayoutLeafIds(page: Page, webTabId: string): Promise<string[]
   }, webTabId)
 }
 
-test('removes the pane a paired remote host retired instead of leaving a dead ghost', async ({
-  testRepoPath
-}, testInfo) => {
+async function expectHostRetiredPaneRemoved(
+  exitedPane: 'split' | 'original',
+  testRepoPath: string,
+  testInfo: TestInfo
+): Promise<void> {
   test.setTimeout(240_000)
   const host = await launchHeadlessPairedRuntimeHost()
   let client: Awaited<ReturnType<typeof launchPairedElectronClient>> | null = null
@@ -102,9 +106,13 @@ test('removes the pane a paired remote host retired instead of leaving a dead gh
       .toBe(true)
     const beforeExit = await mountedLeafPtyIds(client.page, webTabId)
 
-    // The user quits the second shell — the host retires that leaf and
+    // The user quits one shell — the host retires that leaf and
     // republishes a one-leaf layout.
-    await host.client.call('terminal.send', { terminal: secondHandle, text: 'exit', enter: true })
+    await host.client.call('terminal.send', {
+      terminal: exitedPane === 'split' ? secondHandle : firstHandle,
+      text: 'exit',
+      enter: true
+    })
 
     // The host-authoritative layout the client holds shrinks to one leaf
     // (confirms the retirement). This is the refutation-proof signal: before the
@@ -139,4 +147,13 @@ test('removes the pane a paired remote host retired instead of leaving a dead gh
     await client?.dispose()
     await host.dispose()
   }
-})
+}
+
+test('removes the pane a paired remote host retired instead of leaving a dead ghost', async ({
+  testRepoPath
+}, testInfo) => expectHostRetiredPaneRemoved('split', testRepoPath, testInfo))
+
+// Why: the original pane is the host's active leaf, so its retirement also moves focus.
+test('removes the original pane a paired remote host retired after it exits', async ({
+  testRepoPath
+}, testInfo) => expectHostRetiredPaneRemoved('original', testRepoPath, testInfo))

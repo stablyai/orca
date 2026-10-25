@@ -109,7 +109,7 @@ describe('detectAgentPermission', () => {
     const long = `Do you want to proceed? ${'x'.repeat(300)}`
     const result = detectAgentPermission({ state: 'waiting', lastAssistantMessage: long })
     expect(result).not.toBeNull()
-    expect((result?.detail ?? '').length).toBeLessThanOrEqual(160)
+    expect(result?.detail).toBe(`Do you want to proceed? ${'x'.repeat(135)}…`)
   })
 
   it('shortens long numbered option labels', () => {
@@ -120,7 +120,7 @@ describe('detectAgentPermission', () => {
     })
     const second = result?.options[1]
     expect(second?.send).toBe('2')
-    expect((second?.label ?? '').length).toBeLessThanOrEqual(40)
+    expect(second?.label).toBe('No, and explain in great detail exactly…')
   })
 })
 
@@ -141,4 +141,25 @@ describe('parseApprovalFromStatus', () => {
     expect(parseApprovalFromStatus(JSON.stringify({ questions: [] }))).toBeNull()
     expect(parseApprovalFromStatus(JSON.stringify({ approval: {} }))).toBeNull()
   })
+
+  it('omits detail for a missing, empty or non-string summary', () => {
+    for (const summary of [undefined, '', 42]) {
+      const card = parseApprovalFromStatus(JSON.stringify({ approval: { tool: 'Edit', summary } }))
+      expect(card).toEqual({
+        title: 'Allow Edit?',
+        detail: undefined,
+        options: [
+          { label: 'Allow', send: '1' },
+          { label: 'Deny', send: '\x1b' }
+        ]
+      })
+    }
+  })
 })
+
+for (const agent of ['opencode', 'opencode2']) {
+  it(`${agent} approves the captured default selector with Enter`, () => {
+    const card = parseApprovalFromStatus(JSON.stringify({ approval: { tool: 'shell' } }), agent)
+    expect(card?.options[0].send).toBe('\r')
+  })
+}

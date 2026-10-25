@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest, RpcResponse } from '../core'
@@ -15,8 +16,8 @@ vi.mock('../../../window/clipboard-image-temp-file', () => ({
   saveClipboardImageBufferAsTempFile
 }))
 
+import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard-params'
 import {
-  CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
   CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT,
   CLIPBOARD_METHODS,
   resetClipboardImageUploadsForTest

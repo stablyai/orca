@@ -9,8 +9,10 @@ import { readDocPreviewFile } from './doc-preview-file-reader'
 import { publishDocPreviewFailure } from './doc-preview-failure-notice'
 import { getDocPreviewGrant } from './doc-preview-grant-registry'
 
-/** Must run before `app.whenReady()`; Electron freezes the privileged scheme table at ready. */
-export function registerDocPreviewSchemePrivileges(): void {
+/** Register before Electron readiness freezes scheme privileges. */
+export function registerDocPreviewSchemePrivileges(
+  additionalSchemes: Electron.CustomScheme[] = []
+): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: DOC_PREVIEW_SCHEME,
@@ -21,31 +23,26 @@ export function registerDocPreviewSchemePrivileges(): void {
         corsEnabled: true,
         stream: true
       }
-    }
+    },
+    ...additionalSchemes
   ])
 }
 
 let docPreviewSession: Electron.Session | null = null
 
-/** Non-persistent session, so preview bytes never land in a browsing profile's storage. */
+/** Isolate previews from persistent browsing-profile storage. */
 export function getDocPreviewSession(): Electron.Session {
   docPreviewSession ??= session.fromPartition(DOC_PREVIEW_PARTITION)
   return docPreviewSession
 }
 
-/** Pure identity check: every guest attach consults it, and none should materialize a session. */
+/** Guest identity checks must not materialize a session. */
 export function isDocPreviewSession(candidate: Electron.Session): boolean {
   return docPreviewSession !== null && candidate === docPreviewSession
 }
 
-/**
- * Product decision, not a hardening default: previewed documents are agent-authored, so any
- * outbound request they can make is an exfiltration channel for whatever else the page can read.
- * Self-contained documents — inline CSS/JS/SVG and in-grant assets — render in full; a CDN
- * stylesheet, font, script, or analytics beacon deliberately does not load. Electron 43 still
- * resolves explicit DNS-prefetch hints outside session hooks; the accepted residual is covered by
- * `browser-route-dns-prefetch.electron.test.ts` and can beacon grant-readable bytes in DNS labels.
- */
+// Block outbound requests that could exfiltrate grant-readable files.
+// Electron 43 DNS-prefetch bypasses these hooks; see browser-route-dns-prefetch.electron.test.ts.
 const DOC_PREVIEW_CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
@@ -55,11 +52,7 @@ const DOC_PREVIEW_CONTENT_SECURITY_POLICY = [
   "connect-src 'self'",
   "frame-src 'self'",
   "object-src 'none'"
-  // Why no `webrtc 'block'` here, though a peer connection is exactly the outbound channel this
-  // policy is meant to close: Chromium 43-era answers that directive with "Unrecognized
-  // Content-Security-Policy directive 'webrtc'" and gathers candidates anyway, so listing it would
-  // read as a fence while fencing nothing. The guest's IP-handling policy is the one that holds —
-  // see `installDocPreviewGuestPolicy`.
+  // Electron 43 ignores WebRTC CSP; installDocPreviewGuestPolicy enforces IP handling.
 ].join('; ')
 
 function notFound(message: string): Response {
@@ -76,8 +69,7 @@ export async function handleDocPreviewRequest(request: Request): Promise<Respons
   }
   const grant = getDocPreviewGrant(target.grantId)
   if (!grant) {
-    // Why: a revoked or unknown grant is indistinguishable from a missing file by design — but the
-    // shell still needs to know, or the guest paints this body where the document should be.
+    // Keep missing and revoked grants indistinguishable; tell the shell to replace the error body.
     publishDocPreviewFailure({
       grantId: target.grantId,
       relativePath: target.relativePath,
@@ -94,18 +86,22 @@ export async function handleDocPreviewRequest(request: Request): Promise<Respons
       headers: { 'Content-Type': 'text/plain; charset=utf-8' }
     })
   }
-  return new Response(new Uint8Array(outcome.bytes), {
+  const bytes = outcome.bytes
+  const body =
+    bytes.buffer instanceof ArrayBuffer
+      ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+      : new Uint8Array(bytes)
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': outcome.contentType,
       'Content-Security-Policy': DOC_PREVIEW_CONTENT_SECURITY_POLICY,
-      // Why: reload must re-read the workspace disk, so nothing may be cached.
+      // Reload must re-read workspace files.
       'Cache-Control': 'no-store'
     }
   })
 }
 
-/** `data:`/`blob:` never leave the document; every other scheme would reach off-machine. */
 export function isAllowedDocPreviewRequestUrl(url: string): boolean {
   return (
     url.startsWith(`${DOC_PREVIEW_SCHEME}://`) ||
@@ -121,13 +117,10 @@ export function installDocPreviewProtocolHandler(): void {
     return
   }
   previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
-  // Why: the response CSP is the document's own promise to obey; this is the session refusing to
-  // carry network requests even if an element bypasses CSP. DNS-prefetch does not reach this hook.
+  // Block network requests beyond CSP; explicit DNS-prefetch bypasses this hook.
   previewSession.webRequest.onBeforeRequest((details, callback) => {
     callback({ cancel: !isAllowedDocPreviewRequestUrl(details.url) })
   })
-  // Why: the shared installer still owns certificate, UA, download and permission hooks, while
-  // preview content receives no ambient browser/device permissions.
   installBrowserSessionPartitionPolicies(
     {
       id: DOC_PREVIEW_PARTITION,
@@ -136,10 +129,7 @@ export function installDocPreviewProtocolHandler(): void {
       label: 'Document preview',
       source: null
     },
-    // Why downloads are the one policy that does not carry over: the browser download flow needs a
-    // page to attribute the file to, and a previewed document is not one. Routed here it would
-    // reserve a name in this desktop's Downloads folder and write remote-authored bytes into it
-    // with nothing in the UI naming the tab that asked, and no prompt in front of it.
+    // Previews have no browsing-page download flow or ambient device permissions.
     { downloads: 'deny', permissions: 'deny' }
   )
 }

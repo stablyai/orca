@@ -2,14 +2,19 @@ import type { editor } from 'monaco-editor'
 
 export type MonacoContentSyncMode = 'undoable' | 'read-only-live-tail'
 
-function normalizeToModelEol(content: string, model: editor.ITextModel): string {
+function normalizeToModelEol(
+  content: string,
+  model: editor.ITextModel,
+  currentContent: string
+): string {
   const eol = model.getEOL()
   // Why: Monaco normalizes model line endings, while filesystem content keeps
   // its raw EOLs. Compare the representation Monaco can actually retain.
-  if (eol === '\n' && !content.includes('\r')) {
+  if ((eol === '\n' && !content.includes('\r')) || content === currentContent) {
     return content
   }
-  return content.replace(/\r\n|\r|\n/g, eol)
+  const separators = eol === '\r\n' ? /\r(?!\n)|(?<!\r)\n/g : /\r\n|\r|\n/g
+  return content.replace(separators, eol)
 }
 
 function applyModelEdit(
@@ -69,7 +74,7 @@ export function syncContentOnMount(
     return false
   }
   const currentContent = model.getValue()
-  const normalizedContent = normalizeToModelEol(content, model)
+  const normalizedContent = normalizeToModelEol(content, model, currentContent)
   if (currentContent === normalizedContent) {
     return false
   }
@@ -98,7 +103,7 @@ export function syncContentUpdate(
     return
   }
   const currentContent = model.getValue()
-  const normalizedContent = normalizeToModelEol(content, model)
+  const normalizedContent = normalizeToModelEol(content, model, currentContent)
   if (currentContent.length === normalizedContent.length) {
     replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, true)
     return

@@ -21,6 +21,7 @@ import type { RuntimeEnvironmentStatus } from '../../store/slices/runtime-status
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
+import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 
 export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined
@@ -30,6 +31,7 @@ export type ComposerTargetStoreModel = {
   initialLinkedWorkItem: LinkedWorkItemSummary | null
   initialGitHubWorkItem: GitHubWorkItem | null
   initialTaskSourceContext: TaskSourceContext | null
+  initialWorkspaceTarget: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus: WorkspaceStatus | undefined
   initialBaseBranch: string | undefined
   persistDraft: boolean
@@ -39,17 +41,13 @@ export type ComposerTargetStoreModel = {
   onRepoIdOverrideChange: ((value: string) => void) | undefined
   telemetrySource: WorkspaceCreateTelemetrySource | undefined
   enableIssueAutomation: boolean
-  createGateMode: 'full' | 'quick'
   initialProjectGroupId: string | undefined
   decisions: ComposerDecisions
   actions: ComposerStoreActions
   setNewWorkspaceDraft: ComposerStoreActions['setNewWorkspaceDraft']
   clearNewWorkspaceDraft: ComposerStoreActions['clearNewWorkspaceDraft']
-  createWorktree: ComposerStoreActions['createWorktree']
   updateRepo: ComposerStoreActions['updateRepo']
-  updateWorktreeMeta: ComposerStoreActions['updateWorktreeMeta']
   createFolderWorkspace: ComposerStoreActions['createFolderWorkspace']
-  setSidebarOpen: ComposerStoreActions['setSidebarOpen']
   closeModal: ComposerStoreActions['closeModal']
   openSettingsPage: ComposerStoreActions['openSettingsPage']
   openSettingsTarget: ComposerStoreActions['openSettingsTarget']

@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
@@ -9,7 +9,6 @@ import {
   agentMeta,
   agentSummary,
   agentTitle,
-  threadAgentState,
   threadAgentStateLabel,
   type ActivityThreadStatusId
 } from './activity-thread-presentation'
@@ -21,13 +20,15 @@ const ACTIVITY_STATUS_GROUP_RANK: Record<ActivityThreadStatusId, number> = {
   waiting: 0,
   blocked: 1,
   permission: 2,
-  interrupted: 3,
-  working: 4,
-  monitoring: 5,
-  unverifiable: 6,
-  failed: 7,
-  done: 8,
-  idle: 9
+  failed: 3,
+  unconfirmed: 4,
+  working: 5,
+  monitoring: 6,
+  // A user's Stop is not news, so it follows live work, but it is not a finish either.
+  interrupted: 7,
+  unverifiable: 8,
+  done: 9,
+  idle: 10
 }
 
 function activityStatusRank(thread: AgentPaneThread): number {
@@ -42,12 +43,9 @@ export function getActivityThreadGroup(
     return { key: 'all', label: '' }
   }
   if (groupBy === 'status') {
-    // Header dot mirrors the row dot, so the two can never disagree.
-    return {
-      key: activityThreadStatusId(thread),
-      label: threadAgentStateLabel(thread),
-      state: threadAgentState(thread)
-    }
+    // The key is the glyph every row in the group draws, so it heads the group too.
+    const status = activityThreadStatusId(thread)
+    return { key: status, label: threadAgentStateLabel(thread), state: status }
   }
   if (groupBy === 'project') {
     return thread.repo
@@ -109,19 +107,11 @@ function buildThreadSearchText(thread: AgentPaneThread): string {
 // identity is a correct cache key; without this every keystroke re-lowercases a large
 // string per thread. WeakMap so dropped threads release their text.
 const threadSearchTextCache = new WeakMap<AgentPaneThread, string>()
-let threadSearchTextComputeCount = 0
-
-/** Test hook: how many times search text was actually (re)built. */
-export function getThreadSearchTextComputeCount(): number {
-  return threadSearchTextComputeCount
-}
-
 function threadSearchText(thread: AgentPaneThread): string {
   const cached = threadSearchTextCache.get(thread)
   if (cached !== undefined) {
     return cached
   }
-  threadSearchTextComputeCount += 1
   const text = buildThreadSearchText(thread)
   threadSearchTextCache.set(thread, text)
   return text
@@ -134,6 +124,20 @@ export function isActivitySearchQueryTooLarge(
   maxBytes = ACTIVITY_SEARCH_QUERY_MAX_BYTES
 ): boolean {
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function createActivityThreadSearchMatcher(
+  searchQuery: string
+): (thread: AgentPaneThread) => boolean {
+  if (isActivitySearchQueryTooLarge(searchQuery)) {
+    return () => false
+  }
+  const trimmedQuery = searchQuery.trim()
+  if (!trimmedQuery) {
+    return () => true
+  }
+  const normalizedQuery = trimmedQuery.toLowerCase()
+  return (thread) => threadSearchText(thread).includes(normalizedQuery)
 }
 
 export function activityThreadMatchesSearchQuery({

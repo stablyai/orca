@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { SmartNameMode } from './smart-workspace-source-results'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 
 export function getSmartWorkspaceNameFieldCopy({
   repoBackedSourcesDisabled,

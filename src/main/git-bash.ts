@@ -114,6 +114,37 @@ export function isGitForWindowsBashPath(shellPath: string): boolean {
   return /(?:^|\\)(?:git|portablegit)(?:\\usr)?\\bin\\bash\.exe$/.test(normalized)
 }
 
+/** Distinguish Git for Windows install roots from Cygwin/MSYS2 using Git-specific launchers. */
+const GIT_FOR_WINDOWS_ROOT_MARKERS = [
+  ['usr', 'bin', 'bash.exe'],
+  ['cmd', 'git.exe'],
+  ['git-bash.exe']
+] as const
+
+/** bin/bash.exe launches usr/bin/bash.exe; unknown install names need layout-based detection. */
+export function isGitForWindowsBashLauncherPath(
+  shellPath: string,
+  options: Pick<GitBashPathOptions, 'exists'> = {}
+): boolean {
+  const normalized = pathWin32.normalize(shellPath)
+  if (/(?:^|\\)(?:git|portablegit)\\bin\\bash\.exe$/.test(normalized.toLowerCase())) {
+    return true
+  }
+  const binDirectory = pathWin32.dirname(normalized)
+  if (
+    pathWin32.basename(normalized).toLowerCase() !== 'bash.exe' ||
+    pathWin32.basename(binDirectory).toLowerCase() !== 'bin'
+  ) {
+    return false
+  }
+  // `usr\bin\bash.exe` lands here too, and is refused because no install root sits inside `usr`.
+  const installRoot = pathWin32.dirname(binDirectory)
+  const exists = options.exists ?? existsSync
+  return GIT_FOR_WINDOWS_ROOT_MARKERS.every((marker) =>
+    exists(pathWin32.join(installRoot, ...marker))
+  )
+}
+
 export function resolveWindowsGitBashShellPath(
   shell: string,
   options: GitBashPathOptions = {}
@@ -126,20 +157,17 @@ export function resolveWindowsGitBashShellPath(
     return resolveGitBashPath(options)
   }
 
-  // Why: resolveWindowsShellStartupFamily classifies extension-less `bash` as POSIX too, so both
-  // spellings must resolve here or setup/PTY shell selection disagrees with the quoting family.
+  // Accept both spellings used by resolveWindowsShellStartupFamily so launch and quoting agree.
   const shellBasename = pathWin32.basename(trimmed).toLowerCase()
   if (shellBasename !== 'bash.exe' && shellBasename !== 'bash') {
     return null
   }
 
   if (pathWin32.isAbsolute(trimmed) || trimmed.includes('\\') || trimmed.includes('/')) {
-    // Why: an uninstalled/stale configured path must resolve to null like the discovery
-    // branch above, so setup does not commit to a bash the PTY will never spawn.
+    // Reject stale configured paths before setup commits to a shell the PTY cannot spawn.
     const exists = options.exists ?? existsSync
     if (shellBasename === 'bash') {
-      // Why: Git for Windows ships only bash.exe, so an extension-less path is a request for it.
-      // This branch synthesizes a path the user never typed, so it must confirm the file is there.
+      // Git for Windows ships bash.exe; confirm the synthesized extensionless-path target exists.
       const candidate = `${trimmed}.exe`
       return isGitForWindowsBashPath(candidate) && exists(candidate) ? candidate : null
     }

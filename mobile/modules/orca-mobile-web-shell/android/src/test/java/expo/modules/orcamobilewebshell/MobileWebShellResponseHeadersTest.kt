@@ -12,12 +12,19 @@ class MobileWebShellResponseHeadersTest {
     assertEquals("12", headers["Content-Length"])
     assertEquals("no-store", headers["Cache-Control"])
     assertEquals("nosniff", headers["X-Content-Type-Options"])
+    // The document origin is the session id, and `img-src https:` gives the page somewhere to send
+    // it. See MobileWebShellResponseHeaders.
+    assertEquals("no-referrer", headers["Referrer-Policy"])
   }
 
   @Test
   fun `sends the policy on nothing else`() {
     for (path in listOf("/index.html", "/assets/aa.js", "/manifest.json", "/assets/bb.png")) {
-      assertNull(mobileWebShellResponseHeaders(path, 12)["Content-Security-Policy"])
+      val headers = mobileWebShellResponseHeaders(path, 12)
+      assertNull(headers["Content-Security-Policy"])
+      // Rides the document with the policy: on a subresource response it governs nothing, since
+      // the referrer of a request is decided by the document that made it.
+      assertNull(headers["Referrer-Policy"])
     }
   }
 

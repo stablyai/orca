@@ -28,7 +28,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
     expect(d.getTask(task.id)?.status).toBe('dispatched')
 
-    const capability = d.prepareStartingWorkerAuthority({
+    d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
       paneKey: 'tab_worker:leaf_worker',
@@ -37,7 +37,6 @@ describe('OrchestrationDb worker Dispatch state', () => {
       setupState: 'not_applicable',
       effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }]
     })
-    expect(capability).toMatch(/^dcap_/)
     expect(d.markWorkerDispatchReady(started.dispatch.id)).toMatchObject({
       state: 'ready',
       stage: 'input_accepted'
@@ -298,8 +297,8 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
     d.markWorkerDispatchReady(second.dispatch.id)
 
-    expect(d.abandonWorkerDispatch(first.dispatch.id)).toMatchObject({
-      disposition: 'stale',
+    expect(d.abandonWorkerDispatch(first.dispatch.id, 'epoch_test')).toMatchObject({
+      disposition: 'already_settled',
       worker: { state: 'failed' }
     })
     expect(d.getTask(task.id)?.status).toBe('dispatched')

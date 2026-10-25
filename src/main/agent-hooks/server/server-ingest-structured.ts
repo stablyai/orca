@@ -7,9 +7,18 @@ import {
 } from '../../../shared/agent-status-subject'
 import {
   structuredAgentSessionPaneKey,
-  structuredAgentSessionStatusState,
   structuredAgentSessionTabId
 } from '../../../shared/structured-agent-session-projection'
+import {
+  continueMainAgentStatus,
+  isAgentStatusHeldOpenByChildWork,
+  mainAgentTurnInterrupted
+} from '../../../shared/agent-lead-status-fold'
+import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import {
+  structuredAgentSessionDatedMainAgent,
+  structuredAgentSessionRowStateStartedAt
+} from '../../../shared/structured-agent-session-status-started-at'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
@@ -35,13 +44,27 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     }
     const previous = this.canonicalStatusStore.getParent(parsed)
     const priorStatus = previous?.status
-    const state = structuredAgentSessionStatusState(summary.status)
+    // Read canonical children; the summary's task list loses information.
+    const agentStatus = structuredAgentSessionAgentStatus({
+      status: summary.status,
+      childWork: this.canonicalStatusStore.getChildren(parsed),
+      turnOutcome: summary.turnOutcome,
+      ...(summary.stopping ? { stopping: summary.stopping } : {})
+    })
+    const { state, workingMode } = agentStatus
+    // Journal dates preserve main-agent continuity across republishing after restart.
+    const mainAgent = continueMainAgentStatus(
+      priorStatus?.mainAgent,
+      structuredAgentSessionDatedMainAgent(agentStatus.mainAgent, summary),
+      summary.updatedAt
+    )
     const tabId = structuredAgentSessionTabId(parsed.sessionId)
     const paneKey = structuredAgentSessionPaneKey(tabId, parsed.sessionId)
     if (this.state.lastStatusByPaneKey.has(paneKey)) {
       throw new Error('Structured status address conflicts with legacy evidence')
     }
-    const snapshot = this.canonicalStatusStore.getSnapshot()
+    const snapshot = this.canonicalStatusStore.getRevision()
+    const observedAt = Math.max(Date.now(), priorStatus?.receivedAt ?? 0)
     const status: AgentStatusIpcPayload = {
       paneKey,
       tabId,
@@ -50,6 +73,10 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       structuredHost: summary.hostExecutionOwned ? 'owned' : 'held',
       ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
       state,
+      ...(workingMode ? { workingMode } : {}),
+      mainAgent,
+      // Older readers use interrupted instead of mainAgent.
+      interrupted: mainAgentTurnInterrupted(mainAgent),
       prompt: summary.latestPrompt,
       agentType: summary.agent,
       ...(summary.model ? { model: summary.model } : {}),
@@ -58,9 +85,17 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       ...(summary.lastAssistantMessage
         ? { lastAssistantMessage: summary.lastAssistantMessage }
         : {}),
-      receivedAt: Math.max(Date.now(), priorStatus?.receivedAt ?? 0),
-      evidenceObservedAt: summary.updatedAt,
-      stateStartedAt: priorStatus?.state === state ? priorStatus.stateStartedAt : summary.updatedAt,
+      receivedAt: observedAt,
+      // Child-held work needs a live observation clock; the stopped main-agent journal would make it expire.
+      evidenceObservedAt: isAgentStatusHeldOpenByChildWork({ state, mainAgent })
+        ? observedAt
+        : summary.updatedAt,
+      // Monitoring becoming a real turn must restart the clock even if state remains working.
+      stateStartedAt:
+        structuredAgentSessionRowStateStartedAt({ state, mainAgent }, summary) ??
+        (priorStatus?.state === state && priorStatus.workingMode === workingMode
+          ? priorStatus.stateStartedAt
+          : summary.updatedAt),
       observation: {
         origin: 'structured',
         kind: 'transition',
@@ -95,7 +130,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     this.emitEnrichedStatus(after)
   }
 
-  /** Pane cleanup never resolves a canonical subject; only its owning feed can forget this row. */
+  /** Only the owning feed can forget a structured row; pane cleanup cannot. */
   dropStructuredStatus(subject: AgentStatusStructuredSessionSubject): void {
     const parsed = parseAgentStatusSubject(subject)
     if (!parsed || parsed.kind !== 'structured-session') {

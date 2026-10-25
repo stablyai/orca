@@ -10,18 +10,21 @@ import {
   stampWslOrchestrationCompatibilityHost
 } from '../../../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { buildPtyHostEnv } from '../host-env/assembly'
+import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
+import { getRuntimeSourceStamp } from '../../../runtime/host-descriptor'
 import {
   getCompatibleSelectedCodexHomePath,
-  isCodexStatusHooksEnabled,
   shouldStripInheritedOrcaCodexHome
 } from '../host-env/codex-home'
 import type { GetSelectedCodexHomePath } from '../host-env/types'
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
+import { visibleRendererPtys } from '../delivery/visibility-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
+import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
 export function configureLocalPtyProvider(args: {
   runtime?: OrcaRuntimeService
@@ -29,7 +32,7 @@ export function configureLocalPtyProvider(args: {
   getSelectedCodexHomePath?: GetSelectedCodexHomePath
   trustedTerminalHandleEnv: Set<string>
 }): void {
-  // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.
+  // Daemon providers assemble their own environment; configure only the in-process provider.
   if (!(localProvider instanceof LocalPtyProvider)) {
     return
   }
@@ -42,6 +45,13 @@ export function configureLocalPtyProvider(args: {
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),
     buildSpawnEnv: async (id, baseEnv, ctx) => {
+      await prepareAntigravityAccountForLaunch({
+        launchAgent: ctx?.launchAgent,
+        command: ctx?.command,
+        isWsl: ctx?.isWsl,
+        env: baseEnv,
+        envIsComplete: true
+      })
       const codexSelectionTarget: CodexAccountSelectionTarget =
         ctx?.isWsl === true
           ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
@@ -50,10 +60,7 @@ export function configureLocalPtyProvider(args: {
         codexSelectionTarget,
         ctx?.codexHomePathOverride
           ? ctx.codexHomePathOverride.value
-          : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-              workspacePath: ctx?.cwd,
-              launchAgent: ctx?.launchAgent
-            })) ?? null)
+          : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv)) ?? null)
       )
       const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
       const ptySettings = getSettings?.()
@@ -85,15 +92,16 @@ export function configureLocalPtyProvider(args: {
         }),
         launchCommand: ctx?.command,
         launchAgent: ctx?.launchAgent,
+        shellPath: ctx?.shellPath,
         isWsl: ctx?.isWsl,
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+        terminalInlineImages: ptySettings?.terminalInlineImages,
         disabledTuiAgents: ptySettings?.disabledTuiAgents,
-        codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
       })
-      // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
+      // Supply terminal identity at process start so agents can address orchestration without another RPC.
       const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
       const preAllocatedHandle =
         requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
@@ -110,6 +118,10 @@ export function configureLocalPtyProvider(args: {
         runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx?.isWsl === true ? ctx.wslDistro : null
       )
+      stampRuntimeSourceEnv(
+        env,
+        getRuntimeSourceStamp(runtime, getAppEnvironment().getPath('userData'))
+      )
       if (ctx?.isWsl === true) {
         addOrcaWslInteropEnv(env)
       }
@@ -120,11 +132,12 @@ export function configureLocalPtyProvider(args: {
       if (!isCurrentPtyExit({ id, incarnationId })) {
         return
       }
+      const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(id)
       clearProviderPtyState(id)
       ptyOwnership.delete(id)
-      markClaudePtyExited(id)
       runtime?.onPtyExit(id, code, incarnationId, {
         providerExitObserved: true,
+        ...(viewShown ? { viewShown } : {}),
         ...(cause ? { cause } : {})
       })
     },

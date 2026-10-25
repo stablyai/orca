@@ -34,7 +34,7 @@ export const REPLY_MATRIX_NORMAL_RESULT_INVENTORY: readonly ReplyMatrixNormalRes
   {
     family: 'project-explicit-false',
     request: 'github.project.updateIssueBySlug#1',
-    // The b2 seed's only recorded success is a null result — the shipped bug it exists to pin — and
+    // The b2 seed's only recorded success is a null result — the regression it exists to pin — and
     // `result-null` is already its own partition, so replaying it would leave the matrix no control.
     reason: 'the seed records a null result, which the result-null partition already drives',
     result: { ok: true }

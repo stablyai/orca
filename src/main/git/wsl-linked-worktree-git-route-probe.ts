@@ -7,7 +7,7 @@ export type WslLinkedWorktreeRoutingFileSystem = {
   readFile(path: string): Promise<string>
 }
 
-/** `known: false` means the marker exists but cannot be classified — what a half-written `.git` file looks like mid `worktree add`. */
+/** known: false includes half-written or unclassifiable .git files. */
 export type WslLinkedWorktreeGitRouteProbeResult = {
   usesHostGit: boolean
   known: boolean
@@ -30,7 +30,6 @@ export const defaultWslLinkedWorktreeRoutingFileSystem: WslLinkedWorktreeRouting
   readFile: (path) => fsPromises.readFile(path, 'utf8')
 }
 
-/** Walk parent directories until Git's worktree marker identifies which Git owns this checkout. */
 export async function probeWslLinkedWorktreeGitRoute(
   cwd: string,
   fileSystem: WslLinkedWorktreeRoutingFileSystem
@@ -42,11 +41,11 @@ export async function probeWslLinkedWorktreeGitRoute(
     try {
       const marker = await fileSystem.stat(markerPath)
       if (!marker.isFile()) {
-        // A `.git` directory (or anything that is not a file) is a normal main checkout.
+        // A non-file .git marker does not require linked-worktree routing.
         return { usesHostGit: false, known: true }
       }
       const gitdir = parseLinkedGitdir(await fileSystem.readFile(markerPath))
-      // A POSIX gitdir is a settled answer too: the distro owns this checkout.
+      // POSIX gitdirs settle on distro Git too.
       return gitdir === null
         ? { usesHostGit: false, known: false }
         : { usesHostGit: WINDOWS_DRIVE_PATH.test(gitdir), known: true }
@@ -57,7 +56,7 @@ export async function probeWslLinkedWorktreeGitRoute(
       }
     }
     if (candidate === driveRoot) {
-      // No marker up to the drive root: not a worktree at all, and stable enough to cache.
+      // No marker up to the drive root is a stable negative answer.
       return { usesHostGit: false, known: true }
     }
     candidate = win32.dirname(candidate)

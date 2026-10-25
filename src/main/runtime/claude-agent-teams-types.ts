@@ -6,6 +6,7 @@ import type {
   RuntimeTerminalShow,
   RuntimeTerminalSplit
 } from '../../shared/runtime-types'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type AgentTeamsTmuxCompatRequest = {
   teamId: string
@@ -43,7 +44,8 @@ export type AgentTeamsTerminalApi = {
   readTerminal(handle: string, opts?: { limit?: number }): Promise<RuntimeTerminalRead>
   sendTerminal(
     handle: string,
-    action: { text?: string; enter?: boolean; interrupt?: boolean }
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    options: { inputKind: TerminalInputKind }
   ): Promise<RuntimeTerminalSend>
   focusTerminal(handle: string): Promise<RuntimeTerminalFocus>
   closeTerminal(handle: string): Promise<RuntimeTerminalClose>

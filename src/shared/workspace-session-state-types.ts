@@ -6,8 +6,10 @@ import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
+import type { PairedTerminalTabCloseIntent } from './paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
+import type { ClosedTerminalPanesByPaneKey } from './closed-terminal-panes'
 
 /** Minimal subset of OpenFile persisted across restarts.
  *  Only edit-mode files are saved — diffs, conflict reviews, and other
@@ -19,6 +21,7 @@ export type PersistedOpenFile = {
   language: string
   isPreview?: boolean
   runtimeEnvironmentId?: string | null
+  mirroredFromRuntimeSession?: true
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
   /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
@@ -53,9 +56,8 @@ export type WorkspaceSessionState = {
    * (force-park, hibernate, sleep, shutdown) still write it. This field is **local-only**: the
    * ordinary cold park fires every time a workspace is hidden, and shipping that in a wholesale
    * `replace-session` costs tens of MiB on the common path for a copy no peer consumes.
-   * `exportRemoteWorkspaceSession` is an explicit allowlist of named top-level fields, so a
-   * top-level field is omitted from the upload for free — a field *inside* the layout would ride
-   * along, because layout entries are copied whole. Do not move it into the layout for tidiness.
+   * A field *inside* the layout would ride along wherever layout entries are copied whole, so do
+   * not move it into the layout for tidiness.
    *
    * Second property, by construction rather than by a fix: the mirrored-tab apply rewrites only
    * `ptyIdsByTabId` and `terminalLayoutsByTabId`, so a host inventory frame cannot wipe this.
@@ -94,6 +96,11 @@ export type WorkspaceSessionState = {
    * the user deliberately closed while the host was down.
    */
   clientHostedBrowserCloseIntentsByEnvironment?: Record<string, ClientHostedBrowserCloseIntent[]>
+  /**
+   * Client-authored: user closes of a paired runtime host's session tabs that never reached it,
+   * keyed by runtime environment ID. Replayed when a host snapshot still lists the tab.
+   */
+  pairedTerminalTabCloseIntentsByEnvironment?: Record<string, PairedTerminalTabCloseIntent[]>
   /** Per-worktree active tab type (terminal vs editor vs browser) at shutdown. */
   activeTabTypeByWorktree?: Record<string, WorkspaceVisibleTabType>
   /** Global browser URL history for address bar autocomplete. */
@@ -152,6 +159,9 @@ export type WorkspaceSessionState = {
   /** Terminal tabs this client watched the user close, kept until the host's own snapshot stops
    *  listing them. See shared/closed-terminal-tab-tombstones.ts for why absence alone cannot say it. */
   closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
+  /** Layout-owner builds: panes main's layout dropped while their terminals may run on. See
+   *  shared/closed-terminal-panes.ts. */
+  closedTerminalPanesByPaneKey?: ClosedTerminalPanesByPaneKey
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

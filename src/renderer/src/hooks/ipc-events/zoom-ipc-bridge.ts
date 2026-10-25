@@ -1,10 +1,13 @@
+import { writeNativeChatFontSize } from '@/components/native-chat/native-chat-font-size-write'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { computeEditorFontSize, nextEditorFontZoomLevel } from '@/lib/editor-font-zoom'
 import { zoomLevelToPercent } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
 import { useAppStore } from '../../store'
-import { resolveZoomTarget } from '../resolve-zoom-target'
+import { focusedBrowserPageId, resolveZoomTarget } from '../resolve-zoom-target'
+import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/browser-page-zoom'
+import { requestViewerZoom } from '@/components/editor/viewer-zoom-request'
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   // Zoom handling for menu accelerators and keyboard fallback paths.
@@ -18,10 +21,27 @@ export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
         activeTabType,
         activeElement: document.activeElement
       })
+      if (target === 'chat') {
+        void writeNativeChatFontSize(
+          direction === 'in' ? 'increase' : direction === 'out' ? 'decrease' : 'reset'
+        )
+        return
+      }
       if (target === 'terminal') {
         return
       }
+      if (target === 'browser') {
+        const browserPageId = focusedBrowserPageId(document.activeElement)
+        if (browserPageId) {
+          dispatchBrowserPageZoom({ browserPageId, direction })
+        }
+        return
+      }
       if (target === 'editor') {
+        // Why: a PDF or image owns its zoom; editor font zoom would change nothing visible.
+        if (requestViewerZoom(direction)) {
+          return
+        }
         const next = nextEditorFontZoomLevel(editorFontZoomLevel, direction)
         setEditorFontZoomLevel(next)
         void window.api.ui.set({ editorFontZoomLevel: next })

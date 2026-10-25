@@ -15,7 +15,7 @@ import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
 const openUrl = vi.fn()
 const createBrowserTab = vi.fn()
 const setActiveWorktree = vi.fn()
-const openRuntimeBrowserTab = vi.fn(() => Promise.resolve())
+const openRuntimeBrowserTab = vi.fn((): Promise<string | null> => Promise.resolve(null))
 
 function plainEvent(): MouseEvent {
   return {
@@ -120,6 +120,26 @@ describe('terminal link action routing', () => {
       })
     ).toBe(true)
     expect(run).toHaveBeenCalledOnce()
+  })
+
+  it('leaves disabled plain clicks with the terminal while middle click remains enabled', () => {
+    const context = actionContext()
+    context.plainClickBehavior = 'none'
+    context.middleClickBehavior = 'open'
+    const event = plainEvent()
+    const run = vi.fn()
+
+    expect(
+      requestTerminalLinkAction(event, context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run }
+      })
+    ).toBe(false)
+    expect(context.claimPtyMouse).not.toHaveBeenCalled()
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(context.request).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
   })
 
   it('keeps middle click available when plain clicks stay with the terminal', () => {

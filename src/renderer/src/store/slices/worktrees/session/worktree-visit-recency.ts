@@ -1,3 +1,4 @@
+import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
@@ -8,6 +9,10 @@ import {
   getWorktreeVisitKey,
   getWorktreeVisitTimestamp
 } from '@/lib/worktree-visit-recency'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 export function createMarkWorktreeVisited(
   set: WorktreeSliceSet,
@@ -45,7 +50,7 @@ export function createPruneLastVisitedTimestamps(
   set: WorktreeSliceSet,
   _get: WorktreeSliceGet
 ): WorktreeSlice['pruneLastVisitedTimestamps'] {
-  return () => {
+  const prune = () => {
     set((s) => {
       // Why: prune per-repo, not globally — SSH repos aren't hydrated at startup, so a global prune would wipe SSH focus-recency.
       // Only drop for repos with a populated/authoritative list; a missing repoId means not-yet-hydrated (defer).
@@ -56,15 +61,15 @@ export function createPruneLastVisitedTimestamps(
         validWorktreeIds.add(worktree.id)
         validVisitKeys.add(getWorktreeVisitKey(worktree.id, worktree.hostId))
       }
-      for (const [repoId, list] of Object.entries(s.worktreesByRepo)) {
+      for (const [repoId, list] of Object.entries(selectWorktreesByRepo(s))) {
         // An empty list is the not-yet-hydrated shape, not an authoritative "no worktrees".
-        if (s.detectedWorktreesByRepo[repoId] || list.length === 0) {
+        if (selectDetectedWorktreesByRepo(s)[repoId] || list.length === 0) {
           continue
         }
         validIdsByRepo.set(repoId, new Set(list.map((worktree) => worktree.id)))
         list.forEach(addValidWorktree)
       }
-      for (const [repoId, result] of Object.entries(s.detectedWorktreesByRepo)) {
+      for (const [repoId, result] of Object.entries(selectDetectedWorktreesByRepo(s))) {
         if (result.authoritative) {
           validIdsByRepo.set(repoId, new Set(result.worktrees.map((worktree) => worktree.id)))
           result.worktrees.forEach(addValidWorktree)
@@ -127,6 +132,7 @@ export function createPruneLastVisitedTimestamps(
       return Object.keys(patch).length > 0 ? patch : s
     })
   }
+  return () => runAsAutomaticDeselection(prune)
 }
 
 export function createSeedActiveWorktreeLastVisitedIfMissing(

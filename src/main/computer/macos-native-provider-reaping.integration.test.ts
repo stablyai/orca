@@ -1,6 +1,7 @@
 import { once } from 'node:events'
 import { afterEach, describe, expect, it } from 'vitest'
-import { spawnProcess, type ChildProcessHandle } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { reapMacOSProviderProcess } from './macos-native-provider-process-reaping'
 
 describe.skipIf(process.platform === 'win32')('real macOS provider process reaping', () => {

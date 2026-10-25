@@ -1,18 +1,28 @@
 import type { WebContents } from 'electron'
+import { sendGuestCdpCommand } from './guest-cdp-command'
+import { assertRemoteCliPageAccess, readRemoteCliAdmittedPage } from './remote-cli-page-admission'
+
+/** Draws a hidden guest for the duration of a capture; returns its release. */
+export type CapturePaintHold = () => () => void
 
 const SCREENSHOT_TIMEOUT_MS = 8000
+// Probe offsets leave time for the original capture to finish before the deadline.
+const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
+// A cheap 1×1 probe can produce the frame needed by the pending capture.
+const FRAME_PROBE_PARAMS = {
+  format: 'jpeg',
+  quality: 1,
+  clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 }
+}
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
-const SCREENSHOT_TIMEOUT_MESSAGE =
-  'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
+const SCREENSHOT_TIMEOUT_MESSAGE = 'Screenshot timed out — the browser page did not draw a frame.'
 
 function applyFallbackClip(
   image: Electron.NativeImage,
   params: Record<string, unknown> | undefined
 ): Electron.NativeImage | null {
   if (params?.captureBeyondViewport) {
-    // Why: capturePage() can only see the currently painted viewport. If the
-    // caller asked for beyond-viewport pixels, returning a viewport-sized image
-    // would silently lie about what was captured.
+    // capturePage() only captures the painted viewport.
     return null
   }
 
@@ -78,17 +88,17 @@ function encodeNativeImageScreenshot(
   return { data: buffer.toString('base64') }
 }
 
-function getLayoutClip(metrics: {
-  cssContentSize?: { width?: number; height?: number }
-  contentSize?: { width?: number; height?: number }
-}): { x: number; y: number; width: number; height: number; scale: number } | null {
-  // Why: Page.captureScreenshot clip coordinates are in CSS pixels. On HiDPI
-  // Electron guests, `contentSize` can reflect device pixels, which makes
-  // Chromium tile the page into a duplicated 2x2 grid. Prefer cssContentSize
-  // and only fall back to contentSize when older Chromium builds omit it.
-  const size = metrics.cssContentSize ?? metrics.contentSize
-  const width = size?.width
-  const height = size?.height
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function getLayoutClip(
+  metrics: unknown
+): { x: number; y: number; width: number; height: number; scale: number } | null {
+  // Clips use CSS pixels; HiDPI contentSize can cause duplicated tiles.
+  const size = isRecord(metrics) ? (metrics.cssContentSize ?? metrics.contentSize) : undefined
+  const width = isRecord(size) ? size.width : undefined
+  const height = isRecord(size) ? size.height : undefined
   if (
     typeof width !== 'number' ||
     !Number.isFinite(width) ||
@@ -109,88 +119,127 @@ function getLayoutClip(metrics: {
   }
 }
 
-async function sendCommandWithTimeout<T>(
-  webContents: WebContents,
-  method: string,
-  params: Record<string, unknown> | undefined,
-  timeoutMessage: string
-): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timer: NodeJS.Timeout | null = null
-  try {
-    return await Promise.race([
-      webContents.debugger.sendCommand(method, params ?? {}) as Promise<T>,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(timeoutMessage)), SCREENSHOT_TIMEOUT_MS)
-      })
-    ])
-  } finally {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+    })
+  ]).finally(() => {
     if (timer) {
       clearTimeout(timer)
     }
-  }
+  })
+}
+
+// Undrawn pages can leave captures pending; cheap probes trigger a frame for the original request.
+function captureUntilDrawn(
+  webContents: WebContents,
+  params: Record<string, unknown>
+): Promise<{ data: string } | null> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (settle: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(deadline)
+      probes.forEach(clearTimeout)
+      settle()
+    }
+    const send = (
+      requestParams: Record<string, unknown>
+    ): Promise<{ data?: string } | undefined> | null => {
+      if (webContents.isDestroyed()) {
+        finish(() => reject(new Error('WebContents destroyed')))
+        return null
+      }
+      if (!webContents.debugger.isAttached()) {
+        finish(() => reject(new Error('Debugger detached')))
+        return null
+      }
+      try {
+        // Recheck access because navigation can leave the SSH host’s admitted pages between probes.
+        assertRemoteCliPageAccess(webContents.id)
+      } catch (error) {
+        finish(() => reject(error))
+        return null
+      }
+      try {
+        webContents.invalidate()
+      } catch {
+        // Guest teardown can reject repaint requests; still try CDP.
+      }
+      return sendGuestCdpCommand(webContents, 'Page.captureScreenshot', requestParams).then(
+        (result) => {
+          const data = isRecord(result) ? result.data : undefined
+          return typeof data === 'string' ? { data } : undefined
+        }
+      )
+    }
+    const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
+    const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
+      setTimeout(() => send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
+    )
+    send(params)?.then(
+      (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
+      (error: unknown) =>
+        finish(() => reject(error instanceof Error ? error : new Error(String(error))))
+    )
+  })
 }
 
 export async function captureFullPageScreenshot(
   webContents: WebContents,
-  format: 'png' | 'jpeg' = 'png'
+  format: 'png' | 'jpeg',
+  holdPaint: CapturePaintHold
 ): Promise<{ data: string; format: 'png' | 'jpeg' }> {
   if (webContents.isDestroyed()) {
     throw new Error('WebContents destroyed')
   }
-  const dbg = webContents.debugger
-  if (!dbg.isAttached()) {
+  if (!webContents.debugger.isAttached()) {
     throw new Error('Debugger not attached')
   }
 
+  const release = holdPaint()
   try {
-    webContents.invalidate()
-  } catch {
-    // Some guest teardown paths reject repaint requests. Fall through to CDP.
-  }
-
-  const metrics = await sendCommandWithTimeout<{
-    cssContentSize?: { width?: number; height?: number }
-    contentSize?: { width?: number; height?: number }
-  }>(webContents, 'Page.getLayoutMetrics', undefined, SCREENSHOT_TIMEOUT_MESSAGE)
-  const clip = getLayoutClip(metrics)
-  if (!clip) {
-    throw new Error('Unable to determine full-page screenshot bounds')
-  }
-
-  const { data } = await sendCommandWithTimeout<{ data: string }>(
-    webContents,
-    'Page.captureScreenshot',
-    {
+    // Layout works before drawing; only pixel capture needs a frame.
+    const metrics = await withTimeout(
+      sendGuestCdpCommand(webContents, 'Page.getLayoutMetrics', {}),
+      SCREENSHOT_TIMEOUT_MS,
+      'Screenshot timed out — the browser page did not respond.'
+    )
+    const clip = getLayoutClip(metrics)
+    if (!clip) {
+      throw new Error('Unable to determine full-page screenshot bounds')
+    }
+    const frame = await captureUntilDrawn(webContents, {
       format,
       captureBeyondViewport: true,
       clip
-    },
-    SCREENSHOT_TIMEOUT_MESSAGE
-  )
-
-  return { data, format }
+    })
+    if (!frame) {
+      throw new Error(SCREENSHOT_TIMEOUT_MESSAGE)
+    }
+    return { data: frame.data, format }
+  } finally {
+    release()
+  }
 }
 
-// Why: Electron's capturePage() is unreliable on webview guests — the compositor
-// may not produce frames when the webview panel is inactive, unfocused, or in a
-// split-pane layout. Instead, use the debugger's Page.captureScreenshot which
-// renders server-side in the Blink compositor and doesn't depend on OS-level
-// window focus or display state. Guard with a timeout so agent-browser doesn't
-// hang on its 30s CDP timeout if the debugger stalls.
-export function captureScreenshot(
+// Prefer CDP for beyond-viewport capture; bound stalls below agent-browser’s 30-second timeout.
+export async function captureScreenshot(
   webContents: WebContents,
   params: Record<string, unknown> | undefined,
-  onResult: (result: unknown) => void,
-  onError: (message: string) => void
-): void {
+  holdPaint: CapturePaintHold
+): Promise<{ data: string }> {
   if (webContents.isDestroyed()) {
-    onError('WebContents destroyed')
-    return
+    throw new Error('WebContents destroyed')
   }
-  const dbg = webContents.debugger
-  if (!dbg.isAttached()) {
-    onError('Debugger not attached')
-    return
+  if (!webContents.debugger.isAttached()) {
+    throw new Error('Debugger not attached')
   }
 
   const screenshotParams: Record<string, unknown> = {}
@@ -210,89 +259,26 @@ export function captureScreenshot(
     screenshotParams.fromSurface = params.fromSurface
   }
 
-  let settled = false
-  let timeoutTimer: ReturnType<typeof setTimeout> | null = null
-  let fallbackTimer: ReturnType<typeof setTimeout> | null = null
-  const clearTimers = (): void => {
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer)
-      timeoutTimer = null
-    }
-    if (fallbackTimer) {
-      clearTimeout(fallbackTimer)
-      fallbackTimer = null
-    }
-  }
-  const settleResult = (result: unknown): void => {
-    if (settled) {
-      return
-    }
-    settled = true
-    clearTimers()
-    onResult(result)
-  }
-  const settleError = (message: string): void => {
-    if (settled) {
-      return
-    }
-    settled = true
-    clearTimers()
-    onError(message)
-  }
-  // Why: a compositor invalidate is cheap and can recover guest instances that
-  // are visible but have not produced a fresh frame since being reclaimed into
-  // the active browser tab.
+  const release = holdPaint()
   try {
-    webContents.invalidate()
-  } catch {
-    // Some guest teardown paths reject repaint requests. Fall through to CDP.
-  }
-  timeoutTimer = setTimeout(() => {
-    if (settled) {
-      return
+    const frame = await captureUntilDrawn(webContents, screenshotParams)
+    if (frame) {
+      return frame
     }
-    // Why: capturePage is only a best-effort fallback. If it also stalls, the
-    // CDP proxy must still settle instead of inheriting the compositor hang.
-    fallbackTimer = setTimeout(
-      () => settleError(SCREENSHOT_TIMEOUT_MESSAGE),
-      FALLBACK_CAPTURE_TIMEOUT_MS
-    )
-    void Promise.resolve()
-      .then(() => webContents.capturePage())
-      .then(
-        (image) => {
-          if (settled) {
-            return
-          }
-          if (fallbackTimer) {
-            clearTimeout(fallbackTimer)
-            fallbackTimer = null
-          }
-          let fallback: { data: string } | null = null
-          try {
-            fallback = encodeNativeImageScreenshot(image, params)
-          } catch {
-            settleError(SCREENSHOT_TIMEOUT_MESSAGE)
-            return
-          }
-          if (fallback) {
-            settleResult(fallback)
-            return
-          }
-          settleError(SCREENSHOT_TIMEOUT_MESSAGE)
-        },
-        () => {
-          if (fallbackTimer) {
-            clearTimeout(fallbackTimer)
-            fallbackTimer = null
-          }
-          settleError(SCREENSHOT_TIMEOUT_MESSAGE)
-        }
+    const fallback = await readRemoteCliAdmittedPage(webContents.id, () =>
+      withTimeout(
+        Promise.resolve().then(() => webContents.capturePage()),
+        FALLBACK_CAPTURE_TIMEOUT_MS,
+        SCREENSHOT_TIMEOUT_MESSAGE
       )
-  }, SCREENSHOT_TIMEOUT_MS)
-
-  dbg
-    .sendCommand('Page.captureScreenshot', screenshotParams)
-    .then((result) => settleResult(result))
-    .catch((err) => settleError((err as Error).message))
+        .then((image) => encodeNativeImageScreenshot(image, params))
+        .catch(() => null)
+    )
+    if (fallback) {
+      return fallback
+    }
+    throw new Error(SCREENSHOT_TIMEOUT_MESSAGE)
+  } finally {
+    release()
+  }
 }

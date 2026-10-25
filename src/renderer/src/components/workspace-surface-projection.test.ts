@@ -7,8 +7,6 @@
  * SSH/paired-runtime host therefore reached the mount loops twice, mounting the
  * same tabIds under duplicate React keys with both trees marked visible.
  */
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import { getIndexedAllWorktrees, getIndexedWorktreeMap } from '../store/worktree-repo-index'
@@ -365,34 +363,5 @@ describe('worktree surface feed subscription identity', () => {
     expect(new Set(getIndexedWorktreeMap(worktreesByRepo).keys())).toEqual(
       new Set(getIndexedAllWorktrees(worktreesByRepo).map((worktree) => worktree.id))
     )
-  })
-})
-
-// Why source text: the per-id collapse lives in the store index, so the module
-// tests above stay green even if the workbench goes back to flattening the
-// host-qualified array itself. The feed is the half that has to be ratcheted.
-const FOUNDATION_PATH = 'src/renderer/src/components/use-terminal-workspace-foundation.ts'
-
-describe('Terminal workbench surface feed', () => {
-  const source = readFileSync(join(process.cwd(), FOUNDATION_PATH), 'utf8')
-
-  it('feeds the projection from the store per-id index, never the host-qualified array', () => {
-    expect(source).not.toContain('useAllWorktrees')
-    expect(source).toContain('const worktreesById = useWorktreeMap()')
-  })
-
-  it('has exactly one projection call site, so no second flatten can hide beside it', () => {
-    const componentsDir = join(process.cwd(), 'src/renderer/src/components')
-    const callSiteFiles = readdirSync(componentsDir)
-      .filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.'))
-      .filter((name) =>
-        readFileSync(join(componentsDir, name), 'utf8').includes('projectWorkspaceSurfaces(')
-      )
-    expect(callSiteFiles.sort()).toEqual([
-      'use-terminal-workspace-foundation.ts',
-      'workspace-surface-projection.ts'
-    ])
-    expect(source.split('projectWorkspaceSurfaces(').length - 1).toBe(1)
-    expect(source).toContain('worktreesById,\n        folderWorkspaces,')
   })
 })

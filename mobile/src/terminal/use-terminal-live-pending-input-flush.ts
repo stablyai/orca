@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 import {
   buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
@@ -36,6 +37,7 @@ type TerminalLivePendingInputFlush = {
     composing?: boolean
   ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
+  readonly endLiveInputSessionThenSend: (handle: string, bytes: string) => Promise<boolean>
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
@@ -79,7 +81,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   const clearPendingLiveInputCommit = useCallback(() => {
     resetMirrorState()
     setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
+    writeTerminalLiveInputText(liveInputRef, '')
   }, [liveInputRef, resetMirrorState, setLiveInputCapture])
 
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {
@@ -187,6 +189,38 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
   )
 
+  // Queue preedit and click synchronously so the next keystroke follows the cursor move.
+  const endLiveInputSessionThenSend = useCallback(
+    (handle: string, bytes: string): Promise<boolean> => {
+      const pendingHandle = pendingLiveInputHandleRef.current
+      const flushState = pendingLiveInputFlushRef.current
+      if (pendingHandle && pendingHandle !== handle) {
+        // Why: another terminal's queued deltas must not drain into this one.
+        cancelTerminalLivePendingFlush(flushState)
+      } else if (pendingHandle === handle && heldLiveInputTextRef.current.length > 0) {
+        const sentText = sentLiveInputTextRef.current
+        const payload = buildTerminalLiveMirrorPayload(
+          computeTerminalLiveMirrorStep(sentText, sentText + heldLiveInputTextRef.current, {
+            commitHeld: true
+          })
+        )
+        if (payload.length > 0) {
+          void queueTerminalLiveMirrorSend(flushState, handle, payload, sendQueuedMirrorPayload)
+        }
+      }
+      const sent = queueTerminalLiveMirrorSend(flushState, handle, bytes, sendQueuedMirrorPayload)
+      clearHeldCommitTimer()
+      heldLiveInputTextRef.current = ''
+      liveInputComposingRef.current = undefined
+      sentLiveInputTextRef.current = ''
+      pendingLiveInputHandleRef.current = null
+      setLiveInputCapture('')
+      writeTerminalLiveInputText(liveInputRef, '')
+      return sent
+    },
+    [clearHeldCommitTimer, liveInputRef, sendQueuedMirrorPayload, setLiveInputCapture]
+  )
+
   useEffect(() => {
     return () => {
       if (heldCommitTimerRef.current) {
@@ -204,6 +238,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   return {
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
+    endLiveInputSessionThenSend,
     flushPendingLiveInputText,
     heldLiveInputTextRef,
     liveInputComposingRef,

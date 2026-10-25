@@ -1,122 +1,137 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installWindowVisibilityTimeoutPoller } from './window-visibility-timeout-poller'
 
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+})
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+
+async function flush(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(0)
+}
+
 describe('installWindowVisibilityTimeoutPoller', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks()
-    vi.unstubAllGlobals()
-  })
-
-  it('runs immediately while visible and schedules the next poll after completion', async () => {
+  it('runs immediately and schedules after completion', async () => {
     const run = vi.fn().mockResolvedValue(undefined)
-    const setTimeoutMock = vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>)
-    const clearTimeoutMock = vi.fn()
-
-    vi.stubGlobal('window', {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    })
-    vi.stubGlobal('document', {
-      visibilityState: 'visible',
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    })
-
-    const cleanup = installWindowVisibilityTimeoutPoller({
-      run,
-      getDelayMs: () => 3000,
-      setTimeoutFn: setTimeoutMock,
-      clearTimeoutFn: clearTimeoutMock
-    })
-
-    expect(run).toHaveBeenCalledTimes(1)
-    await Promise.resolve()
-    expect(setTimeoutMock).toHaveBeenCalledWith(expect.any(Function), 3000)
-
+    const cleanup = installWindowVisibilityTimeoutPoller({ run, getDelayMs: () => 3000 })
+    expect(run).toHaveBeenCalledOnce()
+    await flush()
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(run).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(run).toHaveBeenCalledTimes(2)
     cleanup()
-    expect(clearTimeoutMock).toHaveBeenCalledWith(1)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('pauses while hidden and refreshes immediately when visible again', async () => {
-    let visibilityState: DocumentVisibilityState = 'hidden'
-    const documentListeners = new Map<string, () => void>()
+  it('pauses hidden work and refreshes once when visible again', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
     const run = vi.fn().mockResolvedValue(undefined)
-    const setTimeoutMock = vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>)
-    const clearTimeoutMock = vi.fn()
-
-    vi.stubGlobal('window', {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    })
-    vi.stubGlobal('document', {
-      get visibilityState() {
-        return visibilityState
-      },
-      addEventListener: vi.fn((event: string, listener: () => void) => {
-        documentListeners.set(event, listener)
-      }),
-      removeEventListener: vi.fn()
-    })
-
-    const cleanup = installWindowVisibilityTimeoutPoller({
-      run,
-      getDelayMs: () => 3000,
-      setTimeoutFn: setTimeoutMock,
-      clearTimeoutFn: clearTimeoutMock
-    })
-
+    const cleanup = installWindowVisibilityTimeoutPoller({ run, getDelayMs: () => 3000 })
+    await vi.advanceTimersByTimeAsync(9000)
     expect(run).not.toHaveBeenCalled()
-    expect(setTimeoutMock).not.toHaveBeenCalled()
-
-    visibilityState = 'visible'
-    documentListeners.get('visibilitychange')?.()
-    expect(run).toHaveBeenCalledTimes(1)
-    await Promise.resolve()
-    expect(setTimeoutMock).toHaveBeenCalledTimes(1)
-
-    visibilityState = 'hidden'
-    documentListeners.get('visibilitychange')?.()
-    expect(clearTimeoutMock).toHaveBeenCalledWith(1)
-
+    visibility.mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flush()
+    expect(run).toHaveBeenCalledOnce()
+    visibility.mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(vi.getTimerCount()).toBe(0)
     cleanup()
   })
 
-  it('does not overlap focus refreshes while a poll is in flight', async () => {
-    const windowListeners = new Map<string, () => void>()
-    let resolveRun!: () => void
+  it('does not overlap in-flight focus reads', async () => {
+    let resolveRun: (() => void) | undefined
     const run = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveRun = resolve
         })
     )
-    const setTimeoutMock = vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>)
+    const cleanup = installWindowVisibilityTimeoutPoller({ run, getDelayMs: () => 3000 })
+    window.dispatchEvent(new Event('focus'))
+    expect(run).toHaveBeenCalledOnce()
+    resolveRun?.()
+    await flush()
+    expect(vi.getTimerCount()).toBe(1)
+    cleanup()
+  })
 
-    vi.stubGlobal('window', {
-      addEventListener: vi.fn((event: string, listener: () => void) => {
-        windowListeners.set(event, listener)
-      }),
-      removeEventListener: vi.fn()
-    })
-    vi.stubGlobal('document', {
-      visibilityState: 'visible',
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    })
-
+  it('stops after a null delay and responds to visibility return without focus bursts', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get')
+    const run = vi.fn().mockResolvedValue(undefined)
     const cleanup = installWindowVisibilityTimeoutPoller({
       run,
-      getDelayMs: () => 3000,
-      setTimeoutFn: setTimeoutMock
+      getDelayMs: () => null,
+      cooldownMs: 10_000
     })
+    await flush()
+    expect(vi.getTimerCount()).toBe(0)
+    window.dispatchEvent(new Event('focus'))
+    await flush()
+    expect(run).toHaveBeenCalledOnce()
+    visibility.mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(10_000)
+    visibility.mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flush()
+    window.dispatchEvent(new Event('focus'))
+    await flush()
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(0)
+    cleanup()
+  })
 
-    expect(run).toHaveBeenCalledTimes(1)
-    windowListeners.get('focus')?.()
-    expect(run).toHaveBeenCalledTimes(1)
+  it('waits for stale data when a fresh window returns before its next poll', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get')
+    const run = vi.fn().mockResolvedValue(undefined)
+    const cleanup = installWindowVisibilityTimeoutPoller({
+      run,
+      getDelayMs: () => 60_000,
+      cooldownMs: 10_000
+    })
+    await flush()
+    visibility.mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(30_000)
+    visibility.mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flush()
+    expect(run).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(run).toHaveBeenCalledTimes(2)
+    cleanup()
+  })
 
-    resolveRun()
-    await Promise.resolve()
-    expect(setTimeoutMock).toHaveBeenCalledTimes(1)
+  it('picks up a settled null delay after pending finishes', async () => {
+    let delay: number | null = 60_000
+    const run = vi.fn().mockResolvedValue(undefined)
+    const cleanup = installWindowVisibilityTimeoutPoller({ run, getDelayMs: () => delay })
+    await flush()
+    delay = null
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(0)
+    cleanup()
+  })
+
+  it('keeps retrying rejected and synchronously throwing reads', async () => {
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce(() => {
+        throw new Error('offline')
+      })
+      .mockResolvedValue(undefined)
+    const cleanup = installWindowVisibilityTimeoutPoller({ run, getDelayMs: () => 3000 })
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(run).toHaveBeenCalledTimes(3)
     cleanup()
   })
 })

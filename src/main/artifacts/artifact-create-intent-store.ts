@@ -1,14 +1,5 @@
-import { createHash, randomBytes } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   ARTIFACT_MAX_CONTENT_BYTES,
@@ -16,20 +7,13 @@ import {
   artifactContentByteLength,
   artifactWriteRequestByteLength
 } from '../../shared/artifacts'
-import {
-  bestEffortFsyncDirectorySync,
-  fsyncFileSync,
-  hardenSecurePath
-} from '../../shared/secure-file'
+import { bestEffortFsyncDirectorySync, writeSecureFile } from '../../shared/secure-file'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import type { ArtifactWriteBody } from './artifact-cloud-request'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
 export const MAX_PENDING_ARTIFACT_CREATES = 32
 export const MAX_ARTIFACT_CREATE_INTENT_BYTES = ARTIFACT_MAX_REQUEST_BYTES + 128 * 1024
-
-const MAX_HARDENED_INTENT_DIRECTORIES = 64
-const hardenedIntentDirectories = new Set<string>()
 
 export type ArtifactCreateIntent = {
   version: 1
@@ -46,20 +30,6 @@ function intentDirectory(profileId: string, userDataPath: string): string {
 function ensureIntentDirectory(profileId: string, userDataPath: string): string {
   const directory = intentDirectory(profileId, userDataPath)
   mkdirSync(directory, { recursive: true, mode: 0o700 })
-  if (!hardenedIntentDirectories.has(directory)) {
-    hardenSecurePath(directory, {
-      isDirectory: true,
-      platform: process.platform,
-      sync: true
-    })
-    if (hardenedIntentDirectories.size >= MAX_HARDENED_INTENT_DIRECTORIES) {
-      const oldest = hardenedIntentDirectories.values().next().value
-      if (oldest !== undefined) {
-        hardenedIntentDirectories.delete(oldest)
-      }
-    }
-    hardenedIntentDirectories.add(directory)
-  }
   return directory
 }
 
@@ -68,23 +38,6 @@ function removeTemporaryIntents(directory: string): void {
     if (name.endsWith('.tmp')) {
       rmSync(join(directory, name), { force: true })
     }
-  }
-}
-
-function writeIntent(path: string, directory: string, serializedIntent: string): void {
-  // Child files inherit the once-hardened directory ACL, avoiding per-create PowerShell launches.
-  const temporaryPath = `${path}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
-  try {
-    writeFileSync(temporaryPath, serializedIntent, {
-      encoding: 'utf8',
-      mode: 0o600
-    })
-    fsyncFileSync(temporaryPath)
-    renameSync(temporaryPath, path)
-    bestEffortFsyncDirectorySync(directory)
-  } catch (error) {
-    rmSync(temporaryPath, { force: true })
-    throw error
   }
 }
 
@@ -233,7 +186,9 @@ export function getOrCreateArtifactCreateIntent(
   if (Buffer.byteLength(serializedIntent, 'utf8') > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
     throw new Error('Artifact create recovery record exceeds the supported size.')
   }
-  writeIntent(intentPath(profileId, userDataPath, sourceKey, scope), directory, serializedIntent)
+  writeSecureFile(intentPath(profileId, userDataPath, sourceKey, scope), serializedIntent, {
+    durable: true
+  })
   return intent
 }
 
@@ -252,7 +207,7 @@ export function removeArtifactCreateIntent(
   try {
     matches = readIntent(path).idempotencyKey === expectedIdempotencyKey
   } catch {
-    // An unreadable record cannot be replayed, so a completed mutation may discard it safely.
+    // Unreadable intents cannot be replayed and may be discarded after completion.
   }
   if (matches) {
     rmSync(path, { force: true })

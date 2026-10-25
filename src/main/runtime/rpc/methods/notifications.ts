@@ -1,8 +1,10 @@
 import { createNotificationStreamFilter } from './notification-stream-policy'
-import { defineStreamingMethod, defineMethod } from '../core'
+import { defineStreamingMethod, defineMethod, type RpcContext } from '../core'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   NotificationGetMissedSinceParams,
   NotificationRegisterPushParams,
+  NotificationReportDesktopPresenceParams,
   NotificationUnsubscribeParams,
   NotificationsSubscribeParams
 } from '../../../../shared/rpc-contract/notifications-params'
@@ -12,10 +14,30 @@ import {
 // notifications.subscribe calls landed on the same millisecond.
 let notificationsSubscriptionSeq = 0
 
+type DesktopPresenceReportContext = Pick<RpcContext, 'clientKind' | 'connectionId' | 'signal'> & {
+  runtime: Pick<OrcaRuntimeService, 'reportDesktopClientPresence' | 'registerSubscriptionCleanup'>
+}
+
+/** Only a paired desktop's own socket speaks for a desktop; the report lives as long as it. */
+export function reportDesktopPresence(
+  params: { away: boolean },
+  { runtime, clientKind, connectionId, signal }: DesktopPresenceReportContext
+): { recorded: boolean } {
+  // A closed socket already ran its cleanups, so a late report would never be forgotten.
+  if (clientKind !== 'runtime' || !connectionId || signal?.aborted) {
+    return { recorded: false }
+  }
+  runtime.reportDesktopClientPresence(connectionId, params.away, (forget) =>
+    runtime.registerSubscriptionCleanup(`desktop-presence-${connectionId}`, forget, connectionId)
+  )
+  return { recorded: true }
+}
+
 // Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
 export const NOTIFICATION_METHODS = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
+    permission: 'workspace',
     params: NotificationsSubscribeParams,
     handler: async (params, { runtime, connectionId }, emit) => {
       const shouldEmit = createNotificationStreamFilter(params?.includeDesktopSuppressed)
@@ -48,6 +70,7 @@ export const NOTIFICATION_METHODS = [
   }),
   defineMethod({
     name: 'notifications.unsubscribe',
+    permission: 'workspace',
     params: NotificationUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)
@@ -56,6 +79,7 @@ export const NOTIFICATION_METHODS = [
   }),
   defineMethod({
     name: 'notifications.getMissedSince',
+    permission: 'workspace',
     params: NotificationGetMissedSinceParams,
     // Why: returns only notifications with seq > lastSeenSeq. The runtime owns
     // the monotonic seq, so this is the single source of truth for what the
@@ -74,7 +98,14 @@ export const NOTIFICATION_METHODS = [
     }
   }),
   defineMethod({
+    name: 'notifications.reportDesktopPresence',
+    permission: 'workspace',
+    params: NotificationReportDesktopPresenceParams,
+    handler: async (params, context) => reportDesktopPresence(params, context)
+  }),
+  defineMethod({
     name: 'notifications.registerPush',
+    permission: 'pairing-admin',
     params: NotificationRegisterPushParams,
     // Why: the registration is keyed by the revocable paired device identity, never
     // by anything the caller can assert, so an in-process or CLI caller has no device
@@ -89,6 +120,7 @@ export const NOTIFICATION_METHODS = [
   }),
   defineMethod({
     name: 'notifications.testPush',
+    permission: 'pairing-admin',
     params: null,
     handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
       if (clientKind !== 'mobile' || !pairedDeviceId) {
@@ -99,6 +131,7 @@ export const NOTIFICATION_METHODS = [
   }),
   defineMethod({
     name: 'notifications.unregisterPush',
+    permission: 'pairing-admin',
     params: null,
     // Deleting the gateway token is durable (outbox), so an offline gateway still
     // reports success to the phone that asked to stop being pushed to.

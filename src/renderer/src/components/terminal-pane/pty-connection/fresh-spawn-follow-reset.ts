@@ -5,7 +5,8 @@ import {
   POST_REPLAY_DEAD_TUI_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
-  POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
+  POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
+  buildKittyKeyboardRestore
 } from '../../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from '../terminal-restored-viewport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -129,7 +130,29 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     })
   }
 
-  session.reattachReplayResetSequence = (
+  // Why one writer: the kitty mirror and xterm must parse every renderer-originated mode byte alike.
+  session.writeInputModeGround = (data: string): void => {
+    session.kittyKeyboardModes.scan(data)
+    session.writeReplayData(data)
+  }
+
+  /**
+   * Writes a post-replay reset ending in the mirror's Kitty flags, through the
+   * mirror first. The restore is built after scanning the profile because its
+   * `?1049l` moves both records to the other screen's slot.
+   */
+  session.writeReplayEpilogue = <T>(
+    profile: string,
+    write: (data: string) => T = session.writeReplayData
+  ): T => {
+    session.kittyKeyboardModes.scan(profile)
+    const kitty = buildKittyKeyboardRestore(session.kittyKeyboardModes.snapshotFlags)
+    session.kittyKeyboardModes.scan(kitty)
+    return write(`${profile}${kitty}`)
+  }
+
+  /** Picks the post-replay reset profile for a reattach; the caller writes it via writeReplayEpilogue. */
+  session.chooseReattachReplayReset = (
     payload: string,
     ownerProcessEnded = false,
     isAlternateScreen?: boolean,

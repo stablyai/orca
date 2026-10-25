@@ -1,3 +1,5 @@
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -96,7 +98,10 @@ export function useHostedReviewActions({
       setActionError(null)
       try {
         const result = isGitLab
-          ? await window.api.gl.mergeMR({
+          ? await gitLabApiFor({
+              repoPath: repo.path,
+              repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
+            }).mergeMR({
               repoPath: repo.path,
               repoId: repo.id,
               iid: review.number,
@@ -150,6 +155,8 @@ export function useHostedReviewActions({
       })
       if (!result.ok) {
         setActionError(result.error)
+        // Refresh stale eligibility without replacing the provider's mutation error.
+        await onRefreshReview().catch(() => {})
       } else {
         await onRefreshReview()
       }
@@ -199,12 +206,18 @@ export function useHostedReviewActions({
       try {
         const result = isGitLab
           ? isClosing
-            ? await window.api.gl.closeMR({
+            ? await gitLabApiFor({
+                repoPath: repo.path,
+                repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
+              }).closeMR({
                 repoPath: repo.path,
                 repoId: repo.id,
                 iid: review.number
               })
-            : await window.api.gl.reopenMR({
+            : await gitLabApiFor({
+                repoPath: repo.path,
+                repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
+              }).reopenMR({
                 repoPath: repo.path,
                 repoId: repo.id,
                 iid: review.number

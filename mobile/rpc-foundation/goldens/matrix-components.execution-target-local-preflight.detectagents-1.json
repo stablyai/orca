@@ -1,33 +1,9 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "components.execution-target-local",
   "family": "components.execution-target-local",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
-  "scenarioSha256": "f88ee2f5d19b19cc53dca5180a9b5936a13a00a82e8a4636a5e895262b669dec",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "1e4520fe6576": {
-      "detected": {
-        "$rpc": "null"
-      },
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
     "2498f3d3369f": {
       "name": "preflight.detectAgents#1",
       "ordinal": 1,
@@ -57,19 +33,6 @@
           "category": "Error",
           "message": "",
           "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "365a6864b043": {
-      "detected": [],
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
         }
       }
     },
@@ -142,6 +105,36 @@
             },
             "ok": false
           }
+        }
+      }
+    },
+    "5779e5e854f7": {
+      "detected": {
+        "$rpc": "null"
+      },
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "7097e9b8c337": {
+      "detected": [],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
         }
       }
     },
@@ -281,19 +274,6 @@
         }
       }
     },
-    "986a776213e8": {
-      "detected": ["claude"],
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
     "9b8ae0c8eec5": {
       "name": "preflight.detectAgents#1",
       "ordinal": 2,
@@ -353,6 +333,20 @@
         "value": {
           "id": "frame-1",
           "ok": true
+        }
+      }
+    },
+    "d3a709c13f9d": {
+      "detected": ["claude"],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
         }
       }
     },
@@ -477,7 +471,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1e4520fe6576",
+          "state": "5779e5e854f7",
           "effects": []
         }
       },
@@ -489,7 +483,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "986a776213e8",
+          "state": "d3a709c13f9d",
           "effects": []
         }
       },
@@ -501,7 +495,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -513,7 +507,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -525,7 +519,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -537,7 +531,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -549,7 +543,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -561,7 +555,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -573,7 +567,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -585,7 +579,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -597,7 +591,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       },
@@ -609,7 +603,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "365a6864b043",
+          "state": "7097e9b8c337",
           "effects": []
         }
       }

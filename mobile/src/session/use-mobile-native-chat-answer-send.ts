@@ -19,9 +19,11 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import {
+  nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../src/shared/native-chat-agent-support'
+import { buildNativeChatPasteBytes } from '../../../src/shared/native-chat-paste-bytes'
 
 /** Sends an ask-user answer to the active chat pane. Claude and Codex selectors
  *  use their agent-specific keystrokes; other agents get pasted label text.
@@ -30,7 +32,7 @@ import {
 export type MobileNativeChatAnswerSend = {
   /** Answer the current question(s) from the card's per-question selections. */
   answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
-  /** Drop any in-flight per-keystroke writes (call on Stop). */
+  /** Cancel unsent groups; an already-issued write may still settle. */
   cancelPending: () => void
 }
 
@@ -49,8 +51,8 @@ function sanitizeAskFreeText(text: string): string {
  * `terminal.send` passthrough (raw text, no enter) — same contract the
  * permission card already uses, so old runtimes replay them verbatim (no new
  * RPC; keystrokes are built client-side). The scheduled wait chain is cancelled
- * on a new answer, on `cancelPending` (Stop), and on unmount / session swap — so
- * a detached chain can never write PTY bytes to a stale pane.
+ * on a new answer, on `cancelPending` (Stop), and on unmount / session swap.
+ * Cancellation prevents later groups; already-issued writes retain their verdict.
  */
 export function useMobileNativeChatAnswerSend(args: {
   client: RpcClient | null
@@ -105,6 +107,11 @@ export function useMobileNativeChatAnswerSend(args: {
 
   const answerAsk = useCallback(
     async (prompt: AskPrompt, selections: AskAnswerSelection[]): Promise<boolean> => {
+      if (nativeChatAskRequiresTerminal(agentRef.current)) {
+        cancelPending()
+        onSendError('Answer this question in terminal view')
+        return false
+      }
       const handle = handleRef.current
       if (!client || !handle || !enabled) {
         onSendError('Answer not sent (disconnected)')
@@ -166,7 +173,8 @@ export function useMobileNativeChatAnswerSend(args: {
             activeRoute.client !== client ||
             activeRoute.sessionId !== sessionId ||
             activeRoute.streamIdentity !== streamIdentity ||
-            handleRef.current !== handle
+            handleRef.current !== handle ||
+            nativeChatAskRequiresTerminal(agentRef.current)
           ) {
             return false
           }
@@ -175,6 +183,7 @@ export function useMobileNativeChatAnswerSend(args: {
             terminal: handle,
             text: body,
             enter,
+            requireWriteSettlement: true,
             deadline,
             ...(deviceTokenRef.current
               ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
@@ -223,9 +232,9 @@ export function useMobileNativeChatAnswerSend(args: {
           }
           return false
         }
-        // Grok commits pasted labels; Claude and Codex need their selector-specific
+        // Grok and async questions take pasted text; Claude and Codex need their selector-specific
         // keystrokes paced so each step renders before the next lands.
-        if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
+        if (prompt.replyAsMessage || !shouldStepNativeChatAskAnswer(agentRef.current)) {
           // This shape pastes the label into the composer and commits it, so an
           // orphaned image paste would be submitted along with the answer (#10228).
           // The selector shapes below deliberately skip the heal: their keys are
@@ -255,7 +264,11 @@ export function useMobileNativeChatAnswerSend(args: {
           // successor's fence. Test the turn slot, not the generation counter —
           // Stop, ask-cancel and a dropped lease all bump the generation with no
           // successor, and there a landed answer IS a success.
-          const sent = (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
+          const sent =
+            (await sendTerminal(
+              buildNativeChatPasteBytes(formatAskAnswer(prompt, selections)),
+              true
+            )) || fail()
           return sent && writeTurnsRef.current.get(handle) === turn
         }
         const groups =

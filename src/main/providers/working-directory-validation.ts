@@ -5,8 +5,8 @@
 import { existsSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
-import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
-import { wslUncDirectoryExists, wslUncDirectoryExistsAsync } from '../wsl'
+import { isWslUncPath, uncRouteKey } from '../../shared/wsl-paths'
+import { wslUncDirectoryExistsAsync } from '../wsl'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 
 const pendingWorkingDirectoryValidations = new Map<string, Promise<void>>()
@@ -24,22 +24,7 @@ type UncRouteLane = {
 
 const uncRouteLanes = new Map<string, UncRouteLane>()
 
-/**
- * Groups paths by the host that must answer for them, so many dead
- * subdirectories of one share share a lane. Returns null for local-disk paths,
- * which never block long enough to be worth queueing.
- */
-export function uncRouteKey(cwd: string): string | null {
-  if (!cwd.startsWith('\\\\')) {
-    return null
-  }
-  const wslInfo = parseWslUncPath(cwd)
-  if (wslInfo) {
-    return `wsl:${wslInfo.distro.trim().toLowerCase()}`
-  }
-  const server = cwd.slice(2).split(/[\\/]/, 1)[0]
-  return `unc:${server.toLowerCase()}`
-}
+export { uncRouteKey } from '../../shared/wsl-paths'
 
 async function withUncRouteLane<T>(cwd: string, run: () => Promise<T>): Promise<T> {
   const key = uncRouteKey(cwd)
@@ -104,20 +89,13 @@ function throwMissingWorkingDirectory(cwd: string): never {
 
 /**
  * Validate that a working directory exists and is a directory.
- * Throws a descriptive Error if not.
+ * Rejects with a descriptive Error if not.
  */
-export function validateWorkingDirectory(cwd: string): void {
-  // Why: Win32 fs.statSync against the WSL 9P share (\\wsl.localhost\...) can
-  // falsely report ENOENT for directories that exist on the Linux side. Ask the
-  // distro itself; only fall back to the fs check when wsl.exe is inconclusive.
+export async function validateWorkingDirectory(cwd: string, signal?: AbortSignal): Promise<void> {
+  // Why: the distro probe spawns wsl.exe (~70 ms warm, 300+ ms for a stopped
+  // distro), so it must never run synchronously on the main process.
   if (isWslUncPath(cwd)) {
-    const existsInDistro = wslUncDirectoryExists(cwd)
-    if (existsInDistro === false) {
-      throwMissingWorkingDirectory(cwd)
-    }
-    if (existsInDistro === true) {
-      return
-    }
+    return validateWorkingDirectoryAsync(cwd, { signal })
   }
 
   if (!existsSync(cwd)) {
@@ -170,6 +148,9 @@ function validateWorkingDirectoryUncached(cwd: string): Promise<void> {
 }
 
 async function probeWorkingDirectory(cwd: string): Promise<void> {
+  // Why: Win32 stat against the WSL 9P share (\\wsl.localhost\...) can falsely
+  // report ENOENT for directories that exist on the Linux side. Ask the distro
+  // itself; only fall back to the fs check when wsl.exe is inconclusive.
   if (isWslUncPath(cwd)) {
     const existsInDistro = await wslUncDirectoryExistsAsync(cwd)
     if (existsInDistro === false) {

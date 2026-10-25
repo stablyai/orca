@@ -9,6 +9,7 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
 export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
@@ -25,9 +26,11 @@ export type PaneSpawnHints = {
   cwd?: string
   cwdPromise?: Promise<string>
   ptyId?: string
+  /** Where the pane's leaf sits; main reads it only for a leaf it does not know yet. */
+  placement?: TerminalPanePlacement
 }
 
-export type PaneSplitOptions = PaneSpawnHints & {
+export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
   ratio?: number
   leafId?: string
 }
@@ -55,6 +58,11 @@ export type PaneExternalDropHandler = (
   target: PaneExternalDropTarget
 ) => boolean
 
+export type PaneDropTaker = (
+  drop: { sourcePaneId: number; targetPaneId: number; zone: DropZone },
+  move: () => void
+) => boolean
+
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
@@ -65,6 +73,10 @@ export type PaneManagerOptions = {
   onPaneDragActiveChange?: (active: boolean) => void
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  /** A user's divider drag or reset ended; runs after `onLayoutChanged`. */
+  onDividerRatiosCommitted?: () => void
+  /** Takes an in-tab pane drop instead of moving it now: true means `move` runs later or never. */
+  takePaneDrop?: PaneDropTaker
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalLigaturesEnabled?: () => boolean
   /** Whether inline terminal images (SIXEL / iTerm2 IIP / Kitty graphics) are
@@ -200,8 +212,11 @@ export type ManagedPaneInternal = {
   compositionHandler: (() => void) | null
   // Stored so disposePane() can remove DOM-renderer focus synchronization.
   focusClassSyncCleanup?: (() => void) | null
+  domBlockFillCleanup?: (() => void) | null
   // Stored so disposePane() can remove user-scroll intent listeners.
   terminalScrollIntentDisposable?: IDisposable | null
+  // Stored so disposePane() can drop the mouse-encoding parser handlers.
+  mouseEncodingTrackerDisposable?: IDisposable | null
   // Stored so disposePane() can detach the streamed-output hover-cache reset
   // that keeps freshly printed links linkifiable without a scroll.
   linkifierHoverResetDisposable?: IDisposable | null

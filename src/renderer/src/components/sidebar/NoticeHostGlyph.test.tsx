@@ -14,12 +14,12 @@ import es from '../../i18n/locales/es.json'
 import ja from '../../i18n/locales/ja.json'
 import ko from '../../i18n/locales/ko.json'
 import zh from '../../i18n/locales/zh.json'
+import { useAppStore } from '@/store'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 
-const runtimeStatusByEnvironmentId = new Map<string, { status?: unknown }>()
-
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector({ runtimeStatusByEnvironmentId })
-}))
+const original = useAppStore.getState()
+let runtimeStatusByEnvironmentId = new Map<string, RuntimeEnvironmentStatus>()
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -56,12 +56,14 @@ async function render(
 describe('NoticeHostGlyph', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    runtimeStatusByEnvironmentId.clear()
+    runtimeStatusByEnvironmentId = new Map()
+    useAppStore.setState({ runtimeStatusByEnvironmentId })
   })
 
   afterEach(() => {
     roots.splice(0).forEach((root) => act(() => root.unmount()))
     document.body.replaceChildren()
+    useAppStore.setState(original, true)
   })
 
   it('names the SSH host it would act on', async () => {
@@ -74,7 +76,11 @@ describe('NoticeHostGlyph', () => {
   })
 
   it('names the paired runtime separately from the SSH host of the same name', async () => {
-    runtimeStatusByEnvironmentId.set('openclaw-env', { status: 'ready' })
+    const response = createCompatibleRuntimeStatusResponse()
+    if (!response.ok) {
+      throw new Error('expected a compatible status')
+    }
+    runtimeStatusByEnvironmentId.set('openclaw-env', { status: response.result, checkedAt: 1 })
     const container = await render('runtime:openclaw-env')
 
     expect(container.querySelector('[data-notice-host-kind="runtime"]')).not.toBeNull()
@@ -84,7 +90,7 @@ describe('NoticeHostGlyph', () => {
   })
 
   it('marks a paired runtime a probe found unreachable as disconnected', async () => {
-    runtimeStatusByEnvironmentId.set('openclaw-env', { status: null })
+    runtimeStatusByEnvironmentId.set('openclaw-env', { status: null, checkedAt: 1 })
     const container = await render('runtime:openclaw-env')
 
     expect(container.querySelector('[data-testid="tooltip"]')?.textContent).toBe(

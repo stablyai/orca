@@ -39,14 +39,16 @@ describe('sidecar response framing', () => {
     const wire = `${JSON.stringify({ id, ok: true, result: 'x'.repeat(1024 * 1024) })}\n`
     const originalIndexOf = String.prototype.indexOf
     let searchedCharacters = 0
-    const search = vi
-      .spyOn(String.prototype, 'indexOf')
-      .mockImplementation(function (this: string, value, position) {
-        if (value === '\n') {
-          searchedCharacters += this.length - (position ?? 0)
-        }
-        return originalIndexOf.call(this, value, position)
-      })
+    const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+      this: string,
+      value,
+      position
+    ) {
+      if (value === '\n') {
+        searchedCharacters += this.length - (position ?? 0)
+      }
+      return originalIndexOf.call(this, value, position)
+    })
     try {
       for (let offset = 0; offset < wire.length; offset += 256) {
         socket.emit('data', wire.slice(offset, offset + 256))

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -15,10 +15,6 @@ const {
 const { CYGWIN_BREAKAWAY_MARKER } = require('./node-pty-job-ownership.cjs')
 
 const fixtureDir = mkdtempSync(join(tmpdir(), 'packaged-node-pty-job-'))
-const ELECTRON_BUILDER_CONFIG = readFileSync(
-  new URL('../electron-builder.config.cjs', import.meta.url),
-  'utf8'
-)
 
 /** A real enough addon: a machine field the arch check reads, and the marker. */
 function conptyImage({ arch = 'x64', cygwinBreakawayDenied = true } = {}) {
@@ -139,33 +135,16 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
   // The cross-host package. No host but Windows can build conpty.node, so there
   // is no build/Release for prune to have replaced the prebuild with -- and the
   // published prebuild is exactly the binary that leaks every MSYS pane child.
-  it('fails a cross-host package left holding the published prebuild', () => {
+  it('rejects an unpatched published prebuild and explains both host remedies', () => {
     const resourcesDir = packagedResources({
       'prebuilds/win32-x64/conpty.node': { cygwinBreakawayDenied: false }
     })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(
-      /predates the Cygwin\/MSYS job-breakaway denial/
-    )
-  })
-
-  it('tells that package how to fix it, which is not a rebuild it can run', () => {
-    const resourcesDir = packagedResources({
-      'prebuilds/win32-x64/conpty.node': { cygwinBreakawayDenied: false }
-    })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(
+    const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')
+    expect(verify).toThrow(/predates the Cygwin\/MSYS job-breakaway denial/)
+    expect(verify).toThrow(
       /this package holds no node-pty source build at all[\s\S]*Otherwise package this Windows slice on a host that can/
     )
-  })
-
-  // The same state reaches this from a capable host too, when the rebuild left
-  // nothing: telling that packager to change hosts would send them nowhere.
-  it('does not assume the packaging host is the wrong one', () => {
-    const resourcesDir = packagedResources({
-      'prebuilds/win32-x64/conpty.node': { cygwinBreakawayDenied: false }
-    })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(
-      /If this IS a Windows x64 host, the rebuild did not leave one/
-    )
+    expect(verify).toThrow(/If this IS a Windows x64 host, the rebuild did not leave one/)
   })
 
   // The cross-arch package that worked: beforeBuild rebuilds node-pty for the
@@ -183,30 +162,25 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
   // The cross-arch package that silently did not: build/Release is the
   // packaging host's own arch, the target cannot load it, and the loader falls
   // through to the unpatched prebuild underneath.
-  it('fails a cross-arch package whose build/Release is the packaging host arch', () => {
+  it('rejects a wrong-arch source build with the target rebuild command', () => {
     const resourcesDir = packagedResources({
       'build/Release/conpty.node': { arch: 'x64' },
       'prebuilds/win32-arm64/conpty.node': { arch: 'arm64', cygwinBreakawayDenied: false }
     })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).toThrow(
-      /prebuilds[\\/]win32-arm64/
+    const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')
+    expect(verify).toThrow(/prebuilds[\\/]win32-arm64/)
+    expect(verify).toThrow(
+      /the source build beside it is the wrong architecture[\s\S]*machine 0x8664/
     )
+    expect(verify).toThrow(/rebuild-native-deps\.mjs --platform=win32 --arch=arm64/)
+    expect(verify).toThrow(/^(?![\s\S]*Package this Windows slice on such a host)[\s\S]*$/)
   })
 
-  it('refuses a package whose every conpty.node is the wrong architecture', () => {
+  it('rejects unloadable architectures and reports their machine values', () => {
     const resourcesDir = packagedResources({ 'build/Release/conpty.node': { arch: 'x64' } })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).toThrow(
-      /the app can load none of them/
-    )
-  })
-
-  // Naming the machine it found is what separates a cross-arch build from a
-  // truncated download, which are the same "cannot load this" to the loader.
-  it('names what it found rather than guessing why', () => {
-    const resourcesDir = packagedResources({ 'build/Release/conpty.node': { arch: 'x64' } })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).toThrow(
-      /machine 0x8664[\s\S]*0xaa64/
-    )
+    const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')
+    expect(verify).toThrow(/the app can load none of them/)
+    expect(verify).toThrow(/machine 0x8664[\s\S]*0xaa64/)
   })
 
   it('calls a candidate that is not a PE image what it is', () => {
@@ -245,38 +219,6 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     )
   })
 
-  // The remedy for this one is a rebuild, not a different host, and the
-  // difference is a build somebody has to run twice to find out.
-  it('blames the wrong-arch source build rather than the host, when there is one', () => {
-    const resourcesDir = packagedResources({
-      'build/Release/conpty.node': { arch: 'x64' },
-      'prebuilds/win32-arm64/conpty.node': { arch: 'arm64', cygwinBreakawayDenied: false }
-    })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).toThrow(
-      /the source build beside it is the wrong architecture[\s\S]*machine 0x8664/
-    )
-  })
-
-  it('tells that build the command that would fix it', () => {
-    const resourcesDir = packagedResources({
-      'build/Release/conpty.node': { arch: 'x64' },
-      'prebuilds/win32-arm64/conpty.node': { arch: 'arm64', cygwinBreakawayDenied: false }
-    })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).toThrow(
-      /rebuild-native-deps\.mjs --platform=win32 --arch=arm64/
-    )
-  })
-
-  it('does not tell it to change hosts, which would not help', () => {
-    const resourcesDir = packagedResources({
-      'build/Release/conpty.node': { arch: 'x64' },
-      'prebuilds/win32-arm64/conpty.node': { arch: 'arm64', cygwinBreakawayDenied: false }
-    })
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'arm64')).toThrow(
-      /^(?![\s\S]*Package this Windows slice on such a host)[\s\S]*$/
-    )
-  })
-
   it('ignores a prebuild for an arch this slice will never load', () => {
     const resourcesDir = packagedResources({
       'build/Release/conpty.node': {},
@@ -310,18 +252,11 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
 
   // Nothing to load is not "a layout we do not recognise", it is a package with
   // no ConPTY backend, and a gate that cannot see its subject is not a gate.
-  it('refuses rather than skip a package with no conpty.node at all', () => {
+  it('rejects a package with no ConPTY backend and lists the searched paths', () => {
     const resourcesDir = packagedResources({})
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(
-      /no conpty\.node on any path its loader tries/
-    )
-  })
-
-  it('names every path it looked at when it finds none', () => {
-    const resourcesDir = packagedResources({})
-    expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')).toThrow(
-      /build[\\/]Release[\s\S]*build[\\/]Debug[\s\S]*prebuilds[\\/]win32-x64/
-    )
+    const verify = () => verifyPackagedConptyBreakawayMarker(resourcesDir, 'x64')
+    expect(verify).toThrow(/no conpty\.node on any path its loader tries/)
+    expect(verify).toThrow(/build[\\/]Release[\s\S]*build[\\/]Debug[\s\S]*prebuilds[\\/]win32-x64/)
   })
 
   // Present but unreadable is the state that used to pass, so it must not warn.
@@ -420,11 +355,5 @@ describe('verifyPackagedWindowsNodePty', () => {
         verifyExports: vi.fn()
       })
     ).toThrow(/predates the Cygwin\/MSYS job-breakaway denial/)
-  })
-
-  it('is what the afterPack hook calls for a Windows slice', () => {
-    expect(ELECTRON_BUILDER_CONFIG).toContain(
-      'verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })'
-    )
   })
 })

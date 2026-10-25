@@ -2,12 +2,16 @@
  * Parked terminal side-effect watcher.
  * Why: parking unmounts TerminalPane, so this replays its bell/title/agent-completion/PR-link side effects while parked.
  */
-import { isClaudeAgent } from '../../../../shared/agent-detection'
+import { isClaudeIdleEdge } from '@/lib/agent-idle-edge'
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
+import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
+  AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS,
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
@@ -18,15 +22,17 @@ import {
   readInFlightCommandCodeTurn
 } from './parked-terminal-command-status'
 import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
-import { createPtyOutputProcessor } from './pty-transport'
+import { createPtyOutputProcessor } from './pty-output-processor'
 import { isRendererHiddenPtyDeliveryGateEnabled } from './terminal-hidden-delivery-gate'
 import {
   isMainTerminalSideEffectAuthorityForPty,
   registerTerminalSideEffectFactConsumer
 } from './terminal-side-effect-facts-handler'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
+import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
+import { hookLaneTitleTurnEndEvidence } from '@/hooks/agent-hook-turn-end-ownership'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
 // Why: keep the live path's BEL-vs-completion race window so notification behavior is identical whether a tab is parked or mounted.
 const PARKED_NOTIFICATION_GRACE_MS = AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS
@@ -42,6 +48,7 @@ function isAgentTaskCompleteTrackingEnabled(state: StoreState): boolean {
 }
 
 export type ParkedTerminalByteWatcherOptions = {
+  workspaceOwner?: NotificationWorkspaceOwner
   ptyId: string
   tabId: string
   worktreeId: string
@@ -66,6 +73,10 @@ export function startParkedTerminalByteWatcher(
   const remoteRuntimePty = isRemoteRuntimePtyId(ptyId)
   const drivesTabTitle = options.drivesTabTitle ?? true
   const paneKey = makePaneKey(tabId, options.leafId)
+  const workspaceOwner =
+    options.workspaceOwner ??
+    resolveTerminalNotificationOwner(useAppStore.getState(), worktreeId, { paneKey, ptyId }) ??
+    undefined
 
   // Why: one watcher per PTY — a stale watcher from a previous park cycle would double-fire bell/completion for the same bytes.
   parkedWatcherDisposersByPtyId.get(ptyId)?.()
@@ -76,6 +87,7 @@ export function startParkedTerminalByteWatcher(
   let wroteRuntimeTitleSlot = false
   let bellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteTimer: ReturnType<typeof setTimeout> | null = null
+  let ownedIdleTimer: ReturnType<typeof setTimeout> | null = null
 
   const clearBellNotificationTimer = (): void => {
     if (bellNotificationTimer !== null) {
@@ -88,6 +100,10 @@ export function startParkedTerminalByteWatcher(
     if (agentTaskCompleteTimer !== null) {
       clearTimeout(agentTaskCompleteTimer)
       agentTaskCompleteTimer = null
+    }
+    if (ownedIdleTimer !== null) {
+      clearTimeout(ownedIdleTimer)
+      ownedIdleTimer = null
     }
   }
 
@@ -110,7 +126,19 @@ export function startParkedTerminalByteWatcher(
         return
       }
       pendingBellNotification = false
-      dispatchTerminalNotification(worktreeId, { source: 'terminal-bell', paneKey })
+      // Why: the hook lane's pending Done announces this burst's turn end, superseding the BEL as a pane completion does.
+      if (
+        hasPendingHookLaneCompletion(paneKey, ptyId) &&
+        isAgentTaskCompleteOsNotificationEnabled(useAppStore.getState())
+      ) {
+        return
+      }
+      dispatchTerminalNotification(worktreeId, {
+        source: 'terminal-bell',
+        paneKey,
+        ptyId,
+        workspaceOwner
+      })
     }, PARKED_NOTIFICATION_GRACE_MS)
   }
 
@@ -125,19 +153,14 @@ export function startParkedTerminalByteWatcher(
       }
     },
     onBell: (): void => {
-      const state = useAppStore.getState()
-      state.markWorktreeUnread(worktreeId)
-      state.markTerminalTabUnread(tabId, 'terminal-bell')
-      if (state.settings?.experimentalTerminalAttention === true) {
-        state.markTerminalPaneUnread(paneKey, 'terminal-bell')
-      }
+      useAppStore.getState().markTerminalBell({ worktreeId, tabId, paneKey })
       // Why: agents emit BEL in the same burst as working→idle, so delay only the OS notification to let the richer completion notification win.
       pendingBellNotification = true
       if (!hasPendingAgentTaskCompleteNotification()) {
         scheduleTerminalBellNotification()
       }
     },
-    onAgentBecameIdle: (title: string, meta?: { staleWorkingTitleClear?: boolean }): void => {
+    onAgentBecameIdle: (title: string, meta?: AgentIdleEdgeMeta): void => {
       // Why: stale-derived idles (main's 3s timer, not observed bytes) clear session state but must not schedule a completion a paused agent didn't earn.
       if (meta?.staleWorkingTitleClear) {
         useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
@@ -146,7 +169,7 @@ export function startParkedTerminalByteWatcher(
       const state = useAppStore.getState()
       // Why: null settings means "not hydrated yet"; a spurious timestamp is harmless while a dropped one loses the timer.
       if (
-        isClaudeAgent(title) &&
+        isClaudeIdleEdge(title, state.agentStatusByPaneKey[paneKey]) &&
         (state.settings === null || state.settings.promptCacheTimerEnabled)
       ) {
         state.setCacheTimerStartedAt(paneKey, Date.now())
@@ -163,11 +186,30 @@ export function startParkedTerminalByteWatcher(
         // Why: completion supersedes a concurrent BEL so each burst yields exactly one OS notification (live-path parity).
         pendingBellNotification = false
         clearBellNotificationTimer()
-        dispatchTerminalNotification(worktreeId, {
-          source: 'agent-task-complete',
-          terminalTitle: title,
-          paneKey
-        })
+        const evidence = (): 'identified' | 'ambiguous' | null => {
+          const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[paneKey]?.agent
+          return hookLaneTitleTurnEndEvidence(paneKey, ptyId, title, foreground ?? null)
+        }
+        const dispatchIdleCompletion = (): void => {
+          dispatchTerminalNotification(worktreeId, {
+            source: 'agent-task-complete',
+            terminalTitle: title,
+            paneKey,
+            ptyId,
+            workspaceOwner
+          })
+        }
+        if (evidence() !== 'identified') {
+          dispatchIdleCompletion()
+          return
+        }
+        // Why: as on a mounted pane, an end the host then calls ambiguous keeps main's title completion.
+        ownedIdleTimer = setTimeout(() => {
+          ownedIdleTimer = null
+          if (!disposed && evidence() === 'ambiguous') {
+            dispatchIdleCompletion()
+          }
+        }, AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - PARKED_NOTIFICATION_GRACE_MS)
       }, PARKED_NOTIFICATION_GRACE_MS)
     },
     onAgentBecameWorking: (): void => {
@@ -243,7 +285,12 @@ export function startParkedTerminalByteWatcher(
           onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
           onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
           onPrLink: (link) =>
-            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
+            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, {
+              tabId,
+              paneKey,
+              ptyId,
+              executionHostId: workspaceOwner?.executionHostId ?? undefined
+            })
         },
         // Why: activation-deferred tabs can start a watcher before any pane restored the title; ordinary parked tabs avoid this IPC.
         restoreTitleOnRegister: options.restoreTitleOnRegister === true
@@ -264,7 +311,12 @@ export function startParkedTerminalByteWatcher(
     commandCodeOutputStatusDetector?.observe(data)
     if (observeTerminalGitHubPRLink) {
       for (const link of observeTerminalGitHubPRLink(data)) {
-        useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
+        useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, {
+          tabId,
+          paneKey,
+          ptyId,
+          executionHostId: workspaceOwner?.executionHostId ?? undefined
+        })
       }
     }
   }

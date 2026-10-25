@@ -149,8 +149,14 @@ describe('startRuntimeCapabilityProbe', () => {
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
     await flushMicrotasks()
-    // Why: 1s+2s+4s+8s then 15s cap; ten failures fit well inside 8 capped waits.
-    await vi.advanceTimersByTimeAsync(15_000 * 10)
+    const delays = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000, 15_000, 15_000, 15_000, 15_000]
+    for (const [index, delay] of delays.entries()) {
+      await vi.advanceTimersByTimeAsync(delay - 1)
+      expect(calls()).toBe(index + 1)
+      expect(seen).toEqual([])
+      await vi.advanceTimersByTimeAsync(1)
+      expect(calls()).toBe(index + 2)
+    }
     expect(seen).toEqual([['a.v1']])
     expect(calls()).toBe(11)
     cancel()

@@ -1,19 +1,10 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "components.execution-target-local",
   "family": "components.execution-target-local",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
-  "scenarioSha256": "2e0d3021621698b63117e250dd5e9762b5bfb3dc1911e27c510e9539bd2ee6c9",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "1e4520fe6576": {
+    "5779e5e854f7": {
       "detected": {
         "$rpc": "null"
       },
@@ -22,19 +13,7 @@
         "error": {
           "$rpc": "null"
         },
-        "requiresConnection": false,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "986a776213e8": {
-      "detected": ["claude"],
-      "gate": {
-        "connectInProgress": true,
-        "error": {
-          "$rpc": "null"
-        },
+        "needsDesktopServerRecovery": false,
         "requiresConnection": false,
         "status": {
           "$rpc": "null"
@@ -70,6 +49,20 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
+      }
+    },
+    "d3a709c13f9d": {
+      "detected": ["claude"],
+      "gate": {
+        "connectInProgress": true,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": {
+          "$rpc": "null"
+        }
       }
     },
     "eb79a9b3682a": {
@@ -124,7 +117,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1e4520fe6576",
+          "state": "5779e5e854f7",
           "effects": []
         }
       },
@@ -136,7 +129,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "986a776213e8",
+          "state": "d3a709c13f9d",
           "effects": []
         }
       }

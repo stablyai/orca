@@ -41,7 +41,6 @@ describe('the body is what the phrase and AND routes see', () => {
   })
 
   it('keeps stop words inside a literal, where they are part of what was quoted', () => {
-    // The literal shape is `foo.ts`; dropping `the` would change what was typed.
     expect(planSessionSearchQuery('the foo.ts file').body).toEqual(['the', 'foo.ts', 'file'])
   })
 
@@ -60,7 +59,6 @@ describe('the OR fallback fans an identifier out into its pieces', () => {
     expect(plan.terms[0]).toBe('resolveTerminalPath')
     expect(plan.terms).toContain('terminal')
     expect(plan.terms).toContain('path')
-    // `resolve` is not a stop word, so the whole identifier is reachable by piece.
     expect(plan.terms).toContain('resolve')
   })
 

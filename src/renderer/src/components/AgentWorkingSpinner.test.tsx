@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -16,9 +14,9 @@ describe('AgentWorkingSpinner', () => {
 
     expect(markup).toContain('agent-working-spinner')
     expect(markup).toContain('data-agent-spinner')
-    expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('border-agent-working')
     expect(markup).toContain('border-t-transparent')
-    expect(markup).toContain('motion-reduce:border-t-yellow-500')
+    expect(markup).toContain('motion-reduce:border-t-agent-working')
   })
 
   it('renders when the Web Animations API is unavailable', async () => {
@@ -130,7 +128,7 @@ describe('AgentWorkingSpinner', () => {
 
       expect(el).not.toBeNull()
       expect(getAnimations).not.toHaveBeenCalled()
-      expect(el!.className).toContain('motion-reduce:border-t-yellow-500')
+      expect(el!.className).toContain('motion-reduce:border-t-agent-working')
     } finally {
       act(() => root.unmount())
       container.remove()
@@ -181,20 +179,5 @@ describe('AgentWorkingSpinner', () => {
         Object.defineProperty(HTMLElement.prototype, 'getAnimations', originalGetAnimations)
       }
     }
-  })
-
-  it('preserves 12 steps per second without frequent iteration events', () => {
-    const css = readFileSync(join(__dirname, '../assets/main.css'), 'utf8')
-
-    const rule = css.match(/\.agent-working-spinner\s*\{[^}]*\}/)?.[0]
-    expect(rule).toBeDefined()
-    expect(rule).toContain('animation: agent-spinner-rotate 86400s steps(1036800, end) infinite')
-    expect(css).toContain('transform: rotate(86400turn)')
-    expect(css).toContain('@keyframes agent-spinner-rotate')
-
-    const reducedMotionBlock = css.match(
-      /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.agent-working-spinner\s*\{[^}]*\}/
-    )?.[0]
-    expect(reducedMotionBlock).toContain('animation: none')
   })
 })

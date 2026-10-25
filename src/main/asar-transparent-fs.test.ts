@@ -5,10 +5,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { rm } from './asar-transparent-fs'
 
-// Why not an asar fixture here: plain Node has no asar shim to see through, so the archive case can
-// only be settled by the real binary — `host-tree-removal-asar.electron.test.ts` does that. What
-// this pins is the other half: outside Electron `original-fs` does not resolve, and the helper has
-// to degrade to `node:fs/promises` rather than throw at first use.
+// Plain Node tests fallback; host-tree-removal-asar.electron.test.ts verifies Electron’s asar behavior.
 const roots: string[] = []
 
 afterAll(async () => {

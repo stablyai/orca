@@ -1,12 +1,15 @@
+import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import type React from 'react'
 import {
   FileJson,
+  Folder,
   FolderGit2,
   MessageSquare,
   MessageSquarePlus,
   MessagesSquare,
-  Play
+  Play,
+  SquareTerminal
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -18,10 +21,14 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
+import { ResumeInNewCliTooltipText } from './ai-vault-session-cli-fork-copy'
 import { sessionDetailConversationTurns, sessionPromptPreview } from './ai-vault-session-display'
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import {
+  aiVaultResumeInSessionWorkspaceLabel,
+  aiVaultSessionWorkspaceHeading,
+  isAiVaultFolderWorkspaceId,
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
   shouldShowAiVaultWorktreeStatusBadge,
@@ -40,7 +47,9 @@ export function SessionInlineDetails({
   subagentResume,
   onContinueInNewSession,
   onResumeInNewChat,
-  onOpenLog
+  onResumeInNewCli,
+  onOpenLog,
+  actionsHidden = false
 }: {
   id: string
   session: AiVaultSession
@@ -52,13 +61,17 @@ export function SessionInlineDetails({
   }
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
-  subagentResume?: AiVaultSubagentResumeActions
+  subagentResume?: AiVaultSubagentResumeActions | null
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
+  onResumeInNewCli?: () => void
   onOpenLog?: () => void
+  /** Hides the action bar; the details stay. */
+  actionsHidden?: boolean
 }): React.JSX.Element {
   // A zero-turn transcript would resume into an empty conversation, so the plain
   // resume affordances are withheld and a distinct "not saved" state is shown.
+  const referenceSession = isAntigravityReferenceSession(session)
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   const showResumeInWorktree = hasResumableContent && Boolean(resumeActions.worktree.worktreeId)
   const showResumeInNewTab =
@@ -66,7 +79,6 @@ export function SessionInlineDetails({
     (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
   const promptPreview = sessionPromptPreview(session)
   const detailTurns = sessionDetailConversationTurns(session, 3)
-  const worktreeDisplay = worktreeInfo
 
   return (
     <div
@@ -80,11 +92,13 @@ export function SessionInlineDetails({
         event.stopPropagation()
       }}
     >
-      {showResumeInWorktree ||
-      showResumeInNewTab ||
-      onContinueInNewSession ||
-      onResumeInNewChat ||
-      onOpenLog ? (
+      {!actionsHidden &&
+      (showResumeInWorktree ||
+        showResumeInNewTab ||
+        onContinueInNewSession ||
+        onResumeInNewChat ||
+        onResumeInNewCli ||
+        onOpenLog) ? (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
           {showResumeInWorktree ? (
             <Button
@@ -100,10 +114,9 @@ export function SessionInlineDetails({
               className="h-7 shrink-0 px-2.5 text-[11px]"
             >
               <Play className="size-3.5" />
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-                'Resume in Worktree'
-              )}
+              {referenceSession
+                ? translate('aiVault.continueInCli', 'Continue in CLI')
+                : aiVaultResumeInSessionWorkspaceLabel(resumeActions.worktree.worktreeId)}
             </Button>
           ) : null}
           {showResumeInNewTab ? (
@@ -120,10 +133,12 @@ export function SessionInlineDetails({
               className="h-7 shrink-0 px-2.5 text-[11px]"
             >
               <Play className="size-3.5" />
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-                'Resume in New Tab'
-              )}
+              {referenceSession
+                ? translate('aiVault.continueInCliNewTab', 'Continue in CLI in New Tab')
+                : translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
+                    'Resume in New Tab'
+                  )}
             </Button>
           ) : null}
           {onResumeInNewChat ? (
@@ -140,10 +155,36 @@ export function SessionInlineDetails({
             >
               <MessagesSquare className="size-3.5" />
               {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewChat',
+                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
                 'Resume in New Chat'
               )}
             </Button>
+          ) : null}
+          {onResumeInNewCli ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="xs"
+                  draggable={false}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onResumeInNewCli()
+                  }}
+                  className="h-7 shrink-0 px-2.5 text-[11px]"
+                >
+                  <SquareTerminal className="size-3.5" />
+                  {translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
+                    'Resume in New Terminal'
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                <ResumeInNewCliTooltipText />
+              </TooltipContent>
+            </Tooltip>
           ) : null}
           {onContinueInNewSession ? (
             <Button
@@ -159,8 +200,8 @@ export function SessionInlineDetails({
             >
               <MessageSquarePlus className="size-3.5" />
               {translate(
-                'components.agentSessionContinuation.continueInNewSession',
-                'Continue in New Session…'
+                'components.agentSessionContinuation.handOffToAnotherAgent',
+                'Hand Off to Another Agent'
               )}
             </Button>
           ) : null}
@@ -186,7 +227,12 @@ export function SessionInlineDetails({
       <div className="space-y-3 p-3">
         {hasResumableContent ? (
           <>
-            <FirstPromptCard key={session.id} session={session} preview={promptPreview} />
+            <FirstPromptCard
+              key={session.id}
+              session={session}
+              preview={promptPreview}
+              copyHidden={actionsHidden}
+            />
             <SessionReceiptSection
               icon={<MessageSquare className="size-3" />}
               label={translate(
@@ -222,17 +268,18 @@ export function SessionInlineDetails({
 
         <SessionSubagentsSection session={session} resume={subagentResume} />
 
-        {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, {
-          vaultScope
-        }) ? (
+        {shouldShowAiVaultSessionWorktreeLine(worktreeInfo, { vaultScope }) ? (
           <SessionReceiptSection
-            icon={<FolderGit2 className="size-3" />}
-            label={translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.worktree',
-              'Worktree'
-            )}
+            icon={
+              isAiVaultFolderWorkspaceId(worktreeInfo.worktreeId) ? (
+                <Folder className="size-3" />
+              ) : (
+                <FolderGit2 className="size-3" />
+              )
+            }
+            label={aiVaultSessionWorkspaceHeading(worktreeInfo.worktreeId)}
           >
-            <WorktreeMetadataLines worktreeInfo={worktreeDisplay} vaultScope={vaultScope} />
+            <WorktreeMetadataLines worktreeInfo={worktreeInfo} vaultScope={vaultScope} />
           </SessionReceiptSection>
         ) : null}
       </div>
@@ -308,7 +355,7 @@ function WorktreeMetadataLines({
         }) ? (
           <>
             <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-              {aiVaultWorktreeStatusLabel(worktreeInfo.status)}
+              {aiVaultWorktreeStatusLabel(worktreeInfo.status, worktreeInfo.worktreeId)}
             </span>
             <span className="shrink-0 text-muted-foreground/45">·</span>
           </>

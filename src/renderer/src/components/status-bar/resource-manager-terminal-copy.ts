@@ -1,6 +1,9 @@
 import { translate } from '@/i18n/i18n'
 
-export function formatTerminalSessionCount(count: number): string {
+export function formatTerminalSessionCount(count: number | null): string {
+  if (count === null) {
+    return translate('resourceManager.countUnavailable', 'terminal count unavailable')
+  }
   return count === 1
     ? translate(
         'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_one',
@@ -38,7 +41,7 @@ export type ResourceManagerTooltipLine = {
 
 export function getResourceManagerTooltipLines(args: {
   memoryLabel: string
-  sessionCount: number
+  sessionCount: number | null
   spaceScanReady: boolean
 }): ResourceManagerTooltipLine[] {
   const rawMemoryLabel = args.memoryLabel.trim()
@@ -70,15 +73,17 @@ export function getResourceManagerTooltipLines(args: {
   lines.push({
     id: 'sessions-hint',
     text:
-      args.sessionCount > 0
-        ? translate(
-            'auto.components.status.bar.resource.manager.terminal.copy.sessionsGroupedByWorkspace',
-            'Terminal sessions are grouped by workspace.'
-          )
-        : translate(
-            'auto.components.status.bar.resource.manager.terminal.copy.noTerminalSessions',
-            'No terminal sessions yet.'
-          ),
+      args.sessionCount === null
+        ? translate('resourceManager.openToObserve', 'Open Resources to observe terminal sessions.')
+        : args.sessionCount !== null && args.sessionCount > 0
+          ? translate(
+              'auto.components.status.bar.resource.manager.terminal.copy.sessionsGroupedByWorkspace',
+              'Terminal sessions are grouped by workspace.'
+            )
+          : translate(
+              'auto.components.status.bar.resource.manager.terminal.copy.noTerminalSessions',
+              'No terminal sessions yet.'
+            ),
     emphasized: false
   })
 
@@ -86,7 +91,7 @@ export function getResourceManagerTooltipLines(args: {
 }
 
 export function getResourceManagerAriaLabel(args: {
-  sessionCount: number
+  sessionCount: number | null
   spaceScanReady: boolean
 }): string {
   const sessions = formatTerminalSessionCount(args.sessionCount)

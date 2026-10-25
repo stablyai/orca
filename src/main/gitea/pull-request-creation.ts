@@ -107,8 +107,7 @@ async function findExistingPullRequest(
   head: string,
   connectionId?: string | null
 ): Promise<{ number: number; url: string } | null> {
-  // Why: only called after a create attempt, which may have just mutated the
-  // remote — a cached /pulls scan from before the POST would miss the new PR.
+  // A create attempt may already have mutated the remote; discard pre-POST listings.
   const repo = await getGiteaRepoRef(repoPath, connectionId)
   if (repo) {
     invalidateGiteaPullRequestScanForRepo(repo)

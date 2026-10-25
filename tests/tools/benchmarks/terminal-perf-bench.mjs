@@ -162,7 +162,8 @@ async function setupWorkspaces(page, fixture) {
           if ('error' in addResult) {
             throw new Error(addResult.error)
           }
-          await store.getState().fetchRepos()
+          const owner = store.getState().settings?.activeRuntimeEnvironmentId ?? null
+          await store.getState().fetchRepos({ runtimeEnvironmentId: owner })
           const state = store.getState()
           const repo =
             state.repos.find((candidate) => candidate.path === repoPath) ?? addResult.repo

@@ -1,7 +1,7 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
 import {
   WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME,
   WSL_BROWSER_NETWORK_RELAY_DIR,
@@ -15,10 +15,7 @@ const STARTUP_TIMEOUT_MS = 10_000
 const INSTALL_TIMEOUT_MS = 30_000
 const MAX_STDERR_BYTES = 32 * 1024
 
-/**
- * The relay child. `spawnProcess` always pipes all three streams, so the non-null
- * shape is a fact of the chokepoint rather than an assumption about this call.
- */
+// spawnProcess pipes all three streams, so the relay child has no null streams.
 export type WslBrowserNetworkRelayChild = ReturnType<typeof spawnProcess> & {
   stdin: NonNullable<ReturnType<typeof spawnProcess>['stdin']>
   stdout: NonNullable<ReturnType<typeof spawnProcess>['stdout']>
@@ -28,22 +25,7 @@ export type WslBrowserNetworkRelayChild = ReturnType<typeof spawnProcess> & {
 type WslBrowserNetworkRelayBundle = { jsPath: string; version: string }
 
 export function resolveWslBrowserNetworkRelayBundle(): WslBrowserNetworkRelayBundle | null {
-  const candidates: string[] = []
-  if (process.env.ORCA_RELAY_PATH) {
-    candidates.push(join(process.env.ORCA_RELAY_PATH, 'wsl'))
-  }
-  if (process.resourcesPath) {
-    candidates.push(join(process.resourcesPath, 'relay', 'wsl'))
-    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', 'wsl'))
-  }
-  try {
-    const appPath = getAppEnvironment().getAppPath()
-    candidates.push(join(appPath, 'resources', 'relay', 'wsl'))
-    candidates.push(join(appPath, 'out', 'relay', 'wsl'))
-  } catch {
-    // Tests, early startup and plain-Node hosts have no app path — env/resources candidates suffice.
-  }
-  for (const dir of candidates) {
+  for (const dir of relayBundleCandidates('wsl')) {
     const jsPath = join(dir, WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME)
     const versionPath = join(dir, WSL_BROWSER_NETWORK_RELAY_VERSION_FILE)
     if (!existsSync(jsPath) || !existsSync(versionPath)) {

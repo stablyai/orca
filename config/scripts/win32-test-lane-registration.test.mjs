@@ -4,9 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { scanSourceTree, stripComments } from '../../src/shared/source-scan/source-tree-scan'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { WINDOWS_BOUNDARY_TESTS } from './pr-package-test-paths.mjs'
 
 /**
- * Every Windows-gated test file must be registered in BOTH Windows-lane lists.
+ * Every Windows-gated test file must be registered in the Windows CI lane.
  *
  * PR CI has exactly one job on a Windows runner -- asserted below on any
  * `runs-on` spelling that could land there, because that premise is what makes
@@ -19,10 +20,9 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
  * unrelated work while the first five were being fixed -- so the class needs a
  * guard.
  *
- * Both lists matter and being in one is not enough: `WINDOWS_PACKAGE_TESTS` in
- * pr-code-change-scope.mjs decides whether the `package_windows` job RUNS at
- * all for a diff, and the workflow step's vitest argv decides whether the FILE
- * runs once the job started.
+ * Registration is one line in `WINDOWS_BOUNDARY_TESTS` (pr-package-test-paths.mjs):
+ * the workflow step runs that list, and `WINDOWS_PACKAGE_TESTS` spreads it so the
+ * same entry decides whether the `package_windows` job RUNS for a diff.
  *
  * WHAT THIS DETECTS -- a file is Windows-gated when its name is `*.win32.test.*`
  * / `*.win32.spec.*`, or when it contains ANY suite-level gate, nested ones
@@ -69,25 +69,26 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const WINDOWS_LANE_JOB = 'package_windows'
-const WINDOWS_LANE_STEP = 'Test Windows-specific boundaries'
+const WINDOWS_LANE_STEPS = [
+  'Test Windows-specific boundaries',
+  'Test Windows installer process probe'
+]
 const WINDOWS_LANE_RUNNER = 'windows-2022'
 
 /**
- * Windows-gated files that predate this guard and are registered in neither
- * list. Shrink-only: registering one means deleting its line here. Never add.
+ * Windows-gated files that predate this guard and are not registered in the
+ * Windows lane. Shrink-only: registering one means deleting its line here. Never add.
  */
 const UNREGISTERED_ON_MAIN = [
   // Suite gated with `describe.skipIf(platform !== 'win32')`; the cross-platform
   // half of the file still runs on ubuntu, the Windows half runs nowhere.
   'src/main/antigravity/windows-hook-payload-delivery.test.ts',
-  // `.win32.test.ts` by name yet in neither list -- the plainest instance of the class.
+  // `.win32.test.ts` by name yet not registered -- the plainest instance of the class.
   'src/main/daemon/node-pty-windows-input-error.win32.test.ts',
   // Same shape as the antigravity file: a win32-only sibling suite that never runs.
   'src/main/grok/windows-grok-hook-script.test.ts',
   // Whole file is `describe.runIf(platform === 'win32')`; runs on no machine.
   'src/main/ipc/preflight-windows-path-refresh.repro.test.ts',
-  // Nested `describe.skipIf(!isWindows)` real-shell block; never exercised in CI.
-  'src/main/ipc/pty-encoding.test.ts',
   // `describeWindows` ternary over the whole file; runs on no machine.
   'src/main/providers/windows-shell-preflight-runtime.windows.test.ts',
   // Whole file is `describe.runIf(platform === 'win32')`; runs on no machine.
@@ -108,9 +109,7 @@ const MANUAL_OPT_IN = [
   'src/main/git/runner-wsl-linked-gitdir-windows.test.ts',
   // `runRealWsl = … && ORCA_REAL_WSL_BANNER_TEST === '1'`; needs a real distro.
   'src/main/local-worktree-filesystem-wsl-banner.wsl.test.ts',
-  // `RUN_REAL_WINDOWS = platform === 'win32' && ORCA_REAL_WINDOWS_SKILL_TEST === '1'`.
-  'src/main/skills/skill-windows-rename-contention.integration.test.ts',
-  // Same flag; installs into a real Windows workspace.
+  // `ORCA_REAL_WINDOWS_SKILL_TEST === '1'`; installs into a real Windows workspace.
   'src/main/skills/skill-windows-workspace.integration.test.ts',
   // `RUN_REAL_WSL = … && ORCA_REAL_WSL_SKILL_TEST === '1'`; real distro filesystem.
   'src/main/skills/skill-wsl-delete.integration.test.ts',
@@ -128,7 +127,7 @@ const MANUAL_OPT_IN = [
 
 /** Caps so growing either list is two deliberate edits, not one. */
 const UNREGISTERED_MAX = 8
-const MANUAL_OPT_IN_MAX = 10
+const MANUAL_OPT_IN_MAX = 9
 
 /**
  * Floor for the Windows-gated population, so a broken walk or a regex that
@@ -282,28 +281,35 @@ export function couldRunOnWindows(runsOn) {
   return labels.some((label) => /windows/i.test(String(label)) || String(label).includes('${{'))
 }
 
-/** The vitest argv of the one Windows job's one curated-file step. */
+/** The Windows job's curated files: the boundary list plus any argv the lane steps spell out. */
 function readWindowsWorkflow() {
   const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
   const jobs = Object.entries(workflow.jobs ?? {})
   const windowsJobs = jobs.filter(([, job]) => couldRunOnWindows(job?.['runs-on']))
   const steps = workflow.jobs?.[WINDOWS_LANE_JOB]?.steps ?? []
-  const step = steps.find((candidate) => candidate?.name === WINDOWS_LANE_STEP)
-  if (!step) {
-    throw new Error(
-      `No "${WINDOWS_LANE_STEP}" step in the ${WINDOWS_LANE_JOB} job of .github/workflows/pr.yml. ` +
-        'If it was renamed, update WINDOWS_LANE_STEP here -- do not delete this guard.'
-    )
+  const runs = WINDOWS_LANE_STEPS.map((name) => {
+    const step = steps.find((candidate) => candidate?.name === name)
+    if (!step) {
+      throw new Error(
+        `No "${name}" step in ${WINDOWS_LANE_JOB}; update WINDOWS_LANE_STEPS if renamed.`
+      )
+    }
+    const run = String(step.run ?? '')
+    if (!/(?:vitest|vitest\.mjs) run/.test(run)) {
+      throw new Error(`The "${name}" step no longer invokes vitest; this guard is stale.`)
+    }
+    return run
+  })
+  if (!runs[0].includes('config/scripts/pr-package-test-paths.mjs')) {
+    throw new Error(`The "${WINDOWS_LANE_STEPS[0]}" step no longer reads WINDOWS_BOUNDARY_TESTS.`)
   }
-  const run = String(step.run ?? '')
-  if (!run.includes('vitest run')) {
-    throw new Error(
-      `The "${WINDOWS_LANE_STEP}" step no longer invokes vitest; this guard is stale.`
-    )
-  }
+  const run = runs.join(' ')
   return {
     windowsJobNames: windowsJobs.map(([name]) => name),
-    laneFiles: run.split(/\s+/).filter((token) => TEST_FILE_PATTERN.test(token))
+    laneFiles: [
+      ...WINDOWS_BOUNDARY_TESTS,
+      ...run.split(/\s+/).filter((token) => TEST_FILE_PATTERN.test(token))
+    ]
   }
 }
 
@@ -331,13 +337,12 @@ function registrationFailure(path) {
   const missing = []
   if (!laneFiles.includes(path)) {
     missing.push(
-      `add "${path}" to the "${WINDOWS_LANE_STEP}" vitest argv in .github/workflows/pr.yml ` +
-        `(job ${WINDOWS_LANE_JOB})`
+      `add '${path}' to WINDOWS_BOUNDARY_TESTS in config/scripts/pr-package-test-paths.mjs`
     )
   }
   if (!isInClassifier(path)) {
     missing.push(
-      `add '${path}' to WINDOWS_PACKAGE_TESTS in config/scripts/pr-code-change-scope.mjs`
+      `add '${path}' to WINDOWS_PACKAGE_TESTS in config/scripts/pr-package-test-paths.mjs`
     )
   }
   return missing.length === 0 ? null : `${path}: ${missing.join('; and ')}`
@@ -348,6 +353,18 @@ function sourceOf(path) {
 }
 
 describe('Windows-gated test files are registered in the Windows CI lane', () => {
+  it('enables real Windows rename contention tests in the registered step', () => {
+    const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
+    const step = workflow.jobs.package_windows.steps.find(
+      (candidate) => candidate.name === 'Test Windows-specific boundaries'
+    )
+    expect(step.env.ORCA_REAL_WINDOWS_SKILL_TEST).toBe('1')
+    expect(step.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+    expect(WINDOWS_BOUNDARY_TESTS).toContain(
+      'src/main/skills/skill-windows-rename-contention.integration.test.ts'
+    )
+  })
+
   it('scans a plausible number of test files', () => {
     // A broken root or extension filter would make every assertion below vacuous.
     expect(scannedTestFiles.length).toBeGreaterThan(5000)
@@ -381,7 +398,9 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
     // Both discovery paths, proven against real files rather than fixtures: one
     // found by filename plus ternary alias, one found only by its gate
     // expression because its name says nothing about Windows gating.
-    expect(gatedFiles).toContain('src/shared/child-process/windows-command-line.win32.test.ts')
+    expect(gatedFiles).toContain(
+      'src/shared/__tests__/process-host/windows-command-line.win32.test.ts'
+    )
     expect(gatedFiles).toContain('src/main/agent-hooks/windows-hook-payload-delivery.test.ts')
     // And a compound gate, the case this guard was blind to at first.
     expect(gatedFiles).toContain('src/main/git/runner-wsl-linked-gitdir-windows.test.ts')
@@ -414,7 +433,7 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
     expect(isInClassifier('src/main/windows/not-a-real-file.win32.test.ts')).toBe(false)
   })
 
-  it('has every Windows-gated test file in both registration lists', () => {
+  it('has every Windows-gated test file registered in the Windows lane', () => {
     const grandfathered = new Set([...UNREGISTERED_ON_MAIN, ...MANUAL_OPT_IN])
     const failures = gatedFiles
       .filter((path) => !grandfathered.has(path))
@@ -422,10 +441,8 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
       .filter((failure) => failure !== null)
     expect(
       failures,
-      'A Windows-gated test file is missing from a Windows CI registration list. It self-skips on ' +
-        'ubuntu and reports success, so it runs on no machine. Both lists are required: ' +
-        'WINDOWS_PACKAGE_TESTS decides whether the package_windows job runs for a diff, the ' +
-        'workflow argv decides whether the file runs once it started. Fix each line below.'
+      'A Windows-gated test file is not registered in the Windows CI lane. It self-skips on ' +
+        'ubuntu and reports success, so it runs on no machine. Fix each line below.'
     ).toEqual([])
   })
 
@@ -458,7 +475,7 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
     expect(
       notActuallyOptIn,
       'A MANUAL_OPT_IN entry has no env-var opt-in, so registering it WOULD make it run. ' +
-        'Register it in both lists and delete the line.'
+        'Register it in WINDOWS_BOUNDARY_TESTS and delete the line.'
     ).toEqual([])
   })
 

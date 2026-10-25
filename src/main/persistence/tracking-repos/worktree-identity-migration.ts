@@ -9,56 +9,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-
-type WorktreeNamingRow = { worktreeId: string }
-
-/**
- * A session map keyed by pane, tab or environment whose VALUE names the worktree it belongs to.
- * Returns the repointed record, or null when no row named the old id — so the caller assigns to
- * the concrete field and the row type is never widened.
- */
-function repointRowRecord<Row extends WorktreeNamingRow>(
-  record: Record<string, Row> | undefined,
-  oldWorktreeId: string,
-  newWorktreeId: string
-): Record<string, Row> | null {
-  if (!record) {
-    return null
-  }
-  let changed = false
-  const next: Record<string, Row> = { ...record }
-  for (const [key, row] of Object.entries(record)) {
-    if (row?.worktreeId !== oldWorktreeId) {
-      continue
-    }
-    next[key] = { ...row, worktreeId: newWorktreeId }
-    changed = true
-  }
-  return changed ? next : null
-}
-
-/** Same, but each value is an array of such rows. */
-function repointRowArrays<Row extends WorktreeNamingRow>(
-  record: Record<string, Row[]> | undefined,
-  oldWorktreeId: string,
-  newWorktreeId: string
-): Record<string, Row[]> | null {
-  if (!record) {
-    return null
-  }
-  let changed = false
-  const next: Record<string, Row[]> = { ...record }
-  for (const [key, rows] of Object.entries(record)) {
-    if (!Array.isArray(rows) || !rows.some((row) => row?.worktreeId === oldWorktreeId)) {
-      continue
-    }
-    next[key] = rows.map((row) =>
-      row?.worktreeId === oldWorktreeId ? { ...row, worktreeId: newWorktreeId } : row
-    )
-    changed = true
-  }
-  return changed ? next : null
-}
+import { repointRowArrays, repointRowRecord } from './worktree-identity-row-repoint'
 
 /**
  * Re-keys every worktreeId-keyed record in `state` from `oldWorktreeId` to `newWorktreeId`. Mutates `state` in place;
@@ -263,6 +214,15 @@ export function migrateWorktreeIdentity(
       session.closedTerminalTabTombstonesByTabId = nextClosedTombstones
       sessionChanged = true
     }
+    const nextClosedPanes = repointRowRecord(
+      session.closedTerminalPanesByPaneKey,
+      oldWorktreeId,
+      newWorktreeId
+    )
+    if (nextClosedPanes) {
+      session.closedTerminalPanesByPaneKey = nextClosedPanes
+      sessionChanged = true
+    }
     const nextCloseIntents = repointRowArrays(
       session.clientHostedBrowserCloseIntentsByEnvironment,
       oldWorktreeId,
@@ -270,6 +230,15 @@ export function migrateWorktreeIdentity(
     )
     if (nextCloseIntents) {
       session.clientHostedBrowserCloseIntentsByEnvironment = nextCloseIntents
+      sessionChanged = true
+    }
+    const nextPairedTabCloseIntents = repointRowArrays(
+      session.pairedTerminalTabCloseIntentsByEnvironment,
+      oldWorktreeId,
+      newWorktreeId
+    )
+    if (nextPairedTabCloseIntents) {
+      session.pairedTerminalTabCloseIntentsByEnvironment = nextPairedTabCloseIntents
       sessionChanged = true
     }
     return sessionChanged
@@ -329,6 +298,9 @@ export function migrateWorktreeIdentity(
     state.mobileClientTabSelectionsByDeviceId ?? {}
   )) {
     changed = moveKey(selectionsByWorktree) || changed
+  }
+  if (state.ui?.explorerDisplayRootByWorktree) {
+    changed = moveKey(state.ui.explorerDisplayRootByWorktree) || changed
   }
   const showDotfiles = state.ui?.showDotfilesByWorktree
   if (showDotfiles) {

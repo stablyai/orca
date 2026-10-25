@@ -42,8 +42,7 @@ describe('resolveWatcherProcessEntryPath', () => {
   })
 
   it('uses the adjacent entry for a packaged host whose app root is not an asar', () => {
-    // orcad: a packaged Node bundle that ships this child beside orcad.js. Gating the
-    // adjacent probe on isPackaged sent it to a desktop out/main that never exists here.
+    // orcad ships this child beside orcad.js without Electron isPackaged or an out/main directory.
     const orcadRoot = path.join(path.sep, 'opt', 'orca')
     const adjacentEntry = path.join(orcadRoot, 'parcel-watcher-process-entry.js')
 

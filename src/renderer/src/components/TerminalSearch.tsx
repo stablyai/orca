@@ -1,8 +1,9 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useEffect, useState, useCallback } from 'react'
 import { ChevronUp, ChevronDown, X, CaseSensitive, Regex } from 'lucide-react'
 import type { SearchAddon } from '@xterm/addon-search'
 import { Button } from '@/components/ui/button'
-import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
+import type { SearchState } from '@/components/terminal-pane/terminal-keyboard-shortcut-matching'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
 import { safeFind } from './terminal-search-safe-find'
@@ -152,7 +153,7 @@ export default function TerminalSearch({
       style={{ width: 340, maxWidth: 'calc(100% - 16px)' }}
       onKeyDown={handleKeyDown}
     >
-      <input
+      <ImeInput
         ref={handleInputRef}
         type="text"
         value={query}

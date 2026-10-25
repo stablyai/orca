@@ -76,8 +76,6 @@ describe('browser identity mode store', () => {
     })
   })
 
-  // Not a serialization claim: writeRecord is synchronous, so two calls cannot interleave. This
-  // pins the observable contract instead -- the later selection is the one that survives.
   it('applies the last of two selections issued together', async () => {
     const userDataPath = makeUserData()
     initializeBrowserIdentityModeStore(userDataPath)
@@ -171,7 +169,7 @@ describe('browser identity mode store', () => {
       ok: true
     })
 
-    // A later launch finds the record unhealthy again; the first backup must survive untouched.
+    // Preserve the first backup when a later launch finds another corrupt record.
     writeFileSync(recordPath, '{bad json again', 'utf8')
     resetBrowserIdentityModeStoreForTests()
     initializeBrowserIdentityModeStore(userDataPath)
@@ -196,7 +194,6 @@ describe('browser identity mode store', () => {
       ok: false,
       error: { code: 'browser_identity_backup_failed' }
     })
-    // Never overwrite what could not be preserved.
     expect(readFileSync(join(userDataPath, BROWSER_IDENTITY_MODE_FILE), 'utf8')).toBe('{bad json')
     expect(readdirSync(userDataPath)).toEqual([BROWSER_IDENTITY_MODE_FILE])
   })

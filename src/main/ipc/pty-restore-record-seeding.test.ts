@@ -11,16 +11,15 @@ import {
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeResolvedWorktreeCache } from '../runtime/runtime-resolved-worktree-cache'
 import type { ResolvedWorktree } from '../runtime/runtime-worktree-path-identity'
 import { getWorktreeScanMutationRevision } from '../local-worktree-scan-generation'
-import {
-  registerPtyHandlers,
-  clearProviderPtyState,
-  getPtyIdForPaneKey,
-  setLocalPtyProvider
-} from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { clearProviderPtyState } from './pty/provider/state-cleanup'
+import { getPtyIdForPaneKey } from './pty/pane/key-state'
+import { setLocalPtyProvider } from './pty/provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -160,18 +159,14 @@ describe('registerPtyHandlers', () => {
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-    // Why: without this seed main's model would be a strict suffix of what the renderer painted, and a later park-reveal would restore the fragment.
+    // Seed full history so a later reveal cannot restore only the live-output suffix.
     expect(runtime.seedHeadlessTerminal).toHaveBeenCalledTimes(1)
     expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
       'pty-ssh-reattach',
       'relay history\r\n'
     )
   })
-  // STA repro (post-restart blind orchestrator): reattach restore payloads
-  // arrive as spawn RPC results, never through onPtyData, so without record
-  // seeding `terminal list` reported connected terminals with empty
-  // title/preview/lastOutputAt after every relaunch and `terminal read`
-  // returned a zero-line tail for a running session.
+  // Reattach restores arrive outside onPtyData; seed list/read records to avoid empty terminal metadata after restart.
   it('leaves the runtime reporting preview and title after a reattach spawn (restart restore)', async () => {
     const worktreeId = 'repo-restore::/tmp/restore-records'
     const tabId = 'tab-restore-records'
@@ -283,9 +278,17 @@ describe('registerPtyHandlers', () => {
       env: { ORCA_PANE_KEY: paneKey }
     })
 
-    // The renderer owns the emulator snapshot here — but the list/read records
-    // are main-side only, so the record seed must still run.
-    expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    // Record seeding is always main-owned; main-owned layout also needs its emulator history seeded.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
+        'pty-gated-reattach',
+        'gated snapshot\r\n',
+        { cols: 80, rows: 24 },
+        {}
+      )
+    } else {
+      expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    }
     expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-gated-reattach', {
       text: 'gated snapshot\r\n',
       lastTitle: 'gated-title'
@@ -334,8 +337,6 @@ describe('registerPtyHandlers', () => {
       lastTitle: 'checkpoint-title'
     })
   })
-  // Why windowless: `orca serve`/CLI runtime creation is the topology that most
-  // needs informative records — its controller.spawn path must seed them too.
   it('seeds restore records for a runtime-controller created terminal (headless reattach)', async () => {
     const worktreeId = 'repo-restore::/tmp/restore-records'
     const ptyId = `${worktreeId}@@session-headless-1`
@@ -360,12 +361,7 @@ describe('registerPtyHandlers', () => {
       getProjects: () => [],
       persistPtyBinding: vi.fn()
     } as never)
-    // Why: selector resolution shells out to git for real repos; prime the
-    // resolved-worktree cache so this headless fixture resolves offline.
-    //
-    // Why through getSnapshot and not a hand-written `resolved` entry: the cache decides freshness
-    // from fields it stamps itself, so a literal that mirrors them is a second copy of that
-    // contract and goes stale the moment a field is added. Let the cache stamp its own entry.
+    // Prime selector resolution through the real cache API to avoid Git I/O and hand-copied freshness fields.
     const worktreeResolutionInternals = runtime as unknown as {
       buildResolvedWorktreeFromId(id: string): ResolvedWorktree
       resolvedWorktrees: RuntimeResolvedWorktreeCache
@@ -578,10 +574,32 @@ describe('registerPtyHandlers', () => {
     clearProviderPtyState(first.id)
 
     expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
-    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey)
+    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalled()
 
     clearProviderPtyState(second.id)
     expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
+    expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey, {
+      forgetAgentExit: true
+    })
+  })
+  // A reconnectable disconnect must preserve the agent's proven exit evidence.
+  it('keeps the proven agent exit when a PTY is cleared for a disconnect', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const stablePaneKey = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })
+    const ptyId = getPtyIdForPaneKey(stablePaneKey)
+    expect(ptyId).toBeDefined()
+    clearAgentHookPaneStateMock.mockClear()
+
+    clearProviderPtyState(ptyId ?? '', { preserveAgentSessionOwners: true })
+
     expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
   })
   it('does not let restart-era alias cleanup clear a newer pane-key owner', async () => {

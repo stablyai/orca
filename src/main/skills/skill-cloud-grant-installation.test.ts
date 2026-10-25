@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: { getPath: () => '/state', isPackaged: true }
 }))
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-status-probe', () => ({
   getRuntimeEnvironmentStatus: mocks.getRuntimeEnvironmentStatus
 }))
 vi.mock('./skill-remote-install-service', () => ({

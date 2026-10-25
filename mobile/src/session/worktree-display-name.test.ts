@@ -22,7 +22,10 @@ describe('getLiveWorktreeDisplayName', () => {
 
   it('falls back to repo only when the display name is blank', () => {
     expect(
-      getLiveWorktreeDisplayName([{ worktreeId: 'wt-1', displayName: '  ', repo: 'orca' }], 'wt-1')
+      getLiveWorktreeDisplayName(
+        [{ worktreeId: 'wt-1', displayName: '  ', repo: '  orca  ' }],
+        'wt-1'
+      )
     ).toBe('orca')
   })
 

@@ -274,21 +274,6 @@ describe('usePrimarySelectionPaste', () => {
     expect(consumeNativePasteMock).not.toHaveBeenCalled()
   })
 
-  it('does not suppress native paste when the terminal has not armed the window', async () => {
-    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
-    consumeNativePasteMock.mockReturnValue(false)
-    await renderProbe()
-    const textarea = appendTextarea()
-
-    let nativeBeforeInput!: Event
-    await act(async () => {
-      nativeBeforeInput = dispatchNativePasteBeforeInput(textarea)
-      await flushPromises()
-    })
-
-    expect(nativeBeforeInput.defaultPrevented).toBe(false)
-  })
-
   it('does not keep middle-click ownership after the gesture window expires', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

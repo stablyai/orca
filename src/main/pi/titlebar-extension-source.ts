@@ -250,9 +250,14 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     '  // Why: pi drops an open dialog through resetExtensionUI without resolving its promise,',
     '  // so a replaced or reloaded session never sends the matching close. Both boundaries',
     '  // prove no dialog from the old session is still on screen.',
-    "  on('session_start', async () => {",
+    "  on('session_start', async (_event, ctx) => {",
     '    clearOwnedTimers()',
     '    resetPromptState()',
+    // Why: branded Pi forks never title `π - ` before the first turn; OMP keeps its native `π >`
+    // so readiness still waits out its setup wizard, which opens after session_start.
+    ...(kind === 'pi'
+      ? ['    if (!isOmpRuntime()) paintTitle(resolvePainter(ctx), () => getBaseTitle(pi))']
+      : []),
     '  })',
     '',
     '  // Why: modern Pi emits agent_end mid-run and only settle later, so settlement is the',

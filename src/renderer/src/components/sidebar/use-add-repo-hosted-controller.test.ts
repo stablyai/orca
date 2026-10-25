@@ -12,9 +12,7 @@ vi.mock('react', async (importOriginal) => {
 
 const mocks = vi.hoisted(() => ({
   state: {
-    closeModal: vi.fn(),
-    openSettingsPage: vi.fn(),
-    openSettingsTarget: vi.fn()
+    closeModal: vi.fn()
   },
   markOnboardingProjectAdded: vi.fn(() => Promise.resolve())
 }))
@@ -85,29 +83,29 @@ describe('useAddRepoHostedController', () => {
       onOpenChange,
       onProjectAdded
     })
-    await finishProjectAdd?.('repo-1')
+    await finishProjectAdd?.('repo-1', 'local_folder_picker')
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedRepo')
     expect(onProjectAdded).toHaveBeenCalledWith('repo-1')
     // Why: closing before selection keeps the composer visible under the
     // dialog's close animation while the new project lands in the picker.
     expect(order).toEqual(['close', 'added'])
   })
-
-  it('SSH settings navigation closes both hosted dialog and composer modal', () => {
-    const onOpenChange = vi.fn()
-    const { handleOpenSshSettings } = useAddRepoHostedController({
-      open: true,
-      onOpenChange,
-      onProjectAdded: vi.fn()
-    })
-    handleOpenSshSettings()
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(mocks.state.closeModal).toHaveBeenCalledTimes(1)
-    expect(mocks.state.openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'ssh',
-      repoId: null,
-      sectionId: 'ssh'
-    })
-    expect(mocks.state.openSettingsPage).toHaveBeenCalledTimes(1)
-  })
+  it.each([true, false])(
+    'prefers the imported group when host accepts it (%s)',
+    async (accepted) => {
+      const onProjectAdded = vi.fn()
+      const onProjectGroupImported = vi.fn(() => accepted)
+      const { finishProjectAdd } = useAddRepoHostedController({
+        open: true,
+        onOpenChange: vi.fn(),
+        onProjectAdded,
+        onProjectGroupImported
+      })
+      await finishProjectAdd?.('repo-1', 'ssh_remote_path', 'ssh:box', {
+        importedProjectGroupId: 'group'
+      })
+      expect(onProjectGroupImported).toHaveBeenCalledWith('group')
+      expect(onProjectAdded).toHaveBeenCalledTimes(accepted ? 0 : 1)
+    }
+  )
 })

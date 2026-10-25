@@ -1,6 +1,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { isAbsolute, resolve } from 'node:path'
+import type { Dirent } from 'node:fs'
+import { isAbsolute, join, resolve } from 'node:path'
 import type { DirEntry, FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { probeGitAvailability } from '../git/git-availability'
@@ -24,6 +25,21 @@ function resolveServerBrowsePath(pathValue: string): string {
   return resolve(homedir(), trimmed)
 }
 
+// Why: Dirent.isDirectory() is false for a symlink, so a linked folder would be unreachable; follow it, and treat broken links or loops (ENOENT/ELOOP) as files.
+async function isBrowseEntryDirectory(dirPath: string, entry: Dirent): Promise<boolean> {
+  if (entry.isDirectory()) {
+    return true
+  }
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  try {
+    return (await stat(join(dirPath, entry.name))).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 export class RuntimeServerEnvironmentCommands {
   async browseDirectory(pathValue: string): Promise<{
     resolvedPath: string
@@ -39,13 +55,15 @@ export class RuntimeServerEnvironmentCommands {
       throw new Error(`${dirPath} is not a directory`)
     }
     const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = entries
-      .filter((entry) => entry.name !== '.' && entry.name !== '..')
-      .map((entry) => ({
-        name: entry.name,
-        isDirectory: entry.isDirectory(),
-        isSymlink: entry.isSymbolicLink()
-      }))
+    const mapped = await Promise.all(
+      entries
+        .filter((entry) => entry.name !== '.' && entry.name !== '..')
+        .map(async (entry) => ({
+          name: entry.name,
+          isDirectory: await isBrowseEntryDirectory(dirPath, entry),
+          isSymlink: entry.isSymbolicLink()
+        }))
+    )
     sortDirEntries(mapped)
     return {
       resolvedPath: dirPath,

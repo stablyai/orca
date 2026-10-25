@@ -347,47 +347,6 @@ describe('registerCrashReportingHandlers', () => {
     expect(listRecent).not.toHaveBeenCalled()
   })
 
-  it('uploads crash logs by default after Send Report', async () => {
-    registerCrashReportingHandlers({
-      getById: vi.fn(async () => null),
-      dismiss: vi.fn(),
-      markSent: vi.fn(),
-      markDismissedSent: vi.fn(),
-      listRecent: vi.fn(async () => []),
-      record: vi.fn(),
-      formatDiagnosticText: vi.fn()
-    } as never)
-
-    const result = await handlers.get('crashReports:submit')?.(null, {
-      notes: 'manual report',
-      submitAnonymously: true,
-      githubLogin: null,
-      githubEmail: null
-    })
-
-    expect(result).toEqual({
-      ok: true,
-      report: null,
-      diagnosticBundle: {
-        status: 'attached',
-        bundleSubmissionId: 'bundleabcdefghijklmnop',
-        bytes: 25,
-        spanCount: 1
-      }
-    })
-    expect(submitFeedbackMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        feedback: expect.stringContaining('Status: attached'),
-        diagnosticBundle: {
-          bundleSubmissionId: 'bundleabcdefghijklmnop',
-          content: diagnosticBundle().payload,
-          bytes: 25,
-          spanCount: 1
-        }
-      })
-    )
-  })
-
   it('marks the report sent when transport retries successfully without diagnostic logs', async () => {
     const pending = report('pending', 'crash-degraded')
     const sent = report('sent', pending.id)

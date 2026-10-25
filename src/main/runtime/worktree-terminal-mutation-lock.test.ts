@@ -16,9 +16,13 @@ describe('WorktreeTerminalMutationLock', () => {
       lock.acquire(KEY, 'shared')
     ])
     expect(releases).toHaveLength(4)
+    expect(lock.hasActiveSpawns(KEY)).toBe(true)
+    expect(lock.hasActiveSpawns('other')).toBe(false)
     for (const release of releases) {
+      expect(lock.hasActiveSpawns(KEY)).toBe(true)
       release()
     }
+    expect(lock.hasActiveSpawns(KEY)).toBe(false)
     expect(lock.trackedKeyCount).toBe(0)
   })
 

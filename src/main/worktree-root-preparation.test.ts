@@ -2,21 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from './wsl'
 import type { Repo } from '../shared/repo-types'
 
-const { mkdirMock, authorizeExternalPathMock, getWslHomeMock, getWslHomeAsyncMock } = vi.hoisted(
-  () => ({
-    mkdirMock: vi.fn(),
-    authorizeExternalPathMock: vi.fn(),
-    getWslHomeMock: vi.fn(),
-    getWslHomeAsyncMock: vi.fn()
-  })
-)
+const { mkdirMock, getWslHomeMock, getWslHomeAsyncMock } = vi.hoisted(() => ({
+  mkdirMock: vi.fn(),
+  getWslHomeMock: vi.fn(),
+  getWslHomeAsyncMock: vi.fn()
+}))
 
 vi.mock('fs/promises', () => ({
   mkdir: mkdirMock
-}))
-
-vi.mock('./ipc/filesystem-auth', () => ({
-  authorizeExternalPath: authorizeExternalPathMock
 }))
 
 vi.mock('./wsl', async (importOriginal) => ({
@@ -43,7 +36,6 @@ const store = {
 describe('prepareLocalWorktreeRootForRepo', () => {
   beforeEach(() => {
     mkdirMock.mockReset().mockResolvedValue(undefined)
-    authorizeExternalPathMock.mockReset()
     getWslHomeMock.mockReset().mockImplementation(() => {
       throw new Error('synchronous wsl.exe home probe must not run on the main thread')
     })
@@ -114,13 +106,11 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     await prepareLocalWorktreeRootForRepo(store as never, { ...repo, kind: 'folder' })
 
     expect(mkdirMock).not.toHaveBeenCalled()
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
   })
 
   it('does not fail repo setup when root preparation fails', async () => {
     mkdirMock.mockRejectedValueOnce(new Error('permission denied'))
 
     await expect(prepareLocalWorktreeRootForRepo(store as never, repo)).resolves.toBeUndefined()
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
   })
 })

@@ -23,6 +23,8 @@ vi.mock('../git/runner', async (importOriginal) => {
 // level. We only exercise the fetch cache, so we let those imports load
 // normally — none of them trigger IO until a runtime method is called.
 import { OrcaRuntimeService } from './orca-runtime'
+import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
+import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
 
 function isFetchArgs(argv: unknown): argv is string[] {
   if (!Array.isArray(argv)) {
@@ -80,6 +82,13 @@ function mockFetchResults(results: unknown[]): void {
 }
 
 describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
+  const base = {
+    remote: 'origin',
+    branch: 'main',
+    ref: 'refs/remotes/origin/main',
+    base: 'origin/main'
+  }
+
   it.each([undefined, 'Ubuntu'])(
     'inherits create priority through fetch adapters on %s',
     async (wslDistro) =>
@@ -116,6 +125,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
   )
 
   beforeEach(() => {
+    _resetCanonicalRepoKeyCacheForTests()
     gitExecFileAsyncMock.mockReset()
   })
 
@@ -195,22 +205,45 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     expect(fetchCallCount()).toBe(1)
   })
 
-  it('bounds process-lifetime fetch cache maps for churned repo paths', async () => {
-    mockFetchResults(Array.from({ length: 520 }, () => ({ stdout: '', stderr: '' })))
-    const runtime = new OrcaRuntimeService(null)
-    const caches = runtime as unknown as {
-      canonicalFetchKeyCache: Map<string, string>
-      fetchLastCompletedAt: Map<string, number>
+  it('evicts the oldest canonical key after 512 distinct repo paths', async () => {
+    const owner = new RuntimeRemoteFetchController()
+    const resolve = vi.spyOn(owner, 'getCanonicalRepoKey').mockImplementation(async (path) => path)
+    for (let index = 0; index < 513; index += 1) {
+      await owner.getCanonicalFetchKey(`/repo/cache-${index}`, 'origin')
     }
+    await owner.getCanonicalFetchKey('/repo/cache-1', 'origin')
+    expect(resolve).toHaveBeenCalledTimes(513)
+    await owner.getCanonicalFetchKey('/repo/cache-0', 'origin')
+    expect(resolve).toHaveBeenCalledTimes(514)
+  })
 
-    for (let i = 0; i < 520; i += 1) {
-      await runtime.fetchRemoteWithCache(`/repo/cache-${i}`, 'origin')
+  it('evicts the oldest successful freshness entry after 512 distinct repo paths', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(10_000)
+    mockFetchResults(Array.from({ length: 514 }, () => ({ stdout: '', stderr: '' })))
+    const owner = new RuntimeRemoteFetchController()
+    for (let index = 0; index < 513; index += 1) {
+      await owner.getOrStartRemoteFetch(`/repo/cache-${index}`, 'origin')
     }
+    await owner.getOrStartRemoteFetch('/repo/cache-1', 'origin')
+    expect(fetchCallCount()).toBe(513)
+    await owner.getOrStartRemoteFetch('/repo/cache-0', 'origin')
+    expect(fetchCallCount()).toBe(514)
+  })
 
-    expect(caches.canonicalFetchKeyCache.size).toBeLessThanOrEqual(512)
-    expect(caches.fetchLastCompletedAt.size).toBeLessThanOrEqual(512)
-    expect(caches.canonicalFetchKeyCache.has('/repo/cache-0::origin')).toBe(false)
-    expect(caches.fetchLastCompletedAt.has('/repo/cache-0::origin')).toBe(false)
+  it('keeps successful fetch freshness independent between owners', async () => {
+    mockFetchResults([
+      { stdout: '', stderr: '' },
+      { stdout: '', stderr: '' }
+    ])
+    const first = new RuntimeRemoteFetchController()
+    const second = new RuntimeRemoteFetchController()
+    await first.getOrStartRemoteFetch('/repo/isolated', 'origin')
+    await second.getOrStartRemoteFetch('/repo/isolated', 'origin')
+    expect(fetchCallCount()).toBe(2)
+    await first.getOrStartRemoteFetch('/repo/isolated', 'origin')
+    await second.getOrStartRemoteFetch('/repo/isolated', 'origin')
+    expect(fetchCallCount()).toBe(2)
   })
 
   it.each([
@@ -243,6 +276,33 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       branch: 'main',
       ref: 'refs/remotes/foo/bar/main',
       base: 'foo/bar/main'
+    })
+  })
+
+  it.each(['refs/heads/feature/加', 'refs/tags/release'])(
+    'does not reinterpret a qualified nonremote ref through a remote named refs: %s',
+    async (base) => {
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'refs\n', stderr: '' })
+      const runtime = new OrcaRuntimeService(null)
+      for (const options of [{}, { wslDistro: 'Ubuntu' }]) {
+        await expect(
+          runtime.resolveRemoteTrackingBase('/repo/e', base, options)
+        ).resolves.toBeNull()
+      }
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('preserves a qualified remote whose name begins with refs', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'refs/heads\n', stderr: '' })
+    const runtime = new OrcaRuntimeService(null)
+    await expect(
+      runtime.resolveRemoteTrackingBase('/repo/e', 'refs/remotes/refs/heads/feature/加')
+    ).resolves.toEqual({
+      remote: 'refs/heads',
+      branch: 'feature/加',
+      ref: 'refs/remotes/refs/heads/feature/加',
+      base: 'refs/heads/feature/加'
     })
   })
 
@@ -296,12 +356,6 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     })
     mockFetchResults([pending, { stdout: '', stderr: '' }])
     const runtime = new OrcaRuntimeService(null)
-    const base = {
-      remote: 'origin',
-      branch: 'main',
-      ref: 'refs/remotes/origin/main',
-      base: 'origin/main'
-    }
 
     const first = runtime.getOrStartRemoteTrackingBaseRefresh('/repo/g', base)
     const second = runtime.getOrStartRemoteTrackingBaseRefresh('/repo/g', base)
@@ -312,6 +366,72 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     await Promise.all([first, second])
     await runtime.getOrStartRemoteTrackingBaseRefresh('/repo/g', base)
 
+    expect(fetchCallCount()).toBe(1)
+  })
+
+  it.each(['create-first', 'success', 'main', 'other'])('Create sharing: %s', async (scenario) => {
+    vi.useFakeTimers()
+    let finishFetch = () => {}
+    gitExecFileAsyncMock.mockImplementation((argv: string[], options) => {
+      return !isFetchArgs(argv)
+        ? Promise.resolve({ stdout: '/repo/.git' })
+        : fetchCallCount() > 1
+          ? Promise.resolve({ stdout: '' })
+          : new Promise((resolve, reject) => {
+              finishFetch = () => resolve({ stdout: '' })
+              options.signal?.addEventListener('abort', () => reject(new Error('expired')))
+            })
+    })
+    const runtime = new RuntimeRemoteFetchController()
+    const firstCreate =
+      scenario === 'create-first'
+        ? runtime.getOrStartRemoteTrackingBaseRefresh('/repo/pr', base)
+        : null
+    const preview = runtime.refreshRemoteTrackingBaseForPreview('/repo/pr', base)
+    await vi.waitFor(() => expect(fetchCallCount()).toBe(1))
+    setTimeout(() => finishFetch(), scenario === 'success' ? 5_000 : 15_000)
+    await vi.advanceTimersByTimeAsync(scenario === 'success' ? 0 : 11_000)
+    const next =
+      scenario === 'other' ? { ...base, branch: 'other', ref: 'refs/remotes/origin/other' } : base
+    const create = firstCreate ?? runtime.getOrStartRemoteTrackingBaseRefresh('/repo/pr', next)
+    const sibling = runtime.getOrStartRemoteTrackingBaseRefresh('/repo/pr', next)
+    await vi.advanceTimersByTimeAsync(scenario === 'success' ? 5_000 : 4_000)
+    await expect(preview).resolves.toMatchObject({ ok: scenario === 'success' })
+    await expect(create).resolves.toEqual({ ok: true })
+    await expect(sibling).resolves.toEqual({ ok: true })
+    expect(fetchCallCount()).toBe(scenario === 'main' || scenario === 'other' ? 2 : 1)
+  })
+
+  it.each([false, true])('shares root freshness after canceled lookup: %s', async (lateTimer) => {
+    vi.useFakeTimers()
+    let releaseLookup = () => {}
+    gitExecFileAsyncMock.mockImplementation(async (_argv, options) => {
+      if (options.signal) {
+        await new Promise<void>((resolve) => {
+          releaseLookup = resolve
+          options.signal.addEventListener('abort', resolve)
+        })
+        expect(options.signal.aborted).toBe(!lateTimer)
+        expect(options.canStart()).toBe(false)
+        throw Object.assign(new Error('canceled'), { name: lateTimer ? 'AbortError' : 'Error' })
+      }
+      return { stdout: '/repo/.git' }
+    })
+    const controller = new RuntimeRemoteFetchController()
+    await controller.getCanonicalRepoKey('/repo')
+    const preview = controller.refreshRemoteTrackingBaseForPreview('/repo-linked', base)
+    await vi.advanceTimersByTimeAsync(0)
+    vi.setSystemTime(Date.now() + (lateTimer ? 10_000 : 0))
+    await vi.advanceTimersByTimeAsync(lateTimer ? 0 : 10_000)
+    if (lateTimer) {
+      releaseLookup()
+    }
+    await expect(preview).resolves.toEqual({ ok: false, errorKind: 'git_error' })
+    expect(fetchCallCount()).toBe(0)
+    await controller.getOrStartRemoteTrackingBaseRefresh('/repo', base)
+    await controller.getOrStartRemoteTrackingBaseRefresh('/repo-linked', base)
+    const recoveredKey = await controller.getCanonicalRepoKey('/repo-linked')
+    expect(recoveredKey).toBe('local::/repo/.git')
     expect(fetchCallCount()).toBe(1)
   })
 

@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { onMock, spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { getPtyRendererDeliveryDebugSnapshot } from './pty/delivery/debug'
+import { _resetColorQueryReplyColorsForTest } from './pty/provider/registry'
+import { _resetPtyOwnerHostColorsForTest } from '../../shared/pty-owner-color-query-colors'
+import { _resetTerminalViewAttributesForTest } from '../runtime/terminal-view-attribute-store'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -55,6 +59,7 @@ describe('registerPtyHandlers', () => {
     createMockProc,
     getPtyWriteListener,
     getPtySetRendererPtyVisibleListener,
+    getPtySetHiddenRendererPtyListener,
     getPtyRendererDispatcherReadyListener,
     getMainFrameNavigationListener,
     getPtyResizeListener
@@ -79,7 +84,7 @@ describe('registerPtyHandlers', () => {
       const rawReadyListener = readyCall[1] as (event: unknown) => void
       vi.advanceTimersByTime(1)
 
-      // Why: a straggler handshake from a dying window must not reopen the gate (or trigger the destructive reconcile) for the new page.
+      // A dying page's handshake must not reopen or reconcile the replacement page's gate.
       handleRendererLoading()
       mainWindow.webContents.send.mockClear()
       rawReadyListener({ sender: { isDestroyed: () => false } })
@@ -90,7 +95,6 @@ describe('registerPtyHandlers', () => {
         rendererPtyDispatcherReady: false
       })
 
-      // The genuine main-window handshake still opens the gate and drains.
       rawReadyListener({ sender: mainWindow.webContents })
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
@@ -116,7 +120,7 @@ describe('registerPtyHandlers', () => {
       const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
       vi.advanceTimersByTime(1)
 
-      // A timely handshake must cancel the reload watchdog so no orphaned ~10s timer lingers (forced-count guard can't catch it — the watchdog no-ops once ready).
+      // Assert timer cleanup too: an orphaned watchdog can no-op without incrementing forced-ready.
       handleRendererLoading()
       handleRendererDispatcherReady()
       vi.advanceTimersByTime(0)
@@ -126,7 +130,6 @@ describe('registerPtyHandlers', () => {
         rendererDispatcherReadyForcedCount: 0
       })
 
-      // Advancing well past the watchdog window leaves the forced counter at zero.
       vi.advanceTimersByTime(20_000)
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererPtyDispatcherReady: true,
@@ -149,22 +152,20 @@ describe('registerPtyHandlers', () => {
       vi.advanceTimersByTime(1)
       expect(vi.getTimerCount()).toBe(0)
 
-      // A reload closes the gate and arms the ~10s self-heal watchdog on THIS registration's closure.
       handleRendererLoading()
       expect(vi.getTimerCount()).toBe(1)
 
-      // Re-registering must cancel the prior closure's watchdog (cross-registration bridge) or it later force-opens a dead window's gate.
+      // Re-registration must cancel the outgoing closure's watchdog before it can reopen the old gate.
       registerPtyHandlers(mainWindow as never)
       expect(vi.getTimerCount()).toBe(0)
 
-      // And no orphaned ~10s watchdog fires later (removing the bridge cancel turns this red).
       vi.advanceTimersByTime(20_000)
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
     }
   })
-  it('preserves background-origin metadata for repaint output caused by a hidden resize', async () => {
+  it('does not tag output read after reveal as background when the hidden resize repaint was gated', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -177,29 +178,30 @@ describe('registerPtyHandlers', () => {
         cwd: '/tmp'
       })) as { id: string }
       const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const setHidden = getPtySetHiddenRendererPtyListener()
       const resizePty = getPtyResizeListener()
       mainWindow.webContents.send.mockClear()
 
       setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      setHidden(null, { id: spawnResult.id, hidden: true })
       resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
+      mockProc.emitData('\x1b[2Khidden-resize repaint')
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+        'pty:data',
+        expect.objectContaining({ data: '\x1b[2Khidden-resize repaint' })
+      )
+
+      setHidden(null, { id: spawnResult.id, hidden: false })
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
-      mockProc.emitData('\x1b[2Khidden-resize redraw')
-      vi.advanceTimersByTime(2)
-
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-        id: spawnResult.id,
-        data: '\x1b[2Khidden-resize redraw',
-        background: true
-      })
-
       mainWindow.webContents.send.mockClear()
-      resizePty(null, { id: spawnResult.id, cols: 80, rows: 24 })
-      mockProc.emitData('visible repaint')
+      // The app's post-reveal full repaint: a background tag makes the renderer drop it.
+      mockProc.emitData('\x1b[2Kfull repaint')
       vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: 'visible repaint'
+        data: '\x1b[2Kfull repaint'
       })
     } finally {
       vi.useRealTimers()
@@ -260,9 +262,7 @@ describe('registerPtyHandlers', () => {
       const sourceData = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
       mockProc.emitData(sourceData)
 
-      // Answered in the query's own turn. A cooked tty echoes the reply as well as
-      // delivering it, and the echo is contained by the output-side projections (#12112);
-      // withholding the write is what let replies overtake each other (#15559).
+      // Reply in the query's turn to preserve order; output projections contain cooked-tty echo (#12112, #15559).
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       vi.advanceTimersByTime(2)
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
@@ -300,7 +300,6 @@ describe('registerPtyHandlers', () => {
       const sourceData = '\x1b]10;?;?\x1b\\ready'
       mockProc.emitData(sourceData)
 
-      // Both slots of a duplicate-slot query are answered in that same turn.
       expect(mockProc.proc.write).toHaveBeenCalledTimes(2)
       vi.advanceTimersByTime(2)
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
@@ -315,7 +314,7 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
-  it('does not answer ordinary terminal OSC color queries in main', async () => {
+  it('answers a plain shell at the owner, then from the colours the renderer pushes', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -333,16 +332,40 @@ describe('registerPtyHandlers', () => {
       })) as { id: string }
       mainWindow.webContents.send.mockClear()
 
-      const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+      const query = '\x1b]11;?\x1b\\'
       mockProc.emitData(`${query}ready`)
+      const pushViewAttributes: unknown = onMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'pty:terminalViewAttributes'
+      )?.[1]
+      if (typeof pushViewAttributes !== 'function') {
+        throw new Error('pty:terminalViewAttributes listener was not registered')
+      }
+      pushViewAttributes(null, {
+        foreground: [0, 0, 0],
+        background: [0x12, 0x34, 0x56],
+        cursor: [0, 0, 0],
+        ansi: Array.from({ length: 256 }, () => [0, 0, 0]),
+        colorSchemeMode: 'light',
+        cursorStyle: 'block',
+        cursorBlink: false
+      })
+      mockProc.emitData(query)
 
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      expect(mockProc.proc.write.mock.calls).toEqual([
+        ['\x1b]11;rgb:1111/1111/1111\x1b\\'],
+        ['\x1b]11;rgb:1212/3434/5656\x1b\\']
+      ])
       vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: `${query}ready`
+        data: 'ready',
+        rawLength: `${query}ready${query}`.length,
+        transformed: true
       })
     } finally {
+      _resetTerminalViewAttributesForTest()
+      _resetColorQueryReplyColorsForTest()
+      _resetPtyOwnerHostColorsForTest()
       vi.useRealTimers()
     }
   })

@@ -43,8 +43,8 @@ import {
   openTranscriptReadStream,
   readTranscriptSlice,
   wslGatedLstat,
-  wslGatedOpen,
-  wslGatedRead,
+  openTranscriptFile,
+  readTranscriptFile,
   wslGatedReaddir,
   wslGatedReadFile,
   wslGatedStat,
@@ -61,12 +61,9 @@ function fakeHandle() {
 }
 
 beforeEach(() => {
-  // The gate mock delegates to the real implementation, so its module state
-  // survives between cases — a case that leaves a task stalled would otherwise
-  // mark that route stuck and fast-fail every later case on it.
+  // Reset real gate state; prior stalls must not quarantine later tests.
   resetWslTranscriptFsGateForTests()
-  // runTask keeps the real gate implementation installed by the mock factory;
-  // only its call log is cleared.
+  // Clear history without removing the mock’s real-gate delegation.
   mocks.runTask.mockClear()
   for (const [name, mock] of Object.entries(mocks)) {
     if (name !== 'runTask') {
@@ -93,8 +90,8 @@ describe('transcript filesystem accessor off WSL UNC', () => {
     await wslGatedLstat(path, 'scan')
     await wslGatedReaddir(path, 'scan')
     await wslGatedReadFile(path, 'utf-8', 'scan')
-    const opened = await wslGatedOpen(path, 'exact')
-    await wslGatedRead(opened, path, Buffer.alloc(1), 0, 1, 0, 'exact')
+    const opened = await openTranscriptFile(path, 'exact')
+    await readTranscriptFile(opened, path, Buffer.alloc(1), 0, 1, 0, 'exact')
     const stream = openTranscriptReadStream(path, { encoding: 'utf-8' }, 'scan')
 
     expect(mocks.runTask).not.toHaveBeenCalled()
@@ -102,7 +99,6 @@ describe('transcript filesystem accessor off WSL UNC', () => {
     expect(mocks.readdir).toHaveBeenCalledWith(path, { withFileTypes: true })
     expect(mocks.readFile).toHaveBeenCalledWith(path, 'utf-8')
     expect(mocks.open).toHaveBeenCalledWith(path, 'r')
-    // Off UNC the raw stream is handed back verbatim, encoding included.
     expect(stream).toBe('raw-stream')
     expect(mocks.createReadStream).toHaveBeenCalledWith(path, {
       encoding: 'utf-8',
@@ -151,8 +147,8 @@ describe('transcript filesystem accessor on WSL UNC', () => {
     handle.read.mockResolvedValue({ bytesRead: 1, buffer: Buffer.alloc(1) })
     mocks.open.mockResolvedValue(handle)
 
-    const opened = await wslGatedOpen(UNC_PATH, 'exact')
-    await wslGatedRead(opened, UNC_PATH, Buffer.alloc(1), 0, 1, 0, 'exact')
+    const opened = await openTranscriptFile(UNC_PATH, 'exact')
+    await readTranscriptFile(opened, UNC_PATH, Buffer.alloc(1), 0, 1, 0, 'exact')
 
     for (const call of mocks.runTask.mock.calls) {
       expect(call[0]).toMatchObject({ dedupe: false })
@@ -212,7 +208,6 @@ describe('transcript filesystem accessor on WSL UNC', () => {
     )
 
     try {
-      // A close blocked on a stalled mount must not block the caller's teardown.
       await expect(closeTranscriptHandle(stuck as never, UNC_PATH)).resolves.toBeUndefined()
       expect(stuck.close).toHaveBeenCalledTimes(1)
     } finally {
@@ -241,15 +236,12 @@ describe('transcript filesystem accessor on WSL UNC', () => {
           () => 'resolved',
           (error: unknown) => error
         )
-        // Let the gate admit and start the syscall, so this covers the waiter on a
-        // RUNNING unabortable call rather than a still-queued one.
+        // Start the unabortable syscall before cancellation so this exercises a running waiter.
         await new Promise((resolve) => setImmediate(resolve))
         expect(mock).toHaveBeenCalledTimes(1)
 
         controller.abort(reason)
 
-        // No timer advance: the waiter must be gone the moment the caller cancels,
-        // not 30s later when its deadline fires.
         await expect(settled).resolves.toBe(reason)
       } finally {
         release?.()
@@ -268,14 +260,13 @@ describe('transcript filesystem accessor on WSL UNC', () => {
     )
     try {
       const handle = fakeHandle()
-      const refused = wslGatedOpen(UNC_PATH, 'exact').catch((error: unknown) => error)
+      const refused = openTranscriptFile(UNC_PATH, 'exact').catch((error: unknown) => error)
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
       await expect(refused).resolves.toBeInstanceOf(WslTranscriptFsError)
 
       release?.(handle)
       await vi.advanceTimersByTimeAsync(0)
 
-      // Nobody was left to own the descriptor, so the gate's disposer closed it.
       expect(handle.close).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -305,8 +296,7 @@ describe('transcript handle close off WSL UNC', () => {
 describe('per-chunk admission', () => {
   it('carries a codepoint straddling the 1 MiB chunk boundary across chunks', async () => {
     const emoji = Buffer.from('😀', 'utf8')
-    // Two of the emoji's four bytes land in chunk 1, two in chunk 2 — derived
-    // from the production constant so the fixture cannot drift off the boundary.
+    // Derive the split from the production chunk size so the emoji always straddles it.
     const body = Buffer.concat([
       Buffer.alloc(WSL_TRANSCRIPT_READ_CHUNK_BYTES - 2, 0x61),
       emoji,

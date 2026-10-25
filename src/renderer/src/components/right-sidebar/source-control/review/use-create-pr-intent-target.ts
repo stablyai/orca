@@ -11,7 +11,7 @@ import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-
  */
 export function useSourceControlCreatePrIntentTarget({
   activeRepoId,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   branchName,
   createPrIntentCurrentTargetRef,
@@ -20,7 +20,7 @@ export function useSourceControlCreatePrIntentTarget({
   worktreePath
 }: {
   activeRepoId: string | null
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   branchName: string
   createPrIntentCurrentTargetRef: SourceControlWorktreeOperationState['createPrIntentCurrentTargetRef']
@@ -48,13 +48,13 @@ export function useSourceControlCreatePrIntentTarget({
   const getCreatePrIntentOperationTarget = useCallback(
     (token: CreatePrIntentRunToken): SourceControlOperationTarget => ({
       // Why: Create PR intent continues after navigation; pin git commands to the worktree/host that started the sequence.
-      settings: activeRepoSettings,
+      target: activeRepoTarget,
       worktreeId: token.worktreeId,
       worktreePath: token.worktreePath,
       connectionId: getConnectionId(token.worktreeId) ?? undefined,
       pushTarget: worktreeMap.get(token.worktreeId)?.pushTarget
     }),
-    [activeRepoSettings, worktreeMap]
+    [activeRepoTarget, worktreeMap]
   )
 
   return { getCreatePrIntentOperationTarget }

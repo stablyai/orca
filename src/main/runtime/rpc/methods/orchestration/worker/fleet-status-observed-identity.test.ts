@@ -3,7 +3,7 @@ import type { AgentStatusOrchestrationContext } from '../../../../../../shared/a
 import { AgentHookServer } from '../../../../../agent-hooks/server'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../orca-runtime-get-orchestration-dispatch-authority'
+import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../terminal/output/terminal-orchestration-authority'
 import {
   AgentStatusObservedPaneIdentityCapture,
   AgentStatusObservedPaneIdentities,
@@ -53,7 +53,7 @@ function createWorld(): ObservedWorld {
   const server = new AgentHookServer()
   const observed = new AgentStatusObservedPaneIdentities()
   server.subscribeEnrichedStatus((entry) =>
-    recordObservedAgentStatusPaneIdentity(observed, entry.paneKey, identity)
+    recordObservedAgentStatusPaneIdentity(observed, entry, identity)
   )
   const host = {
     ...identity,

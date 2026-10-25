@@ -164,7 +164,7 @@ describe('fetchWorktrees', () => {
       displayName: 'feature-two'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -194,7 +194,7 @@ describe('fetchWorktrees', () => {
       pushTarget: { remoteName: 'origin', branchName: 'feature-one' }
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -412,7 +412,7 @@ describe('fetchWorktrees', () => {
     })
     const staleResponse = { ...existing, displayNameMode: undefined }
 
-    mockApi.worktrees.list.mockResolvedValueOnce([staleResponse])
+    worktreeListMock.mockResolvedValueOnce([staleResponse])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -437,7 +437,7 @@ describe('fetchWorktrees', () => {
     // A changed non-branch label from a mode-less host is explicit meta a peer wrote there.
     const peerRenamed = { ...existing, displayName: 'peer label', displayNameMode: undefined }
 
-    mockApi.worktrees.list.mockResolvedValueOnce([peerRenamed])
+    worktreeListMock.mockResolvedValueOnce([peerRenamed])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -462,7 +462,7 @@ describe('fetchWorktrees', () => {
       displayNameMode: undefined
     }
 
-    mockApi.worktrees.list.mockResolvedValueOnce([rederived])
+    worktreeListMock.mockResolvedValueOnce([rederived])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -486,7 +486,7 @@ describe('fetchWorktrees', () => {
     })
     const rederived = { ...existing, branch: '', displayName: 'wt1', displayNameMode: undefined }
 
-    mockApi.worktrees.list.mockResolvedValueOnce([rederived])
+    worktreeListMock.mockResolvedValueOnce([rederived])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -514,7 +514,7 @@ describe('fetchWorktrees', () => {
         resolvePersist = resolve
       })
     )
-    mockApi.worktrees.list.mockResolvedValueOnce([staleResponse])
+    worktreeListMock.mockResolvedValueOnce([staleResponse])
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
     const rename = store.getState().updateWorktreeMeta(existing.id, { displayName: 'new label' })
@@ -546,7 +546,7 @@ describe('fetchWorktrees', () => {
       baseRef: 'upstream/release'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')
@@ -569,7 +569,7 @@ describe('fetchWorktrees', () => {
       priorWorktreeIds: ['repo1::/path/old-name']
     })
 
-    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    worktreeListMock.mockResolvedValue([refreshed])
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')

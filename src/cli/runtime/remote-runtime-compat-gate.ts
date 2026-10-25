@@ -1,4 +1,4 @@
-import type { PairingOffer } from '../../shared/pairing'
+import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import { describeRuntimeCompatBlock, evaluateRuntimeCompat } from '../../shared/protocol-compat'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
@@ -28,7 +28,7 @@ export class RemoteRuntimeCompatGate {
 
   send<TResult>(args: {
     transport: WebSocketTransport
-    pairing: PairingOffer
+    connection: PairedRuntimeConnection
     method: string
     params: unknown
     timeoutMs: number
@@ -36,7 +36,7 @@ export class RemoteRuntimeCompatGate {
   }): Promise<RuntimeRpcResponse<TResult>> {
     if (this.checked || args.method === 'status.get') {
       return args.transport.sendWebSocketRequest<TResult>(
-        args.pairing,
+        args.connection,
         args.method,
         args.params,
         args.timeoutMs,
@@ -44,7 +44,7 @@ export class RemoteRuntimeCompatGate {
       )
     }
     return args.transport.sendWebSocketRequestWithStatusPreflight<TResult>(
-      args.pairing,
+      args.connection,
       args.method,
       args.params,
       args.timeoutMs,

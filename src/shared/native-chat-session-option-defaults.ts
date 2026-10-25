@@ -1,11 +1,21 @@
 import type { AgentType } from './agent-status-types'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  isAgentChatPermissionMode,
+  newChatPermissionModeForSettings,
+  type NewChatPermissionSettings
+} from './agent-chat-permission-mode'
+import type { GlobalSettings } from './global-settings-types'
 import { sessionOptionValueIsValid } from './agent-session-option-catalog'
 import type {
   NativeChatSessionOptionSettingsMutation,
   PersistedNativeChatSessionOptions,
   SessionOptionValue
 } from './native-chat-session-options'
-import { encodeStructuredAgentSessionOptionValue } from './structured-agent-session-option-codec'
+import {
+  decodeStructuredAgentSessionOptionValue,
+  encodeStructuredAgentSessionOptionValue
+} from './structured-agent-session-option-codec'
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
@@ -32,7 +42,18 @@ export function resolveNativeChatSessionOptionDefaults(
 
 /** Canonical values seed through the existing durable string record; the codec
  *  is the only boundary that represents the boolean Fast preference as text. */
-export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort', 'fastMode'] as const
+export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = [
+  'model',
+  'effort',
+  'fastMode',
+  'serviceTier'
+] as const
+
+/** What a launch may hold and a create may seed; the permission mode never rewrites the selection. */
+export const STRUCTURED_LAUNCH_OPTION_IDS = [
+  ...STRUCTURED_LAUNCH_SEED_OPTION_IDS,
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+] as const
 
 /** Any chosen option set narrowed to what a structured create may seed: the seedable ids only,
  *  each encoded as a bounded string. An empty result is `undefined` rather than `{}` — an empty map fails
@@ -47,7 +68,7 @@ export function narrowStructuredLaunchSeedOptions(
   const seeded: Record<string, string> = {}
   for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
     const value = values?.[id]
-    if ((id === 'model' || id === 'effort') && !(typeof value === 'string' && value.trim())) {
+    if (id !== 'fastMode' && !(typeof value === 'string' && value.trim())) {
       continue
     }
     if (typeof value === 'string' || typeof value === 'boolean') {
@@ -60,12 +81,58 @@ export function narrowStructuredLaunchSeedOptions(
   return Object.keys(seeded).length > 0 ? seeded : undefined
 }
 
+/** An already-encoded seed read from another host or from storage: the seedable ids whose value
+ *  decodes, or `undefined` when nothing usable remains. */
+export function parseStructuredLaunchSeedOptions(
+  value: unknown
+): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const entries = new Map<string, unknown>(Object.entries(value))
+  const parsed: Record<string, string> = {}
+  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+    const encoded = entries.get(id)
+    if (
+      typeof encoded === 'string' &&
+      encoded.trim() &&
+      decodeStructuredAgentSessionOptionValue(id, encoded) !== null
+    ) {
+      parsed[id] = encoded
+    }
+  }
+  const permissionMode = entries.get(AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
+  if (isAgentChatPermissionMode(permissionMode)) {
+    parsed[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] = permissionMode
+  }
+  return Object.keys(parsed).length > 0 ? parsed : undefined
+}
+
 /** The saved selection a structured create seeds into its string-valued reservation. */
 export function resolveStructuredLaunchSeedOptions(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   agent: AgentType
 ): Record<string, string> | undefined {
   return narrowStructuredLaunchSeedOptions(resolveNativeChatSessionOptionDefaults(persisted, agent))
+}
+
+/** A new chat's seed: the saved selection plus the permission default narrowed to the agent. */
+export function structuredLaunchSeedOptions(
+  settings:
+    | (Pick<
+        GlobalSettings,
+        'nativeChatSessionOptions' | 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'
+      > &
+        NewChatPermissionSettings)
+    | null
+    | undefined,
+  agent: AgentType
+): Record<string, string> | undefined {
+  const selection = resolveStructuredLaunchSeedOptions(settings?.nativeChatSessionOptions, agent)
+  const permissionMode = newChatPermissionModeForSettings(agent, settings)
+  return permissionMode
+    ? { ...selection, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }
+    : selection
 }
 
 /** Fold a settled batch of picks onto the durable record. A surface that must send the

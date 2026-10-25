@@ -2,6 +2,8 @@ import { browserSessionRegistry } from './browser-session-registry'
 import type { BrowserSessionRegistryProfileOptions } from './browser-session-registry'
 import { collectOrphanedBrowserRoutePartitionStorage } from './browser-route-partition-storage-runtime'
 import { configureRouteSessionsForOrcaProfile } from './browser-route-session-runtime'
+import { configureBrowserSitePermissionStore } from './browser-site-permission-store'
+import { configureBrowserSiteDisplayStore } from './browser-site-display-store'
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from './paired-runtime-browser-client-host-runtime'
 
 let initialized = false
@@ -17,6 +19,8 @@ export function initializeBrowserSessionsForApp(
 
   if (activeProfile) {
     browserSessionRegistry.configureForOrcaProfile(activeProfile)
+    configureBrowserSitePermissionStore(activeProfile.profileDirectory)
+    configureBrowserSiteDisplayStore(activeProfile.profileDirectory)
     configureRouteSessionsForOrcaProfile({
       orcaProfileId: activeProfile.orcaProfileId,
       profileDirectory: activeProfile.profileDirectory
@@ -31,8 +35,7 @@ export function initializeBrowserSessionsForApp(
     )
   }
 
-  // Why: cookie replay must happen before the first session.fromPartition()
-  // call, otherwise Chromium opens the stale live cookie DB before import.
+  // Replay cookies before Chromium opens the live DB via session.fromPartition.
   browserSessionRegistry.applyPendingCookieImport()
   browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   initialized = true

@@ -3,6 +3,7 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { requestSleepingAgentWakeOnMount } from '@/lib/sleeping-agent-wake-requests'
 
 const pendingMounts = new Map<string, BackgroundMountTerminalWorktreeDetail>()
 const requestListeners = new Set<() => void>()
@@ -37,6 +38,11 @@ export function requestBackgroundTerminalWorktreeMount(
 ): void {
   if (!detail.worktreeId) {
     return
+  }
+  // Why targeted only: a named tab is asked for live, while a whole-worktree mount
+  // (e.g. a browser lease) must not mark every sleeping agent for a later hidden remount.
+  if (detail.tabIds) {
+    requestSleepingAgentWakeOnMount(detail.worktreeId, detail.tabIds)
   }
   mergePendingMount(detail)
   if (!hasRequestedMount) {
@@ -150,7 +156,14 @@ export function shouldMountBackgroundWorktreeTab(
 // working set (and later tab switches) ends up exactly where it was before.
 export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 0
 
-export function canMountTerminalWorkspaceForStartup(args: {
+/**
+ * Whether restored terminal tabs may mount their panes. Why this fences panes and not the
+ * workspace surface: a pane binds a PTY on mount, and until startup restoration has fenced
+ * the daemon provider, reconnected SSH targets, and published PTY ownership, that bind would
+ * attach to a not-yet-restored session or spawn a duplicate shell. The tab strip and the
+ * chat, browser, and editor panes bind nothing, so they mount from the hydrated tab model.
+ */
+export function canAdmitTerminalTabsForStartup(args: {
   workspaceSessionReady: boolean
   hydrationSucceeded: boolean
   startupWorktreeRefreshCompleted: boolean

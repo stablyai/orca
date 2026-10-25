@@ -1,12 +1,28 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import type { ReactNode } from 'react'
+import { createRef, type ReactNode } from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
+type ArtifactPublishButtonMocks = {
+  connect: ReturnType<typeof vi.fn>
+  openSettingsPage: ReturnType<typeof vi.fn>
+  openSettingsTarget: ReturnType<typeof vi.fn>
+  getPublishedLink: ReturnType<typeof vi.fn>
+  copyLink: ReturnType<typeof vi.fn>
+  openLink: ReturnType<typeof vi.fn>
+  publish: ReturnType<typeof vi.fn>
+  openPopover: ((open: boolean) => void) | null
+  closePopover: ((event: Event) => void) | null
+  state: {
+    orcaProfileAuthStatus: Record<string, unknown>
+    settings: { artifactSharingEnabled: boolean }
+  }
+}
+
+const mocks = vi.hoisted<ArtifactPublishButtonMocks>(() => ({
   connect: vi.fn(),
   openSettingsPage: vi.fn(),
   openSettingsTarget: vi.fn(),
@@ -14,9 +30,10 @@ const mocks = vi.hoisted(() => ({
   copyLink: vi.fn(),
   openLink: vi.fn(),
   publish: vi.fn(),
-  openPopover: null as ((open: boolean) => void) | null,
+  openPopover: null,
+  closePopover: null,
   state: {
-    orcaProfileAuthStatus: { configured: true, state: 'connected' } as Record<string, unknown>,
+    orcaProfileAuthStatus: { configured: true, state: 'connected' },
     settings: { artifactSharingEnabled: true }
   }
 }))
@@ -42,7 +59,17 @@ vi.mock('@/components/ui/popover', () => ({
     mocks.openPopover = onOpenChange ?? null
     return <>{children}</>
   },
-  PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  PopoverAnchor: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  PopoverContent: ({
+    children,
+    onCloseAutoFocus
+  }: {
+    children: ReactNode
+    onCloseAutoFocus?: (event: Event) => void
+  }) => {
+    mocks.closePopover = onCloseAutoFocus ?? null
+    return <div>{children}</div>
+  },
   PopoverTrigger: ({ children }: { children: ReactNode }) => (
     <span onClick={() => mocks.openPopover?.(true)}>{children}</span>
   )
@@ -81,6 +108,7 @@ describe('ArtifactPublishButton', () => {
     mocks.getPublishedLink.mockResolvedValue(null)
     mocks.copyLink.mockResolvedValue(true)
     mocks.openPopover = null
+    mocks.closePopover = null
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'connected' }
     mocks.state.settings = { artifactSharingEnabled: true }
   })
@@ -99,6 +127,31 @@ describe('ArtifactPublishButton', () => {
     await waitFor(() => expect(mocks.publish).toHaveBeenCalledWith(createRequest))
     expect(screen.getByText('https://example.com')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Update shared content' })).toBeInTheDocument()
+  })
+
+  it('supports a controlled virtual anchor without rendering a second trigger', async () => {
+    const anchorRef = createRef<HTMLButtonElement>()
+    render(
+      <>
+        <button ref={anchorRef}>Overflow</button>
+        <ArtifactPublishButton
+          sourceKey="/repo/report.md"
+          createRequest={vi.fn()}
+          anchorRef={anchorRef}
+          open
+          onOpenChange={vi.fn()}
+        />
+      </>
+    )
+
+    expect(screen.queryByRole('button', { name: 'Share as artifact' })).toBeNull()
+    expect(await screen.findByRole('button', { name: 'Generate link' })).toBeInTheDocument()
+
+    const focus = vi.spyOn(anchorRef.current!, 'focus')
+    const closeEvent = new Event('close', { cancelable: true })
+    mocks.closePopover?.(closeEvent)
+    expect(closeEvent.defaultPrevented).toBe(true)
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('offers sign-in and blocks confirmation while signed out', async () => {

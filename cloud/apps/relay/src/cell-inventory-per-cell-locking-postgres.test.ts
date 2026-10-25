@@ -132,25 +132,29 @@ describePostgres('PostgreSQL per-cell inventory locking', () => {
     await rowHeldPromise
 
     const refresh = store.assign(identity)
-    expect(await lockWaiterAppeared(databases[2]!)).toBe(true)
-    // The refresh is blocked on cell C. Every earlier row must still be free:
-    // the ordered fleet-wide scan would be holding both of them by now.
     const heldWhileRefreshWaits: string[] = []
-    await databases[2]!.transaction(async (transaction) => {
-      for (const cell of [cellA, cellB]) {
-        try {
-          await transaction.queryLocked(
-            `SELECT * FROM relay_cells WHERE cell_id = ?`,
-            [cell.id],
-            { failIfUnavailable: true }
-          )
-        } catch {
-          heldWhileRefreshWaits.push(cell.id)
+    try {
+      expect(await lockWaiterAppeared(databases[2]!)).toBe(true)
+      // The refresh is blocked on cell C. Every earlier row must still be free:
+      // the ordered fleet-wide scan would be holding both of them by now.
+      await databases[2]!.transaction(async (transaction) => {
+        for (const cell of [cellA, cellB]) {
+          try {
+            await transaction.queryLocked(
+              `SELECT * FROM relay_cells WHERE cell_id = ?`,
+              [cell.id],
+              { failIfUnavailable: true }
+            )
+          } catch {
+            heldWhileRefreshWaits.push(cell.id)
+          }
         }
-      }
-    })
-    releaseRow()
-    await holder
+      })
+    } finally {
+      releaseRow()
+      await holder
+      await refresh.catch(() => undefined)
+    }
 
     expect(heldWhileRefreshWaits).toEqual([])
     expect((await refresh).cellId).toBe(cellC.id)

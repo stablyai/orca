@@ -1,3 +1,5 @@
+import { getSessionTabsInventoryPublication } from '../../session-tabs/session-tabs-inventory-test-fixture'
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -387,6 +389,47 @@ describe('session tabs inventory RPC methods', () => {
     ])
   })
 
+  it('ends a set-up stream when its transport aborts later, as a desktop unsubscribe does', async () => {
+    const cleanups = new Map<string, () => void>()
+    const stopListening = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: subscribeAll reaches only these runtime members; a missing one throws and fails the test.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
+      listAllMobileSessionTabsInventoryWithChangeSequence: vi.fn(async () => ({
+        snapshots: [],
+        authoritative: true,
+        changeSequence: 0
+      })),
+      onMobileSessionTabsChanged: vi.fn(() => stopListening),
+      registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
+      cleanupSubscription: (id: string) => {
+        const cleanup = cleanups.get(id)
+        cleanups.delete(id)
+        cleanup?.()
+      }
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+    const controller = new AbortController()
+    const messages: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.subscribeAll'),
+      (message) => messages.push(message),
+      { signal: controller.signal }
+    )
+    expect(stopListening).not.toHaveBeenCalled()
+
+    controller.abort()
+
+    expect(stopListening).toHaveBeenCalledTimes(1)
+    expect(cleanups.size).toBe(0)
+    expect(messages.map((message) => JSON.parse(message).result?.type)).toEqual([
+      'snapshots',
+      'end'
+    ])
+  })
+
   it('aborts and removes a publication waiter when the stream is cleaned up', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.attachWindow(1)
@@ -400,17 +443,16 @@ describe('session tabs inventory RPC methods', () => {
         clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
       }
     )
-    const waiters = (runtime as unknown as { sessionTabsInventoryWaiters: Set<() => void> })
-      .sessionTabsInventoryWaiters
-    for (let index = 0; index < 20 && waiters.size === 0; index += 1) {
+    const waiters = getSessionTabsInventoryPublication(runtime)
+    for (let index = 0; index < 20 && waiters.pendingWaiterCount === 0; index += 1) {
       await Promise.resolve()
     }
-    expect(waiters.size).toBe(1)
+    expect(waiters.pendingWaiterCount).toBe(1)
 
     runtime.cleanupSubscription('session.tabs:conn-cancel:*:req-1')
     await pending
 
-    expect(waiters.size).toBe(0)
+    expect(waiters.pendingWaiterCount).toBe(0)
     expect(messages.map((message) => JSON.parse(message))).toEqual([
       expect.objectContaining({
         ok: false,

@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setRendererUiLanguage } from '@/i18n/i18n'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { JiraIntegrationCard } from './jira-integration-card'
 
@@ -92,7 +93,44 @@ describe('JiraIntegrationCard account scope', () => {
     container?.remove()
     container = null
     mocks.store.current = null
+    await setRendererUiLanguage('en')
   })
+
+  it.each(['en', 'ko'] as const)(
+    'renders complete %s connection counts without an English suffix',
+    async (language) => {
+      await setRendererUiLanguage(language)
+      for (const count of [0, 1, 2]) {
+        const state = installStore({ activeRuntimeEnvironmentId: null })
+        state.jiraStatus.sites = Array.from({ length: count }, (_, index) => ({
+          id: `site-${index}`,
+          displayName: 'Fixture Jira',
+          siteUrl: 'https://fixture.example.test'
+        }))
+        state.jiraStatus.connected = count > 0
+        const rendered = await renderCard()
+        const description =
+          rendered.querySelector('[data-settings-section="integrations-jira"]')?.textContent ?? ''
+        const expected =
+          language === 'ko'
+            ? `사이트 ${count}개 연결됨`
+            : `${count} site${count === 1 ? '' : 's'} connected`
+        if (count === 0) {
+          expect(description).not.toContain(expected)
+          expect(description).not.toContain('0 site')
+        } else {
+          expect(description).toContain(expected)
+        }
+        expect(description).not.toMatch(/개(?: 사이트| 워크스페이스)?s/)
+        await act(async () => {
+          root?.unmount()
+        })
+        root = null
+        container?.remove()
+        container = null
+      }
+    }
+  )
 
   it('shows remote-server account ownership and opens Hosts settings', async () => {
     const state = installStore({ activeRuntimeEnvironmentId: 'runtime-1' })

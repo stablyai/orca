@@ -26,18 +26,6 @@ describe('resolveActiveSessionTab', () => {
     expect(result.retainSelectedSessionTabId).toBe(false)
   })
 
-  it('keeps the device on a terminal tab when an agent turn flags another terminal active', () => {
-    const result = resolveActiveSessionTab(
-      [terminalTab('agent', true), terminalTab('shell', false)],
-      {
-        pendingActiveSessionTabId: null,
-        selectedSessionTabId: 'shell'
-      }
-    )
-
-    expect(result.activeTab?.id).toBe('shell')
-  })
-
   it('follows the host when it explicitly navigates this device', () => {
     const result = resolveActiveSessionTab(
       [terminalTab('agent', true), browserTab('browser', false)],

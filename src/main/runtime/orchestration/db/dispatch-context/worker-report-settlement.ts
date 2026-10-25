@@ -5,6 +5,11 @@ import { settleActiveDispatchesForTask } from './dispatch-completion'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
+import {
+  isWorkerStateIn,
+  SETTLEABLE_WORKER_STATES,
+  UNPROVEN_WORKER_STATES
+} from '../../worker-report-admission'
 
 type WorkerReportObservation = {
   id: string
@@ -92,35 +97,39 @@ export function settleWorkerReportInTransaction(
   // is first-hand evidence and must be able to correct that record instead of being thrown away.
   // Checked before the duplicate short-circuit: a `failed` report lands on the very statuses that
   // short-circuit reads as already settled, dropping the worker's real cause and result body.
+  // A stalled prompt that also tripped the breaker is the same unproven failure, so it corrects too.
   const settledByUnobservedPrompt =
-    dispatch.status === 'failed' &&
+    (dispatch.status === 'failed' || dispatch.status === 'circuit_broken') &&
     dispatch.last_failure === AGENT_PROMPT_STALLED_ERROR &&
     task.status === 'failed'
   const reportingWorker = this.getWorkerDispatch(params.dispatchId)
+  // A tripped breaker is a failed Dispatch, so a repeated failed report is still a duplicate.
+  const settledDispatchStatus = dispatch.status === 'circuit_broken' ? 'failed' : dispatch.status
   if (
     !settledByUnobservedPrompt &&
-    dispatch.status === expectedDispatchStatus &&
+    settledDispatchStatus === expectedDispatchStatus &&
     task.status === expectedTaskStatus
   ) {
     recordAcceptedReportFact(this, params)
     return { action: 'settled', outcome: params.outcome, duplicate: true }
   }
-  const reconnectingStart =
+  const unprovenWorker = isWorkerStateIn(UNPROVEN_WORKER_STATES, reportingWorker?.state)
+  const reconnectingWorker =
     (dispatch.status === 'pending' || dispatch.status === 'dispatched') &&
     task.status === 'blocked' &&
-    reportingWorker?.state === 'start_unknown'
+    unprovenWorker
   const reportingStart =
     dispatch.status === 'pending' &&
     task.status === 'dispatched' &&
     reportingWorker?.state === 'starting'
   const previousDispatchStatus = settledByUnobservedPrompt
-    ? 'failed'
-    : reconnectingStart || reportingStart
+    ? dispatch.status
+    : reconnectingWorker || reportingStart
       ? dispatch.status
       : 'dispatched'
   const previousTaskStatus = settledByUnobservedPrompt
     ? 'failed'
-    : reconnectingStart
+    : reconnectingWorker
       ? 'blocked'
       : 'dispatched'
   if (dispatch.status !== previousDispatchStatus || task.status !== previousTaskStatus) {
@@ -171,8 +180,9 @@ export function settleWorkerReportInTransaction(
     const dispatchTransition = transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
       id: params.dispatchId,
-      from: 'failed',
-      to: expectedDispatchStatus,
+      from: dispatch.status,
+      // A failed report keeps a tripped breaker tripped.
+      to: params.outcome === 'succeeded' ? 'completed' : dispatch.status,
       projection: {
         completed_at: now,
         last_failure: params.outcome === 'failed' ? params.result : dispatch.last_failure,
@@ -191,7 +201,7 @@ export function settleWorkerReportInTransaction(
     dispatchUpdate = { changes: dispatchTransition.changed ? 1 : 0 }
     taskUpdate = { changes: taskTransition.changed ? 1 : 0 }
   } else {
-    if (reconnectingStart) {
+    if (reconnectingWorker) {
       transitionLifecycleWithDb(this.db, {
         entity: 'task',
         id: params.taskId,
@@ -202,7 +212,7 @@ export function settleWorkerReportInTransaction(
     const dispatchTransition = transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
       id: params.dispatchId,
-      from: reconnectingStart || reportingStart ? ['pending', 'dispatched'] : 'dispatched',
+      from: reconnectingWorker || reportingStart ? ['pending', 'dispatched'] : 'dispatched',
       to: expectedDispatchStatus,
       projection: {
         completed_at: new Date().toISOString(),
@@ -238,12 +248,13 @@ export function settleWorkerReportInTransaction(
       projection: { stage: 'settled', updated_at: new Date().toISOString() },
       correction: 'unobserved_prompt_report'
     })
-  } else if ((reconnectingStart || reportingStart) && params.outcome === 'succeeded') {
+  } else if ((unprovenWorker || reportingStart) && params.outcome === 'succeeded') {
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: params.dispatchId,
-      from: reportingStart ? 'starting' : 'start_unknown',
-      to: 'ready'
+      from: reportingStart ? 'starting' : UNPROVEN_WORKER_STATES,
+      to: 'ready',
+      projection: { last_error: null }
     })
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
@@ -256,8 +267,8 @@ export function settleWorkerReportInTransaction(
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: params.dispatchId,
-      // A start_unknown success report reconnects through 'ready' above; only failure settles here.
-      from: params.outcome === 'succeeded' ? 'ready' : ['ready', 'start_unknown', 'starting'],
+      // An unknown worker's success report reconnects through 'ready' above; only failure settles here.
+      from: params.outcome === 'succeeded' ? 'ready' : [...SETTLEABLE_WORKER_STATES, 'starting'],
       to: params.outcome === 'succeeded' ? 'succeeded' : 'failed',
       projection: { stage: 'settled', updated_at: new Date().toISOString() }
     })

@@ -26,7 +26,6 @@ describe('BrowserClientPageCommandExecutor', () => {
       'grant-navigation',
       'bind-guest'
     ])
-    // Downloads must resolve this page before its first navigation, without an automation command.
     expect(dependencies.guestBinding.bind).toHaveBeenCalledWith({
       registration: {
         partition,
@@ -46,6 +45,12 @@ describe('BrowserClientPageCommandExecutor', () => {
         orcaProfileId: 'orca-profile-a',
         browserProfileId: 'profile-a',
         authorityConnectionIdentity: 'authority-record-a',
+        executionHostIdentity: 'execution-host-record-a'
+      },
+      compatibleIdentity: {
+        orcaProfileId: 'orca-profile-a',
+        browserProfileId: 'profile-a',
+        authorityConnectionIdentity: 'pairing-authority-record-a',
         executionHostIdentity: 'execution-host-record-a'
       },
       legacyIdentity: {
@@ -463,7 +468,6 @@ describe('BrowserClientPageCommandExecutor', () => {
       expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
     ])
     expect(Object.isFrozen(inventory[0])).toBe(true)
-    // The unresolved record answers for its exact generation only.
     expect(executor.hasUnresolvedPage('page-a', 8)).toBe(false)
     await expect(executor.retirePage('page-a', 7)).resolves.toBe(false)
     await expect(
@@ -475,7 +479,6 @@ describe('BrowserClientPageCommandExecutor', () => {
       status: 'failed',
       errorCode: 'browser_client_page_generation_conflict'
     })
-    // Close must report the unresolved page rather than claim a clean teardown.
     await expect(executor.close()).rejects.toMatchObject({
       message: 'Browser client page executor cleanup failed',
       errors: [expect.objectContaining({ message: 'browser_client_page_cleanup_unresolved' })]
@@ -526,6 +529,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     expect(() =>
       executor.completeAuthorityTransition({
         authorityConnectionIdentity: 'authority-record-b',
+        pairingAuthorityConnectionIdentity: 'pairing-authority-record-b',
         legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
       })
     ).toThrow('browser_client_page_authority_transition_unavailable')

@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 import {
@@ -12,15 +11,7 @@ import {
   type TerminalShortcutSpecialKey
 } from '../terminal/terminal-accessory-keys'
 import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
-
-const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
-
-export type CustomKey = {
-  id: string
-  label: string
-  bytes: string
-  enter: boolean
-}
+import { updateStoredCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
@@ -65,19 +56,6 @@ type Props = {
   onManageShortcuts?: () => void
 }
 
-export async function loadCustomKeys(): Promise<CustomKey[]> {
-  try {
-    const raw = await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as CustomKey[]) : []
-  } catch {
-    return []
-  }
-}
-
-export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
-  await AsyncStorage.setItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
-}
-
 export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
@@ -103,10 +81,22 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
   const addKey = useCallback(
     async (key: Omit<CustomKey, 'id'>) => {
-      const existing = await loadCustomKeys()
       const newKey: CustomKey = { ...key, id: `custom-${Date.now()}` }
-      const updated = [...existing, newKey]
-      await saveCustomKeys(updated)
+      let updated: CustomKey[]
+      // Caught here because both callers are `void addKey(...)`, which leaves a rejection nowhere
+      // to go. On the page this key is allowlisted and its write rejects for size — the contract
+      // `page-async-storage` states, and the one ruling 33.6 extends to a key `init` could not
+      // carry at all — so an uncaught save here reaches the document's unhandled-rejection
+      // handler, which reports a page fault and drops the generation for a key nobody could add.
+      // Every other allowlisted writer in this closure already catches its own save.
+      try {
+        updated = await updateStoredCustomKeys((keys) => [...keys, newKey])
+      } catch (error) {
+        // Neither reported nor closed: a drawer that dismissed itself and announced the key would
+        // put a row on the accessory bar that no store holds and the next load would not have.
+        console.warn('[custom-keys] the store would not take this key', error)
+        return
+      }
       onKeysChanged(updated)
       onClose()
     },

@@ -49,3 +49,11 @@ describe('getRelativePathInsideRoot', () => {
     )
   })
 })
+
+it.each(['/native/repo\\root', '/ssh/repo\\root'])(
+  'joins POSIX names without merging literal-backslash identities under %s',
+  (root) => {
+    expect(joinPath(root, 'a\\b.txt')).toBe(`${root}/a\\b.txt`)
+    expect(joinPath(root, 'a/b.txt')).toBe(`${root}/a/b.txt`)
+  }
+)

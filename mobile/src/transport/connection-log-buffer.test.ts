@@ -76,18 +76,26 @@ describe('connection log buffer', () => {
 
   it('redacts credentials before retaining or persisting an event', async () => {
     const save = vi.fn(async () => {})
-    const store = createConnectionLogStore(3, { load: async () => [], save })
+    const store = createConnectionLogStore(3, {
+      load: async () => [{ ...entry(0), detail: 'authorization=Bearer legacy-secret' }],
+      save
+    })
 
     store.append('host-a', {
       ...entry(1),
       detail: 'resumeToken=do-not-copy deviceToken:also-secret'
     })
+    expect(store.get('host-a')[0]?.detail).toBe('resumeToken=[redacted] deviceToken:[redacted]')
     await store.hydrate('host-a')
 
-    expect(store.get('host-a')[0]?.detail).toBe('resumeToken=[redacted] deviceToken:[redacted]')
+    expect(store.get('host-a').map((event) => event.detail)).toEqual([
+      'authorization=[redacted]',
+      'resumeToken=[redacted] deviceToken:[redacted]'
+    ])
     await vi.waitFor(() => expect(save).toHaveBeenCalled())
     expect(JSON.stringify(save.mock.calls)).not.toContain('do-not-copy')
     expect(JSON.stringify(save.mock.calls)).not.toContain('also-secret')
+    expect(JSON.stringify(save.mock.calls)).not.toContain('legacy-secret')
   })
 
   it('redacts quoted credential values when the object key is unquoted', async () => {
@@ -176,17 +184,29 @@ describe('connection log buffer', () => {
   })
 
   it('retries one transient persistence failure without requiring another append', async () => {
-    const save = vi.fn().mockResolvedValue(undefined)
-    const store = createConnectionLogStore(3, { load: async () => [], save })
+    vi.useFakeTimers()
+    try {
+      const save = vi.fn().mockResolvedValue(undefined)
+      const store = createConnectionLogStore(3, { load: async () => [], save })
 
-    await store.hydrate('host-a')
-    await vi.waitFor(() => expect(save).toHaveBeenCalled())
-    save.mockReset()
-    save.mockRejectedValueOnce(new Error('storage unavailable')).mockResolvedValueOnce(undefined)
-    store.append('host-a', entry(1))
+      await store.hydrate('host-a')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(save).toHaveBeenCalledOnce()
+      save.mockReset()
+      save.mockRejectedValueOnce(new Error('storage unavailable')).mockResolvedValueOnce(undefined)
+      store.append('host-a', entry(1))
 
-    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2))
-    expect(save).toHaveBeenLastCalledWith('host-a', [entry(1)])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(save).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(199)
+      expect(save).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(save).toHaveBeenCalledTimes(2)
+      expect(save).toHaveBeenLastCalledWith('host-a', [entry(1)])
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 
   it('does not retry failed automatic hydration for every appended event', async () => {

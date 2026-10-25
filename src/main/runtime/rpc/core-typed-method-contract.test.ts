@@ -20,18 +20,21 @@ const ProbeParams = z.object({ id: z.string(), count: z.number().optional() })
 
 const probe = defineMethod({
   name: 'test.typedProbe',
+  permission: 'workspace',
   params: ProbeParams,
   handler: (params) => ({ id: params.id, count: params.count ?? 0 })
 })
 
 const schemalessProbe = defineMethod({
   name: 'test.schemalessProbe',
+  permission: 'workspace',
   params: null,
   handler: () => ['a', 'b']
 })
 
 const streamingProbe = defineStreamingMethod({
   name: 'test.streamingProbe',
+  permission: 'workspace',
   params: ProbeParams,
   handler: async (params, _ctx, emit) => {
     emit(params.id)
@@ -67,7 +70,7 @@ describe('defineMethod preserves the declared contract', () => {
     type StatusGet = ByName<(typeof STATUS_METHODS)[number], 'status.get'>
     type ListDistros = ByName<(typeof HOST_CAPABILITY_METHODS)[number], 'host.wsl.listDistros'>
     expectTypeOf<StatusGet>().not.toBeNever()
-    expectTypeOf<StatusGet['handler']>().returns.toExtend<{ runtimeId: string }>()
+    expectTypeOf<StatusGet['handler']>().returns.resolves.toExtend<{ runtimeId: string }>()
     expectTypeOf<ListDistros['handler']>().returns.toEqualTypeOf<Promise<string[]>>()
     // The manifest is the erasure boundary's input, so the literal names have to survive it too.
     expectTypeOf<ByName<(typeof ALL_RPC_METHODS)[number], 'status.get'>>().not.toBeNever()
@@ -82,13 +85,6 @@ describe('eraseRpcMethods is the registry boundary', () => {
     expectTypeOf(eraseRpcMethods([probe])[0]!.handler)
       .parameter(0)
       .toEqualTypeOf<unknown>()
-  })
-
-  it('returns the same methods, so nothing about the runtime value changes', () => {
-    const erased = eraseRpcMethods([probe, streamingProbe])
-
-    expect(erased[0]).toBe(probe)
-    expect(erased[1]).toBe(streamingProbe)
   })
 
   it('produces methods the registry accepts and the dispatcher can invoke', async () => {

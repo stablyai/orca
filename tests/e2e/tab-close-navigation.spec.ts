@@ -98,7 +98,7 @@ async function setActiveFile(
 
     const state = store.getState()
     state.setActiveFile(id)
-    state.setActiveTabType('editor')
+    state.setActiveTabType('editor', state.activeWorktreeId)
   }, fileId)
 }
 

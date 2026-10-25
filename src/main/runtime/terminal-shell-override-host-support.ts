@@ -32,9 +32,10 @@ export function terminalShellOverrideRefusal(args: {
       `--shell ${args.shellOverride} names a Windows shell, and this execution host is ${args.platform}, which spawns the user's login shell. No terminal was created; omit --shell.`
     )
   }
+  // The path first: no runtime setting can move a `\\wsl$` path out of WSL, so only it names a fix.
   return (
-    projectRuntimeShellConflict(args.shellOverride, args.projectRuntime) ??
-    wslUncPathShellConflict(args.shellOverride, args.cwd, args.workspacePath)
+    wslUncPathShellConflict(args.shellOverride, args.cwd, args.workspacePath) ??
+    projectRuntimeShellConflict(args.shellOverride, args.projectRuntime)
   )
 }
 
@@ -58,10 +59,14 @@ function projectRuntimeShellConflict(
   if (runsInWsl === isWslShellName(shellOverride)) {
     return null
   }
+  // A workspace with no saved runtime of its own follows the default, so name that.
+  const byDefault = projectRuntime.runtime.reason === 'global-default'
+  const runs = `${byDefault ? 'This workspace runs' : "This workspace's project runs"} its terminals ${runsInWsl ? 'in WSL' : 'on the Windows host'}${byDefault ? ', the default in Settings > Project Runtime' : ''}`
+  const change = byDefault ? 'that default' : "the project's execution runtime"
   return new Error(
     runsInWsl
-      ? `This workspace's project runs its terminals in WSL, so --shell ${shellOverride} cannot be applied. No terminal was created. Use --shell wsl.exe, or change the project's execution runtime.`
-      : `This workspace's project runs its terminals on the Windows host, so --shell ${shellOverride} cannot be applied. No terminal was created. Change the project's execution runtime to WSL, or pass a Windows shell.`
+      ? `${runs}, so --shell ${shellOverride} cannot be applied. No terminal was created. Use --shell wsl.exe, or change ${change}.`
+      : `${runs}, so --shell ${shellOverride} cannot be applied. No terminal was created. Change ${change} to WSL, or pass a Windows shell.`
   )
 }
 

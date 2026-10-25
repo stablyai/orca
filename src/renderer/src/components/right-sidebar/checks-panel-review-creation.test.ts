@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  HostedReviewCreationBlockedReason,
-  HostedReviewCreationEligibility,
-  HostedReviewLookupOutcome
-} from '../../../../shared/hosted-review'
+import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import {
   computeChecksPanelConfirmedReadiness,
   isChecksPanelCreateEligibilityConfirmable,
@@ -263,16 +259,6 @@ describe('computeChecksPanelConfirmedReadiness', () => {
     ).toBe(false)
   })
 
-  it('preserves confirmed across a transient refresh failure once past the error', () => {
-    // The panel keeps the last confirmed eligibility snapshot; a transient
-    // failure (no hard error observed) must not drop confirmed.
-    expect(
-      computeChecksPanelConfirmedReadiness(
-        readiness({ hardErrorObservedAt: undefined, reviewLookup: 'not_found' })
-      )
-    ).toEqual({ confirmed: true, needsPush: false })
-  })
-
   describe('hard error clearing', () => {
     it('clears when the request started strictly after the error with an accepted outcome', () => {
       expect(
@@ -383,9 +369,3 @@ describe('isChecksPanelHardErrorCleared', () => {
     ).toBe(true)
   })
 })
-
-// Type-only usage to keep the imports meaningful across refactors.
-const _blocked: HostedReviewCreationBlockedReason = null
-const _outcome: HostedReviewLookupOutcome = 'not_found'
-void _blocked
-void _outcome

@@ -1,8 +1,8 @@
 import { useAppStore } from '@/store'
-import type { PtyConnectResult } from '../pty-transport'
+import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { parseLegacyNumericPaneKey } from '../../../../../shared/stable-pane-id'
-import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
+import { findLegacyNumericSleepingRecord } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-reset'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
@@ -27,40 +27,12 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     if (stableRecord) {
       return { paneKey: session.cacheKey, record: stableRecord }
     }
-    const legacyMatches = Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
-      ([paneKey, record]) => {
-        const legacy = parseLegacyNumericPaneKey(paneKey)
-        return (
-          legacy?.tabId === session.deps.tabId &&
-          record.worktreeId === session.deps.worktreeId &&
-          (!record.tabId || record.tabId === session.deps.tabId)
-        )
-      }
+    const legacy = findLegacyNumericSleepingRecord(
+      state.sleepingAgentSessionsByPaneKey,
+      { tabId: session.deps.tabId, numericPaneId: String(session.pane.id) },
+      (record) => record.worktreeId === session.deps.worktreeId
     )
-    const exactLegacyMatch = legacyMatches.find(([paneKey]) => {
-      const legacy = parseLegacyNumericPaneKey(paneKey)
-      return legacy?.numericPaneId === String(session.pane.id)
-    })
-    const providerSessionKeys = new Set(
-      legacyMatches.map(([, record]) => getProviderSessionClaimKey(record))
-    )
-    const oldestLegacyMatch = legacyMatches
-      .slice()
-      .sort(([, a], [, b]) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)[0]
-    // Why: duplicate legacy aliases can point at one provider session; consume
-    // the oldest capture as canonical and clear its aliases after resume.
-    const selectedLegacyMatch =
-      exactLegacyMatch ??
-      (providerSessionKeys.size === 1
-        ? legacyMatches.length === 1
-          ? legacyMatches[0]
-          : oldestLegacyMatch
-        : null)
-    if (!selectedLegacyMatch) {
-      return null
-    }
-    const [paneKey, record] = selectedLegacyMatch
-    return { paneKey, record }
+    return legacy ? { paneKey: legacy.paneKey, record: legacy.record } : null
   }
   session.clearSleepingRecordProviderDuplicates = (
     state: ReturnType<typeof useAppStore.getState>,
@@ -156,8 +128,14 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       if (metadata?.launchAgent) {
         // Why: daemon launch identity can outlive the process while Orca is
         // closed. Use it to request confirmation, never as current byte authority.
-        useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
+        const state = useAppStore.getState()
+        const current = state.paneForegroundAgentByPaneKey[session.cacheKey]
+        // Why: re-mounting a parked pane must not demote this session's own read of the same agent.
+        const keepsRead =
+          current?.agent === metadata.launchAgent && current.agentEvidence === 'process-read'
+        state.setPaneForegroundAgent(session.cacheKey, {
           agent: metadata.launchAgent,
+          agentEvidence: keepsRead ? 'process-read' : 'launch-record',
           shellForeground: false
         })
       }
@@ -189,7 +167,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
       (entry) => entry.id === session.deps.tabId
     )
-    return tab?.defaultTitle?.trim() || 'Terminal'
+    return neutralTerminalTitle(tab?.defaultTitle)
   }
   installCommandInferredPaneAgent(session)
 }

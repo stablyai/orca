@@ -11,7 +11,7 @@ type WorkspaceIdentityStateInput = Pick<
   | 'newWorkspaceDraft'
   | 'persistDraft'
   | 'selectedRepoConnectionId'
-  | 'selectedRepoSettings'
+  | 'selectedRepoRuntimeEnvironmentId'
   | 'settings'
 >
 
@@ -20,7 +20,7 @@ import { getLinkedWorkItemProvider, isGitLabIssueUrl } from '@/lib/new-workspace
 import {
   type SmartNameMode,
   isBlockingJiraUrlIntent
-} from '@/components/new-workspace/smart-workspace-source-results'
+} from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
@@ -51,7 +51,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     newWorkspaceDraft,
     persistDraft,
     selectedRepoConnectionId,
-    selectedRepoSettings,
+    selectedRepoRuntimeEnvironmentId,
     settings
   } = input
 
@@ -176,11 +176,14 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   )
 
   // Why: for a repo on an SSH host or runtime env, read the per-host agent list so the dialog shows the host's installed agents, not local.
+  const runtimeEnvironmentId = selectedRepoRuntimeEnvironmentId?.trim() || null
+
+  // Kept as-is: uploads fence on the worktree's real host, which for a server repo is its target.
   const connectionId = selectedRepoConnectionId
 
-  const isRemote = typeof connectionId === 'string'
-
-  const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
+  // Why: a server-owned repo's connectionId names that server's own SSH target, which this client
+  // cannot probe for agents; the server answers for it.
+  const isRemote = typeof connectionId === 'string' && !runtimeEnvironmentId
 
   const detectedAgentList = useAppStore((s) => {
     if (isRemote) {

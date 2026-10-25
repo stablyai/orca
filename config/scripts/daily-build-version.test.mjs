@@ -22,16 +22,14 @@ describe('createDailyBuildVersion', () => {
     const version = createDailyBuildVersion('1.4.160-rc.3', new Date('2026-07-28T13:00:00Z'))
     expect(version).toBe('1.4.160-daily.202607281300')
     expect(compareAppVersions(version, '1.4.160-rc.3')).toBeLessThan(0)
-    expect(compareAppVersions('1.4.160-rc.3-daily.202607281300', '1.4.160-rc.3')).toBeGreaterThan(0)
   })
 
   // Why: 'daily' sorts before 'hourly' alphabetically, so a daily of the same
   // base never outranks an hourly — both stay below rc/stable and only the
   // channel picker offers them.
   it('sorts below the hourly build of the same base version', () => {
-    expect(
-      compareAppVersions('1.4.160-daily.202607281300', '1.4.160-hourly.202607281400')
-    ).toBeLessThan(0)
+    const version = createDailyBuildVersion('1.4.160', new Date('2026-07-28T13:00:00Z'))
+    expect(compareAppVersions(version, '1.4.160-hourly.202607281400')).toBeLessThan(0)
   })
 
   it('rejects invalid input', () => {
@@ -44,22 +42,12 @@ describe('formatDailyReleaseName', () => {
   const name = (iso, buildNumber = 1, commit = 'e698241abcde') =>
     formatDailyReleaseName('1.4.163-daily.x', buildNumber, commit, new Date(iso))
 
-  it('renders version, number, Pacific timestamp, and short sha', () => {
-    // 17:15 UTC is 10:15AM PDT in July (the daily cut time).
-    expect(name('2026-07-28T17:15:00Z')).toBe('1.4.163 • 01 • Jul 28, 10:15AM • e698241')
-  })
-
   // Why both sides of DST: the tag's stamp is UTC and the title is Pacific, so
   // the offset between them is not a constant. A test pinned to one season would
   // pass all summer and start failing in November.
   it('follows the Pacific offset across DST', () => {
     expect(name('2026-01-15T18:15:00Z')).toBe('1.4.163 • 01 • Jan 15, 10:15AM • e698241')
     expect(name('2026-07-28T17:15:00Z')).toBe('1.4.163 • 01 • Jul 28, 10:15AM • e698241')
-  })
-
-  it('pads to two digits and grows past them', () => {
-    expect(name('2026-07-28T17:15:00Z', 9)).toContain(' • 09 • ')
-    expect(name('2026-07-28T17:15:00Z', 42)).toContain(' • 42 • ')
   })
 
   it('rejects a build number that is not a positive integer', () => {

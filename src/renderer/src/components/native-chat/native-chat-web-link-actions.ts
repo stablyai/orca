@@ -7,6 +7,7 @@ import {
 import type { TerminalLinkClickBehavior } from '@/components/terminal-pane/terminal-link-click-behavior'
 import {
   buildHttpLinkActions,
+  httpLinkDirectClickDestination,
   openRoutedHttpLink,
   type HttpLinkActionDestinations,
   type HttpLinkDestination
@@ -34,6 +35,20 @@ type ChatLinkMouseEvent = Pick<
   preventDefault: () => void
 }
 
+/** Opens a chat link at a chosen destination, or the routed one when none is chosen. */
+export function openNativeChatWebLink(
+  url: string,
+  deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner'>,
+  destination: HttpLinkDestination | undefined
+): void {
+  openRoutedHttpLink(url, {
+    worktreeId: deps.worktreeId,
+    sourceOwner: deps.sourceOwner,
+    modifierHeld: false,
+    ...(destination ? { forceDestination: destination } : {})
+  })
+}
+
 /** Returns true when the click was consumed; false leaves the anchor's default. */
 export function handleNativeChatWebLink(
   event: ChatLinkMouseEvent,
@@ -41,20 +56,11 @@ export function handleNativeChatWebLink(
   deps: NativeChatWebLinkDeps
 ): boolean {
   const open = (destination: HttpLinkDestination | undefined): void =>
-    openRoutedHttpLink(url, {
-      worktreeId: deps.worktreeId,
-      sourceOwner: deps.sourceOwner,
-      modifierHeld: false,
-      ...(destination ? { forceDestination: destination } : {})
-    })
+    openNativeChatWebLink(url, deps, destination)
 
   if (isTerminalLinkDirectActivation(event)) {
     event.preventDefault()
-    open(
-      event.shiftKey
-        ? (deps.destinations.alternate ?? deps.destinations.primary)
-        : deps.destinations.primary
-    )
+    open(httpLinkDirectClickDestination(deps.destinations, event.shiftKey))
     return true
   }
   if (!isTerminalLinkActionActivation(event)) {

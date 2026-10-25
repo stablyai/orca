@@ -1,7 +1,14 @@
-import { mkdirSync } from 'node:fs'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { mkdirSync, realpathSync } from 'node:fs'
+import path from 'node:path'
+import { runProcess } from '@orca/process-host'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { evaluatePolled } from './helpers/page-evaluate-polled'
+import {
+  addRepoWithWorkspaces,
+  bulkWriteTimeout,
+  writeWorkspaceMeta
+} from './helpers/repo-with-workspaces'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 async function prepareSidebarForScrollTest(page: Page): Promise<void> {
@@ -40,7 +47,7 @@ test.describe('Reveal active workspace button', () => {
   // (not a scenario real users hit). Reveal-into-view is covered robustly by
   // the "outside the virtualized window" test below.
 
-  test('clears sidebar filters before revealing a hidden current workspace', async ({
+  test('adjusts sidebar filters before revealing a hidden current workspace', async ({
     orcaPage,
     testRepoPath
   }, testInfo) => {
@@ -74,7 +81,9 @@ test.describe('Reveal active workspace button', () => {
     await expect
       .poll(() =>
         orcaPage.evaluate(async (id) => {
-          await window.__store!.getState().fetchRepos()
+          await window
+            .__store!.getState()
+            .fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
           return window.__store!.getState().repos.some((repo) => repo.id === id)
         }, filterRepoId)
       )
@@ -93,6 +102,13 @@ test.describe('Reveal active workspace button', () => {
     }, testRepoPath)
     if (!targetId) {
       throw new Error('Seeded secondary worktree is missing')
+    }
+    const targetRepoId = await orcaPage.evaluate(
+      (repoPath) => window.__store!.getState().repos.find((repo) => repo.path === repoPath)?.id,
+      testRepoPath
+    )
+    if (!targetRepoId) {
+      throw new Error('Seeded repository is missing')
     }
 
     const targetRows = orcaPage.locator(
@@ -132,7 +148,7 @@ test.describe('Reveal active workspace button', () => {
     await revealButton.click()
     await orcaPage
       .getByRole('dialog', { name: 'Reveal hidden workspace?' })
-      .getByRole('button', { name: 'Clear filters and reveal' })
+      .getByRole('button', { name: 'Adjust filters and reveal' })
       .click()
 
     await expect(targetRow).toBeVisible()
@@ -149,72 +165,43 @@ test.describe('Reveal active workspace button', () => {
           }),
         {
           timeout: 10_000,
-          message: 'Reveal button should clear repo filters that hide the current workspace'
+          message:
+            'Reveal button should preserve selected repos while revealing the current workspace'
         }
       )
-      .toEqual([])
+      .toEqual([filterRepoId, targetRepoId])
   })
 
   test('reveals the current workspace when it starts outside the virtualized window', async ({
     orcaPage
-  }) => {
+  }, testInfo) => {
     await prepareSidebarForScrollTest(orcaPage)
 
-    const targetId = await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-
-      const state = store.getState()
-      const repo = state.repos[0]
-      if (!repo) {
-        throw new Error('Expected a seeded e2e repo')
-      }
-
-      const now = Date.now()
-      const seededWorktrees = state.worktreesByRepo[repo.id] ?? []
-      const syntheticWorktrees = Array.from({ length: 60 }, (_, index) => {
-        const suffix = String(index).padStart(2, '0')
-        return {
-          id: `${repo.id}::/virtual-reveal-${suffix}`,
-          instanceId: `virtual-reveal-${suffix}`,
-          repoId: repo.id,
-          path: `${repo.path}/../virtual-reveal-${suffix}`,
-          displayName: `Virtual reveal ${suffix}`,
-          comment: '',
-          linkedIssue: null,
-          linkedPR: null,
-          linkedLinearIssue: null,
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
+    const repo = await addRepoWithWorkspaces(orcaPage, testInfo, 60)
+    await writeWorkspaceMeta(
+      orcaPage,
+      repo.ids.map((worktreeId, index) => ({
+        worktreeId,
+        updates: {
+          displayName: `Virtual reveal ${String(index).padStart(2, '0')}`,
           sortOrder: 10_000 - index,
-          lastActivityAt: now - index - 100,
-          head: '0000000000000000000000000000000000000000',
-          branch: `virtual-reveal-${suffix}`,
-          isBare: false,
-          isMainWorktree: false
+          manualOrder: 10_000 - index
         }
-      })
-      const target = syntheticWorktrees.at(-1)
-      if (!target) {
-        throw new Error('Expected a synthetic target worktree')
-      }
-
-      store.setState({
-        activeRepoId: repo.id,
-        activeWorktreeId: target.id,
-        activeWorkspaceKey: `worktree:${target.id}`,
-        pendingRevealWorktree: null,
-        sortBy: 'manual',
-        worktreesByRepo: {
-          ...state.worktreesByRepo,
-          [repo.id]: [...seededWorktrees, ...syntheticWorktrees]
-        }
-      })
-      return target.id
-    })
+      }))
+    )
+    const targetId = repo.ids.at(-1)!
+    await orcaPage.evaluate(
+      ({ repoId, targetId }) => {
+        window.__store!.setState({
+          activeRepoId: repoId,
+          activeWorktreeId: targetId,
+          activeWorkspaceKey: `worktree:${targetId}`,
+          pendingRevealWorktree: null,
+          sortBy: 'manual'
+        })
+      },
+      { repoId: repo.repoId, targetId }
+    )
 
     const scroller = orcaPage.locator('[data-worktree-sidebar]')
     await expect
@@ -268,62 +255,55 @@ test.describe('Reveal active workspace button', () => {
 
   test('uses the active workspace key when the legacy active worktree id is not set', async ({
     orcaPage
-  }) => {
+  }, testInfo) => {
     await prepareSidebarForScrollTest(orcaPage)
 
-    const folderWorktreeId = await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-
-      const now = Date.now()
-      const folderWorkspaces = Array.from({ length: 36 }, (_, index) => {
-        const suffix = String(index).padStart(2, '0')
-        return {
-          id: `reveal-folder-workspace-${suffix}`,
-          projectGroupId: 'reveal-folder-group',
-          name: `Reveal folder workspace ${suffix}`,
-          folderPath: `/tmp/reveal-folder-workspace-${suffix}`,
-          linkedTask: null,
-          comment: '',
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 1_000 - index,
-          lastActivityAt: now - index,
-          createdAt: now,
-          updatedAt: now
-        }
-      })
-      const targetFolder = folderWorkspaces.at(-1)
-      if (!targetFolder) {
-        throw new Error('Expected a target folder workspace')
-      }
-      const folderWorktreeId = `folder:${targetFolder.id}`
-      store.setState({
-        activeRepoId: null,
-        activeWorktreeId: null,
-        activeWorkspaceKey: folderWorktreeId,
-        projectGroups: [
-          {
-            id: 'reveal-folder-group',
-            name: 'Reveal folder group',
-            parentPath: '/tmp/reveal-folder-group',
-            parentGroupId: null,
-            createdFrom: 'manual',
-            tabOrder: 1,
-            isCollapsed: false,
-            color: null,
-            createdAt: now,
-            updatedAt: now
-          }
-        ],
-        folderWorkspaces
-      })
-      store.getState().setGroupBy('repo')
-      return folderWorktreeId
+    // The oldest of 36 folder workspaces sorts last under Recent.
+    const groupPath = testInfo.outputPath('reveal-folder-group')
+    const folderPaths = Array.from({ length: 36 }, (_, index) => {
+      const folderPath = path.join(groupPath, `folder-${String(index).padStart(2, '0')}`)
+      mkdirSync(folderPath, { recursive: true })
+      return realpathSync(folderPath)
     })
+    const folderWorktreeId = await evaluatePolled(
+      orcaPage,
+      async ({ parentPath, folderPaths }) => {
+        const store = window.__store!
+        const group = await window.api.projectGroups.create({
+          name: 'Reveal folder group',
+          parentPath,
+          createdFrom: 'manual'
+        })
+        await store
+          .getState()
+          .fetchProjectGroups({ runtimeEnvironmentId: null, throwOnError: true })
+        const ids: string[] = []
+        for (const [index, folderPath] of folderPaths.entries()) {
+          const folder = await store.getState().createFolderWorkspace(
+            {
+              projectGroupId: group.id,
+              name: `Reveal folder workspace ${String(index).padStart(2, '0')}`,
+              folderPath
+            },
+            { runtimeEnvironmentId: null }
+          )
+          if (!folder) {
+            throw new Error(`Folder workspace ${index} was not created`)
+          }
+          ids.push(folder.id)
+        }
+        const targetKey = `folder:${ids[0]}` as const
+        store.setState({
+          activeRepoId: null,
+          activeWorktreeId: null,
+          activeWorkspaceKey: targetKey
+        })
+        store.getState().setGroupBy('repo')
+        return targetKey
+      },
+      { parentPath: realpathSync(groupPath), folderPaths },
+      { timeout: bulkWriteTimeout(folderPaths.length) }
+    )
 
     const scroller = orcaPage.locator('[data-worktree-sidebar]')
     await scroller.evaluate((element) => {

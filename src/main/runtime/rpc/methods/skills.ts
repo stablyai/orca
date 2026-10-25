@@ -3,6 +3,10 @@ import type { z } from 'zod'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
 import {
+  BundledSkillExecuteRequestSchema,
+  BundledSkillPlanRequestSchema
+} from '../../../../shared/bundled-skill-plan'
+import {
   previewSkillDeleteRequest,
   runSkillDeleteRequest,
   type SkillDeleteRequestDependencies
@@ -67,12 +71,13 @@ function skillDeleteDependencies(
 export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.discover',
+    permission: 'workspace',
     params: SkillsDiscoverParams,
     handler: async (params, { runtime }) => {
       // Why: the executing runtime owns WSL project preferences. Remote callers
       // send worktree identity only; trusting their projectRuntime absence
       // would scan this host's native filesystem for a WSL-configured project.
-      const resolvedTarget = resolveDiscoveryTarget(params, runtime)
+      const resolvedTarget = await resolveDiscoveryTarget(params, runtime)
       return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
         providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
         refresh: params.refresh === true
@@ -81,26 +86,42 @@ export const SKILL_METHODS = [
   }),
   defineMethod({
     name: 'skills.previewDelete',
+    permission: 'workspace',
     params: SkillDeleteRequestSchema,
     handler: async (params, { runtime }) =>
       previewSkillDeleteRequest(
         params,
-        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        await resolveDiscoveryTarget(params.target ?? {}, runtime),
         skillDeleteDependencies(runtime)
       )
   }),
   defineMethod({
     name: 'skills.delete',
+    permission: 'skills-admin',
     params: SkillDeleteRequestSchema,
     handler: async (params, { runtime }) =>
       runSkillDeleteRequest(
         params,
-        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        await resolveDiscoveryTarget(params.target ?? {}, runtime),
         skillDeleteDependencies(runtime)
       )
   }),
+  // The host plans Orca's skills on its own disk; a paired client never sends a WSL target.
+  defineMethod({
+    name: 'skills.planBundledOrca',
+    permission: 'workspace',
+    params: BundledSkillPlanRequestSchema,
+    handler: (params, { runtime }) => runtime.planLocalBundledSkills(params)
+  }),
+  defineMethod({
+    name: 'skills.executeBundledOrca',
+    permission: 'skills-admin',
+    params: BundledSkillExecuteRequestSchema,
+    handler: (params, { runtime }) => runtime.executeLocalBundledSkills(params)
+  }),
   defineMethod({
     name: 'skills.share',
+    permission: 'skills-admin',
     params: AgentSkillShareRequestSchema,
     handler: async (params, { runtime, signal, clientKind }) => {
       runtime.assertAgentSkillSharingAllowed()
@@ -110,7 +131,7 @@ export const SKILL_METHODS = [
           'Publishing skills through a paired client is not supported. Run the command from Orca on the machine that stores the skills.'
         )
       }
-      const resolvedTarget = resolveDiscoveryTarget(params.target ?? {}, runtime)
+      const resolvedTarget = await resolveDiscoveryTarget(params.target ?? {}, runtime)
       if (resolvedTarget.kind !== 'native-host') {
         throw new AgentSkillSharingError(
           AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
@@ -126,6 +147,7 @@ export const SKILL_METHODS = [
   }),
   defineMethod({
     name: 'skills.install',
+    permission: 'skills-admin',
     params: SkillInstallRequestSchema,
     handler: async (params, { runtime, signal, clientCapabilities }) => {
       const result = await runtime.installSharedSkillRequest(params, signal)
@@ -145,12 +167,14 @@ export const SKILL_METHODS = [
   }),
   defineMethod({
     name: 'skills.installBundle',
+    permission: 'skills-admin',
     params: SkillBundleInstallRequestSchema,
     handler: (params, { runtime, signal }) =>
       runtime.installSharedSkillBundleRequest(params, signal)
   }),
   defineMethod({
     name: 'skills.cancelInstall',
+    permission: 'skills-admin',
     params: SkillsCancelInstallParams,
     handler: (params, { runtime }) => ({
       cancelled: runtime.cancelSharedSkillInstall(params.operationId)
@@ -158,6 +182,7 @@ export const SKILL_METHODS = [
   }),
   defineMethod({
     name: 'skills.getInstallProgress',
+    permission: 'workspace',
     params: SkillsGetInstallProgressParams,
     handler: (params, { runtime }) => {
       const progress = runtime.getSharedSkillInstallProgress(params.operationId)
@@ -166,36 +191,43 @@ export const SKILL_METHODS = [
   }),
   defineMethod({
     name: 'skills.previewInstall',
+    permission: 'workspace',
     params: SkillInstallPreviewRequestSchema,
     handler: (params, { runtime }) => runtime.previewSharedSkillInstallRequest(params)
   }),
   defineMethod({
     name: 'skills.removeInstall',
+    permission: 'skills-admin',
     params: SkillRemoveRequestSchema,
     handler: (params, { runtime }) => runtime.removeSharedSkillInstallRequest(params)
   }),
   defineMethod({
     name: 'skills.listManagedInstalls',
+    permission: 'workspace',
     params: null,
     handler: (_params, { runtime }) => runtime.listManagedSkillInstalls()
   }),
   defineMethod({
     name: 'skills.beginUpload',
+    permission: 'skills-admin',
     params: SkillUploadBeginRequestSchema,
     handler: (params, { runtime }) => runtime.beginSkillUpload(params)
   }),
   defineMethod({
     name: 'skills.uploadChunk',
+    permission: 'skills-admin',
     params: SkillUploadChunkRequestSchema,
     handler: (params, { runtime }) => runtime.appendSkillUploadChunk(params)
   }),
   defineMethod({
     name: 'skills.commitUpload',
+    permission: 'skills-admin',
     params: SkillUploadCommitRequestSchema,
     handler: (params, { runtime }) => runtime.commitSkillUpload(params.uploadId)
   }),
   defineMethod({
     name: 'skills.cancelUpload',
+    permission: 'skills-admin',
     params: SkillUploadCommitRequestSchema,
     handler: (params, { runtime }) => runtime.cancelSkillUpload(params.uploadId)
   })

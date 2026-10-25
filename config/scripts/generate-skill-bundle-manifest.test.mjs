@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process'
 import {
   chmod,
   copyFile,
-  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -17,17 +16,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { observeSkillPackage } from '../../src/main/skills/skill-package-identity'
 import {
-  appendReleaseRow,
-  assertReleasedHistoryPreserved,
   classifyFile,
   collectPackageFiles,
   describeFile,
-  gitTreeSha,
-  isToleratedReleaseMappingPrefix,
+  findDroppedReleasedDigests,
   normalizeText,
   packageDigest,
-  releasedHistoryFromCommitted,
-  sortManifestFiles
+  sortManifestFiles,
+  withDigests
 } from './generate-skill-bundle-manifest.mjs'
 
 const temporaryDirectories = []
@@ -39,10 +35,17 @@ async function createPackage() {
   return directory
 }
 
+// Why strip GITHUB_*: on a CI pull_request the add-only check looks for a base the sandbox lacks.
+function localEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith('GITHUB_'))
+  )
+}
+
 // Why: the generator resolves its repo root from its own location, so a copy of
-// the script inside a throwaway tree exercises the real CLI — including which
-// artifacts each mode is allowed to write — without touching resources/skills.
-async function createReleaseSandbox() {
+// the script inside a throwaway tree exercises the real CLI without touching
+// resources/skills.
+async function createGeneratorSandbox() {
   // Node resolves the entry point through symlinks, so the script's own
   // repo-root check only matches when the sandbox path is already resolved.
   const root = await realpath(await createPackage())
@@ -50,11 +53,36 @@ async function createReleaseSandbox() {
   const script = path.join(root, 'config', 'scripts', 'generate-skill-bundle-manifest.mjs')
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
-  await copyFile(path.join(import.meta.dirname, 'generate-skill-bundle-manifest.mjs'), script)
+  for (const name of ['generate-skill-bundle-manifest.mjs', 'git-pull-request-diff-base.mjs']) {
+    await copyFile(path.join(import.meta.dirname, name), path.join(path.dirname(script), name))
+  }
   await writeFile(path.join(skillRoot, 'SKILL.md'), 'demo skill\n')
+  const run = (env, args) =>
+    execFileSync(process.execPath, [script, ...args], { stdio: 'pipe', env })
   return {
-    generate: (...args) => execFileSync(process.execPath, [script, ...args], { stdio: 'pipe' }),
+    root,
+    generate: (...args) => run(localEnv(), args),
+    generateOnPullRequest: (...args) =>
+      run({ ...localEnv(), GITHUB_EVENT_NAME: 'pull_request' }, args),
+    git: (...args) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd: root,
+        stdio: 'pipe',
+        env: localEnv()
+      }),
     read: (name) => readFile(path.join(root, 'resources', 'skills', name), 'utf8'),
+    readSources: () =>
+      readFile(
+        path.join(
+          root,
+          'src',
+          'main',
+          'skills',
+          'bundled-skill-install',
+          'bundled-skill-sources.ts'
+        ),
+        'utf8'
+      ),
     editSkill: (body) => writeFile(path.join(skillRoot, 'SKILL.md'), body)
   }
 }
@@ -90,7 +118,7 @@ describe('skill bundle manifest generator', () => {
     expect(packageDigest([skillFile, executable])).toMatch(/^[a-f0-9]{64}$/)
   })
 
-  it('orders git-history files identically to the filesystem walk', async () => {
+  it('orders files identically however they were listed', async () => {
     const packageRoot = await createPackage()
     await mkdir(path.join(packageRoot, 'sub'))
     for (const name of ['apple.md', 'sub.md', 'Zebra.md', path.join('sub', 'inner.txt')]) {
@@ -98,8 +126,8 @@ describe('skill bundle manifest generator', () => {
     }
     const walked = await collectPackageFiles(packageRoot)
 
-    // Why: git ls-tree emits [Zebra.md, apple.md, sub.md, sub/inner.txt]; index-based
-    // snapshot matching requires history and observation to share one order.
+    // Why: git ls-tree emits [Zebra.md, apple.md, sub.md, sub/inner.txt]; the digest
+    // hashes files in array order, so every producer must share one order.
     const gitOrdered = ['Zebra.md', 'apple.md', 'sub.md', 'sub/inner.txt'].map((manifestPath) =>
       walked.find((file) => file.path === manifestPath)
     )
@@ -114,295 +142,67 @@ describe('skill bundle manifest generator', () => {
     ])
   })
 
-  it('rejects rewrites of released snapshots and allows floating-tail replacement', () => {
-    const snapshot = (releaseRevision, packageDigest) => ({ releaseRevision, packageDigest })
-    const artifacts = {
-      releasedSnapshotCounts: { 'orca-cli': 2 },
-      snapshotRegistry: {
-        schemaVersion: 1,
-        skills: { 'orca-cli': [snapshot(1, 'aaa'), snapshot(2, 'bbb'), snapshot(3, 'ccc')] }
-      }
-    }
+  it('writes a schema-3 manifest and fails verification once a skill changes', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.generate('--write')
+    const manifest = JSON.parse(await sandbox.read('current-manifest.json'))
+    expect(manifest.schemaVersion).toBe(3)
+    expect(manifest.skills.map((skill) => Object.keys(skill))).toEqual([
+      ['name', 'sourcePath', 'packageDigest', 'files']
+    ])
+    expect(() => sandbox.generate()).not.toThrow()
 
-    expect(() =>
-      assertReleasedHistoryPreserved(
-        { schemaVersion: 1, skills: { 'orca-cli': [snapshot(1, 'aaa'), snapshot(2, 'bbb')] } },
-        artifacts
-      )
-    ).not.toThrow()
-    expect(() =>
-      assertReleasedHistoryPreserved(
-        {
-          schemaVersion: 1,
-          skills: { 'orca-cli': [snapshot(1, 'aaa'), snapshot(2, 'bbb'), snapshot(3, 'stale')] }
-        },
-        artifacts
-      )
-    ).not.toThrow()
-    expect(() =>
-      assertReleasedHistoryPreserved(
-        {
-          schemaVersion: 1,
-          skills: { 'orca-cli': [snapshot(1, 'aaa'), snapshot(2, 'rewritten')] }
-        },
-        artifacts
-      )
-    ).toThrow('Released snapshot history changed for orca-cli at revision 2')
-    expect(() =>
-      assertReleasedHistoryPreserved(
-        {
-          schemaVersion: 1,
-          skills: {
-            'orca-cli': [snapshot(1, 'aaa'), { ...snapshot(2, 'bbb'), gitTreeSha: 'rewritten' }]
-          }
-        },
-        artifacts
-      )
-    ).toThrow('Released snapshot history changed for orca-cli at revision 2')
-    expect(() =>
-      assertReleasedHistoryPreserved(
-        {
-          schemaVersion: 1,
-          skills: {
-            'orca-cli': [snapshot(1, 'aaa'), snapshot(2, 'bbb'), snapshot(3, 'stale')]
-          }
-        },
-        { ...artifacts, releasedSnapshotCounts: { 'orca-cli': 1 } }
-      )
-    ).toThrow('Released snapshot history is incomplete for orca-cli')
-    expect(() => assertReleasedHistoryPreserved(null, artifacts)).not.toThrow()
+    await sandbox.editSkill('changed\n')
+    expect(() => sandbox.generate()).toThrow()
   })
 
-  it('protects only revisions named by the committed release mapping', () => {
-    const snapshot = (releaseRevision, packageDigest) => ({ releaseRevision, packageDigest })
-    const committedRegistry = {
-      schemaVersion: 1,
-      skills: {
-        'linear-tickets': [snapshot(1, 'released'), snapshot(2, 'unreleased-tail')]
-      }
-    }
-    const artifacts = {
-      releasedSnapshotCounts: { 'linear-tickets': 2 },
-      snapshotRegistry: {
-        schemaVersion: 1,
-        skills: { 'linear-tickets': [snapshot(1, 'released'), snapshot(2, 'new-release')] }
-      }
-    }
+  it('keeps every shipped SKILL.md digest and embeds the current LF bytes', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.generate('--write')
+    const [first] = JSON.parse(await sandbox.read('released-digests.json')).skills.demo
 
-    expect(() =>
-      assertReleasedHistoryPreserved(committedRegistry, artifacts, {
-        schemaVersion: 1,
-        releases: [{ appVersion: '1.0.0', skills: { 'linear-tickets': 1 } }]
-      })
-    ).not.toThrow()
-    expect(() =>
-      assertReleasedHistoryPreserved(committedRegistry, artifacts, {
-        schemaVersion: 1,
-        releases: [{ appVersion: '1.0.0', skills: { 'linear-tickets': 2 } }]
-      })
-    ).toThrow('Released snapshot history changed for linear-tickets at revision 2')
-  })
-
-  it('tolerates only redundant trailing release-mapping rows', () => {
-    const serialized = (value) => `${JSON.stringify(value, null, 2)}\n`
-    const rows = [
-      { appVersion: '1.0.0', skills: { 'orca-cli': 1 } },
-      { appVersion: '1.1.0', skills: { 'orca-cli': 2 } }
-    ]
-    const artifacts = {
-      currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 2 }] },
-      releaseMapping: { schemaVersion: 1, releases: rows }
-    }
-    const committedPrefix = serialized({ schemaVersion: 1, releases: [rows[0]] })
-
-    // A just-cut tag whose bytes equal the working tree may lag in the mapping.
-    expect(isToleratedReleaseMappingPrefix(committedPrefix, artifacts)).toBe(true)
-    // The committed file matching the derived mapping is byte-equality's job, not tolerance.
-    expect(isToleratedReleaseMappingPrefix(serialized(artifacts.releaseMapping), artifacts)).toBe(
-      false
+    await sandbox.editSkill('changed\r\n')
+    sandbox.generate('--write')
+    const ledger = JSON.parse(await sandbox.read('released-digests.json'))
+    expect(ledger.skills.demo).toHaveLength(2)
+    expect(ledger.skills.demo).toContain(first)
+    expect(await sandbox.readSources()).toContain(
+      JSON.stringify({ name: 'demo', text: 'changed\n', releasedDigests: ledger.skills.demo })
     )
-    // A trailing row for bytes the committed artifacts do not describe is a real gap.
-    expect(
-      isToleratedReleaseMappingPrefix(committedPrefix, {
-        ...artifacts,
-        currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 3 }] }
-      })
-    ).toBe(false)
-    expect(
-      isToleratedReleaseMappingPrefix(committedPrefix, {
-        ...artifacts,
-        currentManifest: {
-          skills: [
-            { name: 'orca-cli', releaseRevision: 2 },
-            { name: 'orca-linear', releaseRevision: 1 }
-          ]
-        }
-      })
-    ).toBe(false)
-    // Rewritten earlier rows never pass, with or without trailing rows.
-    expect(
-      isToleratedReleaseMappingPrefix(
-        serialized({
-          schemaVersion: 1,
-          releases: [{ appVersion: '0.9.0', skills: { 'orca-cli': 1 } }]
-        }),
-        artifacts
-      )
-    ).toBe(false)
-    expect(isToleratedReleaseMappingPrefix('not json', artifacts)).toBe(false)
-    expect(isToleratedReleaseMappingPrefix(serialized({ schemaVersion: 1 }), artifacts)).toBe(false)
+    expect(() => sandbox.generate()).not.toThrow()
   })
 
-  it('seeds released history from the committed ledger and drops the floating tail', () => {
-    const snapshot = (releaseRevision, packageDigest) => ({ releaseRevision, packageDigest })
-    const committedRegistry = {
-      schemaVersion: 1,
-      skills: {
-        // released revs 1..2 named by the mapping, plus an unreleased tail at 3
-        'orca-cli': [snapshot(1, 'aaa'), snapshot(2, 'bbb'), snapshot(3, 'unreleased')],
-        // no mapping row -> fall back to all-but-tail
-        'orca-linear': [snapshot(1, 'ccc'), snapshot(2, 'tail')]
-      }
-    }
-    const committedMapping = {
-      schemaVersion: 1,
-      releases: [{ appVersion: '1.0.0', skills: { 'orca-cli': 2 } }]
-    }
-
-    const seeded = releasedHistoryFromCommitted(committedRegistry, committedMapping)
-
-    // The unreleased tail is dropped; only mapping-named revisions survive.
-    expect(seeded.registry.skills['orca-cli']).toEqual([snapshot(1, 'aaa'), snapshot(2, 'bbb')])
-    expect(seeded.registry.skills['orca-linear']).toEqual([snapshot(1, 'ccc')])
-    expect(seeded.releasedSnapshotCounts).toEqual({ 'orca-cli': 2, 'orca-linear': 1 })
-    // The seed clones the mapping so a later release append cannot alias committed state.
-    expect(seeded.mapping).toEqual(committedMapping)
-    expect(seeded.mapping).not.toBe(committedMapping)
-  })
-
-  it('returns an empty ledger when no committed artifacts exist', () => {
-    const seeded = releasedHistoryFromCommitted(null, null)
-    expect(seeded.registry.skills).toEqual({})
-    expect(seeded.releasedSnapshotCounts).toEqual({})
-    expect(seeded.mapping.releases).toEqual([])
-  })
-
-  it('appends one release row, stripping the v-prefix and deduping identical tails', () => {
-    const artifacts = {
-      currentManifest: {
-        skills: [
-          { name: 'orca-cli', releaseRevision: 36 },
-          { name: 'orca-linear', releaseRevision: 8 }
-        ]
-      },
-      releaseMapping: {
-        schemaVersion: 1,
-        releases: [{ appVersion: '1.4.151', skills: { 'orca-cli': 35, 'orca-linear': 8 } }]
-      }
-    }
-
-    appendReleaseRow(artifacts, 'v1.4.160')
-    expect(artifacts.releaseMapping.releases.at(-1)).toEqual({
-      appVersion: '1.4.160',
-      skills: { 'orca-cli': 36, 'orca-linear': 8 }
-    })
-
-    // A second release over identical revisions adds no row.
-    appendReleaseRow(artifacts, '1.4.161')
-    expect(artifacts.releaseMapping.releases).toHaveLength(2)
-  })
-
-  it('overwrites the trailing row when a failed cut is re-cut at the same version', () => {
-    const artifacts = {
-      currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 37 }] },
-      releaseMapping: {
-        schemaVersion: 1,
-        releases: [
-          { appVersion: '1.4.151', skills: { 'orca-cli': 35 } },
-          // The failed cut already pushed this row to main at revision 36.
-          { appVersion: '1.4.160', skills: { 'orca-cli': 36 } }
-        ]
-      }
-    }
-
-    appendReleaseRow(artifacts, '1.4.160')
-
-    // One row per version: the tag ships revision 37, so 36 must not linger.
-    expect(artifacts.releaseMapping.releases).toEqual([
-      { appVersion: '1.4.151', skills: { 'orca-cli': 35 } },
-      { appVersion: '1.4.160', skills: { 'orca-cli': 37 } }
-    ])
-  })
-
-  it('refuses to rewrite an already-shipped version behind the trailing row', () => {
-    const artifacts = {
-      currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 37 }] },
-      releaseMapping: {
-        schemaVersion: 1,
-        releases: [
-          { appVersion: '1.4.151', skills: { 'orca-cli': 35 } },
-          { appVersion: '1.4.160', skills: { 'orca-cli': 36 } }
-        ]
-      }
-    }
-
-    expect(() => appendReleaseRow(artifacts, '1.4.151')).toThrow(/already has a row for 1\.4\.151/)
-  })
-
-  it('records a release without regenerating the content-addressed artifacts', async () => {
-    const sandbox = await createReleaseSandbox()
-
+  it('collects every SKILL.md version in git history, even ones never generated', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.git('init', '-q')
+    sandbox.git('add', 'skills')
+    sandbox.git('commit', '-qm', 'one')
+    await sandbox.editSkill('second version\n')
+    sandbox.git('commit', '-qam', 'two')
+    await sandbox.editSkill('third version\n')
     sandbox.generate('--write')
-    const [manifest, registry] = await Promise.all([
-      sandbox.read('current-manifest.json'),
-      sandbox.read('snapshot-registry.json')
-    ])
-    sandbox.generate('--release', 'v1.4.156')
+    expect(JSON.parse(await sandbox.read('released-digests.json')).skills.demo).toHaveLength(3)
+    expect(() => sandbox.generate()).not.toThrow()
+  })
 
-    // The cut records provenance for bytes that are already committed, so a
-    // version-only cut can never rewrite a shipped identity.
-    expect(JSON.parse(await sandbox.read('release-mapping.json')).releases).toEqual([
-      { appVersion: '1.4.156', skills: { demo: 1 } }
-    ])
-    expect(await sandbox.read('current-manifest.json')).toBe(manifest)
-    expect(await sandbox.read('snapshot-registry.json')).toBe(registry)
-
-    // Bytes that changed since the last regeneration would make the row name a
-    // revision this tag does not ship — refuse rather than record it.
-    await sandbox.editSkill('edited after the last regeneration\n')
-    expect(() => sandbox.generate('--release', '1.4.157')).toThrow(
-      /Generated skill artifacts are stale/
+  it('fails when a digest is missing or the pull request base cannot be read', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.generate('--write')
+    expect(() => sandbox.generateOnPullRequest()).toThrow(/Cannot read the pull request base/)
+    await writeFile(
+      path.join(sandbox.root, 'resources', 'skills', 'released-digests.json'),
+      `${JSON.stringify({ schemaVersion: 1, skills: { demo: [] } }, null, 2)}\n`
     )
-    expect(JSON.parse(await sandbox.read('release-mapping.json')).releases).toHaveLength(1)
+    expect(() => sandbox.generate()).toThrow(/stale/)
   })
 
-  it('freezes a revision once a release records it, and only until then', async () => {
-    const sandbox = await createReleaseSandbox()
-    const demoSnapshots = async () =>
-      JSON.parse(await sandbox.read('snapshot-registry.json')).skills.demo
-
-    sandbox.generate('--write')
-    const unreleased = (await demoSnapshots())[0].packageDigest
-
-    // Nothing has shipped revision 1 yet, so re-deriving it over new bytes is
-    // correct: the tail floats until a release names it.
-    await sandbox.editSkill('about to ship\n')
-    sandbox.generate('--write')
-    const shipped = await demoSnapshots()
-    expect(shipped).toHaveLength(1)
-    expect(shipped[0].packageDigest).not.toBe(unreleased)
-
-    sandbox.generate('--release', '1.4.156')
-
-    // The cut named revision 1, so the next change appends revision 2 instead of
-    // rebuilding revision 1. Installs carrying the shipped digest keep matching a
-    // known snapshot — without the ledger row they would match nothing.
-    await sandbox.editSkill('changed again after the cut\n')
-    sandbox.generate('--write')
-    const frozen = await demoSnapshots()
-    expect(frozen).toHaveLength(2)
-    expect(frozen[0]).toEqual(shipped[0])
-    expect(frozen[1].releaseRevision).toBe(2)
+  it('merges digests without duplicates and reports any the base had but HEAD lost', () => {
+    const merged = withDigests({ skills: { demo: ['b'] } }, [['demo', ['a', 'b', 'a']]])
+    expect(merged.skills.demo).toEqual(['a', 'b'])
+    expect(findDroppedReleasedDigests({ skills: { demo: ['a', 'b'] } }, merged)).toEqual([])
+    expect(
+      findDroppedReleasedDigests({ skills: { demo: ['a', 'c'], gone: ['d'] } }, merged)
+    ).toEqual(['demo:c', 'gone:d'])
   })
 
   it.runIf(process.platform !== 'win32')(
@@ -522,43 +322,10 @@ describe('skill bundle manifest generator', () => {
     expect(generated).toEqual(['.DS_Store.md', '.dsstore', 'SKILL.md', '_SKILL.md', 'ds_store.md'])
   })
 
-  it('computes the same Git tree identity as Git', async () => {
-    const packageRoot = await createPackage()
-    await cp(path.join(REPO_ROOT, 'skills', 'orca-cli'), packageRoot, { recursive: true })
-    const files = await collectPackageFiles(packageRoot)
-    // Compare the same bytes even when the skill has uncommitted edits.
-    execFileSync('git', ['init', '--quiet'], { cwd: packageRoot })
-    execFileSync('git', ['-c', 'core.autocrlf=false', 'add', '-A'], { cwd: packageRoot })
-    const expected = execFileSync('git', ['write-tree'], {
-      cwd: packageRoot,
-      encoding: 'utf8'
-    }).trim()
-
-    expect(gitTreeSha(files)).toBe(expected)
-  })
-
-  it('matches Git when a directory and file share a name prefix', async () => {
-    const packageRoot = await createPackage()
-    await mkdir(path.join(packageRoot, 'sub'))
-    await writeFile(path.join(packageRoot, 'sub', 'inner.txt'), 'nested\n')
-    await writeFile(path.join(packageRoot, 'sub.md'), 'sibling\n')
-    const files = await collectPackageFiles(packageRoot)
-    execFileSync('git', ['init', '--quiet'], { cwd: packageRoot })
-    execFileSync('git', ['add', '-A'], { cwd: packageRoot })
-    const expected = execFileSync('git', ['write-tree'], {
-      cwd: packageRoot,
-      encoding: 'utf8'
-    }).trim()
-
-    expect(gitTreeSha(files)).toBe(expected)
-  })
-
   // Why: every step in the cut job shares one workspace and one index, so any of
-  // them can stage the content-addressed artifacts and the bump step's own commit
-  // then carries them into the tag. Grepping the workflow cannot see a path built
-  // from an env var, a composite action, or concatenation, so the cut asserts its
-  // own index before committing; this test pins that guard and adds a tripwire
-  // for the literal spellings.
+  // them can stage a regenerated manifest and the bump step's own commit then
+  // carries it into the tag. The cut asserts what its commit carries; this test
+  // pins that guard and adds a tripwire for the literal spellings.
   it('keeps the whole release-cut job off skill regeneration', async () => {
     const workflow = parse(
       await readFile(path.join(REPO_ROOT, '.github/workflows/release-cut.yml'), 'utf8')
@@ -568,28 +335,21 @@ describe('skill bundle manifest generator', () => {
       .map((step) => ({ name: step.name ?? '(unnamed)', run: step.run.replace(/^\s*#.*$/gm, '') }))
     const bumpStep = runSteps.find((step) => step.name === 'Bump package.json and tag')
 
-    // The load-bearing check: whatever staged it and however the commit was
-    // spelled, only these two paths may ship. Asserted on the commit rather than
-    // the index because `git commit -a/-i/--only/<pathspec>` bypasses the index.
-    // -F is part of the contract; without it `.` admits a path like packageXjson.
-    // Flags pinned, not just the command: a `--diff-filter` slipped in here would
-    // silence modifications, and dropping -m makes a merge commit report nothing.
+    // Asserted on the commit rather than the index because `git commit -a/-i/--only/
+    // <pathspec>` bypasses the index. -F is part of the contract; without it `.` admits a
+    // path like packageXjson. Dropping -m makes a merge commit report nothing.
     expect(bumpStep.run).toMatch(
-      /git diff-tree --no-commit-id --name-only -r -m --first-parent HEAD\s*\|\s*grep -vxF -e 'package\.json' -e 'resources\/skills\/release-mapping\.json'/
+      /git diff-tree --no-commit-id --name-only -r -m --first-parent HEAD\s*\|\s*grep -vxF -e 'package\.json'/
     )
     expect(bumpStep.run.indexOf('grep -vxF')).toBeLessThan(bumpStep.run.indexOf('git tag'))
     // ...and that it aborts. A guard degraded to a warning still reads as covered.
-    // The exit must be inside the guard's own block, not borrowed from a later one.
     expect(bumpStep.run).toMatch(
       /if \[\[ -n "\$committed" \]\]; then(?:(?!\bfi\b)[\s\S])*exit 1[\s\S]*?fi/
     )
-    // Tripwire only. A step that merely READS this directory may be added here;
-    // one that writes or stages it must not, and the guard above will reject it.
-    expect(runSteps.filter((s) => /resources[/\\]skills/.test(s.run)).map((s) => s.name)).toEqual([
-      'Bump package.json and tag'
-    ])
     for (const step of runSteps) {
-      expect(step.run, step.name).not.toMatch(/--write|generate:skill-bundle-manifest/)
+      expect(step.run, step.name).not.toMatch(
+        /resources[/\\]skills|--write|generate:skill-bundle-manifest/
+      )
     }
   })
 })

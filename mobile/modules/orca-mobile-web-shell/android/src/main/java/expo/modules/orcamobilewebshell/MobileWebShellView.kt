@@ -15,6 +15,9 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebMessageCompat
@@ -44,6 +47,7 @@ internal class OrcaMobileWebShellView(
 ) : ExpoView(context, appContext) {
   private val onLoadState by EventDispatcher<Map<String, Any>>()
   private val onBridgeMessage by EventDispatcher<Map<String, Any>>()
+  private val onExternalNavigation by EventDispatcher<Map<String, Any>>()
 
   private var generationDirectory = ""
   private var sessionId = ""
@@ -264,6 +268,11 @@ internal class OrcaMobileWebShellView(
       ): Boolean = false
     }
     view.setDownloadListener { _, _, _, _, _ -> }
+    // Replaces WebView's own inset handling (its listener on P–R, onApplyWindowInsets on S+);
+    // forwarding the zeroed set keeps S+ in step.
+    ViewCompat.setOnApplyWindowInsetsListener(view) { target, insets ->
+      ViewCompat.onApplyWindowInsets(target, insetsForShellPage(insets))
+    }
     return view
   }
 
@@ -354,12 +363,34 @@ internal class OrcaMobileWebShellView(
       return refusedResponse()
     }
 
-    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-      mobileWebShellDropsNavigation(
-        requestParts(request.url),
-        served?.originHost,
-        request.isForMainFrame
+    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+      // `hasGesture` decides only what may be offered to the opener. Nothing is allowed on the
+      // strength of it: Chromium is permitted to report false for a request a human started, and a
+      // subframe can navigate the top frame with no gesture at all.
+      val verdict = mobileWebShellNavigationVerdict(
+        url = request.url?.toString(),
+        isForMainFrame = request.isForMainFrame,
+        // Not reported here, unlike WKNavigationAction.sourceFrame on iOS.
+        isFromSubframe = false,
+        isDocumentUrl = !mobileWebShellDropsNavigation(
+          requestParts(request.url),
+          served?.originHost,
+          request.isForMainFrame
+        ),
+        // Always false, and it is the platform that says so. WebViewClient's own javadoc: "This
+        // callback is not called for all page navigations. In particular, this is not called for
+        // navigations which the app initiated with loadUrl(): this callback would not serve a purpose
+        // in this case, because the app already knows about the navigation." So there is no own-load
+        // window here to keep a flag for, and nothing reaching this callback is the shell's own load.
+        isShellLoad = false,
+        hasGesture = request.hasGesture(),
+        isDownload = false
       )
+      if (verdict is MobileWebShellNavigationVerdict.CancelAndOffer) {
+        onExternalNavigation(mapOf("url" to verdict.url))
+      }
+      return verdict !is MobileWebShellNavigationVerdict.Allow
+    }
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
       // The document that spoke is being replaced, so its proxy stops being somewhere to post: the
@@ -421,3 +452,18 @@ internal class MobileWebShellBridgeMessageTooLargeException(byteCount: Int) : Co
   "A bridge message of $byteCount bytes exceeds the " +
     "$MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES byte cap"
 )
+
+/**
+ * The shell pads the bars and shortens the WebView for the keyboard, so WebView M144+ forwarding
+ * systemBars/displayCutout to env(safe-area-inset-*), and M139+ resizing for ime(), pad twice.
+ * Zeroed, never CONSUMED, so later changes still arrive (Android "Understand window insets in WebView").
+ */
+private fun insetsForShellPage(insets: WindowInsetsCompat): WindowInsetsCompat =
+  WindowInsetsCompat.Builder(insets)
+    .setInsets(SHELL_OWNED_INSET_TYPES, Insets.NONE)
+    .build()
+
+private val SHELL_OWNED_INSET_TYPES =
+  WindowInsetsCompat.Type.systemBars() or
+    WindowInsetsCompat.Type.displayCutout() or
+    WindowInsetsCompat.Type.ime()

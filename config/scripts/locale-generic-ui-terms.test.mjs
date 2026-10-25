@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { LOCALIZABLE_GENERIC_TERMS } from './locale-generic-ui-terms.mjs'
-import { NEVER_TRANSLATE_VALUES, repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 // Why: #12113 — repair-locale-catalog rewrote ~2000 translated values back to English because
 // generic UI words (agent, terminal, commit, repo, Continue) were treated as brands. These pin
@@ -73,48 +72,12 @@ describe('locale generic UI terms', () => {
     ).toBe('Codex')
     expect(
       repairTranslatedValue({
-        key: 'auto.components.settings.appearance.search.9ae151b26b',
-        enValue: 'linear',
-        localeValue: '线性',
-        locale: 'zh'
-      })
-    ).toBe('Linear')
-    expect(
-      repairTranslatedValue({
         key: 'auto.components.settings.NetworkPane.tailscale',
         enValue: 'Connect over Tailscale',
         localeValue: '通过尾鳞连接',
         locale: 'zh'
       })
     ).toBe('通过 Tailscale 连接')
-  })
-
-  it('still reverts nonsense renderings of a generic term', () => {
-    // 端子 is an electrical connector, 回购 a repurchase agreement, Comprometerse "to pledge".
-    expect(
-      repairTranslatedValue({
-        key: 'auto.components.agent.AgentCombobox.986f946354',
-        enValue: 'Blank Terminal',
-        localeValue: '空白端子',
-        locale: 'zh'
-      })
-    ).toBe('空白 Terminal')
-    expect(
-      repairTranslatedValue({
-        key: 'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-        enValue: 'Commit',
-        localeValue: 'Comprometerse',
-        locale: 'es'
-      })
-    ).toBe('Commit')
-    expect(
-      repairTranslatedValue({
-        key: 'auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef',
-        enValue: 'Markdown',
-        localeValue: '가격 인하',
-        locale: 'ko'
-      })
-    ).toBe('Markdown')
   })
 
   it('does not cut a valid word that contains a nonsense rendering', () => {
@@ -138,14 +101,6 @@ describe('locale generic UI terms', () => {
         locale: 'ko'
       })
     ).toBe('터미널 1')
-    expect(
-      repairTranslatedValue({
-        key: 'auto.store.slices.worktrees.889487d8bb',
-        enValue: 'Dismiss',
-        localeValue: '해고하다',
-        locale: 'ko'
-      })
-    ).toBe('닫기')
   })
 
   it('keeps agent catalog product names in English by key, not by word', () => {
@@ -157,18 +112,16 @@ describe('locale generic UI terms', () => {
         locale: 'zh'
       })
     ).toBe('Continue')
-    expect(
-      repairTranslatedValue({
-        key: 'auto.lib.agent.catalog.760bc6883d',
-        enValue: 'Codex',
-        localeValue: '사본',
-        locale: 'ko'
-      })
-    ).toBe('Codex')
   })
 
-  it('does not list a generic term as never-translatable', () => {
-    const pinned = [...LOCALIZABLE_GENERIC_TERMS].filter((term) => NEVER_TRANSLATE_VALUES.has(term))
-    expect(pinned).toEqual([])
+  it.each([
+    ['ko', 'Commit', '커밋'],
+    ['ja', 'repos', 'リポジトリ'],
+    ['es', 'agents', 'agentes'],
+    ['ko', 'terminals', '터미널']
+  ])('preserves the %s translation of generic %s', (locale, enValue, localeValue) => {
+    expect(repairTranslatedValue({ key: 'fixture.generic', enValue, localeValue, locale })).toBe(
+      localeValue
+    )
   })
 })

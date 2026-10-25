@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
-import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { getPtyRendererDeliveryDebugSnapshot } from './pty/delivery/debug'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -102,7 +103,6 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(mainWindow as never, nextRuntime as never)
 
       nextRuntime.registerRawTerminalViewSubscriber(result.id)
-      // Repeated presence signals must remain deduplicated.
       nextRuntime.onRemoteTerminalViewPresenceChanged?.(result.id)
 
       expect(daemon.setPtyBackgrounded).toHaveBeenCalledOnce()
@@ -137,7 +137,6 @@ describe('registerPtyHandlers', () => {
         daemon.emitData(result.id, 'hidden output')
         vi.advanceTimersByTime(50)
 
-        // Model ingestion still ran — only renderer delivery was dropped.
         expect(runtime.onPtyData).toHaveBeenCalledWith(
           result.id,
           'hidden output',
@@ -146,14 +145,14 @@ describe('registerPtyHandlers', () => {
           undefined
         )
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
-        // Why out-of-band: an in-band empty pty:data chunk is ambiguous with chunks fully consumed by renderer OSC-9999 stripping.
+        // In-band empty data also occurs after OSC-9999 stripping; restore markers need a distinct channel.
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: result.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop',
           markerSeq: 42
         })
 
-        // Subsequent gated chunks drop silently — the marker is one-shot.
         daemon.emitData(result.id, 'more hidden output')
         vi.advanceTimersByTime(50)
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
@@ -171,7 +170,6 @@ describe('registerPtyHandlers', () => {
       }
     })
     it('surfaces the hidden-yet-visible contradiction in the snapshot and warns on drop', async () => {
-      // Why: field snapshot v1.4.124-rc.2.perf — aggregates couldn't tell if the visible pane was hidden-gated; overlap counter + warn makes it decisive.
       vi.useFakeTimers()
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const daemon = installObservableDaemonTestProvider()
@@ -185,7 +183,6 @@ describe('registerPtyHandlers', () => {
         const setHidden = getPtySetHiddenRendererPtyListener()
         const setVisible = getPtySetRendererPtyVisibleListener()
 
-        // The two visibility signals contradict: pane reports visible while the hidden-delivery gate still holds it.
         setVisible(null, { id: result.id, visible: true })
         setHidden(null, { id: result.id, hidden: true })
         daemon.emitData(result.id, 'starved visible output')
@@ -201,7 +198,6 @@ describe('registerPtyHandlers', () => {
           expect.objectContaining({ id: redactPtyIdForDiagnostics(result.id), visible: true })
         )
 
-        // Unhiding resolves the contradiction.
         setHidden(null, { id: result.id, hidden: false })
         expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
           hiddenDeliveryGatedPtyCount: 0,
@@ -243,7 +239,7 @@ describe('registerPtyHandlers', () => {
           inFlightChars: 0,
           pendingChars: 0
         })
-        // Why redaction is pinned: daemon session ids embed worktree paths, so the report must never carry the raw id.
+        // Daemon session IDs contain worktree paths; diagnostics must redact them.
         expect(diagnostics.perPty.some((candidate) => candidate.id === result.id)).toBe(false)
         const breadcrumbKinds = diagnostics.breadcrumbs.map((crumb) => crumb.kind)
         expect(breadcrumbKinds).toContain('gate-mark')
@@ -279,6 +275,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
       } finally {
@@ -317,6 +314,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
       } finally {
@@ -363,6 +361,7 @@ describe('registerPtyHandlers', () => {
 
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
         expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
@@ -440,6 +439,7 @@ describe('registerPtyHandlers', () => {
 
           expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
             id: spawnResult.id,
+            hiddenDropEpisode: expect.any(Number),
             reason: 'hidden-drop'
           })
           expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
@@ -470,10 +470,10 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).not.toHaveBeenCalled()
         setHidden(null, { id: spawnResult.id, hidden: true })
 
-        // The queued bytes are model-owned; only the restore marker goes out.
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
         vi.advanceTimersByTime(2)
@@ -503,11 +503,12 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(2)
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
 
-        // Why: a renderer reload can replace the view that latched restore-needed; unhide repeats the marker so the live view heals.
+        // Reload can replace the view that missed the marker; reveal must repeat it for the live view.
         setHidden(null, { id: spawnResult.id, hidden: false })
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
         expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'unhide'
         })
 
@@ -592,13 +593,14 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(2)
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
 
-        // Why: a hidden remount (tab move, parking handoff) re-marks without an unhide, so re-marking must NOT erase drop memory.
+        // Hidden remounts re-mark without revealing; preserve the unrestored gap.
         setHidden(null, { id: spawnResult.id, hidden: true })
         setHidden(null, { id: spawnResult.id, hidden: false })
 
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
         expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'unhide'
         })
       } finally {
@@ -622,7 +624,7 @@ describe('registerPtyHandlers', () => {
       const daemon = installObservableDaemonTestProvider()
       try {
         registerPtyHandlers(mainWindow as never, runtime as never)
-        // Why daemon provider: survives reloads and keeps orphan-kill off this webContents, so 'did-finish-load' means gate reset only.
+        // Daemon PTYs survive reload; without local orphan cleanup this listener tests only gate reset.
         const reloadHandlers = mainWindow.webContents.on.mock.calls
           .filter((call: unknown[]) => call[0] === 'did-finish-load')
           .map((call: unknown[]) => call[1] as () => void)
@@ -640,17 +642,17 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(50)
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
 
-        // Renderer reload: hidden marks die with the old renderer, but dropped bytes were never restored — memory must survive.
+        // Reload must preserve dropped bytes the old renderer never restored.
         reloadHandlers[0]()
         expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
           hiddenDeliveryGatedPtyCount: 0
         })
 
-        // The reloaded pane's first sync re-marks hidden, then reveals.
         setHidden(null, { id: result.id, hidden: true })
         setHidden(null, { id: result.id, hidden: false })
         expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
           id: result.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'unhide',
           markerSeq: 42
         })
@@ -688,7 +690,6 @@ describe('registerPtyHandlers', () => {
         const setInterest = getPtySetDeliveryInterestListener()
         mainWindow.webContents.send.mockClear()
 
-        // A sidecar holds interest, so hidden bytes still flow.
         setInterest(null, { id: result.id, interested: true })
         setHidden(null, { id: result.id, hidden: true })
         daemon.emitData(result.id, 'sidecar bytes')
@@ -698,7 +699,7 @@ describe('registerPtyHandlers', () => {
           expect.objectContaining({ id: result.id, data: 'sidecar bytes' })
         )
 
-        // Why: the renderer reload killed the sidecar's ref count without a release IPC — the leaked hold must not force-feed the PTY forever.
+        // Reload kills sidecar references without release IPC; clear their holds to avoid permanent force-feeding.
         reloadHandlers[0]()
         mainWindow.webContents.send.mockClear()
         setHidden(null, { id: result.id, hidden: true })
@@ -708,6 +709,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: result.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop',
           markerSeq: 42
         })

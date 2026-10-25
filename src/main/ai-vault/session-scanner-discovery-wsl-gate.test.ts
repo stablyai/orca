@@ -21,8 +21,7 @@ import { discoverFiles, walkSessionFiles } from './session-scanner-discovery'
 const SLOW_MESSAGE =
   'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
 
-// Complete: UNC readdir results pass through the child dispatcher's dirent
-// serializer, which reads every kind flag.
+// UNC child serialization reads every Dirent kind flag.
 function dirent(name: string): Dirent {
   return {
     name,
@@ -52,8 +51,7 @@ beforeEach(() => {
   releaseStall = undefined
 })
 
-// A stalled task holds its gate permit until the call settles; releasing it
-// keeps the next case from fast-failing on an already-exhausted gate.
+// Settle stalled calls to release permits before the next test.
 afterEach(async () => {
   if (!vi.isFakeTimers()) {
     return
@@ -138,8 +136,7 @@ describe('discoverFiles containment for a stalled WSL root', () => {
         extensions: ['.jsonl']
       })
 
-      // Two deadlines total, not five: once the first stalled stat is marked
-      // stuck, every later file fast-fails on the route instead of queueing.
+      // Route quarantine makes later stats fail fast; only the first stalled operations reach deadlines.
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS * 2 + 2)
 
       await expect(discovery).resolves.toEqual({ agent: 'codex', rootDir: UNC_ROOT, files: [] })
@@ -147,4 +144,20 @@ describe('discoverFiles containment for a stalled WSL root', () => {
       expect(issues.every((issue) => issue.path.startsWith(UNC_ROOT))).toBe(true)
     }
   })
+})
+
+it('execution admission preserves native access errors while confirmed missing roots remain absent', async () => {
+  for (const code of ['EACCES', 'ENOENT']) {
+    const failure = Object.assign(new Error(code), { code })
+    const search = walkSessionFiles('/account/sessions', 'codex', [], {
+      extensions: new Set(['.jsonl']),
+      strictErrors: true,
+      readDirectory: async () => {
+        throw failure
+      }
+    })
+    await (code === 'ENOENT'
+      ? expect(search).resolves.toEqual([])
+      : expect(search).rejects.toBe(failure))
+  }
 })

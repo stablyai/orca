@@ -1,18 +1,18 @@
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { getAppPtyId } from '../provider/registry'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
 import { snapshotCodexPaneHomeRoutes, codexReattachedHomeRouteField } from '../host-env/codex-home'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export function adoptMaterializedRuntimePtySpawn(
   ctx: RuntimePtySpawnState,
   startupAlreadyAwaited = false
 ): Promise<PtySpawnResult | null> | PtySpawnResult | null {
   const args = ctx.args
-  // Why: the re-entry after the startup await must not re-mint the lifecycle
-  // sequence or re-snapshot routes taken before the barrier.
+  // Re-entry after startup must retain the original lifecycle sequence and routing snapshot.
   if (!startupAlreadyAwaited) {
     ctx.codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
     ctx.codexHomeLaunchStartedSequence = !args.connectionId
@@ -28,7 +28,9 @@ export function adoptMaterializedRuntimePtySpawn(
         )
       : new Map<string, CodexPaneHomeRoute | null>()
   }
-  const startupPromise = ctx.deps.getLocalPtyStartupPromise(args.connectionId)
+  const startupPromise = ctx.deps.getLocalPtyStartupPromise(
+    getConnectionExecutionHostId(args.connectionId)
+  )
   if (startupPromise && !startupAlreadyAwaited) {
     return startupPromise.then(() => adoptMaterializedRuntimePtySpawn(ctx, true))
   }

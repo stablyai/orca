@@ -1,4 +1,6 @@
+import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -457,7 +459,7 @@ describe('OrcaRuntimeService', () => {
     const getForegroundProcess = vi.fn(async () => 'omp')
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -490,7 +492,12 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('preserves host metadata when terminal.create adopts a stable pane owner', async () => {
-    const adoptStablePane = vi.fn().mockResolvedValue(null)
+    const adoptStablePane = vi.fn(
+      async (args: AdoptStablePaneArgs): Promise<AdoptStablePaneResult | null> => {
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }
+    )
     const spawn = vi.fn(async (opts: { adoptedStablePane?: { owner: { handle?: string } } }) =>
       opts.adoptedStablePane
         ? {
@@ -526,6 +533,7 @@ describe('OrcaRuntimeService', () => {
       launchAgent: 'claude'
     })
     adoptStablePane.mockResolvedValueOnce({
+      materialized: true,
       result: { id: 'pty-stable-owner', isReattach: true },
       owner: {
         handle: first.handle,
@@ -557,21 +565,18 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
     ])
-    expect(spawn.mock.calls[1]?.[0]).toMatchObject({
-      command: "claude 'replacement'",
-      adoptedStablePane: expect.anything()
-    })
-    expect(spawn.mock.calls[1]?.[0]).not.toMatchObject({
-      command: expect.stringContaining('--teammate-mode')
-    })
+    expect(spawn).toHaveBeenCalledOnce()
   })
 
   it('releases a stable-pane claim when creation aborts before provider spawn', async () => {
     const releaseClaim = vi.fn()
     const spawn = vi.fn()
+    // C5e relies on this: a disconnected client is refused before the pane is adopted.
+    const adoptStablePane = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       claimStablePaneCreate: vi.fn(() => releaseClaim),
+      adoptStablePane,
       spawn,
       write: () => true,
       kill: () => true,
@@ -589,6 +594,69 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('client_disconnected')
 
     expect(spawn).not.toHaveBeenCalled()
+    expect(adoptStablePane).not.toHaveBeenCalled()
     expect(releaseClaim).toHaveBeenCalledOnce()
+  })
+
+  // C5e relies on this: createTerminal checks the client again after adoption, before it spawns.
+  it('refuses before spawning when the client disconnects during pane adoption', async () => {
+    const abort = new AbortController()
+    const spawn = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      adoptStablePane: vi.fn(async (args: AdoptStablePaneArgs) => {
+        abort.abort()
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }),
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'disconnected-during-adopt',
+        leafId: HEADLESS_LEAF_ID,
+        signal: abort.signal
+      })
+    ).rejects.toThrow('client_disconnected')
+
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  // C5e and C7 rely on this: createTerminal hands the client signal and the slept-worktree refusal to the spawn.
+  it('passes the client signal and the slept-worktree refusal to the spawn', async () => {
+    const spawn = vi.fn(async (_args: Record<string, unknown>) => {
+      throw new Error('spawn_reached')
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      adoptStablePane: vi.fn(async (args: AdoptStablePaneArgs) => {
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }),
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const abort = new AbortController()
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'guards-forwarded',
+        leafId: HEADLESS_LEAF_ID,
+        signal: abort.signal,
+        refuseSleptWorktree: true
+      })
+    ).rejects.toThrow('spawn_reached')
+
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({
+      signal: abort.signal,
+      refuseSleptWorktree: true
+    })
   })
 })

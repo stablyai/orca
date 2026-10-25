@@ -41,6 +41,14 @@ describe('formatTerminalList host identity', () => {
   })
 })
 
+describe('formatTerminalList pane titles', () => {
+  it("prints a pane's user name over the terminal title, and the title when the host sends none", () => {
+    const named = formatTerminalList(listResult({ terminals: [terminal({ paneTitle: 'server' })] }))
+    expect(named).toContain('term_1  server  connected')
+    expect(formatTerminalList(listResult())).toContain('term_1  worker  connected')
+  })
+})
+
 describe('formatTerminalList scope declaration', () => {
   it('states the covered and omitted hosts', () => {
     const output = formatTerminalList(

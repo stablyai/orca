@@ -23,3 +23,11 @@ export function localPreflightContextKey(context: LocalPreflightContextKeyInput)
   }
   return context?.wslDefault ? 'wsl:default' : 'host'
 }
+
+/** Native agent detection uses process PATH, independent of the project's directory. */
+export function localAgentInventoryContextKey(context: LocalPreflightContextKeyInput): string {
+  return context?.projectRuntime?.status === 'resolved' &&
+    context.projectRuntime.runtime.kind !== 'wsl'
+    ? 'host'
+    : localPreflightContextKey(context)
+}

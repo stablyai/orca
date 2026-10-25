@@ -1,8 +1,16 @@
+import { antigravitySessionOrigin } from '../../shared/antigravity-session-origin'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { codexSessionAliasKey, codexSessionAliasBeats } from './codex-session-root-dedup'
 import { sessionSortTime } from './session-scanner-accumulator'
 
 function sessionAliasKey(session: AiVaultSession): string | null {
+  if (session.agent === 'antigravity') {
+    const root = session.filePath
+      .split(/[\\/]+/)
+      .slice(0, -4)
+      .join('/')
+    return `antigravity\0${session.executionHostId}\0${antigravitySessionOrigin(session.filePath) ?? 'cli'}\0${root}\0${session.sessionId}`
+  }
   if (session.agent !== 'devin') {
     const codexKey = codexSessionAliasKey(session)
     return codexKey ? `codex\0${codexKey}` : null
@@ -13,6 +21,16 @@ function sessionAliasKey(session: AiVaultSession): string | null {
 }
 
 function sessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
+  if (candidate.agent === 'antigravity') {
+    if (candidate.messageCount > 0 !== best.messageCount > 0) {
+      return candidate.messageCount > 0
+    }
+    const full = (path: string): boolean => path.split(/[\\/]+/).at(-1) === 'transcript_full.jsonl'
+    if (full(candidate.filePath) !== full(best.filePath)) {
+      return full(candidate.filePath)
+    }
+    return sessionSortTime(candidate) > sessionSortTime(best)
+  }
   if (candidate.agent !== 'devin') {
     return codexSessionAliasBeats(candidate, best)
   }
@@ -59,9 +77,7 @@ type SessionWinner = { session: AiVaultSession; indices: number | number[] }
 /** Scan-local accumulation; parsed rows must not be mutated after admission. */
 export class ScannedSessionCollection {
   private readonly sessions = new Map<number, AiVaultSession>()
-  // Keyed by the row's own sessionId string, so an unlimited scan retains no
-  // alias key per live row; a per-alias-key map appears only for the rare id
-  // that spans several hosts, namespaces, or rollout names.
+  // Reuse sessionId keys; allocate alias maps only for IDs spanning hosts, namespaces, or rollouts.
   private readonly winnersBySessionId = new Map<
     string,
     SessionWinner | Map<string, SessionWinner>
@@ -85,7 +101,6 @@ export class ScannedSessionCollection {
     this.sessions.set(index, session)
   }
 
-  /** Whether the row is retained; a losing alias is dropped. */
   private admit(session: AiVaultSession, key: string, index: number): boolean {
     const bucket = this.winnersBySessionId.get(session.sessionId)
     if (bucket instanceof Map) {
@@ -113,7 +128,6 @@ export class ScannedSessionCollection {
     return winner !== null
   }
 
-  /** The alias key's winner after this row, or null when the row loses. */
   private contest(
     best: SessionWinner | undefined,
     session: AiVaultSession,

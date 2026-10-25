@@ -9,8 +9,10 @@ import { TextInputModal } from '../components/TextInputModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { CustomKeyModal } from '../components/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../components/MobileDictationSetupSheet'
+import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
+import { getMobileNativeChatCliForkActions } from './mobile-native-chat-cli-fork'
 import {
   getRepoIdFromMobileWorktreeId,
   isTerminalPhoneDisplayMode
@@ -61,6 +63,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setShowDictationSetup,
     browserScreencastSupported,
     quickCommandsSupported,
+    quickCommandAgentPromptMaxLength,
     showToast,
     nativeChatTranscriptIsLocalReadable,
     nativeChatController,
@@ -69,6 +72,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     readFileTab,
     leaveSession,
     discardMarkdownLocalContent,
+    copyMarkdownPath,
     confirmDiscardMarkdown,
     handleDeleteCustomKey,
     handleManageShortcuts,
@@ -91,6 +95,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     showChecksAction
   } = controller
   const clipboard = useClipboardWriter()
+  const onPairedHost = useWorkspaceOnPairedHost()
   return (
     <>
       <MobileSessionHeaderMoreActionsSheet
@@ -111,6 +116,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             : getRepoIdFromMobileWorktreeId(worktreeId) || null
         }
         repoName={worktreeName || null}
+        agentPromptMaxLength={quickCommandAgentPromptMaxLength}
         onLaunch={launchQuickCommand}
       />
       <ActionSheetModal
@@ -144,14 +150,18 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                     setShowCreateBrowserModal(true)
                   }
                 },
-                {
-                  label: 'Markdown Note',
-                  icon: FileText,
-                  onPress: () => {
-                    setShowCreateTabDrawer(false)
-                    void handleCreateMarkdownNote()
-                  }
-                }
+                ...(onPairedHost
+                  ? [
+                      {
+                        label: 'Markdown Note',
+                        icon: FileText,
+                        onPress: () => {
+                          setShowCreateTabDrawer(false)
+                          void handleCreateMarkdownNote()
+                        }
+                      }
+                    ]
+                  : [])
               ])
         ]}
         onClose={() => setShowCreateTabDrawer(false)}
@@ -230,13 +240,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               const target = markdownActionTarget
               setMarkdownActionTarget(null)
               if (target) {
-                void clipboard
-                  .writeText(target.relativePath || target.filePath)
-                  .then(() => showToast('Path copied'))
-                  .catch(() => {
-                    triggerError()
-                    showToast("Couldn't copy path", 1500)
-                  })
+                void copyMarkdownPath(target)
               }
             }
           },
@@ -273,9 +277,15 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <ActionSheetModal
         visible={agentSessionActionTarget != null}
         title={agentSessionActionTarget?.title || 'Chat'}
-        actions={closeWithBulkActions(agentSessionActionTarget, () =>
-          setAgentSessionActionTarget(null)
-        )}
+        actions={[
+          ...getMobileNativeChatCliForkActions({
+            controller,
+            tab: agentSessionActionTarget,
+            workspaceOnPairedHost: onPairedHost,
+            onDismiss: () => setAgentSessionActionTarget(null)
+          }),
+          ...closeWithBulkActions(agentSessionActionTarget, () => setAgentSessionActionTarget(null))
+        ]}
         onClose={() => setAgentSessionActionTarget(null)}
       />
       <ActionSheetModal

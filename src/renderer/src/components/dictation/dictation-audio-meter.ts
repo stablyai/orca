@@ -36,7 +36,7 @@ export function createDictationMeterAnalyzerState(): DictationMeterAnalyzerState
   }
 }
 
-export function measureDictationAudioChunk(samples: Float32Array): {
+function measureDictationAudioChunk(samples: Float32Array): {
   rms: number
   peak: number
 } {

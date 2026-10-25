@@ -8,11 +8,10 @@ import { useAllHostClients } from './use-all-host-clients'
 import { useFocusedSettingsHostClients } from './settings-host-client-connections'
 import {
   RpcClientProvider,
-  useHostClient,
-  usePrimeHosts,
   useRpcClientContext,
   type RpcClientContextValue
 } from './client-context'
+import { useHostClient, usePrimeHosts } from './host-client-hooks'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, HostProfile } from './types'
@@ -21,6 +20,12 @@ const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
 const routeFocus = vi.hoisted(() => ({
   effect: null as null | (() => void | (() => void))
+}))
+
+// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+const descriptorProbe = vi.hoisted(() => ({ start: vi.fn(() => vi.fn()) }))
+vi.mock('./runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (...args: unknown[]) => descriptorProbe.start(...args)
 }))
 
 vi.mock('expo-router', () => ({
@@ -37,6 +42,9 @@ vi.mock('./host-store', () => ({
 }))
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
+}))
+vi.mock('./connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
 }))
 
 type FakeClient = RpcClient & {

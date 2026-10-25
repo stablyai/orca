@@ -1,3 +1,4 @@
+import { claudeBackgroundArgs } from './claude-background-run-isolation'
 import type { TuiAgent } from './tui-agent'
 import type {
   CommitMessageAgentSpec,
@@ -35,7 +36,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
       // Why: diffs can be large and `claude -p` reads from stdin natively when no
       // positional prompt is provided.
       promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel }) => [
+      buildArgs: ({ model, thinkingLevel, strictMcp, userArgs }) => [
         '-p',
         '--output-format',
         'text',
@@ -43,8 +44,10 @@ export function buildPrimaryCommitMessageAgentSpecs({
         model,
         '--permission-mode',
         'plan',
-        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
+        ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
+        ...claudeBackgroundArgs(strictMcp, userArgs)
       ],
+      singletonOptions: [['--model']],
       modelSource: 'dynamic',
       // Why: the Claude CLI has no listing subcommand; one list_models control
       // request over --print stream-json returns the /model picker catalog.
@@ -110,6 +113,12 @@ export function buildPrimaryCommitMessageAgentSpecs({
       // by version so the frontier model lands on top and legacy models trail.
       models: [
         {
+          id: 'gpt-5.6-terra',
+          label: 'GPT-5.6 Terra',
+          thinkingLevels: OPENAI_THINKING_LEVELS,
+          defaultThinkingLevel: 'low'
+        },
+        {
           id: 'gpt-5.5',
           label: 'GPT-5.5',
           thinkingLevels: OPENAI_THINKING_LEVELS,
@@ -150,7 +159,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
           defaultThinkingLevel: 'low'
         }
       ],
-      defaultModelId: 'gpt-5.5'
+      defaultModelId: 'gpt-5.6-terra'
     },
     opencode: {
       id: 'opencode',
@@ -161,32 +170,25 @@ export function buildPrimaryCommitMessageAgentSpecs({
       promptDelivery: 'stdin',
       buildArgs: ({ model, thinkingLevel }) => [
         'run',
-        '--model',
-        model,
+        ...(model && model !== 'default' ? ['--model', model] : []),
         '--agent',
         'build',
         '--format',
-        'default',
+        'json',
         ...(thinkingLevel ? ['--variant', thinkingLevel] : [])
       ],
       singletonOptions: [['--model', '-m'], ['--agent'], ['--format'], ['--variant']],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'opencode', args: ['models'], parse: parseLineModels },
       models: [
-        {
-          // Why: OpenCode's hosted GPT models can require workspace billing even
-          // when `opencode models` lists them. This free model is available in
-          // discovery and works as a usable out-of-the-box default.
-          id: 'opencode/deepseek-v4-flash-free',
-          label: 'OpenCode DeepSeek V4 Flash Free'
-        },
+        { id: 'default', label: 'Config default' },
         {
           id: 'opencode/gpt-5.4-mini',
           label: 'OpenCode GPT 5.4 Mini',
           ...withOpenAiThinking('gpt-5.4-mini')
         }
       ],
-      defaultModelId: 'opencode/deepseek-v4-flash-free'
+      defaultModelId: 'default'
     },
     opencode2: {
       id: 'opencode2',
@@ -195,25 +197,26 @@ export function buildPrimaryCommitMessageAgentSpecs({
       promptDelivery: 'stdin',
       buildArgs: ({ model, thinkingLevel }) => [
         'run',
-        '--model',
-        thinkingLevel ? `${model}#${thinkingLevel}` : model,
+        ...(model && model !== 'default'
+          ? ['--model', thinkingLevel ? `${model}#${thinkingLevel}` : model]
+          : []),
         '--agent',
         'build',
         '--format',
-        'default'
+        'json'
       ],
       singletonOptions: [['--model', '-m'], ['--agent'], ['--format']],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'opencode2', args: ['models'], parse: parseLineModels },
       models: [
-        { id: 'opencode/deepseek-v4-flash-free', label: 'OpenCode DeepSeek V4 Flash Free' },
+        { id: 'default', label: 'Config default' },
         {
           id: 'opencode/gpt-5.4-mini',
           label: 'OpenCode GPT 5.4 Mini',
           ...withOpenAiThinking('gpt-5.4-mini')
         }
       ],
-      defaultModelId: 'opencode/deepseek-v4-flash-free'
+      defaultModelId: 'default'
     },
     pi: {
       id: 'pi',

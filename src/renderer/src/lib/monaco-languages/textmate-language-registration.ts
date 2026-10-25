@@ -4,7 +4,7 @@ import type {
   TextMateGrammarLoader
 } from './textmate-token-provider'
 
-type MonacoModule = typeof Monaco
+type MonacoModule = Pick<typeof Monaco, 'languages'>
 type TextMateTokensProvider = Monaco.languages.TokensProvider
 type TextMateTokenProviderModule = {
   createTextMateTokensProvider: typeof createTextMateTokensProviderType
@@ -13,8 +13,8 @@ type TextMateTokenProviderModule = {
 export type TextMateLanguageRegistration = {
   language: Monaco.languages.ILanguageExtensionPoint
   configuration?: Monaco.languages.LanguageConfiguration
-  scopeName: string
   loadGrammar: TextMateGrammarLoader
+  mapTokenScopes?: (scopes: readonly string[]) => string
   loadProviderModule?: () => Promise<TextMateTokenProviderModule>
 }
 
@@ -47,8 +47,8 @@ export function registerTextMateLanguage(
         registration.loadProviderModule ?? loadDefaultProviderModule
       )().then(({ createTextMateTokensProvider }) =>
         createTextMateTokensProvider({
-          scopeName: registration.scopeName,
-          loadGrammar: registration.loadGrammar
+          loadGrammar: registration.loadGrammar,
+          ...(registration.mapTokenScopes ? { mapTokenScopes: registration.mapTokenScopes } : {})
         })
       )
       return tokensProviderPromise

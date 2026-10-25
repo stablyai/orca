@@ -4,9 +4,9 @@ import type { GitHubSlice } from './slice-types'
 import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 import type { GitHubProjectMutationResult } from '../../../../shared/github/project-result-types'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { settingsForProjectRowOwner } from '../slices/github-project-row-owner'
-import { settingsForProjectViewCacheKey } from './cache-identity'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForProjectRowOwner } from '../slices/github-project-row-owner'
+import { projectViewCacheKeyTarget } from './cache-identity'
 import { applyRowPatch, parseSlugAndNumber, rollbackRowIfPresent } from './project-cache'
 
 export const createProjectRowActions = (
@@ -91,14 +91,12 @@ export const createProjectRowActions = (
     // Why: labels/assignees go through the issue endpoint for both (GitHub PRs are issues for those); title/body split PR→updatePullRequestBySlug vs issue→updateIssueBySlug.
     let envelope: GitHubProjectMutationResult = { ok: true }
     // Why: slug-only Project rows have no registered Orca repo, so fall back to the view source in the cache key, not the focused host.
-    const target = getActiveRuntimeTarget(
-      settingsForProjectRowOwner(
-        get(),
-        owner,
-        repo,
-        table.project.host,
-        settingsForProjectViewCacheKey(get().settings, cacheKey)
-      )
+    const target = runtimeTargetForProjectRowOwner(
+      get(),
+      owner,
+      repo,
+      table.project.host,
+      projectViewCacheKeyTarget(cacheKey)
     )
     if (
       previousRow.itemType === 'PULL_REQUEST' &&
@@ -221,14 +219,12 @@ export const createProjectRowActions = (
     }
     applyRowPatch(set, cacheKey, rowId, optimistic)
     // Why: slug-only Project rows belong to the host that loaded the view, which may differ from the now-focused host.
-    const target = getActiveRuntimeTarget(
-      settingsForProjectRowOwner(
-        get(),
-        owner,
-        repo,
-        table.project.host,
-        settingsForProjectViewCacheKey(get().settings, cacheKey)
-      )
+    const target = runtimeTargetForProjectRowOwner(
+      get(),
+      owner,
+      repo,
+      table.project.host,
+      projectViewCacheKeyTarget(cacheKey)
     )
     const args = {
       owner,

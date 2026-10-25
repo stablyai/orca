@@ -314,7 +314,7 @@ function perfTabsPaletteProps(count: number): Partial<AppState> {
 
 /** Each primary row paired with the section header rendered above it, in DOM order. */
 function getPrimaryRowsBySectionHeader(): { header: string; rowId: string }[] {
-  const headerLabels = new Set(['Open Tabs', 'Worktrees'])
+  const headerLabels = new Set(['Open Tabs', 'Workspaces'])
   const pairs: { header: string; rowId: string }[] = []
   let header = ''
   for (const node of testContainer.querySelectorAll<HTMLElement>(
@@ -366,7 +366,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     expect(rows.filter((row) => isWorkspaceTabItemId(row.rowId))).toHaveLength(8)
     expect(rows.filter((row) => isWorktreeItemId(row.rowId))).toHaveLength(5)
     for (const { header, rowId } of rows) {
-      expect(header).toBe(isWorkspaceTabItemId(rowId) ? 'Open Tabs' : 'Worktrees')
+      expect(header).toBe(isWorkspaceTabItemId(rowId) ? 'Open Tabs' : 'Workspaces')
     }
   })
 
@@ -420,7 +420,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const rows = getPrimaryRowsBySectionHeader()
     expect(rows).toEqual([{ header: 'Open Tabs', rowId: workspaceTabItemId('wt-tabs', 'tab-0') }])
     expect(testContainer.textContent).toContain('Open Tabs')
-    expect(testContainer.textContent).not.toContain('Worktrees')
+    expect(testContainer.textContent).not.toContain('Workspaces')
   })
 
   it('puts the tab title on the left and the worktree name in the badge rail', async () => {

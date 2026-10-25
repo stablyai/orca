@@ -63,22 +63,24 @@ export type PendingImagePreviewEcho = {
   baselineTailMessageId: string | null
 }
 
-export type LandedImagePreviewEcho = {
-  pendingId: string
+/** This phone's photos for the row they were sent in. */
+export type SentImagePreview = {
   messageId: string
   images: string[]
 }
 
+export type LandedImagePreviewEcho = SentImagePreview & { pendingId: string }
+
 const SENT_IMAGE_PREVIEW_LIMIT = 32
 const SENT_IMAGE_PREVIEW_SESSION_LIMIT = 8
 
-export function mergeLandedImagePreviewEchoes(
+export function mergeSentImagePreviews(
   previous: Record<string, Record<string, string[]>>,
   sessionKey: string,
-  landed: readonly LandedImagePreviewEcho[]
+  previews: readonly SentImagePreview[]
 ): Record<string, Record<string, string[]>> {
   const entries = Object.entries(previous[sessionKey] ?? {})
-  for (const preview of landed) {
+  for (const preview of previews) {
     const existingIndex = entries.findIndex(([messageId]) => messageId === preview.messageId)
     if (existingIndex !== -1) {
       entries.splice(existingIndex, 1)

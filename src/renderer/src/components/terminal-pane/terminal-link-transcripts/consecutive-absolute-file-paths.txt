@@ -1,0 +1,2 @@
+/home/alice/dev/notes/README.md
+/home/alice/dev/renderer/package.json

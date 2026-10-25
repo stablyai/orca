@@ -32,12 +32,14 @@ describe('buildAiVaultServiceEnv', () => {
   it('keeps the agent-home variables the scanner discovers sessions through', () => {
     const env = buildAiVaultServiceEnv(
       {
+        CLAUDE_CONFIG_DIR: '/home/dev/claude-home',
         CODEX_HOME: '/home/dev/.codex',
         CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
         COPILOT_HOME: '/home/dev/.copilot',
         DEVIN_HOME: '/home/dev/.devin',
         GROK_HOME: '/home/dev/.grok',
         KIMI_CODE_HOME: '/home/dev/.kimi-code',
+        KIRO_HOME: '/home/dev/kiro-data',
         OMP_CODING_AGENT_DIR: '/home/dev/.omp/agent/sessions',
         OPENCLAW_STATE_DIR: '/home/dev/.openclaw',
         PI_CODING_AGENT_DIR: '/home/dev/.pi/agent/sessions',
@@ -49,12 +51,14 @@ describe('buildAiVaultServiceEnv', () => {
     )
 
     expect(env).toEqual({
+      CLAUDE_CONFIG_DIR: '/home/dev/claude-home',
       CODEX_HOME: '/home/dev/.codex',
       CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
       COPILOT_HOME: '/home/dev/.copilot',
       DEVIN_HOME: '/home/dev/.devin',
       GROK_HOME: '/home/dev/.grok',
       KIMI_CODE_HOME: '/home/dev/.kimi-code',
+      KIRO_HOME: '/home/dev/kiro-data',
       OMP_CODING_AGENT_DIR: '/home/dev/.omp/agent/sessions',
       OPENCLAW_STATE_DIR: '/home/dev/.openclaw',
       PI_CODING_AGENT_DIR: '/home/dev/.pi/agent/sessions',
@@ -113,6 +117,14 @@ describe('buildAiVaultServiceEnv', () => {
 })
 
 describe('buildRelayAiVaultServiceEnv', () => {
+  it('preserves the execution host Kiro home with Windows case folding', () => {
+    expect(buildRelayAiVaultServiceEnv({ KIRO_HOME: '/srv/kiro' }, 'linux')).toEqual({
+      KIRO_HOME: '/srv/kiro'
+    })
+    expect(buildRelayAiVaultServiceEnv({ kiro_home: 'D:\\kiro' }, 'win32')).toEqual({
+      KIRO_HOME: 'D:\\kiro'
+    })
+  })
   it('drops Node flag injection variables', () => {
     const env = buildRelayAiVaultServiceEnv(
       { NODE_OPTIONS: '--max-old-space-size=8192', NODE_PATH: '/tmp/evil', HOME: '/home/ada' },
@@ -124,8 +136,6 @@ describe('buildRelayAiVaultServiceEnv', () => {
     expect(env.HOME).toBe('/home/ada')
   })
 
-  // The sidecar takes remoteHome and hostPlatform from its init message, so an
-  // agent-home override on the remote host is not part of how it finds roots.
   it('withholds the agent-home variables the desktop child needs', () => {
     const env = buildRelayAiVaultServiceEnv(
       { CODEX_HOME: '/remote/.codex', PATH: '/usr/bin' },
@@ -150,5 +160,17 @@ it('carries OMP root/profile inputs only to the desktop service, retaining empty
     XDG_DATA_HOME: '/home/dev/data'
   }
   expect(buildAiVaultServiceEnv(roots, 'linux')).toEqual({ ...roots, ELECTRON_RUN_AS_NODE: '1' })
-  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual({})
+  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual({ XDG_DATA_HOME: '/home/dev/data' })
+})
+
+it('preserves execution-host OpenCode roots in the relay service', () => {
+  expect(
+    buildRelayAiVaultServiceEnv(
+      { XDG_DATA_HOME: '/srv/data', OPENCODE_DB: 'opencode-team.db' },
+      'linux'
+    )
+  ).toEqual({
+    XDG_DATA_HOME: '/srv/data',
+    OPENCODE_DB: 'opencode-team.db'
+  })
 })

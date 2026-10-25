@@ -72,6 +72,78 @@ function result(
 
 const USER_1_KEY = 'claude:claude-session:user-1'
 
+function sessionState(
+  state: 'idle' | 'running' | 'requires_action',
+  observedAt: number
+): ClaudeStructuredSessionEvent {
+  return {
+    type: 'message',
+    sessionId: 'orca-session',
+    observedAt,
+    message: {
+      type: 'system',
+      subtype: 'session_state_changed',
+      state,
+      uuid: `ssc-${state}`,
+      session_id: 'claude-session'
+    }
+  }
+}
+
+describe('the CLI session state ends a turn no result settled', () => {
+  it('settles the open turn on idle, with no verdict it was not given', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    translator.handle(userTurn('user-1', 1_000))
+    expect(state.lifecycle().at(-1)?.state).toBe('running')
+
+    translator.handle(sessionState('idle', 5_000))
+
+    expect(state.lifecycle().at(-1)).toMatchObject({
+      turnId: 'user-1',
+      state: 'completed',
+      completedAt: 5_000
+    })
+    expect(state.lifecycle().at(-1)?.outcome).toBeUndefined()
+  })
+
+  it.each(['running', 'requires_action'] as const)('leaves the turn running on %s', (reported) => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    translator.handle(userTurn('user-1', 1_000))
+    translator.handle(sessionState(reported, 5_000))
+
+    expect(state.lifecycle().at(-1)?.state).toBe('running')
+  })
+
+  it('keeps the verdict the result already recorded', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    translator.handle(userTurn('user-1', 1_000))
+    translator.handle(result(4_000, { is_error: true, subtype: 'error_during_execution' }))
+    const settled = state.lifecycle().at(-1)
+
+    translator.handle(sessionState('idle', 5_000))
+
+    expect(settled?.outcome).toBe('failure')
+    expect(state.lifecycle().at(-1)).toEqual(settled)
+  })
+
+  it('lets the next send open a turn after an idle', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    translator.handle(userTurn('user-1', 1_000))
+    translator.handle(sessionState('idle', 5_000))
+    translator.handle(userTurn('user-2', 6_000))
+
+    expect(state.lifecycle().at(-1)).toMatchObject({ turnId: 'user-2', state: 'running' })
+  })
+})
+
 describe('Claude structured turn timing', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -89,7 +161,7 @@ describe('Claude structured turn timing', () => {
         state: 'running',
         startedAt: 1_000,
         userItemId: USER_1_KEY,
-        options: { observedAt: 1_000 }
+        options: { observedAt: 1_000, lifecycle: true, turnScope: { kind: 'thread' } }
       }
     ])
   })
@@ -100,7 +172,6 @@ describe('Claude structured turn timing', () => {
 
     translator.handle(userTurn('user-1', 1_000))
 
-    // The echo itself is never a row; its provider key is what the submission adopted.
     expect(state.items.some((item) => item.body.kind === 'message')).toBe(false)
     expect(state.lifecycle().at(-1)?.userItemId).toBe(USER_1_KEY)
   })
@@ -116,13 +187,11 @@ describe('Claude structured turn timing', () => {
     expect(state.lifecycle().at(-1)).toEqual({
       turnId: 'user-1',
       state: 'completed',
-      // A result with no error is the provider saying the turn worked, so the
-      // ordinary path carries a positive verdict rather than leaving it unknown.
       outcome: 'success',
       startedAt: 1_000,
       completedAt: 4_500,
       userItemId: USER_1_KEY,
-      options: {}
+      options: { lifecycle: true, turnScope: { kind: 'thread' } }
     })
     expect(state.items.at(-1)?.identity).toEqual(state.items[0]?.identity)
   })
@@ -184,6 +253,7 @@ describe('Claude structured turn timing', () => {
       {
         turnId: 'user-1',
         state: 'interrupted',
+        outcome: 'superseded',
         startedAt: 1_000,
         completedAt: 3_000,
         userItemId: USER_1_KEY
@@ -223,14 +293,13 @@ describe('Claude structured turn timing', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] },
       fence: 7
     })
-    await Promise.resolve()
+    await dispatch
     const connection = claude.connections[0]!
     connection.handlers.onMessage?.({
       ...connection.sent[0],
       uuid: 'turn-1',
       timestamp: '2001-01-01T00:00:00.000Z'
     })
-    await dispatch
     connection.handlers.onMessage?.({
       type: 'assistant',
       uuid: 'assistant-1',

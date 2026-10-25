@@ -4,7 +4,7 @@
  * STA-3811: imports never touch the Google cookie family, so every import menu must disclose it
  * at the moment of decision.
  */
-import { act, type ReactNode } from 'react'
+import { act, createRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
@@ -54,6 +54,7 @@ describe('cookie-import Google disclosure footer', () => {
       'browser toolbar overflow',
       () => (
         <BrowserToolbarMenuDropdown
+          browserPageId="page-1"
           menuOpen
           onMenuOpenChange={vi.fn()}
           allProfiles={[]}
@@ -67,6 +68,15 @@ describe('cookie-import Google disclosure footer', () => {
           onImportFromFile={vi.fn()}
           viewportPresetId={null}
           onApplyViewportPreset={vi.fn()}
+          siteDisplay={null}
+          onZoomPage={vi.fn()}
+          onSetSiteColorScheme={vi.fn()}
+          overflow={{
+            triggerRef: createRef<HTMLButtonElement>(),
+            tools: [],
+            deferUntilClose: vi.fn(),
+            onMenuCloseAutoFocus: vi.fn()
+          }}
         />
       )
     ],
@@ -77,7 +87,7 @@ describe('cookie-import Google disclosure footer', () => {
         <BrowserUseCookieImportStep
           cookiesImported={false}
           isImportingDefault={false}
-          step3Blocked={false}
+          disabled={false}
           sourceLabel={null}
         />
       )
@@ -145,6 +155,7 @@ function dropdownMenuStubs(): Record<string, unknown> {
     DropdownMenuRadioGroup: passthrough,
     DropdownMenuRadioItem: block,
     DropdownMenuSeparator: () => <hr />,
+    DropdownMenuShortcut: block,
     DropdownMenuSub: passthrough,
     DropdownMenuSubContent: block,
     DropdownMenuSubTrigger: block,

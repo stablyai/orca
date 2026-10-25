@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { UNFOCUSED_SPLIT_GROUP_OPACITY } from '../tab-group/split-group-dim'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 type MockAppState = {
@@ -17,7 +18,8 @@ const mocks = vi.hoisted(() => ({
   focusGroup: vi.fn(),
   mountsByTabId: new Map<string, number>(),
   unmountsByTabId: new Map<string, number>(),
-  groupIdByTabId: new Map<string, string | undefined>()
+  groupIdByTabId: new Map<string, string | undefined>(),
+  targetByTabId: new Map<string, unknown>()
 }))
 
 vi.mock('@/store', async () => {
@@ -34,18 +36,8 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: MockAppState) => state.runtimeEnvironmentId
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: ({
-    activeRuntimeEnvironmentId
-  }: {
-    activeRuntimeEnvironmentId: string | null
-  }) =>
-    activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: activeRuntimeEnvironmentId }
-      : { kind: 'local' }
+  getExecutionHostIdForWorktree: (state: MockAppState) =>
+    state.runtimeEnvironmentId ? `runtime:${state.runtimeEnvironmentId}` : 'local'
 }))
 
 vi.mock('./NativeChatView', async () => {
@@ -55,14 +47,17 @@ vi.mock('./NativeChatView', async () => {
       tabId,
       groupId,
       isVisible,
-      isFocusedGroup
+      isFocusedGroup,
+      target
     }: {
       tabId: string
       groupId?: string
       isVisible: boolean
       isFocusedGroup: boolean
+      target: unknown
     }) {
       mocks.groupIdByTabId.set(tabId, groupId)
+      mocks.targetByTabId.set(tabId, target)
       useEffect(() => {
         mocks.mountsByTabId.set(tabId, (mocks.mountsByTabId.get(tabId) ?? 0) + 1)
         return () => {
@@ -95,10 +90,29 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     mocks.mountsByTabId.clear()
     mocks.unmountsByTabId.clear()
     mocks.groupIdByTabId.clear()
+    mocks.targetByTabId.clear()
     mocks.store?.setState(createState(FIRST_TAB_ID))
   })
 
   afterEach(cleanup)
+
+  // Two hosts can publish the same workspace id; each tab records which one holds its chat.
+  it('reads each chat from the host recorded on its tab, not its workspace', () => {
+    const state = createState(FIRST_TAB_ID)
+    const [first, second] = state.unifiedTabsByWorktree[WORKTREE_ID]!
+    mocks.store?.setState({
+      unifiedTabsByWorktree: {
+        [WORKTREE_ID]: [{ ...first!, executionHostId: 'runtime:server-1' }, second!]
+      }
+    })
+    render(<StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />)
+
+    expect(mocks.targetByTabId.get(FIRST_TAB_ID)).toEqual({
+      kind: 'environment',
+      environmentId: 'server-1'
+    })
+    expect(mocks.targetByTabId.get(SECOND_TAB_ID)).toEqual({ kind: 'local' })
+  })
 
   it('keeps materialized chat surfaces mounted while activation only swaps visibility', () => {
     const view = render(
@@ -203,6 +217,17 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatVisible).toBe('true')
     expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatFocusedGroup).toBe('false')
     expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatFocusedGroup).toBe('true')
+    const host = (tabId: string): HTMLElement | null =>
+      chatSurface(view.container, tabId).closest<HTMLElement>('[data-retained-pane-host]')
+    const first = host(FIRST_TAB_ID)
+    const second = host(SECOND_TAB_ID)
+    const dim = String(UNFOCUSED_SPLIT_GROUP_OPACITY)
+    // The unfocused chat takes the same dim as every other unfocused split group, never more.
+    expect(first?.style.opacity).toBe(dim)
+    expect(second?.style.opacity).toBe('1')
+    act(() => mocks.store?.setState({ activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID } }))
+    expect(first?.style.opacity).toBe('1')
+    expect(second?.style.opacity).toBe(dim)
   })
 
   it('marks no column as focused when the focused group id names nothing', () => {

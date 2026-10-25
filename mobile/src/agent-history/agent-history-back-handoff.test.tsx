@@ -25,7 +25,7 @@ const router = vi.hoisted(() => ({
   canGoBack: vi.fn(() => false)
 }))
 
-vi.mock('expo-router', () => ({ useRouter: () => router }))
+vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 
 // The house pattern for a screen test: react-native is Flow source vitest cannot parse, so the
 // host components become strings and the tree below is the panel's own structure.
@@ -60,7 +60,7 @@ vi.mock('../transport/client-context', async () => await import('../transport/cl
 // runtime this test does not have. The panel reads `client`/`state` off `useHostClient`.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -138,10 +138,17 @@ afterEach(() => {
 describe("the agent-history panel's Back button inside the shell's page", () => {
   it('hands the pop to the shell, because this document has nowhere to go back to', async () => {
     const mounted = await mountPanel()
+    expect(mounted.pair.client.getShellSession()).not.toBeNull()
+    expect(postedNames(mounted.pair)).toEqual([])
     pressBack(mounted.tree)
     await mounted.pair.flush()
 
-    expect(postedNames(mounted.pair)).toContain(BRIDGE_NAVIGATE_BACK_NOTIFY)
+    const frames = mounted.pair.toShell
+      .map((json) => JSON.parse(json))
+      .filter((frame: { name?: string }) => frame.name === BRIDGE_NAVIGATE_BACK_NOTIFY)
+    expect(frames).toEqual([
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }
+    ])
     expect(router.back).not.toHaveBeenCalled()
   })
 
@@ -153,28 +160,5 @@ describe("the agent-history panel's Back button inside the shell's page", () => 
 
     expect(postedNames(mounted.pair)).not.toContain(BRIDGE_NAVIGATE_BACK_NOTIFY)
     expect(router.back).toHaveBeenCalled()
-  })
-
-  it('reaches the shell over the same channel the rest of the screen uses', async () => {
-    // The presence precondition for the absence above: a panel that never mounted, or a chevron
-    // whose handler never ran, would post nothing either and read as the local pop.
-    const mounted = await mountPanel()
-    expect(mounted.pair.client.getShellSession()).not.toBeNull()
-    expect(postedNames(mounted.pair)).toEqual([])
-    pressBack(mounted.tree)
-    await mounted.pair.flush()
-    expect(postedNames(mounted.pair).length).toBeGreaterThan(0)
-  })
-
-  it('carries the protocol version every other frame carries', async () => {
-    const mounted = await mountPanel()
-    pressBack(mounted.tree)
-    await mounted.pair.flush()
-    const frames = mounted.pair.toShell
-      .map((json) => JSON.parse(json))
-      .filter((frame: { name?: string }) => frame.name === BRIDGE_NAVIGATE_BACK_NOTIFY)
-    expect(frames).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }
-    ])
   })
 })

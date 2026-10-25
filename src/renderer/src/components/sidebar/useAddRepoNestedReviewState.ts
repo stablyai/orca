@@ -22,7 +22,7 @@ export function useAddRepoNestedReviewState({
   activeRuntimeEnvironmentId: string | null | undefined
   cancelNestedRepoScan: (
     scanId: string,
-    options?: { runtimeEnvironmentId?: string | null }
+    options: { runtimeEnvironmentId: string | null }
   ) => Promise<unknown>
   setStep: (step: AddRepoDialogStep) => void
 }): {
@@ -35,7 +35,7 @@ export function useAddRepoNestedReviewState({
   nestedScanInProgress: boolean
   nestedScanId: string | null
   nestedImportScanId: string | null
-  nestedRuntimeEnvironmentId: string | null | undefined
+  nestedRuntimeEnvironmentId: string | null
   setNestedSelectedPaths: Dispatch<SetStateAction<Set<string>>>
   setNestedGroupName: Dispatch<SetStateAction<string>>
   setNestedScanInProgress: Dispatch<SetStateAction<boolean>>
@@ -56,11 +56,9 @@ export function useAddRepoNestedReviewState({
   const [nestedScanInProgress, setNestedScanInProgress] = useState(false)
   const [nestedScanId, setNestedScanId] = useState<string | null>(null)
   const [nestedImportScanId, setNestedImportScanId] = useState<string | null>(null)
-  const [nestedRuntimeEnvironmentId, setNestedRuntimeEnvironmentId] = useState<
-    string | null | undefined
-  >(undefined)
+  const [nestedRuntimeEnvironmentId, setNestedRuntimeEnvironmentId] = useState<string | null>(null)
   const nestedScanIdRef = useRef<string | null>(null)
-  const nestedScanRuntimeEnvironmentIdRef = useRef<string | null | undefined>(undefined)
+  const nestedScanRuntimeEnvironmentIdRef = useRef<string | null>(null)
 
   const getNestedRepoRuntimeKind = useCallback(
     (connectionId: string | null): NestedRepoTelemetryRuntimeKind => {
@@ -91,9 +89,9 @@ export function useAddRepoNestedReviewState({
   )
 
   const setActiveNestedScanId = useCallback(
-    (scanId: string | null, runtimeEnvironmentId?: string | null): void => {
+    (scanId: string | null, runtimeEnvironmentId: string | null = null): void => {
       nestedScanIdRef.current = scanId
-      nestedScanRuntimeEnvironmentIdRef.current = scanId ? runtimeEnvironmentId : undefined
+      nestedScanRuntimeEnvironmentIdRef.current = scanId ? runtimeEnvironmentId : null
       setNestedScanId(scanId)
     },
     []

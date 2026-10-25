@@ -6,7 +6,7 @@ import type { WorktreeDisplayNameSource } from './worktree-display-name'
 // workspace's connection through, the session tab snapshot, native chat's workspace paths and
 // older-history page, the quick-command list, the whole `worktree.show` record and a markdown
 // tab's document. Checked against the handlers in src/main/runtime/rpc/methods/ — repo.ts:29,
-// files.ts:27-56, session-tabs.ts:24, client-ui.ts:29-42, mobile-markdown-tab-methods.ts:6-20 —
+// files.ts:27-56, session-tabs.ts:24, client-ui.ts:29-42, session-tab-markdown-methods.ts:6-20 —
 // and the shared result types they return verbatim.
 
 /**
@@ -43,6 +43,11 @@ export const runtimeRepoListSchema = z
  * TypeError in the loader. Each element stays unknown because `isMobileTuiAgent` is the filter.
  */
 export const detectedAgentsSchema = z.array(z.unknown())
+
+/** `preflight.refreshAgents` wraps the same list with PATH diagnostics the drawer never reads. */
+export const refreshedAgentsSchema = z
+  .looseObject({ agents: detectedAgentsSchema })
+  .transform((reply) => reply.agents)
 
 /**
  * The workspace file paths native chat suggests, from either the search or the legacy inventory.
@@ -106,17 +111,20 @@ export const sessionWorktreeRecordSchema = z
 /**
  * A markdown tab's document, read the same way on load and on save.
  *
- * `content`, `version` and `isDirty` are required: use-mobile-session-document-readers.ts:38-45
- * publishes all three into the tab's ready state with no guard, so a reply missing one rendered
- * `undefined` in the editor and saved against an undefined base version.
- * `editable` and `readOnlyReason` are guarded on the same lines and stay optional.
+ * `content`, `version` and `isDirty` are required: `readMarkdownTab` in
+ * `useMobileSessionDocumentReaders` publishes all three into the tab's ready state with no guard,
+ * so a reply missing one rendered `undefined` in the editor and saved against an undefined base
+ * version. `editable` and `readOnlyReason` are guarded there and stay optional, as are
+ * `truncated` and `byteLength`, which only a host that truncates oversize documents sends.
  */
 export const markdownTabDocumentSchema = z.looseObject({
   content: z.string(),
   version: z.string(),
   isDirty: z.boolean(),
   editable: salvagedOptional('editable', z.boolean()),
-  readOnlyReason: salvagedOptional('readOnlyReason', z.string())
+  readOnlyReason: salvagedOptional('readOnlyReason', z.string()),
+  truncated: salvagedOptional('truncated', z.boolean()),
+  byteLength: salvagedOptional('byteLength', z.number())
 })
 
 /**

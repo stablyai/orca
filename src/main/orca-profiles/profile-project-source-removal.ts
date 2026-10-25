@@ -10,6 +10,7 @@ import {
 } from './profile-project-session-state'
 import { isRepoWorktreeId, removeRepoWorktreeRecord } from './profile-project-worktree-identity'
 
+/** Removes repository-owned sessions, lineage, and UI preferences from the source profile after transfer. */
 export function removeSourceRepo(
   state: TransferProfileState,
   repoId: string
@@ -35,6 +36,10 @@ export function removeSourceRepo(
           ? null
           : state.ui.lastActiveWorktreeId,
       filterRepoIds: state.ui.filterRepoIds?.filter((id) => id !== repoId) ?? [],
+      explorerDisplayRootByWorktree: removeRepoWorktreeRecord(
+        state.ui.explorerDisplayRootByWorktree,
+        repoId
+      ),
       showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId)
     }
   }

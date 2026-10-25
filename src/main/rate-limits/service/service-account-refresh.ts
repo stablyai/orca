@@ -29,12 +29,34 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     return this.getState()
   }
 
+  invalidateOpenCodeGoCredentialState(options: { apiKeyCleared?: boolean } = {}): void {
+    this.opencodeFetchGeneration += 1
+    // Why: a key from env, OpenCode's DB or auth.json survives a cookie change; only clearing the saved key hides the chip.
+    if (options.apiKeyCleared) {
+      this.openCodeGoApiKeyConfigured = false
+    }
+    // Why: a credential change must discard the snapshot and any result still in flight.
+    this.updateState({
+      ...this.state,
+      opencodeGo: this.withFetchingStatus(null, 'opencode-go')
+    })
+  }
+
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1
     // Why: saving/forgetting the cookie can race an in-flight fetch; clear the visible snapshot before any old-cookie result returns.
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
+    })
+  }
+
+  invalidateZcodeCredentialState(): void {
+    this.zcodeFetchGeneration += 1
+    // Why: saving/forgetting the plan key can race an in-flight fetch; clear the visible snapshot before any old-key result returns.
+    this.updateState({
+      ...this.state,
+      zcode: this.withFetchingStatus(null, 'zcode')
     })
   }
 
@@ -139,6 +161,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.inactiveClaudeAccountsGeneration += 1
     this.pruneInactiveClaudeState()
     this.claudeFetchGeneration += 1
+    this.lastClaudeCheckCompletedAt = null
     // Why: a new account/target starts with a clean retry schedule.
     this.activeFailureStreakByProvider.claude = 0
     // Why: statusline posts from the outgoing account's sessions must not land on the incoming account's bar mid-switch.
@@ -157,6 +180,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     const targetChanged = !this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     this.claudeFetchTarget = nextTarget
     this.claudeFetchGeneration += 1
+    this.lastClaudeCheckCompletedAt = null
     this.activeFailureStreakByProvider.claude = 0
     if (targetChanged) {
       // Why: statusline posts from the outgoing target's sessions must not land on the incoming target's bar mid-switch.
@@ -168,16 +192,5 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
-  }
-
-  async refreshAfterClaudeLivePtysDrained(): Promise<void> {
-    // Why: "Waiting for Claude session" can only recover once no live claude
-    // owns the credentials. Refetch on the last PTY exit instead of leaving
-    // the stale terminal error up until the failure backoff elapses.
-    if (!this.state.claude?.usageMetadata?.deferredByLiveClaudeSession) {
-      return
-    }
-    this.activeFailureStreakByProvider.claude = 0
-    await this.fetchClaudeOnly({ force: true })
   }
 }

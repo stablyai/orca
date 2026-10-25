@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { planE2e, verifyE2eSelection } from './ci-e2e-shard-plan.mjs'
 
 const require = createRequire(import.meta.url)
@@ -52,9 +52,9 @@ it('native Playwright test-list preserves full discovery, serial suites, skips a
   }
   try {
     const full = await discover()
-    const assignment = planE2e(full, 14, { timings: {} })
+    const assignment = planE2e(full, 3, { timings: {} })
     const ids = []
-    for (let index = 0; index < 14; index++) {
+    for (let index = 0; index < 3; index++) {
       const path = join(directory, 'selected.txt')
       writeFileSync(path, `${assignment.shards[index].files.join('\n')}\n`)
       const selected = await discover(['--test-list', path])

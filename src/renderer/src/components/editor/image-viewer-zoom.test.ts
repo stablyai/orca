@@ -43,8 +43,8 @@ describe('image viewer zoom helpers', () => {
   })
 
   it('bounds very large per-event zoom factors', () => {
-    expect(getPinchZoomFactor(-10_000, 0)).toBeCloseTo(getPinchZoomFactor(-200, 0))
-    expect(getPinchZoomFactor(10_000, 0)).toBeCloseTo(getPinchZoomFactor(200, 0))
+    expect(getPinchZoomFactor(-10_000, 0)).toBeCloseTo(getPinchZoomFactor(-100, 0))
+    expect(getPinchZoomFactor(10_000, 0)).toBeCloseTo(getPinchZoomFactor(100, 0))
     expect(getPinchZoomFactor(-10_000, 0)).toBeLessThan(2)
     expect(getPinchZoomFactor(10_000, 0)).toBeGreaterThan(0.5)
   })

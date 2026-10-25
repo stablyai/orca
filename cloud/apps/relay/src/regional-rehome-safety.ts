@@ -54,14 +54,43 @@ export function regionalRehomeSafetyFailure(
   if (safety.observedAt === 0 || now - safety.observedAt > 60_000) {
     return 'monitoring_stale'
   }
-  if (safety.sqlFailures > REGIONAL_REHOME_SQL_FAILURES_LIMIT) return 'sql_failures'
   if (safety.controlActivityRecoveryFailures > 0) {
     return 'control_recovery_failures'
   }
   const reconnectLimit =
     Math.max(1, requiredCells) * REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT
   if (safety.reconnects > reconnectLimit) return 'elevated_reconnects'
+  // Last, so 'sql_failures' means no latching reason also failed.
+  if (safety.sqlFailures > REGIONAL_REHOME_SQL_FAILURES_LIMIT) return 'sql_failures'
   return null
+}
+
+// The shared database stalls for 5-7 s about every 610 s, and one stall keeps
+// the published sum over the sql bar for up to ~90 s (two 30 s windows plus
+// heartbeat lag): 396 on 2026-10-06 latched rehome off fleet-wide. A breach
+// therefore pauses claims, and only one that outlasts a stall latches.
+export const REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS = 150_000
+// The director polls every ~6 s; a longer silence means the breach was not watched.
+export const REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS = 45_000
+
+export type RegionalRehomeSqlFailuresBreach = { since: number; lastSeenAt: number } | null
+
+export function nextRegionalRehomeSqlFailuresBreach(
+  breach: RegionalRehomeSqlFailuresBreach,
+  sqlFailures: number,
+  now: number
+): RegionalRehomeSqlFailuresBreach {
+  if (sqlFailures <= REGIONAL_REHOME_SQL_FAILURES_LIMIT) return null
+  if (!breach || now - breach.lastSeenAt > REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS) {
+    return { since: now, lastSeenAt: now }
+  }
+  return { since: breach.since, lastSeenAt: now }
+}
+
+export function regionalRehomeSqlFailuresSustained(
+  breach: NonNullable<RegionalRehomeSqlFailuresBreach>
+): boolean {
+  return breach.lastSeenAt - breach.since >= REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS
 }
 
 export function combineRegionalRehomeSafety(

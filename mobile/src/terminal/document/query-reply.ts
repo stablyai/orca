@@ -1,6 +1,6 @@
 import { enqueueWriteBoundary } from './write-queue'
 import { notify } from './host-notify'
-import { scope, type TerminalDocumentDisposable } from './document-scope'
+import type { TerminalDocumentDisposable, TerminalDocumentScope } from './document-scope'
 
 /**
  * The gate deciding when xterm's parser replies may reach the native host.
@@ -18,29 +18,33 @@ export type QueryReplyTerminal = {
   onData: (listener: (data: string) => void) => TerminalDocumentDisposable
 }
 
-export function resetTerminalDataReplyAuthority() {
+export function resetTerminalDataReplyAuthority(scope: TerminalDocumentScope) {
   scope.terminalDataRepliesEnabled = false
 }
 
-export function resumeTerminalDataReplyAuthority() {
+export function resumeTerminalDataReplyAuthority(scope: TerminalDocumentScope) {
   scope.terminalDataRepliesEnabled = true
 }
 
-export function forwardTerminalDataReply(data: string) {
+export function forwardTerminalDataReply(scope: TerminalDocumentScope, data: string) {
   if (scope.terminalDataRepliesEnabled) {
-    notify({ type: 'terminal-data', bytes: data })
+    notify(scope, { type: 'terminal-data', bytes: data })
   }
 }
 
-export function enqueueTerminalDataReplyBoundary(gen: number) {
-  enqueueWriteBoundary(function () {
+export function enqueueTerminalDataReplyBoundary(scope: TerminalDocumentScope, gen: number) {
+  enqueueWriteBoundary(scope, function () {
     if (gen === scope.terminalGeneration) {
       scope.terminalDataRepliesEnabled = true
     }
   })
 }
 
-export function attachTerminalQueryReplyBridge(term: QueryReplyTerminal, gen: number) {
+export function attachTerminalQueryReplyBridge(
+  scope: TerminalDocumentScope,
+  term: QueryReplyTerminal,
+  gen: number
+) {
   // Why: parser replies require stdin enabled, but mobile input is owned by
   // native controls. Keep xterm's textarea inert for touch/hardware keys.
   try {
@@ -56,11 +60,11 @@ export function attachTerminalQueryReplyBridge(term: QueryReplyTerminal, gen: nu
   try {
     scope.termObserverDisposables.push(
       term.onData(function (data) {
-        forwardTerminalDataReply(data)
+        forwardTerminalDataReply(scope, data)
       })
     )
   } catch {}
   // Why: live output can queue before initial replay finishes. Enable replies
   // at the replay boundary so those live queries are answered, never replayed ones.
-  enqueueTerminalDataReplyBoundary(gen)
+  enqueueTerminalDataReplyBoundary(scope, gen)
 }

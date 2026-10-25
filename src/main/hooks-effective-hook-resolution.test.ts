@@ -7,7 +7,6 @@ import {
   TEST_WORKTREE_PATH
 } from './hooks-test-fixtures'
 
-// Mock fs used by loadHooks
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   existsSync: vi.fn(),
@@ -18,7 +17,6 @@ vi.mock('fs', () => ({
 }))
 
 describe('getEffectiveHooks', () => {
-  // We need to dynamically import after mocking
   const makeRepo = (hookSettings?: {
     mode?: 'auto' | 'override'
     setupRunPolicy?: 'ask' | 'run-by-default' | 'skip-by-default'
@@ -31,7 +29,6 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
 
-    // Re-import to pick up mocks
     const { getEffectiveHooks } = await import('./hooks')
     const repo = makeRepo()
     const result = getEffectiveHooks(repo)

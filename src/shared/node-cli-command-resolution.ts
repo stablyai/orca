@@ -1,6 +1,7 @@
 import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
+import { firstWindowsPathEnvKey, isNativeExecutable } from './cli-runtime-pairing-inputs'
 import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
 
 type ResolveCommandOptions = {
@@ -278,6 +279,27 @@ export function resolveCliCommand(
   return installCandidate ?? commandName
 }
 
+/** Resolve a literal override without falling back to an unverified command name. */
+export function resolveExecutableCommand(
+  command: string,
+  options: ResolveCommandOptions = {}
+): string | null {
+  const platform = options.platform ?? process.platform
+  const expanded =
+    command.startsWith('~/') || command.startsWith('~\\')
+      ? join(options.homePath ?? homedir(), command.slice(2))
+      : command
+  if (isAbsolute(expanded)) {
+    return isRunnableCommand(platform, expanded) ? expanded : null
+  }
+  // Relative paths depend on the workspace, which a session-less catalog cannot name.
+  if (expanded.includes('/') || expanded.includes('\\')) {
+    return null
+  }
+  const resolved = resolveCliCommand(expanded, options)
+  return isAbsolute(resolved) && isRunnableCommand(platform, resolved) ? resolved : null
+}
+
 export function resolveCliCommands(
   commandNames: readonly string[],
   options: ResolveCommandOptions = {}
@@ -308,21 +330,6 @@ export function resolveClaudeCommand(options: ResolveCommandOptions = {}): strin
   return resolveCliCommand('claude', options)
 }
 
-// Why: Win32 resolves env names case-insensitively and object order preserves
-// the block order, so the entry the child will actually read is the FIRST
-// case-insensitive match — not necessarily `Path` or `PATH`. Reading a narrower
-// set than the dedupe below deletes would destroy a third spelling unread.
-// Mirrors resolvePathEnvKey in src/main/pty/windows-path-segment-merge.ts, which
-// src/shared must not import.
-function firstWindowsPathEnvKey(env: NodeJS.ProcessEnv): string {
-  for (const key of Object.keys(env)) {
-    if (key.toLowerCase() === 'path' && env[key] !== undefined) {
-      return key
-    }
-  }
-  return 'Path'
-}
-
 /**
  * Put a resolved CLI's own directory ahead of PATH when that directory ships a
  * sibling `node`.
@@ -334,8 +341,8 @@ function firstWindowsPathEnvKey(env: NodeJS.ProcessEnv): string {
  * require (stablyai/orca#10932). Pair the binary with the runtime it was
  * installed against instead.
  *
- * Only prepends when the sibling `node` really exists, so a CLI resolved from a
- * directory that ships no node is left alone.
+ * Only prepends when the sibling `node` really exists and the CLI is not a
+ * compiled binary, so a native CLI or one beside no node is left alone.
  */
 export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   commandPath: string,
@@ -347,12 +354,16 @@ export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
     return env
   }
   const commandDirectory = dirname(commandPath)
-  if (!findFirstExecutable(platform, [commandDirectory], getExecutableNames(platform, 'node'))) {
+  if (
+    !findFirstExecutable(platform, [commandDirectory], getExecutableNames(platform, 'node')) ||
+    isNativeExecutable(commandPath)
+  ) {
     return env
   }
   const pathKey = platform === 'win32' ? firstWindowsPathEnvKey(env) : 'PATH'
   const pathDelimiter = platform === 'win32' ? ';' : delimiter
-  const segments = splitPath(env[pathKey], pathDelimiter)
+  // Why: the child inherits Orca's PATH when `env` names none, so pair over that, not over nothing.
+  const segments = splitPath(env[pathKey] ?? process.env[pathKey], pathDelimiter)
   if (segments[0] === commandDirectory) {
     return env
   }

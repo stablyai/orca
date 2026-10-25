@@ -3,13 +3,11 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import {
   pruneTabGroupLayoutAfterRetirement,
   repairMobileSessionTabGroupsAfterRetirement,
-  retireLeavesFromTerminalLayout,
   type RetiredTerminalSurface
 } from './mobile-session-terminal-retirement'
-import {
-  advanceTerminalTopologyRevision,
-  rebaseWorkspaceSessionTerminalMembership
-} from './workspace-session-terminal-membership-authority'
+import { retireLeavesFromTerminalLayout } from '../../shared/terminal-layout-leaf-retirement'
+import { rebaseWorkspaceSessionTerminalMembership } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 function visibleTypeForContentType(
   contentType: string | undefined

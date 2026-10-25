@@ -31,11 +31,7 @@ import {
  *
  * Field classification lives in FIELD_OWNERSHIP below and is checked for
  * exhaustiveness at compile time, mirroring SESSION_RELEVANT_FIELDS in
- * workspace-session.ts. The remote-workspace SSH projection
- * (src/shared/remote-workspace-session-projection.ts) enumerates the same
- * worktree/tab-scoped fields by worktree-path; the two surfaces are kept
- * deliberately aligned — when a new worktree-scoped field is added there it
- * must be classified here too.
+ * workspace-session.ts.
  */
 
 export type HostSessionSlices = Partial<Record<ExecutionHostId, WorkspaceSessionState>>
@@ -147,11 +143,13 @@ function assignKeyedByResolvedWorktree(
 
 /** Partition a unified session into per-host slices keyed by ExecutionHostId.
  *  Global fields are copied to the 'local' slice; worktree-scoped data is routed
- *  to its owner host. Entries whose owning worktree is unknown (orphan tabs,
- *  files, pages) stay in 'local' so they are never silently dropped. */
+ *  to its owner host. Entries whose owning worktree is unknown to the payload and
+ *  to `worktreeIdByTabId` (orphan tabs, files, pages) stay in 'local' so they are
+ *  never silently dropped. */
 export function splitWorkspaceSessionByHost(
   state: WorkspaceSessionState,
-  hostIdByWorktreeId: HostIdByWorktreeId
+  hostIdByWorktreeId: HostIdByWorktreeId,
+  options: { worktreeIdByTabId?: Map<string, string> } = {}
 ): HostSessionSlices {
   // Template carries only the global fields; per-field assigners add the rest.
   // Why: copy only own-keys so a partial patch (where most globals are absent)
@@ -176,7 +174,7 @@ export function splitWorkspaceSessionByHost(
 
   const ctx: SplitContext = {
     hostIdByWorktreeId,
-    worktreeIdByTabId: buildWorktreeIdByTabId(state),
+    worktreeIdByTabId: options.worktreeIdByTabId ?? buildWorktreeIdByTabId(state),
     worktreeIdByFileId: buildWorktreeIdByFileId(state)
   }
 

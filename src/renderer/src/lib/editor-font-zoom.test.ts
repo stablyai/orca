@@ -4,7 +4,7 @@ import {
   computeDiffEditorFontSize,
   computeEditorFontSize,
   resolveEditorFontFamily,
-  resolveEditorFontFamilyOrInherit
+  resolveEditorFontStack
 } from './editor-font-zoom'
 
 describe('editor font zoom', () => {
@@ -47,22 +47,23 @@ describe('resolveEditorFontFamily', () => {
   })
 })
 
-describe('resolveEditorFontFamilyOrInherit', () => {
-  it('returns undefined (inherit UI font) when neither font is set', () => {
-    expect(resolveEditorFontFamilyOrInherit({})).toBeUndefined()
-    expect(resolveEditorFontFamilyOrInherit(undefined)).toBeUndefined()
+describe('resolveEditorFontStack', () => {
+  it('wraps a single family name with the monospace fallback chain', () => {
+    const stack = resolveEditorFontStack({ editorFontFamily: 'JetBrains Mono' })
+    expect(stack.startsWith('"JetBrains Mono", "SF Mono"')).toBe(true)
+    expect(stack.endsWith(', monospace')).toBe(true)
   })
 
-  it('follows the terminal font when no editor override is set', () => {
-    expect(resolveEditorFontFamilyOrInherit({ terminalFontFamily: 'Menlo' })).toBe('Menlo')
+  it('passes a comma-separated stack through unchanged', () => {
+    expect(resolveEditorFontStack({ editorFontFamily: 'JetBrains Mono, monospace' })).toBe(
+      'JetBrains Mono, monospace'
+    )
+    expect(resolveEditorFontStack({ terminalFontFamily: '"Fira Code", Menlo' })).toBe(
+      '"Fira Code", Menlo'
+    )
   })
 
-  it('uses the editor font override when set', () => {
-    expect(
-      resolveEditorFontFamilyOrInherit({
-        editorFontFamily: 'Fira Code',
-        terminalFontFamily: 'Menlo'
-      })
-    ).toBe('Fira Code')
+  it('falls back to the full chain when no font is set', () => {
+    expect(resolveEditorFontStack({})).toMatch(/^"SF Mono", .*, monospace$/)
   })
 })

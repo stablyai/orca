@@ -4,7 +4,7 @@ import {
   workspaceKindForWorktreeId,
   type ProspectiveWorkspace
 } from '@/lib/agent-launch-route-input'
-import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
 import { useAppStore } from '@/store'
 
 export type SourceControlLaunchAgentArgsApplicabilityInput = {
@@ -14,8 +14,9 @@ export type SourceControlLaunchAgentArgsApplicabilityInput = {
   executionHostId?: ExecutionHostId
 }
 
-function prospectiveWorkspace(
-  input: SourceControlLaunchAgentArgsApplicabilityInput
+/** The workspace a source-control launch targets, which may not exist yet. */
+export function sourceControlLaunchWorkspace(
+  input: Omit<SourceControlLaunchAgentArgsApplicabilityInput, 'agent'>
 ): ProspectiveWorkspace {
   if (input.worktreeId) {
     return { kind: workspaceKindForWorktreeId(input.worktreeId), worktreeId: input.worktreeId }
@@ -47,9 +48,9 @@ export function sourceControlLaunchAppliesAgentArgs(
     return true
   }
   return (
-    planAgentSessionLaunch(useAppStore.getState(), {
+    resolveAgentSessionLaunchRoute(useAppStore.getState(), {
       agent: input.agent,
-      workspace: prospectiveWorkspace(input)
-    }).route !== 'structured-native-chat'
+      workspace: sourceControlLaunchWorkspace(input)
+    }) !== 'structured-native-chat'
   )
 }

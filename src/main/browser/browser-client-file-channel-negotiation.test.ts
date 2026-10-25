@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { describe, expect, it } from 'vitest'
 
 import { BrowserClientHostAttachParams } from '../../shared/browser-client-host-protocol'
@@ -6,8 +7,14 @@ import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-comma
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
 
+const TEST_CONNECTION = pairedRuntimeConnectionFromOffer({
+  endpoint: 'ws://127.0.0.1:1',
+  deviceToken: 'token',
+  publicKeyB64: 'key'
+})
+
 const leaseOptions = {
-  pairing: {} as never,
+  connection: TEST_CONNECTION,
   authorityRuntimeId: 'runtime-1',
   browserHostClientId: 'host-1',
   hostCapabilities: ['webview'],
@@ -90,7 +97,6 @@ describe('browser file channel negotiation', () => {
     }
     transport.bind(sender)
     expect(transport.available).toBe(false)
-    // Old host: the caller may keep its local fallback, unlike a lost or unbound channel.
     expect(transport.availability).toBe('unsupported')
 
     const negotiatedSender = {
@@ -112,8 +118,9 @@ describe('browser file channel negotiation', () => {
   })
 
   it('separates a host that never offered the channel from one whose lease is gone', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reads the host's private channel state; a renamed field fails the test.
     const host = new PairedRuntimeBrowserClientHost({
-      pairing: {} as never,
+      connection: TEST_CONNECTION,
       authorityRuntimeId: 'runtime-1',
       browserHostClientId: 'host-1',
       hostCapabilities: ['webview'],
@@ -131,13 +138,12 @@ describe('browser file channel negotiation', () => {
 
     expect(host.fileChannelAvailability).toBe('unavailable')
 
-    // Old host: it attached, and its authority never named a file channel version.
     host.authority = { fileChannelProtocolVersion: undefined }
     expect(host.fileChannelAvailability).toBe('unsupported')
 
     host.authority = { fileChannelProtocolVersion: 1 }
     host.lease.authority = { fileChannelProtocolVersion: 1 }
-    // Mirror acceptAuthority, the only production writer of lease.authority.
+    // Match acceptAuthority’s lease update.
     host.lease.fileChannelActive = true
     expect(host.fileChannelAvailability).toBe('negotiated')
 

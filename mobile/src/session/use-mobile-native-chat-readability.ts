@@ -5,7 +5,11 @@ import {
   type MobileRuntimeRepoSummary
 } from './mobile-session-read-operations'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
-import { isMobileNativeChatTranscriptReadable } from './mobile-native-chat-eligibility'
+import { resumeFolderWorkspaceListRead } from '../agent-history/mobile-agent-history-operations'
+import {
+  isMobileFolderNativeChatReadable,
+  isMobileNativeChatTranscriptReadable
+} from './mobile-native-chat-eligibility'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 
 type ReadabilityState = { client: RpcClient | null; worktreeId: string; readable: boolean }
@@ -29,6 +33,29 @@ export function useMobileNativeChatReadability(
     if (!client) {
       setState({ client, worktreeId, readable: false })
       return
+    }
+    if (worktreeId.startsWith('folder:')) {
+      void resumeFolderWorkspaceListRead
+        .request(client)
+        .then((response) => {
+          if (!active) {
+            return
+          }
+          const result = resumeFolderWorkspaceListRead.interpret(response)
+          setState({
+            client,
+            worktreeId,
+            readable: result.accepted && isMobileFolderNativeChatReadable(result.value, worktreeId)
+          })
+        })
+        .catch(() => {
+          if (active) {
+            setState({ client, worktreeId, readable: false })
+          }
+        })
+      return () => {
+        active = false
+      }
     }
     void nativeChatRepoListRead
       .request(client)

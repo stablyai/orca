@@ -9,10 +9,8 @@ export function useFloatingTerminalPanelStoreState() {
   const createTab = useAppStore((state) => state.createTab)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
   const closeTab = useAppStore((state) => state.closeTab)
-  const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const closeFile = useAppStore((state) => state.closeFile)
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
-  const markFileDirty = useAppStore((state) => state.markFileDirty)
   const activateTab = useAppStore((state) => state.activateTab)
   const setActiveTab = useAppStore((state) => state.setActiveTab)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
@@ -23,6 +21,9 @@ export function useFloatingTerminalPanelStoreState() {
   const openFile = useAppStore((state) => state.openFile)
   const browserDefaultUrl = useAppStore((state) => state.browserDefaultUrl)
   const floatingTerminalCwd = useAppStore((state) => state.settings?.floatingTerminalCwd ?? '')
+  // The host-resolved floating directory; the geometry hook keeps it fresh.
+  const cwd = useAppStore((state) => state.floatingWorkspacePath)
+  const setFloatingWorkspacePath = useAppStore((state) => state.setFloatingWorkspacePath)
   const generatedTabTitlesEnabled = useAppStore(
     (state) => state.settings?.tabAutoGenerateTitle === true
   )
@@ -42,10 +43,8 @@ export function useFloatingTerminalPanelStoreState() {
     createTab,
     createBrowserTab,
     closeTab,
-    closeBrowserTab,
     closeFile,
     closeUnifiedTab,
-    markFileDirty,
     activateTab,
     setActiveTab,
     setTabCustomTitle,
@@ -56,6 +55,8 @@ export function useFloatingTerminalPanelStoreState() {
     openFile,
     browserDefaultUrl,
     floatingTerminalCwd,
+    cwd,
+    setFloatingWorkspacePath,
     generatedTabTitlesEnabled,
     managedBrowserCreationEnabled
   }

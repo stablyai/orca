@@ -20,8 +20,8 @@ import {
   isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
   clearWebAgentSessionHandoff
 } from '../web-agent-session-handoff'
-import { toRemoteRuntimePtyId } from '../runtime-terminal-stream'
-import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import {
   isReadyTerminalTab,
   isTerminalSurfaceTab,
@@ -137,40 +137,25 @@ export function prepareWebSessionTabsSnapshotBase(
     }
   }
   const exactProvisionalHandoffs = new Set(provisionalHandoffHostTabIds.keys())
-  const replacedConversations = new Set(
-    snapshot.tabs.flatMap((tab) =>
-      tab.type === 'agent-session' && tab.replacesSessionId ? [tab.replacesSessionId] : []
-    )
-  )
-  const replacedTerminalIds = new Set(
-    (state.unifiedTabsByWorktree[worktreeId] ?? [])
-      .filter(
+  const retainedTerminalTabs = reconcilesNonAgentTabs
+    ? currentTerminalTabs.filter(
         (tab) =>
-          tab.contentType === 'terminal' &&
-          tab.structuredSessionId &&
-          replacedConversations.has(tab.structuredSessionId)
+          !shouldReplaceTerminalTab(
+            tab,
+            environmentId,
+            nextRemotePtyIds,
+            nextMirroredTerminalIds,
+            exactProvisionalHandoffs,
+            state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
+          )
       )
-      .map((tab) => tab.entityId)
-  )
-  const retainedTerminalTabs = (
-    reconcilesNonAgentTabs
-      ? currentTerminalTabs.filter(
-          (tab) =>
-            !shouldReplaceTerminalTab(
-              tab,
-              environmentId,
-              nextRemotePtyIds,
-              nextMirroredTerminalIds,
-              exactProvisionalHandoffs
-            )
-        )
-      : currentTerminalTabs
-  ).filter((tab) => !replacedTerminalIds.has(tab.id))
+    : currentTerminalTabs
   const mirroredTerminalTabs = buildMirroredTerminalTabs(
     snapshot,
     environmentId,
     existingTerminalById,
     state.terminalLayoutsByTabId,
+    state.ptyIdsByTabId,
     retainedTerminalTabs.length,
     now,
     callerFocusIntentTab?.type === 'terminal'

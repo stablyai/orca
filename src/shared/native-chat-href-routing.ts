@@ -3,24 +3,39 @@ import { fileUriToFilesystemPath } from './file-uri-path'
 
 export type NativeChatHrefRoute =
   | { kind: 'web'; url: string }
-  | { kind: 'file'; pathText: string; line: number | null }
+  | { kind: 'file'; pathText: string; line: number | null; pathKind?: 'literal' }
   | { kind: 'none' }
 
 const WEB_SCHEME_PATTERN = /^(?:https?|mailto):/i
 const SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/
+// Why: `README.md:5` is a file location; the scheme pattern alone reads `README.md:` as a scheme.
+const BARE_FILE_LOCATION_PATTERN = /^[^\s:/\\?#]+\.[\p{L}\p{N}_+-]+:\d+(?::\d+)?$/u
 export const NATIVE_CHAT_FILE_HREF_PREFIX = '#orca-native-chat-file='
+const NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX = '#orca-native-chat-file-path='
 const MAX_NATIVE_CHAT_FILE_HREF_DECODES = 4
 
-export function createNativeChatFileHref(pathText: string): string {
-  return `${NATIVE_CHAT_FILE_HREF_PREFIX}${encodeURIComponent(pathText)}`
+/** Location text keeps reply parsing; known tool paths retain every filename character. */
+export function createNativeChatFileHref(
+  pathText: string,
+  pathKind: 'location' | 'literal' = 'location'
+): string {
+  const prefix =
+    pathKind === 'literal' ? NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX : NATIVE_CHAT_FILE_HREF_PREFIX
+  return `${prefix}${encodeURIComponent(pathText)}`
 }
 
-function decodeNativeChatFileHref(href: string): string | null {
-  if (!href.startsWith(NATIVE_CHAT_FILE_HREF_PREFIX)) {
+function decodeNativeChatFileHref(
+  href: string,
+  prefix = NATIVE_CHAT_FILE_HREF_PREFIX
+): string | null {
+  if (!href.startsWith(prefix)) {
     return null
   }
   try {
-    const decoded = decodeURIComponent(href.slice(NATIVE_CHAT_FILE_HREF_PREFIX.length))
+    const decoded = decodeURIComponent(href.slice(prefix.length))
+    if (prefix === NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX) {
+      return decoded || null
+    }
     return decoded && !decoded.startsWith(NATIVE_CHAT_FILE_HREF_PREFIX) ? decoded : null
   } catch {
     return null
@@ -67,15 +82,25 @@ export function routeNativeChatHref(href: string | null | undefined): NativeChat
   if (!trimmed) {
     return { kind: 'none' }
   }
+  if (trimmed.startsWith(NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX)) {
+    const pathText = decodeNativeChatFileHref(trimmed, NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX)
+    return pathText ? { kind: 'file', pathText, line: null, pathKind: 'literal' } : { kind: 'none' }
+  }
+  let isLiteralFileLocation = false
   for (let depth = 0; depth < MAX_NATIVE_CHAT_FILE_HREF_DECODES; depth += 1) {
     const encodedFileHref = decodeNativeChatFileHref(trimmed)
     if (!encodedFileHref) {
       break
     }
     trimmed = encodedFileHref.trim()
+    isLiteralFileLocation = true
   }
   if (!trimmed || trimmed.startsWith(NATIVE_CHAT_FILE_HREF_PREFIX)) {
     return { kind: 'none' }
+  }
+  if (isLiteralFileLocation) {
+    // Why: `#`, `?` and `%XX` are legal filename characters, not URL syntax, in wrapped text.
+    return { kind: 'file', pathText: trimmed, line: null }
   }
   if (trimmed.startsWith('#')) {
     return { kind: 'none' }
@@ -96,7 +121,11 @@ export function routeNativeChatHref(href: string | null | undefined): NativeChat
     }
     return { kind: 'file', pathText, line: parseLineFragment(url.hash.slice(1)) }
   }
-  if (!isWindowsAbsolutePathLike(trimmed) && SCHEME_PATTERN.test(trimmed)) {
+  if (
+    !isWindowsAbsolutePathLike(trimmed) &&
+    !BARE_FILE_LOCATION_PATTERN.test(trimmed) &&
+    SCHEME_PATTERN.test(trimmed)
+  ) {
     return { kind: 'none' }
   }
   const { pathText, line } = stripQueryAndHash(trimmed)

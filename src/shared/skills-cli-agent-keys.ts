@@ -14,6 +14,7 @@ import type { TuiAgent } from './tui-agent'
 export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   claude: 'claude-code',
   'claude-agent-teams': 'claude-code',
+  codebuddy: 'codebuddy',
   // Why: Orca states OpenClaude reads Claude-owned roots (native-chat-agent-profiles).
   openclaude: 'claude-code',
   codex: 'codex',
@@ -24,6 +25,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   pi: 'pi',
   omp: null,
   'prime-agent': null,
+  qoder: 'qoder',
+  'qoder-cn': 'qoder-cn',
   gemini: 'gemini-cli',
   antigravity: 'antigravity',
   aider: null,
@@ -35,6 +38,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   aug: 'augment',
   cline: 'cline',
   codebuff: null,
+  freebuff: null,
   'command-code': 'command-code',
   continue: 'continue',
   cursor: 'cursor',
@@ -50,37 +54,10 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   devin: 'devin',
   ante: null,
   // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
-  trae: 'trae-cn'
+  trae: 'trae-cn',
+  muse: null,
+  zcode: 'zcode',
+  // Why: DSH ships skills as Cordis plugins, not a `skills --agent` target.
+  dsh: null,
+  jcode: null
 } satisfies Record<TuiAgent, string | null>
-
-/**
- * The shared `.agents/skills` target every universal agent reads. Always included
- * so agents Orca cannot map still receive the skill.
- */
-export const SKILLS_CLI_UNIVERSAL_AGENT_KEY = 'universal'
-
-/**
- * Whether a value is shaped like a `skills --agent` key, or its explicit all-agents
- * wildcard.
- *
- * Why: the skills CLI silently DROPS a `--agent` value that starts with `-`, which
- * empties its target list and drops it into the same all-agents branch an omitted
- * --agent does. `--agent -y` is enough to trigger it, so shape is checked, not just
- * emptiness. An unknown-but-plausible key is left to the CLI, which rejects it
- * loudly with its own valid list before writing anything.
- */
-export function isUsableSkillsCliAgentKey(value: string): boolean {
-  return /^(?:\*|[a-z0-9][a-z0-9.-]*)$/i.test(value)
-}
-
-/** Map detected Orca agents onto `skills --agent` keys, plus the universal target. */
-export function toSkillsCliAgentKeys(detectedAgents: readonly TuiAgent[]): string[] {
-  const keys = new Set<string>([SKILLS_CLI_UNIVERSAL_AGENT_KEY])
-  for (const agent of detectedAgents) {
-    const key = SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT[agent]
-    if (key) {
-      keys.add(key)
-    }
-  }
-  return [...keys].sort()
-}

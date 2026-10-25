@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-10-02T07:26:38.777Z",
+  "platform": "darwin",
+  "command": [
+    "qoderclicn",
+    "--config-dir",
+    "/tmp/orca-qoder-validation-1002/cn-config",
+    "--cwd",
+    "/tmp/orca-qoder-validation-1002/workspace"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "Qoder CLI China 1.1.65; isolated config; no China account",
+  "exitCode": 129
+}

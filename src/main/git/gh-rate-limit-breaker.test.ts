@@ -168,9 +168,7 @@ describe('breaker state', () => {
   })
 
   it('fires the reset probe with the tripping scope for non-default scopes', () => {
-    // Why: a WSL-only Windows install (or GHES) would otherwise stay on the
-    // blunt 5-minute fallback forever — the probe must learn which scope to
-    // query.
+    // Reset probes need the blocked host/runtime, including GHES and WSL-only installs.
     const probe = vi.fn()
     registerGhRateLimitResetProbe(probe)
 

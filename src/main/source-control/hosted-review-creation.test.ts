@@ -17,7 +17,6 @@ const {
   glabExecFileAsyncMock,
   gitExecFileAsyncMock,
   getUpstreamStatusMock,
-  getSshGitProviderMock,
   getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
@@ -36,7 +35,6 @@ const {
   glabExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getUpstreamStatusMock: vi.fn(),
-  getSshGitProviderMock: vi.fn(),
   getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
@@ -107,10 +105,6 @@ vi.mock('../git/upstream', () => ({
   getUpstreamStatus: getUpstreamStatusMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
-}))
-
 vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
@@ -143,7 +137,6 @@ function resetMocks(): void {
     glabExecFileAsyncMock,
     gitExecFileAsyncMock,
     getUpstreamStatusMock,
-    getSshGitProviderMock,
     getEnterpriseGitHubRepoSlugMock
   ]) {
     mock.mockReset()
@@ -570,81 +563,6 @@ describe('createHostedReview', () => {
     )
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
     expect(createGitLabMergeRequestMock).not.toHaveBeenCalled()
-  })
-
-  it('uses the SSH git provider for remote hosted-review preflight', async () => {
-    const remoteGit = {
-      getStatus: vi.fn(async () => ({ entries: [], conflictOperation: 'unknown' })),
-      getUpstreamStatus: vi.fn(async () => ({
-        hasUpstream: true,
-        upstreamName: 'origin/feature',
-        ahead: 0,
-        behind: 0
-      })),
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
-          return { stdout: 'feature\n', stderr: '' }
-        }
-        if (args[0] === 'remote') {
-          return { stdout: 'origin\n', stderr: '' }
-        }
-        if (args[0] === 'show-ref') {
-          return { stdout: 'abc refs/remotes/origin/main\n', stderr: '' }
-        }
-        if (args[0] === 'log' && args.includes('--pretty=%s')) {
-          return { stdout: 'Feature title\n', stderr: '' }
-        }
-        if (args[0] === 'log') {
-          return { stdout: '- Feature title\n', stderr: '' }
-        }
-        return { stdout: '', stderr: '' }
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(remoteGit)
-
-    await expect(
-      createHostedReview(
-        '/remote/repo',
-        {
-          provider: 'github',
-          base: 'main',
-          head: 'feature',
-          title: 'Feature'
-        },
-        'ssh:ssh-1'
-      )
-    ).resolves.toEqual({
-      ok: true,
-      number: 12,
-      url: 'https://github.com/acme/orca/pull/12'
-    })
-
-    expect(remoteGit.exec).toHaveBeenCalledWith(
-      ['rev-parse', '--abbrev-ref', 'HEAD'],
-      '/remote/repo'
-    )
-    expect(remoteGit.getStatus).toHaveBeenCalledWith('/remote/repo')
-    expect(remoteGit.exec).not.toHaveBeenCalledWith(['status', '--porcelain'], '/remote/repo')
-    expect(remoteGit.getUpstreamStatus).toHaveBeenCalledWith('/remote/repo')
-    expect(remoteGit.exec).not.toHaveBeenCalledWith(
-      ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
-      '/remote/repo'
-    )
-    expect(getUpstreamStatusMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['auth', 'status', '--hostname', 'github.com'],
-      { host: 'github.com' }
-    )
-    expect(createGitHubPullRequestMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      {
-        provider: 'github',
-        base: 'main',
-        head: 'feature',
-        title: 'Feature'
-      },
-      'ssh:ssh-1'
-    )
   })
 
   it('returns the existing review instead of creating a duplicate', async () => {

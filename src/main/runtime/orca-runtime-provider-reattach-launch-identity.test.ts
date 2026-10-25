@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp'), isPackaged: false },
@@ -29,11 +31,22 @@ function getPty(runtime: OrcaRuntimeService, ptyId: string): RuntimePtyLaunchIde
   )
 }
 
+/** Switch-on, main's layout answers which pane holds a terminal, so the runtime needs a store. */
+function createRuntime(): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration reads only the session bindPaneFirst adds to this store.
+  return new OrcaRuntimeService(ORCA_LAYOUT_OWNER_IS_MAIN ? ({} as never) : null)
+}
+
+function paneKeyOf(runtime: OrcaRuntimeService, ptyId: string): string | null {
+  const pty = runtime['ptysById'].get(ptyId)
+  return runtime['paneOfPty'](pty).paneKey
+}
+
 describe('provider reattach launch identity', () => {
   it('restores daemon-owned agent identity without minting renderer authority', () => {
-    const runtime = new OrcaRuntimeService(null)
+    const runtime = createRuntime()
 
-    runtime.registerPty('pty-reattach', WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-reattach', WORKTREE_ID, null, {
       tabId: TAB_ID,
       leafId: LEAF_ID,
       incarnationId: INCARNATION_ID,
@@ -43,9 +56,9 @@ describe('provider reattach launch identity', () => {
       }
     })
 
+    expect(paneKeyOf(runtime, 'pty-reattach')).toBe(PANE_KEY)
     expect(getPty(runtime, 'pty-reattach')).toMatchObject({
       incarnationId: INCARNATION_ID,
-      paneKey: PANE_KEY,
       launchAgent: 'codex',
       launchToken: null,
       launchIncarnationId: null
@@ -53,9 +66,9 @@ describe('provider reattach launch identity', () => {
   })
 
   it('rejects provider identity from a different process incarnation', () => {
-    const runtime = new OrcaRuntimeService(null)
+    const runtime = createRuntime()
 
-    runtime.registerPty('pty-mismatched-reattach', WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-mismatched-reattach', WORKTREE_ID, null, {
       tabId: TAB_ID,
       leafId: LEAF_ID,
       incarnationId: INCARNATION_ID,
@@ -65,9 +78,9 @@ describe('provider reattach launch identity', () => {
       }
     })
 
+    expect(paneKeyOf(runtime, 'pty-mismatched-reattach')).toBe(PANE_KEY)
     expect(getPty(runtime, 'pty-mismatched-reattach')).toMatchObject({
       incarnationId: INCARNATION_ID,
-      paneKey: PANE_KEY,
       launchAgent: null,
       launchToken: null,
       launchIncarnationId: null
@@ -75,9 +88,9 @@ describe('provider reattach launch identity', () => {
   })
 
   it('retires daemon launch identity when the agent command finishes', () => {
-    const runtime = new OrcaRuntimeService(null)
+    const runtime = createRuntime()
 
-    runtime.registerPty('pty-finished-reattach', WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-finished-reattach', WORKTREE_ID, null, {
       tabId: TAB_ID,
       leafId: LEAF_ID,
       incarnationId: INCARNATION_ID,

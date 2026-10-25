@@ -1,8 +1,4 @@
-// Why: the batched `cat-file --batch-check` conflict probe decides from stdout, so a
-// WSL login-shell fallback that prints the distro banner onto that stream desynchronizes
-// the one-line-per-ref contract. Every batch then came back undecided and fell through to
-// one `show-ref` subprocess per remote -- the cost the batch exists to remove. These tests
-// pin the fence request and the resulting subprocess count at 58 remotes.
+// Fence login banners so batched probes keep one stdout record per ref and avoid per-remote fallback.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,14 +16,14 @@ const WSL_BANNER =
 
 type GitExecOptions = { stdin?: string; captureWslLoginShellOutput?: boolean }
 
-/**
- * Stand-in for a WSL-routed runner: the login shell prepends its banner to stdout unless
- * the caller asked for the fenced form, which slices the payload back out.
- */
+/** Simulate a login banner unless fenced capture was requested. */
 function installLoginShellRunner(): { argv: string[][] } {
   const argv: string[][] = []
   gitExecFileAsyncMock.mockImplementation(async (args: string[], options: GitExecOptions = {}) => {
     argv.push(args)
+    if (args[0] === 'for-each-ref') {
+      return { stdout: '', stderr: '' }
+    }
     if (args[0] === 'rev-parse') {
       throw new Error('local branch is absent')
     }
@@ -82,6 +78,9 @@ describe('getBranchConflictKind batched remote probe', () => {
 
   it('still falls back to per-ref probes when the batch itself fails', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '', stderr: '' }
+      }
       if (args[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }

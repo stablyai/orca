@@ -26,15 +26,15 @@ describe('getDiscardEntryConfirmationCopy', () => {
     })
   })
 
-  it('uses delete copy for files added to the index', () => {
+  it('preserves staged additions when discarding working edits', () => {
     expect(
       getDiscardEntryConfirmationCopy(
         entry({ area: 'staged', path: 'src/added.ts', status: 'added' })
       )
     ).toEqual({
-      title: 'Delete "added.ts"?',
-      description: 'This will permanently delete this file. This cannot be undone.',
-      confirmLabel: 'Delete'
+      title: 'Discard changes to "added.ts"?',
+      description: 'This will revert the unstaged changes to this file. This cannot be undone.',
+      confirmLabel: 'Discard'
     })
   })
 
@@ -46,7 +46,7 @@ describe('getDiscardEntryConfirmationCopy', () => {
     ).toEqual({
       title: 'Restore "removed.ts"?',
       description:
-        'This will restore the file from HEAD and discard the deletion. This cannot be undone.',
+        'This will restore the last staged version and discard the deletion. This cannot be undone.',
       confirmLabel: 'Restore'
     })
   })
@@ -56,7 +56,7 @@ describe('getDiscardEntryConfirmationCopy', () => {
       getDiscardEntryConfirmationCopy(entry({ path: 'src/changed.ts', status: 'modified' }))
     ).toEqual({
       title: 'Discard changes to "changed.ts"?',
-      description: 'This will revert all changes to this file. This cannot be undone.',
+      description: 'This will revert the unstaged changes to this file. This cannot be undone.',
       confirmLabel: 'Discard'
     })
   })
@@ -99,7 +99,8 @@ describe('getDiscardAreaConfirmationCopy', () => {
   it('uses singular unstaged copy', () => {
     expect(getDiscardAreaConfirmationCopy('unstaged', 1)).toEqual({
       title: 'Discard all unstaged changes?',
-      description: 'This will revert the unstaged changes in 1 file. This cannot be undone.',
+      description:
+        'This will revert unstaged changes and permanently delete any untracked files in this selection. This cannot be undone.',
       confirmLabel: 'Discard all'
     })
   })
@@ -107,7 +108,8 @@ describe('getDiscardAreaConfirmationCopy', () => {
   it('uses plural unstaged copy', () => {
     expect(getDiscardAreaConfirmationCopy('unstaged', 2)).toEqual({
       title: 'Discard all unstaged changes?',
-      description: 'This will revert unstaged changes in 2 files. This cannot be undone.',
+      description:
+        'This will revert unstaged changes and permanently delete any untracked files among these 2 files. This cannot be undone.',
       confirmLabel: 'Discard all'
     })
   })

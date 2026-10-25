@@ -4,7 +4,7 @@ import { AlertTriangle, Download, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { ReleaseBuildPicker } from './ReleaseBuildPicker'
 import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
 import { Badge } from '../ui/badge'
 import { translate } from '@/i18n/i18n'
@@ -16,7 +16,6 @@ import {
   getVersionChannel,
   hasDedicatedReleaseRepo,
   isChannelSupportedOnPlatform,
-  parseDevBuildStamp,
   requiresManualDevChannelInstall,
   type DedicatedRepoChannel,
   type ReleaseBuild,
@@ -50,31 +49,6 @@ const DEDICATED_CHANNEL_WARNINGS: Record<DedicatedRepoChannel, { key: string; fa
         'Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.'
     }
   }
-
-function formatBuildLabel(build: ReleaseBuild): string {
-  // Why the release's own title wins: the build workflows compose it (hourly
-  // `1.4.163 • 01 • Jul 31, 1:54PM • e698241`, adhoc `1.4.163 • wasm-terminal • …`),
-  // so this row is the same string the GitHub releases list shows — one thing to
-  // search for in either place, rather than two renderings of the same build that
-  // have to be matched up by eye. For adhoc it is also the only place the branch
-  // is named, which is what tells two concurrent adhoc builds apart.
-  if (build.name) {
-    return build.name
-  }
-  const stamp = parseDevBuildStamp(build.version)
-  if (!stamp) {
-    return build.version
-  }
-  // Fallback for builds cut before that naming, and for any release someone
-  // titled by hand. A dev build's semver tail is an opaque timestamp, so show it
-  // as a date rather than as digits.
-  return `${build.version.split('-')[0]} · ${stamp.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })}`
-}
 
 export function ReleaseChannelSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -116,46 +90,54 @@ export function ReleaseChannelSection(): React.JSX.Element {
   // from a channel the picker is no longer showing.
   const latestRequestRef = useRef(0)
 
-  const loadBuilds = useCallback(async (channel: ReleaseChannel): Promise<void> => {
-    const requestId = latestRequestRef.current + 1
-    latestRequestRef.current = requestId
-    const isStale = (): boolean => latestRequestRef.current !== requestId
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const result = await window.api.updater.listBuilds(channel)
-      if (isStale()) {
-        return
-      }
-      if (result.ok) {
-        setBuilds(result.builds)
-        setSelectedTag(result.builds[0]?.tag ?? null)
-      } else {
+  const loadBuilds = useCallback(
+    async (channel: ReleaseChannel, options?: { force?: boolean }): Promise<void> => {
+      const requestId = latestRequestRef.current + 1
+      latestRequestRef.current = requestId
+      const isStale = (): boolean => latestRequestRef.current !== requestId
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const result = await window.api.updater.listBuilds(channel, options)
+        if (isStale()) {
+          return
+        }
+        if (result.ok) {
+          setBuilds(result.builds)
+          setSelectedTag(result.builds[0]?.tag ?? null)
+        } else {
+          setBuilds(null)
+          setLoadError(result.message)
+        }
+      } catch (error) {
+        if (isStale()) {
+          return
+        }
         setBuilds(null)
-        setLoadError(result.message)
+        setLoadError(String((error as Error)?.message ?? error))
+      } finally {
+        // Why: only the newest request owns the spinner; a superseded one clearing
+        // it would show "no builds" while the current load is still running.
+        if (!isStale()) {
+          setLoading(false)
+        }
       }
-    } catch (error) {
-      if (isStale()) {
-        return
-      }
-      setBuilds(null)
-      setLoadError(String((error as Error)?.message ?? error))
-    } finally {
-      // Why: only the newest request owns the spinner; a superseded one clearing
-      // it would show "no builds" while the current load is still running.
-      if (!isStale()) {
-        setLoading(false)
-      }
-    }
-  }, [])
+    },
+    []
+  )
 
   // Why: reload whenever the channel changes so the picker never offers tags
-  // from the channel the user just switched away from.
+  // from the channel the user just switched away from. Not before the version
+  // resolves: the running channel is unknown until then, and a load for the
+  // 'stable' placeholder would be a GitHub request whose result is thrown away.
   useEffect(() => {
+    if (appVersion === null) {
+      return
+    }
     setBuilds(null)
     setSelectedTag(null)
     void loadBuilds(activeChannel)
-  }, [activeChannel, loadBuilds])
+  }, [activeChannel, appVersion, loadBuilds])
 
   const selectedBuild = useMemo(
     () => builds?.find((build) => build.tag === selectedTag) ?? null,
@@ -268,34 +250,24 @@ export function ReleaseChannelSection(): React.JSX.Element {
 
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Select
-            value={selectedTag ?? undefined}
-            onValueChange={setSelectedTag}
+          <ReleaseBuildPicker
+            key={activeChannel}
+            builds={builds ?? []}
+            selectedTag={selectedTag}
+            onSelect={setSelectedTag}
             disabled={loading || !builds || builds.length === 0}
-          >
-            <SelectTrigger size="sm" className="min-w-64 flex-1">
-              <SelectValue
-                placeholder={
-                  loading
-                    ? translate(
-                        'auto.components.settings.ReleaseChannelSection.loadingBuilds',
-                        'Loading builds…'
-                      )
-                    : translate(
-                        'auto.components.settings.ReleaseChannelSection.noBuilds',
-                        'No builds found'
-                      )
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {(builds ?? []).map((build) => (
-                <SelectItem key={build.tag} value={build.tag}>
-                  {formatBuildLabel(build)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            placeholder={
+              loading || (builds === null && loadError === null)
+                ? translate(
+                    'auto.components.settings.ReleaseChannelSection.loadingBuilds',
+                    'Loading builds…'
+                  )
+                : translate(
+                    'auto.components.settings.ReleaseChannelSection.noBuilds',
+                    'No builds found'
+                  )
+            }
+          />
 
           <Button
             variant="ghost"
@@ -306,7 +278,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
               'Refresh build list'
             )}
             disabled={loading}
-            onClick={() => void loadBuilds(activeChannel)}
+            onClick={() => void loadBuilds(activeChannel, { force: true })}
           >
             {loading ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -349,6 +321,13 @@ export function ReleaseChannelSection(): React.JSX.Element {
             )}
           </Button>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.ReleaseChannelSection.cacheHint',
+            'Build lists are cached for 5 minutes. Refresh to check for new builds.'
+          )}
+        </p>
 
         {loadError ? (
           <p className="text-xs text-destructive">{loadError}</p>

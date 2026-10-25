@@ -27,3 +27,13 @@ export function structuredAgentSessionSubscriptionId(ctx: RpcContext, sessionId:
 export function structuredAgentSessionStatusSubscriptionId(ctx: RpcContext): string {
   return withFrameId(ctx, `${SUBSCRIPTION_PREFIX}.status:${ctx.connectionId ?? 'local'}`)
 }
+
+/** The turn-completion feed, which like the status feed is per connection, not per session. */
+export function structuredAgentSessionTurnCompletionSubscriptionId(ctx: RpcContext): string {
+  return withFrameId(ctx, `${SUBSCRIPTION_PREFIX}.turn-completion:${ctx.connectionId ?? 'local'}`)
+}
+
+/** The availability feed, per connection like the status feed. */
+export function structuredAgentSessionAvailabilitySubscriptionId(ctx: RpcContext): string {
+  return withFrameId(ctx, `${SUBSCRIPTION_PREFIX}.availability:${ctx.connectionId ?? 'local'}`)
+}

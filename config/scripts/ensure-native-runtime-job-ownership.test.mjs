@@ -100,13 +100,7 @@ describe('assertNodePtyJobOwnership', () => {
 
   it('rejects the prebuild that shipped without the job exports', () => {
     expect(() => assertNodePtyJobOwnership(onWindows(PREBUILD, CURRENT_ADDON))).toThrow(
-      /listJobProcessIds, terminateJob, assignCurrentProcessToJob/
-    )
-  })
-
-  it('names where the bad native came from, so the fix is obvious', () => {
-    expect(() => assertNodePtyJobOwnership(onWindows(PREBUILD, CURRENT_ADDON))).toThrow(
-      /prebuilds\/win32-x64/
+      /listJobProcessIds, terminateJob, assignCurrentProcessToJob[\s\S]*prebuilds\/win32-x64/
     )
   })
 
@@ -119,13 +113,7 @@ describe('assertNodePtyJobOwnership', () => {
   // child out of its pane's job satisfies all of them.
   it('rejects a source build that predates the Cygwin/MSYS breakaway denial', () => {
     expect(() => assertNodePtyJobOwnership(onWindows(PATCHED, PRE_MSYS_ADDON))).toThrow(
-      /predates the Cygwin\/MSYS job-breakaway denial/
-    )
-  })
-
-  it('tells that build apart by path, and says to rebuild', () => {
-    expect(() => assertNodePtyJobOwnership(onWindows(PATCHED, PRE_MSYS_ADDON))).toThrow(
-      /pre-msys\.node[\s\S]*Rebuild node-pty from source/
+      /pre-msys\.node[\s\S]*predates the Cygwin\/MSYS job-breakaway denial[\s\S]*Rebuild node-pty from source/
     )
   })
 
@@ -220,15 +208,10 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
   it('refuses a same-host rebuild that reported success and produced nothing', () => {
     const nodePtyDir = rebuiltInto({ 'package.json': {} })
     expect(() =>
-      assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'x64', crossHost: false })
-    ).toThrow(/the rebuild reported success/)
-  })
-
-  it('names both the addon it wanted and the prebuild that would load instead', () => {
-    const nodePtyDir = rebuiltInto({ 'package.json': {} })
-    expect(() =>
       assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'arm64', crossHost: false })
-    ).toThrow(/build[\\/]Release[\s\S]*prebuilds[\\/]win32-arm64/)
+    ).toThrow(
+      /the rebuild reported success[\s\S]*build[\\/]Release[\s\S]*prebuilds[\\/]win32-arm64/
+    )
   })
 
   // A rebuild that ignored --arch leaves a binary the target cannot load, so
@@ -250,16 +233,9 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
     writeFileSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'), Buffer.alloc(0x200))
     expect(() =>
       assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'x64', crossHost: false })
-    ).toThrow(/is not a PE image[\s\S]*truncated or quarantined/)
-  })
-
-  it('still names the consequence for that file, which is the prebuild', () => {
-    const nodePtyDir = join(mkdtempSync(join(fixtureDir, 'rebuild-')), 'node-pty')
-    mkdirSync(join(nodePtyDir, 'build', 'Release'), { recursive: true })
-    writeFileSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'), Buffer.alloc(0x200))
-    expect(() =>
-      assertRebuiltConptyDeniesMsysBreakaway({ nodePtyDir, rebuildArch: 'x64', crossHost: false })
-    ).toThrow(/fall back to the published prebuild/)
+    ).toThrow(
+      /is not a PE image[\s\S]*fall back to the published prebuild[\s\S]*truncated or quarantined/
+    )
   })
 
   it('accepts one a cross-arch rebuild really did emit for the target', () => {

@@ -83,7 +83,7 @@ describe('Codex prompt claim lifetime', () => {
     await collect()
     expect(old.deref()).toBeUndefined()
     expect(registry.find(replacement.itemId)).toBe(replacement.prompt)
-    expect(registry.ownsBoundClaim(claim, replacement.itemId, 'thread', 'new-turn')).toBe(true)
+    expect(registry.ownsClaim(claim)).toBe(true)
     registry.clearTurn('thread', 'new-turn')
     expect(registry.ownsClaim(claim)).toBe(false)
   })
@@ -106,5 +106,24 @@ describe('Codex prompt claim lifetime', () => {
     registry.clear()
     await collect()
     expect(prompt.deref()).toBeUndefined()
+  })
+})
+
+describe('Codex abandoned command approvals', () => {
+  it("reports only a command's own approval that its turn ended unanswered, once", () => {
+    const registry = new CodexPromptRegistry()
+    const ask = (id: number, method: string, params: Record<string, string>) =>
+      registry.register({ id, method, params: { threadId: 'thread', turnId: 'turn', ...params } })
+    ask(1, 'item/commandExecution/requestApproval', { itemId: 'unanswered' })
+    const answered = ask(2, 'item/commandExecution/requestApproval', { itemId: 'answered' })
+    ask(3, 'item/commandExecution/requestApproval', { itemId: 'parent', approvalId: 'sub' })
+    ask(4, 'item/fileChange/requestApproval', { itemId: 'patch' })
+    if (!answered) {
+      throw new Error('Fixture prompt was refused')
+    }
+    registry.forget(answered)
+    registry.clearTurn('thread', 'turn')
+    expect(registry.takeAbandonedCommands()).toEqual([{ threadId: 'thread', itemId: 'unanswered' }])
+    expect(registry.takeAbandonedCommands()).toEqual([])
   })
 })

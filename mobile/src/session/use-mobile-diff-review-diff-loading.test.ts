@@ -1,36 +1,67 @@
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { ConnectionState } from '../transport/types'
-import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
+import { buildMobileDiffReviewQueue } from './mobile-diff-review-queue'
 import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
 
 const loadDiff = vi.hoisted(() => vi.fn())
 vi.mock('./mobile-diff-review-loaders', () => ({ loadMobileDiffReviewDiff: loadDiff }))
 
-const client = { sendRequest: vi.fn() } as unknown as RpcClient
-// Stable identity, like the controller's useState setter: it is an effect dependency.
-const setActiveHunkIndex = () => {}
-const currentItem = { key: 'item-1', filePath: 'src/app.ts' } as MobileDiffReviewQueueItem
-const readyScreen = { kind: 'ready', branchCompare: null } as unknown as ReviewScreenState
+const client = createFakeRpcClient()
+const currentItem = buildMobileDiffReviewQueue({
+  worktreeId: 'wt-1',
+  statusEntries: [{ path: 'src/app.ts', status: 'modified', area: 'unstaged' }],
+  branchEntries: [],
+  comments: [],
+  reviewState: { version: 1, files: {} }
+})[0]!
+const readyScreen: ReviewScreenState = {
+  kind: 'ready',
+  branchCompare: null,
+  status: {
+    entries: [],
+    conflictOperation: undefined,
+    branch: undefined,
+    head: undefined,
+    upstreamStatus: undefined
+  },
+  comments: [],
+  reviewState: { version: 1, files: {} }
+}
 
 function readyDiff(firstLine: string): ReviewDiffState {
   return {
     kind: 'ready',
-    itemKey: 'item-1',
-    lines: [{ kind: 'context', text: firstLine }],
-    hunks: [],
+    itemKey: currentItem.key,
+    lines: [
+      {
+        kind: 'add',
+        newLineNumber: 1,
+        text: firstLine,
+        segments: [{ text: firstLine, kind: 'plain' }],
+        highlighted: false
+      }
+    ],
+    hunks: [
+      { index: 0, startIndex: 0, endIndex: 0, addedLines: 1, deletedLines: 0, firstLineNumber: 1 }
+    ],
     truncated: false
-  } as unknown as ReviewDiffState
+  }
 }
 
 describe('useMobileDiffReviewDiffLoading', () => {
   let renderer: ReactTestRenderer | null = null
   let diffState: ReviewDiffState = { kind: 'idle' }
+  let activeHunkIndex: number | null = null
+  let selectHunk: ((index: number | null) => void) | null = null
 
   function Probe({ connState }: { connState: ConnectionState }): null {
+    const [selectedHunk, setActiveHunkIndex] = useState<number | null>(null)
+    activeHunkIndex = selectedHunk
+    selectHunk = setActiveHunkIndex
     diffState = useMobileDiffReviewDiffLoading({
       client,
       connState,
@@ -72,12 +103,15 @@ describe('useMobileDiffReviewDiffLoading', () => {
 
     await render('connected')
     expect(diffState).toMatchObject({ kind: 'ready' })
+    act(() => selectHunk?.(0))
+    expect(activeHunkIndex).toBe(0)
 
     await update('reconnecting')
     await update('connected')
     // Why (F10): a failed refetch must not erase the diff (or hunk context) on screen.
     expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'before the drop' }] })
     expect(loadDiff).toHaveBeenCalledTimes(2)
+    expect(activeHunkIndex).toBe(0)
   })
 
   it('keeps the loaded diff through a disconnect and its reconnect refetch', async () => {
@@ -91,6 +125,8 @@ describe('useMobileDiffReviewDiffLoading', () => {
 
     await render('connected')
     expect(diffState).toMatchObject({ kind: 'ready' })
+    act(() => selectHunk?.(0))
+    expect(activeHunkIndex).toBe(0)
 
     await update('reconnecting')
     expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'before the drop' }] })
@@ -104,13 +140,14 @@ describe('useMobileDiffReviewDiffLoading', () => {
     })
     expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'after the drop' }] })
     expect(loadDiff).toHaveBeenCalledTimes(2)
+    expect(activeHunkIndex).toBe(0)
   })
 
   it('waits for the desktop when the drop lands before any diff is loaded', async () => {
     loadDiff.mockReturnValueOnce(new Promise(() => {}))
 
     await render('connected')
-    expect(diffState).toMatchObject({ kind: 'loading', itemKey: 'item-1' })
+    expect(diffState).toMatchObject({ kind: 'loading', itemKey: currentItem.key })
 
     await update('disconnected')
     expect(diffState).toMatchObject({ kind: 'error', message: 'Waiting for desktop...' })

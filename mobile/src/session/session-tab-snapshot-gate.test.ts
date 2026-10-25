@@ -88,6 +88,10 @@ describe('applyClosedTabTombstones', () => {
 
   it('stops suppressing and clears an expired tombstone even if still present', () => {
     const tombstones = new Map([['a', 5000]])
+    expect(
+      applyClosedTabTombstones([tab('a'), tab('b')], tombstones, 4999).map((t) => t.id)
+    ).toEqual(['b'])
+    expect(tombstones.has('a')).toBe(true)
     const result = applyClosedTabTombstones([tab('a'), tab('b')], tombstones, 5000)
     expect(result.map((t) => t.id)).toEqual(['a', 'b'])
     expect(tombstones.has('a')).toBe(false)

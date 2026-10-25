@@ -15,8 +15,29 @@ import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   TerminalStreamOpcode,
-  decodeTerminalStreamFrame
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamJson,
+  encodeTerminalStreamJson,
+  type TerminalStreamFrame
 } from '../../src/shared/terminal-stream-protocol'
+
+/**
+ * Why: a refusal reaches the remount only on a stream that did not negotiate sequenced input (an
+ * older peer); a sequenced stream keeps its journal and resends on the same stream instead.
+ */
+function withoutInputAck(frame: TerminalStreamFrame): TerminalStreamFrame {
+  if (frame.opcode !== TerminalStreamOpcode.Subscribe) {
+    return frame
+  }
+  const payload = decodeTerminalStreamJson<{ capabilities?: Record<string, unknown> }>(
+    frame.payload
+  )
+  if (!payload?.capabilities) {
+    return frame
+  }
+  const { inputAck: _inputAck, ...capabilities } = payload.capabilities
+  return { ...frame, payload: encodeTerminalStreamJson({ ...payload, capabilities }) }
+}
 
 const ENVIRONMENT_ID = 'env-1'
 const TERMINAL_HANDLE = 'terminal-1'
@@ -48,7 +69,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
 }))
 
@@ -84,8 +105,6 @@ function startHost(): {
     getRemoteDesktopFitHold: vi.fn().mockReturnValue({ mode: 'desktop-fit', cols: 120, rows: 40 }),
     isRemoteDesktopViewerOwner: vi.fn().mockReturnValue(false),
     getPtyOutputSequence: vi.fn().mockReturnValue(0),
-    attachRemoteTerminalSourceRangeConsumer: vi.fn().mockReturnValue(false),
-    detachRemoteTerminalSourceRangeConsumer: vi.fn(),
     getRendererTerminalSerializerGeneration: vi.fn().mockReturnValue(0),
     sendTerminal,
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -149,7 +168,7 @@ function startHost(): {
         sendBinary: (bytes: Uint8Array) => {
           const frame = decodeTerminalStreamFrame(bytes)
           if (frame) {
-            handlers.get(frame.streamId)?.(frame)
+            handlers.get(frame.streamId)?.(withoutInputAck(frame))
           }
         }
       }
@@ -251,12 +270,8 @@ function createDeps() {
     setRuntimePaneTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
     updateTabPtyId: vi.fn(),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    clearWorktreeUnread: vi.fn(),
-    clearTerminalTabUnread: vi.fn(),
-    clearTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
+    readTerminalPaneOnInput: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
@@ -323,11 +338,9 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       suppressedPtyExitIds: {},
       agentLaunchConfigByPaneKey: {},
       getAgentLaunchConfigForStatusEntry: vi.fn(),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(),
       clearSleepingAgentSession: vi.fn(),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),
-      markWorktreeUnread: vi.fn(),
       observeTerminalGitHubPullRequestLink: vi.fn(),
       recordTerminalInput: vi.fn(),
       setAgentStatus: vi.fn(),
@@ -336,9 +349,8 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       retireAgentPaneAuthority: vi.fn(),
       setPaneForegroundAgent: vi.fn(),
       clearPaneForegroundAgent: vi.fn(),
-      markTerminalTabUnread: vi.fn(),
-      markTerminalPaneUnread: vi.fn(),
-      markAgentCompletionPaneUnread: vi.fn(),
+      markTerminalBell: vi.fn(),
+      markAgentAttentionUnread: vi.fn(),
       remountTerminalTabForRecovery
     }
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {

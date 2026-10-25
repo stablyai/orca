@@ -1,5 +1,9 @@
-import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
+import type {
+  GitHubPRRefreshCandidate,
+  PRRefreshOutcome
+} from '../../shared/github/pull-request-refresh-types'
 import { lookupBackoffDelayMs } from '../source-control/hosted-review-refresh-pacing'
+import { refreshIntervalForCandidate } from './pr-refresh-candidate-policy'
 
 export class PRRefreshRetryState {
   private readonly errorBackoff = new Map<string, { failures: number; retryAt: number }>()
@@ -26,9 +30,12 @@ export class PRRefreshRetryState {
     return this.manualRetryGates.get(key) ?? 0
   }
 
-  nextVisibleErrorRetryAt(key: string): number {
+  nextVisibleErrorRetryAt(key: string, candidate: GitHubPRRefreshCandidate): number {
     const failures = (this.errorBackoff.get(key)?.failures ?? 0) + 1
-    const retryAt = Date.now() + lookupBackoffDelayMs(failures)
+    const interval = refreshIntervalForCandidate(candidate)
+    const retryAt =
+      Date.now() +
+      Math.max(lookupBackoffDelayMs(failures), Number.isFinite(interval) ? interval : 0)
     this.errorBackoff.set(key, { failures, retryAt })
     return retryAt
   }

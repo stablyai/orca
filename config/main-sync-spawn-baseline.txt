@@ -1,0 +1,51 @@
+# Synchronous child-process launches in production src/main and src/shared, per file: uses of
+# execFileSync/spawnSync/execSync, runProcessSync and the repo sync wrappers listed in
+# config/scripts/check-main-sync-spawn-ratchet.mjs (synchronous ACL rewrites and grants, which
+# can block on a whole directory subtree).
+# Some entries run in the daemon or orcad process, or are test harnesses outside the test-path
+# conventions. This is a RATCHET: counts may only go DOWN.
+# Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune
+1 src/main/agent-hooks/installer-utils.ts
+2 src/main/browser/cookies/sources/browser-cookie-key.ts
+1 src/main/browser/browser-route-egress-electron-launch.ts
+1 src/main/browser/browser-route-partition-binding-store.ts
+1 src/main/browser/browser-route-persisted-worker-electron-process.ts
+1 src/main/claude-accounts/runtime-auth-service.ts
+3 src/main/codex-accounts/fs-utils.ts
+2 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
+2 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
+1 src/main/codex-accounts/runtime-home-service-home-routing.ts
+1 src/main/codex-accounts/runtime-home-service-wsl.ts
+2 src/main/codex-accounts/service.ts
+1 src/main/computer/macos-computer-use-permissions.ts
+2 src/main/daemon/daemon-cgroup-scope.ts
+1 src/main/daemon/daemon-process-identity-query.ts
+1 src/main/daemon/daemon-process-start-time.ts
+1 src/main/daemon/daemon-user-manager-lifetime.ts
+1 src/main/daemon/pty-subprocess/shell-launch-plan.ts
+1 src/main/daemon/terminal-scopes.ts
+1 src/main/emulator/serve-sim-runtime-materializer.ts
+1 src/main/git/command-runner/git-exec-file.ts
+1 src/main/git/repo-detection-command.ts
+1 src/main/git/runner.ts
+1 src/main/ipc/worktree-logic.ts
+2 src/main/macos-press-and-hold-default.ts
+1 src/main/network/macos-tailscale-dns-diagnostic.ts
+1 src/main/opencode/legacy-plugin-acl-retry.ts
+2 src/main/orcad/node-pty-precondition.ts
+1 src/main/orcad/orcad-data-root-privacy.ts
+2 src/main/persistence/profile-state/profile-state-access-identity.ts
+1 src/main/persistence/profile-state/profile-state-recovery-copy.ts
+1 src/main/plugins/plugin-private-marketplace-ssh-shim.cjs
+1 src/main/pty/posix-pty-foreground-group.ts
+1 src/main/pty/posix-pty-process-groups.ts
+1 src/main/pwsh.ts
+1 src/main/runtime/runtime-skill-install-authority.ts
+2 src/main/startup/cli-launch-redirect.ts
+1 src/main/startup/linux-secret-service-probe.ts
+1 src/main/worktree-runner-script.ts
+3 src/main/wsl.ts
+2 src/main/zsh-startup-hook-pty-harness.ts
+1 src/shared/fish-binary-requirement.ts
+1 src/shared/openssh-default-shell.ts
+1 src/shared/secure-file.ts

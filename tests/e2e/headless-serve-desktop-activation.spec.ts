@@ -1,3 +1,4 @@
+import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -8,6 +9,7 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
+import { retryTransientMainEvaluate } from './helpers/electron-main-evaluate-retry'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation,
@@ -31,7 +33,6 @@ import type {
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { parsePaneKey } from '../../src/shared/stable-pane-id'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(
@@ -76,12 +77,8 @@ function readPersistedPromotionBinding(
   leafId: string
 ): { tabId: string; leafId: string; ptyId: string } | null {
   try {
-    const persisted = JSON.parse(
-      readFileSync(
-        path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json'),
-        'utf8'
-      )
-    ) as {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const persisted = readPersistedProfileState(userDataDir) as {
       workspaceSession?: {
         tabsByWorktree?: Record<string, { id?: string; ptyId?: string | null }[]>
         terminalLayoutsByTabId?: Record<string, { ptyIdsByLeafId?: Record<string, string | null> }>
@@ -142,7 +139,10 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       args: [...getOrcaElectronLaunchArgs(mainPath, false), '--serve', '--serve-no-pairing'],
       env
     })
-    const resolvedHome = await serveApp.evaluate(({ app }) => app.getPath('home'))
+    const launchedServeApp = serveApp
+    const resolvedHome = await retryTransientMainEvaluate(() =>
+      launchedServeApp.evaluate(({ app }) => app.getPath('home'))
+    )
     assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     // Why: this spec bypasses the app fixture, so opt into its gated Electron log capture for CI failures.
     forwardElectronProcessLogs(serveApp, testInfo)

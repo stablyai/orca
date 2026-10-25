@@ -10,6 +10,7 @@ import {
   type DetectedTerminalFileLinkRange
 } from './terminal-file-link-detection-ranges'
 import { detectTerminalFileUriLinks } from './terminal-file-uri-link'
+import { detectTerminalMarkdownFileLinks } from './terminal-markdown-file-links'
 
 export type ParsedTerminalFileLink = {
   pathText: string
@@ -33,8 +34,9 @@ export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'co
 // `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
 // Why: framework route files commonly use punctuation segments like
 // `app/(shop)/products/[id]/page.tsx`; keep those links whole.
+// Keep Japanese middle dots and tildes without admitting prose delimiters.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/gu
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]\u30FB\uFF65\u301C\uFF5E]*(?::\d+)?(?::\d+)?/gu
 
 // Matches separator paths whose file or folder names include spaces. This runs
 // before LOCAL_PATH_REGEX so `/Users/A/Foo Bar/file.ts` is claimed as one link
@@ -273,24 +275,24 @@ function detectSpacedLocalPathLinks(
   return links
 }
 
-// Runs the file-uri, local-path, and bare-filename passes in that precedence.
+// Runs Markdown destinations, file URIs, local paths, then bare filenames.
 // `file://` and separator paths claim their ranges first so the bare-filename
 // pass never re-links a token already covered by a longer explicit link.
 function assembleFileLinks(
   lineText: string,
   includeLineEndingPrefixCandidates: boolean
 ): ParsedTerminalFileLink[] {
-  const uriLinks = detectTerminalFileUriLinks(lineText)
-  const pathLinks = detectLocalPathLinks(lineText, includeLineEndingPrefixCandidates)
-  const explicitLinks = uriLinks.length > 0 ? [...uriLinks, ...pathLinks] : pathLinks
+  const markdown = detectTerminalMarkdownFileLinks(lineText)
+  const uriLinks = detectTerminalFileUriLinks(markdown.remainingText)
+  const pathLinks = detectLocalPathLinks(markdown.remainingText, includeLineEndingPrefixCandidates)
+  const explicitLinks = [...markdown.links, ...uriLinks, ...pathLinks]
   const claimed = mergeTerminalFileLinkRanges(
     explicitLinks.map(({ startIndex, endIndex }): [number, number] => [startIndex, endIndex])
   )
-  const wordLinks = detectBareFilenameLinks(lineText, claimed)
-  for (const link of wordLinks) {
+  for (const link of detectBareFilenameLinks(markdown.remainingText, claimed)) {
     explicitLinks.push(link)
   }
-  return explicitLinks
+  return explicitLinks.sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex)
 }
 
 export function extractTerminalFileLinks(lineText: string): ParsedTerminalFileLink[] {

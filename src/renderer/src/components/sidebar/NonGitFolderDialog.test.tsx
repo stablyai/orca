@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     settings: {}
   },
   addRemote: vi.fn(),
+  addRuntimeSshRepo: vi.fn(),
   onboardingGet: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))
@@ -84,10 +85,15 @@ vi.mock('sonner', () => ({
   }
 }))
 
+vi.mock('@/runtime/runtime-ssh-target-management', () => ({
+  addRuntimeSshRepo: mocks.addRuntimeSshRepo
+}))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
+import { toast } from 'sonner'
 import NonGitFolderDialog from './NonGitFolderDialog'
 
 function makeWorktree(id: string, path: string, hostId: Worktree['hostId']): Worktree {
@@ -173,65 +179,71 @@ describe('NonGitFolderDialog', () => {
     })
   })
 
-  it('names the SSH folder project after the requested display name', async () => {
+  it("adds a folder on a server's SSH host through that server, named as requested", async () => {
     mocks.state.modalData = {
       folderPath: '/srv/non-git',
       connectionId: 'ssh-1',
+      runtimeEnvironmentId: 'env-1',
       displayName: 'inf-오케스트레이터'
     }
-    mocks.addRemote.mockResolvedValue({
-      repo: {
-        id: 'ssh-repo',
-        path: '/srv/non-git',
-        displayName: 'inf-오케스트레이터',
-        badgeColor: '#111',
-        addedAt: 1,
-        kind: 'folder',
-        connectionId: 'ssh-1'
-      } satisfies Repo
-    })
+    mocks.addRuntimeSshRepo.mockResolvedValue({
+      id: 'ssh-repo',
+      path: '/srv/non-git',
+      displayName: 'inf-오케스트레이터',
+      badgeColor: '#111',
+      addedAt: 1,
+      kind: 'folder'
+    } satisfies Repo)
     renderToStaticMarkup(<NonGitFolderDialog />)
 
     const button = mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))
     button?.onClick?.()
 
     await vi.waitFor(() =>
-      expect(mocks.addRemote).toHaveBeenCalledWith({
-        connectionId: 'ssh-1',
-        remotePath: '/srv/non-git',
-        kind: 'folder',
-        displayName: 'inf-오케스트레이터'
+      expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith('ssh-repo', {
+        requireAuthoritative: true,
+        executionHostId: 'runtime:env-1'
       })
     )
+    expect(mocks.addRuntimeSshRepo).toHaveBeenCalledWith('env-1', {
+      connectionId: 'ssh-1',
+      remotePath: '/srv/non-git',
+      kind: 'folder',
+      displayName: 'inf-오케스트레이터'
+    })
+    expect(mocks.state.repos).toContainEqual(
+      expect.objectContaining({ id: 'ssh-repo', executionHostId: 'runtime:env-1' })
+    )
+    expect(mocks.addRemote).not.toHaveBeenCalled()
+    expect(mocks.state.addNonGitFolder).not.toHaveBeenCalled()
   })
 
-  it('activates only the selected SSH folder when repo IDs collide', async () => {
+  it("activates only the server's SSH folder when repo IDs collide", async () => {
     const repo: Repo = {
       id: 'shared-repo',
       path: '/srv/non-git',
       displayName: 'SSH folder',
       badgeColor: '#111',
       addedAt: 1,
-      kind: 'folder',
-      connectionId: 'ssh-1'
+      kind: 'folder'
     }
     const localWorktree = makeWorktree('shared-repo::/local/non-git', '/local/non-git', 'local')
-    const sshWorktree = makeWorktree('shared-repo::/srv/non-git', '/srv/non-git', 'ssh:ssh-1')
+    const serverWorktree = makeWorktree(
+      'shared-repo::/srv/non-git',
+      '/srv/non-git',
+      'runtime:env-1'
+    )
     mocks.state.modalData = {
       folderPath: '/srv/non-git',
-      connectionId: 'ssh-1'
+      connectionId: 'ssh-1',
+      runtimeEnvironmentId: 'env-1'
     }
     mocks.state.repos = [
-      {
-        ...repo,
-        path: '/local/non-git',
-        connectionId: null,
-        executionHostId: 'local'
-      }
+      { ...repo, path: '/local/non-git', connectionId: null, executionHostId: 'local' }
     ]
-    mocks.addRemote.mockResolvedValue({ repo })
+    mocks.addRuntimeSshRepo.mockResolvedValue(repo)
     mocks.state.fetchWorktrees.mockImplementation(async () => {
-      mocks.state.worktreesByRepo = { [repo.id]: [localWorktree, sshWorktree] }
+      mocks.state.worktreesByRepo = { [repo.id]: [localWorktree, serverWorktree] }
       return true
     })
     renderToStaticMarkup(<NonGitFolderDialog />)
@@ -240,18 +252,30 @@ describe('NonGitFolderDialog', () => {
     button?.onClick?.()
 
     await vi.waitFor(() =>
-      expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(sshWorktree.id, {
+      expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(serverWorktree.id, {
         sidebarRevealBehavior: 'auto',
-        executionHostId: 'ssh:ssh-1'
+        executionHostId: 'runtime:env-1'
       })
     )
-    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true,
-      executionHostId: 'ssh:ssh-1'
-    })
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalledWith(
       localWorktree.id,
       expect.anything()
     )
+  })
+
+  it('refuses an SSH folder with no server to add it, never adding it on this computer', async () => {
+    mocks.state.modalData = { folderPath: '/srv/non-git', connectionId: 'ssh-1' }
+    renderToStaticMarkup(<NonGitFolderDialog />)
+
+    const button = mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))
+    button?.onClick?.()
+
+    await vi.waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('SSH connection "ssh-1" not found or not connected')
+    )
+    expect(mocks.addRemote).not.toHaveBeenCalled()
+    expect(mocks.addRuntimeSshRepo).not.toHaveBeenCalled()
+    expect(mocks.state.addNonGitFolder).not.toHaveBeenCalled()
+    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
   })
 })

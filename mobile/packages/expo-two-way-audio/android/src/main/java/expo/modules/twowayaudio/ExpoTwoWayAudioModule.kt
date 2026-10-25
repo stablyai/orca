@@ -98,11 +98,21 @@ class ExpoTwoWayAudioModule : Module() {
          }
 
          AsyncFunction("requestMicrophonePermissionsAsync") { promise: Promise ->
-             Permissions.askForPermissionsWithPermissionsManager(
-                 appContext.permissions,
-                 promise,
-                 android.Manifest.permission.RECORD_AUDIO
-             )
+             // Asking when already granted still runs GrantPermissionsActivity, which pauses/resumes the React host.
+             val permissionsManager = appContext.permissions
+             if (permissionsManager?.hasGrantedPermissions(android.Manifest.permission.RECORD_AUDIO) == true) {
+                 Permissions.getPermissionsWithPermissionsManager(
+                     permissionsManager,
+                     promise,
+                     android.Manifest.permission.RECORD_AUDIO
+                 )
+             } else {
+                 Permissions.askForPermissionsWithPermissionsManager(
+                     permissionsManager,
+                     promise,
+                     android.Manifest.permission.RECORD_AUDIO
+                 )
+             }
          }
 
         // Register events

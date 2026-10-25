@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '../store'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
@@ -43,6 +43,12 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalSshParkingEnabled,
     workspaceSurfaceIds
   } = controller
+  // Why: this effect is the sole writer, so these mirror the queued state without a render.
+  const dispatchedIdSetsRef = useRef<{
+    parked: ReadonlySet<string>
+    forceParked: ReadonlySet<string>
+    evictionExempt: ReadonlySet<string>
+  } | null>(null)
 
   useEffect(() => {
     const pass = collectTerminalParkingPassCandidates(controller)
@@ -143,17 +149,26 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
       }
       pass.nextParkedTerminalWorktreeIds.add(worktreeId)
     }
-    setParkedTerminalWorktreeIds((current) =>
-      haveSameIdSet(current, pass.nextParkedTerminalWorktreeIds)
-        ? current
-        : pass.nextParkedTerminalWorktreeIds
-    )
-    setForceParkedTerminalWorktreeIds((current) =>
-      haveSameIdSet(current, forceParkedWorktreeIds) ? current : forceParkedWorktreeIds
-    )
-    setEvictionExemptTerminalTabIds((current) =>
-      haveSameIdSet(current, nextEvictionExemptTabIds) ? current : nextEvictionExemptTabIds
-    )
+    // Why: a functional updater that returns `current` still queues a render. This pass runs in the
+    // synchronously flushed effects of every pty-exit commit, so those no-op renders chained a
+    // worktree removal's pane-close burst past React's nested-update limit (#185).
+    const dispatched = (dispatchedIdSetsRef.current ??= {
+      parked: new Set(),
+      forceParked: new Set(),
+      evictionExempt: new Set()
+    })
+    if (!haveSameIdSet(dispatched.parked, pass.nextParkedTerminalWorktreeIds)) {
+      dispatched.parked = pass.nextParkedTerminalWorktreeIds
+      setParkedTerminalWorktreeIds(pass.nextParkedTerminalWorktreeIds)
+    }
+    if (!haveSameIdSet(dispatched.forceParked, forceParkedWorktreeIds)) {
+      dispatched.forceParked = forceParkedWorktreeIds
+      setForceParkedTerminalWorktreeIds(forceParkedWorktreeIds)
+    }
+    if (!haveSameIdSet(dispatched.evictionExempt, nextEvictionExemptTabIds)) {
+      dispatched.evictionExempt = nextEvictionExemptTabIds
+      setEvictionExemptTerminalTabIds(nextEvictionExemptTabIds)
+    }
     const retentionTtlEligibleIds = new Set(
       retentionBudgetCandidates
         .filter((candidate) => !candidate.ordinaryParkingCovers && !candidate.hasPendingSpawnWork)

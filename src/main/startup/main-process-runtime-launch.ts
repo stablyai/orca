@@ -1,20 +1,21 @@
-import { app, powerMonitor, type BrowserWindow } from 'electron'
-import { is } from '@electron-toolkit/utils'
-import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { app, type BrowserWindow } from 'electron'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 import {
   getCanonicalUserDataPath,
   migrateMobilePairingDataToCanonicalUserDataPath
 } from '../persistence'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { registerMobileHandlers } from '../ipc/mobile'
-import { getLocalPtyProvider, registerHeadlessPtyRuntime } from '../ipc/pty'
+import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
+import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
+import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
+import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
-import { getDesktopRelayStatus, publishDesktopRelayStatus } from './main-process-relay-status'
-import { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
+import { getDesktopRelayStatus } from './main-process-relay-status'
+import { startDesktopRelayService } from './main-process-relay-startup'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
   bindTerminalRuntimeStartupServices,
@@ -26,19 +27,25 @@ import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
 import { startWindowsDesktopBeforeShellPathReady } from './windows-desktop-shell-path-startup'
 import { repairKnownPoisonedInstallDirBeforeWindow } from './windows-install-dir-acl-recovery'
-import { registerServeSignalHandlers } from './serve-signal-handlers'
+import { installServeQuitHandling } from './serve-quit-handling'
+import { installCloudSessionShutdownFlush } from './cloud-session-shutdown-flush'
+import { registerHeadlessServeSshHandlers } from './headless-serve-ssh-registration'
 import { settleServeDesktopActivation } from './serve-desktop-activation'
 import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
 } from '../runtime/runtime-rpc-startup-failure'
-import { CliInstaller } from '../cli/cli-installer'
-import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'
+import { registerCliForHeadlessServe } from './serve-cli-registration'
+import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
+import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
+import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
+import { resolveUpdateInstallMode } from '../updater'
+import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
 
@@ -73,7 +80,7 @@ function installRuntimeRpc(
     throw new Error(`Invalid ORCA_E2E_RUNTIME_WS_PORT value: ${requestedE2EWsPort}`)
   }
   // Why: pin dev to 6769 so `pnpm dev` doesn't race packaged Orca on 6768 and fall back to a random port, breaking deterministic mobile pairing/repro (STA-1511).
-  const devWsPort = is.dev && !isE2E ? 6769 : undefined
+  const devWsPort = !app.isPackaged && !isE2E ? 6769 : undefined
   const runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.
@@ -88,12 +95,14 @@ function installRuntimeRpc(
       ? {
           wsPort: serveOptions.wsPort,
           // Why: only explicit `orca serve --port` overrides a stale STA-1511 fallback (issue #8535); default/dev stay fallback-first for pairing stability.
-          preferPinnedWsPort: true
+          preferPinnedWsPort: true,
+          requirePinnedWsPort: true
         }
       : {}),
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc
+  runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
     consumePendingUnpairedDeviceAuthFailure: (webContentsId) => {
@@ -148,69 +157,47 @@ async function launchServeMode(
   )
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+  // Switch point: main shows live terminals no pane shows, before any client attaches.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    await placeUnshownLiveTerminalsBestEffort(runtime)
+  }
   // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
   if (state.headlessBrowserDisplayAvailable) {
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
-        getAgentBrowserBridge: () => state.agentBrowserBridge
+        getAgentBrowserBridge: () => state.agentBrowserBridge,
+        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page)
       })
     )
   }
-  // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  publishHeadlessRuntimeGraph(runtime)
+  // Why before RPC binds: the first paired client must already see this host's SSH targets.
+  registerHeadlessServeSshHandlers(state.store!, runtime)
   await runtimeRpc.start().catch((error) => {
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
   })
+  scheduleAgentLaunchRecordWarmup(null)
   // Why: a phone paired to a headless host still registers and unregisters its token;
   // it simply never receives a push, because nothing dispatches notifications here.
   startDesktopPushService(runtimeRpc)
   settleDesktopActivation()
-  // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
-  registerServeSignalHandlers(process, () => app.quit())
-  // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
-  if (process.platform === 'darwin' || process.platform === 'linux') {
-    try {
-      // Why: serve is headless — a fallback osascript admin prompt would hang it; skip elevation since ~/.local/bin needs none.
-      const cliStatus = await new CliInstaller({
-        privilegedRunner: async () => {
-          throw new Error('serve CLI auto-install must not request administrator privileges')
-        }
-      }).install()
-      console.log(
-        `[serve] orca CLI install: ${cliStatus.state}${cliStatus.commandPath ? ` (${cliStatus.commandPath})` : ''}`
-      )
-    } catch (error) {
-      console.warn(
-        '[serve] orca CLI install skipped:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
-  }
-  // Why: Linux CLI installs as `orca-ide`, but the Claude Team launcher invokes bare `orca`; drop a ~/.local/bin dispatcher (ahead of /usr/bin) so it resolves. Best-effort.
-  if (process.platform === 'linux' && app.isPackaged && process.resourcesPath) {
-    try {
-      const dispatcher = await installLinuxBareOrcaDispatcher({
-        resourcesPath: process.resourcesPath
-      })
-      console.log(
-        `[serve] bare orca dispatcher ${dispatcher.state}: ${dispatcher.dispatcherPath}` +
-          `${dispatcher.target ? ` -> ${dispatcher.target}` : ''}`
-      )
-    } catch (error) {
-      console.warn(
-        '[serve] bare orca dispatcher install skipped:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
-  }
+  installServeQuitHandling()
+  await registerCliForHeadlessServe()
   // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
   state.automations?.start()
   // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
   // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
-  scheduleAllPendingHistoryTreeRemovals()
+  void scheduleAllPendingHistoryTreeRemovals()
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
   await printServeReady(serveOptions)
+  const store = state.store!
+  setupHeadlessServeAutoUpdater(store, {
+    onBeforeUpdateQuit: () =>
+      preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.codexRuntimeHome, store }),
+    onBeforeUpdateQuitFailure: 'abort',
+    updateInstallMode: resolveUpdateInstallMode(true)
+  })
 }
 
 async function launchDesktopMode(
@@ -237,6 +224,7 @@ async function launchDesktopMode(
         }
       )
   ])
+  scheduleAgentLaunchRecordWarmup(win)
   if (!runtimeRpcStartResult.ok) {
     // Why gated: this dialog is the only launch-phase text read through translateMain, and i18n
     // now settles alongside this phase — without the wait a non-English user could get the
@@ -245,42 +233,16 @@ async function launchDesktopMode(
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
   }
+  // Why before the proxy await: a mint in that window must wait for the installer, not fail
+  // provider_missing; the installer itself holds its first request until the proxy lands.
+  startDesktopRelayService(runtimeRpc)
   // Why after the window and not before it: the default-session request guard already holds every
   // fetcher until the persisted proxy lands, so this only has to keep the launch phase itself
-  // ordered ahead of the relay — it must not gate the renderer.
+  // ordered ahead of the push gateway — it must not gate the renderer.
   await state.initialProxyApplicationReady
   // Why after the proxy await: the push gateway client is an app-owned fetcher, so it must not
   // issue its first request ahead of the persisted proxy.
   startDesktopPushService(runtimeRpc)
-  const cloudAuth = getOrcaCloudAuthConfig()
-  if (cloudAuth.configured) {
-    try {
-      const relayService = new DesktopRelayService({
-        authConfig: cloudAuth.config,
-        userDataPath: getProfileUserDataPath(),
-        appVersion: app.getVersion(),
-        runtimeRpc,
-        onStatus: publishDesktopRelayStatus
-      })
-      state.desktopRelayService = relayService
-      runtimeRpc.setMobileRelayPairingProvider({
-        createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
-        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
-        onDemandStateChanged: () => relayService.demandStateChanged(),
-        getEndpoints: (context, params) => relayService.getEndpoints(context, params),
-        provisionRelay: (context, params) => relayService.provisionRelay(context, params)
-      })
-      relayService.start()
-      // Why: sleeping past relay-token expiry kills the broker with no retry
-      // timer; resume is the moment that state becomes recoverable.
-      powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
-    } catch (error) {
-      console.warn(
-        '[relay] Desktop relay startup unavailable:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
-  }
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
     // Why: store can be null if init failed earlier; bail rather than throw inside an Electron event listener.
@@ -308,6 +270,7 @@ export async function initializeMainProcessRuntimeLaunch(
     return
   }
   state.serveOptions = serveOptions
+  installCloudSessionShutdownFlush()
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
   const shellPathReady = shellPathHydration.whenReady()
   // Why published: the renderer's git-environment barrier must fence on the same
@@ -334,6 +297,11 @@ export async function initializeMainProcessRuntimeLaunch(
     })
     desktopWindow = desktopStartup.window
   } else {
+    // Why before the daemon starts: its host choice waits briefly for a copy unpacking here.
+    // Serve unpacks for itself, with a deadline and progress on its own output.
+    if (!serveOptions) {
+      void startAppImageCopyPreExtraction()
+    }
     await shellPathReady
     bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
   }

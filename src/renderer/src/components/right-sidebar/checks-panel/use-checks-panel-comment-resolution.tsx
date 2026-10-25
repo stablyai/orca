@@ -1,6 +1,9 @@
+import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import { resolveChecksActionAgent } from '@/lib/fix-checks-agent-launch'
+import type { SourceControlActionId } from '../../../../../shared/source-control-ai-actions'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
-import { pickDefaultSourceControlAgent } from '../SourceControl'
 import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot
@@ -14,10 +17,12 @@ import { resolveGitLabMRDiscussionForChecks } from './gitlab-review-client'
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,
-  | 'activeConnectionId'
+  | 'activeWorktree'
   | 'activeWorktreeId'
   | 'branch'
   | 'claimedCommentResolutionRef'
@@ -25,7 +30,6 @@ type ChecksPanelCommentResolutionInput = Pick<
   | 'commentsLoading'
   | 'detectedAgentIds'
   | 'pendingCommentResolutionRef'
-  | 'remoteDetectedAgentIds'
   | 'repo'
   | 'resolveReviewThread'
   | 'setAgentComposerState'
@@ -42,9 +46,9 @@ type ChecksPanelCommentResolutionInput = Pick<
 
 export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolutionInput) {
   const {
-    activeConnectionId,
     activeGitLabReview,
     activeReview,
+    activeWorktree,
     activeWorktreeId,
     branch,
     claimedCommentResolutionRef,
@@ -56,12 +60,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     pr,
     prCacheKey,
     prNumber,
-    remoteDetectedAgentIds,
     repo,
     resolveReviewThread,
     setAgentComposerState,
     setComments,
-    settings,
     sourceControlAiActionsVisible,
     commentResolutionLaunchAcceptedRef
   } = model
@@ -84,10 +86,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         const result = await resolveGitLabMRDiscussionForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          settings,
           iid: activeGitLabReview.number,
           discussionId: threadId,
-          resolved: resolve
+          resolved: resolve,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
         })
         if (!result.ok) {
           rollbackThread(previousThreadComments)
@@ -143,7 +145,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       prNumber,
       repo,
       resolveReviewThread,
-      settings,
+      activeWorktree,
       setComments
     ]
   )
@@ -152,20 +154,21 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const commentsDisabledReason = canTargetPRComments
     ? undefined
     : 'Commenting requires a GitHub PR repository target.'
-  const detectedAgentsForAI =
-    typeof activeConnectionId === 'string' ? remoteDetectedAgentIds : detectedAgentIds
-  const noEnabledAgentKnown =
-    detectedAgentsForAI != null &&
-    pickDefaultSourceControlAgent(
-      settings?.defaultTuiAgent,
-      detectedAgentsForAI,
-      settings?.disabledTuiAgents
-    ) == null
-  const aiActionDisabledReason = !activeWorktreeId
-    ? 'Select a workspace before launching an AI action.'
-    : noEnabledAgentKnown
-      ? 'No enabled AI agents. Configure agents in Settings.'
-      : undefined
+  const workspace = worktreeLaunchWorkspace(activeWorktreeId ?? '')
+  useChatProgramFacts(workspace, Boolean(activeWorktreeId) && sourceControlAiActionsVisible)
+  const launchState = useAppStore.getState()
+  const noAgentFor = (actionId: SourceControlActionId): boolean =>
+    detectedAgentIds != null &&
+    resolveChecksActionAgent(launchState, actionId, repo?.id, workspace, detectedAgentIds) == null
+  const noEnabledAgentKnown = noAgentFor('resolveConflicts')
+  const actionDisabledReason = (actionId: SourceControlActionId): string | undefined =>
+    !activeWorktreeId
+      ? 'Select a workspace before launching an AI action.'
+      : noAgentFor(actionId)
+        ? 'No enabled AI agents. Configure agents in Settings.'
+        : undefined
+  const aiActionDisabledReason = actionDisabledReason('resolveConflicts')
+  const fixChecksDisabledReason = actionDisabledReason('fixChecks')
   useEffect(() => {
     if (!sourceControlAiActionsVisible) {
       setAgentComposerState(null)
@@ -185,8 +188,8 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     ? 'Still finishing the previous comment launch.'
     : commentsLoading
       ? 'Comments are still loading.'
-      : aiActionDisabledReason
-        ? aiActionDisabledReason
+      : actionDisabledReason('resolveComments')
+        ? actionDisabledReason('resolveComments')
         : !activeReview
           ? 'Open a PR or MR before launching an AI action.'
           : !repo
@@ -200,9 +203,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     handleResolve,
     canTargetPRComments,
     commentsDisabledReason,
-    detectedAgentsForAI,
+    detectedAgentsForAI: detectedAgentIds,
     noEnabledAgentKnown,
     aiActionDisabledReason,
+    fixChecksDisabledReason,
     resolveCommentsWithAIDisabledReason
   }
 }

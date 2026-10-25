@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-28T07:56:49.813Z",
+  "platform": "darwin",
+  "command": ["freebuff", "--cwd", "/tmp/orca-freebuff-folder-workspace"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Freebuff 0.1.2 authenticated free plan; choice, answer, tool, interruption, tool error",
+  "exitCode": 0
+}

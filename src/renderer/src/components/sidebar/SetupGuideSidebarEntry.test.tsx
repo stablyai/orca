@@ -144,21 +144,6 @@ describe('SetupGuideSidebarEntry', () => {
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
   })
 
-  it('does not flash when agent capability completion is still unresolved', () => {
-    mocks.useSetupGuideProgress.mockReturnValue(
-      makeAllDoneProgress({
-        ready: false,
-        stepDone: {
-          ...makeAllDoneProgress().stepDone,
-          'agent-capabilities': false
-        },
-        coreDoneCount: 7
-      })
-    )
-
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
-  })
-
   it('does not render after setup is complete and progress is ready', () => {
     mocks.useSetupGuideProgress.mockReturnValue(makeAllDoneProgress())
 

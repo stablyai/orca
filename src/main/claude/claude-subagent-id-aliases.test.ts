@@ -22,7 +22,6 @@ describe('ClaudeSubagentIds', () => {
     for (let index = 0; index <= 512; index += 1) {
       ids.alias(`toolu_${index}`, `task-${index}`)
     }
-    // Evicted: the id now stands only for itself.
     expect(ids.canonical('toolu_0')).toBe('toolu_0')
     expect(ids.canonical('toolu_512')).toBe('task-512')
     expect(ids.canonical('toolu_1')).toBe('task-1')
@@ -56,5 +55,19 @@ describe('ClaudeSubagentIds', () => {
     ids.clear()
     expect(ids.canonical('toolu_1')).toBe('toolu_1')
     expect(ids.isExcluded('task-1')).toBe(false)
+  })
+})
+
+describe('ClaudeSubagentIds with an earlier run journaled', () => {
+  it("prefers what this run was told, and falls back to the earlier run's alias", () => {
+    const ids = new ClaudeSubagentIds((toolUseId) =>
+      toolUseId === 'toolu_spawn' || toolUseId === 'toolu_both' ? 'task-journaled' : null
+    )
+    ids.alias('toolu_both', 'task-live')
+    expect(ids.canonical('toolu_both')).toBe('task-live')
+    expect(ids.canonical('toolu_spawn')).toBe('task-journaled')
+    expect(ids.isAnnounced('toolu_spawn')).toBe(true)
+    expect(ids.isAnnounced('toolu_unknown')).toBe(false)
+    expect(ids.canonical('toolu_unknown')).toBe('toolu_unknown')
   })
 })

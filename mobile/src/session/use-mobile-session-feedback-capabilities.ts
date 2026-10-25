@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Animated } from 'react-native'
 import { reconcileMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
 import type { MobileSessionTerminalRuntimeModel } from './use-mobile-session-terminal-runtime'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 
 export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTerminalRuntimeModel) {
   const {
@@ -32,11 +33,14 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
-  // Prompt cancellation is negotiated with the same host capability probe as
-  // the other session surfaces; consumers never maintain a second status cache.
-  const [agentSessionPromptCancelSupported, setAgentSessionPromptCancelSupported] = useState<
-    boolean | null
+  // Why: an older host's character cap; null until a host says it has one.
+  const [quickCommandAgentPromptMaxLength, setQuickCommandAgentPromptMaxLength] = useState<
+    number | null
   >(null)
+  // Structured-session features are negotiated with the same host capability probe as
+  // the other session surfaces; consumers never maintain a second status cache.
+  const [agentSessionHostSupport, setAgentSessionHostSupport] =
+    useState<StructuredAgentSessionHostSupport | null>(null)
   // Why: stable callbacks (handleFileTap) read the live value via this ref, since
   // the capability probe resolves after the callbacks are created.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
@@ -59,6 +63,14 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setCreateWarningState(reconciledCreateWarningState)
   }
   const createWarning = reconciledCreateWarningState.visible
+
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const clearDelayedActionTimers = useCallback(() => {
     for (const timer of delayedActionTimersRef.current) {
@@ -85,6 +97,9 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
 
   const showToast = useCallback(
     (message: string, durationMs = 1200) => {
+      if (!mountedRef.current) {
+        return
+      }
       const seq = toastSeqRef.current + 1
       toastSeqRef.current = seq
       clearToastHideTimer()
@@ -120,8 +135,10 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionHistorySupported,
     quickCommandsSupported,
     setQuickCommandsSupported,
-    agentSessionPromptCancelSupported,
-    setAgentSessionPromptCancelSupported,
+    quickCommandAgentPromptMaxLength,
+    setQuickCommandAgentPromptMaxLength,
+    agentSessionHostSupport,
+    setAgentSessionHostSupport,
     browserScreencastSupportedRef,
     reconciledCreateWarningState,
     createWarning,

@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
-import { runMacPrivilegedCommand, runWindowsPathCommand } from './cli-privileged-processes'
+import {
+  runMacPrivilegedCommand,
+  runWindowsPathCommand,
+  writeWindowsUserPath
+} from './cli-privileged-processes'
 
 describe('Windows CLI PATH process boundary', () => {
   beforeEach(() => runProcessMock.mockReset())
@@ -54,6 +58,21 @@ describe('Windows CLI PATH process boundary', () => {
       message: 'UnauthorizedAccessException',
       stderr: 'UnauthorizedAccessException'
     })
+  })
+
+  it('doubles typographic single quotes in the PATH literal', async () => {
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
+
+    await writeWindowsUserPath('C:\\O\u2019Brien\\bin')
+    expect(runProcessMock.mock.calls[0][0].args.at(-1)).toBe(
+      "[Environment]::SetEnvironmentVariable('Path', 'C:\\O\u2019\u2019Brien\\bin', 'User')"
+    )
   })
 })
 

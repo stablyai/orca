@@ -7,10 +7,10 @@ const remove = vi.fn()
 vi.mock('react-native', () => ({
   AppState: {
     currentState: 'active',
-    addEventListener: (_: string, callback: typeof onChange) => {
+    addEventListener: vi.fn((_: string, callback: typeof onChange) => {
       onChange = callback
       return { remove }
-    }
+    })
   }
 }))
 afterEach(() => {
@@ -23,6 +23,7 @@ it('renews only while mobile is foregrounded, resumes on return, and tears down'
   AppState.currentState = 'active'
   const renew = vi.fn(async () => {})
   const stop = startMobilePushLeaseRenewal(renew)
+  expect(AppState.addEventListener).toHaveBeenCalledExactlyOnceWith('change', expect.any(Function))
   await vi.advanceTimersByTimeAsync(15 * 60_000)
   expect(renew).toHaveBeenCalledTimes(1)
   AppState.currentState = 'background'

@@ -2,19 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { parseArgs } from './daemon-entry'
 
 describe('daemon-entry parseArgs', () => {
+  it('only enables scope cleanup with the fresh launch flag', () => {
+    const args = ['--socket', '/tmp/t.sock', '--token', '/tmp/t.token']
+    expect(parseArgs(args)).not.toHaveProperty('freshDaemonScope')
+    expect(parseArgs([...args, '--fresh-daemon-scope'])).toHaveProperty('freshDaemonScope', true)
+  })
   it('parses --socket and --token flags', () => {
     const result = parseArgs(['--socket', '/tmp/test.sock', '--token', '/tmp/test.token'])
     expect(result).toEqual({
       socketPath: '/tmp/test.sock',
       tokenPath: '/tmp/test.token'
-    })
-  })
-
-  it('handles flags in any order', () => {
-    const result = parseArgs(['--token', '/tmp/t.token', '--socket', '/tmp/t.sock'])
-    expect(result).toEqual({
-      socketPath: '/tmp/t.sock',
-      tokenPath: '/tmp/t.token'
     })
   })
 
@@ -24,15 +21,6 @@ describe('daemon-entry parseArgs', () => {
 
   it('throws when --token is missing', () => {
     expect(() => parseArgs(['--socket', '/tmp/t.sock'])).toThrow('Usage:')
-  })
-
-  it('throws with no args', () => {
-    expect(() => parseArgs([])).toThrow('Usage:')
-  })
-
-  it('omits logFilePath when --log-file is absent (adopted old daemons)', () => {
-    const result = parseArgs(['--socket', '/tmp/t.sock', '--token', '/tmp/t.token'])
-    expect(result).not.toHaveProperty('logFilePath')
   })
 
   it('parses --log-file when present', () => {

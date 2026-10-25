@@ -1,6 +1,8 @@
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { repositionOverlay } from './selection-overlay'
 import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
+import { getCellWidth, getTotalScale } from './cell-metrics'
 
 // Why: after init() the initial scrollback applyFitScale may have run
 // against an empty buffer (or one without the widest line yet). Re-fit
@@ -9,7 +11,7 @@ import { scope } from './document-scope'
 
 // Diagnostic logger — bridges WebView console.log to RN via postMessage.
 // Tag with [fit] so it's easy to filter in the Expo/Metro logs.
-export function flog(tag: string, payload: Record<string, unknown>) {
+export function flog(scope: TerminalDocumentScope, tag: string, payload: Record<string, unknown>) {
   try {
     scope.postToHost({
       type: 'log',
@@ -17,17 +19,6 @@ export function flog(tag: string, payload: Record<string, unknown>) {
       payload: payload
     })
   } catch {}
-}
-
-export function getCellWidth() {
-  if (!scope.term || !scope.term._core) {
-    return 0
-  }
-  const core = scope.term._core
-  if (core._renderService && core._renderService.dimensions) {
-    return core._renderService.dimensions.css.cell.width || 0
-  }
-  return 0
 }
 
 // Why: width measurement strategy.
@@ -40,34 +31,35 @@ export function getCellWidth() {
 //      but better than nothing.
 //   3. If both are 0, return 1 (no scale change). The retry loop in
 //      applyFitScale will keep trying until one is positive.
-export function computeFitScale() {
+export function computeFitScale(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return 1
   }
-  const cellW = getCellWidth()
+  const cellW = getCellWidth(scope)
   const termWidth =
     cellW > 0 ? cellW * scope.term.cols : scope.term.element ? scope.term.element.scrollWidth : 0
   if (termWidth <= 0) {
     return 1
   }
-  const vpWidth = window.innerWidth
+  const vpWidth = scope.viewportRect().width
+  // Why: a viewport with no width yet (a page host never laid out) would give scale 0 and blank the grid.
+  if (vpWidth <= 0) {
+    return 1
+  }
   return Math.min(1, vpWidth / termWidth)
 }
 
-export function getTotalScale() {
-  return scope.currentScale * scope.userScale
-}
-
-export function updateTransform() {
+export function updateTransform(scope: TerminalDocumentScope) {
   scope.surface!.style.transform =
-    'translate(' + scope.panX + 'px,' + scope.panY + 'px) scale(' + getTotalScale() + ')'
-  updateScrollIndicator(false)
+    'translate(' + scope.panX + 'px,' + scope.panY + 'px) scale(' + getTotalScale(scope) + ')'
+  updateScrollIndicator(scope, false)
+  paintBottomRowBackdrop(scope)
   if (scope.selMode === 'select') {
-    repositionOverlay()
+    repositionOverlay(scope)
   }
 }
 
-export function updateScrollIndicator(reveal: boolean) {
+export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: boolean) {
   if (
     !scope.scrollIndicator ||
     !scope.scrollThumb ||
@@ -79,11 +71,11 @@ export function updateScrollIndicator(reveal: boolean) {
   }
   const buffer = scope.term.buffer.active
   const maxViewportY = buffer.baseY || 0
-  if (maxViewportY <= 0 || shouldRouteScrollToTerminalInput()) {
+  if (maxViewportY <= 0 || shouldRouteScrollToTerminalInput(scope)) {
     scope.scrollIndicator.classList.remove('visible')
     return
   }
-  const trackHeight = Math.max(0, window.innerHeight - 8)
+  const trackHeight = Math.max(0, scope.viewportRect().height - 8)
   const totalRows = maxViewportY + (scope.term.rows || 0)
   if (trackHeight <= 0 || totalRows <= 0) {
     return
@@ -107,7 +99,7 @@ export function updateScrollIndicator(reveal: boolean) {
 }
 
 /** Ruling 21: the hide timer is the one thing this module schedules. */
-export function stopViewportTransform() {
+export function stopViewportTransform(scope: TerminalDocumentScope) {
   if (scope.scrollIndicatorHideTimer) {
     clearTimeout(scope.scrollIndicatorHideTimer)
     scope.scrollIndicatorHideTimer = null

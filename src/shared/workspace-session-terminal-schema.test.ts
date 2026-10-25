@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest'
 import { parseWorkspaceSession } from './workspace-session-schema'
 
 describe('parseWorkspaceSession terminal fields', () => {
+  it('preserves the native chat owner leaf in a terminal layout', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'leaf-chat' },
+          activeLeafId: 'leaf-chat',
+          expandedLeafId: null,
+          chatLeafId: 'leaf-chat'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.terminalLayoutsByTabId.tab1?.chatLeafId).toBe('leaf-chat')
+    }
+  })
+
   it('preserves terminal startup cwd while accepting older omitted fields', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

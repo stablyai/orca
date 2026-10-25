@@ -6,7 +6,9 @@ name: Adhoc macOS + Windows Dev Build
 #
 # Deliberately narrow scope:
 #   - macOS and Windows desktop installers. Linux keeps using RC/stable.
-#   - No tests, no lint, no e2e. PR CI and release-cut remain the gates.
+#   - No tests, no lint, no e2e. PR CI and release-cut remain the gates. The one
+#     exception is the orcad template: like release-cut, it is merged from the
+#     node-server lanes that build and qualify each SSH target's slot.
 #   - macOS is signed and notarized so TCC grants survive updates.
 #   - Windows is unsigned; the published release notes explain the one-time
 #     SmartScreen/manual-install requirement.
@@ -73,6 +75,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  ORCA_BACKGROUND_LAUNCH: '1'
   ADHOC_REPO: stablyai/orca-adhoc
   # Why age and not a count like hourly: this channel is low-volume and bursty, so
   # a count would either hold one week's experiments forever or evict a build
@@ -81,43 +84,26 @@ env:
   ADHOC_RETAIN_DAYS: 30
 
 jobs:
-  build-adhoc-mac:
+  # Why: every job below checks out its own copy, and a branch name read per job builds whatever
+  # the branch points at when that job starts. A push mid-run then mixes commits, e.g. slot lanes
+  # from one commit merged by a template step from the next. Resolving once pins the whole run.
+  # Validate reachability before any job executes the requested source.
+  resolve-ref:
     if: github.repository == 'stablyai/orca'
-    # Why an environment: it gives the signing/notary/App secrets somewhere to
-    # live that a stale copy of this workflow on an old branch cannot reach.
-    # Referencing it is a no-op until repo settings give it teeth; the intended
-    # follow-up is to move MAC_CERTS, MAC_CERTS_PASSWORD, APPLE_ID,
-    # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID, HOURLY_RELEASE_APP_ID, and
-    # HOURLY_RELEASE_APP_PRIVATE_KEY into it, then pin its deployment branch
-    # policy to main so only main's copy of this file can read them.
-    environment: adhoc-mac-build
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
-      tag: ${{ steps.release.outputs.tag }}
-      version: ${{ steps.adhoc.outputs.version }}
-      head_sha: ${{ steps.adhoc.outputs.head_sha }}
-      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
-    runs-on: blacksmith-6vcpu-macos-15
-    # Why 150: it must exceed the worst case the retry budgets below can produce
-    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
-    # the job is killed mid-retry and no cleanup step runs at all.
-    timeout-minutes: 150
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
+      sha: ${{ steps.resolve.outputs.sha }}
     steps:
-      # Why vet before checkout: everything after this step runs the checked-out
-      # code with release signing credentials in reach. Branches and tags of this
-      # repo are the intended audience; refs/pull/* would smuggle in fork code,
-      # and a raw SHA is only accepted when some branch or tag of this repo can
-      # actually reach it. Resolving to a pinned SHA here also means the commit
-      # that was vetted is the commit that gets checked out — a push to the
-      # branch between the two steps cannot swap it.
-      - name: Vet the requested ref
-        id: vetted
+      - name: Resolve the requested ref to one commit
+        id: resolve
         shell: bash
         env:
           REQUESTED_REF: ${{ inputs.ref || github.ref_name }}
           REPO_URL: https://github.com/${{ github.repository }}
-        run: |
+        run: &vet-repository-ref |
           set -euo pipefail
           case "$REQUESTED_REF" in
             refs/pull/*|pull/*)
@@ -137,8 +123,18 @@ jobs:
           # Branch first to keep actions/checkout's old tie-break: bare
           # rev-parse would prefer the tag when a branch shares its name.
           sha=""
-          for cand in "refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF" "$REQUESTED_REF"; do
-            if sha="$(git -C "$scratch" rev-parse --verify --quiet "$cand^{commit}")"; then
+          case "$REQUESTED_REF" in
+            refs/heads/*|refs/tags/*) candidates=("$REQUESTED_REF") ;;
+            *) candidates=("refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF") ;;
+          esac
+          if [[ "$REQUESTED_REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            candidates+=("$REQUESTED_REF")
+          fi
+          for cand in "${candidates[@]}"; do
+            if ! [[ "$cand" =~ ^[0-9a-fA-F]{40}$ ]] && ! git check-ref-format "$cand"; then
+              continue
+            fi
+            if sha="$(git -C "$scratch" rev-parse --verify --quiet --end-of-options "$cand^{commit}")"; then
               break
             fi
             sha=""
@@ -151,77 +147,61 @@ jobs:
           # it: a partial clone can lazily fetch a bare SHA on demand, and
           # GitHub serves PR-only commits by SHA. Reachability is the actual
           # trust test.
-          if [[ -z "$(git -C "$scratch" for-each-ref --contains "$sha" refs/heads refs/tags | head -1)" ]]; then
+          if [[ -z "$(git -C "$scratch" for-each-ref --count=1 --format='%(refname)' --contains "$sha" refs/heads refs/tags)" ]]; then
             echo "::error::Commit $REQUESTED_REF is not reachable from any branch or tag of stablyai/orca; refusing to build it with release credentials."
             exit 1
           fi
           echo "Vetted $REQUESTED_REF -> $sha"
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
 
-      - name: Checkout the requested ref
+  # Resolve shared build identity while detecting whether this ref ships a template.
+  orcad-template-support:
+    needs: resolve-ref
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      ships: ${{ steps.detect.outputs.ships }}
+      version: ${{ steps.adhoc.outputs.version }}
+      commit: ${{ steps.adhoc.outputs.commit }}
+      name: ${{ steps.adhoc.outputs.name }}
+    steps:
+      - name: Checkout template detection and version scripts
         uses: actions/checkout@v6
         with:
-          # Why an input at all rather than just github.ref: the whole point is to
-          # build code that has not landed, and the workflow definition itself
-          # always comes from the dispatch ref — naming the branch here instead
-          # applies main's current copy of this file to an arbitrary branch.
-          ref: ${{ steps.vetted.outputs.sha }}
-          # Version helpers only read HEAD; published versions come from the release API.
-          fetch-depth: 1
-          # This job only reads stablyai/orca and never pushes; every write goes
-          # to the adhoc repo through a minted App token passed by env. Not
-          # persisting the checkout credential shrinks the blast radius if a build
-          # step is compromised (zizmor: artipacked).
+          ref: ${{ needs.resolve-ref.outputs.sha }}
+          sparse-checkout: |
+            /config/scripts/
+            /package.json
+            /config/tsconfig.relay.json
+          sparse-checkout-cone-mode: false
           persist-credentials: false
-
-      - name: Setup pnpm
-        uses: pnpm/setup@v2
-        with:
-          install: false
+      # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
+      - name: Refuse a ref that still ships the SSH relay
+        shell: bash
+        run: |
+          if [[ -e config/tsconfig.relay.json ]]; then
+            echo "::error::This ref predates #27215 and still ships the SSH relay; build a commit at or after 2b4b60a87e."
+            exit 1
+          fi
+      - name: Detect whether the ref ships the orcad template
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f config/scripts/packaged-orcad-template.cjs ]]; then
+            echo "ships=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "ships=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::This ref predates the orcad template; the build ships without it."
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
-          cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            mobile/pnpm-lock.yaml
-
-      - name: Cache electron-builder downloads
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            electron-builder-mac-
-
-      # Why both CPUs: the mac config packages x64 and arm64 from this arm64
-      # runner, so the install must carry both variants of the native optional deps.
-      - name: Install dependencies
-        uses: nick-fields/retry@v4
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          retry_wait_seconds: 30
-          command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
-
-      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
-      # build resolves React Native and Expo from mobile/node_modules.
-      - uses: ./.github/actions/install-mobile-dependencies
-
-      # Why: signing is what makes an adhoc build installable over an existing
-      # Orca, so a missing cert must fail here rather than after a 20-minute build.
-      - name: Verify macOS signing environment
-        run: node config/scripts/verify-macos-release-env.mjs
-        env:
-          CSC_LINK: ${{ secrets.MAC_CERTS }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          check-latest: true
+          package-manager-cache: false
 
       - name: Compute adhoc version
         id: adhoc
@@ -241,7 +221,6 @@ jobs:
               exit 1
             fi
           done
-          echo "head_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
           # Why git tags, not GitHub releases: unpublishing a buggy cut deletes the
           # GitHub release and leaves the tag, which still owns that number.
           # Releases-only let adhoc sit on a number already taken, so the updater
@@ -259,19 +238,43 @@ jobs:
           fi
           cat "$RUNNER_TEMP/adhoc-identity.txt" >>"$GITHUB_OUTPUT"
 
-      - name: Build app
-        run: pnpm build:release
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-          # Why: adhoc builds are not an official channel — telemetry's transport
-          # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
-          # silent, which is correct for unvetted branch artifacts.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+  # Design D2, as release-cut does: every desktop build ships the orcad template (server JS plus
+  # every target's addons), merged from the node-server lanes that qualify each slot at this ref.
+  # Without it an adhoc build cannot deploy managed orcad to an SSH host. No secrets, and the mac
+  # job vets the ref before anything is signed.
+  orcad-template:
+    needs: [resolve-ref, orcad-template-support]
+    if: needs.orcad-template-support.outputs.ships == 'true'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/qualified-orcad-template.yml
+    with:
+      ref: ${{ needs.resolve-ref.outputs.sha }}
+      fast_runners: true
 
-      # Why the token is minted here and not at the top: installation tokens live
-      # one hour, everything before this point writes nothing, and the notary round
-      # trip inside the publish step can be tens of minutes. Minting after the build
-      # starts the clock at the first call that actually uses it.
+  release-javascript:
+    needs: [resolve-ref, orcad-template-support]
+    uses: ./.github/workflows/release-javascript.yml
+    with:
+      ref: ${{ needs.resolve-ref.outputs.sha }}
+      dev_build: true
+      runner: blacksmith-8vcpu-ubuntu-2404
+
+  prepare-adhoc-mac-release:
+    needs: [resolve-ref, orcad-template-support, release-javascript]
+    if: >-
+      !cancelled() && github.repository == 'stablyai/orca' &&
+      needs.orcad-template-support.result == 'success' &&
+      needs.release-javascript.result == 'success'
+    environment: adhoc-mac-build
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
       - name: Mint adhoc repo token
         id: app_token
         uses: actions/create-github-app-token@v2
@@ -286,9 +289,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          TAG: v${{ steps.adhoc.outputs.version }}
-          NAME: ${{ steps.adhoc.outputs.name }}
-          SHA: ${{ steps.adhoc.outputs.head_sha }}
+          TAG: v${{ needs.orcad-template-support.outputs.version }}
+          NAME: ${{ needs.orcad-template-support.outputs.name }}
+          SHA: ${{ needs.resolve-ref.outputs.sha }}
           REF: ${{ inputs.ref || github.ref_name }}
           # Via env, not inline `${{ }}`: both land inside a shell string, and an
           # expression expanded there is substituted before bash parses the line
@@ -326,22 +329,217 @@ jobs:
           including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
-      - name: Publish adhoc macOS artifacts
+  build-adhoc-mac-arch:
+    needs: [resolve-ref, orcad-template-support, release-javascript, prepare-adhoc-mac-release]
+    # Template qualification gates packaging after desktop preparation.
+    if: >-
+      !cancelled() && github.repository == 'stablyai/orca' &&
+      needs.orcad-template-support.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
+      needs.prepare-adhoc-mac-release.result == 'success'
+    # Why an environment: it gives the signing/notary/App secrets somewhere to
+    # live that a stale copy of this workflow on an old branch cannot reach.
+    # Referencing it is a no-op until repo settings give it teeth; the intended
+    # follow-up is to move MAC_CERTS, MAC_CERTS_PASSWORD, APPLE_ID,
+    # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID, HOURLY_RELEASE_APP_ID, and
+    # HOURLY_RELEASE_APP_PRIVATE_KEY into it, then pin its deployment branch
+    # policy to main so only main's copy of this file can read them.
+    environment: adhoc-mac-build
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    runs-on: blacksmith-12vcpu-macos-15
+    # Why 150: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
+    # the job is killed mid-retry and no cleanup step runs at all.
+    timeout-minutes: 150
+    env:
+      JOBS: max
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      # Why vet before checkout: everything after this step runs the checked-out
+      # code with release signing credentials in reach. Branches and tags of this
+      # repo are the intended audience; refs/pull/* would smuggle in fork code,
+      # and a raw SHA is only accepted when some branch or tag of this repo can
+      # actually reach it. Resolving to a pinned SHA here also means the commit
+      # that was vetted is the commit that gets checked out — a push to the
+      # branch between the two steps cannot swap it.
+      - name: Vet the requested ref
+        id: vetted
+        shell: bash
+        env:
+          # The commit resolve-ref pinned for every job; vetting it keeps the reachability test.
+          REQUESTED_REF: ${{ needs.resolve-ref.outputs.sha }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: *vet-repository-ref
+
+      - name: Checkout the requested ref
+        uses: actions/checkout@v6
+        with:
+          # Why an input at all rather than just github.ref: the whole point is to
+          # build code that has not landed, and the workflow definition itself
+          # always comes from the dispatch ref — naming the branch here instead
+          # applies main's current copy of this file to an arbitrary branch.
+          ref: ${{ steps.vetted.outputs.sha }}
+          # Version helpers only read HEAD; published versions come from the release API.
+          fetch-depth: 1
+          # This job only reads stablyai/orca and never pushes; every write goes
+          # to the adhoc repo through a minted App token passed by env. Not
+          # persisting the checkout credential shrinks the blast radius if a build
+          # step is compromised (zizmor: artipacked).
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # Why: packaging bundles the pinned Node into the macOS terminal host. Keyed on the pin alone
+      # with no restore-keys, so a pin bump starts empty instead of carrying old archives forward.
+      - name: Locate the pinned Node runtime cache
+        shell: bash
+        run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
+
+      - name: Cache the pinned Node runtime
+        uses: actions/cache@v5
+        with:
+          path: ~/Library/Caches/orca-node-runtime
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-mac-
+
+      # Why both CPUs: the mac config packages x64 and arm64 from this arm64
+      # runner, so the install must carry both variants of the native optional deps.
+      - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
-          # Why 45: an attempt is pack + notarize + upload, and the notary queue is
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: needs.release-javascript.outputs.supported != 'true'
+
+      # Why: signing is what makes an adhoc build installable over an existing
+      # Orca, so a missing cert must fail here rather than after a 20-minute build.
+      - name: Verify macOS signing environment
+        run: node config/scripts/verify-macos-release-env.mjs
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Download shared JavaScript
+        if: needs.release-javascript.outputs.supported == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
+      - name: Build app
+        run: |
+          if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm build:release
+          fi
+        env:
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
+          NODE_OPTIONS: --max-old-space-size=4096
+          # Why: adhoc builds are not an official channel — telemetry's transport
+          # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
+          # silent, which is correct for unvetted branch artifacts.
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      - name: Wait for the qualified orcad template
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deadline = Date.now() + 30 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+              const failed = lanes.find(job => job.status === 'completed' &&
+                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
+              if (failed) throw new Error(`Template qualification failed: ${failed.name}`)
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: context.runId, per_page: 100
+              })
+              const ready = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
+              const completed = lanes.length > 0 && lanes.every(job => job.status === 'completed')
+              if (ready && (process.env.WAIT_FOR_TEMPLATE_COMPLETION !== '1' || completed)) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for the qualified orcad template')
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+
+      # Why the token is minted here and not at the top: installation tokens live
+      # one hour, everything before this point writes nothing, and the notary round
+      # trip inside the publish step can be tens of minutes. Minting after the build
+      # starts the clock at the first call that actually uses it.
+      - name: Checkout workflow packaging scripts
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tools
+          sparse-checkout: config/scripts/adhoc-mac-manifests.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Package and notarize this Mac architecture
+        uses: nick-fields/retry@v4
+        with:
+          # Why 45: an attempt is pack + notarize, and the notary queue is
           # the unbounded part. Two attempts, because a failed adhoc build has a
           # person waiting on it who can simply dispatch again.
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac dmg zip --${{ matrix.arch }} --publish never
         env:
-          # Why: electron-builder's github publisher targets the repo named in the
-          # config; the token must therefore carry write access to orca-adhoc.
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          ORCA_ADHOC_BUILD_VERSION: ${{ steps.adhoc.outputs.version }}
-          ORCA_BUILD_COMMIT: ${{ steps.adhoc.outputs.commit }}
+          ORCA_ADHOC_BUILD_VERSION: ${{ needs.orcad-template-support.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ needs.orcad-template-support.outputs.commit }}
+          # beforePack and afterPack fail the package when the template is absent.
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ needs.orcad-template-support.outputs.ships == 'true' && '1' || '' }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the
@@ -351,31 +549,133 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Why: the updater resolves a tag, then fetches latest-mac.yml from it. A
-      # release missing that manifest is a tag the picker offers and the download
-      # 404s on, so fail loudly instead of leaving a broken entry.
-      - name: Verify update manifest published
+      - name: Verify signed and stapled app
+        shell: bash
+        env:
+          MAC_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          app_dir=dist/mac
+          if [[ "$MAC_ARCH" == arm64 ]]; then app_dir=dist/mac-arm64; fi
+          codesign --verify --deep --strict "$app_dir/Orca.app"
+          xcrun stapler validate "$app_dir/Orca.app"
+
+      - name: Verify this architecture's updater files
+        env:
+          MAC_ARCH: ${{ matrix.arch }}
+          MAC_VERSION: ${{ needs.orcad-template-support.outputs.version }}
+        run: node .workflow-tools/config/scripts/adhoc-mac-manifests.mjs stage "$MAC_ARCH" "$MAC_VERSION" dist .build/mac-manifests
+
+      - name: Mint adhoc repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-adhoc
+
+      - name: Upload verified architecture assets to the draft
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          TAG: ${{ steps.release.outputs.tag }}
+          TAG: ${{ needs.prepare-adhoc-mac-release.outputs.tag }}
+          MAC_ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
-          assets="$(gh release view "$TAG" --repo "$ADHOC_REPO" --json assets --jq '.assets[].name')"
-          echo "Published assets:"
-          echo "$assets"
-          # Why exit 1 without deleting here: the release is still a draft, so it is
-          # already invisible to users, and the failure handler below owns cleanup.
-          for required in latest-mac.yml; do
-            if ! grep -qx "$required" <<<"$assets"; then
-              echo "::error::Adhoc draft $TAG is missing $required; the updater could not install it."
-              exit 1
-            fi
-          done
-          if ! grep -q '\.zip$' <<<"$assets"; then
-            echo "::error::Adhoc draft $TAG has no ZIP artifact for the updater to download."
-            exit 1
-          fi
+          files=()
+          while IFS= read -r file; do files+=("dist/$file"); done < ".build/mac-manifests/$MAC_ARCH-assets.txt"
+          gh release upload "$TAG" "${files[@]}" --repo "$ADHOC_REPO" --clobber
+
+      - name: Stage verified architecture manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: adhoc-mac-manifest-${{ matrix.arch }}
+          path: .build/mac-manifests/${{ matrix.arch }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  build-adhoc-mac:
+    needs: [resolve-ref, orcad-template-support, prepare-adhoc-mac-release, build-adhoc-mac-arch]
+    if: always() && needs.prepare-adhoc-mac-release.result == 'success'
+    environment: adhoc-mac-build
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      tag: ${{ needs.prepare-adhoc-mac-release.outputs.tag }}
+      version: ${{ needs.orcad-template-support.outputs.version }}
+      head_sha: ${{ needs.resolve-ref.outputs.sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+      ships_orcad_template: ${{ needs.orcad-template-support.outputs.ships }}
+    steps:
+      - name: Mint adhoc repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-adhoc
+
+      - name: Require both architecture jobs
+        env:
+          ARCH_RESULT: ${{ needs.build-adhoc-mac-arch.result }}
+        run: test "$ARCH_RESULT" = success
+
+      - name: Checkout manifest merger
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: config/scripts/adhoc-mac-manifests.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Download architecture manifests
+        uses: actions/download-artifact@v8
+        with:
+          pattern: adhoc-mac-manifest-*
+          merge-multiple: true
+          path: .build/mac-manifests
+
+      - name: Merge and verify the updater manifest
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TAG: ${{ needs.prepare-adhoc-mac-release.outputs.tag }}
+          MAC_VERSION: ${{ needs.orcad-template-support.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$ADHOC_REPO" --json assets > .build/mac-manifests/assets.json
+          node config/scripts/adhoc-mac-manifests.mjs merge "$MAC_VERSION" .build/mac-manifests
+          gh release upload "$TAG" .build/mac-manifests/latest-mac.yml --repo "$ADHOC_REPO" --clobber
+
+      - name: Confirm final template qualification before publication
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/github-script@v8
+        env:
+          WAIT_FOR_TEMPLATE_COMPLETION: '1'
+        with:
+          script: |
+            const deadline = Date.now() + 30 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+              const failed = lanes.find(job => job.status === 'completed' &&
+                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
+              if (failed) throw new Error(`Template qualification failed: ${failed.name}`)
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: context.runId, per_page: 100
+              })
+              const ready = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
+              const completed = lanes.length > 0 && lanes.every(job => job.status === 'completed')
+              if (ready && (process.env.WAIT_FOR_TEMPLATE_COMPLETION !== '1' || completed)) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for the qualified orcad template')
 
       # Why this is the last mutating step: publishing the draft is what makes the
       # build visible to listReleaseBuilds. Doing it only after the manifest check
@@ -385,8 +685,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          TAG: ${{ steps.release.outputs.tag }}
-          NAME: ${{ steps.adhoc.outputs.name }}
+          TAG: ${{ needs.prepare-adhoc-mac-release.outputs.tag }}
+          NAME: ${{ needs.orcad-template-support.outputs.name }}
         run: |
           set -euo pipefail
           # --title again: electron-builder resolves this draft by tag and may
@@ -403,12 +703,12 @@ jobs:
       # mid-publish would strand the draft.
       - name: Discard the draft release on failure
         if: >-
-          (failure() || cancelled()) && steps.release.outputs.tag != '' &&
+          (failure() || cancelled()) && needs.prepare-adhoc-mac-release.outputs.tag != '' &&
           steps.publish_live.outcome != 'success'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          TAG: ${{ steps.release.outputs.tag }}
+          TAG: ${{ needs.prepare-adhoc-mac-release.outputs.tag }}
         run: |
           set -uo pipefail
           # No --cleanup-tag: an unpublished draft never created a git tag.
@@ -425,14 +725,14 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           # Protect the tag this run just shipped, so no filter mistake can delete
           # a build minutes after the person who cut it was told it exists.
-          TAG: ${{ steps.release.outputs.tag }}
+          TAG: ${{ needs.prepare-adhoc-mac-release.outputs.tag }}
         run: |
           set -euo pipefail
           # Why compute the cutoff in bash rather than with jq's `now`: this runs
           # once per dispatch, and a fixed epoch makes the threshold visible in the
           # log when someone asks where their build went.
           cutoff=$(( $(date -u +%s) - ADHOC_RETAIN_DAYS * 86400 ))
-          echo "Pruning adhoc releases published before $(date -u -r "$cutoff" '+%Y-%m-%dT%H:%M:%SZ')"
+          echo "Pruning adhoc releases published before $(date -u -d "@$cutoff" '+%Y-%m-%dT%H:%M:%SZ')"
           # --cleanup-tag so pruning does not leave orphan tags with no release or
           # assets attached. Drafts are excluded: a stale draft is the failure
           # path's business, not the retention window's.
@@ -467,26 +767,40 @@ jobs:
               echo "::warning::Could not prune $tag"
           done <<<"$stale"
 
-  # Why this runs after the mac leg rather than beside it: the tag and version
-  # are computed inside that job, so until it has run nothing else can name the
-  # release to upload into. The cost is small enough not to matter — the Windows
-  # leg measures ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a
-  # ~9.5 min mac run, which keeps a adhoc run far inside its interval.
-  #
-  # Why `./` rather than a pinned `@main`: `uses:` resolves against the ref this
-  # file itself came from, which for an ordinary dispatch is main. Someone who
-  # deliberately points the Actions "Use workflow from" picker at a branch
-  # already gets that branch's copy of this entire file, so this follows the same
-  # rule instead of inventing a second one.
+  # Build unsigned Windows artifacts alongside Mac; publication waits below.
   build-adhoc-win:
-    needs: build-adhoc-mac
-    # Only once the mac release is actually live: there is no release to upload
-    # into otherwise, and the Windows workflow refuses to create one.
-    if: needs.build-adhoc-mac.outputs.published == 'true'
+    needs: [resolve-ref, orcad-template-support, release-javascript]
+    if: >-
+      !cancelled() && github.repository == 'stablyai/orca' &&
+      needs.orcad-template-support.result == 'success' &&
+      needs.release-javascript.result == 'success'
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/dev-channel-win-build.yml
     secrets: inherit
     with:
       channel: adhoc
-      tag: ${{ needs.build-adhoc-mac.outputs.tag }}
-      ref: ${{ needs.build-adhoc-mac.outputs.head_sha }}
-      version: ${{ needs.build-adhoc-mac.outputs.version }}
+      tag: v${{ needs.orcad-template-support.outputs.version }}
+      ref: ${{ needs.resolve-ref.outputs.sha }}
+      version: ${{ needs.orcad-template-support.outputs.version }}
+      orcad_template: ${{ needs.orcad-template-support.outputs.ships == 'true' }}
+      stage_only: true
+      fast_release: true
+      javascript_source_sha: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
+
+  # Prefetch the installer during notarization; the publisher still waits for Mac success.
+  publish-adhoc-win:
+    needs: [orcad-template-support, build-adhoc-win]
+    if: >-
+      !cancelled() && needs.orcad-template-support.result == 'success' &&
+      needs.build-adhoc-win.result == 'success'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/dev-channel-win-publish.yml
+    secrets: inherit
+    with:
+      channel: adhoc
+      tag: v${{ needs.orcad-template-support.outputs.version }}
+      wait_for_mac_job: build-adhoc-mac

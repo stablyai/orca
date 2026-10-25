@@ -1,19 +1,26 @@
 import { webContents } from 'electron'
-import type { BrowserViewportScrollState } from '../../shared/browser-workspace-types'
+import type {
+  BrowserViewportOverride,
+  BrowserViewportScrollState
+} from '../../shared/browser-workspace-types'
 
-/**
- * Renderer routing plus the host-side viewport-preset geometry the wheel path needs to decide
- * whether a scroll belongs to the emulated viewport or to the guest page.
- */
+type ViewportPresetState = {
+  guestWebContentsId: number
+  requested: BrowserViewportOverride | null
+  /** Metrics Chromium accepted for this guest, independent of the requested preset. */
+  applied: BrowserViewportOverride | null
+}
+
 export abstract class BrowserManagerViewportScrollState {
   protected readonly rendererWebContentsIdByTabId = new Map<string, number>()
-  // Why: host-side wheel panning follows the requested local viewport on the owning guest;
-  // replacement guests must not inherit a retired guest's state.
-  protected readonly viewportPresetActiveByTabId = new Map<
-    string,
-    { guestWebContentsId: number; active: boolean }
-  >()
+  // Panning follows requested metrics; identity follows applied metrics, both fenced to one guest.
+  protected readonly viewportPresetByTabId = new Map<string, ViewportPresetState>()
   protected readonly viewportScrollStateByTabId = new Map<string, BrowserViewportScrollState>()
+
+  protected isViewportPresetActive(browserTabId: string, guestWebContentsId: number): boolean {
+    const state = this.viewportPresetByTabId.get(browserTabId)
+    return state?.guestWebContentsId === guestWebContentsId && state.requested !== null
+  }
 
   setViewportScrollState(
     browserTabId: string,
@@ -65,6 +72,17 @@ export abstract class BrowserManagerViewportScrollState {
       canScrollAxis(deltaX, state.scrollLeft, state.maxScrollLeft) ||
       canScrollAxis(deltaY, state.scrollTop, state.maxScrollTop)
     )
+  }
+
+  protected recordAppliedViewportOverride(
+    browserTabId: string,
+    guestWebContentsId: number,
+    applied: BrowserViewportOverride | null
+  ): void {
+    const preset = this.viewportPresetByTabId.get(browserTabId)
+    if (preset?.guestWebContentsId === guestWebContentsId) {
+      this.viewportPresetByTabId.set(browserTabId, { ...preset, applied })
+    }
   }
 
   protected resolveRendererForBrowserTab(browserTabId: string): Electron.WebContents | null {

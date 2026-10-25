@@ -13,29 +13,33 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
       settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined,
       connectionId?: string
     ) => connectionId ?? settings?.activeRuntimeEnvironmentId ?? null
-  ),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+  )
 }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: vi.fn(),
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: vi.fn()
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(),
   getConnectionIdForFile: vi.fn(),
   isWorktreeConnectionResolved: vi.fn(() => true)
 }))
+
+vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
@@ -49,7 +53,31 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: vi.fn(() => 'local')
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+// These fixtures' workspaces live on runtime-1, so an unstamped tab resolves there.
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    runtimeEnvironmentId: string | null | undefined
+  ) =>
+    runtimeEnvironmentId === null
+      ? { kind: 'local' as const }
+      : { kind: 'environment' as const, environmentId: runtimeEnvironmentId ?? 'runtime-1' }
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 vi.mock('./useEditorPanelExternalContentEvents', () => ({
   useEditorPanelExternalContentEvents: vi.fn(),
@@ -61,7 +89,6 @@ vi.mock('./useLocalLogTail', () => ({ useLocalLogTail: vi.fn() }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 
-const authorizeExternalPath = vi.fn()
 let latestFileContents: Record<string, FileContent> = {}
 
 function createOpenFile(overrides: Partial<OpenFile>): OpenFile {
@@ -94,9 +121,7 @@ describe('remote sibling editor content routing', () => {
 
   beforeEach(() => {
     latestFileContents = {}
-    authorizeExternalPath.mockReset()
-    authorizeExternalPath.mockResolvedValue(undefined)
-    ;(window as unknown as { api: unknown }).api = { fs: { authorizeExternalPath } }
+    vi.stubGlobal('api', { fs: {} })
     mocks.readRuntimeFileContent.mockReset()
     mocks.findWorkspaceFileRoute.mockReset()
     mocks.findWorkspaceFileRoute.mockReturnValue(null)
@@ -133,9 +158,12 @@ describe('remote sibling editor content routing', () => {
 
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('log line'))
     expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
-    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: logPath })
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: undefined, includeLocalLogMetadata: true })
+      expect.objectContaining({
+        connectionId: undefined,
+        includeLocalLogMetadata: true,
+        access: { kind: 'user-file' }
+      })
     )
   })
 
@@ -162,7 +190,6 @@ describe('remote sibling editor content routing', () => {
         'runtime-1'
       )
     )
-    expect(authorizeExternalPath).not.toHaveBeenCalled()
     expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
   })
 

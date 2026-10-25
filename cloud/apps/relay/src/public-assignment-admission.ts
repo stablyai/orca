@@ -22,9 +22,16 @@ export type AssignmentAdmissionRejection =
 
 const MAX_TRACKED_HOSTS = 4_096
 
+type LeaseKind = 'placement' | 'reserved' | 'drain-return'
+
 export class RelayPublicAssignmentAdmission {
   private active = 0
   private activeReserved = 0
+  private activeDrainReturn = 0
+  private readonly activeDrainReturnHosts = new Set<string>()
+  private readonly queuedDrainReturnHosts = new Set<string>()
+  private readonly lastDrainReturnAttemptByHost = new Map<string, number>()
+  private readonly pendingDrainReturns: PendingAssignment[] = []
   private readonly activeAssignmentHosts = new Set<string>()
   private readonly activeReservedHosts = new Set<string>()
   private readonly queuedAssignmentHosts = new Set<string>()
@@ -40,12 +47,74 @@ export class RelayPublicAssignmentAdmission {
       waitMs?: number
       maxReservedConcurrent?: number
       reservedWaitMs?: number
+      // Drain returns borrow placement permits: their re-placement is placement
+      // work, serialized on the same store mutex, so it fits the pool budget the
+      // placement lane already has. Placement and reserved waiters go first.
+      maxDrainReturnConcurrent?: number
+      maxDrainReturnQueued?: number
+      drainReturnWaitMs?: number
+      drainReturnMinIntervalMs?: number
       minIntervalMs: number
       now?: () => number
       schedule?: (callback: () => void, delayMs: number) => CancelWait
       onRejected?: (reason: AssignmentAdmissionRejection) => void
     }
   ) {}
+
+  get queuedDrainReturns(): number {
+    return this.pendingDrainReturns.length
+  }
+
+  // Rejections here are the drain lane's, so they skip the placement onRejected hook.
+  async acquireDrainReturn(
+    relayHostId: string,
+    notifyRejected: RejectionSink
+  ): Promise<AssignmentAdmissionLease | null> {
+    const now = (this.options.now ?? Date.now)()
+    if (
+      this.activeDrainReturnHosts.has(relayHostId) ||
+      this.queuedDrainReturnHosts.has(relayHostId)
+    ) {
+      notifyRejected('host-in-flight')
+      return null
+    }
+    const lastAttempt = this.lastDrainReturnAttemptByHost.get(relayHostId)
+    if (
+      lastAttempt !== undefined &&
+      now - lastAttempt < (this.options.drainReturnMinIntervalMs ?? 0)
+    ) {
+      notifyRejected('host-rate-limited')
+      return null
+    }
+    if (this.pendingDrainReturns.length === 0 && this.canGrantDrainReturn()) {
+      this.recordAttempt(this.lastDrainReturnAttemptByHost, relayHostId, now)
+      return this.createLease(relayHostId, 'drain-return')
+    }
+    if (this.pendingDrainReturns.length >= (this.options.maxDrainReturnQueued ?? 0)) {
+      notifyRejected('queue-full')
+      return null
+    }
+    return await new Promise((resolve) => {
+      const schedule = this.options.schedule ?? defaultSchedule
+      let cancelWait: CancelWait = () => undefined
+      const pending: PendingAssignment = {
+        relayHostId,
+        resolve,
+        cancelWait: () => cancelWait(),
+        notifyRejected
+      }
+      this.pendingDrainReturns.push(pending)
+      this.queuedDrainReturnHosts.add(relayHostId)
+      cancelWait = schedule(() => {
+        const index = this.pendingDrainReturns.indexOf(pending)
+        if (index === -1) return
+        this.pendingDrainReturns.splice(index, 1)
+        this.queuedDrainReturnHosts.delete(relayHostId)
+        notifyRejected('wait-timeout')
+        resolve(null)
+      }, this.options.drainReturnWaitMs ?? 1_000)
+    })
+  }
 
   async acquire(
     relayHostId: string,
@@ -70,7 +139,7 @@ export class RelayPublicAssignmentAdmission {
       this.pendingAssignments.length === 0
     ) {
       this.recordAttempt(this.lastAttemptByHost, relayHostId, now)
-      return this.createLease(relayHostId, false)
+      return this.createLease(relayHostId, 'placement')
     }
     if (this.pendingAssignments.length >= (this.options.maxQueued ?? 0)) {
       return this.reject('queue-full', notifyRejected)
@@ -93,6 +162,7 @@ export class RelayPublicAssignmentAdmission {
         this.pendingAssignments.splice(index, 1)
         this.queuedAssignmentHosts.delete(relayHostId)
         resolve(this.reject('wait-timeout', notifyRejected))
+        this.grantPendingDrainReturns()
       }, this.options.waitMs ?? 1_000)
     })
   }
@@ -122,7 +192,7 @@ export class RelayPublicAssignmentAdmission {
       !this.activeAssignmentHosts.has(relayHostId)
     ) {
       this.recordAttempt(this.lastReservedAttemptByHost, relayHostId, now)
-      return this.createLease(relayHostId, true)
+      return this.createLease(relayHostId, 'reserved')
     }
 
     return await new Promise((resolve) => {
@@ -139,15 +209,19 @@ export class RelayPublicAssignmentAdmission {
         this.pendingReserved = undefined
         resolve(this.reject('wait-timeout', notifyRejected))
         this.grantPendingAssignments()
+        this.grantPendingDrainReturns()
       }, this.options.reservedWaitMs ?? 1_000)
     })
   }
 
-  private createLease(relayHostId: string, reserved: boolean): AssignmentAdmissionLease {
+  private createLease(relayHostId: string, kind: LeaseKind): AssignmentAdmissionLease {
     this.active++
-    if (reserved) {
+    if (kind === 'reserved') {
       this.activeReserved++
       this.activeReservedHosts.add(relayHostId)
+    } else if (kind === 'drain-return') {
+      this.activeDrainReturn++
+      this.activeDrainReturnHosts.add(relayHostId)
     } else {
       this.activeAssignmentHosts.add(relayHostId)
     }
@@ -157,15 +231,42 @@ export class RelayPublicAssignmentAdmission {
         if (released) return
         released = true
         this.active = Math.max(0, this.active - 1)
-        if (reserved) {
+        if (kind === 'reserved') {
           this.activeReserved = Math.max(0, this.activeReserved - 1)
           this.activeReservedHosts.delete(relayHostId)
+        } else if (kind === 'drain-return') {
+          this.activeDrainReturn = Math.max(0, this.activeDrainReturn - 1)
+          this.activeDrainReturnHosts.delete(relayHostId)
         } else {
           this.activeAssignmentHosts.delete(relayHostId)
         }
         this.grantPendingReserved()
         this.grantPendingAssignments()
+        this.grantPendingDrainReturns()
       }
+    }
+  }
+
+  private canGrantDrainReturn(): boolean {
+    return (
+      this.activeDrainReturn < (this.options.maxDrainReturnConcurrent ?? 0) &&
+      this.active < this.options.maxConcurrent &&
+      this.pendingReserved === undefined &&
+      this.pendingAssignments.length === 0
+    )
+  }
+
+  private grantPendingDrainReturns(): void {
+    while (this.pendingDrainReturns.length > 0 && this.canGrantDrainReturn()) {
+      const pending = this.pendingDrainReturns.shift()!
+      this.queuedDrainReturnHosts.delete(pending.relayHostId)
+      pending.cancelWait()
+      this.recordAttempt(
+        this.lastDrainReturnAttemptByHost,
+        pending.relayHostId,
+        (this.options.now ?? Date.now)()
+      )
+      pending.resolve(this.createLease(pending.relayHostId, 'drain-return'))
     }
   }
 
@@ -185,7 +286,7 @@ export class RelayPublicAssignmentAdmission {
       pending.relayHostId,
       (this.options.now ?? Date.now)()
     )
-    pending.resolve(this.createLease(pending.relayHostId, true))
+    pending.resolve(this.createLease(pending.relayHostId, 'reserved'))
   }
 
   private grantPendingAssignments(): void {
@@ -202,7 +303,7 @@ export class RelayPublicAssignmentAdmission {
         pending.relayHostId,
         (this.options.now ?? Date.now)()
       )
-      pending.resolve(this.createLease(pending.relayHostId, false))
+      pending.resolve(this.createLease(pending.relayHostId, 'placement'))
     }
   }
 

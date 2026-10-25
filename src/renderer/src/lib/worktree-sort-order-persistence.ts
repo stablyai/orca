@@ -1,6 +1,6 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { splitWorktreeSortOrderByHost } from './worktree-sort-order-host-split'
 
 function ignoreSortOrderPersistenceFailure(promise: Promise<unknown>): void {
@@ -21,7 +21,7 @@ export function persistWorktreeSortOrderByHost(
         callRuntimeRpc(
           { kind: 'environment', environmentId: parsed.environmentId },
           'worktree.persistSortOrder',
-          { orderedIds: group.orderedIds },
+          { orderedIds: group.orderedIds, hostIds: group.rowHostIds },
           { timeoutMs: 15_000 }
         )
       )
@@ -29,7 +29,10 @@ export function persistWorktreeSortOrderByHost(
     }
 
     ignoreSortOrderPersistenceFailure(
-      window.api.worktrees.persistSortOrder({ orderedIds: group.orderedIds })
+      window.api.worktrees.persistSortOrder({
+        orderedIds: group.orderedIds,
+        hostIds: group.rowHostIds
+      })
     )
   }
 }

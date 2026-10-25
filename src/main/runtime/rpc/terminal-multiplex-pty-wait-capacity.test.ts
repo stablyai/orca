@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -284,7 +285,6 @@ describe('terminal multiplex RPC', () => {
         )!
       )
     }
-    expect(TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION).toBe(128)
     for (
       let streamId = 1;
       streamId <= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION + 1;
@@ -355,7 +355,7 @@ describe('terminal multiplex RPC', () => {
     expect(viewSubscriberCount).toBe(0)
   })
 
-  it('reserves PTY wait capacity independently from active streams', async () => {
+  it('queues PTY waits past the running cap independently from active streams', async () => {
     const activeStreamCount = 44
     const waitSignals: AbortSignal[] = []
     const resolveWaits: ((ptyId: string) => void)[] = []
@@ -419,32 +419,28 @@ describe('terminal multiplex RPC', () => {
     await vi.waitFor(() =>
       expect(waitSignals).toHaveLength(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION)
     )
-    const rejectedStreamId =
-      activeStreamCount + TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION + 1
-    await vi.waitFor(() => {
-      const results = harness.messages.map((message) => JSON.parse(message).result)
-      expect(results).toContainEqual({
-        type: 'error',
-        streamId: rejectedStreamId,
-        message: 'terminal_stream_limit_exceeded'
-      })
-      expect(results).toContainEqual({ type: 'end', streamId: rejectedStreamId })
-    })
+    // Why: the wait past the running cap queues instead of failing the restore (STA-2886).
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(waitSignals).toHaveLength(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION)
 
+    resolveWaits[0]?.('pty-pending-1')
+    await vi.waitFor(() =>
+      expect(waitSignals).toHaveLength(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION + 1)
+    )
     for (const [index, resolve] of resolveWaits.entries()) {
       resolve(`pty-pending-${index + 1}`)
     }
     await vi.waitFor(() => {
       const results = harness.messages.map((message) => JSON.parse(message).result)
       expect(results.filter((result) => result?.type === 'subscribed')).toHaveLength(
-        activeStreamCount + TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION
+        activeStreamCount + TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION + 1
       )
       expect(
         results.filter(
           (result) =>
             result?.type === 'error' && result.message === 'terminal_stream_limit_exceeded'
         )
-      ).toHaveLength(1)
+      ).toHaveLength(0)
     })
 
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
@@ -595,7 +591,11 @@ describe('terminal multiplex RPC', () => {
     // Widened gate: a desktop client must mount + await its late PTY, not skip
     // straight to the bare scrollback path the way it did under the mobile-only gate.
     expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
-    expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith('terminal-1', 10_000, undefined)
+    expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith(
+      'terminal-1',
+      10_000,
+      expect.any(AbortSignal)
+    )
     expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['subscribed', 'end'])
   })
 })

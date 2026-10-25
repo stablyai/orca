@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { vi, type Mock } from 'vitest'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import type { BrowserManager } from './browser-manager'
@@ -32,8 +33,6 @@ export function mockBrowserManager(
     getBrowserPageLoadError: vi.fn(() => null),
     getBrowserPageCertificateFailure: vi.fn(() => null),
     unregisterGuest: vi.fn(),
-    ensureWebviewVisible: vi.fn(async () => () => {}),
-    acquireAutomationVisibility: vi.fn(async () => () => {}),
     ...overrides
   } as unknown as BrowserManager
 }
@@ -58,8 +57,13 @@ export type MockWebContents = {
   on: Mock<(event: string, listener: MockEmitterListener) => void>
   removeListener: Mock<(event: string, listener: MockEmitterListener) => void>
   isDestroyed: () => boolean
+  isCrashed: () => boolean
   invalidate: Mock<() => void>
   focus: Mock<() => void>
+  // Offscreen by default; use 'webview' for guest-direct key input.
+  getType: Mock<() => string>
+  sendInputEvent: Mock<(event: Electron.KeyboardInputEvent) => void>
+  setIgnoreMenuShortcuts: Mock<(ignore: boolean) => void>
   debugger: MockWebContentsDebugger
 }
 
@@ -80,8 +84,12 @@ export function mockWebContents(
     on: vi.fn(),
     removeListener: vi.fn(),
     isDestroyed: () => false,
+    isCrashed: () => false,
     invalidate: vi.fn(),
     focus: vi.fn(),
+    getType: vi.fn(() => 'window'),
+    sendInputEvent: vi.fn(),
+    setIgnoreMenuShortcuts: vi.fn(),
     debugger: {
       isAttached: vi.fn(() => true),
       attach: vi.fn(),
@@ -93,13 +101,11 @@ export function mockWebContents(
   }
 }
 
-// Why: the bridge resolves webContents via dynamic require('electron').webContents.fromId
-// inside a try/catch. Override the private method to inject our mock.
+// Dynamic require('electron') bypasses the module mock; override the protected lookup.
 export function overrideBridgeWebContentsLookup(
   bridgePrototype: AgentBrowserBridge,
   webContentsFromIdMock: Mock
 ): void {
-  // Why defineProperty: getWebContents is protected, so a typed assignment is not expressible.
   Object.defineProperty(bridgePrototype, 'getWebContents', {
     configurable: true,
     enumerable: true,
@@ -111,14 +117,19 @@ export function overrideBridgeWebContentsLookup(
   })
 }
 
+// Raw-process execution subscribes to the child's exit event.
+export function createFakeAgentBrowserChild<T extends object>(fields: T): EventEmitter & T {
+  return Object.assign(new EventEmitter(), fields)
+}
+
 export function createSucceedWith(execFileMock: Mock, stdinWrites: string[]) {
   return function succeedWith(data: unknown): void {
     execFileMock.mockImplementation(
       (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
         cb(null, JSON.stringify({ success: true, data }), '')
-        return {
+        return createFakeAgentBrowserChild({
           stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
-        }
+        })
       }
     )
   }

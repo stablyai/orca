@@ -9,7 +9,6 @@ const expo = vi.hoisted(() => ({
   getDocumentAsync: vi.fn(() => Promise.resolve({ canceled: true })),
   getImageAsync: vi.fn(() => Promise.resolve(null)),
   deleted: new Array<string>(),
-  written: new Array<{ uri: string; base64: string }>(),
   copiedBytes: new Array<{ uri: string; bytes: number[] }>(),
   sources: new Map<string, Uint8Array>()
 }))
@@ -29,7 +28,6 @@ vi.mock('expo-file-system', () => ({
     }
     create(): void {}
     write(content: string | Uint8Array): void {
-      expo.written.push({ uri: this.uri, base64: typeof content === 'string' ? content : '' })
       if (typeof content !== 'string') {
         expo.copiedBytes.push({ uri: this.uri, bytes: [...content] })
       }
@@ -96,14 +94,10 @@ describe('the library permission this shell does not ask for', () => {
     expect(expo.launchImageLibraryAsync).toHaveBeenCalled()
     expect(expo.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled()
   })
-
-  it('offers no permission member at all, so no caller can reintroduce the gate', () => {
-    expect(Object.hasOwn(deps(), 'requestLibraryPermission')).toBe(false)
-  })
 })
 
 describe('how the pickers are launched', () => {
-  it('asks the library for images the shell can own, single and multiple', async () => {
+  it('asks the library for an image the shell can own in a single pick', async () => {
     await deps().launchLibrary({ multiple: false, limit: 8 })
     expect(expo.launchImageLibraryAsync).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -164,13 +158,6 @@ describe('copying a provider uri into the cache', () => {
 })
 
 describe('staging and discarding', () => {
-  it('writes pasteboard base64 into a cache file of this shell s own, and answers its uri', () => {
-    const uri = deps().stageBase64('AAAA')
-    expect(uri.startsWith('file:///cache/orca-media-')).toBe(true)
-    expect(ownsStagedMediaUri(uri)).toBe(true)
-    expect(expo.written.at(-1)).toEqual({ uri, base64: 'AAAA' })
-  })
-
   it('deletes one staged file by uri', () => {
     discardStagedMedia('file:///cache/orca-media-9.png')
     expect(expo.deleted).toContain('file:///cache/orca-media-9.png')

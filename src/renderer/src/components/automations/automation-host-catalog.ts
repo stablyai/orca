@@ -4,7 +4,7 @@ import type {
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
 } from '../../../../shared/automation-owner-ref'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { isOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   automationAuthorityCatalogKey,
   type AutomationCatalogSshMirrorInput,
@@ -164,7 +164,7 @@ function resolveSshScopeGap(
 function projectSshEntries(ctx: AuthorityProjectionContext): AutomationHostCatalogEntry[] {
   const liveTargets = new Map(
     ctx.ssh.targets
-      .filter((target) => !isRuntimeOwnedSshTargetId(target.targetId))
+      .filter((target) => !isOwnedSshTargetId(target.targetId))
       .map((target) => [target.targetId, target])
   )
   const candidateIds = new Set<string>(liveTargets.keys())
@@ -176,7 +176,7 @@ function projectSshEntries(ctx: AuthorityProjectionContext): AutomationHostCatal
   }
   const entries: AutomationHostCatalogEntry[] = []
   for (const targetId of candidateIds) {
-    if (isRuntimeOwnedSshTargetId(targetId)) {
+    if (isOwnedSshTargetId(targetId)) {
       continue
     }
     const live = liveTargets.get(targetId)
@@ -248,17 +248,23 @@ export function buildAutomationHostCatalog(
 ): AutomationHostCatalog {
   const referenced = groupReferencedKeys(input.referencedStableKeys)
   const desktopAuthority: StableAutomationAuthorityRef = { kind: 'desktop' }
+  // Only a saved runtime can absorb the desktop authority; an unknown id leaves it projected.
+  const desktopAlias = input.runtimes.find(
+    (runtime) => runtime.environmentId === input.desktopAliasEnvironmentId
+  )
+  const desktopAliasEnvironmentId = desktopAlias?.environmentId
+  const desktopContext: AuthorityProjectionContext = {
+    authority: desktopAuthority,
+    authorityLabel: input.desktop.label,
+    authorityHealth: input.desktop.authorityHealth ?? 'fresh',
+    querySupport: 'scoped',
+    pairingRevision: null,
+    ssh: input.desktop.ssh,
+    referenced: referenced.get(automationAuthorityCatalogKey(desktopAuthority)) ?? EMPTY_SCOPE,
+    orphanCount: input.desktop.orphanCount
+  }
   const contexts: AuthorityProjectionContext[] = [
-    {
-      authority: desktopAuthority,
-      authorityLabel: input.desktop.label,
-      authorityHealth: input.desktop.authorityHealth ?? 'fresh',
-      querySupport: 'scoped',
-      pairingRevision: null,
-      ssh: input.desktop.ssh,
-      referenced: referenced.get(automationAuthorityCatalogKey(desktopAuthority)) ?? EMPTY_SCOPE,
-      orphanCount: input.desktop.orphanCount
-    },
+    ...(desktopAliasEnvironmentId === undefined ? [desktopContext] : []),
     ...input.runtimes.map((runtime): AuthorityProjectionContext => {
       const authority: StableAutomationAuthorityRef = {
         kind: 'runtime',
@@ -283,7 +289,8 @@ export function buildAutomationHostCatalog(
     byStableKey,
     hydration: {
       runtimeCatalogSettled: input.runtimeCatalogSettled,
-      desktopSshHydrated: input.desktop.ssh.targetsHydrated,
+      // A folded desktop's SSH targets are the runtime it folded into.
+      desktopSshHydrated: (desktopAlias?.ssh ?? input.desktop.ssh).targetsHydrated,
       runtimeSshHydratedByEnvironmentId: new Map(
         input.runtimes.map((runtime) => [runtime.environmentId, runtime.ssh.targetsHydrated])
       ),

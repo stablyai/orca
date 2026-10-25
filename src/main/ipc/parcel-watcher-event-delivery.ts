@@ -13,6 +13,7 @@ const directoryStatSlots = new PrioritySemaphore(DIRECTORY_STAT_CONCURRENCY)
 
 export type WatcherProcessEventDeliveryQueue = {
   enqueue(events: readonly ParcelWatcherEvent[]): void
+  flush(): Promise<void>
   close(): void
 }
 
@@ -40,8 +41,7 @@ async function mapWatcherEvent(
     isDirectory = await statWatcherEventPath(event.path, signal)
   } catch {
     signal?.throwIfAborted()
-    // Why: a path can vanish between the native event and metadata lookup.
-    // Treat unknown metadata as a file-like event so parent invalidation still runs.
+    // Vanished paths still need parent invalidation; unknown metadata remains file-like.
   }
   return { type: event.type, path: event.path, isDirectory }
 }
@@ -75,6 +75,12 @@ export function createWatcherProcessEventDeliveryQueue(
   let draining = false
   let pendingOverflow = false
   let pendingEvents: ParcelWatcherEvent[] = []
+  let flushCompletion: ReturnType<typeof Promise.withResolvers<void>> | undefined
+
+  const finishFlush = (): void => {
+    flushCompletion?.resolve()
+    flushCompletion = undefined
+  }
 
   const drain = async (): Promise<void> => {
     if (!active || draining) {
@@ -104,6 +110,8 @@ export function createWatcherProcessEventDeliveryQueue(
       draining = false
       if (active && (pendingOverflow || pendingEvents.length > 0)) {
         void drain()
+      } else {
+        finishFlush()
       }
     }
   }
@@ -123,11 +131,19 @@ export function createWatcherProcessEventDeliveryQueue(
       }
       void drain()
     },
+    flush(): Promise<void> {
+      if (!active || !draining) {
+        return Promise.resolve()
+      }
+      flushCompletion ??= Promise.withResolvers<void>()
+      return flushCompletion.promise
+    },
     close(): void {
       active = false
       controller.abort()
       pendingEvents = []
       pendingOverflow = false
+      finishFlush()
     }
   }
 }

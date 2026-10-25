@@ -16,6 +16,14 @@ enum MobileWebShellResponseHeaders {
     ]
     if path == "/" {
       headers["Content-Security-Policy"] = MobileWebShellCsp.header
+      // The document's origin is `orca-mobile-web://<sessionId>/` -- a custom scheme's host is
+      // opaque, so the id is used verbatim and a referrer carries it. Android hashes it into a
+      // host instead; see its twin. `img-src https:` made that reachable: an image the
+      // artifact or a markdown document names is a request to someone else's host. The iframe's
+      // own `referrerPolicy` does not cover it -- measured on WebKit, a srcdoc frame's image
+      // request carried the embedder's origin anyway, where Chromium sent none -- so the guarantee
+      // belongs on the document, where one header covers every request the page makes.
+      headers["Referrer-Policy"] = "no-referrer"
     }
     return headers
   }

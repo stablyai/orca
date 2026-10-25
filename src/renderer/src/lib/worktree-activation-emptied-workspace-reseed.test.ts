@@ -12,8 +12,15 @@ import { toSshExecutionHostId } from '../../../shared/execution-host'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent-test-state'
+} from '@/lib/worktree-activation-created-agent.test-fixture'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -24,9 +31,12 @@ afterEach(() => {
 })
 
 /** The state a workspace lands in once its last terminal is closed: the row survives as an
- *  explicit empty list rather than disappearing. */
+ *  explicit empty list rather than disappearing, beside the close's record. */
 function seedClosedLastTerminal(worktreeId: string): void {
-  useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
+  useAppStore.setState({
+    tabsByWorktree: { [worktreeId]: [] },
+    closedTerminalTabTombstonesByTabId: { closed: { closedAt: Date.now(), worktreeId } }
+  })
   const { renderableTabCount } = useAppStore.getState().reconcileWorktreeTabModel(worktreeId)
   expect(renderableTabCount).toBe(0)
 }

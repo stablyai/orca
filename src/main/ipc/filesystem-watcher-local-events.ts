@@ -1,12 +1,9 @@
 import { stat } from 'node:fs/promises'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../shared/filesystem-entry-types'
-import {
-  WATCH_BATCH_MAX_WAIT_MS,
-  WATCH_BATCH_TRAILING_MS
-} from '../../shared/filesystem-watch-batch-window'
+import { watchBatchFlushDelayMs } from '../../shared/filesystem-watch-batch-window'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
-// Why: suppress high-churn dirs at the watcher level (separate from the File Explorer display filter, which only hides rows).
+// Filter high-churn events at source; Explorer display filters only hide rows.
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
@@ -18,12 +15,15 @@ import {
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush, createDebouncedBatch } from './filesystem-watcher-batch-control'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import {
+  notifyLocalWatcherEvents,
+  notifyLocalWatcherInterrupted
+} from './local-watcher-event-observers'
 
-// Why: matches the watcher subprocess budget in parcel-watcher-event-delivery.ts.
+// Match the watcher subprocess stat budget.
 const DIRECTORY_STAT_CONCURRENCY = 8
 
-// ── Event coalescing ─────────────────────────────────────────────────
-// Why: keep the last event per path in a flush window; delete→create emits both (delete cleans the subtree, create refreshes the parent), create→delete is dropped (§4.4).
+// delete→create retains both for subtree/parent refresh; create→delete cancels within the window.
 function coalesceEvents(
   raw: WatcherEvent[]
 ): { type: 'create' | 'update' | 'delete'; path: string }[] {
@@ -36,11 +36,9 @@ function coalesceEvents(
     const prev = lastByPath.get(p)
 
     if (prev) {
-      // delete followed by create → emit both
       if (prev.type === 'delete' && evt.type === 'create') {
         deleteBeforeCreate.add(p)
       }
-      // create followed by delete → net no-op, remove both
       if (prev.type === 'create' && evt.type === 'delete') {
         lastByPath.delete(p)
         deleteBeforeCreate.delete(p)
@@ -50,7 +48,7 @@ function coalesceEvents(
 
     lastByPath.set(p, { type: evt.type, index: i })
 
-    // Why: drop the stale delete when a later event supersedes delete→create, else output has a spurious delete for a file that still exists (§4.4).
+    // Later events can supersede delete→create; do not retain its stale delete.
     if (evt.type !== 'create' && deleteBeforeCreate.has(p)) {
       deleteBeforeCreate.delete(p)
     }
@@ -58,12 +56,10 @@ function coalesceEvents(
 
   const result: { type: 'create' | 'update' | 'delete'; path: string }[] = []
 
-  // Emit delete events first for paths that have delete→create
   for (const p of deleteBeforeCreate) {
     result.push({ type: 'delete', path: p })
   }
 
-  // Emit the last event for each path
   for (const [p, entry] of lastByPath) {
     result.push({ type: entry.type, path: p })
   }
@@ -71,19 +67,15 @@ function coalesceEvents(
   return result
 }
 
-// ── Stat helper for isDirectory ──────────────────────────────────────
-
 async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined> {
   try {
     const s = await stat(filePath)
     return s.isDirectory()
   } catch {
-    // Why: stat failure (EPERM, vanished file) → undefined; renderer treats it as a file event, the safe default (§4.4).
+    // Failed stat leaves the renderer's conservative file-event default.
     return undefined
   }
 }
-
-// ── Flush and emit ───────────────────────────────────────────────────
 
 function emitOverflowPayload(root: WatchedRoot): void {
   const { rootPath } = root
@@ -115,7 +107,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
   const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
-  root.batch.firstEventAt = 0
+  root.batch.lastFlushAt = Date.now()
 
   try {
     if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
@@ -123,7 +115,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
     }
 
     if (overflowed || rawEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
-      // Why: deletion storms can be too large to coalesce/stat per path; one overflow asks the renderer for the same conservative refresh.
+      // A large deletion storm needs one conservative refresh instead of per-path coalescing and stat.
       if (!root.batch.cancelled) {
         emitOverflowPayload(root)
       }
@@ -132,13 +124,12 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
 
     const coalesced = coalesceEvents(rawEvents)
 
-    // Why: a full batch is up to MAX_BATCHED_WATCHER_EVENTS paths; unbounded stat() would swamp
-    // libuv's 4-thread pool, which also serves git reads and persistence writes.
+    // Bound stat concurrency so Git and persistence can still use libuv's shared pool.
     const events: FsChangeEvent[] = await mapWithConcurrency(
       coalesced,
       DIRECTORY_STAT_CONCURRENCY,
       async (evt) => {
-        // Why: a deleted path can't be stat'd; leave isDirectory undefined and let the renderer infer from dirCache.
+        // Deleted paths cannot be statted; let the renderer infer from dirCache.
         const isDirectory =
           root.batch.cancelled || evt.type === 'delete'
             ? undefined
@@ -172,12 +163,11 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       root.batch.flushQueued = false
       if (
         !root.batch.cancelled &&
-        // Why: an armed timer still owns its debounce window; draining here would split related events across payloads.
+        // An armed flush still owns its window; draining early would split related events.
         !root.batch.timer &&
         (root.batch.events.length > 0 || root.batch.overflowed)
       ) {
-        // Drain the queued batch only after the current payload has settled,
-        // preserving watcher event ordering without dropping a storm tail.
+        // Drain after the current payload settles to preserve event order and the storm tail.
         void flushBatch(root)
       }
     }
@@ -192,35 +182,19 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
     root.batch.flushQueued = true
   }
 
-  const now = Date.now()
-
-  if (root.batch.firstEventAt === 0) {
-    root.batch.firstEventAt = now
-  }
-
-  // If we've exceeded the max wait, flush immediately
-  if (now - root.batch.firstEventAt >= WATCH_BATCH_MAX_WAIT_MS) {
-    if (root.batch.timer) {
-      clearTimeout(root.batch.timer)
-      root.batch.timer = null
-    }
-    void flushBatch(root)
-    return
-  }
-
-  // Trailing-edge debounce: reset timer on each new event
+  // Resetting armed timers would starve delivery under continuous writes.
   if (root.batch.timer) {
-    root.batch.timer.refresh()
     return
   }
-  // Why: clear the handle as it fires so `batch.timer` means "a debounce window is still open", which gates the queued drain.
-  root.batch.timer = setTimeout(() => {
-    root.batch.timer = null
-    void flushBatch(root)
-  }, WATCH_BATCH_TRAILING_MS)
+  // Null the fired timer so queued drain sees that the flush window closed.
+  root.batch.timer = setTimeout(
+    () => {
+      root.batch.timer = null
+      void flushBatch(root)
+    },
+    watchBatchFlushDelayMs(Date.now(), root.batch.lastFlushAt)
+  )
 }
-
-// ── Watcher creation ─────────────────────────────────────────────────
 
 export async function createLocalWatcher(
   rootKey: string,
@@ -235,31 +209,33 @@ export async function createLocalWatcher(
   }
 
   try {
-    // Why: if the error callback cleaned up before subscribe() resolved, its returned subscription is orphaned and leaks a native handle.
+    // Errors can precede subscribe resolution; retain cleanup evidence to retire the orphan handle.
     let errorCleanedUp = false
 
     const watcherOptions = {
       ...buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS),
-      // Why: Parcel probes Watchman first, which prints a shell-level "watchman not recognized" error on Windows; pin the backend to suppress it.
+      // Pin Windows backend to avoid Parcel's noisy Watchman probe.
       ...(process.platform === 'win32' ? { backend: 'windows' as const } : {})
     }
 
     const markWatcherInterrupted = (): void => {
+      notifyLocalWatcherInterrupted(root)
       root.batch.overflowed = true
       scheduleLocalBatchFlush(root)
     }
 
-    // Why: fork the watcher process (issue #7547 — watcher.node teardown races crash the host); onInterruption marks overflow to refresh past the gap.
+    // Isolate watcher.node teardown crashes in a child; interruptions require overflow refresh (#7547).
     root.subscription = await subscribeViaWatcherProcess(
       rootPath,
       (err, events) => {
         if (err) {
-          // Why: treat watcher errors as overflow so the renderer conservatively refreshes rather than trusting possibly-invalid caches (§7.2, §7.3).
+          // Errors invalidate path precision; force a conservative renderer refresh.
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
+          notifyLocalWatcherInterrupted(root)
           emitOverflowPayload(root)
-          // Why: after an error the native subscription may be invalid (deleted root); tear down the dead watcher so it doesn't dangle (§7.3).
+          // Retire native subscriptions that may be invalid after errors or root deletion.
           cancelLocalBatchFlush(root)
-          // Why: error callback can fire before subscribe() assigns root.subscription; guard against null so cleanup doesn't crash.
+          // The error callback can precede assignment of the subscription.
           if (root.subscription) {
             retainLocalWatcherPhysicalFailure(rootKey, err)
             void trackDetachedLocalUnsubscribe(rootKey, root)
@@ -272,6 +248,7 @@ export async function createLocalWatcher(
         if (root.batch.cancelled) {
           return
         }
+        notifyLocalWatcherEvents(root, events)
         queueWatcherEvents(root.batch, events)
         scheduleLocalBatchFlush(root)
       },
@@ -285,13 +262,13 @@ export async function createLocalWatcher(
       }
     )
 
-    // Why: error callback already cleaned up watchedRoots before subscribe() resolved; unsubscribe this orphaned subscription so it doesn't leak.
+    // subscribe resolved after error cleanup; retire its orphaned native handle.
     if (errorCleanedUp) {
       void trackDetachedLocalUnsubscribe(rootKey, root)
       throw new Error(`Watcher for ${rootKey} errored during subscribe`)
     }
   } catch (err) {
-    // Why: watcher backend can throw synchronously on a deleted root/permission error; log rather than crash the main process (§7.3).
+    // Surface synchronous subscription failures through the caller rather than crashing main.
     console.error(`[filesystem-watcher] failed to subscribe ${rootKey}:`, err)
     throw err
   }

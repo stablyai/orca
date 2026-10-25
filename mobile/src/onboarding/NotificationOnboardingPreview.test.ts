@@ -77,8 +77,7 @@ describe('NotificationOnboardingPreview', () => {
     const preview = renderer!.root.findByProps({ testID: 'notification-onboarding-preview' })
     const copy = renderer!.root
       .findAllByType('Text')
-      .map((node) => node.props.children)
-      .flat()
+      .flatMap((node) => node.props.children)
       .join(' ')
 
     expect(preview.props.accessibilityElementsHidden).toBe(true)
@@ -88,6 +87,7 @@ describe('NotificationOnboardingPreview', () => {
   })
 
   it('does not animate the banners when the page is off-screen', async () => {
+    mocks.reducedMotion = false
     await renderPreview(false)
     expect(mocks.loop).not.toHaveBeenCalled()
   })

@@ -1,3 +1,4 @@
+import { createQoderSessionResumeState } from './session-scanner-qoder-parser'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
@@ -5,6 +6,7 @@ import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
+import { createCodebuddySessionResumeState } from './session-scanner-codebuddy-parser'
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
@@ -14,6 +16,8 @@ import type { ResumableSessionParseState, SessionFileCandidate } from './session
 import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
 import {
   getSessionParseCacheEntry,
+  noteSessionParseCacheListed,
+  sessionParseCacheKey,
   storeSessionParseCacheEntry,
   type SessionParseCacheEntry
 } from './session-parse-cache-store'
@@ -21,7 +25,9 @@ import type { TranscriptMessageSink } from './session-transcript-consumers'
 import { sidecarUnchanged } from './session-sidecar-stat'
 import {
   enrichSessionFromSidecar,
-  sidecarEnrichesWithoutReparse
+  reuseUnchangedSidecarSession,
+  sidecarEnrichesWithoutReparse,
+  type SidecarEnrichment
 } from './session-scanner-sidecar-enrichment'
 import {
   readResumableTranscript,
@@ -32,25 +38,20 @@ import {
 
 export {
   invalidateSessionParseCacheEntry,
-  resetSessionParseCacheForTests,
-  seedSessionParseCache,
-  snapshotSessionParseCacheForPersistence,
-  type PersistedSessionParseCacheEntry
+  resetSessionParseCacheForTests
 } from './session-parse-cache-store'
 
-// Incremental append-parsing applies only to transcripts that are append-only
-// JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes/gemini-json)
-// are rewritten in place, Kimi reads a state doc plus a sibling wire file, and
-// OpenCode reads SQLite rows or a doc plus a message dir — those formats keep
-// unchanged-file reuse only and re-parse whole when they change.
-// Returns a factory (not a state) so steady-state resumes, which clone the
-// cached state instead, never pay for a throwaway accumulator.
+// Resume only append-only folds; return factories so cached resumes avoid allocating throwaway state.
 function resumableStateFactoryFor(
   candidate: SessionFileCandidate
 ): ((messages: TranscriptMessageSink) => ResumableSessionParseState) | null {
   switch (candidate.agent) {
     case 'claude':
       return (messages) => createClaudeSessionResumeState(candidate.file, messages)
+    case 'qoder':
+      return (messages) => createQoderSessionResumeState(candidate.file, messages)
+    case 'codebuddy':
+      return (messages) => createCodebuddySessionResumeState(candidate.file, messages)
     case 'codex':
       return (messages) =>
         createCodexSessionResumeState(candidate.file, candidate.codexHome, messages)
@@ -76,10 +77,14 @@ function resumableStateFactoryFor(
     case 'devin':
     case 'grok':
     case 'hermes':
+    case 'jcode':
     case 'cline':
     case 'kimi':
+    case 'kiro':
+    case 'muse':
     case 'opencode':
     case 'opencode2':
+    case 'zcode':
     case 'rovo':
       return null
   }
@@ -99,56 +104,41 @@ export function createSessionParseStats(): SessionParseStats {
   }
 }
 
-/**
- * The session list's cursor over the transcript reader: it remembers what each
- * file looked like when it was last listed, reuses that work where the file is
- * provably unchanged (mtime+size), and otherwise asks the reader to resume from
- * the last consumed byte or re-read the file whole. This is what keeps the
- * renderer's ~5s forced rescans from re-reading gigabytes of transcripts
- * (STA-1278/STA-1417: main process pegging one core during multi-agent
- * workloads). Other consumers of the reader keep their own equivalent cursor
- * and never consult this one.
- */
+/** History owns this stat-keyed cursor; transcript consumers track their own read coverage. */
 export async function parseAgentSessionFileCached(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
   stats?: SessionParseStats,
-  requireRead?: SessionParseReadRequirement
+  requireRead?: SessionParseReadRequirement,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  // The whole lookup-read-store sequence runs in the lane: a concurrent parse of
-  // the same path shares this entry's resume point and its message channel.
+  // Serialize lookup/read/store because overlapping parses share a resume point and message channel.
   return inSessionParseFileLane(candidate.file.path, () =>
-    parseCachedInLane(candidate, platform, stats, requireRead)
+    parseCachedInLane(candidate, platform, stats, requireRead, signal)
   )
 }
 
-/**
- * What a caller other than the session list needs out of this parse.
- *
- * `any`: some bytes must be read. A cursor already at the file's current stat
- * is dropped so the reader opens it; one that is merely behind is left alone,
- * because an append is a read.
- *
- * `whole`: the file must be re-read from zero, for a consumer whose own cursor
- * covers a span this one does not.
- *
- * Why it is a parameter and not two calls around this one: the decision reads
- * cache state and then changes it, so outside the per-path lane an overlapping
- * list parse can store its entry in between and the forced read silently
- * degrades to a reuse.
- */
+/** Mark listed rows before parsing to exempt them from the unlisted cache bound. */
+export function parseListedSessionFile(
+  candidate: SessionFileCandidate,
+  platform: NodeJS.Platform,
+  stats: SessionParseStats,
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  noteSessionParseCacheListed(sessionParseCacheKey(candidate.agent, candidate.file.path))
+  return parseAgentSessionFileCached(candidate, platform, stats, undefined, signal)
+}
+
+/** Enforce in the path lane: any forbids unchanged reuse; whole requires reading from zero. */
 export type SessionParseReadRequirement = 'any' | 'whole'
 
-/**
- * True when this cursor already sits at the transcript's current stat, so a
- * parse would reuse the cached fold and read no bytes at all.
- */
 function sessionParseCacheCoversTranscript(
   candidate: SessionFileCandidate,
+  key: string,
   platform: NodeJS.Platform
 ): boolean {
   const { file } = candidate
-  const entry = getSessionParseCacheEntry(file.path)
+  const entry = getSessionParseCacheEntry(key)
   return (
     entry !== undefined &&
     entry.platform === platform &&
@@ -161,35 +151,52 @@ async function parseCachedInLane(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
   stats?: SessionParseStats,
-  requireRead?: SessionParseReadRequirement
+  requireRead?: SessionParseReadRequirement,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
-  if (
+  const key = sessionParseCacheKey(candidate.agent, file.path)
+  const forceWholeRead =
     requireRead === 'whole' ||
-    (requireRead === 'any' && sessionParseCacheCoversTranscript(candidate, platform))
-  ) {
+    (requireRead === 'any' && sessionParseCacheCoversTranscript(candidate, key, platform))
+  if (forceWholeRead) {
     requestWholeTranscriptRead(file.path)
   }
-  const entry = getSessionParseCacheEntry(file.path)
+  // Not looked up again after a forced read: a failed database delete would hand the row back.
+  const entry = forceWholeRead ? undefined : getSessionParseCacheEntry(key)
 
-  if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, platform)) {
+  if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, key, platform)) {
     if (sidecarUnchanged(entry.sidecar, file.sidecar)) {
-      return reuseCachedSession(candidate, entry, stats)
+      return reuseCachedSession(candidate, key, entry, stats)
     }
-    // Only the sibling moved. For an agent whose sibling just adds metadata,
-    // re-merge it onto the stored fold result; the transcript is not re-read.
+    // Metadata-only sidecar changes can merge onto the saved fold without rereading the transcript.
     if (sidecarEnrichesWithoutReparse(candidate) && entry.foldSession !== undefined) {
-      const enriched = await enrichSessionFromSidecar(candidate, entry.foldSession, platform)
-      entry.session = enriched.session
-      entry.sidecar = enriched.refused ? 'unknown' : file.sidecar
-      storeSessionParseCacheEntry(file.path, entry)
+      const enriched = await enrichSessionFromSidecar(
+        candidate,
+        entry.foldSession,
+        platform,
+        signal
+      )
+      const session = reuseUnchangedSidecarSession(entry.session, enriched.session)
+      storeSessionParseCacheEntry(key, {
+        ...entry,
+        session,
+        sidecar: enriched.refused ? 'unknown' : file.sidecar
+      })
       if (stats) {
         stats.reused++
       }
-      return entry.session
+      return session
     }
   }
 
+  let enriched: SidecarEnrichment = { session: null, refused: false }
+  const sessionForConsumers = async (
+    session: AiVaultSession | null
+  ): Promise<AiVaultSession | null> => {
+    enriched = await enrichSessionFromSidecar(candidate, session, platform, signal)
+    return enriched.session
+  }
   const stateFactory = resumableStateFactoryFor(candidate)
   if (stateFactory) {
     const read = await readResumableTranscript({
@@ -197,17 +204,17 @@ async function parseCachedInLane(
       platform,
       resume: entry?.platform === platform ? entry.resume : null,
       stateFactory,
-      stats
+      stats,
+      signal,
+      sessionForConsumers
     })
-    const enriched = await enrichSessionFromSidecar(candidate, read.session, platform)
-    storeSessionParseCacheEntry(file.path, {
+    storeSessionParseCacheEntry(key, {
+      agent: candidate.agent,
       mtimeMs: file.mtimeMs,
       sizeBytes: file.sizeBytes ?? null,
       platform,
       session: enriched.session,
-      // A refused sibling leaves the transcript's own work cached and resumable;
-      // only the sibling is recorded as unknown, so the next healthy scan
-      // re-merges it without re-reading the transcript.
+      // Preserve transcript work while refused sidecars stay unknown for a metadata-only retry.
       sidecar: enriched.refused ? 'unknown' : file.sidecar,
       foldSession: read.session,
       resume: read.resume
@@ -215,18 +222,19 @@ async function parseCachedInLane(
     return enriched.session
   }
 
-  const session = await readWholeTranscript({ candidate, platform, stats })
-  // Whole-file agents merge the sibling here just like the resumable branch
-  // does post-read; the raw fold stays in foldSession so a sibling-only change
-  // re-merges without re-reading the transcript.
-  const enriched = await enrichSessionFromSidecar(candidate, session, platform)
-  storeSessionParseCacheEntry(file.path, {
+  const session = await readWholeTranscript({
+    candidate,
+    platform,
+    stats,
+    signal,
+    sessionForConsumers
+  })
+  storeSessionParseCacheEntry(key, {
+    agent: candidate.agent,
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform,
     session: enriched.session,
-    // A refused sibling keeps the transcript's own result cached; only the
-    // sibling is recorded as unknown, so the next scan re-merges.
     sidecar: enriched.refused ? 'unknown' : file.sidecar,
     foldSession: session,
     resume: null
@@ -236,18 +244,16 @@ async function parseCachedInLane(
 
 async function reuseCachedSession(
   candidate: SessionFileCandidate,
+  key: string,
   entry: SessionParseCacheEntry,
   stats?: SessionParseStats
 ): Promise<AiVaultSession | null> {
   if (stats) {
     stats.reused++
   }
-  // A zero-turn transcript usually never changes again, but its sibling
-  // subagent dir (Claude `<session>/subagents/`, OMP's same-named artifact
-  // dir) can gain files after the parent's last write (a still-running
-  // subagent finishing). The mtime+size key can't see that, so refresh the
-  // cheap directory count on reuse.
-  if (entry.session && entry.session.messageCount === 0) {
+  let session = entry.session
+  // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
+  if (session && session.messageCount === 0) {
     const subagentTranscriptCount =
       candidate.agent === 'claude'
         ? await countSubagentTranscripts(candidate.file.path)
@@ -256,16 +262,15 @@ async function reuseCachedSession(
           : null
     if (
       subagentTranscriptCount !== null &&
-      subagentTranscriptCount !== entry.session.subagentTranscriptCount
+      subagentTranscriptCount !== session.subagentTranscriptCount
     ) {
-      entry.session = { ...entry.session, subagentTranscriptCount }
+      session = { ...session, subagentTranscriptCount }
     }
   }
-  // Codex titles come from session_index.jsonl, which mtime+size can't see.
-  // Remote counterpart: remote-session-scanner.ts's reusedCodexTitleRefresh.
-  if (entry.session && candidate.agent === 'codex') {
-    entry.session = await refreshCachedCodexTitle(candidate, entry.session)
+  // Index titles can change independently of the transcript signature.
+  if (session && candidate.agent === 'codex') {
+    session = await refreshCachedCodexTitle(candidate, session)
   }
-  storeSessionParseCacheEntry(candidate.file.path, entry)
-  return entry.session
+  storeSessionParseCacheEntry(key, { ...entry, session })
+  return session
 }

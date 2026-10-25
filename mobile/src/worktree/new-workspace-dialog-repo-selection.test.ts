@@ -37,6 +37,14 @@ describe('mobile new workspace dialog repo selection', () => {
         activeRepoId: 'active'
       })
     ).toBe('draft')
+    expect(
+      resolveMobileNewWorkspaceDialogRepoId({
+        eligibleRepos,
+        draftRepoId: 'missing',
+        initialRepoId: 'initial',
+        activeRepoId: 'active'
+      })
+    ).toBe('initial')
   })
 
   it('uses the last visited repo as the active repo before falling back', () => {
@@ -93,5 +101,15 @@ describe('mobile new workspace dialog repo selection', () => {
     expect(
       refreshMobileNewWorkspaceDialogSelectedRepo([makeRepo('fresh')], makeRepo('stale'))
     ).toBe(null)
+  })
+
+  it('keeps a repo picked on a server when the desktop lists one with the same id', () => {
+    const onDesktop = makeRepo('repo', { path: '/mac/repo' })
+    const onServer = makeRepo('repo', { path: '/srv/repo', executionHostId: 'runtime:env-1' })
+
+    expect(refreshMobileNewWorkspaceDialogSelectedRepo([onDesktop, onServer], onServer)).toBe(
+      onServer
+    )
+    expect(refreshMobileNewWorkspaceDialogSelectedRepo([onDesktop], onServer)).toBe(null)
   })
 })

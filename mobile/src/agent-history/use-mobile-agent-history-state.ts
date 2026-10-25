@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/host-client-hooks'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
+import type { RpcClient } from '../transport/rpc-client'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import type {
   AiVaultScanIssue,
   AiVaultScope,
@@ -38,11 +41,24 @@ export type MobileAgentHistoryStateParams = {
 
 export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams) {
   const { hostId, worktreeId, worktrees, worktreesLoaded } = params
-  const { client, state: connState } = useHostClient(hostId)
+  const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const [scope, setScope] = useState<AiVaultScope>('workspace')
   const [screenState, setScreenState] = useState<AgentHistoryScreenState>({ kind: 'loading' })
-  const [hostStatusResult, setHostStatusResult] = useState<unknown>(null)
+  const clientGeneration = client?.getGeneration?.() ?? 0
+  const [hostStatusProbe, setHostStatusProbe] = useState<{
+    hostId: string
+    client: RpcClient
+    generation: number
+    result: unknown
+  } | null>(null)
+  const hostStatusResult =
+    connState === 'connected' &&
+    hostStatusProbe?.hostId === hostId &&
+    hostStatusProbe.client === client &&
+    hostStatusProbe.generation === clientGeneration
+      ? hostStatusProbe.result
+      : null
   const [refreshing, setRefreshing] = useState(false)
   const generationRef = useRef(0)
   const mountedRef = useRef(true)
@@ -71,10 +87,14 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     async (options: { scope: AiVaultScope; force: boolean }): Promise<void> => {
       const generation = generationRef.current + 1
       generationRef.current = generation
-      const isCurrent = () => mountedRef.current && generationRef.current === generation
+      const isCurrent = () =>
+        mountedRef.current &&
+        generationRef.current === generation &&
+        (client?.getGeneration?.() ?? 0) === clientGeneration
 
       if (!client || connState !== 'connected') {
         if (isCurrent()) {
+          setHostStatusProbe(null)
           // Why: keep the stale list visible through transient reconnects
           // (connState flips re-run the load effect) instead of tearing it
           // down to a full-screen error, matching the host list screen.
@@ -97,7 +117,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           () => agentHistoryHostStatusRead.interpret(statusReply),
           'Unable to reach host'
         )
-        setHostStatusResult(status)
+        setHostStatusProbe({ hostId, client, generation: clientGeneration, result: status })
         if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {
           setScreenState({ kind: 'unsupported' })
           return
@@ -139,11 +159,11 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           return
         }
         const message = err instanceof Error ? err.message : 'Unable to load agent sessions'
-        setHostStatusResult(null)
+        setHostStatusProbe(null)
         setScreenState({ kind: 'error', message })
       }
     },
-    [activeWorktree, client, connState, worktrees, worktreesLoaded]
+    [activeWorktree, client, clientGeneration, connState, hostId, worktrees, worktreesLoaded]
   )
 
   // Initial + reconnect load. Why: scope switches reuse the host's 15s cache
@@ -174,13 +194,16 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     }
   }, [loadSessions, scope])
 
-  const retry = useCallback(() => {
-    if (connState !== 'connected' && hostId) {
-      void forceReconnect(hostId)
-      return
-    }
-    void loadSessions({ scope, force: false })
-  }, [connState, forceReconnect, hostId, loadSessions, scope])
+  const retry = useMemo(
+    () =>
+      connectionRetryAction({
+        hostId,
+        needsReconnect: connState !== 'connected',
+        forceReconnect,
+        reload: () => void loadSessions({ scope, force: false })
+      }),
+    [connState, forceReconnect, hostId, loadSessions, scope]
+  )
 
   return {
     connState,

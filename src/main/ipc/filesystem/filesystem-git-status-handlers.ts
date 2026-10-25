@@ -17,15 +17,13 @@ import {
   getDiff
 } from '../../git/status'
 import { getHistory } from '../../git/history'
+import { isGitWorktreeMutationInFlight } from '../../git/git-worktree-mutation-state'
+import type { GitMutationInFlight } from '../../../shared/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../git/check-ignored-paths'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
 } from '../../git/huge-folder-ignore'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { validateGitRelativeFilePath } from '../filesystem-path-containment'
 import {
@@ -36,6 +34,8 @@ import {
 import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
 import { applyGitStatusUpstreamRefWatchRequest } from '../git-status-upstream-ref-watch-request'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 
 export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerContext): void {
   const { store, gitStatusCancellations } = context
@@ -70,17 +70,9 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         ...(controller ? { signal: controller.signal } : {})
       }
       try {
-        if (args.connectionId) {
-          const provider = getSshGitProvider(args.connectionId)
-          if (!provider) {
-            throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-          }
-          // Why: await keeps the cancellation token registered until the remote request settles (an early finally would free it).
-          return await provider.getStatus(args.worktreePath, options)
-        }
+        requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-        // Why: one registered-worktree lookup feeds both — status polls this
-        // handler, and the scan walks every repo's worktree meta.
+        // Reuse one registered-worktree lookup for frequent status polls and repo metadata reads.
         const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
         const gitOptions = getLocalGitOptionsForRepo(store, repo)
         const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
@@ -105,7 +97,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       applyGitStatusUpstreamRefWatchRequest(store, args)
   )
 
-  // Why: parent status reports only one gitlink row per submodule; fetch inner per-file changes from the submodule's own worktree.
+  // Parent status exposes only gitlinks; read inner changes from each submodule worktree.
   ipcMain.handle(
     'git:submoduleStatus',
     async (
@@ -117,13 +109,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         area?: GitStagingArea
       }
     ): Promise<GitStatusResult> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getSubmoduleStatus(args.worktreePath, args.submodulePath, args.area)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -143,14 +129,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       _event,
       args: { worktreePath: string; paths: string[]; connectionId?: string }
     ): Promise<string[]> => {
-      if (args.connectionId) {
-        const paths = args.paths.map((p) => validateGitRelativeFilePath(args.worktreePath, p))
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.checkIgnoredPaths(args.worktreePath, paths)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -162,7 +141,6 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  // Why: backs the SCM "ignore the flooding folder" flow; local-only since huge untracked folders are a local-dev pathology.
   ipcMain.handle(
     'git:findHugeFoldersToIgnore',
     async (_event, args: { worktreePath: string }): Promise<string[]> => {
@@ -191,13 +169,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
       const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getHistory(args.worktreePath, options)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -208,20 +180,14 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  // Why: fs-only conflict-state check so non-active worktrees can clear their Rebasing/Merging badges without a full git status.
+  // Filesystem probes clear inactive-worktree conflict badges without a full Git status.
   ipcMain.handle(
     'git:conflictOperation',
     async (
       _event,
       args: { worktreePath: string; connectionId?: string }
     ): Promise<GitConflictOperation> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.detectConflictOperation(args.worktreePath)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -233,15 +199,26 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
   )
 
   ipcMain.handle(
+    'git:mutationInFlight',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<GitMutationInFlight> => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return { inFlight: await isGitWorktreeMutationInFlight(worktreePath, gitOptions) }
+    }
+  )
+
+  ipcMain.handle(
     'git:abortMerge',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No git provider for connection "${args.connectionId}"`)
-        }
-        return provider.abortMerge(args.worktreePath)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -255,13 +232,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
   ipcMain.handle(
     'git:abortRebase',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No git provider for connection "${args.connectionId}"`)
-        }
-        return provider.abortRebase(args.worktreePath)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -284,18 +255,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         connectionId?: string
       }
     ): Promise<GitDiffResult> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getDiff(
-          args.worktreePath,
-          args.filePath,
-          args.staged,
-          args.compareAgainstHead
-        )
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(

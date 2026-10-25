@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
-import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
+import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { AppState } from '@/store/types'

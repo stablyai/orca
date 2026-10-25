@@ -1,3 +1,5 @@
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from '../checks-entry-refresh'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
@@ -294,9 +296,13 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     setTitleSaving(true)
     try {
       if (activeReview.provider === 'gitlab') {
-        const result = await window.api.gl.updateMR({
+        const selector = {
           repoPath: repo.path,
           repoId: repo.id,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+        }
+        const result = await gitLabApiFor(selector).updateMR({
+          ...selector,
           iid: activeReview.number,
           updates: { title: nextTitle }
         })
@@ -329,6 +335,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     }
   }, [
     activeReview,
+    activeWorktree,
     repo,
     pr,
     titleDraft,

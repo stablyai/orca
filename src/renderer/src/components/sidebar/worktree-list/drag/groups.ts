@@ -1,6 +1,6 @@
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../grouping/group-keys'
+import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getNaturalWorktreeIds } from '../../natural-worktree-ids'
-import type { HostSectionRow } from '../../host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { WorktreeDragGroup } from '../../worktree-manual-order'
 
 export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {

@@ -8,9 +8,8 @@ import { installInProcessSessionSearchService } from '../ai-vault-search/session
 /**
  * orcad's session search registration.
  *
- * In this process and not a scanner child: orcad ships only the watcher and the
- * daemon entries beside `orcad.js`, so there is no scanner-service child here to
- * own the index — and this process is the sole writer, so nothing can race it.
+ * In this process and not the scanner child: orcad never installs the search data
+ * root, so its scanner child gets no index and this process is the sole writer.
  * Null on a host whose Node has no `node:sqlite`, which is orcad's stated floor.
  */
 export async function installOrcadSessionSearchService(args: {

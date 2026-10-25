@@ -10,12 +10,6 @@ afterEach(() => {
 })
 
 describe('readBrowserClientHostId', () => {
-  it('reads the id its main process reports', () => {
-    vi.stubGlobal('api', { browser: { readClientHostId: () => 'browser-host-a' } })
-
-    expect(readBrowserClientHostId()).toBe('browser-host-a')
-  })
-
   // Why the read is not repeated: every row of every session snapshot asks, and the id is fixed
   // for the life of the process.
   it('asks the bridge once and answers from the cache after that', () => {

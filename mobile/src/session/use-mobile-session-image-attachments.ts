@@ -2,11 +2,16 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
   type MobileNativeChatImageAttachments
 } from './use-mobile-native-chat-image-attachments'
+import {
+  useMobileNativeChatFileAttachments,
+  type MobileNativeChatFileAttachments
+} from './use-mobile-native-chat-file-attachments'
 
 type CurrentRef<T> = { readonly current: T }
 
@@ -22,6 +27,8 @@ type Args = {
    *  are scoped per tab so a switch can't ride an image into another terminal. */
   readonly nativeChatScopeKey: string | null
   readonly nativeChatInputLeaseReady: boolean
+  /** False when only memory names the agent: the pane may be a bare shell, so images never send. */
+  readonly nativeChatAgentConfirmed: boolean
   readonly getActiveWorktreeConnectionId: () => Promise<string | null>
   readonly beforeTerminalSend: (terminal: string) => Promise<boolean>
   /** Outcome-preserving so an ambiguous ('unknown') delivery after an image
@@ -31,15 +38,13 @@ type Args = {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly {
-      id: string
-      path: string
-      previewUri: string
-      contentFingerprint?: string
-    }[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured agent sessions do not have a terminal paste path. */
   readonly structuredNativeChat: boolean
+  /** The structured chat's session, which owns the files uploaded for it. */
+  readonly nativeChatSessionId: string | null
   /** Launch-context text parked on the agent's TUI input line, or null — sizes
    *  the image paste's leading clear so a multi-line draft cannot ride along. */
   readonly readSeededLaunchDraft: () => string | null
@@ -52,8 +57,9 @@ type Args = {
 
 /** A session exposes image attachment on two surfaces that share one upload
  *  pipeline and host wiring: the visible terminal input (immediate bracketed
- *  paste) and the native-chat composer (chips deferred to submit). Owning both
- *  here keeps the already-dense session route to a single wiring point. */
+ *  paste) and the native-chat composer (chips deferred to submit), plus a
+ *  structured chat's files. Owning them here keeps the already-dense session
+ *  route to a single wiring point. */
 export function useMobileSessionImageAttachments({
   client,
   agent,
@@ -64,10 +70,12 @@ export function useMobileSessionImageAttachments({
   deviceTokenRef,
   nativeChatScopeKey,
   nativeChatInputLeaseReady,
+  nativeChatAgentConfirmed,
   getActiveWorktreeConnectionId,
   beforeTerminalSend,
   nativeChatBaseSend,
   structuredNativeChat,
+  nativeChatSessionId,
   readSeededLaunchDraft,
   showToast,
   onNativeChatSendError,
@@ -77,6 +85,7 @@ export function useMobileSessionImageAttachments({
   attachImage: (source: MobileImageSource) => Promise<void>
   isAttaching: boolean
   nativeChatImages: MobileNativeChatImageAttachments
+  nativeChatFiles: MobileNativeChatFileAttachments
 } {
   const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
@@ -91,6 +100,13 @@ export function useMobileSessionImageAttachments({
     onSuccess,
     onError
   })
+  const nativeChatFiles = useMobileNativeChatFileAttachments({
+    client,
+    sessionId: structuredNativeChat ? nativeChatSessionId : null,
+    scopeKey: nativeChatScopeKey,
+    enabled: structuredNativeChat && connState === 'connected',
+    showToast
+  })
   const nativeChatImages = useMobileNativeChatImageAttachments({
     client,
     agent,
@@ -99,8 +115,12 @@ export function useMobileSessionImageAttachments({
     getActiveWorktreeConnectionId,
     connState,
     scopeKey: nativeChatScopeKey,
-    enabled: structuredNativeChat ? connState === 'connected' : nativeChatInputLeaseReady,
+    enabled: structuredNativeChat
+      ? connState === 'connected'
+      : nativeChatInputLeaseReady && nativeChatAgentConfirmed,
     structuredNativeChat,
+    files: nativeChatFiles.files,
+    onFilesSent: nativeChatFiles.removeFiles,
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,
@@ -108,5 +128,5 @@ export function useMobileSessionImageAttachments({
     onAttachSuccess: onSuccess,
     onError
   })
-  return { attachImage, isAttaching, nativeChatImages }
+  return { attachImage, isAttaching, nativeChatImages, nativeChatFiles }
 }

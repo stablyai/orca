@@ -88,6 +88,7 @@ vi.mock('@xterm/xterm', () => ({
     scrollToBottom = vi.fn()
     selectAll = vi.fn()
     getSelection = vi.fn(() => this.selectionText)
+    hasSelection = vi.fn(() => this.selectionText !== '')
     attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
       this.customKeyHandler = handler
     })
@@ -146,6 +147,11 @@ vi.mock('@/store', () => {
   useAppStore.getState = (): typeof storeState => storeState
   return { useAppStore }
 })
+
+// Paste encoding is under test here; owner routing is covered by AgentTerminalPreview.test.tsx.
+vi.mock('./terminal-preview-api', () => ({
+  terminalPreviewApiFor: () => window.api.terminalPreview
+}))
 
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 

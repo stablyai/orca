@@ -83,7 +83,7 @@ describe('useActivityThreadActionBindings', () => {
 
     expect(bindings.hasUnreadThreads).toBe(true)
     bindings.markAllThreadsRead()
-    expect(acknowledgeAgents).toHaveBeenCalledWith([hiddenUnread.paneKey])
+    expect(acknowledgeAgents).toHaveBeenCalledWith([hiddenUnread.paneKey], undefined, 'explicit')
   })
 
   it('clears completed strictly from the visible set', () => {

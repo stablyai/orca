@@ -1,3 +1,4 @@
+import { mobileFileMedia } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
 import type { RpcFailure, RpcResponse } from '../transport/types'
@@ -143,6 +144,15 @@ export async function loadMobileFilePreview(
   relativePath?: string,
   options: TerminalArtifactRetryOptions = {}
 ): Promise<MobileFilePreviewResult> {
+  const media =
+    typeof worktreeIdOrSource === 'string'
+      ? mobileFileMedia(worktreeIdOrSource, relativePath)
+      : worktreeIdOrSource.source === 'worktree'
+        ? mobileFileMedia(worktreeIdOrSource.worktreeId, worktreeIdOrSource.relativePath)
+        : null
+  if (media) {
+    return { status: 'ready', kind: 'media', media }
+  }
   let source = worktreeIdOrSource
   let read = await sendMobileFilePreviewRead(
     client,
@@ -296,7 +306,12 @@ function terminalArtifactPreviewMatchesBase(
   if (preview.status === 'empty') {
     return baseContent.length === 0
   }
-  return preview.status === 'ready' && preview.kind !== 'image' && preview.content === baseContent
+  return (
+    preview.status === 'ready' &&
+    preview.kind !== 'image' &&
+    preview.kind !== 'media' &&
+    preview.content === baseContent
+  )
 }
 
 function previewPathForSource(source: MobileFilePreviewSource): string {

@@ -67,7 +67,7 @@ export async function getActiveMarkdownExportPayload({
   }
 
   const subtree = findDocumentSubtree(root)
-  if (!subtree) {
+  if (!subtree || subtree.hasAttribute('data-markdown-preview-incomplete')) {
     return null
   }
 

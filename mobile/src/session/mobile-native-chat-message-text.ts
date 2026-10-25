@@ -1,9 +1,9 @@
 /** Pinch-to-zoom font bounds. Default 1 means no visible change until pinched. */
-export const FONT_SCALE_MIN = 0.8
-export const FONT_SCALE_MAX = 1.8
+const FONT_SCALE_MIN = 0.8
+const FONT_SCALE_MAX = 1.8
 
 /** Clamp a proposed font scale into the supported range. */
-export function clampFontScale(scale: number): number {
+function clampFontScale(scale: number): number {
   if (Number.isNaN(scale)) {
     return 1
   }

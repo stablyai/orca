@@ -1,6 +1,6 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import type {
@@ -176,6 +176,11 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
     return pane ? (paneKittyKeyboardModesRef?.current.get(pane.id)?.flags ?? 0) : 0
   }
+  const getModifyOtherKeysActivePane = (): number => {
+    const manager = managerRef.current
+    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+    return pane ? (paneKittyKeyboardModesRef?.current.get(pane.id)?.modifyOtherKeys ?? 0) : 0
+  }
   const hasActivePaneCtrlEnterCsiUAuthority = (): boolean => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
@@ -205,7 +210,8 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       getActivePaneWindowsShiftEnterEncoding,
       isActivePaneWindowsTerminalHost,
       terminalShortcutPolicy,
-      hasActivePaneCtrlEnterCsiUAuthority
+      hasActivePaneCtrlEnterCsiUAuthority,
+      getModifyOtherKeysActivePane
     )
   const createCapturedInputSender = (pane: { id: number; leafId: string }, data: string) => {
     const capturedTransport = paneTransportsRef.current.get(pane.id)

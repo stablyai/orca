@@ -1,10 +1,7 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
 import { isHangulJamoKeyText } from './hangul-jamo-key'
 import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
-import {
-  isTerminalImeCandidateDigitKeyEvent,
-  isTerminalImeCandidateSelectionKeyEvent
-} from './terminal-ime-candidate-key-release-guard'
+import { isTerminalImeCandidateSelectionKeyEvent } from './terminal-ime-candidate-key-release-guard'
 
 // Why: when a CLI activates kitty progressive enhancement (CSI > N u), xterm's
 // KittyKeyboard encoder turns every modifier chord — including plain Cmd+C —
@@ -52,14 +49,6 @@ export type XtermImeKeyboardOptions = {
   candidateKeyGuardActive: boolean
   /** True when the pending-release guard already matched this specific event. */
   pendingCandidateKeyReleaseActive: boolean
-  /** True for the narrow Linux path where the IME emits an orphaned letter
-   *  keyup but no composition/input events before its candidate digit. */
-  linuxOrphanCandidateDigitGuardActive?: boolean
-  /** True when the most recent preedit was Hangul, where a digit ends the
-   *  syllable and is literal text. Only the orphan-keyup guard is barred from
-   *  claiming it (#15299): ibus-hangul's Hanja lookup table does index by digit,
-   *  but only over a live preedit the composition guards already own. */
-  hangulPreedit?: boolean
   // Required so no caller silently falls back to non-mac 229 suppression,
   // which re-swallows the first key after a macOS IME input-source switch.
   isMac: boolean
@@ -129,20 +118,6 @@ export function shouldBypassXtermForIosTextEdit(
   return isHangulJamoKeyText(event.key)
 }
 
-/** Returns whether the Linux orphan-keyup window may claim this digit. */
-function claimsOrphanCandidateDigit(
-  event: XtermBypassEvent,
-  options: XtermImeKeyboardOptions
-): boolean {
-  return (
-    options.linuxOrphanCandidateDigitGuardActive === true &&
-    isTerminalImeCandidateDigitKeyEvent(event) &&
-    // Why: the orphan window arms off a bare keyup and cannot see which engine
-    // produced it, so a Hangul syllable's terminating digit must opt out.
-    options.hangulPreedit !== true
-  )
-}
-
 /** Returns whether xterm must not process an IME-owned keyboard event. */
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
@@ -158,8 +133,7 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   const suppressCandidateKey =
     isLinux &&
     (pendingCandidateKeyReleaseActive ||
-      (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
-      claimsOrphanCandidateDigit(event, options))
+      (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)))
   if (event.type === 'keypress') {
     // Why: a suppressed candidate keydown is not preventDefault-ed by xterm,
     // so its native keypress still fires and _keyPress would forward the
@@ -203,8 +177,8 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
   return (
     event.type === 'keydown' &&
     options.isLinux &&
-    ((options.candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
-      claimsOrphanCandidateDigit(event, options))
+    options.candidateKeyGuardActive &&
+    isTerminalImeCandidateSelectionKeyEvent(event)
   )
 }
 
@@ -253,6 +227,23 @@ function matchesClipboardBinding(
   platform: NodeJS.Platform
 ): boolean {
   return keybindingMatchesInput(binding, event, platform)
+}
+
+/**
+ * On macOS an unselected Cmd+C belongs to an app that negotiated Kitty keyboard
+ * reporting: apps like Codex capture the mouse, so their highlight is never an
+ * xterm selection. Without negotiation, unselected Cmd+C still sends nothing.
+ */
+export function isAppOwnedCopyChord(
+  event: XtermBypassEvent,
+  options: Pick<XtermBypassOptions, 'isMac' | 'hasSelection' | 'kittyKeyboardFlags'>
+): boolean {
+  return (
+    options.isMac &&
+    !options.hasSelection &&
+    (options.kittyKeyboardFlags ?? 0) !== 0 &&
+    matchesClipboardBinding('Mod+C', event, 'darwin')
+  )
 }
 
 /**
@@ -327,6 +318,10 @@ export function shouldBypassXtermKeyboardEvent(
     // `code` (KeyA -> Latin "a"). Bypass keydown so Chromium emits layout text
     // via keypress, and bypass keyup so xterm doesn't leak the release CSI-u.
     return true
+  }
+
+  if (isAppOwnedCopyChord(event, options)) {
+    return false
   }
 
   if (isMac) {

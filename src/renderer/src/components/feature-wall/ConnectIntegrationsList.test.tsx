@@ -36,12 +36,15 @@ const { storeState } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: StoreState) => unknown) => {
-    if (!storeState.current) {
-      throw new Error('Store state was not installed')
-    }
-    return selector(storeState.current)
-  }
+  useAppStore: Object.assign(
+    (selector: (state: StoreState) => unknown) => {
+      if (!storeState.current) {
+        throw new Error('Store state was not installed')
+      }
+      return selector(storeState.current)
+    },
+    { getState: () => storeState.current }
+  )
 }))
 
 vi.mock('@/components/linear-api-key-dialog', () => ({

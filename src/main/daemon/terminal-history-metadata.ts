@@ -29,7 +29,7 @@ export function readTerminalHistoryMeta(basePath: string, sessionId: string): Se
     const meta = readTerminalHistoryJson<unknown>(metaPath, TERMINAL_HISTORY_META_MAX_BYTES)
     return isSessionMeta(meta) ? { status: 'readable', meta } : { status: 'unreadable' }
   } catch (err) {
-    // Why: a concurrent cleanup/quarantine between existsSync and the read means no history, not corrupt history.
+    // Concurrent cleanup or quarantine can remove metadata between the existence check and read.
     if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
       return { status: 'missing' }
     }
@@ -45,11 +45,10 @@ export function readTerminalHistoryMetaFromDir(dir: string): SessionMeta | null 
   }
 }
 
-/** meta.json records the session's cwd, so it is private like the rest of the tree. */
 export function writeTerminalHistoryMeta(dir: string, meta: SessionMeta): void {
   const metaPath = join(dir, 'meta.json')
   writeFileSync(metaPath, JSON.stringify(meta, null, 2), { mode: PRIVATE_FILE_MODE })
-  // `mode` applies only at creation, so a rewrite of an older daemon's file needs the chmod.
+  // Creation modes do not tighten existing files from older daemons.
   tightenPathMode(metaPath, PRIVATE_FILE_MODE)
 }
 

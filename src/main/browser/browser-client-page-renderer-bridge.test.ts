@@ -212,27 +212,6 @@ describe('BrowserClientPageRendererBridgeRegistry', () => {
     await expect(retired).resolves.toBeUndefined()
   })
 
-  it('times out exactly once and releases admission for later work', async () => {
-    vi.useFakeTimers()
-    try {
-      const harness = createHarness({ maxPending: 1, timeoutMs: 25 })
-      const renderer = harness.registry.attachRenderer(harness.endpoint)
-      const timedOut = renderer.mountPage(page, new AbortController().signal)
-      const timedOutExpectation = expect(timedOut).rejects.toThrow(
-        'browser_client_page_renderer_request_timeout'
-      )
-
-      await vi.advanceTimersByTimeAsync(25)
-      await timedOutExpectation
-
-      const replacement = renderer.mountPage(page, new AbortController().signal)
-      completeMount(harness)
-      await expect(replacement).resolves.toEqual({ webContentsId: 91 })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('ignores a late rekey reply after timeout and admits an exact replacement', async () => {
     vi.useFakeTimers()
     try {

@@ -10,20 +10,6 @@ import {
 } from './agent-status-pane-keyed-records'
 import { findCompletedOrphanPaneKeysForTabClose } from './agent-status-pane-key-tab-binding'
 
-/** Slices that only the fold touched, so the batch commits as a MERGE. */
-export function buildAgentStatusBatchPatch(
-  initialState: AppState,
-  nextState: AppState
-): Partial<AppState> {
-  const patch: Record<string, unknown> = {}
-  for (const key of Object.keys(nextState) as (keyof AppState)[]) {
-    if (!Object.is(nextState[key], initialState[key])) {
-      patch[key as string] = nextState[key]
-    }
-  }
-  return patch as Partial<AppState>
-}
-
 /** The slice of app state the tab-prefix drop reduces over — narrow so callers
  *  outside the store (the paired snapshot apply) can build the same patch. */
 export type AgentStatusTabPrefixDropState = Pick<
@@ -41,6 +27,7 @@ export type AgentStatusTabPrefixDropState = Pick<
   | 'retentionSuppressedPaneKeys'
   | 'sortEpoch'
   | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
 >
 
 /** Pure form of the dropAgentStatusByTabPrefix reducer: the paired snapshot

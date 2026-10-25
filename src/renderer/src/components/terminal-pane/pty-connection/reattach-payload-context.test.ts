@@ -5,16 +5,21 @@ import {
   restoreTerminalTestGlobals
 } from '../pty-connection-test-environment'
 import { createReattachPayloadHandlers } from './apply-reattach-payload'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
 
 function createSession(overrides: Record<string, unknown> = {}): ReattachPayloadSession {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only these session members.
   return {
     pane: createPane(1),
+    deps: { worktreeId: 'wt-1', tabId: 'tab-1' },
     rememberReattachPayloadAgentSignal: vi.fn(),
     writeReplayData: vi.fn(),
-    reattachReplayResetSequence: vi.fn(() => '<reset>'),
+    writeInputModeGround: vi.fn(),
+    chooseReattachReplayReset: vi.fn(() => '<reset>'),
+    writeReplayEpilogue: vi.fn(),
     sendFocusedReattachFocusInAfterReplay: vi.fn(),
     kittyKeyboardModes: {
       hasProvenBaseline: true,
@@ -34,16 +39,17 @@ function createContext(replay: string, attemptGeneration: number): ReattachPaylo
     attemptGeneration,
     prefetchedParkModelSnapshot: null,
     revealFollowsTerminalPark: false,
-    reconnectMayUseModel: false,
-    fetchSshMainModelReattachSnapshot: async () => null,
     shouldApplyStructuralPayload: true,
     coldRestoreStartup: undefined,
-    reattachPayloadApplied: false
+    reattachPayloadApplied: false,
+    skippedAltFrameCaptureCols: null
   }
 }
 
 describe('reattach payload context', () => {
-  beforeEach(() => installTerminalTestGlobals())
+  beforeEach(async () => {
+    await installTerminalTestGlobals()
+  })
 
   afterEach(async () => restoreTerminalTestGlobals())
 
@@ -99,7 +105,12 @@ describe('reattach payload context', () => {
 
     await createReattachPayloadHandlers(session, context).applyReattachPayload()
 
-    expect(applyColdRestoreAgentResumeStartup).toHaveBeenCalledWith(startup)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main started the pane and resumed its agent; the window's paint applies no resume.
+      expect(applyColdRestoreAgentResumeStartup).not.toHaveBeenCalledWith(startup)
+    } else {
+      expect(applyColdRestoreAgentResumeStartup).toHaveBeenCalledWith(startup)
+    }
     expect(buildColdRestoreAgentResumeStartup).not.toHaveBeenCalled()
     expect(schedulePendingStartupCommandDelivery).not.toHaveBeenCalled()
     expect(context.reattachPayloadApplied).toBe(true)

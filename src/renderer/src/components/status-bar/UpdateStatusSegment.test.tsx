@@ -154,3 +154,21 @@ describe('update status disclosure', () => {
     }
   )
 })
+
+it('keeps blocked installs accessible as waiting rather than a failed download', () => {
+  setStatus({
+    state: 'error',
+    version: '1.4.200',
+    retryAction: 'install',
+    message: 'Diagnostic',
+    installBlock: { reason: 'running-instances', instances: [{ pid: 42, kind: 'browser' }] }
+  })
+  useAppStore.setState({ updateCardCollapsed: true })
+  renderUpdateControls()
+  const toggle = screen.getByRole('button', {
+    name: 'Update waiting for other Orca instances. Click to expand.'
+  })
+  expect(screen.queryByText('Update failed')).toBeNull()
+  fireEvent.click(toggle)
+  expect(screen.getByRole('complementary', { name: 'Update waiting' })).toBeTruthy()
+})
