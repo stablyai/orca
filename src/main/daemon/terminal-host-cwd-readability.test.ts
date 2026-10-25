@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
+import { validateWorkingDirectoryAsync } from '../providers/working-directory-validation'
 
-const { opendirMock } = vi.hoisted(() => ({ opendirMock: vi.fn() }))
+const { opendirMock, statMock } = vi.hoisted(() => ({
+  opendirMock: vi.fn(),
+  statMock: vi.fn()
+}))
 // TCC directory enumeration can remain pending while a permission sheet is open.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  opendir: opendirMock
+  opendir: opendirMock,
+  stat: statMock
 }))
 
 vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
@@ -78,9 +83,10 @@ describe('TerminalHost cwd readability verdict', () => {
   beforeEach(() => {
     close.mockReset()
     spawnSubprocess.mockClear()
+    statMock.mockReset()
     opendirMock.mockReset().mockReturnValue(dirReading(() => ({ name: 'entry' })))
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     host = new TerminalHost({ spawnSubprocess })
   })
 
@@ -144,6 +150,75 @@ describe('TerminalHost cwd readability verdict', () => {
   it('omits the verdict when no cwd was requested', async () => {
     expect((await create('no-cwd')).cwdReadableByDaemon).toBeUndefined()
     expect(opendirMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['linux', 'win32'])('skips TCC enumeration on %s', async (platform) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+    expect((await create('non-macos', '/work/repo')).cwdReadableByDaemon).toBeUndefined()
+    expect(opendirMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps native UNC creation within the validation lane while healthy creation proceeds', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    vi.useFakeTimers()
+    let release = () => {}
+    const unavailable = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    opendirMock.mockImplementation(async () => {
+      await unavailable
+      return dirReading(() => null)
+    })
+    const server = '\\\\unreachable-smb\\share'
+    let active = 0
+    let peak = 0
+    statMock.mockImplementation(async (cwd: string) => {
+      if (cwd.startsWith(server)) {
+        active += 1
+        peak = Math.max(peak, active)
+        try {
+          await unavailable
+        } finally {
+          active -= 1
+        }
+      }
+      return { isDirectory: () => true }
+    })
+    await host.dispose()
+    host = new TerminalHost({
+      spawnSubprocess: async (opts) => {
+        if (opts.cwd) {
+          await validateWorkingDirectoryAsync(opts.cwd, { signal: opts.cancelSignal })
+        }
+        return createMockSubprocess()
+      }
+    })
+    const abort = new AbortController()
+    const firstPath = `${server}\\first`
+    const canceled = create('unc-canceled', firstPath, abort.signal)
+    void canceled.catch(() => {})
+    const pending = [
+      create('unc-second', `${server}\\second`),
+      create('unc-queued', `${server}\\third`)
+    ]
+    try {
+      await vi.advanceTimersByTimeAsync(1_100)
+      expect(active + opendirMock.mock.calls.length).toBe(2)
+      abort.abort()
+      await expect(canceled).rejects.toThrow('was canceled')
+      pending.push(create('unc-canceled', firstPath))
+      await vi.advanceTimersByTimeAsync(1_100)
+      expect(statMock).toHaveBeenCalledTimes(2)
+      expect((await create('healthy', 'C:\\healthy')).isNew).toBe(true)
+      expect(active).toBe(2)
+    } finally {
+      release()
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.allSettled([canceled, ...pending])
+    }
+    expect(peak).toBe(2)
+    expect(host.listSessions()).toHaveLength(4)
+    expect(statMock).toHaveBeenCalledTimes(4)
   })
 
   it('omits the verdict on attach to an existing session', async () => {

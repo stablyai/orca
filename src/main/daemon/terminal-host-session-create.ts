@@ -146,9 +146,11 @@ async function spawnAndPublishSession(
   onPublished: (sessionId: string, isAlive: boolean) => void
 ): Promise<CreateOrAttachResult> {
   const { size, wslDistro } = ctx
-  // Bound the permission probe before the shell can fall back to another path.
+  // Only macOS needs the TCC probe; other hosts must not pin extra filesystem workers.
   const cwdReadableByDaemon =
-    opts.cwd && !wslDistro ? await isCwdReadableByThisProcess(opts.cwd, opts) : null
+    process.platform === 'darwin' && opts.cwd && !wslDistro
+      ? await isCwdReadableByThisProcess(opts.cwd, opts)
+      : null
   deps.assertCreateAllowed()
   const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
