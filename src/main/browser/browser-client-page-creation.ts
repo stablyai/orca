@@ -9,6 +9,7 @@ import {
   assertCurrentBrowserClientPageRenderer,
   browserClientPageIdentity
 } from './browser-client-page-command-admission'
+import type { BrowserClientPageAuthorityIdentity } from './browser-client-page-command-executor-dependencies'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
 import type { BrowserClientPageGuestBinding } from './browser-client-page-guest-binding'
 import { createBrowserClientPageInventory } from './browser-client-page-inventory'
@@ -23,10 +24,8 @@ import type {
 import type { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import type { BrowserRouteSessionHandle } from './browser-route-session-state'
 
-type BrowserClientPageCreationDependencies = {
+type BrowserClientPageCreationDependencies = BrowserClientPageAuthorityIdentity & {
   orcaProfileId: string
-  authorityConnectionIdentity: string
-  legacyAuthorityConnectionIdentity: string
   storageScope: string
   retainNetworkRoute(executionHostKey: string, signal: AbortSignal): Promise<RetainedNetworkRoute>
   retireSupersededExecutionHostPages(route: RetainedNetworkRoute): Promise<void>
@@ -59,18 +58,23 @@ export async function createReservedBrowserClientPage(
     if (route.key !== event.command.executionHostKey) {
       throw new BrowserClientPageCommandError('browser_client_page_execution_host_stale')
     }
-    // The started route proves this generation is current, so any page still holding an older key
-    // for the same host owns a fenced tunnel and the partition's previous proxy endpoint.
     await dependencies.retireSupersededExecutionHostPages(route)
     assertBrowserClientPageCommandNotAborted(signal)
     assertAvailable()
     renderer = dependencies.selectRenderer()
     assertCurrentBrowserClientPageRenderer(renderer)
     routeSession = await dependencies.routeSessions.preparePage({
+      ...(event.command.profile ? { profileMetadata: event.command.profile } : {}),
       identity: {
         orcaProfileId: dependencies.orcaProfileId,
         browserProfileId: event.command.browserProfileId,
         authorityConnectionIdentity: dependencies.authorityConnectionIdentity,
+        executionHostIdentity: route.executionHostIdentity
+      },
+      compatibleIdentity: {
+        orcaProfileId: dependencies.orcaProfileId,
+        browserProfileId: event.command.browserProfileId,
+        authorityConnectionIdentity: dependencies.pairingAuthorityConnectionIdentity,
         executionHostIdentity: route.executionHostIdentity
       },
       legacyIdentity: {
@@ -109,7 +113,7 @@ export async function createReservedBrowserClientPage(
     if (!dependencies.routeWebContents.grantNavigation(registration)) {
       throw new BrowserClientPageCommandError('browser_client_page_navigation_grant_failed')
     }
-    // Before the first navigation: a download can start on it, and an unbound page cannot own one.
+    // Bind before navigation so downloads can resolve their owning page immediately.
     dependencies.guestBinding.bind({
       registration,
       browserProfileId: event.command.browserProfileId

@@ -18,6 +18,7 @@ import {
 } from './workspace-cleanup-removal-targets'
 import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup-candidate-enrichment'
 import { invalidateWorkspaceCleanupScanProgress } from './workspace-cleanup-scan-progress'
+import { assertWorkspaceCleanupAgentStopApproved } from './workspace-cleanup-agent-evidence'
 
 export type WorkspaceCleanupFailure = {
   worktreeId: string
@@ -132,6 +133,8 @@ export async function removeWorkspaceCleanupCandidates(
       // preserved-branch warnings would stack one toast per removed row.
       {
         suppressPreservedBranchToast: true,
+        assertBeforeDispatch: () =>
+          assertWorkspaceCleanupAgentStopApproved(get(), candidate, target.approvedCandidate),
         ...(sameIdSurvivingHostId ? { sameIdSurvivingHostId } : {}),
         ...(ignoreWorkspaceCleanupScanSurvivors
           ? { ignoreWorkspaceCleanupScanSurvivors: true }

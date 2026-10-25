@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
+import {
+  resolveCreateReviewDraftTitle,
+  resolveCreateReviewSeedText
+} from './create-review-draft-title'
 
 describe('resolveCreateReviewDraftTitle', () => {
   it('uses the hosted eligibility title when one is available', () => {
@@ -35,5 +38,29 @@ describe('resolveCreateReviewDraftTitle', () => {
         branch: 'refs/remotes/origin/feature/improve-diff-view-per-file'
       })
     ).toBe('Improve diff view per file')
+  })
+})
+
+describe('Jira review seed', () => {
+  it.each(['github', 'gitlab'] as const)(
+    'prefixes %s titles from the canonical Jira source',
+    (provider) => {
+      expect(
+        resolveCreateReviewSeedText({
+          branch: 'user/team_alpha9-7-restore-login',
+          eligibility: { provider, title: 'Restore login', body: 'Details' },
+          jiraIssueKey: 'TEAM_ALPHA9-7'
+        })
+      ).toEqual({ title: 'TEAM_ALPHA9-7 Restore login', body: 'Details' })
+    }
+  )
+  it('uses the key once when the title comes from an existing lowercase branch', () => {
+    expect(
+      resolveCreateReviewSeedText({
+        branch: 'user/team_alpha9-7-restore-login',
+        eligibility: { provider: 'gitlab', title: '', body: '' },
+        jiraIssueKey: 'TEAM_ALPHA9-7'
+      })
+    ).toEqual({ title: 'TEAM_ALPHA9-7 Restore login', body: '' })
   })
 })

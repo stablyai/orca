@@ -51,6 +51,8 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   { file: 'src/transport/rpc-client.ts', references: 2 },
   // The typed boundary itself — the one module that turns a reply into a declared type.
   { file: 'src/transport/rpc-operation.ts', references: 5 },
+  // Forwards the port with the workspace's execution host stamped on; picks no method.
+  { file: 'src/transport/execution-host-scoped-rpc-client.ts', references: 2 },
   // Forwards the port across a physical-client cutover.
   { file: 'src/transport/stable-logical-rpc-client.ts', references: 2 },
   // Names the port as the recording oracle's sender contract; a non-test file for the same reason.
@@ -67,7 +69,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
 
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
 export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcRequestPortEntry[] = [
-  // app/h/[hostId]/ — Expo route screens
+  // src/accounts/ — the accounts screen
   // Holdout behind two gates. The first is the mount: the screen reads
   // `expo-router.useFocusEffect` and `react-native.ScrollView`, neither is a substituted member, so
   // the trap refuses before any effect runs. Substituting exactly those two clears it and exposes
@@ -77,18 +79,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // driven. The runner itself is no longer the blocker: `ScenarioStep` carries `frame`, and
   // `notifications.desktop-stream` is a recorded stream family. The two members are left out here
   // because the engine gains `useFocusEffect` on its own track.
-  { file: 'app/h/[hostId]/accounts.tsx', references: 2 },
-
-  // app/ — Expo route screens
-  // Holdout: not the screen. It renders to completion under inert reanimated and gesture-handler
-  // substitutes, and then sends nothing: its host list comes from `loadHosts()`, which joins a
-  // device token held in the keychain through expo-secure-store. A scenario can declare the async
-  // store and the notification tray, not a credential, so `loadHosts()` answers with an empty list
-  // and the screen has no client. `notifications.testPush` migrated because its screen reads
-  // `loadHostCatalog()`, which keeps a credential-less entry. Line ~193 also reads `ms` off the
-  // reply envelope instead of off its result, so the value is always undefined; that is a product
-  // defect with its own fix and re-record, not something this migration may quietly repair.
-  { file: 'app/terminal-settings.tsx', references: 3 },
+  { file: 'src/accounts/MobileAccountsScreen.tsx', references: 2 },
 
   // src/components/ — shared widgets that fetch their own data. Nothing is left here: the New
   // Workspace drawer's execution target, setup hook, runtime context and Codex capability probe
@@ -98,23 +89,16 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // in tasks/mobile-workspace-source-operations.ts, and the repo.list readers the dialog now shares
   // in session/mobile-session-read-operations.ts.
 
-  // src/host-screen/ — host screen catalog and actions. The repo and label metadata reads, the
-  // desktop view-settings mirror and the list's pin, remove and activate mutations migrated in
-  // step 4; see host-screen-operations.ts.
-  // Holdout: the last `worktree.sleep` is an `onPress` this file builds for `ActionSheetContent`,
-  // which renders only inside an open `BottomDrawer`. Nothing gates those children — the drawer
-  // mounts on `visible || mounted` and `MountedBottomDrawer` renders them unconditionally inside
-  // its `Modal`. The block is that module's imports: reanimated and gesture-handler, neither of
-  // which has a substitute, so reaching this send means standing in for both engines rather than
-  // pinning a device input.
-  { file: 'src/host-screen/host-screen-overlays.tsx', references: 1 },
+  // src/host-screen/ — host screen catalog and actions. Nothing is left here: the repo and label
+  // metadata reads, the desktop view-settings mirror and the list's pin, remove and activate
+  // mutations migrated in step 4, and the row sleep followed once it moved into the actions hook;
+  // see host-screen-operations.ts.
 
   // src/notifications/ — push registration and delivery. Nothing is left here. Registration and
   // unregistration migrated in step 4; see mobile-push-registration-operations.ts. Tray
   // reconciliation followed once a scenario could declare the notification tray and the stored host
-  // list it resolves against; see push-dismissal-operations.ts. The stream unsubscribe inside the
-  // `notifications.subscribe` callback migrated in step 6 once the recorder could script the
-  // `ready` frame that hands it a subscription id; see desktop-notification-stream-operations.ts.
+  // list it resolves against; see push-dismissal-operations.ts. The stream's `notifications.unsubscribe`
+  // is no longer a request here: the stream transport sends it with the id from the current `ready`.
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
   // the diff-review loaders and the rest of the screen migrated in step 4; see
@@ -182,6 +166,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/transport/mobile-runtime-capability-negotiation.ts', references: 2 },
   // Sends through hostStatusProbe; the one reference left is its parameter type. Its callers do
   // not share a client type — push-registration.ts holds only the sender — so the parameter names
-  // the port itself. It reaches zero when the last such caller migrates.
-  { file: 'src/transport/runtime-capability-probe.ts', references: 1 }
+  // the port itself. It reaches zero when the last such caller migrates. Moved here from
+  // runtime-capability-probe.ts, which is now a projection of this probe and names no port.
+  { file: 'src/transport/runtime-status-probe.ts', references: 1 }
 ]

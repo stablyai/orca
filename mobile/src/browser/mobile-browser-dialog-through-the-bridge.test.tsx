@@ -17,6 +17,8 @@ vi.mock('./use-browser-binary-screencast-grant', () => ({
   useBrowserBinaryScreencastGrant: vi.fn(() => true)
 }))
 
+vi.mock('./MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () => null }))
+
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
@@ -154,14 +156,14 @@ async function openPaneOverTheBridge() {
     })
   }
   /** Settles the dialog reply the pane sent, the way a host that reached the stream would. */
-  const answerFromTheHost = async (accept: boolean): Promise<void> => {
+  const answerFromTheHost = async (): Promise<void> => {
     const request = rpc.requests.at(-1)
-    if (!request || !request.method.startsWith('browser.dialog')) {
+    if (!request || !['browser.dialogAccept', 'browser.dialogDismiss'].includes(request.method)) {
       throw new Error(`the pane's last request was ${request?.method ?? 'nothing'}`)
     }
     await act(async () => {
       request.resolve(rpcSuccess(`req-${rpc.requests.length}`, {}))
-      page.answer(accept)
+      page.answer(request.method === 'browser.dialogAccept')
       await pair.flush()
     })
   }
@@ -183,7 +185,7 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
     // so it is still up here.
     expect(cardMessages(pane.renderer)).toContain('first')
 
-    await pane.answerFromTheHost(true)
+    await pane.answerFromTheHost()
     // The page moved on, so the card did too: the confirm, with a Cancel beside the OK.
     expect(cardMessages(pane.renderer)).toContain('second')
     expect(cardMessages(pane.renderer)).not.toContain('first')
@@ -191,7 +193,7 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
 
     pressButton(pane.renderer, 'OK')
     await pane.flush()
-    await pane.answerFromTheHost(true)
+    await pane.answerFromTheHost()
     expect(pane.page.confirmValue()).toBe(true)
     expect(cardMessages(pane.renderer)).not.toContain('second')
   })
@@ -219,12 +221,12 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
     // And the button still works: the retry reaches the host, which answers, and the page moves on.
     pressButton(pane.renderer, 'OK')
     await pane.flush()
-    await pane.answerFromTheHost(true)
+    await pane.answerFromTheHost()
     expect(cardMessages(pane.renderer)).toContain('second')
     expect(cardMessages(pane.renderer)).not.toContain('That answer did not reach the page.')
   })
 
-  it('kills the card buttons while an answer is in flight, so a double tap sends one', async () => {
+  it('disables the answer button in flight and enables the next dialog buttons', async () => {
     const pane = await openPaneOverTheBridge()
     await act(async () => {
       pane.page.start()
@@ -238,7 +240,7 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
     // next dialog unseen. The button is what stops the second tap from ever being sent.
     expect(findButton(pane.renderer, 'OK').props.disabled).toBe(true)
 
-    await pane.answerFromTheHost(true)
+    await pane.answerFromTheHost()
     expect(pane.rpc.requests.length).toBe(inFlight)
     // The next dialog arrives with live buttons of its own.
     expect(cardMessages(pane.renderer)).toContain('second')
@@ -286,12 +288,12 @@ describe('the pane keeps its dialog card until the page is unblocked', () => {
     })
     pressButton(pane.renderer, 'OK')
     await pane.flush()
-    await pane.answerFromTheHost(true)
+    await pane.answerFromTheHost()
 
     pressButton(pane.renderer, 'Cancel')
     await pane.flush()
     expect(pane.rpc.requests.at(-1)?.method).toBe('browser.dialogDismiss')
-    await pane.answerFromTheHost(false)
+    await pane.answerFromTheHost()
     expect(pane.page.confirmValue()).toBe(false)
     expect(cardMessages(pane.renderer)).not.toContain('second')
   })

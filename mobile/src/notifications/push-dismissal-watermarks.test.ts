@@ -63,7 +63,8 @@ it('joins an overtaking JavaScript write before retrying a delayed negative snap
     return snapshot
   })
   const pending = wasPushDismissed(payload)
-  await vi.waitFor(() => expect(finish).toBeDefined())
+  await Promise.resolve()
+  expect(finish).toBeDefined()
   await rememberPushDismissal(payload)
   finish()
   expect(await pending).toBe(true)

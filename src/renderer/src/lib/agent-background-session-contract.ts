@@ -8,6 +8,8 @@ export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
   worktreeId: string
   prompt?: string
+  /** An automation's saved extras, merged over this host's default Arguments. */
+  extraAgentArgs?: string
   launchSource?: LaunchSource
   title?: string
   onData?: (chunk: string) => void
@@ -21,4 +23,6 @@ export type LaunchAgentBackgroundSessionResult = {
   ptyId: string
   startupPlan: AgentStartupPlan
   terminalOwnership: AutomationTerminalOwnership | null
+  /** Ends a remote runtime's exit wait and data stream; a no-op for local/SSH PTYs. */
+  releaseRuntimeObservers: () => void
 }

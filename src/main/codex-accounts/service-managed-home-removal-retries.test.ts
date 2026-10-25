@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync } from 'node:fs'
 import {
   createManagedHome,
@@ -15,6 +16,7 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -34,8 +36,7 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('node:fs', () => ({ ...actualFs, rmSync: rmSyncSpy }))
 
     try {
-      // Why realpath: assertManagedHomePath canonicalizes before rmSync, so the
-      // spy sees /private/var-style paths on macOS.
+      // Match ownership canonicalization, including /private/var paths on macOS.
       const managedHomePath = actualFs.realpathSync(
         createManagedHome(testState.userDataDir, 'account-1')
       )

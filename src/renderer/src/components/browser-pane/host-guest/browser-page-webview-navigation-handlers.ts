@@ -1,5 +1,4 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -8,6 +7,7 @@ import type { BrowserLoadError } from '../../../../../shared/browser-workspace-t
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
+import { consumeBrowserAnnotationViewportMessage } from '../annotate/browser-annotation-viewport-message'
 import {
   getBrowserDisplayTitle,
   isChromiumErrorPage,
@@ -28,6 +28,7 @@ export type BrowserPageWebviewNavigationHandlersArgs = {
   webview: Electron.WebviewTag
   browserTabId: string
   browserTabUrl: string
+  invalidateBrowserAnnotationDocumentRef: MutableRefObject<() => void>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
@@ -53,10 +54,22 @@ export type BrowserPageWebviewNavigationHandlers = {
   handleAnnotationViewportMessage: (event: { message?: string }) => void
 }
 
+/**
+ * A new document starting to load in the page itself. Not did-start-loading, which also fires for
+ * iframe loads; and this covers navigations the page starts (links, forms, redirects, history).
+ */
+export function isPageDocumentNavigationStart(event: {
+  isMainFrame: boolean
+  isInPlace: boolean
+}): boolean {
+  return event.isMainFrame && !event.isInPlace
+}
+
 export function createBrowserPageWebviewNavigationHandlers({
   webview,
   browserTabId,
   browserTabUrl,
+  invalidateBrowserAnnotationDocumentRef,
   recoveryNavigationValidationRef,
   activeLoadFailureRef,
   lastKnownWebviewUrlRef,
@@ -92,9 +105,13 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleDidStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
-    if (!event.isMainFrame || event.isInPlace || !event.url) {
+    if (event.isMainFrame && event.url) {
+      invalidateBrowserAnnotationDocumentRef.current()
+    }
+    if (!isPageDocumentNavigationStart(event) || !event.url) {
       return
     }
+    onUpdatePageStateRef.current(browserTabId, { loading: true })
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
@@ -126,6 +143,9 @@ export function createBrowserPageWebviewNavigationHandlers({
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const normalizedBrowserModelUrl =
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+    if (lastKnownWebviewUrlRef.current !== normalizedBrowserModelUrl) {
+      invalidateBrowserAnnotationDocumentRef.current()
+    }
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     rememberLiveBrowserUrl(browserTabId, browserModelUrl)
     // Why: don't overwrite in-progress typing (see above).
@@ -176,29 +196,11 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleAnnotationViewportMessage = (event: { message?: string }): void => {
-    const message = typeof event.message === 'string' ? event.message : ''
-    const prefix = `${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}${annotationViewportBridgeTokenRef.current}:`
-    if (!message.startsWith(prefix)) {
-      return
-    }
-    try {
-      const next = JSON.parse(message.slice(prefix.length)) as {
-        scrollX?: unknown
-        scrollY?: unknown
-      }
-      const scrollX =
-        typeof next.scrollX === 'number' && Number.isFinite(next.scrollX) ? next.scrollX : 0
-      const scrollY =
-        typeof next.scrollY === 'number' && Number.isFinite(next.scrollY) ? next.scrollY : 0
-      setBrowserOverlayViewport((current) => {
-        if (current.scrollX === scrollX && current.scrollY === scrollY) {
-          return current.version === 0 ? { ...current, version: 1 } : current
-        }
-        return { scrollX, scrollY, version: current.version + 1 }
-      })
-    } catch {
-      // Ignore unrelated or malformed guest console output.
-    }
+    consumeBrowserAnnotationViewportMessage(
+      event,
+      annotationViewportBridgeTokenRef.current,
+      setBrowserOverlayViewport
+    )
   }
 
   return {

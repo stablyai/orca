@@ -12,9 +12,8 @@ import type {
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { withOpenCodeSqliteScanScope } from './session-scanner-opencode-sqlite-scan-scope'
 
-// A worker_threads stand-in the tests drive directly: it records posted requests
-// and lets a test emit message/error/exit without a built worker bundle.
 class FakeWorker {
   postedRequests: OpenCodeSqliteWorkerRequest[] = []
   terminated = false
@@ -75,6 +74,63 @@ function makeFactory(workers: FakeWorker[]): () => Worker {
 }
 
 describe('OpenCodeSqliteWorkerClient', () => {
+  it('expires a scan in the FIFO without cancelling ordinary reads or a later scan', async () => {
+    vi.useFakeTimers()
+    const workers: FakeWorker[] = []
+    const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+    const issues: AiVaultScanIssue[] = []
+    try {
+      const ordinary = [1, 2].map((id) =>
+        client.list({
+          dbPaths: [`/ordinary-${id}.db`],
+          limit: 1,
+          issues: []
+        })
+      )
+      const scan = withOpenCodeSqliteScanScope(() =>
+        client.list({
+          dbPaths: ['/scan.db'],
+          limit: 1,
+          issues
+        })
+      )
+      await vi.advanceTimersByTimeAsync(25_000)
+      workers[0].emit('message', {
+        id: workers[0].lastId(),
+        ok: true,
+        value: { candidates: [], issues: [] }
+      })
+      await vi.advanceTimersByTimeAsync(20_000)
+      await expect(scan).resolves.toEqual([])
+      expect(issues).toEqual([
+        expect.objectContaining({
+          kind: 'scope',
+          message: expect.stringContaining('45s work budget')
+        })
+      ])
+      expect(workers[0].postedRequests).toHaveLength(2)
+      expect(workers[0].terminated).toBe(false)
+      workers[0].emit('message', {
+        id: workers[0].lastId(),
+        ok: true,
+        value: { candidates: [], issues: [] }
+      })
+      await expect(Promise.all(ordinary)).resolves.toEqual([[], []])
+      const next = withOpenCodeSqliteScanScope(() =>
+        client.list({ dbPaths: ['/next.db'], limit: 1, issues: [] })
+      )
+      workers[0].emit('message', {
+        id: workers[0].lastId(),
+        ok: true,
+        value: { candidates: [], issues: [] }
+      })
+      await expect(next).resolves.toEqual([])
+    } finally {
+      client.dispose()
+      vi.useRealTimers()
+    }
+  })
+
   it('correlates responses by id and ignores stale ids', async () => {
     const workers: FakeWorker[] = []
     const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
@@ -84,7 +140,6 @@ describe('OpenCodeSqliteWorkerClient', () => {
     expect(worker).toBeDefined()
     expect(worker!.unrefed).toBe(true)
 
-    // A response for a different id must not settle the active call.
     worker!.emit('message', {
       id: 999,
       ok: true,
@@ -107,7 +162,6 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const second = client.parse({ dbPath: '/db#b', sessionId: 'b', platform: 'darwin' })
     const worker = workers[0]!
 
-    // Only the first is dispatched; the second waits for the active slot.
     expect(worker.postedRequests).toHaveLength(1)
     expect(worker.postedRequests[0]).toMatchObject({ kind: 'parse', sessionId: 'a' })
 
@@ -118,7 +172,6 @@ describe('OpenCodeSqliteWorkerClient', () => {
     expect(worker.postedRequests[1]).toMatchObject({ kind: 'parse', sessionId: 'b' })
     worker.emit('message', { id: worker.postedRequests[1]!.id, ok: true, value: 'B' })
     await expect(second).resolves.toBe('B')
-    // The worker is reused across serial calls (one persistent worker).
     expect(workers).toHaveLength(1)
   })
 
@@ -137,12 +190,10 @@ describe('OpenCodeSqliteWorkerClient', () => {
         `OpenCode SQLite worker timed out after ${PARSE_TIMEOUT_MS}ms`
       )
 
-      // The queued call's timer must not have started while it waited, so only
-      // the active call fires at the parse timeout.
+      // Queued calls must not spend their timeout before dispatch.
       await vi.advanceTimersByTimeAsync(PARSE_TIMEOUT_MS)
       await activeAssertion
 
-      // Fault respawns a fresh worker and dispatches the still-queued call.
       expect(workers).toHaveLength(2)
       const respawned = workers[1]!
       expect(respawned.postedRequests).toHaveLength(1)
@@ -168,7 +219,6 @@ describe('OpenCodeSqliteWorkerClient', () => {
     await activeAssertion
     expect(workers[0]!.terminated).toBe(true)
 
-    // Exactly one respawn; the queued call drains on the new worker.
     expect(workers).toHaveLength(2)
     const respawned = workers[1]!
     respawned.emit('message', { id: respawned.lastId(), ok: true, value: 'B' })
@@ -188,7 +238,7 @@ describe('OpenCodeSqliteWorkerClient', () => {
       client.list({ dbPaths: ['/tmp/opencode.db'], limit: 10, issues: listIssues })
     ).resolves.toEqual([])
     expect(
-      listIssues.some((issue) => /background scanner could not start/.test(issue.message))
+      listIssues.some((issue) => issue.message.includes('background scanner could not start'))
     ).toBe(true)
     await expect(
       client.parse({ dbPath: '/tmp/opencode.db', sessionId: 'ses_skipped', platform: 'darwin' })
@@ -202,19 +252,15 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const pending = Array.from({ length: MAX_CONSECUTIVE_DEATHS + 2 }, (_, i) =>
       client.parse({ dbPath: `/db#${i}`, sessionId: `s${i}`, platform: 'darwin' })
     )
-    // The last crash's text has to survive into the drain message, or a log
-    // cannot say what killed the run.
+    // Preserve the final crash reason when failing the remaining queue.
     const settled = pending.map((promise) => expect(promise).rejects.toThrow(/crash \d/))
 
-    // Crash every worker as it is spawned; the client respawns up to the cap.
     for (let i = 0; i < MAX_CONSECUTIVE_DEATHS; i++) {
       expect(workers[i]).toBeDefined()
       workers[i]!.emit('error', new Error(`crash ${i}`))
     }
 
     await Promise.all(settled)
-    // No respawn past the cap: only MAX_CONSECUTIVE_DEATHS workers were created,
-    // and the queued remainder failed to scan issues rather than looping.
     expect(workers).toHaveLength(MAX_CONSECUTIVE_DEATHS)
   })
 
@@ -232,8 +278,6 @@ describe('OpenCodeSqliteWorkerClient', () => {
         limit: 10,
         issues
       })
-      // The list request is dispatched but never answered → it must time out into
-      // a scan issue (not an unbounded stall) and contribute no sessions.
       await vi.advanceTimersByTimeAsync(LIST_TIMEOUT_MS)
       await expect(listPromise).resolves.toEqual([])
       expect(issues).toHaveLength(1)
@@ -258,20 +302,18 @@ describe('OpenCodeSqliteWorkerClient', () => {
       },
       log() {}
     })
-    // Scan 1: both calls fail closed, keeping synchronous SQLite off the main
-    // thread. The failure is not latched, so a later scan can still recover.
+    // A missing worker must fail closed for this scan without latching failure across future scans.
     const firstIssues: AiVaultScanIssue[] = []
     const first = await client.list({ dbPaths: ['/db'], limit: 10, issues: firstIssues })
     expect(first).toEqual([])
     expect(
-      firstIssues.some((issue) => /background scanner could not start/.test(issue.message))
+      firstIssues.some((issue) => issue.message.includes('background scanner could not start'))
     ).toBe(true)
     await expect(
       client.parse({ dbPath: '/db', sessionId: 'ses_heal', platform: 'darwin' })
     ).rejects.toThrow(/background scanner could not start/)
     expect(workers).toHaveLength(0)
 
-    // Spawns recover; the next scan must re-probe and use the worker.
     failSpawns = false
     const secondIssues: AiVaultScanIssue[] = []
     const secondPromise = client.list({ dbPaths: ['/db'], limit: 10, issues: secondIssues })
@@ -329,16 +371,13 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const workers: FakeWorker[] = []
     const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
 
-    // Burst 1: one parse whose worker dies, then the burst ends (queue empties)
-    // with no success to reset the death counter.
+    // End the first burst after one death without a successful response to reset the counter.
     const first = client.parse({ dbPath: '/db#a', sessionId: 'a', platform: 'darwin' })
     const firstAssertion = expect(first).rejects.toThrow(/exited with code/)
     workers[0]!.emit('exit', 1)
     await firstAssertion
 
-    // Burst 2 from idle: the fresh scan resets the cap, so MAX_CONSECUTIVE_DEATHS
-    // brand-new workers must be spawned before the remainder drains — the carried
-    // death from burst 1 does not count against burst 2.
+    // A fresh idle-to-active burst gets the full death budget despite the earlier failed burst.
     const pending = Array.from({ length: MAX_CONSECUTIVE_DEATHS }, (_, i) =>
       client.parse({ dbPath: `/db#b${i}`, sessionId: `b${i}`, platform: 'darwin' })
     )
@@ -347,7 +386,6 @@ describe('OpenCodeSqliteWorkerClient', () => {
       workers.at(-1)!.emit('error', new Error(`b-crash ${i}`))
     }
     await Promise.all(settled)
-    // One worker from burst 1 plus a fresh worker per allowed death in burst 2.
     expect(workers).toHaveLength(1 + MAX_CONSECUTIVE_DEATHS)
   })
 

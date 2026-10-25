@@ -5,6 +5,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { eraseRpcMethods } from '../../../core'
+import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
 
 // The federation host runs its own copy of the observation and stop logic, so
 // it needs the same rule: lost contact with a worker's host is not an exit, and
@@ -20,9 +21,12 @@ const REAL_PTY_ID = 'pty-federation-liveness'
 const REAL_WORKTREE_ID = 'repo-federation::/tmp/federation-liveness'
 
 function realRuntimeStore() {
+  let session = getDefaultWorkspaceSession()
   return {
-    getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
-    setWorkspaceSession: vi.fn(),
+    getWorkspaceSession: vi.fn(() => session),
+    setWorkspaceSession: vi.fn((next: typeof session) => {
+      session = next
+    }),
     getWorkspaceSessionHostIds: vi.fn(() => ['local']),
     getRepos: vi.fn(() => [
       {
@@ -106,7 +110,7 @@ describe('federation host liveness verdicts', () => {
     hostRuntime.setOrchestrationDb(hostDb)
     hostRuntime.attachWindow(1)
     hostRuntime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    hostRuntime.registerPty(REAL_PTY_ID, REAL_WORKTREE_ID, connectionId, {
+    registerBoundPty(hostRuntime, REAL_PTY_ID, REAL_WORKTREE_ID, connectionId, {
       tabId: 'tab_federation_liveness',
       leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
       incarnationId: 'incarnation-real'
@@ -114,6 +118,10 @@ describe('federation host liveness verdicts', () => {
     const terminal = (await hostRuntime.listTerminals(`id:${REAL_WORKTREE_ID}`)).terminals[0]
     if (!terminal) {
       throw new Error('Expected the real runtime PTY to be listed')
+    }
+    const paneKey = hostRuntime.getTerminalPaneKey(terminal.handle)
+    if (!paneKey) {
+      throw new Error('Expected the real runtime PTY to resolve a stable pane key')
     }
     hostDb.createRemoteDispatchAttachment({
       runId: 'run-home',
@@ -131,7 +139,7 @@ describe('federation host liveness verdicts', () => {
     })
     hostDb.prepareRemoteAttachmentAuthority({
       dispatchId: DISPATCH_ID,
-      paneKey: hostRuntime.getTerminalPaneKey(terminal.handle)!,
+      paneKey,
       processIncarnation: hostRuntime.getTerminalProcessIncarnation(terminal.handle)!,
       worktreeId: REAL_WORKTREE_ID,
       terminalHandle: terminal.handle,

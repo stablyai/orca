@@ -102,6 +102,9 @@ function readJpegDimensions(bytes: Uint8Array): RasterImageDimensions | null {
   let offset = 2
   const scanEnd = bytes.byteLength
   while (offset < scanEnd) {
+    while (offset < scanEnd && bytes[offset] !== 0xff) {
+      offset += 1
+    }
     while (offset < scanEnd && bytes[offset] === 0xff) {
       offset += 1
     }

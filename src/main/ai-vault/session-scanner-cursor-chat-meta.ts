@@ -5,17 +5,13 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { timestampIso } from './session-scanner-accumulator'
 import { extractString, normalizeTitleText, readJsonObjectIfExists } from './session-scanner-values'
 
-// Cursor keeps a chat's transcript and its metadata in two unrelated trees:
-// <cursor>/projects/<slug>/agent-transcripts/<uuid>/<uuid>.jsonl holds the
-// messages, while <cursor>/chats/<md5 of cwd>/<uuid>/meta.json holds the cwd,
-// title and timestamps. The md5 hashes the very cwd we are looking for, so the
-// only way across is an index of the chat directories.
+// Transcript paths cannot derive hashed metadata buckets; index the separate chats tree by chat ID.
 
 const CURSOR_CHATS_DIR = 'chats'
 const CURSOR_CHAT_META_FILE = 'meta.json'
 const CURSOR_TRANSCRIPTS_DIR = 'agent-transcripts'
 const CURSOR_PROJECTS_DIR = 'projects'
-// Why: custom and WSL Cursor homes can vary over a long-lived main process.
+// Bound retained indexes as custom and WSL homes change.
 const CURSOR_CHAT_META_INDEX_CACHE_MAX = 8
 
 export type CursorChatMeta = {
@@ -36,22 +32,17 @@ type CursorChatMetaScan = {
   index: Map<string, Promise<Map<string, string>>>
   // Chats roots this scan could not read, reported once by the scan owner.
   refusals: Map<string, string>
-  // Transcripts whose own meta.json read was refused, so the metadata merged
-  // onto them is not what the file on disk says.
+  // Refused metadata reads must remain unknown rather than validate cached enrichment.
   refusedTranscripts: Set<string>
 }
 
-// Why: validating the module cache costs a readdir of the chats root plus a stat
-// per workspace, and it cannot be skipped because the signature is built from
-// those stats. Discovery asks once per transcript and finalize asks again, so
-// the scope has to span both phases for one scan to see the tree once.
+// Share index validation across discovery and parsing to avoid repeated directory reads and workspace stats.
 const scanScopedIndex = new AsyncLocalStorage<CursorChatMetaScan>()
 
 export function resetCursorChatMetaIndexCacheForTests(): void {
   cursorChatMetaIndexCache.clear()
 }
 
-/** Runs one whole scan, discovery and parse; every Cursor transcript in it shares one index read. */
 export function withCursorChatMetaScan<T>(fn: () => Promise<T>): Promise<T> {
   return scanScopedIndex.run(
     { index: new Map(), refusals: new Map(), refusedTranscripts: new Set() },
@@ -59,16 +50,20 @@ export function withCursorChatMetaScan<T>(fn: () => Promise<T>): Promise<T> {
   )
 }
 
-/**
- * True when this transcript's own meta.json read was refused, so the caller
- * records the sidecar as unknown rather than as the observation discovery made.
- * The transcript's own work and its resume point are kept either way.
- */
+/** Mark refused metadata unknown while retaining the transcript fold and resume point. */
 export function wasCursorChatMetaRefused(transcriptPath: string): boolean {
   return scanScopedIndex.getStore()?.refusedTranscripts.has(transcriptPath) ?? false
 }
 
-/** Chats roots the current scan was refused, for the caller to report as scan issues. */
+/** Whether this scan could not look for the transcript's meta.json, so its absence proves nothing. */
+export function cursorChatMetaUnavailable(transcriptPath: string): boolean {
+  const chatsRoot = cursorChatsRootFromTranscriptPath(transcriptPath)
+  return (
+    wasCursorChatMetaRefused(transcriptPath) ||
+    (chatsRoot !== null && scanScopedIndex.getStore()?.refusals.has(chatsRoot) === true)
+  )
+}
+
 export function cursorChatMetaRefusals(): { chatsRoot: string; message: string }[] {
   const scan = scanScopedIndex.getStore()
   return scan ? [...scan.refusals].map(([chatsRoot, message]) => ({ chatsRoot, message })) : []
@@ -98,14 +93,7 @@ function readCursorChatMetaIndexOncePerScan(chatsRoot: string): Promise<Map<stri
   return pending
 }
 
-/**
- * A refused WSL read is not "no chats", but it must not take the transcript
- * down with it: before this join a stalled distro could not hide a Cursor
- * session at all. Degrade to no metadata for the scan and report the root once.
- * The session still lists from its transcript alone, and the sidecar is
- * recorded as unknown, so the next healthy scan merges the real metadata in
- * without re-reading a byte of the transcript.
- */
+/** Keep transcripts listed on WSL refusal, report the root once, and leave metadata unknown for retry. */
 async function readCursorChatMetaIndexOrNone(chatsRoot: string): Promise<Map<string, string>> {
   try {
     return await readCursorChatMetaIndex(chatsRoot)
@@ -125,21 +113,22 @@ function recordCursorChatMetaRefusal(chatsRoot: string, message: string): void {
   }
 }
 
-export async function readCursorChatMeta(transcriptPath: string): Promise<CursorChatMeta | null> {
+export async function readCursorChatMeta(
+  transcriptPath: string,
+  signal?: AbortSignal
+): Promise<CursorChatMeta | null> {
   const metaPath = await cursorChatMetaPath(transcriptPath)
   if (!metaPath) {
     return null
   }
   let record: Record<string, unknown> | null
   try {
-    record = await readJsonObjectIfExists(metaPath)
+    record = await readJsonObjectIfExists(metaPath, signal)
   } catch (error) {
     if (!(error instanceof WslTranscriptFsError)) {
       throw error
     }
-    // The session still lists, but unlike the index read this transcript's key
-    // already includes meta.json's stat, so the caller must not cache the
-    // un-enriched result. One issue per chats root, as for a refused index.
+    // Discovery observed this sidecar; mark its refused read unknown instead of validating un-enriched results.
     recordCursorChatMetaRefusal(
       cursorChatsRootFromTranscriptPath(transcriptPath) ?? metaPath,
       error.message
@@ -183,8 +172,7 @@ async function readCursorChatMetaIndex(chatsRoot: string): Promise<Map<string, s
       .map((entry) => entry.name)
       .sort()
   } catch (error) {
-    // Why: a refused WSL read is not "no chats"; letting it through keeps the
-    // session out of the parse cache instead of caching it without metadata.
+    // Propagate WSL refusal so the scan records unknown metadata and can retry enrichment.
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
@@ -200,8 +188,7 @@ async function readCursorChatMetaIndex(chatsRoot: string): Promise<Map<string, s
     metaPathByChatId
   }))
   storeCursorChatMetaIndexEntry(chatsRoot, pending)
-  // Why: a rejected build (a refused WSL read) must not be served from the
-  // cache forever; the next scan rebuilds while this one still sees the error.
+  // Evict rejected builds so the next scan retries instead of reusing a refused WSL read.
   pending.catch(() => {
     if (cursorChatMetaIndexCache.get(chatsRoot) === pending) {
       cursorChatMetaIndexCache.delete(chatsRoot)
@@ -210,8 +197,7 @@ async function readCursorChatMetaIndex(chatsRoot: string): Promise<Map<string, s
   return (await pending).metaPathByChatId
 }
 
-// Why: a new chat only bumps its own workspace directory, so the chats root's
-// own mtime would keep serving an index that is missing the newest sessions.
+// New chats update their workspace directory; the chats root mtime alone misses them.
 async function readCursorChatsSignature(
   chatsRoot: string,
   workspaceDirs: string[]
@@ -245,8 +231,6 @@ async function buildCursorChatMetaIndex(
       continue
     }
     for (const chatDir of chatDirs) {
-      // Why: the same chat id never appears under two workspace hashes, so the
-      // first hit wins and a duplicate would only cost a wasted read.
       if (chatDir.isDirectory() && !metaPathByChatId.has(chatDir.name)) {
         metaPathByChatId.set(
           chatDir.name,
@@ -270,8 +254,7 @@ async function readCachedCursorChatMetaIndex(
   if (entry.signature !== signature) {
     return undefined
   }
-  // Why: a concurrent scan can replace this Promise while it resolves; only the
-  // still-current entry may refresh recency without bypassing the cap.
+  // Refresh only the current promise; resurrecting evicted entries would bypass the cap.
   if (cursorChatMetaIndexCache.get(chatsRoot) === cached) {
     cursorChatMetaIndexCache.delete(chatsRoot)
     cursorChatMetaIndexCache.set(chatsRoot, cached)

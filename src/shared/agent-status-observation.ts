@@ -7,12 +7,14 @@
 //
 // NOTHING READS IT YET. It is stamped so consumers can be migrated one at a time.
 
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
+
 /** Where the evidence for a status row came from — the ingress, not the transport.
  *  A hook event relayed over SSH is still `hook`; the relay is a carrier. */
 export const AGENT_STATUS_OBSERVATION_ORIGINS = [
   /** Provider hook event (loopback HTTP or relayed), run through a provider normalizer. */
   'hook',
-  /** OSC 9999 structured payload parsed out of PTY bytes. Canonical payload, no provider normalizer. */
+  /** In-band status parsed out of PTY bytes: OSC 9999 payloads or OSC 7501 program status. */
   'osc',
   /** Inferred from a terminal title. The weakest evidence Orca acts on. */
   'title',
@@ -195,5 +197,5 @@ export class AgentStatusObservationSequencer {
  *  authority's revision counter starts over, so its observations must not be comparable
  *  with the ones it emitted before (including any rehydrated from disk). */
 export function createAgentStatusAuthorityId(role: string): string {
-  return `${role}:${globalThis.crypto.randomUUID()}`
+  return `${role}:${createNonSecureContextUuid()}`
 }

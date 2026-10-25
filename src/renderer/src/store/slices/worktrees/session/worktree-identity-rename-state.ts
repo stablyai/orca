@@ -11,30 +11,22 @@ import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
 } from '../../recently-closed-tabs'
+import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
+import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
 // Every worktree-id-keyed store map the rename path re-keys, so a new `*ByWorktree` map isn't silently missed.
-// Tab-id/file-id-keyed maps are deliberately excluded: tabs and files keep their ids across a rename.
+// Layout maps are re-keyed by renameWorktreeLayoutKeys. Tab-id/file-id-keyed maps are deliberately
+// excluded: tabs and files keep their ids across a rename.
 const WORKTREE_ID_KEYED_MAP_KEYS = [
   'worktreeLineageById',
-  'tabsByWorktree',
   'deleteStateByWorktreeId',
   'baseStatusByWorktreeId',
   'remoteBranchConflictByWorktreeId',
   'fileSearchStateByWorktree',
-  'browserTabsByWorktree',
   'recentlyClosedBrowserTabsByWorktree',
-  'activeBrowserTabIdByWorktree',
-  'activeFileIdByWorktree',
-  'activeTabTypeByWorktree',
-  'activeTabIdByWorktree',
-  'tabBarOrderByWorktree',
   'pendingReconnectTabByWorktree',
   'rightSidebarTabByWorktree',
   'rightSidebarExplorerViewByWorktree',
-  'unifiedTabsByWorktree',
-  'groupsByWorktree',
-  'layoutByWorktree',
-  'activeGroupIdByWorktree',
   'gitStatusByWorktree',
   'gitStatusHeadByWorktree',
   'gitBranchLineTotalByWorktree',
@@ -45,6 +37,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'gitBranchCompareSummaryByWorktree',
   'gitBranchCompareRequestKeyByWorktree',
   'gitBranchCompareRequestStatusHeadByWorktree',
+  'explorerDisplayRootByWorktree',
   'showDotfilesByWorktree',
   'expandedDirs',
   'defaultTerminalTabsAppliedByWorktreeId',
@@ -65,6 +58,7 @@ export function buildWorktreeRenameState(
   if (oldWorktreeId === newWorktreeId) {
     return {}
   }
+  renameCombinedDiffViewOwner(oldWorktreeId, newWorktreeId)
   const renamed: Record<string, unknown> = {}
   const renameKey = <T>(
     key: keyof AppState,
@@ -99,9 +93,6 @@ export function buildWorktreeRenameState(
       : renamedValue
   }
   const renameValueByKey: Partial<Record<(typeof WORKTREE_ID_KEYED_MAP_KEYS)[number], unknown>> = {
-    tabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
-    browserTabsByWorktree: (workspaces: BrowserWorkspace[]) =>
-      workspaces.map(withNewBrowserWorktreeId),
     recentlyClosedBrowserTabsByWorktree: (
       snapshots: { workspace: BrowserWorkspace; pages: BrowserPage[] }[]
     ) =>
@@ -113,9 +104,7 @@ export function buildWorktreeRenameState(
     fileSearchStateByWorktree: (searchState: AppState['fileSearchStateByWorktree'][string]) => ({
       ...searchState,
       resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
-    }),
-    unifiedTabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
-    groupsByWorktree: (groups: { worktreeId: string }[]) => groups.map(withNewWorktreeId)
+    })
   }
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
@@ -150,11 +139,6 @@ export function buildWorktreeRenameState(
   )
   renameKey('remoteStatusesByWorktree')
 
-  const openFiles = s.openFiles?.some((f) => f.worktreeId === oldWorktreeId)
-    ? s.openFiles.map((f) =>
-        f.worktreeId === oldWorktreeId ? { ...f, worktreeId: newWorktreeId } : f
-      )
-    : s.openFiles
   const currentBrowserPagesByWorkspace = s.browserPagesByWorkspace ?? {}
   const browserPagesByWorkspace = Object.values(currentBrowserPagesByWorkspace).some((pages) =>
     pages.some(
@@ -220,14 +204,24 @@ export function buildWorktreeRenameState(
         closedTombstoneEntries.rows.map(({ tabId, ...tombstone }) => [tabId, tombstone])
       )
     : s.closedTerminalTabTombstonesByTabId
-  const currentCloseIntents = s.clientHostedBrowserCloseIntentsByEnvironment ?? {}
-  let closeIntentsChanged = false
-  const clientHostedBrowserCloseIntentsByEnvironment = Object.fromEntries(
-    Object.entries(currentCloseIntents).map(([environmentId, intents]) => {
-      const repointed = repointRows(intents)
-      closeIntentsChanged = closeIntentsChanged || repointed.changed
-      return [environmentId, repointed.changed ? repointed.rows : intents]
-    })
+  const repointRowsByEnvironment = <T extends { worktreeId: string }>(
+    current: Record<string, T[]> | undefined
+  ): Record<string, T[]> | null => {
+    let changed = false
+    const next = Object.fromEntries(
+      Object.entries(current ?? {}).map(([environmentId, intents]) => {
+        const repointed = repointRows(intents)
+        changed = changed || repointed.changed
+        return [environmentId, repointed.changed ? repointed.rows : intents]
+      })
+    )
+    return changed ? next : null
+  }
+  const clientHostedBrowserCloseIntentsByEnvironment = repointRowsByEnvironment(
+    s.clientHostedBrowserCloseIntentsByEnvironment
+  )
+  const pairedTerminalTabCloseIntentsByEnvironment = repointRowsByEnvironment(
+    s.pairedTerminalTabCloseIntentsByEnvironment
   )
   const currentSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey ?? {}
   const sleepingAgentSessionsByPaneKey = Object.values(currentSleepingAgentSessionsByPaneKey).some(
@@ -242,8 +236,8 @@ export function buildWorktreeRenameState(
     : s.sleepingAgentSessionsByPaneKey
 
   return {
+    ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId),
     ...(renamed as Partial<AppState>),
-    ...(openFiles !== s.openFiles ? { openFiles } : {}),
     ...(browserPagesByWorkspace !== s.browserPagesByWorkspace ? { browserPagesByWorkspace } : {}),
     ...(recentlyClosedBrowserPagesByWorkspace !== s.recentlyClosedBrowserPagesByWorkspace
       ? { recentlyClosedBrowserPagesByWorkspace }
@@ -260,7 +254,12 @@ export function buildWorktreeRenameState(
     ...(closedTerminalTabTombstonesByTabId !== s.closedTerminalTabTombstonesByTabId
       ? { closedTerminalTabTombstonesByTabId }
       : {}),
-    ...(closeIntentsChanged ? { clientHostedBrowserCloseIntentsByEnvironment } : {}),
+    ...(clientHostedBrowserCloseIntentsByEnvironment
+      ? { clientHostedBrowserCloseIntentsByEnvironment }
+      : {}),
+    ...(pairedTerminalTabCloseIntentsByEnvironment
+      ? { pairedTerminalTabCloseIntentsByEnvironment }
+      : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
     ...(s.activeWorkspaceKey === worktreeWorkspaceKey(oldWorktreeId)

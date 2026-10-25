@@ -18,8 +18,8 @@ import {
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
-const LOCAL = { activeRuntimeEnvironmentId: null }
-const REMOTE = { activeRuntimeEnvironmentId: 'env-1' }
+const LOCAL = { kind: 'local' } as const
+const REMOTE = { kind: 'environment', environmentId: 'env-1' } as const
 
 function emptyClaudeState(): ClaudeRateLimitAccountsState {
   return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
@@ -312,8 +312,8 @@ describe('fetchProviderAccountsSnapshot', () => {
   })
 
   it('isolates in-flight snapshots by remote account owner', async () => {
-    const first = fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId: 'env-1' })
-    const second = fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId: 'env-2' })
+    const first = fetchProviderAccountsSnapshot({ kind: 'environment', environmentId: 'env-1' })
+    const second = fetchProviderAccountsSnapshot({ kind: 'environment', environmentId: 'env-2' })
     await flushMicrotasks()
 
     expect(runtimeEnvironmentSubscribe).toHaveBeenCalledTimes(2)
@@ -343,7 +343,7 @@ describe('fetchProviderAccountsSnapshot', () => {
     )
 
     const local = fetchProviderAccountsSnapshot(LOCAL)
-    const remote = fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId: 'local' })
+    const remote = fetchProviderAccountsSnapshot({ kind: 'environment', environmentId: 'local' })
     await flushMicrotasks()
 
     expect(remote).not.toBe(local)

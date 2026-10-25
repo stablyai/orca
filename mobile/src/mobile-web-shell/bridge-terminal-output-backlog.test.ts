@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge/bridge-caps'
+import { readBridgeHostMessage, type BridgeHostMessage } from './bridge/bridge-envelope'
 import {
   BRIDGE_ACK_INTERVAL_BYTES,
   BRIDGE_ACK_INTERVAL_FRAMES
@@ -114,11 +115,40 @@ function replay(chunks: readonly string[], options: { method?: string } = {}): R
   let unreadBytes = 0
   let drainCreditBytes = 0
 
+  const events: { frame: BridgeHostMessage; bytes: number }[] = []
+  let postedCursor = 0
+  let largestFrameBytes = 0
+  let ended = false
+
+  // A page decodes each posted frame once, rather than replaying its whole history on every read.
+  const readPosted = (): void => {
+    for (const json of bridge.posted.slice(postedCursor)) {
+      const read = readBridgeHostMessage(json)
+      if (!read.ok) {
+        throw new Error(`the page would refuse this frame: ${read.refusal}`)
+      }
+      postedCursor += 1
+      const frame = read.message
+      const bytes = JSON.stringify(frame).length
+      largestFrameBytes = Math.max(largestFrameBytes, bytes)
+      if (frame.type === 'event' && frame.id === ID) {
+        events.push({ frame, bytes })
+      }
+      if (frame.type === 'end' && frame.id === ID) {
+        ended = true
+      }
+    }
+  }
+
   /** One frame off the page's queue, or false when it has caught up. This is the drain. */
   const readOne = (): boolean => {
-    const events = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === ID)
-    const frame = events[readFrames]
-    if (frame === undefined || frame.type !== 'event') {
+    readPosted()
+    const event = events[readFrames]
+    if (event === undefined) {
+      return false
+    }
+    const { frame, bytes } = event
+    if (frame.type !== 'event') {
       return false
     }
     readFrames += 1
@@ -135,7 +165,7 @@ function replay(chunks: readonly string[], options: { method?: string } = {}): R
     }
     drainCreditBytes -= applied
     unreadFrames += 1
-    unreadBytes += JSON.stringify(frame).length
+    unreadBytes += bytes
     if (unreadFrames >= BRIDGE_ACK_INTERVAL_FRAMES || unreadBytes >= BRIDGE_ACK_INTERVAL_BYTES) {
       unreadFrames = 0
       unreadBytes = 0
@@ -159,12 +189,12 @@ function replay(chunks: readonly string[], options: { method?: string } = {}): R
   while (readOne()) {
     // The page reads; the interval acks inside `readOne` are the only ones it sends.
   }
-  const events = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === ID)
+  readPosted()
   return {
     delivered,
-    largestFrameBytes: Math.max(0, ...bridge.frames().map((frame) => JSON.stringify(frame).length)),
+    largestFrameBytes,
     frames: events.length,
-    ended: bridge.frames().some((frame) => frame.type === 'end' && frame.id === ID)
+    ended
   }
 }
 
@@ -184,15 +214,7 @@ describe.each([
     const run = replay(chunks)
     expect(run.ended).toBe(false)
     expect(run.delivered.join('')).toBe(chunks.join(''))
-  })
-
-  it('delivers it in fewer frames than it was produced in', () => {
-    const run = replay(chunks)
     expect(run.frames).toBeLessThan(chunks.length)
-  })
-
-  it('never posts a frame over the cap, however much it merged', () => {
-    const run = replay(chunks)
     expect(run.largestFrameBytes).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
   })
 })
@@ -240,7 +262,11 @@ describe('the two ends a held terminal stream has', () => {
     const reports = bridge.diagnostics.filter((entry) => entry.kind === 'terminal-backlog')
     expect(reports).toHaveLength(1)
     expect(reports[0]).toMatchObject({ ended: 'pending-ceiling' })
-    expect(reports[0]).toHaveProperty('peakPendingBytes')
+    const report = reports[0]
+    if (report?.kind !== 'terminal-backlog') {
+      throw new Error('backlog report missing')
+    }
+    expect(report.peakPendingBytes).toBeGreaterThan(TERMINAL_STREAM_MAX_PENDING_BYTES)
   })
 
   it('still ends on one event over the frame cap, which is C0.3 and is not slowness', () => {
@@ -407,22 +433,31 @@ describe('the cases the rulings name', () => {
     bridge.client.streams[0].emit({ type: 'resized', streamId: 1, cols: 80, rows: 24 })
     bridge.client.streams[0].emit({ type: 'data', streamId: 1, chunk: 'after-the-resize' })
     drain(bridge, ID)
-    const kinds = bridge
+    const payloads = bridge
       .frames()
-      .filter((frame) => frame.type === 'event' && frame.id === ID)
-      .map((frame) =>
-        frame.type === 'event' &&
-        'payload' in frame &&
-        frame.payload !== null &&
-        typeof frame.payload === 'object' &&
-        'type' in frame.payload
-          ? frame.payload.type
-          : null
-      )
-    const resizeAt = kinds.indexOf('resized')
+      .flatMap((frame) => (frame.type === 'event' && 'payload' in frame ? [frame.payload] : []))
+    const resizeAt = payloads.findIndex(
+      (payload) =>
+        typeof payload === 'object' &&
+        payload !== null &&
+        'type' in payload &&
+        payload.type === 'resized'
+    )
     expect(resizeAt).toBeGreaterThan(0)
-    // The resize is its own frame, and the chunk behind it is behind it.
-    expect(kinds.slice(resizeAt + 1)).toContain('data')
+    expect(payloads[resizeAt]).toEqual({ type: 'resized', streamId: 1, cols: 80, rows: 24 })
+    const before = payloads
+      .slice(0, resizeAt)
+      .map((payload) => {
+        if (typeof payload !== 'object' || payload === null || !('chunk' in payload)) {
+          throw new Error('missing pre-resize output')
+        }
+        return payload.chunk
+      })
+      .join('')
+    expect(before).toBe(SMALL_CHUNK.repeat(OVER_FRAME_WINDOW))
+    expect(payloads.slice(resizeAt + 1)).toEqual([
+      { type: 'data', streamId: 1, chunk: 'after-the-resize' }
+    ])
     expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
   })
 })
@@ -432,7 +467,7 @@ describe('the cases the rulings name', () => {
  *
  * The page asks the host for a snapshot no larger than this, and the host trims against it by
  * building the payload it will publish. Here is the other half of that contract: a payload that
- * serializes to exactly the budget crosses, and one byte more does not. Without this the budget is
+ * serializes to the budget crosses, and a payload beyond the frame cap does not. Without this the budget is
  * a number two files agree on and nothing tests.
  */
 describe('a snapshot payload at the budget the page asks for', () => {
@@ -457,24 +492,9 @@ describe('a snapshot payload at the budget the page asks for', () => {
     const events = bridge.frames().filter((frame) => frame.type === 'event' && frame.id === ID)
     expect(events).toHaveLength(1)
     expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
-    expect(bridge.posted[bridge.posted.length - 1].length).toBeLessThanOrEqual(
-      BRIDGE_MAX_MESSAGE_BYTES
-    )
-  })
-
-  /**
-   * The budget is a bound, and a bound with slack in it is doing its job.
-   *
-   * It is computed at the widest every envelope field can be written — a full-length id and `seq`
-   * at the largest integer it can hold — so a real first frame, whose `seq` is 1, has room to
-   * spare. Asserted as a direction rather than as a number: what must never happen is the budget
-   * leaving too little, and the amount it leaves over is the seq counter's width.
-   */
-  it('leaves the frame inside the cap with room, rather than exactly at it', () => {
-    const bridge = post(mobileTerminalSnapshotByteBudget() ?? 0)
-    const frame = bridge.posted[bridge.posted.length - 1]
-    expect(frame.length).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(BRIDGE_MAX_MESSAGE_BYTES - frame.length).toBeLessThan(64)
+    const bytes = new TextEncoder().encode(bridge.posted.at(-1)).byteLength
+    expect(bytes).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
+    expect(BRIDGE_MAX_MESSAGE_BYTES - bytes).toBeLessThan(64)
   })
 
   it('ends the stream on a payload the cap cannot hold, which is why the host trims', () => {

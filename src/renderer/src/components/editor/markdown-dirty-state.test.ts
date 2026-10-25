@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import { Table } from '@tiptap/extension-table'
-import { TableCell } from '@tiptap/extension-table-cell'
-import { TableHeader } from '@tiptap/extension-table-header'
-import { TableRow } from '@tiptap/extension-table-row'
+import { TaskList, TaskItem } from '@tiptap/extension-list'
+import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { normalizeEmptyListItems } from './rich-markdown-normalize'
 
@@ -32,20 +28,6 @@ function createEditor(markdown: string): Editor {
 
 function trimEnd(s: string): string {
   return s.trimEnd()
-}
-
-function shouldSyncPropIntoEditor(
-  currentMarkdown: string,
-  propContent: string,
-  lastCommittedMarkdown: string
-): boolean {
-  if (propContent === lastCommittedMarkdown) {
-    return false
-  }
-  if (currentMarkdown === propContent) {
-    return false
-  }
-  return true
 }
 
 /**
@@ -131,27 +113,6 @@ describe('document soft-break round-trip', () => {
     } finally {
       editor.destroy()
     }
-  })
-})
-
-// -----------------------------------------------------------------------
-// 3. Rich editor content sync must ignore its own mount-time round-trip
-//    differences, but still accept genuine external file changes.
-// -----------------------------------------------------------------------
-describe('content sync gating', () => {
-  it('does not re-sync on mount when only the normalized markdown differs', () => {
-    const disk = 'Line one\nLine two'
-    const normalizedMarkdown = simulateOnCreate(disk)
-
-    expect(shouldSyncPropIntoEditor(normalizedMarkdown, disk, disk)).toBe(false)
-  })
-
-  it('does re-sync when disk content actually changes externally', () => {
-    const oldDisk = 'Line one\nLine two'
-    const newDisk = 'Line one\nLine two\nLine three'
-    const normalizedCurrentMarkdown = simulateOnCreate(oldDisk)
-
-    expect(shouldSyncPropIntoEditor(normalizedCurrentMarkdown, newDisk, oldDisk)).toBe(true)
   })
 })
 

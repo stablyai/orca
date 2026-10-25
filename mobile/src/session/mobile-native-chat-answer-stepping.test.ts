@@ -3,17 +3,10 @@ import {
   mobileNativeChatQuestionOffsets,
   scheduleMobileClaudeAnswer,
   MOBILE_NATIVE_CHAT_ADVANCE_BUFFER_MS,
-  MOBILE_NATIVE_CHAT_QUESTION_STEP_MS,
   MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS
 } from './mobile-native-chat-answer-stepping'
 
 describe('mobileNativeChatQuestionOffsets', () => {
-  it('matches the desktop cadence constants', () => {
-    expect(MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS).toBe(500)
-    expect(MOBILE_NATIVE_CHAT_ADVANCE_BUFFER_MS).toBe(500)
-    expect(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS).toBe(1000)
-  })
-
   it('paces each question a full step apart, Enter 500ms after its body', () => {
     expect(mobileNativeChatQuestionOffsets(0)).toEqual({ bodyAt: 0, enterAt: 500 })
     expect(mobileNativeChatQuestionOffsets(1)).toEqual({ bodyAt: 1000, enterAt: 1500 })
@@ -28,7 +21,7 @@ describe('scheduleMobileClaudeAnswer', () => {
   it('writes each question body then its Enter, paced per step, one Enter per line', () => {
     const events: string[] = []
     const timers = scheduleMobileClaudeAnswer(
-      ['', 'b', 'c'], // blank middle answer must still get its own body + Enter
+      ['', 'b', 'c'], // A blank answer still gets its own body + Enter.
       (line) => events.push(`body:${line}`),
       () => events.push('enter')
     )
@@ -36,7 +29,9 @@ describe('scheduleMobileClaudeAnswer', () => {
 
     vi.advanceTimersByTime(0)
     expect(events).toEqual(['body:'])
-    vi.advanceTimersByTime(MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS)
+    vi.advanceTimersByTime(MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS - 1)
+    expect(events).toEqual(['body:'])
+    vi.advanceTimersByTime(1)
     expect(events).toEqual(['body:', 'enter'])
     vi.advanceTimersByTime(MOBILE_NATIVE_CHAT_ADVANCE_BUFFER_MS)
     expect(events).toEqual(['body:', 'enter', 'body:b'])

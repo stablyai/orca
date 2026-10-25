@@ -1,8 +1,8 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../shared/protocol-version'
 import { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { launchOrcaApp } from './runtime/launch'
@@ -31,6 +31,12 @@ afterEach(async () => {
   servers.clear()
 })
 
+function makeRuntimeClientFixture(): string {
+  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+  onTestFinished(() => rmSync(userDataPath, { recursive: true, force: true }))
+  return userDataPath
+}
+
 function writeMetadata(
   userDataPath: string,
   endpoint: string,
@@ -56,9 +62,7 @@ function writeMetadata(
 }
 
 function findUnusedPid(seed = 200_000): number {
-  // Why: the stale-bootstrap test must point metadata at a definitely-dead
-  // process. Hard-coding a small PID is host-dependent and flakes when that
-  // PID happens to be alive on the machine running the suite.
+  // Find a dead PID at runtime; a fixed PID may belong to a live process on this host.
   let pid = Math.max(seed, process.pid + 10_000)
   while (pid < 2_000_000) {
     try {
@@ -71,12 +75,10 @@ function findUnusedPid(seed = 200_000): number {
   return 2_000_000
 }
 
-// Why: these tests create Unix domain socket servers in temp directories.
-// Windows does not support Unix domain sockets in the same way, causing
-// EACCES errors on listen(), so the suite is skipped on that platform.
+// Temp-path Unix sockets fail with EACCES on Windows.
 describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   it('adds an opaque durable request ID only to orchestration mutations', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const requests: Record<string, unknown>[] = []
     const server = createServer((socket) => {
@@ -140,7 +142,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('rejects an old local runtime before sending an orchestration mutation', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const requests: Record<string, unknown>[] = []
     const server = createServer((socket) => {
@@ -177,7 +179,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('returns the full RPC envelope for successful calls', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -210,7 +212,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('reports not_running when no runtime metadata exists', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const client = new RuntimeClient(userDataPath, 100)
 
     const status = await client.getCliStatus()
@@ -233,7 +235,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('reports stale_bootstrap when bootstrap artifacts exist but no runtime is reachable', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     writeMetadata(userDataPath, join(userDataPath, 'missing.sock'), 'token', findUnusedPid())
 
     const client = new RuntimeClient(userDataPath, 100)
@@ -244,7 +246,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('reports graph_not_ready when the runtime is reachable but graph is unavailable', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -280,7 +282,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('openOrca activates the app even when a desktop runtime is already reachable', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -317,7 +319,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('openOrca waits for a reachable headless runtime to expose a desktop window', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     let statusRequests = 0
     const server = createServer((socket) => {
@@ -358,7 +360,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('openOrca fails explicitly when the serve owner cannot promote safely', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -392,18 +394,16 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     await expect(client.openOrca(100)).rejects.toMatchObject({
       code: 'desktop_activation_blocked'
     })
-    // A blocked runtime can't promote, so we bail before spawning the app.
     expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
   it('times out if the runtime never responds', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
-      // Why: keep the socket open without replying so the client timeout path
-      // is exercised against a real hung runtime connection.
+      // Leave the connection open without a reply to exercise the timeout against a real socket.
     })
     servers.add(server)
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
@@ -417,7 +417,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('preserves a dropped read-only orchestration failure exactly', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     let request: Record<string, unknown> | undefined
     const server = createServer((socket) => {
@@ -446,8 +446,44 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(request).not.toHaveProperty('orchestrationRequestId')
   })
 
+  it('does not crash while resolving terminal.wait defaults without params', async () => {
+    const userDataPath = makeRuntimeClientFixture()
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request: unknown = JSON.parse(String(data).trim())
+        if (
+          typeof request !== 'object' ||
+          request === null ||
+          !('id' in request) ||
+          typeof request.id !== 'string'
+        ) {
+          throw new Error('Expected a runtime request with an id')
+        }
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: { satisfied: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint, 'token', process.pid)
+
+    const client = new RuntimeClient(userDataPath, 100)
+    const response = await client.call<{ satisfied: boolean }>('terminal.wait')
+
+    expect(response.result).toEqual({ satisfied: true })
+  })
+
   it('allows a per-call timeout override for long runtime requests', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -479,7 +515,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('preserves structured runtime failures', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -512,7 +548,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('rejects invalid runtime response frames', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -533,7 +569,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   })
 
   it('rejects mismatched response ids from the runtime', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const userDataPath = makeRuntimeClientFixture()
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)

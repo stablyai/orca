@@ -3,7 +3,34 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
+import { useNativeChatNamingFailure } from '../tab-bar/use-native-chat-naming-failure'
+import { NameGenerationFailedDialog, AutoRenameFailedDialog } from './AutoRenameFailedDialog'
+
+vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+  useStructuredAgentSessionHostCapabilityState: () => 'unsupported'
+}))
+vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+  getStructuredAgentSessionStatusFeed: () => null
+}))
+function ChatFailure({ failedAt }: { failedAt: number }) {
+  const controls = useNativeChatNamingFailure({
+    executionHostId: 'local',
+    sessionId: 'chat',
+    error: { message: 'No name', failedAt }
+  })
+  return (
+    controls && (
+      <NameGenerationFailedDialog
+        open
+        onOpenChange={() => {}}
+        title="Chat name"
+        description="Failure"
+        error={controls.message}
+        readFullOutput={controls.readFullOutput}
+      />
+    )
+  )
+}
 
 const getBranchRenameFailureOutput =
   vi.fn<(args: { worktreeId: string }) => Promise<string | null>>()
@@ -16,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   ;(window as unknown as { api: unknown }).api = {
     worktrees: { getBranchRenameFailureOutput },
+    nativeChat: { getConversationNameFailureOutput: getBranchRenameFailureOutput },
     ui: { writeClipboardText }
   }
   container = document.createElement('div')
@@ -56,6 +84,20 @@ describe('AutoRenameFailedDialog full output', () => {
     expect(getBranchRenameFailureOutput).toHaveBeenCalledWith({ worktreeId: 'wt-1' })
     expect(document.body.textContent).toContain('[stderr]')
     expect(document.body.textContent).toContain('Use /login to log in.')
+  })
+
+  it('refreshes and copies a new chat diagnostic while its identical-message dialog stays open', async () => {
+    getBranchRenameFailureOutput.mockResolvedValueOnce('run A output')
+    await act(async () => root.render(<ChatFailure failedAt={1} />))
+    expect(document.body.textContent).toContain('run A output')
+    getBranchRenameFailureOutput.mockResolvedValueOnce('run B output')
+    await act(async () => root.render(<ChatFailure failedAt={2} />))
+    expect(document.body.textContent).not.toContain('run A output')
+    expect(document.body.textContent).toContain('run B output')
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('button[aria-label="Copy error"]')?.click()
+    )
+    expect(writeClipboardText).toHaveBeenCalledWith('run B output')
   })
 
   it('falls back to the persisted excerpt when main holds no capture', async () => {

@@ -1,4 +1,8 @@
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  IPtyProvider,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/pty-provider-contract'
 
 export const DEGRADED_DAEMON_RECOVERY_RETRY_MS = 30_000
 

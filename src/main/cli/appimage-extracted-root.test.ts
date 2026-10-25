@@ -9,6 +9,7 @@ import {
   isAppImageExtractedLauncherPath,
   isAppImageExtractionComplete,
   isAppImageInstalledLauncherOwnedBySibling,
+  readAppImageSourceOfNamespace,
   resolveAppImageCacheKey,
   resolveAppImageExtractedRoot
 } from './appimage-extracted-root'
@@ -90,8 +91,22 @@ describe('appimage extracted root', () => {
     expect(isAppImageExtractionComplete(first!)).toBe(true)
   })
 
-  // Why: an update replaces the file in place, so stat identity must change the key or the command
-  // would keep resolving through the previous version's payload.
+  // Why: a server running from the copy has no $APPIMAGE; this record is how it finds the file.
+  it('records which AppImage a namespace came from, and rejects a record for another path', async () => {
+    const { appImagePath, cacheRootPath } = await makeFixture()
+    const root = await ensureAppImageExtractedRoot({
+      appImagePath,
+      cacheRootPath,
+      runExtract: async (_path, cwd) => writePayload(cwd)
+    })
+    const namespacePath = dirname(root!.rootPath)
+    const namespaceKey = namespacePath.slice(namespacePath.lastIndexOf('/') + 1)
+
+    expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBe(appImagePath)
+    await writeFile(join(namespacePath, 'source-appimage'), '/elsewhere/Orca.AppImage')
+    expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBeNull()
+  })
+
   it('keys the payload on file identity and metadata, not just path', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
     const before = resolveAppImageCacheKey(appImagePath)
@@ -106,8 +121,7 @@ describe('appimage extracted root', () => {
     )
   })
 
-  // Why: `chmod +x` is what every AppImage user is told to run, and a backup restore or SELinux
-  // relabel does the same thing. Re-keying on that cost a full re-extraction of an unchanged payload.
+  // chmod, backup restores and SELinux relabels must not trigger re-extraction of unchanged payloads.
   it('does not re-key the payload when only inode metadata changes', async () => {
     const { appImagePath } = await makeFixture()
     const before = resolveAppImageCacheKey(appImagePath)
@@ -119,8 +133,6 @@ describe('appimage extracted root', () => {
     expect(resolveAppImageCacheKey(appImagePath)).toBe(before)
   })
 
-  // Why: a crashed extraction must not leave a directory that later reads treat
-  // as a usable payload — the command would exec a path that does not exist.
   it('publishes nothing when extraction fails partway', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
 

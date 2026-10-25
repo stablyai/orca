@@ -55,7 +55,7 @@ async function createWslStartupTab(
         }
       })
       store.getState().setActiveTab(tab.id)
-      store.getState().setActiveTabType('terminal')
+      store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
       return tab.id
     },
     { worktreeId, marker }
@@ -104,7 +104,7 @@ async function waitForRestoredWslTab(page: Page, worktreeId: string, tabId: stri
   await page.evaluate((tabId) => {
     const state = window.__store?.getState()
     state?.setActiveTab(tabId)
-    state?.setActiveTabType('terminal')
+    state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
   }, tabId)
   await waitForActiveTerminalManager(page, 60_000)
   await waitForActivePanePtyId(page, 60_000)

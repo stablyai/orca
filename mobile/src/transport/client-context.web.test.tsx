@@ -1,7 +1,9 @@
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
+import type { ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
+import { BRIDGE_PAGE_CLIENT_ID } from '../mobile-web-shell/bridge/bridge-page-client-identity'
 import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
@@ -10,7 +12,7 @@ import type { RpcClientContextValue } from './rpc-client-context-contract'
 // this test does not have. Nothing below calls one.
 vi.mock('./host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -46,6 +48,15 @@ function Screen(): null {
   return null
 }
 
+const trees: ReactTestRenderer[] = []
+const clients: BridgeRpcClient[] = []
+
+function mount(client: BridgeRpcClient): ReactTestRenderer {
+  const tree = create(render(client))
+  trees.push(tree)
+  return tree
+}
+
 function render(client: BridgeRpcClient): ReactElement {
   return (
     <RpcClientProvider client={client}>
@@ -72,12 +83,16 @@ function installChannel(): { deliver: (frame: unknown) => void } {
 }
 
 /** What the entry hands the provider: one client, already holding a session. */
-function createReadyClient(deliver: (frame: unknown) => void): BridgeRpcClient {
+function createReadyClient(
+  deliver: (frame: unknown) => void,
+  init: unknown = INIT
+): BridgeRpcClient {
   const client = createShellPageClient()
   if (client === null) {
     throw new Error('no channel installed')
   }
-  deliver(INIT)
+  clients.push(client)
+  deliver(init)
   return client
 }
 
@@ -96,6 +111,15 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  act(() => {
+    for (const tree of trees.splice(0)) {
+      tree.unmount()
+    }
+  })
+  for (const client of clients.splice(0)) {
+    client.close()
+  }
+  vi.restoreAllMocks()
   vi.useRealTimers()
   Reflect.deleteProperty(globalThis, 'orcaBridge')
 })
@@ -105,7 +129,7 @@ describe('the page provider', () => {
     const channel = installChannel()
     const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render(client))
+      mount(client)
     })
 
     expect(screen.mounts).toBe(1)
@@ -123,7 +147,7 @@ describe('the page provider', () => {
     const channel = installChannel()
     const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render(client))
+      mount(client)
     })
 
     const context = readContext()
@@ -133,11 +157,51 @@ describe('the page provider', () => {
     expect(context.getLastConnectedAt('host-a')).toBe(1700)
   })
 
+  it('claims the placeholder the shell swaps, never the session id', () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
+    act(() => {
+      mount(client)
+    })
+
+    // What `terminal.subscribe` carries as `client.id` and what the send gate reads. Null was not a
+    // smaller answer — the session route refuses to subscribe without one, so no scrollback
+    // arrives, the terminal document never receives `init`, and live input never opens.
+    expect(readContext().getClientId('host-a')).toBe(BRIDGE_PAGE_CLIENT_ID)
+    expect(readContext().getClientId('host-a')).not.toBe(INIT.sessionId)
+  })
+
+  it('keeps the same identity across a remount, so a resent message keeps its caller', () => {
+    const channel = installChannel()
+    const client = createReadyClient(channel.deliver)
+    act(() => {
+      mount(client)
+    })
+    const first = readContext().getClientId('host-a')
+
+    // A shell remount mints a new session id, which is what a per-document identity would follow.
+    // The composer's send journal refuses a retained operation whose caller fingerprint moved, and
+    // it has no expiry, so that would make "send it again" a permanent refusal for that message.
+    act(() => {
+      for (const tree of trees.splice(0)) {
+        tree.unmount()
+      }
+    })
+    client.close()
+    const nextChannel = installChannel()
+    act(() => {
+      mount(createReadyClient(nextChannel.deliver, { ...INIT, sessionId: 'session-b' }))
+    })
+
+    expect(readContext().getClientId('host-a')).toBe(first)
+    expect(first).toBe(BRIDGE_PAGE_CLIENT_ID)
+  })
+
   it('carries a state change from the shell to the screens watching it', () => {
     const channel = installChannel()
     const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render(client))
+      mount(client)
     })
     const listener = vi.fn()
     readContext().subscribeHostState('host-a', listener)
@@ -158,10 +222,10 @@ describe('the page provider', () => {
     const channel = installChannel()
     const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render(client))
+      mount(client)
     })
     const listener = vi.fn()
-    readContext().subscribeAllHosts(listener)
+    const unsubscribe = readContext().subscribeAllHosts(listener)
 
     act(() => {
       channel.deliver({
@@ -172,13 +236,22 @@ describe('the page provider', () => {
     })
 
     expect(listener).toHaveBeenCalledTimes(1)
+    unsubscribe()
+    act(() => {
+      channel.deliver({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'state',
+        connection: { ...INIT.connection, state: 'disconnected' }
+      })
+    })
+    expect(listener).toHaveBeenCalledTimes(1)
   })
 
   it('stops listening when the screen that asked goes away', () => {
     const channel = installChannel()
     const client = createReadyClient(channel.deliver)
     act(() => {
-      create(render(client))
+      mount(client)
     })
     const listener = vi.fn()
     const unsubscribe = readContext().subscribeHostState('host-a', listener)
@@ -200,19 +273,29 @@ describe('the page provider', () => {
     const client = createReadyClient(channel.deliver)
     const close = vi.spyOn(client, 'close')
     act(() => {
-      create(render(client))
+      mount(client)
     })
 
     const context = readContext()
+    expect(context.acquire('host-a', {})).toBe(client)
     context.release('host-a', {})
     context.releaseAndCloseIfUnused('host-a', {})
     context.closeIfUnused('host-a')
     context.disconnectHostClient('host-a')
     context.forgetHostClient('host-a')
     context.refreshHostClient('host-a')
-    await context.forceReconnect('host-a')
 
     expect(close).not.toHaveBeenCalled()
     expect(context.acquire('host-a', {})).toBe(client)
+  })
+
+  it('offers no re-dial at all, so no screen can wire a Retry to one', () => {
+    // Null and not an inert function: every Retry and Reconnect reads it to decide whether it
+    // renders, and an inert one painted controls whose only effect on the page was nothing.
+    const channel = installChannel()
+    act(() => {
+      mount(createReadyClient(channel.deliver))
+    })
+    expect(readContext().forceReconnect).toBeNull()
   })
 })

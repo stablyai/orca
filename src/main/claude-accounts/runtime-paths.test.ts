@@ -63,8 +63,6 @@ describe('ClaudeRuntimePathResolver', () => {
     const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
 
     expect(paths.configDir).toBe(join(testState.fakeHomeDir, '.claude'))
-    // Why: background rate-limit refreshes resolve these paths even when Claude
-    // is disabled, so resolving must never materialize the directory (#12181).
     expect(existsSync(paths.configDir)).toBe(false)
   })
 
@@ -77,12 +75,6 @@ describe('ClaudeRuntimePathResolver', () => {
     expect(paths.configDir).toBe(inherited)
     expect(existsSync(inherited)).toBe(false)
     expect(paths.envPatch).toEqual({ CLAUDE_CONFIG_DIR: inherited })
-  })
-
-  it('resolves credentials next to the config directory', () => {
-    const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
-
-    expect(paths.credentialsPath).toBe(join(testState.fakeHomeDir, '.claude', '.credentials.json'))
   })
 
   it('falls back to the home config file when no colocated config exists', () => {

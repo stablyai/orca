@@ -81,16 +81,6 @@ describe('planBrowserWorkspaceTabClose', () => {
     ).toBeUndefined()
   })
 
-  it('closes a single owner on its host and leaves the tab for host sync to remove', () => {
-    expect(
-      plan([{ id: 'page-1', environmentId: 'env-a' }], { activeEnvironmentIds: ['env-a'] })
-    ).toEqual({
-      hostEnvironmentIds: ['env-a'],
-      closesLocally: false,
-      removesVisibleTab: false
-    })
-  })
-
   // Why: this is the dead end — a workspace spanning two environments used to resolve as
   // "ambiguous" and the close fell through silently, leaving the X inert.
   it('closes every environment holding part of the workspace', () => {

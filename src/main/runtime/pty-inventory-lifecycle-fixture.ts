@@ -1,7 +1,12 @@
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
+import type {
+  PtyInventoryRefreshOptions,
+  RuntimePtyController
+} from './runtime-pty-controller-contract'
 import type { PtyProcessInfo } from '../providers/pty-process-info'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
 export const WORKTREE = 'repo::/tmp/inventory-admission'
 export const PTY = `${WORKTREE}@@shell`
@@ -32,13 +37,25 @@ export function processRow(id = PTY, incarnationId = PREDECESSOR): PtyProcessInf
 }
 
 export class InventoryLifecycleRuntime extends OrcaRuntimeService {
-  read(connectionId?: string | null, target: string | null = null, deadline?: number) {
-    return this.refreshPtyWorktreeRecordsWithControllerInventory([], target, deadline, connectionId)
+  read(
+    connectionId?: string | null,
+    target: string | null = null,
+    deadline?: number,
+    inventoryOptions?: PtyInventoryRefreshOptions
+  ) {
+    return this.refreshPtyWorktreeRecordsWithControllerInventory(
+      [],
+      target,
+      deadline,
+      connectionId,
+      false,
+      inventoryOptions
+    )
   }
 
   register(incarnationId = PREDECESSOR): void {
     this.registerPreAllocatedHandleForPty(PTY, `term_${incarnationId}`)
-    this.registerPty(PTY, WORKTREE, null, {
+    registerBoundPty(this, PTY, WORKTREE, null, {
       tabId: TAB,
       leafId: LEAF,
       incarnationId,
@@ -48,12 +65,13 @@ export class InventoryLifecycleRuntime extends OrcaRuntimeService {
 
   capture(id = PTY) {
     const pty = this.ptysById.get(id)
+    const pane = this.paneOfPty(pty)
     return {
       connected: pty?.connected,
       incarnationId: pty?.incarnationId,
       controllerTitle: pty?.controllerTitle,
-      tabId: pty?.tabId,
-      paneKey: pty?.paneKey,
+      tabId: pane.tabId,
+      paneKey: pane.paneKey,
       handle: this.handleByPtyId.get(id) ?? null,
       verdict: this.getPtyLivenessVerdict(id),
       headless: this.headlessTerminals.has(id)
@@ -63,6 +81,16 @@ export class InventoryLifecycleRuntime extends OrcaRuntimeService {
 
 export function createInventoryRuntime(listProcesses: InventoryListing) {
   const runtime = new InventoryLifecycleRuntime()
+  // Main's layout is the only answer to which pane holds a terminal; it lives in the store session.
+  // An empty store otherwise, as the null store reads.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    Reflect.set(runtime, 'store', {
+      getRepos: () => [],
+      getRepo: () => undefined,
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    })
+  }
   const hasPty = vi.fn(() => false)
   runtime.setPtyController({
     write: () => true,

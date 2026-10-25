@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
-import { MobileWebShellDevRow } from '../src/diagnostics/mobile-web-shell-dev-row'
+import { MobileWebShellUpdateFailureRow } from '../src/diagnostics/mobile-web-shell-update-failure-row'
 import { TroubleshootView } from '../src/diagnostics/troubleshoot-view'
 import { useTroubleshootDiagnostics } from '../src/diagnostics/use-troubleshoot-diagnostics'
 
@@ -23,12 +23,11 @@ export default function NativeTroubleshootRoute() {
       onBack={() => router.back()}
       onConnectionLog={() => router.push('/connection-log')}
       developerRow={
-        isDevelopmentBuild ? (
-          <>
-            <MobileWebBundleProbeRow />
-            <MobileWebShellDevRow />
-          </>
-        ) : null
+        // The bundle probe stays development-only: it fetches.
+        <>
+          {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
+          <MobileWebShellUpdateFailureRow />
+        </>
       }
     />
   )

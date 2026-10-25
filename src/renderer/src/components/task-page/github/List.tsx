@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { LoaderCircle } from 'lucide-react'
 import { TaskPageGitHubRows } from './Rows'
 import { PaginationBar } from '../PaginationBar'
-import { supersedeGitHubListScrollRestore } from '../../task-page-github-list-scroll-restore'
+import { supersedeGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 export function TaskPageGitHubList({
   model
 }: {

@@ -1,6 +1,7 @@
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import type { AgentSessionTurnActivity } from './agent-session-wire'
+import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { normalizePromptField } from './agent-status-field-normalization'
 import { describeActiveToolCall, formatActiveToolLabel } from './native-chat-tool-activity'
 
@@ -73,36 +74,27 @@ function repeatsRecentToolLabel(text: string, labels: ReadonlySet<string>): bool
   return false
 }
 
-/** Prefer provider-authored activity copy; callers provide the broad fallback. */
+/** The live provider activity for this turn; callers provide the broad fallback.
+ *  Journal rows are history, not the present, so none of them ever becomes this line. */
 export function selectStructuredAgentTurnActivity(
   items: readonly AgentJournalRenderItem[],
   turnId: string | null,
   providerActivity?: AgentSessionTurnActivity | null
 ): NativeChatTurnActivity | null {
-  if (!turnId) {
+  if (!turnId || providerActivity?.turnId !== turnId) {
+    return null
+  }
+  const text = activityLine(providerActivity.text)
+  if (!text) {
     return null
   }
   const turnStartIndex = items.findLastIndex((item) => {
     const turn = readAgentJournalTurn(item.body)
     return turn?.turnId === turnId && turn.state === 'running'
   })
-  const turnItems = items.slice(Math.max(0, turnStartIndex))
-  const toolLabels = recentToolActivityLabels(turnItems)
-  if (providerActivity?.turnId === turnId) {
-    const text = activityLine(providerActivity.text)
-    if (text && !repeatsRecentToolLabel(text, toolLabels)) {
-      return { kind: 'description', text }
-    }
-  }
-  for (let index = turnItems.length - 1; index >= 0; index -= 1) {
-    const body = turnItems[index]?.body
-    if (body?.kind !== 'status' || readAgentJournalTurn(body) || body.providerFrame) {
-      continue
-    }
-    const text = activityLine(body.text)
-    if (text && !repeatsRecentToolLabel(text, toolLabels)) {
-      return { kind: 'description', text }
-    }
-  }
-  return null
+  // Root-scoped: a subagent's tool label must not suppress the parent's own line.
+  const turnItems = items.slice(Math.max(0, turnStartIndex)).filter(isRootAgentJournalItem)
+  return repeatsRecentToolLabel(text, recentToolActivityLabels(turnItems))
+    ? null
+    : { kind: 'description', text }
 }

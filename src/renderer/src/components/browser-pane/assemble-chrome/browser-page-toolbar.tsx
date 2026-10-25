@@ -1,6 +1,8 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { translate } from '@/i18n/i18n'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '@/store'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
@@ -9,7 +11,14 @@ import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import { SshEgressIndicator } from './browser-egress-indicator'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
-import { readBrowserHtmlArtifactRequest } from '../describe-page/browser-artifact-upload'
+import {
+  getShareableBrowserArtifactFile,
+  readBrowserHtmlArtifactRequest
+} from '../describe-page/browser-artifact-upload'
+import {
+  canOpenBrowserFileInWorkspaceEditor,
+  openBrowserFileSource
+} from '../navigate/browser-file-editor-open'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type {
   BrowserPageConversionOrigin,
@@ -35,6 +44,7 @@ export function BrowserPageToolbar({
   convertedFrom,
   convertedTo,
   loading,
+  loadFailed,
   webviewRef,
   reloadMenuOpen,
   setReloadMenuOpen,
@@ -75,6 +85,7 @@ export function BrowserPageToolbar({
   /** Set on a page Back returned to; Forward re-crosses it once guest history runs out. */
   convertedTo?: BrowserPageConversionOrigin | null
   loading: boolean
+  loadFailed: boolean
   webviewRef: RefObject<Electron.WebviewTag | null>
   reloadMenuOpen: boolean
   setReloadMenuOpen: Dispatch<SetStateAction<boolean>>
@@ -102,13 +113,33 @@ export function BrowserPageToolbar({
   currentBrowserUrl: string
   externalUrl: string | null
 }): React.JSX.Element {
+  const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
+  const browserTourStep = useAppStore((state) =>
+    state.activeContextualTourId === 'browser' ? state.activeContextualTourStepIndex : null
+  )
+  const pinnedStage =
+    browserTourStep === 0
+      ? ('grab' as const)
+      : browserTourStep === 1
+        ? ('annotate' as const)
+        : undefined
+  const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
+  // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
+  const canOpenSourceFile = useAppStore(
+    (state) => localHtmlFilePath !== null && canOpenBrowserFileInWorkspaceEditor(state, worktreeId)
+  )
+  const openSourceFile =
+    canOpenSourceFile && localHtmlFilePath !== null
+      ? () => openBrowserFileSource(worktreeId, localHtmlFilePath)
+      : null
+
   return (
     <BrowserChromeToolbar
       showTourAnchors
+      pinnedStage={pinnedStage}
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),
-        loading,
         // Why the fallbacks: guest history cannot survive a conversion (the guest was replaced),
         // so once it runs out Back returns across the conversion — and Forward re-crosses it —
         // instead of going dead.
@@ -135,6 +166,7 @@ export function BrowserPageToolbar({
       }}
       addressSlot={
         <BrowserAddressBar
+          pageId={browserPageId}
           value={addressBarValue}
           onChange={setAddressBarValue}
           onSubmit={submitAddressBar}
@@ -145,6 +177,8 @@ export function BrowserPageToolbar({
           inputRef={addressBarInputRef}
           dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
           leadingIcon={<SshEgressIndicator worktreeId={worktreeId} />}
+          loading={loading}
+          loadFailed={loadFailed}
         />
       }
       reloadControl={
@@ -152,7 +186,7 @@ export function BrowserPageToolbar({
           menuOpen={reloadMenuOpen}
           onMenuOpenChange={setReloadMenuOpen}
           label={reloadButtonLabel}
-          loading={loading}
+          showStop={reloadButtonLabelKind === 'stop'}
           showShortcutHint={reloadButtonLabelKind === 'reload'}
           reloadShortcut={reloadShortcut}
           hardReloadShortcut={hardReloadShortcut}
@@ -161,12 +195,15 @@ export function BrowserPageToolbar({
           onHardReload={() => runReloadTrigger('hard-reload')}
         />
       }
-      importControl={<BrowserImportHintButton profileId={sessionProfileId} />}
+      importControl={(compact) => (
+        <BrowserImportHintButton profileId={sessionProfileId} compact={compact} />
+      )}
       elementTools={{
         activeIntent: grab.state !== 'idle' ? grabIntent : null,
         onStartIntent: startGrabIntent,
         disabled: isBlankTab || markupIsActive,
         grabShortcutLabel: grabElementShortcut,
+        annotateShortcutLabel: annotateElementShortcut,
         annotationCount: browserAnnotationsLength
       }}
       markup={{
@@ -176,13 +213,16 @@ export function BrowserPageToolbar({
         canShowDiscoveryHint: isActive
       }}
       shareControl={
-        shareableArtifactFile ? (
-          <ArtifactPublishButton
-            sourceKey={shareableArtifactFile.filePath}
-            className="h-7 w-7"
-            createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
-          />
-        ) : null
+        shareableArtifactFile
+          ? (control) => {
+              const props = {
+                sourceKey: shareableArtifactFile.filePath,
+                className: 'h-7 w-7',
+                createRequest: () => readBrowserHtmlArtifactRequest(currentBrowserUrl)
+              }
+              return <ArtifactPublishButton {...props} {...control} />
+            }
+          : undefined
       }
       viewSource={{
         onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
@@ -204,7 +244,8 @@ export function BrowserPageToolbar({
         ),
         disabled: !externalUrl
       }}
-      overflowMenu={
+      // oxlint-disable-next-line react-doctor/no-unstable-nested-components -- BrowserChromeToolbar calls this as a function, so BrowserToolbarMenu stays one stable component.
+      overflowMenu={(overflow) => (
         <BrowserToolbarMenu
           currentProfileId={sessionProfileId}
           workspaceId={workspaceId}
@@ -212,8 +253,10 @@ export function BrowserPageToolbar({
           viewportPresetId={viewportPresetId}
           onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
           isActive={isActive}
+          onOpenSourceFile={openSourceFile}
+          overflow={overflow}
         />
-      }
+      )}
     />
   )
 }

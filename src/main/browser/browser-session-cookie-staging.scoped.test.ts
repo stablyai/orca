@@ -8,9 +8,9 @@ const { appGetPathMock } = vi.hoisted(() => ({ appGetPathMock: vi.fn() }))
 
 vi.mock('electron', () => ({ app: { getPath: appGetPathMock } }))
 
-import { importedDomainScope } from './browser-cookie-import-policy'
-import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
-import { prepareStagedCookiesForImport } from './browser-cookie-staged-import'
+import { importedDomainScope } from './cookies/browser-cookie-import-policy'
+import { createChromiumCookieTestDatabase } from './cookies/browser-cookie-import-test-database'
+import { prepareStagedCookiesForImport } from './cookies/browser-cookie-staged-import'
 import {
   applyPendingBrowserCookieImports,
   setPendingBrowserCookieImport
@@ -151,7 +151,7 @@ describe('scoped pending browser cookie imports', () => {
     expect(loadBrowserSessionMeta(() => metaPath, PARTITION).pendingCookieImports).toEqual({
       [PARTITION]: { format: 'scoped-v1', path: stagedPath }
     })
-    // Why: both SQLite handles must be closed after failure so Windows can read the retry file.
+    // Closed SQLite handles let Windows copy the retry file.
     expect(() => copyFileSync(stagedPath, `${stagedPath}.copy`)).not.toThrow()
   })
 
@@ -166,7 +166,6 @@ describe('scoped pending browser cookie imports', () => {
 
     applyPending()
 
-    // With neither modern nor legacy DB present, replay uses Chromium's legacy fallback path.
     const replayedPath = join(tmpDir, 'Partitions', 'test', 'Cookies')
     expect(readCookies(replayedPath)).toEqual([
       { host_key: '.a.example.com', name: 'new-a', value: 'imported' },

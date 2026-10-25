@@ -1,0 +1,33 @@
+name: Restore xterm build dependencies
+description: Reuse installed dependencies for the pinned upstream checkout.
+outputs:
+  cache-key:
+    description: Exact dependency cache key.
+    value: ${{ steps.restore.outputs.cache-primary-key }}
+  cache-hit:
+    description: Whether the exact installed dependency cache was restored.
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - id: runtime
+      shell: bash
+      run: |
+        . /etc/os-release
+        echo "image=$ID-$VERSION_ID" >> "$GITHUB_OUTPUT"
+        echo "node=$(node --version)" >> "$GITHUB_OUTPUT"
+    - id: restore
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          ${{ runner.temp }}/xterm-patch-build/upstream/.git
+          ${{ runner.temp }}/xterm-patch-build/upstream/node_modules
+        key: xterm-dependencies-v1-${{ runner.os }}-${{ steps.runtime.outputs.image }}-${{ runner.arch }}-${{ steps.runtime.outputs.node }}-${{ hashFiles('config/patches/xterm-upstream.json', 'config/scripts/regenerate-xterm-patches.mjs', 'config/scripts/xterm-patch-text.mjs', '.github/actions/prepare-xterm-dependencies/action.yml') }}
+    - name: Restore download cache on an installed-dependency miss
+      if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          ~/.npm
+          ${{ runner.temp }}/xterm-patch-build/upstream/.git
+        key: xterm-upstream-${{ hashFiles('config/patches/xterm-upstream.json') }}

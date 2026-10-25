@@ -1,6 +1,7 @@
 // Worktree add/move/remove/rollback rewrite the `.git` marker the WSL Git route was derived from.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeModule from './worktree'
+import type * as WorktreePreparationLock from './worktree-preparation-lock'
 
 const {
   gitExecFileAsyncMock,
@@ -25,13 +26,6 @@ vi.mock('./status', () => ({
   runWithGitReadCacheInvalidation: <T>(run: () => Promise<T>) => run()
 }))
 
-// Default: the checkout cannot be renamed aside, so removal deletes it in place.
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: vi.fn().mockResolvedValue(undefined),
-  restoreWorktreeDirectoryFromTrash: vi.fn().mockResolvedValue(true),
-  scheduleWorktreeTrashDeletion: vi.fn()
-}))
-
 vi.mock('./worktree', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeModule>()),
   resolveWorktreeAddBaseContext: vi.fn(async () => ({ effectiveBase: 'origin/main' })),
@@ -43,6 +37,14 @@ vi.mock('./worktree', async (importOriginal) => ({
 vi.mock('./worktree-scan-cache', () => ({
   bumpWorktreeScanGeneration: vi.fn(),
   listWorktrees: listWorktreesMock
+}))
+
+vi.mock('./worktree-preparation-lock', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreePreparationLock>()),
+  lockWorktreePreparation: vi.fn(async () => '/owned-lock'),
+  verifyWorktreePreparationLock: vi.fn(async () => '/owned-lock'),
+  verifyWorktreePreparationLockAtPath: vi.fn(),
+  unlockWorktreePreparationAtPath: vi.fn()
 }))
 
 import { addWorktree } from './worktree-add'
@@ -127,7 +129,7 @@ describe('worktree mutations invalidate the WSL linked-worktree Git route', () =
   it('drops the route after a prepared worktree is discarded', async () => {
     seedWslLinkedWorktreeGitRoutingForTests(LINKED)
 
-    await discardPreparedWorktree(REPO, LINKED)
+    await discardPreparedWorktree(REPO, LINKED, {}, 'owner')
 
     expect(hasCachedHostRoute(LINKED)).toBe(false)
   })
@@ -140,11 +142,41 @@ describe('worktree mutations invalidate the WSL linked-worktree Git route', () =
     expect(hasCachedHostRoute(PREPARED)).toBe(false)
   })
 
+  it('reads and materializes the barrier tip on the preparation Git host', async () => {
+    const head = 'b'.repeat(40)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: `${head}\n`, stderr: '' })
+    await prepareWorktreeCreateCheckout(
+      REPO,
+      PREPARED,
+      'refs/remotes/origin/main',
+      'owner',
+      { wslDistro: 'Ubuntu' },
+      Promise.resolve()
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'],
+      { cwd: REPO, wslDistro: 'Ubuntu' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['reset', '--hard', head],
+      expect.objectContaining({ cwd: PREPARED, wslDistro: 'Ubuntu' })
+    )
+  })
+
   it('drops both routes after the prepared checkout is moved into place', async () => {
     seedWslLinkedWorktreeGitRoutingForTests(PREPARED)
     seedWslLinkedWorktreeGitRoutingForTests(LINKED)
 
-    await finalizePreparedWorktree(REPO, PREPARED, LINKED, 'feature', 'origin/main')
+    await finalizePreparedWorktree(
+      REPO,
+      PREPARED,
+      LINKED,
+      'feature',
+      'origin/main',
+      false,
+      {},
+      'owner'
+    )
 
     expect(hasCachedHostRoute(PREPARED)).toBe(false)
     expect(hasCachedHostRoute(LINKED)).toBe(false)
@@ -160,7 +192,7 @@ describe('worktree mutations invalidate the WSL linked-worktree Git route', () =
     )
 
     await expect(
-      finalizePreparedWorktree(REPO, PREPARED, LINKED, 'feature', 'origin/main')
+      finalizePreparedWorktree(REPO, PREPARED, LINKED, 'feature', 'origin/main', false, {}, 'owner')
     ).rejects.toThrow('destination exists')
 
     expect(hasCachedHostRoute(PREPARED)).toBe(false)

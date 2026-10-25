@@ -3,7 +3,7 @@ import type { ChildProcess } from 'node:child_process'
 import { createServer, type AddressInfo } from 'node:net'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from '../ssh/ssh-connection'
+import type { SshConnection } from '../ssh/connection/ssh-connection'
 import type { SshProviderEpoch } from '../../shared/ssh-types'
 import { resolveSshBrowserNetworkExecutionRoute } from './ssh-browser-network-execution-route'
 
@@ -240,7 +240,6 @@ describe('SSH browser network execution route', () => {
     socket.on('error', (error) => events.push(`error:${error.message}`))
     socket.on('close', () => events.push('close'))
 
-    // A bare close reaches the tunnel session as a pre-connect close, which fences the whole tunnel.
     await vi.waitFor(() => expect(events).toContain('close'))
     expect(events[0]).toBe('error:browser_tunnel_execution_host_stale')
     await route.close()

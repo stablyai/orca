@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
@@ -6,11 +7,13 @@ import type {
 } from '../../../../shared/managed-account-types'
 import {
   buildClaudeStatusSwitchGroups,
+  resolveClaudeStatusAccountState
+} from './status-bar-claude-accounts'
+import {
   buildCodexStatusSwitchGroups,
-  getStatusBarPreferredWslDistro,
-  resolveClaudeStatusAccountState,
   resolveCodexStatusAccountState
-} from './StatusBar'
+} from './status-bar-codex-accounts'
+import { getStatusBarPreferredWslDistro } from './status-bar-runtime-targets'
 
 const hostLabel = navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 
@@ -162,6 +165,51 @@ describe('status bar runtime switch groups', () => {
     ])
   })
 
+  it("labels Claude rows with their folder's login and keeps one needing sign-in unselectable", () => {
+    const summary = (
+      id: string,
+      email: string,
+      extra: Partial<ClaudeRateLimitAccountsState['accounts'][number]> = {}
+    ) => ({
+      id,
+      email,
+      managedAuthRuntime: 'host' as const,
+      wslDistro: null,
+      authMethod: 'subscription-oauth' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1,
+      ...extra
+    })
+    const runtimeState: ClaudeRateLimitAccountsState = {
+      accounts: [
+        summary('legacy', 'old@example.test', { needsSignIn: true }),
+        summary('relabelled', 'now@example.test')
+      ],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    // Local settings carry neither; the switcher must learn both from the host.
+    const settings: GlobalSettings = {
+      ...getDefaultSettings('/tmp'),
+      claudeManagedAccounts: [
+        { ...summary('legacy', 'old@example.test'), managedAuthPath: '' },
+        { ...summary('relabelled', 'added-as@example.test'), managedAuthPath: '' }
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    const state = resolveClaudeStatusAccountState(settings, runtimeState, null)
+    const [host] = buildClaudeStatusSwitchGroups(state, { runtime: 'host', wslDistro: null })
+    expect(
+      host.targets.map((target) => [target.label, target.disabled ?? false, target.hint ?? null])
+    ).toEqual([
+      ['System default', false, null],
+      ['old@example.test', true, 'Sign in again to use this account'],
+      ['now@example.test', false, null]
+    ])
+  })
+
   it('keeps Claude WSL system-default available without managed Claude accounts', () => {
     const state: ClaudeRateLimitAccountsState = {
       accounts: [],
@@ -278,13 +326,12 @@ describe('status bar runtime switch groups', () => {
       ]
     } as GlobalSettings
 
-    expect(resolveCodexStatusAccountState(settings, remoteState)).toBe(remoteState)
+    expect(resolveCodexStatusAccountState(settings, remoteState, 'env-1')).toBe(remoteState)
     // Without a remote owner, settings-derived accounts win as before.
     expect(
-      resolveCodexStatusAccountState(
-        { ...settings, activeRuntimeEnvironmentId: null },
-        remoteState
-      ).accounts.map((account) => account.id)
+      resolveCodexStatusAccountState(settings, remoteState, null).accounts.map(
+        (account) => account.id
+      )
     ).toEqual(['desktop-codex-1'])
   })
 
@@ -311,12 +358,11 @@ describe('status bar runtime switch groups', () => {
       ]
     } as GlobalSettings
 
-    expect(resolveClaudeStatusAccountState(settings, remoteState)).toBe(remoteState)
+    expect(resolveClaudeStatusAccountState(settings, remoteState, 'env-1')).toBe(remoteState)
     expect(
-      resolveClaudeStatusAccountState(
-        { ...settings, activeRuntimeEnvironmentId: '   ' },
-        remoteState
-      ).accounts.map((account) => account.id)
+      resolveClaudeStatusAccountState(settings, remoteState, null).accounts.map(
+        (account) => account.id
+      )
     ).toEqual(['desktop-claude-1'])
   })
 })

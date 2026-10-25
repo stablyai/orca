@@ -1,9 +1,9 @@
-import { spawnSync } from 'node:child_process'
+import { runProcessSync } from '@orca/process-host'
 import fs from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { resolveMobileTypecheckCompiler } from './mobile-typecheck-compiler.mjs'
 
 // Ratchet gate for the mobile test typecheck.
 //
@@ -23,10 +23,6 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 // disappears from this gate silently.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
-    'scripts/rpc-recording-pin-guard.test.ts',
-    'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
-  ],
-  [
     'src/tasks/agent-launch-mobile-replay.test.ts',
     'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
   ],
@@ -35,8 +31,16 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
     'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
   ],
   [
+    'src/test-support/rpc-recording/recorded-request-params.test.ts',
+    'Node-side: imports the desktop RPC dispatcher, checked against @types/node rather than RN libs'
+  ],
+  [
     'src/transport/mobile-relay-browser-cancel-budget.test.ts',
-    'Node-side: imports src/shared/child-process, checked against @types/node rather than RN libs'
+    'Node-side: imports @orca/process-host, checked against @types/node rather than RN libs'
+  ],
+  [
+    'src/transport/mobile-web-bundle-host-slow-link.test.ts',
+    'Node-side: imports the desktop bundle RPC handlers, checked against @types/node rather than RN libs'
   ]
 ])
 
@@ -144,26 +148,34 @@ export function diffBaseline(current, baseline) {
   }
 }
 
-// Run tsc's JS entry on this Node rather than the node_modules/.bin shim, which is a POSIX shell
-// script: on Windows the shim is tsc.CMD and an extensionless path gets .exe appended.
-function runTsc(root, args) {
-  const entry = createRequire(import.meta.url).resolve('typescript/lib/tsc.js')
-  const result = spawnSync(process.execPath, [entry, ...args], {
+function runTsc(root, args, compiler) {
+  return runProcessSync({
+    program: compiler.program,
+    args: [...compiler.args, ...args],
     cwd: root,
-    encoding: 'utf8',
-    shell: false,
-    maxBuffer: 64 * 1024 * 1024
+    timeoutMs: null,
+    maxOutputBytes: 64 * 1024 * 1024
   })
-  if (result.error) {
-    throw result.error
-  }
-  return result
 }
 
 // tsc exits non-zero on type errors, which is the expected state here, so only a crash is fatal.
 // One pass answers both questions: --listFiles names the program, the diagnostics name the failures.
 export function collectTypecheckPass(root = process.cwd()) {
-  const result = runTsc(root, ['--noEmit', '--listFiles', '-p', PROJECT])
+  const compiler = resolveMobileTypecheckCompiler()
+  const cache = process.env.ORCA_MOBILE_TYPECHECK_CACHE_DIR
+  const result = runTsc(
+    root,
+    [
+      '--noEmit',
+      '--listFiles',
+      '-p',
+      PROJECT,
+      ...(cache && !compiler.native
+        ? ['--incremental', '--tsBuildInfoFile', path.join(cache, 'tests.tsbuildinfo')]
+        : [])
+    ],
+    compiler
+  )
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
   return {
     failing: parseFailingFiles(output),

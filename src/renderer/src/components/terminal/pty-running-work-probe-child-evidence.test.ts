@@ -14,8 +14,6 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 
 import { probePtyRunningWork } from './pty-running-work-probe'
 
-const SETTINGS = { activeRuntimeEnvironmentId: null }
-
 describe('probePtyRunningWork child-process evidence', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -28,9 +26,9 @@ describe('probePtyRunningWork child-process evidence', () => {
       childProcessEvidence: 'no-children'
     })
 
-    await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
+    await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
 
-    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith(SETTINGS, 'pty-a', {
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith('pty-a', {
       scanChildProcesses: true
     })
   })
@@ -42,7 +40,7 @@ describe('probePtyRunningWork child-process evidence', () => {
       childProcessEvidence: 'unverifiable'
     })
 
-    const [probe] = await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
+    const [probe] = await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
 
     expect(probe).toMatchObject({
       verdict: 'unverifiable',
@@ -58,7 +56,7 @@ describe('probePtyRunningWork child-process evidence', () => {
       childProcessEvidence: 'no-children'
     })
 
-    const [probe] = await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
+    const [probe] = await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
 
     expect(probe?.verdict).toBe('exited')
   })
@@ -70,7 +68,7 @@ describe('probePtyRunningWork child-process evidence', () => {
       childProcessEvidence: 'children'
     })
 
-    const [probe] = await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
+    const [probe] = await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
 
     expect(probe?.verdict).toBe('live')
   })
@@ -85,8 +83,8 @@ describe('probePtyRunningWork child-process evidence', () => {
       hasChildProcesses: false
     })
 
-    const [live] = await probePtyRunningWork(SETTINGS, ['pty-a'], { timeoutMs: 1000 })
-    const [idle] = await probePtyRunningWork(SETTINGS, ['pty-b'], { timeoutMs: 1000 })
+    const [live] = await probePtyRunningWork(['pty-a'], { timeoutMs: 1000 })
+    const [idle] = await probePtyRunningWork(['pty-b'], { timeoutMs: 1000 })
 
     expect(live?.verdict).toBe('live')
     expect(idle?.verdict).toBe('exited')

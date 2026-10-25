@@ -11,8 +11,7 @@ export function resolveHooksJsonWritePath(configPath: string): string {
     return configPath
   }
   if (isSymlink) {
-    // Why: atomic rename on the link path disconnects dotfiles-managed hook
-    // configs. A dangling link must fail closed rather than be replaced.
+    // Resolve symlinks before atomic replacement; dangling links must fail closed.
     return realpathSync.native(configPath)
   }
   return configPath

@@ -20,6 +20,7 @@ vi.mock('../host-guest/webview-registry', () => ({
 import { SshRoutedBrowserPageGate } from './ssh-routed-browser-page-gate'
 
 const PAGE_IDS = ['page-1', 'page-2'] as const
+const initialHostState = useAppStore.getState()
 
 const settle = () =>
   act(async () => {
@@ -28,14 +29,25 @@ const settle = () =>
 
 describe('SshRoutedBrowserPageGate', () => {
   beforeEach(() => {
-    mocks.prepare.mockReset()
+    useAppStore.setState({
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          { targetId: 'target-a', status: 'connected', error: null, reconnectAttempt: 0 }
+        ]
+      ])
+    })
+    mocks.prepare.mockReset().mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
     mocks.destroyPersistentWebview.mockReset()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { browser: { prepareSshWorkspacePartition: mocks.prepare } }
     })
   })
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    useAppStore.setState({ sshConnectionStates: initialHostState.sshConnectionStates })
+  })
 
   it('renders children with no override for non-SSH workspaces without any prepare call', async () => {
     mocks.executionHostId = 'local'

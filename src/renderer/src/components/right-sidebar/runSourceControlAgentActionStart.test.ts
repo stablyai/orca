@@ -1,3 +1,4 @@
+import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -7,7 +8,12 @@ const mocks = vi.hoisted(() => ({
   onLaunched: vi.fn(),
   onSaveAgentDefault: vi.fn(),
   onStart: vi.fn(),
-  toastError: vi.fn()
+  toastError: vi.fn(),
+  mutationInFlight: vi.fn()
+}))
+vi.mock('@/runtime/runtime-git-status-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeGitStatusClientModule>()),
+  getRuntimeGitMutationInFlight: mocks.mutationInFlight
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -54,6 +60,34 @@ function buildArgs(
 describe('runSourceControlAgentActionStart', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
+  })
+
+  it('rejects conflict recovery before creating a tab when Git is still running', async () => {
+    const onLaunchAccepted = vi.fn()
+    mocks.mutationInFlight.mockResolvedValue({ inFlight: true })
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({
+          actionId: 'resolveConflicts',
+          onLaunchAccepted,
+          recoveryContext: { target: { kind: 'local' }, worktreeId: 'wt-1', worktreePath: '/repo' }
+        })
+      )
+    ).resolves.toBe(false)
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+    expect(onLaunchAccepted).not.toHaveBeenCalled()
+    expect(mocks.onLaunched).not.toHaveBeenCalled()
+    expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
+    expect(mocks.onClose).not.toHaveBeenCalled()
+  })
+
+  it('does not gate conflict launches that are not paused-operation recovery', async () => {
+    mocks.mutationInFlight.mockResolvedValue({ inFlight: true })
+    await runSourceControlAgentActionStart(buildArgs({ actionId: 'resolveConflicts' }))
+    expect(mocks.mutationInFlight).not.toHaveBeenCalled()
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalled()
   })
 
   it('waits for deferred prompt delivery before confirming a source-control launch', async () => {

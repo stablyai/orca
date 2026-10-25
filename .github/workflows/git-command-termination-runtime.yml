@@ -1,14 +1,19 @@
 name: Git command termination runtime
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/main/git/command-runner/spawned-command-tree-kill*'
       - '.github/workflows/git-command-termination-runtime.yml'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: git-command-termination-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   windows-exit:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: windows-latest
     timeout-minutes: 20
     env:

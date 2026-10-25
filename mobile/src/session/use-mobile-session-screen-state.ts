@@ -6,7 +6,7 @@ import {
   getDefaultTerminalAccessoryBuiltInIds,
   getVisibleTerminalAccessoryKeys
 } from '../terminal/terminal-accessory-layout'
-import type { CustomKey } from '../components/CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import { useTerminalLiveInputModePreference } from './use-terminal-live-input-mode-preference'
 import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
@@ -41,6 +41,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [input, setInput] = useState('')
   // Why: baseline terminal zoom reloaded on focus so a Settings → Terminal change applies in place (panes stay mounted).
   const [terminalTextScale, setTerminalTextScale] = useState(1)
+  const terminalTextScaleRevisionRef = useRef(0)
   // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
@@ -77,7 +78,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     useState<DiffNotesDelivery | null>(null)
   const [creating, setCreating] = useState(false)
   // Why: React state isn't a synchronous lock; this ref blocks a double-tap's second create in the same tick before `creating` re-renders.
-  const creatingTerminalRef = useRef(false)
+  // It holds the create's id, so an older launch can't free a newer one's lock.
+  const creatingTerminalRef = useRef<string | null>(null)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -122,6 +124,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   // Holds the host's spelling verbatim, and undefined once a setup reply arrives without one: only
   // the two arms below bind mic handlers, so anything else leaves the button as inert as it starts.
   const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
+  const [dictationEnabled, setDictationEnabled] = useState(true)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -142,6 +145,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setInput,
     terminalTextScale,
     setTerminalTextScale,
+    terminalTextScaleRevisionRef,
     autocompleteEnabled,
     setAutocompleteEnabled,
     terminalLinkOpenMode,
@@ -232,6 +236,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowDictationSetup,
     dictationMode,
     setDictationMode,
+    dictationEnabled,
+    setDictationEnabled,
     toastMessage,
     setToastMessage,
     toastOpacityRef,

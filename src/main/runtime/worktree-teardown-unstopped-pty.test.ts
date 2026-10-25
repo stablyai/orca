@@ -14,7 +14,7 @@ import {
   classifyWorktreeForceDeleteReason,
   isProvenLivePtyRemovalError
 } from '../../shared/worktree/removal'
-import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
+import type { IPtyProvider, PtyProcessInfo } from '../providers/pty-provider-contract'
 
 // Why: these tests advance fake timers *before* awaiting the teardown, so a
 // rejection mid-advance had no handler yet — Node reported it as an unhandled

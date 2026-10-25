@@ -65,16 +65,11 @@ export const gitHistoryRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * A refused compare leaves the row's file list untouched, so refusal is a skip, not a throw. A
- * reply that carries no readable `entries` is now an incompatible reply rather than an undefined
- * list: the row's `.catch` resolves it to "No file changes" instead of spinning forever.
- */
 export const gitCommitCompareRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'git.commit-compare-entries-or-skip',
+    name: 'git.commit-compare-entries',
     method: 'git.commitCompare',
-    acceptance: 'success-result-or-skip',
+    acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('commit-compare', gitCommitCompareResultSchema)
   })

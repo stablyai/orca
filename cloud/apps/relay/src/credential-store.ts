@@ -6,6 +6,8 @@ import {
   type DeviceResumeConfirmed
 } from '@orca-cloud/relay-contract'
 import type { RelayDatabase, SqlRow } from './database.js'
+import { HeapWindowReaper } from './heap-window-reaper.js'
+import { ResumeConfirmedAuditBuffer } from './resume-confirmed-audit-buffer.js'
 
 const CREDENTIAL_GRACE_MS = 24 * 60 * 60 * 1000
 // Released desktops validate invite expiry against their own clock with zero
@@ -20,9 +22,23 @@ const TERMINAL_INVITE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 // active/unconsumed AND inside its deadline, and every deadline is set at most 30s past insert, so
 // a settled row can never authorize anything again. A day is margin for forensics, not for reads.
 const INACTIVE_AUTHORIZATION_RETENTION_MS = 24 * 60 * 60 * 1000
+// A stored confirm result only answers a retry of the same request on the same connection basis,
+// and a different basis is refused as a tuple mismatch; a basis lives for one phone connection. A
+// week matches the pairing support window above.
+export const CONFIRM_RESULT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+// Nothing in the relay reads audit events back; 90 days covers support and incident questions.
+export const AUDIT_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000
 // Bounded so one cycle cannot hold row locks or grow WAL without limit; the backlog drains over
 // however many cycles it takes.
 const REAP_BATCH_ROWS = 5000
+// ~14 rows per page. With ~9 director ticks a minute the row cap is ~3M rows a day, so the 7.4M-row
+// backlog drains over two to three days; a walk that finds nothing reads ~1 MB a tick.
+const CONFIRM_RESULT_REAP_BUDGET = {
+  pagesPerStatement: 16,
+  maxPagesPerTick: 128,
+  maxRowsPerTick: 250,
+  budgetMs: 250
+}
 
 export type RelayIdentity = { userId: string; relayHostId: string }
 export type CredentialReservation = RelayIdentity & {
@@ -80,11 +96,81 @@ function string(row: SqlRow, field: string): string {
   return value
 }
 
+// Memory confirms renew a device at most this often (design decision 3: at most once a day of use).
+export const RESUME_RENEWAL_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+function tokenFamily(device: SqlRow) {
+  return {
+    currentVersion: number(device, 'current_version'),
+    currentHash: string(device, 'current_hash'),
+    currentExpiresAt: number(device, 'current_expires_at'),
+    graceVersion: optionalNumber(device, 'grace_version'),
+    graceHash: typeof device.grace_hash === 'string' ? device.grace_hash : undefined,
+    graceExpiresAt: optionalNumber(device, 'grace_expires_at'),
+    revokedAt: optionalNumber(device, 'revoked_at')
+  }
+}
+
+// A device row's answer to a resume token: null when revoked, or neither hash is still valid.
+function resumeReservation(
+  device: SqlRow,
+  relayHostId: string,
+  tokenHash: string,
+  reservationId: string,
+  now: number
+): CredentialReservation | null {
+  if (optionalNumber(device, 'revoked_at') !== undefined) return null
+  const currentHash = string(device, 'current_hash')
+  const currentExpiresAt = number(device, 'current_expires_at')
+  const graceHash = device.grace_hash
+  const graceExpiresAt = optionalNumber(device, 'grace_expires_at')
+  let acceptedAs: 'current' | 'grace'
+  let acceptedCredentialVersion: number
+  if (equalHash(currentHash, tokenHash) && currentExpiresAt > now) {
+    acceptedAs = 'current'
+    acceptedCredentialVersion = number(device, 'current_version')
+  } else if (
+    typeof graceHash === 'string' &&
+    equalHash(graceHash, tokenHash) &&
+    (graceExpiresAt ?? 0) > now
+  ) {
+    acceptedAs = 'grace'
+    acceptedCredentialVersion = number(device, 'grace_version')
+  } else {
+    return null
+  }
+  return {
+    userId: string(device, 'user_id'),
+    relayHostId,
+    relayDeviceId: string(device, 'relay_device_id'),
+    credentialKind: 'resume',
+    tokenHash,
+    reservationId,
+    leaseExpiresAt: now + RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs,
+    acceptedCredentialVersion,
+    acceptedAs,
+    resumeExpiresAt: currentExpiresAt,
+    graceExpiresAt
+  }
+}
+
 export class RelayCredentialStore {
+  // committed_at has no index, so a LIMIT delete would plan as a sequential scan of the whole table.
+  private readonly confirmResultReaper = new HeapWindowReaper(
+    'relay_confirm_results',
+    'committed_at <= ?',
+    CONFIRM_RESULT_REAP_BUDGET
+  )
+
+  // Only memory confirms add to it, so its flush timer never starts on a director.
+  readonly resumeAudit: ResumeConfirmedAuditBuffer
+
   constructor(
     private readonly database: RelayDatabase,
     private readonly now: () => number = Date.now
-  ) {}
+  ) {
+    this.resumeAudit = new ResumeConfirmedAuditBuffer(database, now)
+  }
 
   async createInvite(identity: RelayIdentity, relayDeviceId: string): Promise<{
     inviteToken: string
@@ -194,40 +280,31 @@ export class RelayCredentialStore {
         [relayHostId, tokenHash, tokenHash]
       )
       const device = deviceRows[0]
-      if (!device || optionalNumber(device, 'revoked_at') !== undefined) return null
-      const currentHash = string(device, 'current_hash')
-      const currentExpiresAt = number(device, 'current_expires_at')
-      const graceHash = device.grace_hash
-      const graceExpiresAt = optionalNumber(device, 'grace_expires_at')
-      let acceptedAs: 'current' | 'grace'
-      let acceptedCredentialVersion: number
-      if (equalHash(currentHash, tokenHash) && currentExpiresAt > now) {
-        acceptedAs = 'current'
-        acceptedCredentialVersion = number(device, 'current_version')
-      } else if (
-        typeof graceHash === 'string' &&
-        equalHash(graceHash, tokenHash) &&
-        (graceExpiresAt ?? 0) > now
-      ) {
-        acceptedAs = 'grace'
-        acceptedCredentialVersion = number(device, 'grace_version')
-      } else {
-        return null
-      }
-      return {
-        userId: string(device, 'user_id'),
-        relayHostId,
-        relayDeviceId: string(device, 'relay_device_id'),
-        credentialKind: 'resume',
-        tokenHash,
-        reservationId,
-        leaseExpiresAt: now + RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs,
-        acceptedCredentialVersion,
-        acceptedAs,
-        resumeExpiresAt: currentExpiresAt,
-        graceExpiresAt
-      }
+      return device ? resumeReservation(device, relayHostId, tokenHash, reservationId, now) : null
     })
+  }
+
+  // Step 6's one-read resume. Only `none` may fall through to the invite path: a device row
+  // that refuses this token closes the phone (4401), as reserveCredential would.
+  async lookupResume(
+    relayHostId: string,
+    token: string,
+    reservationId: string = randomUUID()
+  ): Promise<
+    | { outcome: 'none' }
+    | { outcome: 'refused' }
+    | { outcome: 'resume'; reservation: CredentialReservation }
+  > {
+    const tokenHash = hashCredential(token)
+    const rows = await this.database.query(
+      `SELECT * FROM relay_devices
+       WHERE relay_host_id = ? AND (current_hash = ? OR grace_hash = ?)`,
+      [relayHostId, tokenHash, tokenHash]
+    )
+    const device = rows[0]
+    if (!device) return { outcome: 'none' }
+    const reservation = resumeReservation(device, relayHostId, tokenHash, reservationId, this.now())
+    return reservation ? { outcome: 'resume', reservation } : { outcome: 'refused' }
   }
 
   async recordConnectionBasis(input: CredentialReservation & {
@@ -461,19 +538,7 @@ export class RelayCredentialStore {
       const device = devices[0]
       if (!device) throw new RelayStoreError('credential_not_found')
       const acceptedVersion = number(basis, 'accepted_credential_version')
-      const decision = decideResumeCommit(
-        {
-          currentVersion: number(device, 'current_version'),
-          currentHash: string(device, 'current_hash'),
-          currentExpiresAt: number(device, 'current_expires_at'),
-          graceVersion: optionalNumber(device, 'grace_version'),
-          graceHash: typeof device.grace_hash === 'string' ? device.grace_hash : undefined,
-          graceExpiresAt: optionalNumber(device, 'grace_expires_at'),
-          revokedAt: optionalNumber(device, 'revoked_at')
-        },
-        acceptedVersion,
-        now
-      )
+      const decision = decideResumeCommit(tokenFamily(device), acceptedVersion, now)
       if (decision.startsWith('reject-')) throw new RelayStoreError(decision)
       const renewed = decision === 'renew-current'
       const resumeExpiresAt = renewed
@@ -525,6 +590,82 @@ export class RelayCredentialStore {
     })
   }
 
+  // Step 6's confirm for a basis the cell holds in memory: one fresh device read, and a renewal
+  // write at most once a day per device. A current-version confirm always answers renewed:true
+  // with the expiry the database now holds, so a phone keeps scheduling its renewals.
+  async confirmMemoryResume(
+    input: RelayIdentity & {
+      reqId: string
+      basisConnId: string
+      relayDeviceId: string
+      acceptedCredentialVersion: number
+      acceptedAs: 'current' | 'grace'
+    },
+    options: { onRenewalFailure?: (error: unknown) => void } = {}
+  ): Promise<DeviceResumeConfirmed> {
+    const now = this.now()
+    const devices = await this.database.query(
+      `SELECT * FROM relay_devices
+       WHERE user_id = ? AND relay_host_id = ? AND relay_device_id = ?`,
+      [input.userId, input.relayHostId, input.relayDeviceId]
+    )
+    const device = devices[0]
+    if (!device) throw new RelayStoreError('credential_not_found')
+    const decision = decideResumeCommit(tokenFamily(device), input.acceptedCredentialVersion, now)
+    if (decision.startsWith('reject-')) throw new RelayStoreError(decision)
+    const renewed = decision === 'renew-current'
+    let resumeExpiresAt = number(device, 'current_expires_at')
+    const renewalDue = resumeExpiresAt < now + RELAY_PROTOCOL_LIMITS.resumeTtlMs - RESUME_RENEWAL_INTERVAL_MS
+    if (renewed && renewalDue) {
+      // A failing renewal still answers the expiry the database holds, but must stay visible:
+      // left failing, phones age toward re-pairing.
+      resumeExpiresAt = await this.renewResume(input, device, now).catch((error: unknown) => {
+        options.onRenewalFailure?.(error)
+        return resumeExpiresAt
+      })
+    }
+    this.resumeAudit.add({
+      userId: input.userId,
+      relayHostId: input.relayHostId,
+      relayDeviceId: input.relayDeviceId,
+      detail: { reqId: input.reqId, basisConnId: input.basisConnId, renewed }
+    })
+    return {
+      v: 1,
+      reqId: input.reqId,
+      currentVersion: number(device, 'current_version'),
+      acceptedAs: input.acceptedAs,
+      renewed,
+      resumeExpiresAt,
+      ...(optionalNumber(device, 'grace_expires_at') === undefined
+        ? {}
+        : { graceExpiresAt: optionalNumber(device, 'grace_expires_at') })
+    }
+  }
+
+  // Guarded by the row just read, so a revoke or install that committed since leaves it alone;
+  // the answer then keeps the expiry that was read, which the database still holds.
+  private async renewResume(
+    identity: RelayIdentity & { relayDeviceId: string },
+    device: SqlRow,
+    now: number
+  ): Promise<number> {
+    const renewedTo = now + RELAY_PROTOCOL_LIMITS.resumeTtlMs
+    const rows = await this.database.query(
+      `UPDATE relay_devices SET current_expires_at = ?, updated_at = ?
+       WHERE user_id = ? AND relay_host_id = ? AND relay_device_id = ?
+         AND current_version = ? AND current_hash = ? AND revoked_at IS NULL
+         AND current_expires_at < ?
+       RETURNING current_expires_at`,
+      [
+        renewedTo, now, identity.userId, identity.relayHostId, identity.relayDeviceId,
+        number(device, 'current_version'), string(device, 'current_hash'),
+        now + RELAY_PROTOCOL_LIMITS.resumeTtlMs - RESUME_RENEWAL_INTERVAL_MS
+      ]
+    )
+    return rows[0] ? number(rows[0], 'current_expires_at') : number(device, 'current_expires_at')
+  }
+
   async deactivateBasis(basisConnId: string): Promise<void> {
     await this.database.query(`UPDATE relay_connection_bases SET active = ? WHERE basis_conn_id = ?`, [
       0,
@@ -558,25 +699,9 @@ export class RelayCredentialStore {
     relayHostId: string,
     token: string
   ): Promise<{ userId: string; relayDeviceId: string } | null> {
-    const tokenHash = hashCredential(token)
-    const rows = await this.database.query(
-      `SELECT * FROM relay_devices
-       WHERE relay_host_id = ? AND (current_hash = ? OR grace_hash = ?)`,
-      [relayHostId, tokenHash, tokenHash]
-    )
-    const device = rows[0]
-    if (!device || optionalNumber(device, 'revoked_at') !== undefined) return null
-    const now = this.now()
-    const currentValid =
-      equalHash(string(device, 'current_hash'), tokenHash) &&
-      number(device, 'current_expires_at') > now
-    const graceHash = device.grace_hash
-    const graceValid =
-      typeof graceHash === 'string' &&
-      equalHash(graceHash, tokenHash) &&
-      (optionalNumber(device, 'grace_expires_at') ?? 0) > now
-    return currentValid || graceValid
-      ? { userId: string(device, 'user_id'), relayDeviceId: string(device, 'relay_device_id') }
+    const found = await this.lookupResume(relayHostId, token)
+    return found.outcome === 'resume'
+      ? { userId: found.reservation.userId, relayDeviceId: found.reservation.relayDeviceId }
       : null
   }
 
@@ -680,16 +805,29 @@ export class RelayCredentialStore {
       'consumed_at IS NOT NULL AND consumed_at <= ?',
       [now - INACTIVE_AUTHORIZATION_RETENTION_MS]
     )
+    await this.confirmResultReaper.reap(this.database, [now - CONFIRM_RESULT_RETENTION_MS])
+    // Ordered so the plan walks relay_audit_events_at from its oldest entry: unordered, a LIMIT
+    // can plan as a sequential scan that rereads the retained rows before reaching the old ones.
+    await this.reapBatch('relay_audit_events', 'at <= ?', [now - AUDIT_EVENT_RETENTION_MS], 'at')
   }
 
   // ctid/rowid, not the primary key: the physical address lets the delete re-find exactly the batch
-  // the subquery located instead of re-matching the predicate per row.
-  private async reapBatch(table: string, predicate: string, params: unknown[]): Promise<void> {
-    const address = this.database.dialect === 'sqlite' ? 'rowid' : 'ctid'
+  // the subquery located instead of re-matching the predicate per row. On Postgres an array of TIDs,
+  // not `IN`: IN can plan as a hash join over a sequential scan of the whole table.
+  private async reapBatch(
+    table: string,
+    predicate: string,
+    params: unknown[],
+    orderBy?: string
+  ): Promise<void> {
+    const sqlite = this.database.dialect === 'sqlite'
+    const address = sqlite ? 'rowid' : 'ctid'
+    const order = orderBy ? `ORDER BY ${orderBy} ` : ''
+    const batch = `SELECT ${address} FROM ${table} WHERE ${predicate} ${order}LIMIT ${REAP_BATCH_ROWS}`
     await this.database.query(
-      `DELETE FROM ${table} WHERE ${address} IN (
-         SELECT ${address} FROM ${table} WHERE ${predicate} LIMIT ${REAP_BATCH_ROWS}
-       )`,
+      sqlite
+        ? `DELETE FROM ${table} WHERE rowid IN (${batch})`
+        : `DELETE FROM ${table} WHERE ctid = ANY(ARRAY(${batch}))`,
       params
     )
   }

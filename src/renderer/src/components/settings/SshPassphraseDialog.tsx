@@ -61,7 +61,10 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   )
 
   const handleSubmit = useCallback(async () => {
-    if (!request || !value) {
+    // Why: keyboard-interactive servers may accept an empty response (e.g.
+    // plain Enter to trigger a default MFA push); passwords and passphrases
+    // are never empty.
+    if (!request || (!value && request.kind !== 'keyboard-interactive')) {
       return
     }
     setSubmitting(true)
@@ -186,7 +189,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
           <Input
             id="ssh-credential-input"
             ref={setInputRef}
-            type="password"
+            type={isKeyboardInteractive && request.echo ? 'text' : 'password'}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
@@ -224,7 +227,11 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
           >
             {translate('auto.components.settings.SshPassphraseDialog.d5a234456f', 'Cancel')}
           </Button>
-          <Button size="sm" onClick={() => void handleSubmit()} disabled={!value || submitting}>
+          <Button
+            size="sm"
+            onClick={() => void handleSubmit()}
+            disabled={(!value && !isKeyboardInteractive) || submitting}
+          >
             {isKeyboardInteractive
               ? translate('auto.components.settings.SshPassphraseDialog.c624f64b86', 'Continue')
               : isPassword

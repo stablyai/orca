@@ -115,6 +115,7 @@ const DEFAULT_INPUT: ProbeInput = {
 /** The hook mutates the model it is handed, so each render gets a fresh envelope around
  *  the same input identities — exactly how the picker projection feeds it in the app. */
 function createModel(input: ProbeInput): PickerProjectionModel {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every field the projection reads; unrelated screen actions are never called.
   return {
     activeGitHubProject: null,
     defaultGitHubPreset: 'open',
@@ -128,6 +129,14 @@ function createModel(input: ProbeInput): PickerProjectionModel {
     githubProjects: [],
     gitlabFilter: 'opened',
     hostedRepos: [],
+    jiraConnection: {
+      connected: false,
+      sites: [],
+      selection: null,
+      credentialError: null,
+      unavailableReason: null
+    },
+    jiraFilter: 'assigned',
     items: input.items,
     linearDisplayProperties: new Set(['state', 'priority']),
     linearFilter: 'all',

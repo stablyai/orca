@@ -1,18 +1,15 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult,
   AutomationPrecheckResult,
   AutomationRun,
-  ExternalAutomationManager,
-  ExternalAutomationRunsPage
+  ExternalAutomationManager
 } from '../../shared/automations-types'
 import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
 import type {
   ScopedExternalManagerActionRequest,
-  ScopedExternalManagerCreateRequest,
-  ScopedExternalManagerListRequest,
-  ScopedExternalManagerRunsRequest,
-  ScopedExternalManagerUpdateRequest
+  ScopedExternalManagerListRequest
 } from '../../shared/external-automation-scope'
 import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
 
@@ -23,20 +20,11 @@ export type ExternalAutomationManagerResult = {
   updatedAt: number
 }
 
-/**
- * Orca automation CRUD rides the local runtime RPC surface (`runtime:call`),
- * so this IPC api carries only what stays desktop-native: the external-manager
- * scope (probes run on this computer) and the dispatch-loop plumbing.
- */
+// Automation CRUD uses runtime RPC; this IPC API handles desktop probes and dispatch.
 export type AutomationsApi = {
   listExternalManagerForOwner: (
     request: ScopedExternalManagerListRequest
   ) => Promise<ExternalAutomationManagerResult>
-  listExternalRunsForOwner: (
-    request: ScopedExternalManagerRunsRequest
-  ) => Promise<ExternalAutomationRunsPage>
-  createExternalForOwner: (request: ScopedExternalManagerCreateRequest) => Promise<void>
-  updateExternalForOwner: (request: ScopedExternalManagerUpdateRequest) => Promise<void>
   runExternalActionForOwner: (request: ScopedExternalManagerActionRequest) => Promise<void>
   retainExternalScopes: (request: { owners: readonly AutomationOwnerRef[] }) => Promise<void>
   runPrecheck: (args: {
@@ -44,7 +32,11 @@ export type AutomationsApi = {
     runId: string
   }) => Promise<AutomationPrecheckResult | null>
   markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
-  snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
+  snapshotWorkspaceName: (args: {
+    workspaceId: string
+    hostId: ExecutionHostId
+    displayName: string
+  }) => Promise<number>
   rendererReady: () => Promise<void>
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
   onChanged: (callback: (payload: AutomationsChangedPayload) => void) => () => void

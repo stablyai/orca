@@ -17,6 +17,10 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('reports the wake as unsupported when a phone activates a worktree on headless serve', async () => {
@@ -58,7 +62,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       resumeSleepingAgents,
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
@@ -114,7 +117,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       resumeSleepingAgents,
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
@@ -138,15 +140,19 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false, instanceId: 'wt-instance' })
     }
-    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-      return metaById[worktreeId]
-    })
+    const setWorktreeMeta = vi.fn(
+      ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    )
     const worktreesChanged = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta
     } as never)
     runtime.setNotifier({
@@ -159,7 +165,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -180,7 +185,10 @@ describe('OrcaRuntimeService', () => {
     await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
 
     expect(setWorktreeMeta).toHaveBeenCalledTimes(1)
-    expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { isUnread: false })
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'local' }),
+      { isUnread: false }
+    )
     expect(worktreesChanged).toHaveBeenCalledTimes(1)
     expect(worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
   })
@@ -189,14 +197,18 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: true })
     }
-    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
-      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-      return metaById[worktreeId]
-    })
+    const setWorktreeMeta = vi.fn(
+      ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta
     } as never)
     runtime.setNotifier({
@@ -209,7 +221,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -267,7 +278,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -341,7 +351,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -442,7 +451,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -507,7 +515,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -559,7 +566,6 @@ describe('OrcaRuntimeService', () => {
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
       closeSessionTab,
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })

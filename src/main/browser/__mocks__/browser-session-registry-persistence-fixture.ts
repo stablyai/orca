@@ -2,16 +2,10 @@ import { vi } from 'vitest'
 
 type RegistryMock = ReturnType<typeof vi.fn>
 
-/**
- * In-memory filesystem and module mocks shared by the BrowserSessionRegistry persistence suites.
- *
- * `vi.doMock` is not hoisted, which is why it can live here: each test installs the mocks and then
- * dynamically imports the registry, so the relative specifiers below resolve against this
- * directory exactly as they did when this block lived inside the test file.
- */
 export const USER_DATA = '/user-data'
 export const META_PATH = `${USER_DATA}/browser-session-meta.json`
 export const IDENTITY_RECORD_PATH = `${USER_DATA}/browser-identity-mode.json`
+export const SITE_PERMISSIONS_PATH = `${USER_DATA}/browser-site-permissions.json`
 export const CLEAN_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.224 Safari/537.36'
 
@@ -30,7 +24,11 @@ export function seedMeta(fsState: FsState, meta: unknown): void {
   fsState.present.add(META_PATH)
 }
 
-/** Annotated rather than inferred: vitest's inferred mock type cannot be named across a module boundary. */
+export function seedSitePermissions(fsState: FsState, profiles: unknown): void {
+  fsState.files.set(SITE_PERMISSIONS_PATH, JSON.stringify({ version: 1, profiles }))
+  fsState.present.add(SITE_PERMISSIONS_PATH)
+}
+
 export type BrowserSessionRegistryMocks = {
   sessionFromPartitionMock: RegistryMock
   installBrowserSessionUserAgentPolicyMock: RegistryMock
@@ -72,8 +70,7 @@ export function installModuleMocks(
   }))
 
   vi.doMock('node:fs', () => ({
-    // The identity sidecar goes through writeFileDurableSync, so the in-memory fs has to
-    // answer its fsync/rename syscalls too or every identity write looks like a disk failure.
+    // Identity persistence uses the durable writer's fsync/rename path.
     closeSync: vi.fn(),
     fsyncSync: vi.fn(),
     openSync: vi.fn(() => 1),
@@ -99,8 +96,7 @@ export function installModuleMocks(
     readFileSync: vi.fn((p: string) => {
       const v = fsState.files.get(fsKey(p))
       if (v === undefined) {
-        // Carry the code: absent data reads as "missing", while a codeless throw would
-        // look "unreadable" and make every caller refuse to write.
+        // A missing error code would mark the file unreadable and block writes.
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
       return v
@@ -138,7 +134,8 @@ export function installModuleMocks(
       notifyPermissionDenied: browserManagerNotifyPermissionDeniedMock,
       handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock,
       installCertificateRequestGuard: vi.fn(),
-      removeCertificateRequestGuard: vi.fn()
+      removeCertificateRequestGuard: vi.fn(),
+      resolvePagePromptTarget: vi.fn(() => null)
     }
   }))
   vi.doMock('../browser-media-access', () => ({
@@ -160,9 +157,8 @@ export function installModuleMocks(
   vi.doMock('../../persistence/loading-store/user-data-path', () => ({
     getCanonicalUserDataPath: () => USER_DATA
   }))
-  // These suites model replay with an in-memory filesystem. The real file-backed SQLite merge has
-  // dedicated coverage; these fixtures are legacy unmarked images and keep the copy path.
-  vi.doMock('../browser-cookie-staged-import', () => ({
+  // Model legacy unmarked stages; real SQLite merges have separate file-backed coverage.
+  vi.doMock('../cookies/browser-cookie-staged-import', () => ({
     SCOPED_COOKIE_IMPORT_FORMAT: 'scoped-v1',
     applyScopedStagedCookieImport: vi.fn(() => false),
     isScopedStagedCookieImport: vi.fn(() => false),
@@ -183,8 +179,6 @@ export function installModuleMocks(
         fsState.files.set(targetKey, value)
       }
     }),
-    // Nothing on this path calls writeFileAtomically; it is here only to keep the module shape
-    // complete. The identity write goes through node:fs above, which is where failure is injected.
     writeFileAtomically: vi.fn((pathValue: string, data: string) => {
       const key = fsKey(pathValue)
       fsState.files.set(key, data)

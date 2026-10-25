@@ -8,10 +8,6 @@ import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sql
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 
-// Part B (#8864) bounds: discovery reads only the newest session identities and
-// recency fields, while the preview join reads parts of only the newest 100
-// messages of a session. These tests pin the observable effects.
-
 let tempDirs: string[] = []
 
 afterEach(() => {
@@ -191,9 +187,6 @@ describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
 
 describe('parseOpenCodeSqliteSession — bounded preview window', () => {
   it('surfaces the newest text previews and retains the full message count', async () => {
-    // Positive coverage of preview selection (newest OPENCODE_SQLITE_PREVIEW_LIMIT
-    // by recency) + full-count retention. The window bound itself is pinned by the
-    // discriminating test below (this all-text fixture would pass either way).
     const { db, path } = createTempDb()
     applySchema(db)
     const base = 1_777_634_000_000
@@ -215,9 +208,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
       platform: 'darwin'
     })
     expect(session).not.toBeNull()
-    // Full user/assistant count is retained for display accuracy.
     expect(session!.messageCount).toBe(105)
-    // The preview surfaces the newest text parts only.
     expect(session!.previewMessages).toHaveLength(5)
     const previewText = session!.previewMessages.map((m) => m.text)
     expect(previewText).not.toContain('OLDEST_PROMPT')
@@ -225,16 +216,12 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
   })
 
   it('excludes user text whose message falls outside the newest-100 window', async () => {
-    // Discriminating fixture: the newest 100 messages carry only non-text parts,
-    // so the window yields zero previews; the user text lives in older messages
-    // beyond the window. The pre-fix whole-session scan would surface that old
-    // text, so this fails if the 100-message window is reverted.
+    // Fill the recent window with non-text parts so stale text can surface only if the window is ignored.
     const { db, path } = createTempDb()
     applySchema(db)
     const base = 1_777_634_000_000
     insertSession(db, 'ses_window', base + 500_000)
 
-    // Older-than-window user messages with real text parts.
     for (let i = 0; i < 3; i++) {
       insertMessageWithPart(db, {
         id: `old_${i}`,
@@ -245,8 +232,6 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
         text: `OLD_USER_TEXT_${i}`
       })
     }
-    // 100 newer assistant messages whose only part is non-text (tool output), so
-    // they fill the newest-100 window but contribute no preview text.
     for (let i = 0; i < 100; i++) {
       insertMessageWithPart(db, {
         id: `new_${String(i).padStart(3, '0')}`,
@@ -265,9 +250,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
       platform: 'darwin'
     })
     expect(session).not.toBeNull()
-    // Full user/assistant count is retained (3 user + 100 assistant).
     expect(session!.messageCount).toBe(103)
-    // The window excludes the old user text; the newest 100 have no text parts.
     expect(session!.previewMessages).toHaveLength(0)
     expect(session!.previewMessages.map((m) => m.text)).not.toContain('OLD_USER_TEXT_0')
   })
@@ -282,7 +265,6 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
       timeCreated: 1_777_634_000_100,
       text: 'hello'
     })
-    // A tool-role message must not inflate the count.
     db.prepare(`INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)`).run(
       'msg_tool',
       'ses_roles',

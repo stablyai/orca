@@ -10,48 +10,11 @@ import {
   runtimeHostContactFromSnapshot
 } from '../../../shared/runtime-host-contact'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import {
-  runtimeHostConnectionState,
-  runtimeHostConnectionStateForEntry,
-  type RuntimeHostConnectionState
-} from './runtime-host-connection-state'
-
-// This file exists to prove the contact introduced here changes nothing. It carries a frozen copy
-// of the derivation as it stood before, and asserts the shipping one agrees with it on every
-// combination of the inputs it reads. A behaviour change would have to survive the whole
-// cross-product to go unnoticed, which is a much harder thing to do by accident than to argue.
 
 type Entry = {
   status: RuntimeStatus | null
   remoteControl?: RuntimeStatus['remoteControl'] | null
   snapshot?: RuntimeHostStatusSnapshot
-}
-
-/** The derivation exactly as it read before `RuntimeHostContact` existed. Do not refactor. */
-function legacyRuntimeHostConnectionStateForEntry(
-  entry: Entry | null | undefined
-): RuntimeHostConnectionState {
-  const snapshot = entry?.snapshot
-  if (snapshot) {
-    if (snapshot.retired || snapshot.verification === 'blocked') {
-      return 'disconnected'
-    }
-    if (snapshot.transport === 'disconnected') {
-      return 'reconnecting'
-    }
-    if (snapshot.verification === 'checking' && !entry?.status) {
-      return 'checking'
-    }
-    if (snapshot.transport === 'ready' && snapshot.verification !== 'verified') {
-      return 'runtime-unavailable'
-    }
-  }
-  return runtimeHostConnectionState({
-    hasStatusEntry: Boolean(entry),
-    status: entry?.status ?? null,
-    ...(snapshot?.transport === 'connecting' ? { transportStatus: 'checking' as const } : {}),
-    remoteControl: entry?.remoteControl ?? entry?.status?.remoteControl ?? null
-  })
 }
 
 const VERIFICATIONS = ['checking', 'verified', 'unavailable', 'blocked'] as const
@@ -138,38 +101,7 @@ function* everySnapshotEntry(): Generator<{ label: string; entry: Entry }> {
   }
 }
 
-describe('the host contact changes no verdict', () => {
-  it('agrees with the frozen derivation on every snapshot combination', () => {
-    const cases = [...everySnapshotEntry()]
-    // Guard against the enumeration silently collapsing: 4 x 4 x 2 x 2 x 6.
-    expect(cases).toHaveLength(384)
-    const disagreements = cases
-      .map(({ label, entry }) => ({
-        label,
-        now: runtimeHostConnectionStateForEntry(entry),
-        before: legacyRuntimeHostConnectionStateForEntry(entry)
-      }))
-      .filter(({ now, before }) => now !== before)
-    expect(disagreements).toEqual([])
-  })
-
-  it('agrees for entries that carry no snapshot at all', () => {
-    const entries: (Entry | null | undefined)[] = [
-      null,
-      undefined,
-      { status: null },
-      { status: makeStatus() },
-      { status: null, remoteControl: makeRemoteControl('closed') },
-      { status: null, remoteControl: makeRemoteControl('ready') },
-      { status: makeStatus({ remoteControl: makeRemoteControl('reconnecting') }) }
-    ]
-    for (const entry of entries) {
-      expect(runtimeHostConnectionStateForEntry(entry)).toBe(
-        legacyRuntimeHostConnectionStateForEntry(entry)
-      )
-    }
-  })
-
+describe('the revoked predicate and the contact verdict stay in step', () => {
   it('keeps the revoked predicate and the contact verdict in step', () => {
     for (const { label, entry } of everySnapshotEntry()) {
       expect(

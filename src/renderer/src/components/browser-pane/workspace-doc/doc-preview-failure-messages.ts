@@ -68,3 +68,17 @@ export function docPreviewDownloadBlockedNotice(): string {
     'Downloads are disabled in document previews.'
   )
 }
+
+export function docPreviewNotices(
+  isUnavailable: boolean,
+  downloadBlocked: boolean,
+  assetFailures: DocPreviewFileFailure[]
+): string[] {
+  // Nothing rendered on an unavailable preview, so a notice strip would be a footnote on a blank page.
+  return isUnavailable
+    ? []
+    : [
+        downloadBlocked ? docPreviewDownloadBlockedNotice() : null,
+        docPreviewAssetNotice(assetFailures)
+      ].filter((notice): notice is string => notice !== null)
+}

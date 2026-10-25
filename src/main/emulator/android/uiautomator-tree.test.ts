@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { EmulatorError } from '../emulator-errors'
 import { parseAndroidBounds, parseUiAutomatorXml } from './uiautomator-tree'
 
-// Realistic `uiautomator dump` output: an XML prolog, a <hierarchy> root, and
-// nested self-describing <node> elements (mix of container + self-closing leaf).
 const HIERARCHY_XML = `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 <hierarchy rotation="0">
   <node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.android.launcher3" content-desc="" checkable="false" clickable="false" enabled="true" focused="false" bounds="[0,0][1080,2340]">
@@ -55,7 +53,6 @@ describe('parseUiAutomatorXml', () => {
 
   it('omits string fields whose attribute is absent or empty', () => {
     const frame = parseUiAutomatorXml(HIERARCHY_XML).children[0]
-    // class is present, but text/resource-id/content-desc are "" -> omitted.
     expect('text' in frame).toBe(false)
     expect('resourceId' in frame).toBe(false)
     expect('contentDesc' in frame).toBe(false)

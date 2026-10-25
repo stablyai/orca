@@ -1,25 +1,24 @@
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { toast } from 'sonner'
 import {
   clearRuntimeCompatibilityCache,
-  markRuntimeEnvironmentCompatible,
-  unwrapRuntimeRpcResult
+  markRuntimeEnvironmentCompatible
 } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import { assertTerminalQuickCommandsStorable } from '../../../../shared/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from './runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import {
-  normalizeTuiAgentArgsRecord,
-  normalizeTuiAgentEnvRecord
-} from '../../../../shared/tui-agent-launch-defaults'
+import { sanitizeAgentLaunchProfileUpdates } from '../../../../shared/tui-agent-launch-defaults'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
@@ -35,6 +34,7 @@ import {
 import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -57,13 +57,6 @@ function normalizeRuntimeEnvironmentId(value: string | null | undefined): string
   return trimmed ? trimmed : null
 }
 
-function createOpenInApplicationId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  )
-}
-
 function normalizeSettingsUpdates(
   updates: Partial<GlobalSettings>,
   currentSettings: GlobalSettings | null
@@ -75,6 +68,8 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
       updates.terminalQuickCommands
     )
+    // The web client stores its own list without main's check, so refuse here too, before any write.
+    assertTerminalQuickCommandsStorable(sanitizedUpdates.terminalQuickCommands)
   }
   if ('terminalCustomThemes' in updates) {
     sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
@@ -97,20 +92,18 @@ function normalizeSettingsUpdates(
   }
   if ('openInApplications' in updates) {
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
-      createId: createOpenInApplicationId
+      createId: createBrowserUuid
     })
+  }
+  if ('nativeChatAppearance' in updates) {
+    sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
+      updates.nativeChatAppearance
+    )
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
   }
-  if ('agentDefaultArgs' in updates) {
-    sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
-    sanitizedUpdates.agentYoloDefaultsMigrated = true
-  }
-  if ('agentDefaultEnv' in updates) {
-    sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
-    sanitizedUpdates.agentYoloDefaultsMigrated = true
-  }
+  sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
   }
@@ -288,7 +281,8 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       }
       // Why: hydration is host-merged by downstream slices. Switching focus
       // should add/update the selected host without discarding other hosts.
-      await get().fetchRepos()
+      // Why: hydrate the newly chosen default host's catalog; other hosts keep theirs.
+      await get().fetchRepos({ runtimeEnvironmentId: nextId })
       await get().fetchAllWorktrees()
       await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()

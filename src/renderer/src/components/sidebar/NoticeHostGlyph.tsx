@@ -2,13 +2,9 @@ import React from 'react'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HostRowIcon } from '../host-row-icon'
-import { useAppStore } from '@/store'
+import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
-import {
-  isDisconnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
 
 type NoticeHostGlyphProps = {
   hostId: ExecutionHostId
@@ -32,14 +28,9 @@ export default function NoticeHostGlyph({
   const host = parseExecutionHostId(hostId)
   // Why the shared derivation, not raw truthiness: an absent entry means "not probed yet",
   // which is not the same verdict as a probe that came back unreachable.
-  const isDisconnected = useAppStore((s) => {
-    if (host?.kind !== 'runtime') {
-      return false
-    }
-    return isDisconnectedRuntimeHostState(
-      runtimeHostConnectionStateForEntry(s.runtimeStatusByEnvironmentId.get(host.environmentId))
-    )
-  })
+  const isDisconnected = useRuntimeHostDisconnected(
+    host?.kind === 'runtime' ? host.environmentId : null
+  )
 
   if (!host) {
     return null

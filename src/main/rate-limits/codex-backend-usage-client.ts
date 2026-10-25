@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import {
   classifyCodexRateLimitWindows,
   CODEX_SESSION_WINDOW_MINUTES,
@@ -7,7 +8,7 @@ import {
   type CodexRateWindowSnapshot
 } from './codex-rate-limit-window-classification'
 import {
-  createCodexBackendRequestSignal,
+  CODEX_BACKEND_TIMEOUT_MS,
   getCodexBackendAuthHeaders,
   type CodexBackendRequest
 } from './codex-backend-auth'
@@ -60,7 +61,7 @@ export async function fetchCodexRateLimitsViaBackend(
   request: CodexBackendRequest,
   options?: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits | null> {
-  const signal = createCodexBackendRequestSignal(options?.signal)
+  const signal = abortSignalWithTimeout(options?.signal, CODEX_BACKEND_TIMEOUT_MS)
   const headers = await getCodexBackendAuthHeaders(options, signal)
   if (!headers || signal.aborted) {
     return null

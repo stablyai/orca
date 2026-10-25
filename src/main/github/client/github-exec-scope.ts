@@ -24,11 +24,11 @@ export function githubPRStackExecutionScope(
 }
 
 export function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): boolean {
-  // Why: casing does not distinguish GitHub repos, but the same slug on different hosts does.
+  // Repository casing is insensitive; host identity still distinguishes equal slugs.
   return Boolean(left && right && githubRepoIdentityKey(left) === githubRepoIdentityKey(right))
 }
 
-// Why: exact-linked fallback has no dataRepo; derive its host-aware identity from the web URL for merged-PR membership checks.
+// Exact-linked fallback has no dataRepo; use its URL for host-aware merged-commit membership.
 export function ownerRepoFromPullRequestUrl(url: string): OwnerRepo | null {
   const match = url.match(/^https?:\/\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)\/pull\/\d+/)
   return match ? { owner: match[2], repo: match[3], host: match[1] } : null

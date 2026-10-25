@@ -2,19 +2,29 @@ import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 
-type Props = {
-  visible: boolean
+type ContentProps = {
   title: string
   message?: string
   confirmLabel?: string
-  cancelLabel?: string
+  /** `null` drops the Cancel button, for a notice that only needs acknowledging. */
+  cancelLabel?: string | null
   destructive?: boolean
-  onConfirm: () => void
+  /** Optional for a notice, whose one button only dismisses. */
+  onConfirm?: () => void
   onCancel: () => void
 }
 
-export function ConfirmModal({
-  visible,
+type Props = ContentProps & { visible: boolean }
+
+export function ConfirmModal({ visible, ...content }: Props) {
+  return (
+    <BottomDrawer visible={visible} onClose={content.onCancel}>
+      <ConfirmContent {...content} />
+    </BottomDrawer>
+  )
+}
+
+export function ConfirmContent({
   title,
   message,
   confirmLabel = 'Confirm',
@@ -22,20 +32,22 @@ export function ConfirmModal({
   destructive = false,
   onConfirm,
   onCancel
-}: Props) {
+}: ContentProps) {
   return (
-    <BottomDrawer visible={visible} onClose={onCancel}>
+    <>
       <View style={styles.content}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
       <View style={styles.buttons}>
-        <Pressable
-          style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
-          onPress={onCancel}
-        >
-          <Text style={styles.cancelText}>{cancelLabel}</Text>
-        </Pressable>
+        {cancelLabel === null ? null : (
+          <Pressable
+            style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
+            onPress={onCancel}
+          >
+            <Text style={styles.cancelText}>{cancelLabel}</Text>
+          </Pressable>
+        )}
         <Pressable
           style={({ pressed }) => [
             styles.button,
@@ -43,7 +55,7 @@ export function ConfirmModal({
             pressed && styles.pressed
           ]}
           onPress={() => {
-            onConfirm()
+            onConfirm?.()
             onCancel()
           }}
         >
@@ -52,7 +64,7 @@ export function ConfirmModal({
           </Text>
         </Pressable>
       </View>
-    </BottomDrawer>
+    </>
   )
 }
 

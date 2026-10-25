@@ -1,8 +1,10 @@
-import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  PaneResumeOutcome,
+  PaneStartStatus
+} from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -11,17 +13,18 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
-import type {
-  DirectSshLivePtyBinding,
-  DirectSshPaneRetryAttempt,
-  DirectSshPaneRetryHistory
-} from '../slices/direct-ssh-terminal-recovery'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import type { HostSessionSlices } from '@/lib/workspace-session-host-split'
-import type { AutomaticAgentResumeClaim, CodexRestartNotice } from './terminal-contracts'
+import type {
+  AccountRestartAgent,
+  AutomaticAgentResumeClaim,
+  CodexRestartNotice
+} from './terminal-contracts'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalActions } from './terminal-actions'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { PairedTerminalTabCloseIntentSlice } from './paired-terminal-tab-close-intent-actions'
 
 export type TerminalState = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -30,20 +33,21 @@ export type TerminalState = {
   activeTabIdByWorktree: Record<string, string | null>
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  unreadTerminalTabs: Record<string, StoredAgentAttentionUnread>
-  unreadTerminalPanes: Record<string, StoredAgentAttentionUnread>
-  unreadAgentCompletionPanes: Record<string, StoredAgentAttentionUnread>
   /** Scoped exit suppression and reference-counted shutdown ownership prevent teardown races. */
   suppressedPtyExitIds: Record<string, true>
   pendingPtyShutdownIds: Record<string, number>
-  pendingCodexPaneRestartIds: Record<string, true>
+  /** Account-switch restarts awaiting execution, keyed by the PTY they replace. */
+  pendingPaneAccountRestarts: Record<string, AccountRestartAgent>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
-  directSshPaneRetryByTabId: Record<string, DirectSshPaneRetryAttempt>
-  directSshLivePtyBindingByTabId: Record<string, DirectSshLivePtyBinding>
-  directSshPaneRetryHistoryByTabId: Record<string, DirectSshPaneRetryHistory>
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  /** Main's start of a pane's terminal, by pane key, as its layout frames publish it (layout-owner
+   *  build). Live state, never saved: a pane with an entry has no terminal of its own yet. */
+  terminalPaneStartsByPaneKey: Record<string, TerminalPaneStart>
+  /** Whether main's start of a pane resumed its agent, by pane key, for the terminal it names
+   *  (layout-owner build). Live state, never saved. */
+  terminalPaneResumeOutcomesByPaneKey: Record<string, TerminalPaneResumeOutcome>
   /** Ordinary-park scrollback, tabId -> leafId -> buffer. Never uploaded to a peer; see
    *  WorkspaceSessionState.localOnlyScrollbackByTabId. Read via resolveLeafScrollbackBuffers only. */
   localOnlyScrollbackByTabId: Record<string, Record<string, string>>
@@ -64,6 +68,8 @@ export type TerminalState = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      /** The agent launch the pane's own spawn starts, instead of `command`. */
+      agentLaunch?: AgentPaneLaunchRequest
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>
@@ -76,14 +82,6 @@ export type TerminalState = {
     }
   >
   pendingInitialCwdByTabId: Record<string, string>
-  pendingSetupSplitByTabId: Record<
-    string,
-    {
-      command: string
-      env?: Record<string, string>
-      direction: SetupSplitDirection
-    }
-  >
   pendingIssueCommandSplitByTabId: Record<
     string,
     {
@@ -153,7 +151,15 @@ export type TerminalState = {
   deferredSshReconnectTargets: string[]
   deferredSshSessionIdsByTabId: Record<string, string>
 }
-export type TerminalSlice = TerminalState & TerminalActions
+export type TerminalSlice = TerminalState & TerminalActions & PairedTerminalTabCloseIntentSlice
 
 export type TerminalStoreSet = Parameters<StateCreator<AppState, [], [], AppState>>[0]
 export type TerminalStoreGet = Parameters<StateCreator<AppState, [], [], AppState>>[1]
+
+export type TerminalPaneStart = { status: PaneStartStatus; reason?: string }
+/** `ptyGeneration` tells two starts under one terminal id apart (a daemon session id is reused). */
+export type TerminalPaneResumeOutcome = {
+  ptyId: string
+  ptyGeneration?: number
+  outcome: PaneResumeOutcome
+}

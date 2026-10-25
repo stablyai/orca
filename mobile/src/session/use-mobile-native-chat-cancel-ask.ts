@@ -1,4 +1,5 @@
 import { useCallback, type MutableRefObject } from 'react'
+import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat-agent-support'
 import type { RpcClient } from '../transport/rpc-client'
 import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
 
@@ -10,12 +11,18 @@ export function useMobileNativeChatCancelAsk(args: {
   enabled: boolean
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
-  /** Drops any in-flight paced answer writes before the Escape lands. */
+  agentRef: MutableRefObject<string | null>
+  /** Cancels unsent answer groups before issuing Escape. */
   cancelPending: () => void
   onSendError: (message: string) => void
 }): () => Promise<boolean> {
-  const { client, enabled, handleRef, deviceTokenRef, cancelPending, onSendError } = args
+  const { client, enabled, handleRef, deviceTokenRef, agentRef, cancelPending, onSendError } = args
   return useCallback(async (): Promise<boolean> => {
+    if (nativeChatAskRequiresTerminal(agentRef.current)) {
+      cancelPending()
+      onSendError('Answer this question in terminal view')
+      return false
+    }
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
       onSendError('Cancel not sent (disconnected)')
@@ -29,6 +36,7 @@ export function useMobileNativeChatCancelAsk(args: {
       terminal: handle,
       text: String.fromCharCode(27),
       enter: false,
+      requireWriteSettlement: true,
       ...(deviceTokenRef.current
         ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
         : {})
@@ -41,5 +49,5 @@ export function useMobileNativeChatCancelAsk(args: {
       onSendError('Cancel not sent')
     }
     return outcome === 'accepted'
-  }, [cancelPending, client, deviceTokenRef, enabled, handleRef, onSendError])
+  }, [agentRef, cancelPending, client, deviceTokenRef, enabled, handleRef, onSendError])
 }

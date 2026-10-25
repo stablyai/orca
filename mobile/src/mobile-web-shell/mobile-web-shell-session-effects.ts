@@ -1,8 +1,5 @@
 import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
-import {
-  isMobileWebBundleTransportFailure,
-  mobileWebBundleManifestRead
-} from '../transport/mobile-web-bundle-operations'
+import { mobileWebBundleManifestRead } from '../transport/mobile-web-bundle-operations'
 import { runRpcOperation } from '../transport/rpc-operation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GenerationStore } from './generation-store'
@@ -10,9 +7,12 @@ import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { generationDirectoryPath } from './generation-store-file-system'
 import type {
   CachedGeneration,
-  MobileWebShellReadFailure,
   MobileWebShellSessionEvent
 } from './mobile-web-shell-session-contract'
+import {
+  updateFailureCauseOf,
+  type MobileWebShellUpdateFailureCause
+} from './mobile-web-shell-update-failure'
 
 /**
  * The work the session's effects do: read the cache, read the manifest, download a generation.
@@ -26,8 +26,7 @@ export async function openCache(
   hostKey: string
 ): Promise<CachedGeneration | null> {
   try {
-    // Here and nowhere earlier: with the flag off no code path reaches this hook, so a store build
-    // never sweeps a cache it never wrote.
+    // Here and nowhere earlier: only a mounted shell sweeps, so nothing sweeps a cache it never wrote.
     await store.sweepStagedGenerations()
     const active = await store.readActiveGeneration(hostKey)
     return active === null
@@ -36,7 +35,14 @@ export async function openCache(
           buildId: active.buildId,
           directory: generationDirectoryPath(active.directory),
           totalBytes: active.manifest.totalBytes,
-          routes: active.manifest.routes
+          routes: active.manifest.routes,
+          compat: {
+            schemaVersion: active.manifest.schemaVersion,
+            runtimeProtocolVersion: active.manifest.runtimeProtocolVersion,
+            minCompatibleRuntimeProtocolVersion:
+              active.manifest.minCompatibleRuntimeProtocolVersion,
+            pageVersion: active.manifest.pageVersion
+          }
         }
   } catch {
     // A cache that cannot be read is not a cache that is wrong: nothing is deleted, and the flow
@@ -45,10 +51,12 @@ export async function openCache(
   }
 }
 
-/** A rejection the link caused says nothing about the bundle, and the reducer opens the cache on it
- *  rather than telling a phone that already holds a workspace it could not be downloaded. */
-function readFailure(error: unknown): MobileWebShellReadFailure {
-  return isMobileWebBundleTransportFailure(error) ? 'transport' : 'bundle'
+/** No client is no link, and the gates are about to say so. */
+const NO_CONNECTION: MobileWebShellUpdateFailureCause = { reason: 'no-connection', hostCode: null }
+/** Bytes that arrived whole and verified, refused by this phone's own disk. */
+const CACHE_WRITE_FAILED: MobileWebShellUpdateFailureCause = {
+  reason: 'cache-write-failed',
+  hostCode: null
 }
 
 export async function readManifest(
@@ -57,8 +65,7 @@ export async function readManifest(
   send: (event: MobileWebShellSessionEvent) => void
 ): Promise<void> {
   if (client === null) {
-    // No client is no link, and the gates are about to say so.
-    send({ type: 'download-failed', flow, failure: 'transport' })
+    send({ type: 'download-failed', flow, cause: NO_CONNECTION })
     return
   }
   try {
@@ -72,13 +79,14 @@ export async function readManifest(
         schemaVersion: manifest.schemaVersion,
         runtimeProtocolVersion: manifest.runtimeProtocolVersion,
         minCompatibleRuntimeProtocolVersion: manifest.minCompatibleRuntimeProtocolVersion,
+        pageVersion: manifest.pageVersion,
         totalBytes: manifest.totalBytes,
         totalAssets: manifest.assets.length,
         routes: manifest.routes
       }
     })
   } catch (error) {
-    send({ type: 'download-failed', flow, failure: readFailure(error) })
+    send({ type: 'download-failed', flow, cause: updateFailureCauseOf(error) })
   }
 }
 
@@ -94,16 +102,21 @@ export async function download(args: {
 }): Promise<void> {
   const { client, store, hostKey, flow, runtime, send } = args
   if (client === null) {
-    send({ type: 'download-failed', flow, failure: 'transport' })
+    send({ type: 'download-failed', flow, cause: NO_CONNECTION })
     return
   }
   const controller = new AbortController()
   args.downloads.add(controller)
+  // Past the fetch, a throw is the store's: the bytes had already verified.
+  let fetchedWhole = false
   try {
+    // A cache that cannot be opened is one with nothing to reuse, not a failed download.
+    const reusable = await store.openReusableAssets(hostKey).catch(() => undefined)
     const fetched = await fetchMobileWebBundle({
       client,
       signal: controller.signal,
-      onProgress: (progress) => send({ type: 'fetch-progress', flow, ...progress })
+      onProgress: (progress) => send({ type: 'fetch-progress', flow, ...progress }),
+      reusable
     })
     // The bytes are in; the session they were for may not be. The fetch throws on an abort it sees,
     // but an abort landing between its last read and this line would otherwise still write a
@@ -111,6 +124,7 @@ export async function download(args: {
     if (controller.signal.aborted) {
       return
     }
+    fetchedWhole = true
     send({ type: 'download-staged', flow })
     const staged = await store.stageGeneration(hostKey, fetched)
     // Again before the commit, because the commit is the write that is not the staging tree's to
@@ -131,7 +145,11 @@ export async function download(args: {
       elapsedMs: runtime.now() - args.startedAt
     })
   } catch (error) {
-    send({ type: 'download-failed', flow, failure: readFailure(error) })
+    send({
+      type: 'download-failed',
+      flow,
+      cause: fetchedWhole ? CACHE_WRITE_FAILED : updateFailureCauseOf(error)
+    })
   } finally {
     args.downloads.delete(controller)
   }

@@ -2,9 +2,10 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { getAgentResumeArgv, isResumableTuiAgent } from '../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
-import { isLiveResumeAnchorForCompletedAgent } from './live-resume-anchor-record'
+import { isLiveResumeAnchorForCompletedAgent } from '../../../shared/live-resume-anchor-record'
+import { agentTurnEndedUncleanly } from '../../../shared/agent-main-agent-verdict'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 
 export type EligiblePane = {
@@ -89,7 +90,7 @@ export function getEligiblePane(args: {
   )
   if (
     entry.state !== 'done' ||
-    entry.interrupted === true ||
+    agentTurnEndedUncleanly(entry) ||
     Boolean(entry.subagents?.length) ||
     hasUnsettledOrUnknownDispatch(entry) ||
     (sleepingRecord && !hasOnlyLiveResumeAnchor)

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WATCHER_PROCESS_EXIT_DEADLINE_MS } from './parcel-watcher-child-termination'
+import { WATCHER_PROCESS_EXIT_DEADLINE_MS } from './filesystem/watcher-process/parcel-watcher-child-termination'
 import {
   MAX_PHYSICAL_WATCHER_CHILDREN,
   resetWatcherChildRegistryForTest
-} from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-registry'
 import {
   acknowledgeWatcherSubscribe,
   currentWatcherChild,

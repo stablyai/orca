@@ -3,8 +3,16 @@ import { ipcRenderer } from 'electron'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { KeybindingActionId } from '../../shared/keybindings'
 import type { PreloadApi } from '../api-types'
+import type {
+  RemoteCliBrowserScopeQuery,
+  RemoteCliBrowserScopeReply
+} from '../../shared/desktop-browser-bridge-protocol'
 
 export const uiStateAndMenuCommandsApi = {
+  getJiraQuickFilters: () => ipcRenderer.invoke('ui:getJiraQuickFilters'),
+  setJiraQuickFilters: (state) => ipcRenderer.invoke('ui:setJiraQuickFilters', state),
+  getJiraSavedFilters: () => ipcRenderer.invoke('ui:getJiraSavedFilters'),
+  mutateJiraSavedFilters: (mutation) => ipcRenderer.invoke('ui:mutateJiraSavedFilters', mutation),
   get: () => ipcRenderer.invoke('ui:get'),
   set: (args) => ipcRenderer.invoke('ui:set', args),
   setWithAck: (args) => ipcRenderer.invoke('ui:set', args),
@@ -173,5 +181,16 @@ export const uiStateAndMenuCommandsApi = {
   },
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }): void => {
     ipcRenderer.send('browser:tabCreateReply', reply)
+  },
+  onRequestRemoteCliBrowserScope: (
+    callback: (data: RemoteCliBrowserScopeQuery) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: RemoteCliBrowserScopeQuery) =>
+      callback(data)
+    ipcRenderer.on('browser:requestRemoteCliScope', listener)
+    return () => ipcRenderer.removeListener('browser:requestRemoteCliScope', listener)
+  },
+  replyRemoteCliBrowserScope: (reply: RemoteCliBrowserScopeReply): void => {
+    ipcRenderer.send('browser:remoteCliScopeReply', reply)
   }
 } satisfies Partial<PreloadApi['ui']>

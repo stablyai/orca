@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities,
@@ -8,37 +7,39 @@ import {
 } from '@/lib/windows-terminal-capabilities'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
-import { getSettingsProjectHostRepo } from './settings-project-list'
+import { getSettingsEntryHostSelection, getSettingsProjectHostRepo } from './settings-project-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 export function useSettingsTerminalModel(
   model: SettingsStoreModel,
   navigation: SettingsNavigationModel
 ) {
-  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
-    model.settings?.activeRuntimeEnvironmentId
-  )
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(model.settings), [model.settings])
+  const scopeEnvironmentId = runtimeTargetEnvironmentId(model.settingsHostScope.target)
+  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(scopeEnvironmentId)
+  const runtimeTarget = model.settingsHostScope.target
   const capabilityLoadTarget = useMemo(
     () => (model.isWebClient ? { kind: 'local' as const } : runtimeTarget),
     [model.isWebClient, runtimeTarget]
   )
-  const hasActiveRuntimeEnvironment = Boolean(model.settings?.activeRuntimeEnvironmentId?.trim())
+  const hasActiveRuntimeEnvironment = scopeEnvironmentId !== null
   const needsRepoWindowsRuntimeCapabilities = [...navigation.neededSectionIds].some((sectionId) =>
     sectionId.startsWith('repo-')
   )
   const needsLocalWindowsRuntimeCapabilities =
     (model.isWindows || model.isWebClient) &&
     (navigation.neededSectionIds.has('agents') || navigation.neededSectionIds.has('general'))
+  // Why: a server that is no longer saved has no capabilities to load; never probe another host.
   const shouldLoadWindowsTerminalCapabilities =
-    hasActiveRuntimeEnvironment ||
-    ((model.isWindows || model.isWebClient) &&
-      (navigation.neededSectionIds.has('terminal') ||
-        navigation.neededSectionIds.has('accounts') ||
-        needsRepoWindowsRuntimeCapabilities ||
-        (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities)))
-  // Why: terminal, account, and repository settings describe the active execution host.
+    model.settingsHostScope.available &&
+    (hasActiveRuntimeEnvironment ||
+      ((model.isWindows || model.isWebClient) &&
+        (navigation.neededSectionIds.has('terminal') ||
+          navigation.neededSectionIds.has('accounts') ||
+          needsRepoWindowsRuntimeCapabilities ||
+          (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities))))
+  // Why: terminal, account, and repository settings describe the host chosen in the page.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
     true,
@@ -84,11 +85,16 @@ export function useSettingsTerminalModel(
       if (!navigation.neededSectionIds.has(`repo-${settingsProject.representativeRepoId}`)) {
         continue
       }
+      const hostSelection = getSettingsEntryHostSelection(
+        settingsProject,
+        model.settingsProjectHostSelection,
+        model.settingsProjectSetupSelection
+      )
       const repo = getSettingsProjectHostRepo(
         settingsProject,
         model.repos,
-        model.settingsProjectHostSelection[settingsProject.projectId],
-        model.settingsProjectSetupSelection[settingsProject.projectId]
+        hostSelection.hostId,
+        hostSelection.setupId
       )
       if (repo) {
         reposByHostIdentity.set(getRepoHostIdentity(repo), repo)

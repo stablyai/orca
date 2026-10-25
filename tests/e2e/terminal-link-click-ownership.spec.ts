@@ -12,6 +12,11 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
+import {
+  readPanelNavigationObserver,
+  startPanelNavigationObserver
+} from './helpers/plugin-panel-navigation-observer'
+
 const FIXTURE_PATH = path.join(
   process.cwd(),
   'tests/e2e/fixtures/terminal-link-mouse-owner-fixture.cjs'
@@ -92,12 +97,117 @@ async function expectChildMouseReports(mouseLogPath: string): Promise<void> {
     .toBeGreaterThan(0)
 }
 
-async function expectOrcaOwnedMouseOutcome(mouseLogPath: string): Promise<void> {
+async function expectOrcaOwnedMouseOutcome(
+  mouseLogPath: string,
+  reportsBeforeClick = 0
+): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 1_000))
-  expect(childMouseReportCount(mouseLogPath)).toBe(0)
+  expect(childMouseReportCount(mouseLogPath)).toBe(reportsBeforeClick)
+}
+
+async function openLegacyDisabledLinkSettings(orcaPage: Page): Promise<void> {
+  await orcaPage.evaluate(() => {
+    void window.__store?.getState().updateSettings({ terminalLinkActionPopoverEnabled: false })
+  })
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(() => window.__store?.getState().settings?.terminalLinkActionPopoverEnabled)
+    )
+    .toBe(false)
+  await orcaPage.evaluate(() => {
+    const state = window.__store?.getState()
+    state?.openSettingsPage()
+    state?.openSettingsTarget({ pane: 'browser', repoId: null })
+  })
 }
 
 test.describe('terminal link click ownership', () => {
+  test('selecting Actions reenables a legacy-disabled popover and survives renderer reload', async ({
+    orcaPage
+  }, testInfo) => {
+    const { mouseLogPath, ptyId, target } = await startMouseAwareLinkFixture(orcaPage, testInfo)
+    await openLegacyDisabledLinkSettings(orcaPage)
+
+    const choices = orcaPage.getByRole('radiogroup', { name: 'Plain click URL behavior' })
+    await expect(choices.getByRole('radio', { name: 'Leave to terminal' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    await choices.getByRole('radio', { name: 'Actions', exact: true }).click()
+    await expect(choices.getByRole('radio', { name: 'Actions', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+
+    await orcaPage.reload()
+    await waitForSessionReady(orcaPage)
+    await orcaPage.evaluate(() => {
+      const state = window.__store?.getState()
+      state?.openSettingsPage()
+      state?.openSettingsTarget({ pane: 'browser', repoId: null })
+    })
+    await expect(choices.getByRole('radio', { name: 'Actions', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    await orcaPage.screenshot({ path: testInfo.outputPath('actions-selected-after.png') })
+    await orcaPage.evaluate(() => window.__store?.getState().closeSettingsPage())
+    await waitForActiveTerminalManager(orcaPage)
+    await orcaPage.mouse.click(target.x, target.y)
+    await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toBeVisible()
+    await expect(orcaPage.locator('[data-terminal-link-destination]')).toHaveText(LINK)
+    await expectOrcaOwnedMouseOutcome(mouseLogPath)
+    await orcaPage.screenshot({ path: testInfo.outputPath('actions-after.png') })
+    await sendToTerminal(orcaPage, ptyId, 'q')
+  })
+
+  test('explicit Open URL and Leave to terminal choices preserve direct-open modifiers', async ({
+    orcaPage,
+    electronApp
+  }, testInfo) => {
+    const { mouseLogPath, ptyId, target } = await startMouseAwareLinkFixture(orcaPage, testInfo)
+    await startPanelNavigationObserver(electronApp, orcaPage.url())
+    await openLegacyDisabledLinkSettings(orcaPage)
+    const choices = orcaPage.getByRole('radiogroup', { name: 'Plain click URL behavior' })
+    await choices.getByRole('radio', { name: 'Open URL', exact: true }).click()
+    await expect(choices.getByRole('radio', { name: 'Open URL', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    await orcaPage.evaluate(() => window.__store?.getState().closeSettingsPage())
+    await orcaPage.mouse.click(target.x, target.y)
+    await expect
+      .poll(async () => (await readPanelNavigationObserver(electronApp)).externalUrls)
+      .toEqual([LINK])
+    await expectOrcaOwnedMouseOutcome(mouseLogPath)
+
+    await orcaPage.evaluate(() => {
+      const state = window.__store?.getState()
+      state?.openSettingsPage()
+      state?.openSettingsTarget({ pane: 'browser', repoId: null })
+    })
+    await choices.getByRole('radio', { name: 'Leave to terminal', exact: true }).click()
+    await expect(
+      choices.getByRole('radio', { name: 'Leave to terminal', exact: true })
+    ).toHaveAttribute('aria-checked', 'true')
+    await orcaPage.evaluate(() => window.__store?.getState().closeSettingsPage())
+    await orcaPage.mouse.click(target.x, target.y)
+    await expectChildMouseReports(mouseLogPath)
+    expect((await readPanelNavigationObserver(electronApp)).externalUrls).toEqual([LINK])
+
+    const reportsBeforeModifiedClick = childMouseReportCount(mouseLogPath)
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await orcaPage.keyboard.down(modifier)
+    await orcaPage.mouse.click(target.x, target.y)
+    await orcaPage.keyboard.up(modifier)
+    await expect
+      .poll(async () => (await readPanelNavigationObserver(electronApp)).externalUrls)
+      .toEqual([LINK, LINK])
+    await expectOrcaOwnedMouseOutcome(mouseLogPath, reportsBeforeModifiedClick)
+    await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toHaveCount(0)
+    await sendToTerminal(orcaPage, ptyId, 'q')
+  })
+
   test('an Orca-owned plain link click emits no child PTY mouse frames', async ({
     orcaPage
   }, testInfo) => {

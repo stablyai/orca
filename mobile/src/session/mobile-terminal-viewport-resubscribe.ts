@@ -2,6 +2,7 @@
  *  frame dims can never equal the phone viewport must not re-arm the stream
  *  forever — it broke gesture recognition and drained battery at ~25 cycles/s. */
 
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 
 export const MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS = 3
@@ -45,7 +46,14 @@ export function resolveTerminalViewportResubscribe(args: {
   viewportMeasured: boolean
   viewport: TerminalViewportDims | null
   attempts: number
+  /** The host's display mode for this terminal, as carried on the scrollback frame. */
+  displayMode?: string | null
 }): TerminalViewportResubscribeDecision {
+  // Why: in desktop mode the phone watches at the desktop's size on purpose (a desktop take-back
+  // or the phone's own toggle), so differing dims are not a failed fit (#28487).
+  if (args.displayMode === 'desktop') {
+    return { kind: 'converged' }
+  }
   const overBudget = args.attempts >= MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS
   // First subscribe carries no viewport; resubscribing is how the server learns it.
   if (!args.viewportMeasured || args.viewport == null) {
@@ -173,11 +181,11 @@ export class TerminalViewportResubscribeBudget {
   }
 }
 
-type MutableRef<T> = { current: T }
+export type MutableRef<T> = { current: T }
 
 type TerminalFitWebView = {
   awaitReady: () => Promise<unknown>
-  measureFitDimensions: (frameHeight?: number) => Promise<TerminalViewportDims | null | undefined>
+  fitDimensions: (frame: { width: number; height: number }) => TerminalViewportDims | null
 }
 
 export type TerminalViewportFitPassArgs = {
@@ -185,6 +193,9 @@ export type TerminalViewportFitPassArgs = {
   seq: number
   hostCols: number | null
   hostRows: number | null
+  displayMode?: string | null
+  /** The viewport this subscribe carried; null when it went without one. */
+  sentViewport: TerminalViewportDims | null
   budget: TerminalViewportResubscribeBudget
   diagnostics: Pick<
     MobileTerminalDiagnostics,
@@ -193,9 +204,8 @@ export type TerminalViewportFitPassArgs = {
   viewportRef: MutableRef<TerminalViewportDims | null>
   viewportMeasuredRef: MutableRef<boolean>
   subscribeSeqRef: MutableRef<Map<string, number>>
-  initializedHandlesRef: MutableRef<Set<string>>
   terminalUnsubsRef: MutableRef<Map<string, () => void>>
-  terminalFrameHeightRef: MutableRef<number>
+  terminalFrameRef: MutableRef<TerminalFrame | null>
   getTerminalRef: (handle: string | null) => TerminalFitWebView | undefined
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
@@ -211,6 +221,7 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
   const decision = resolveTerminalViewportResubscribe({
     hostCols,
     hostRows,
+    displayMode: args.displayMode,
     viewportMeasured: args.viewportMeasuredRef.current,
     viewport: args.viewportRef.current,
     attempts: budget.attempts(handle)
@@ -230,9 +241,10 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     }
     return
   }
-  const viewportWasMeasured = args.viewportMeasuredRef.current
+  // Why: a subscribe that carried a viewport already told the host one; a fresh measure that matches it needs no round trip.
+  const viewportWasMeasured = args.viewportMeasuredRef.current || args.sentViewport != null
   void (async () => {
-    // Why: wait for init()'s rAF chain before measuring, else the measure races ahead and returns null (log dump 2026-05-06).
+    // Why: wait for init()'s rAF chain, which reports the box the fit reads (log dump 2026-05-06).
     await args.getTerminalRef(handle)?.awaitReady()
     if (
       args.subscribeSeqRef.current.get(handle) !== seq ||
@@ -240,17 +252,9 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     ) {
       return
     }
-    const dims = await args
-      .getTerminalRef(handle)
-      ?.measureFitDimensions(args.terminalFrameHeightRef.current || undefined)
-    // Why: re-check seq — the awaits may have let a newer subscribe cycle arm; tearing it down would resubscribe a stale generation.
-    if (
-      args.subscribeSeqRef.current.get(handle) !== seq ||
-      !budget.isRetryGenerationCurrent(handle, retryGeneration)
-    ) {
-      return
-    }
-    if (!args.getTerminalRef(handle) || !dims) {
+    const frame = args.terminalFrameRef.current
+    const dims = frame ? args.getTerminalRef(handle)?.fitDimensions(frame) : null
+    if (!dims) {
       return
     }
     args.viewportRef.current = dims
@@ -279,7 +283,6 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
       }
       diagnostics.streamResubscribing(handle, seq, dims, budget.attempts(handle), decision.delayMs)
       args.unsubscribeTerminal(handle)
-      args.initializedHandlesRef.current.delete(handle)
       args.subscribeToTerminal(handle)
       // Why: only a resubscribe that actually armed spends budget; one turned away by its own gates never reached the host.
       if (args.terminalUnsubsRef.current.has(handle)) {

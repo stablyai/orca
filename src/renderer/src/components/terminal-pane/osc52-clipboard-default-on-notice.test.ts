@@ -111,7 +111,7 @@ describe('useOsc52ClipboardDefaultOnNotice', () => {
     expect(storeState.clearOsc52ClipboardDefaultOnNotice).toHaveBeenCalledTimes(1)
   })
 
-  it('dedupes the StrictMode double-invoke with a stable toast id', async () => {
+  it('assigns a stable toast id for notice deduplication', async () => {
     // Why pin the id: the effect re-runs against the same closure, so the early return
     // cannot catch the second pass — sonner collapses it only because the id matches.
     await mountProbe(true)

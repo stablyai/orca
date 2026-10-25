@@ -153,7 +153,7 @@ describe('shared settings screen state', () => {
     // Without the request-epoch fence the stale read would flip the switch back on.
     expect(switchProps().value).toBe(false)
   })
-  it('does not enable notifications after denied OS permission', async () => {
+  it('does not enable notifications when permission is not granted', async () => {
     const denied = {
       granted: false,
       status: 'undetermined',

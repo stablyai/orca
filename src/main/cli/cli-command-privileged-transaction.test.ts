@@ -1,5 +1,6 @@
 import {
   chmod,
+  lchmod,
   lstat,
   mkdir,
   mkdtemp,
@@ -14,7 +15,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 vi.mock('electron', () => ({
   app: {
@@ -25,7 +26,7 @@ vi.mock('electron', () => ({
 }))
 
 import { CliInstaller } from './cli-installer'
-import { buildUnixDevLauncher } from './cli-dev-launcher'
+import { buildUnixCliLauncher } from './cli-dev-launcher'
 
 const createdRoots: string[] = []
 const protectedDirectories: string[] = []
@@ -93,6 +94,8 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       const installed = await installer.install()
       expect(installed.state).toBe('installed')
       await expect(readlink(fixture.commandPath)).resolves.toBe(installed.launcherPath)
+      // Why: macOS enforces a symlink's own mode on readlink; a 0700 link is unreadable to other users.
+      expect((await lstat(fixture.commandPath)).mode & 0o777).toBe(0o755)
 
       await chmod(fixture.protectedDirectory, 0o500)
       await expect(installer.remove()).resolves.toMatchObject({ state: 'not_installed' })
@@ -140,7 +143,7 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       const oldCliPath = join(fixture.root, 'old', 'out', 'cli', 'index.js')
       await writeFile(
         fixture.commandPath,
-        buildUnixDevLauncher('/Applications/Old.app/Contents/MacOS/Orca', oldCliPath, 'user-data')
+        buildUnixCliLauncher('/Applications/Old.app/Contents/MacOS/Orca', oldCliPath, 'user-data')
       )
       const foreignContent = 'foreign command written into the inspected inode'
       let raced = false
@@ -159,6 +162,94 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       await chmod(fixture.protectedDirectory, 0o500)
       await expect(installer.install()).rejects.toThrow()
       await expect(readFile(fixture.commandPath, 'utf8')).resolves.toBe(foreignContent)
+      expect(
+        (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
+      ).toBe(false)
+    })
+
+    it('creates missing parent directories readable by the user', async () => {
+      const fixture = await createPrivilegedFixture()
+      const commandPath = join(fixture.protectedDirectory, 'nested', 'bin', 'orca')
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        commandPathOverride: commandPath,
+        privilegedRunner: async (command) => {
+          await chmod(fixture.protectedDirectory, 0o700)
+          await executePrivilegedShell(command)
+        }
+      })
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
+      expect((await lstat(join(fixture.protectedDirectory, 'nested'))).mode & 0o777).toBe(0o755)
+      expect((await lstat(join(fixture.protectedDirectory, 'nested', 'bin'))).mode & 0o777).toBe(
+        0o755
+      )
+    })
+
+    it('makes an unreadable link to the current launcher readable with one privileged step', async () => {
+      const fixture = await createPrivilegedFixture()
+      const commands: string[] = []
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        privilegedRunner: async (command) => {
+          commands.push(command)
+          await executePrivilegedShell(command)
+        }
+      })
+      const launcherPath = (await installer.getStatus()).launcherPath
+      await symlink(String(launcherPath), fixture.commandPath)
+      await lchmod(fixture.commandPath, 0o300)
+      await expect(readlink(fixture.commandPath)).rejects.toMatchObject({ code: 'EACCES' })
+
+      await expect(installer.getStatus()).resolves.toMatchObject({
+        state: 'stale',
+        currentTarget: null
+      })
+      await chmod(fixture.protectedDirectory, 0o500)
+      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
+      expect(commands).toHaveLength(1)
+      expect(commands[0]).toContain('/bin/chmod -h 755')
+      expect((await lstat(fixture.commandPath)).mode & 0o777).toBe(0o755)
+      await expect(readlink(fixture.commandPath)).resolves.toBe(launcherPath)
+    })
+
+    it('repairs an unreadable link to an older Orca launcher through the transaction', async () => {
+      const fixture = await createPrivilegedFixture()
+      await symlink('/Applications/Old Orca.app/Contents/Resources/bin/orca', fixture.commandPath)
+      await lchmod(fixture.commandPath, 0o300)
+      const commands: string[] = []
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        privilegedRunner: async (command) => {
+          commands.push(command)
+          await chmod(fixture.protectedDirectory, 0o700)
+          await executePrivilegedShell(command)
+          await chmod(fixture.protectedDirectory, 0o500)
+        }
+      })
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      const installed = await installer.install()
+      expect(installed.state).toBe('installed')
+      expect(commands).toHaveLength(2)
+      await expect(readlink(fixture.commandPath)).resolves.toBe(installed.launcherPath)
+      expect((await lstat(fixture.commandPath)).mode & 0o777).toBe(0o755)
+    })
+
+    it('refuses an unreadable symlink that is not an Orca launcher once root makes it readable', async () => {
+      const fixture = await createPrivilegedFixture()
+      const foreignTarget = '/opt/other/bin/orca'
+      await symlink(foreignTarget, fixture.commandPath)
+      await lchmod(fixture.commandPath, 0o300)
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        privilegedRunner: executePrivilegedShell
+      })
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      await expect(installer.install()).rejects.toThrow(/Refusing to replace non-Orca command/)
+      await expect(readlink(fixture.commandPath)).resolves.toBe(foreignTarget)
       expect(
         (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
       ).toBe(false)

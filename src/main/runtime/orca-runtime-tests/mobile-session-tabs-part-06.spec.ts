@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   OrcaRuntimeService,
   appendBrowserTabOrder,
@@ -495,7 +497,9 @@ describe('OrcaRuntimeService', () => {
     let ptyCounter = 0
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn(async () => ({ id: `target-group-pty-${++ptyCounter}` })),
+      spawn: vi.fn(
+        committingSpawn(runtime, async () => ({ id: `target-group-pty-${++ptyCounter}` }))
+      ),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -653,7 +657,9 @@ describe('OrcaRuntimeService', () => {
       }))
     })
 
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    // Layout-owner build: main's own panes read the partition twice more (graph and fence); this
+    // store has no write notice to cache on. Still per sync, never per workspace.
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(ORCA_LAYOUT_OWNER_IS_MAIN ? 3 : 1)
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 
@@ -674,7 +680,9 @@ describe('OrcaRuntimeService', () => {
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    // Layout-owner build: main's own panes read the partition twice more (graph and fence); this
+    // store has no write notice to cache on. Still per sync, never per workspace.
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(ORCA_LAYOUT_OWNER_IS_MAIN ? 3 : 1)
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 })

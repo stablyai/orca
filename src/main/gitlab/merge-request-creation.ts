@@ -7,8 +7,6 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
   getHostedReviewLocalGitOptions,
   hasHostedReviewLocalGitOptions,
@@ -18,7 +16,7 @@ import { getProjectSlug } from './client'
 import {
   acquire,
   glabExecFileAsync,
-  glabHostnameArgs,
+  glabHostEnvOptions,
   glabRepoExecOptions,
   release
 } from './gl-utils'
@@ -100,21 +98,11 @@ async function readMergeRequestTemplate(
     '.gitlab/merge_request_template.md',
     '.gitlab/MERGE_REQUEST_TEMPLATE.md'
   ]
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
+  if (connectionId) {
     return ''
   }
   for (const relativeCandidate of relativeCandidates) {
     try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional GitLab merge-request template path.
@@ -188,8 +176,7 @@ export async function createGitLabMergeRequest(
       title,
       '--description',
       body,
-      '--yes',
-      ...glabHostnameArgs(projectRef, connectionId)
+      '--yes'
     ]
     if (head) {
       createArgs.push('--source-branch', head)
@@ -201,6 +188,7 @@ export async function createGitLabMergeRequest(
       const { stdout } = await glabExecFileAsync(createArgs, {
         ...glabRepoExecOptions(repoPath, connectionId),
         ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
+        ...glabHostEnvOptions(projectRef, connectionId),
         timeout: 60_000,
         idempotent: false
       })

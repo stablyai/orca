@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
+import {
+  classifyMobileNativeChatSend,
+  getMobileNativeChatCommands
+} from './mobile-native-chat-send-classification'
 
 describe('classifyMobileNativeChatSend', () => {
   it('recognizes OMP selectors and context commands without claiming generic help', () => {
@@ -22,6 +25,15 @@ describe('classifyMobileNativeChatSend', () => {
     expect(classifyMobileNativeChatSend('claude', '/model sonnet')).toBe('unknown-token')
     expect(classifyMobileNativeChatSend('claude', '/cost')).toBe('unknown-token')
     expect(classifyMobileNativeChatSend('claude', '/diff')).toBe('unknown-token')
+  })
+
+  it('leaves /context off mobile, which has no way to show its answer', () => {
+    // OpenClaude's report is a transcript row; OMP's is answered by the desktop composer.
+    for (const agent of ['openclaude', 'omp']) {
+      expect(classifyMobileNativeChatSend(agent, '/context')).toBe('unknown-token')
+      expect(classifyMobileNativeChatSend(agent, '/compact')).toBe('command')
+      expect(getMobileNativeChatCommands(agent).map(({ name }) => name)).not.toContain('context')
+    }
   })
 
   it('keeps prose as chat, including leading-whitespace slash text', () => {

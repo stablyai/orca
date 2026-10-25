@@ -52,6 +52,7 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -123,8 +124,6 @@ describe('AgentBrowserBridge', () => {
       vi.useRealTimers()
     }
   })
-
-  // ── goto command ──
 
   it('navigates the registered webContents without spawning agent-browser', async () => {
     const wc = mockWebContents(100, 'https://example.com/start', 'Example')
@@ -409,7 +408,7 @@ describe('AgentBrowserBridge', () => {
               ''
             )
           }
-          return { kill: vi.fn() }
+          return createFakeAgentBrowserChild({ kill: vi.fn() })
         }
       )
 

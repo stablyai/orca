@@ -157,8 +157,7 @@ describe('project runtime git options', () => {
       ).toBeUndefined()
     })
 
-    // Placement must not throw where git execution does: a project awaiting
-    // repair still gets a worktree, on the Windows side as it always has.
+    // Worktree placement permits Windows fallback even when Git execution would require runtime repair.
     it('names no distro instead of throwing when the runtime needs repair', () => {
       _setWslCachesForTests({ available: true, distros: ['Debian'] })
       const project = makeProject({
@@ -191,8 +190,7 @@ describe('project runtime git options', () => {
       ).toEqual({ wslDistro: 'Ubuntu' })
     })
 
-    // A speculative warm-up must degrade to the host Git it used before routing
-    // existed, never surface the repair state git execution raises.
+    // Speculative warmup must fall back to host Git instead of exposing a repair error.
     it('falls back to host git instead of throwing when the runtime needs repair', () => {
       _setWslCachesForTests({ available: true, distros: ['Debian'] })
       const project = makeProject({

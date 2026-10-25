@@ -222,6 +222,7 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   for (const [hostId, slice] of sshPartitions) {
     const adoption = adoptStrandedHostPartitionSession(session, slice, {
       contestedSessionKeys: attribution.contestedSessionKeys,
+      ownedSessionKeys: attribution.ownedSessionKeysByHostId.get(hostId),
       foreignSessionKeys: unownedSessionKeys(
         session,
         attribution.contestedSessionKeys,
@@ -289,12 +290,11 @@ function sshPartitionCatalogAttribution(
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[],
   sshPartitions: readonly (readonly [ExecutionHostId, WorkspaceSessionState | null])[],
   mergedContested: ReadonlySet<string>
-): {
-  contestedSessionKeys: Set<string>
-  foreignSessionKeysByHostId: Map<ExecutionHostId, Set<string>>
-} {
+) {
   const contestedSessionKeys = new Set(mergedContested)
   const foreignSessionKeysByHostId = new Map<ExecutionHostId, Set<string>>()
+  // Ids the catalog resolves to the ssh partition that names them.
+  const ownedSessionKeysByHostId = new Map<ExecutionHostId, Set<string>>()
   const repoLookup = createRepoRowExecutionHostLookup(repos)
   const ownedByHostId = new Map<ExecutionHostId, Set<string>>()
   for (const [hostId, slice] of sshPartitions) {
@@ -303,6 +303,7 @@ function sshPartitionCatalogAttribution(
     }
     const foreign = new Set<string>()
     const owned = new Set<string>()
+    const catalogOwned = new Set<string>()
     for (const workspaceId of workspaceIdsNamedByPartition(slice)) {
       // A folder key carries no repo id at all, and `getRepoIdFromWorktreeId` hands back the whole
       // key rather than nothing, so the catalog would be asked about `folder:<uuid>` and answer
@@ -317,7 +318,9 @@ function sshPartitionCatalogAttribution(
         foreign.add(workspaceId)
         continue
       }
-      if (resolution?.kind === 'unresolved' && resolution.reason === 'ambiguous') {
+      if (resolution?.kind === 'resolved') {
+        catalogOwned.add(workspaceId)
+      } else if (resolution?.reason === 'ambiguous') {
         contestedSessionKeys.add(workspaceId)
       }
       owned.add(workspaceId)
@@ -326,6 +329,7 @@ function sshPartitionCatalogAttribution(
       foreignSessionKeysByHostId.set(hostId, foreign)
     }
     ownedByHostId.set(hostId, owned)
+    ownedSessionKeysByHostId.set(hostId, catalogOwned)
   }
   // Why co-presence is asked only of the ids left after the catalog has spoken: one partition
   // holding residue the catalog attributes elsewhere is a single owner plus a leftover, not a
@@ -333,7 +337,7 @@ function sshPartitionCatalogAttribution(
   for (const workspaceId of sessionKeysHeldByMultiplePartitionSets([...ownedByHostId.values()])) {
     contestedSessionKeys.add(workspaceId)
   }
-  return { contestedSessionKeys, foreignSessionKeysByHostId }
+  return { contestedSessionKeys, foreignSessionKeysByHostId, ownedSessionKeysByHostId }
 }
 
 /** Ids that appear in more than one of these per-partition sets. */

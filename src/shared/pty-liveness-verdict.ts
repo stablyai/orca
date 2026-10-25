@@ -27,6 +27,17 @@ export function describeUnconfirmedStop(reason: string): string {
   return `The PTY was not confirmed stopped: ${endSentence(reason)}`
 }
 
+/** A close's unconfirmed-stop sentence; it promises a retry only when the host recorded one. */
+export function describeUnconfirmedCloseStop(close: {
+  ptyStopReason?: string
+  pendingKillRecorded?: true
+}): string {
+  const sentence = describeUnconfirmedStop(close.ptyStopReason ?? 'its host could not be reached')
+  return close.pendingKillRecorded === true
+    ? `${sentence} The kill retries when the host reconnects.`
+    : sentence
+}
+
 /** Words a close whose PTY teardown was never confirmed, for a stop receipt. */
 export function describeUnconfirmedAgentStop(close: {
   ptyStopVerdict?: 'live' | 'unverifiable'

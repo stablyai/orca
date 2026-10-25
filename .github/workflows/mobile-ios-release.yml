@@ -23,6 +23,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   ios-build:
     # GitHub-hosted macOS runner: required for Xcode. Expo SDK 55's
@@ -62,6 +65,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -99,7 +103,8 @@ jobs:
         run: npx expo prebuild --platform ios --no-install
 
       - name: Install CocoaPods
-        run: npx pod-install ios
+        working-directory: mobile/ios
+        run: bundle exec pod install
 
       # Why: `-allowProvisioningUpdates` + the App Store Connect API key can
       # create/refresh provisioning profiles, but it cannot recreate the

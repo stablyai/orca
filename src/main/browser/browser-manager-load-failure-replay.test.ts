@@ -321,17 +321,14 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
     didFailLoad(null, -202, 'Certificate authority invalid', 'https://localhost:3443/', true)
-    // Retry: the new navigation starts (overlay optimistically cleared)...
     didStartNavigation(null, 'https://localhost:3443/', false, true)
     expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')).toBeNull()
-    // ...then aborts (ERR_ABORTED) before committing, so the error is restored.
     didFailLoad(null, -3, 'Aborted', 'https://localhost:3443/', true)
     expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')?.code).toBe(-202)
 
-    // A fresh navigation from a non-errored state drops the stash, so a later
-    // abort cannot resurrect the old error.
-    didStartNavigation(null, 'https://localhost:3443/', false, true) // stashes -202, clears active
-    didStartNavigation(null, 'https://example.com/', false, true) // active empty -> drops stash
+    // A fresh navigation must discard the stash so a later abort cannot resurrect stale errors.
+    didStartNavigation(null, 'https://localhost:3443/', false, true)
+    didStartNavigation(null, 'https://example.com/', false, true)
     didFailLoad(null, -3, 'Aborted', 'https://example.com/', true)
     expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')).toBeNull()
   })

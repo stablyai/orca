@@ -11,6 +11,7 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import type { ProjectHostSetup } from '../../../shared/project-types'
+import { translate } from '@/i18n/i18n'
 
 // Availability/connect guidance for needs-setup run-target rows — extracted so
 // project-host-setup-options.ts stays under the file line ratchet.
@@ -136,4 +137,37 @@ export function getPendingSetupDetail(setup: ProjectHostSetup): string {
     case 'ready':
       return setup.path
   }
+}
+
+/**
+ * Setup-only subset of getHostSetupAvailability: reports blocked version or a
+ * runtime host missing setup capabilities, and ignores connection health (the
+ * settings rows surface connection state separately).
+ */
+export function getHostSetupUnavailableDetail(host: ExecutionHostRegistryEntry): string | null {
+  if (host.health === 'blocked') {
+    return translate(
+      'auto.components.settings.RepositoryPane.hostSetupBlockedVersion',
+      'Orca server version is incompatible'
+    )
+  }
+  if (host.kind !== 'runtime') {
+    return null
+  }
+  if (!host.capabilities) {
+    return translate(
+      'auto.components.settings.RepositoryPane.hostSetupCheckingCapability',
+      'Checking host capabilities'
+    )
+  }
+  if (
+    !host.capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
+    !host.capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
+  ) {
+    return translate(
+      'auto.components.settings.RepositoryPane.hostSetupMissingCapability',
+      'Update Orca on this host to set up projects'
+    )
+  }
+  return null
 }

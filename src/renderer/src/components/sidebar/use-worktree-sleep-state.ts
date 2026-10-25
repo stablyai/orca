@@ -1,7 +1,13 @@
 import { useAppStore } from '@/store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-inputs'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { Tab } from '../../../../shared/tab-types'
+import {
+  hasUnknownStructuredChat,
+  type StructuredChatSleptAtByPaneKey
+} from '@/store/slices/structured-chat-slept-at'
 
 type TabLike = { id: string }
 
@@ -13,6 +19,8 @@ type SleepStateInput = {
   tabsByWorktree?: Record<string, readonly TabLike[]> | null
   ptyIdsByTabId?: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, readonly TabLike[]> | null
+  unifiedTabsByWorktree?: Record<string, Tab[]> | null
+  structuredChatSleptAtByPaneKey?: StructuredChatSleptAtByPaneKey
 }
 
 type LiveAgentGeneration = {
@@ -53,8 +61,8 @@ function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<str
 }
 
 /**
- * Whether a workspace is asleep: no live terminal, no browser tab, and no live
- * agent holding it awake through a PTY gap.
+ * Whether a workspace is asleep: no live terminal, no browser tab, no live
+ * agent holding it awake through a PTY gap, and no structured chat.
  *
  * Why not `status === 'inactive'`: a slept workspace keeps its retained done
  * rows, so its status still reads 'done' — keying the sleeping glyph on status
@@ -64,16 +72,30 @@ function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<str
  * predicate, so the moon and the filter cannot disagree about which workspaces
  * are asleep.
  */
-export function useIsSleepingWorktree(worktreeId: string): boolean {
-  return useAppStore((state) =>
-    isInactiveWorkspace(
-      worktreeId,
-      state.tabsByWorktree,
-      state.ptyIdsByTabId,
-      state.browserTabsByWorktree,
-      selectWorktreeIdsWithLiveAgent(state)
+export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: string): boolean {
+  if (
+    hasUnknownStructuredChat(
+      state.unifiedTabsByWorktree?.[worktreeId],
+      state.structuredChatSleptAtByPaneKey
+    )
+  ) {
+    return false
+  }
+  return isInactiveWorkspace(
+    worktreeId,
+    state.tabsByWorktree,
+    state.ptyIdsByTabId,
+    state.browserTabsByWorktree,
+    selectWorktreeIdsWithLiveAgent(state),
+    getWorktreeIdsWithStructuredChat(
+      state.unifiedTabsByWorktree,
+      state.structuredChatSleptAtByPaneKey
     )
   )
+}
+
+export function useIsSleepingWorktree(worktreeId: string): boolean {
+  return useAppStore((state) => selectIsSleepingWorktree(state, worktreeId))
 }
 
 export function resetWorktreeSleepStateCacheForTests(): void {

@@ -60,15 +60,14 @@ describe('getBranchCompare', () => {
     readFileMock.mockReset()
   })
 
-  // Why dispatch on args instead of mockResolvedValueOnce chains: getBranchCompare now
-  // issues its head-of-chain reads concurrently, so a positional mock would encode call
-  // order rather than behaviour and break on any safe reordering.
+  // Route by argv so independent concurrent reads can reorder safely.
   type BranchCompareGitResponses = {
     branch?: string | Error
     probe?: Record<string, string | Error>
     headOid?: string | Error
     baseOid?: string | Error
     mergeBase?: string | Error
+    onMergeBase?: () => void
     nameStatus?: string | Error
     numstat?: string | Error
     revList?: string | Error
@@ -99,13 +98,28 @@ describe('getBranchCompare', () => {
         return reply(responses.baseOid, `rev-parse ${args.at(-1)}`)
       }
       if (args[0] === 'merge-base') {
+        responses.onMergeBase?.()
         return reply(responses.mergeBase, 'merge-base')
       }
-      if (args.includes('--name-status')) {
-        return reply(responses.nameStatus, 'diff --name-status')
-      }
-      if (args.includes('--numstat')) {
-        return reply(responses.numstat, 'diff --numstat')
+      if (args.includes('--raw')) {
+        const raw =
+          typeof responses.nameStatus === 'string'
+            ? responses.nameStatus
+                .split(/\r?\n/)
+                .filter(Boolean)
+                .map((line) => {
+                  const [status, ...paths] = line.split('\t')
+                  return `:100644 100644 a b ${status}\0${paths.join('\0')}\0`
+                })
+                .join('')
+            : responses.nameStatus
+        if (raw instanceof Error) {
+          return reply(raw, 'diff')
+        }
+        if (responses.numstat instanceof Error) {
+          return reply(responses.numstat, 'diff')
+        }
+        return reply((raw ?? '') + (responses.numstat ?? ''), 'diff')
       }
       if (args[0] === 'rev-list') {
         return reply(responses.revList, 'rev-list')
@@ -113,6 +127,62 @@ describe('getBranchCompare', () => {
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
   }
+
+  it.each([40, 64])(
+    'skips change and count reads for identical %i-character commit tips',
+    async (length) => {
+      const oid = 'a'.repeat(length)
+      mockBranchCompareGit({
+        branch: 'feature\n',
+        probe: { 'refs/remotes/origin/main^{commit}': `${oid}\n` },
+        headOid: `${oid}\n`,
+        baseOid: `${oid}\n`,
+        mergeBase: `${oid}\n`
+      })
+
+      await expect(getBranchCompare('/repo', 'origin/main')).resolves.toEqual({
+        summary: {
+          baseRef: 'origin/main',
+          baseOid: oid,
+          compareRef: 'feature',
+          headOid: oid,
+          mergeBase: oid,
+          changedFiles: 0,
+          commitsAhead: 0,
+          commitsBehind: 0,
+          status: 'ready'
+        },
+        entries: []
+      })
+      expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'merge-base')).toBe(true)
+      expect(
+        gitExecFileAsyncMock.mock.calls.some(([args]) => ['diff', 'rev-list'].includes(args[0]))
+      ).toBe(false)
+    }
+  )
+
+  it('keeps cancellation effective when equal-tip validation settles', async () => {
+    const oid = 'a'.repeat(40)
+    const controller = new AbortController()
+    mockBranchCompareGit({
+      branch: 'feature\n',
+      probe: { 'refs/remotes/origin/main^{commit}': `${oid}\n` },
+      headOid: `${oid}\n`,
+      baseOid: `${oid}\n`,
+      mergeBase: `${oid}\n`,
+      onMergeBase: () => controller.abort(new Error('compare canceled'))
+    })
+
+    await expect(
+      getBranchCompare('/repo', 'origin/main', { signal: controller.signal })
+    ).resolves.toMatchObject({
+      summary: { status: 'error', errorMessage: 'compare canceled' },
+      entries: []
+    })
+    expect(
+      gitExecFileAsyncMock.mock.calls.some(([args]) => ['diff', 'rev-list'].includes(args[0]))
+    ).toBe(false)
+  })
 
   it('returns a pinned branch compare snapshot and parsed branch entries', async () => {
     mockBranchCompareGit({
@@ -147,8 +217,6 @@ describe('getBranchCompare', () => {
     ])
   })
 
-  // Why: a rebased branch is ahead AND behind; the symmetric --left-right range is the
-  // only form that reports both, and its columns are left=behind, right=ahead.
   it('counts both divergence directions from one symmetric rev-list', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
@@ -192,7 +260,6 @@ describe('getBranchCompare', () => {
   it('returns unborn-head when HEAD cannot be resolved', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
-      // Why the probe fails here: a proven base ref would resolve, giving 'ready'.
       probe: { 'refs/remotes/origin/main^{commit}': new Error('missing base') },
       headOid: new Error('unborn'),
       baseOid: new Error('missing base')
@@ -245,7 +312,7 @@ describe('getBranchCompare', () => {
     expect(result.entries).toEqual([])
   })
 
-  it('passes core.quotePath=false to diff --name-status and parses UTF-8 paths', async () => {
+  it('loads UTF-8 paths and line counts with one diff', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
       probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
@@ -260,16 +327,7 @@ describe('getBranchCompare', () => {
     const result = await getBranchCompare('/repo', 'origin/main')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'diff',
-        '--name-status',
-        '-M',
-        '-C',
-        'merge-base-oid',
-        'head-oid'
-      ],
+      ['diff', '--raw', '--numstat', '-z', '-M', '-C', 'merge-base-oid', 'head-oid', '--'],
       expect.objectContaining({ cwd: '/repo' })
     )
     expect(result.entries).toEqual([
@@ -277,8 +335,6 @@ describe('getBranchCompare', () => {
     ])
   })
 
-  // Why: the base oid now comes from the probe, so the probe must never report a ref it
-  // did not actually resolve -- an empty rev-parse --quiet stdout means "not found".
   it('treats an empty probe result as an unresolved base ref', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
@@ -295,8 +351,7 @@ describe('getBranchCompare', () => {
     expect(result.summary.status).toBe('invalid-base')
   })
 
-  // Why: the probe tries refs/remotes first, then refs/heads. Reusing "the last probed
-  // oid" rather than the oid for the ref that won would return the wrong commit.
+  // Keep distinct probe results to catch accidental reuse of the losing ref's OID.
   it('reuses only the oid of the ref the probe actually resolved', async () => {
     mockBranchCompareGit({
       branch: 'feature\n',
@@ -319,8 +374,6 @@ describe('getBranchCompare', () => {
     })
   })
 
-  // Why: an already-qualified base ref skips the probe entirely, so its oid must still
-  // come from rev-parse rather than from a stale or absent probe entry.
   it('resolves an already-qualified base ref without a probe', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
@@ -361,10 +414,7 @@ describe('getBranchCompare', () => {
       if (args[0] === 'merge-base') {
         return Promise.resolve({ stdout: 'merge-base-oid\n' })
       }
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: '' })
-      }
-      if (args.includes('--numstat')) {
+      if (args.includes('--raw')) {
         return Promise.resolve({ stdout: '' })
       }
       if (args[0] === 'rev-list') {
@@ -404,12 +454,9 @@ describe('getBranchCompare', () => {
       if (args[0] === 'merge-base') {
         return Promise.resolve({ stdout: 'merge-base-oid\n' })
       }
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: 'M\tdocs/a => b.txt\n' })
-      }
-      if (args.includes('--numstat')) {
+      if (args.includes('--raw')) {
         return Promise.resolve({
-          stdout: args.includes('-z') ? '1\t0\tdocs/a => b.txt\0' : '1\t0\tdocs/a => b.txt\n'
+          stdout: ':100644 100644 a b M\0docs/a => b.txt\0' + '1\t0\tdocs/a => b.txt\0'
         })
       }
       if (args[0] === 'rev-list') {
@@ -421,17 +468,7 @@ describe('getBranchCompare', () => {
     const result = await getBranchCompare('/repo', 'origin/main')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'diff',
-        '-z',
-        '--numstat',
-        '-M',
-        '-C',
-        'merge-base-oid',
-        'head-oid'
-      ],
+      ['diff', '--raw', '--numstat', '-z', '-M', '-C', 'merge-base-oid', 'head-oid', '--'],
       expect.objectContaining({ cwd: '/repo' })
     )
     expect(result.entries).toEqual([
@@ -454,12 +491,9 @@ describe('getCommitCompare', () => {
       if (args[0] === 'rev-list') {
         return Promise.resolve({ stdout: 'commit-oid parent-oid\n' })
       }
-      if (args.includes('--name-status')) {
-        return Promise.resolve({ stdout: 'M\tdocs/a => b.txt\n' })
-      }
-      if (args.includes('--numstat')) {
+      if (args.includes('--raw')) {
         return Promise.resolve({
-          stdout: args.includes('-z') ? '1\t0\tdocs/a => b.txt\0' : '1\t0\tdocs/a => b.txt\n'
+          stdout: ':100644 100644 a b M\0docs/a => b.txt\0' + '1\t0\tdocs/a => b.txt\0'
         })
       }
       throw new Error(`unexpected git args: ${args.join(' ')}`)
@@ -468,17 +502,7 @@ describe('getCommitCompare', () => {
     const result = await getCommitCompare('/repo', 'commit-oid')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'diff',
-        '-z',
-        '--numstat',
-        '-M',
-        '-C',
-        'parent-oid',
-        'commit-oid'
-      ],
+      ['diff', '--raw', '--numstat', '-z', '-M', '-C', 'parent-oid', 'commit-oid', '--'],
       expect.objectContaining({ cwd: '/repo' })
     )
     expect(result.entries).toEqual([

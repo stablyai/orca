@@ -61,7 +61,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Parallel workspace orchestration',
     caption:
       'Give each task its own workspace - no stashing, no branch juggling. Fan work across agents, compare, and continue with the best result.',
-    gifPath: 'tile-01.gif',
+    gifPath: 'tile-01.webp',
     posterPath: 'tile-01.poster.jpg',
     recordedAtPath: 'tile-01.recorded-at.json',
     owner: 'worktree-orchestration',
@@ -73,7 +73,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Ghostty-class terminal',
     caption:
       'WebGL rendering, infinite splits, scrollback restored on restart, full scrollback search.',
-    gifPath: 'tile-02.gif',
+    gifPath: 'tile-02.webp',
     posterPath: 'tile-02.poster.jpg',
     recordedAtPath: 'tile-02.recorded-at.json',
     owner: 'terminal',
@@ -85,7 +85,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'GitHub & Linear, native',
     caption:
       'Find connected GitHub or Linear work in Tasks, open its context, and start workspaces without switching tools.',
-    gifPath: 'tile-03.gif',
+    gifPath: 'tile-03.webp',
     posterPath: 'tile-03.poster.jpg',
     recordedAtPath: 'tile-03.recorded-at.json',
     owner: 'task-integrations',
@@ -96,7 +96,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     kind: 'media',
     title: 'Supported CLI agents',
     caption: 'Claude Code, Codex, Cursor CLI, Gemini, Copilot, OpenCode, and Pi are preconfigured.',
-    gifPath: 'tile-04.gif',
+    gifPath: 'tile-04.webp',
     posterPath: 'tile-04.poster.jpg',
     recordedAtPath: 'tile-04.recorded-at.json',
     owner: 'agent-integrations',
@@ -108,7 +108,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Embedded browser + Design Mode',
     caption:
       'A real Chromium window per workspace. Click any UI element to send its HTML, CSS, and a cropped screenshot into your agent.',
-    gifPath: 'tile-05.gif',
+    gifPath: 'tile-05.webp',
     posterPath: 'tile-05.poster.jpg',
     recordedAtPath: 'tile-05.recorded-at.json',
     owner: 'browser-experience',
@@ -120,7 +120,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Remote workspaces',
     caption:
       'Run agents on a remote machine with the same Orca editing, git, and terminal workflow.',
-    gifPath: 'tile-06.gif',
+    gifPath: 'tile-06.webp',
     posterPath: 'tile-06.poster.jpg',
     recordedAtPath: 'tile-06.recorded-at.json',
     owner: 'ssh-workspaces',
@@ -132,6 +132,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Monaco editor, drag-to-agent',
     caption:
       "VS Code's editor, autosave everywhere, quick-open with hidden files, drag-drop files or Finder images into an agent prompt.",
+    // gif2webp changes this recording's 10 ms frame delays.
     gifPath: 'tile-07.gif',
     posterPath: 'tile-07.poster.jpg',
     recordedAtPath: 'tile-07.recorded-at.json',
@@ -144,7 +145,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Inline review, back to the agent',
     caption:
       'Drop markdown comments on any diff line, batch them, ship them back to the agent. Inspect CI, resolve conflicts, open PRs - all in-app.',
-    gifPath: 'tile-08.gif',
+    gifPath: 'tile-08.webp',
     posterPath: 'tile-08.poster.jpg',
     recordedAtPath: 'tile-08.recorded-at.json',
     owner: 'diff-review',
@@ -155,7 +156,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     kind: 'media',
     title: 'Orca CLI',
     caption: 'Agents can drive Orca too: create workspaces, snapshot screens, click, and fill.',
-    gifPath: 'tile-09.gif',
+    gifPath: 'tile-09.webp',
     posterPath: 'tile-09.poster.jpg',
     recordedAtPath: 'tile-09.recorded-at.json',
     owner: 'orca-cli',
@@ -167,7 +168,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Keyboard-native',
     caption:
       'Jump across workspaces, open files, and remap every shortcut. Move at the speed of your fingers.',
-    gifPath: 'tile-10.gif',
+    gifPath: 'tile-10.webp',
     posterPath: 'tile-10.poster.jpg',
     recordedAtPath: 'tile-10.recorded-at.json',
     owner: 'keyboard-ux',
@@ -179,7 +180,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'Usage & rate-limit aware',
     caption:
       'See Claude and Codex usage, rate-limit resets, and hot-swap Codex accounts without re-logging in.',
-    gifPath: 'tile-11.gif',
+    gifPath: 'tile-11.webp',
     posterPath: 'tile-11.poster.jpg',
     recordedAtPath: 'tile-11.recorded-at.json',
     owner: 'usage-rate-limits',
@@ -191,7 +192,7 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
     title: 'PDFs, images, CSV, Markdown',
     caption:
       'Preview everything your repo carries: PDFs, image diff modes, CSV tables, wiki-linked Markdown with search.',
-    gifPath: 'tile-12.gif',
+    gifPath: 'tile-12.webp',
     posterPath: 'tile-12.poster.jpg',
     recordedAtPath: 'tile-12.recorded-at.json',
     owner: 'file-preview',

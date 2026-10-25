@@ -1,4 +1,4 @@
-FROM node:24-bookworm
+FROM node:24.22.1-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -26,7 +26,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable \
-  && corepack prepare pnpm@12.0.0 --activate \
+  && corepack prepare pnpm@12.14.0 --activate \
   && pnpm --version
 
 WORKDIR /workspace

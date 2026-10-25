@@ -21,6 +21,12 @@ import {
   useActivityTerminalPortalStatus
 } from './activity-terminal-portal-status'
 import type { ActivityTerminalPortalSlotId } from './activity-thread-types'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export * from './activity-prototype-page-exports'
 
@@ -236,13 +242,15 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       })
     }
 
-    window.addEventListener('keydown', focusActivityFilter, { capture: true })
-    return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
+    addAppKeyListener('keydown', focusActivityFilter)
+    return () => removeAppKeyListener('keydown', focusActivityFilter)
   }, [activePortalTargetEl, inactivePortalTargetEl])
 
   const {
     markThreadRead,
     markThreadUnread,
+    markThreadsRead,
+    markThreadsUnread,
     selectThread,
     jumpToWorkspace,
     markAllThreadsRead,
@@ -257,18 +265,24 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     setSelectedPaneKey
   })
 
+  const worktreesByRepo = selectWorktreesByRepo(storeData)
+  const detectedWorktreesByRepo = selectDetectedWorktreesByRepo(storeData)
+  const folderWorkspaces = selectFolderWorkspaces(storeData)
+
   const canJumpToWorkspace = useCallback(
     (thread: Parameters<typeof hasActivityThreadWorkspace>[0]) =>
       hasActivityThreadWorkspace(thread, {
-        worktreesByRepo: storeData.worktreesByRepo,
-        detectedWorktreesByRepo: storeData.detectedWorktreesByRepo,
-        folderWorkspaces: storeData.folderWorkspaces,
+        worktreesByRepo,
+        detectedWorktreesByRepo,
+        folderWorkspaces,
+        floatingWorkspacePath: storeData.floatingWorkspacePath,
         defaultHostId: storeData.defaultHostId
       }),
     [
-      storeData.worktreesByRepo,
-      storeData.detectedWorktreesByRepo,
-      storeData.folderWorkspaces,
+      worktreesByRepo,
+      detectedWorktreesByRepo,
+      folderWorkspaces,
+      storeData.floatingWorkspacePath,
       storeData.defaultHostId
     ]
   )
@@ -337,6 +351,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
           onJumpToWorkspace={jumpToWorkspace}
           onMarkThreadRead={markThreadRead}
           onMarkThreadUnread={markThreadUnread}
+          onMarkThreadsRead={markThreadsRead}
+          onMarkThreadsUnread={markThreadsUnread}
           canJumpToWorkspace={canJumpToWorkspace}
           isThreadListResizing={isThreadListResizing}
           onResizeStart={onResizeStart}

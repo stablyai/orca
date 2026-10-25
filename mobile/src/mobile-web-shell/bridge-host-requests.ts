@@ -5,6 +5,7 @@ import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'
 import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
+import { substituteBridgePageClientIdentity } from './bridge/bridge-page-client-identity'
 
 type RequestMessage = Extract<BridgeClientMessage, { type: 'request' }>
 
@@ -21,6 +22,8 @@ export type BridgeHostRequestDeps = {
   capExceeded: (message: string) => Error
   /** Answers a `native.` method on this device. Rejecting is how the seam refuses one. */
   serveNative: (id: string, method: string, params: unknown) => Promise<RpcResponse>
+  /** This device's identity to the host, swapped in for the page's placeholder. */
+  readClientIdentity: () => string | null
 }
 
 /**
@@ -66,14 +69,25 @@ export class BridgeHostRequests {
    *  are the whole boundary, and a test that reads only `client.requests` sees only this half. */
   private forward(message: RequestMessage): Promise<RpcResponse> {
     const { client } = this.deps
+    // An envelope is wire fields for a desktop RPC; a native verb never reaches the wire.
     if (isBridgeNativeMethod(message.method)) {
       return this.deps.serveNative(message.id, message.method, message.params)
     }
-    if (message.options !== undefined) {
-      return client.sendRequest(message.method, message.params, message.options)
+    // One of the two doors to the client, and the placeholder must not survive either. A throw
+    // here lands in `open`'s catch, which answers the page the way every other refusal does.
+    const params = substituteBridgePageClientIdentity(
+      message.params,
+      this.deps.readClientIdentity()
+    )
+    const options =
+      message.envelope === undefined
+        ? message.options
+        : { ...message.options, envelope: message.envelope }
+    if (options !== undefined) {
+      return client.sendRequest(message.method, params, options)
     }
     return 'params' in message
-      ? client.sendRequest(message.method, message.params)
+      ? client.sendRequest(message.method, params)
       : client.sendRequest(message.method)
   }
 

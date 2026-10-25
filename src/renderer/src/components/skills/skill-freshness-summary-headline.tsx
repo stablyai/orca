@@ -1,56 +1,11 @@
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
-import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
+import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
+import { summarizeBundledSkillPlan } from '../../../../shared/bundled-skill-summary'
 import { translate } from '@/i18n/i18n'
 
-export type FreshnessSummaryKind =
-  | 'loading'
-  | 'empty'
-  | 'eligible'
-  | 'current'
-  | 'attention'
-  | 'scan-incomplete'
-
-export function summarizeInventory(
-  inventory: SkillFreshnessInventory | null,
-  hasBlockedGroup: boolean,
-  hasIncompleteScan: boolean
-): FreshnessSummaryKind {
-  if (!inventory) {
-    return 'loading'
-  }
-  if (inventory.eligibleUpdateNames.length > 0) {
-    return 'eligible'
-  }
-  // Why: a named skill the update can't converge outranks a coverage gap — the gap
-  // says something might be unchecked, the group says something definitely is wrong.
-  if (hasBlockedGroup) {
-    return 'attention'
-  }
-  // Why: a fault on the user's disk, or a bound that ended the walk early. Skipping a
-  // single folder is not either one — headlining that would put a permanent warning on
-  // any ordinary large plugin cache, the unclearable amber this change removes.
-  if (hasIncompleteScan) {
-    return 'scan-incomplete'
-  }
-  // Why: ordered after the scan checks so a scan that never completed is not reported
-  // as an empty machine — "none found" would be a claim the scan cannot support.
-  if (inventory.installations.length === 0) {
-    return 'empty'
-  }
-  return 'current'
-}
-
-/** Pre-run headline. Once a run starts, the dialog reports the run instead. */
-export function SummaryHeadline({
-  kind,
-  eligibleCount,
-  blockedCount
-}: {
-  kind: FreshnessSummaryKind
-  eligibleCount: number
-  blockedCount: number
-}): React.JSX.Element {
-  if (kind === 'loading') {
+/** Pre-run headline, read from the live plan; once a run starts the dialog reports it. */
+export function SummaryHeadline({ plan }: { plan: BundledSkillPlan | null }): React.JSX.Element {
+  if (!plan) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
@@ -61,7 +16,7 @@ export function SummaryHeadline({
       </div>
     )
   }
-  if (kind === 'empty') {
+  if (plan.skills.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
         {translate(
@@ -71,47 +26,23 @@ export function SummaryHeadline({
       </p>
     )
   }
-  if (kind === 'current') {
-    return (
-      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-        {translate(
-          'auto.components.skills.SkillFreshnessUpdateDialog.success',
-          'All installed Orca skills are up to date.'
-        )}
-      </div>
-    )
-  }
-  if (kind === 'attention') {
-    // No follow-up sentence: skipped rows open themselves, so the reason is
-    // already on screen directly under this headline.
+  const summary = summarizeBundledSkillPlan(plan)
+  const updates = summary.skills.filter((skill) => skill.state === 'update').length
+  if (summary.badge === 'repair') {
     return (
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
         {translate(
-          'auto.components.skills.SkillFreshnessUpdateDialog.attention',
-          'Some installed Orca skills were left out of the update.'
+          'auto.components.skills.SkillFreshnessUpdateDialog.repair',
+          'An earlier update was interrupted. Update to repair it.'
         )}
       </div>
     )
   }
-  if (kind === 'scan-incomplete') {
-    // No follow-up sentence, matching 'attention': the skipped folders are listed
-    // directly under this headline, so pointing at a details panel would be stale.
+  if (updates > 0) {
     return (
-      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-        {translate(
-          'auto.components.skills.SkillFreshnessUpdateDialog.scanIncomplete',
-          'Orca could not finish checking plugin-managed skills.'
-        )}
-      </div>
-    )
-  }
-  return (
-    <div className="space-y-1">
       <p className="text-sm font-medium text-foreground">
-        {eligibleCount === 1
+        {updates === 1
           ? translate(
               'auto.components.skills.SkillFreshnessUpdateDialog.updateOne',
               '1 update available'
@@ -119,23 +50,43 @@ export function SummaryHeadline({
           : translate(
               'auto.components.skills.SkillFreshnessUpdateDialog.updateMany',
               '{{value0}} updates available',
-              { value0: eligibleCount }
+              { value0: updates }
             )}
       </p>
-      {blockedCount > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {blockedCount === 1
+    )
+  }
+  if (
+    summary.skills.some((skill) => skill.locations.some((location) => location.state === 'leave'))
+  ) {
+    const current = summary.skills.filter((skill) => skill.upToDate).length
+    return (
+      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+        {current > 0 ? <CheckCircle2 className="size-4 text-status-success" /> : null}
+        {current === 0
+          ? translate(
+              'auto.components.skills.SkillFreshnessUpdateDialog.noUpdates',
+              'No updates available'
+            )
+          : current === 1
             ? translate(
-                'auto.components.skills.SkillFreshnessUpdateDialog.blockedOne',
-                "1 skill can't be updated automatically."
+                'auto.components.skills.SkillFreshnessUpdateDialog.currentOne',
+                '1 skill is up to date'
               )
             : translate(
-                'auto.components.skills.SkillFreshnessUpdateDialog.blockedMany',
-                "{{value0}} skills can't be updated automatically.",
-                { value0: blockedCount }
+                'auto.components.skills.SkillFreshnessUpdateDialog.currentMany',
+                '{{value0}} skills are up to date',
+                { value0: current }
               )}
-        </p>
-      ) : null}
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+      {translate(
+        'auto.components.skills.SkillFreshnessUpdateDialog.success',
+        'All installed Orca skills are up to date.'
+      )}
     </div>
   )
 }

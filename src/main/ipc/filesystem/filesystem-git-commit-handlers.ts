@@ -1,12 +1,10 @@
 import { ipcMain } from 'electron'
 import { commitChanges } from '../../git/status'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 
 export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -16,17 +14,11 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       _event,
       args: { worktreePath: string; message: string; connectionId?: string }
     ): Promise<{ success: boolean; error?: string }> => {
-      // Why: validate at the IPC boundary so the renderer gets a clear error instead of an opaque execFile failure.
+      // Validate at IPC so users receive a clear error before process launch.
       if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
       }
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.commit(args.worktreePath, args.message)
-      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,

@@ -44,7 +44,7 @@ vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: routeIdentityMock
 }))
 
-vi.mock('../browser/browser-cookie-import', () => ({
+vi.mock('../browser/cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: detectBrowsersMock,
   importCookiesFromBrowser: vi.fn(),
   importCookiesFromFile: vi.fn(),
@@ -85,9 +85,7 @@ describe('browser session profile IPC', () => {
     return handleMock.mock.calls.find(([channel]) => channel === 'browser:identity:set')?.[1]
   }
 
-  // Why reject rather than coerce: the RPC door validates mode against z.enum(['clean','native'])
-  // and rejects. Coercing an unrecognized value to 'clean' here made one concept answer an unknown
-  // value two different ways, and reported success for a mode that was quietly replaced.
+  // Unknown modes must reject consistently with RPC instead of silently selecting clean.
   it('refuses an unrecognized identity mode instead of silently selecting Cleaned', async () => {
     setTrustedBrowserRendererWebContentsId(91)
     const handler = identitySetHandler()
@@ -114,8 +112,7 @@ describe('browser session profile IPC', () => {
     )?.[1]
   }
 
-  // Why: the import runs wherever the pages are hosted, so the picker must be sourced from the same
-  // machine — a remote-sourced list is either empty (headless) or names profiles this desktop lacks.
+  // Client-hosted import must list browsers on this desktop, not the headless remote.
   it('detects this desktop’s browsers only while the environment is client-hosted', () => {
     detectBrowsersMock.mockReturnValue([
       {

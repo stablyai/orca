@@ -21,11 +21,11 @@ import {
   type ElectronApplication,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { TEST_REPO_PATH_FILE } from '../global-setup'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { closeElectronAppForE2E } from './electron-process-shutdown'
+import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
@@ -33,7 +33,11 @@ import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
 } from './electron-home-isolation'
-import { createSeededTestRepo, isValidGitRepo } from './seeded-test-repo'
+import {
+  createSeededTestRepo,
+  isValidGitRepo,
+  provideWorkerTestRepository
+} from './seeded-test-repo'
 
 type OrcaTestFixtures = {
   electronApp: ElectronApplication
@@ -66,7 +70,7 @@ type OrcaTestFixtures = {
 }
 
 type OrcaWorkerFixtures = {
-  /** Absolute path to the test git repo created by globalSetup. */
+  /** Absolute path to this worker's disposable test git repo. */
   testRepoPath: string
 }
 
@@ -88,9 +92,11 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
 })()
 
 async function removeUserDataDirAfterShutdown(userDataDir: string): Promise<void> {
+  const started = performance.now()
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(userDataDir, { recursive: true, force: true })
+      recordElectronShutdownTiming('profile-removal', started)
       return
     } catch (error) {
       if (attempt === 4) {
@@ -142,19 +148,13 @@ export function forwardElectronProcessLogs(app: ElectronApplication, testInfo: T
  * userData directory so state cannot leak across specs through persistence.
  */
 export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
-  // Worker-scoped: read the test repo path once
+  // Auto: restart-only specs also read the published path without requesting an app fixture.
   testRepoPath: [
     // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
     async ({}, provideFixture) => {
-      const persistedRepoPath = existsSync(TEST_REPO_PATH_FILE)
-        ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-        : ''
-      const repoPath = isValidGitRepo(persistedRepoPath)
-        ? persistedRepoPath
-        : createSeededTestRepo()
-      await provideFixture(repoPath)
+      await provideWorkerTestRepository(provideFixture)
     },
-    { scope: 'worker' }
+    { scope: 'worker', auto: true }
   ],
 
   // Why: Windows keeps watched worktrees locked until Electron and its
@@ -241,18 +241,9 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // Why: ORCA_E2E_HEADLESS suppresses mainWindow.show() for CI/headless
       // runs. ORCA_E2E_HEADFUL overrides this for tests that need a visible
       // window (e.g. pointer-capture drag tests).
-      // Why: local SSH E2E deploys the relay from the dev build output. The
-      // Electron app's getAppPath() points at the compiled main bundle in E2E,
-      // so pass the repo-root relay path explicitly for this opt-in suite.
       env: {
         ...homeIsolation.env,
         NODE_ENV: 'development',
-        ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
-          process.env.ORCA_E2E_SSH_DOCKER === '1' ||
-          process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') &&
-        !cleanEnv.ORCA_RELAY_PATH
-          ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
-          : {}),
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
@@ -263,16 +254,14 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     } catch (error) {
-      await closeElectronAppForE2E(app)
-      await cleanupE2EDaemons(userDataDir)
+      await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
       await removeUserDataDirAfterShutdown(userDataDir)
       throw error
     }
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.
-    await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
+    await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
     await removeUserDataDirAfterShutdown(userDataDir)
   },
 
@@ -343,7 +332,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
             if (!store) {
               return false
             }
-            await store.getState().fetchRepos()
+            await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
             const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
             if (!repo) {
               return false
@@ -374,9 +363,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       }, seededRepoId)
       .catch(() => false)
 
-    // Why: parallel specs mutate real git worktrees in the shared fixture repo.
-    // A first scan can briefly return no rows while git holds a worktree lock,
-    // so poll the public fetch path until the seeded primary + secondary load.
+    // Wait for the public fetch path to discover both seeded worktrees.
     await playwrightExpect
       .poll(
         () =>

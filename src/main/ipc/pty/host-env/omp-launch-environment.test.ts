@@ -20,19 +20,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('OMP launch directory environment', () => {
-  it.each([{ launchAgent: 'omp' }, { launchCommand: 'omp' }, {}])(
-    'inherits login-shell category roots for %j',
-    async (options) => {
-      const env = {}
-      await inheritOmpLaunchEnvironment(env, options)
-      expect(env).toEqual({
-        XDG_DATA_HOME: '/login/data',
-        XDG_STATE_HOME: '/login/state',
-        XDG_CACHE_HOME: '/login/cache',
-        PI_CONFIG_DIR: '.config/omp'
-      })
-    }
-  )
+  it.each([
+    { launchAgent: 'omp' },
+    { launchCommand: 'omp' },
+    { launchCommand: 'sleep 30 && omp' },
+    {}
+  ])('inherits login-shell category roots for %j', async (options) => {
+    const env = {}
+    await inheritOmpLaunchEnvironment(env, options)
+    expect(env).toEqual({
+      XDG_DATA_HOME: '/login/data',
+      XDG_STATE_HOME: '/login/state',
+      XDG_CACHE_HOME: '/login/cache',
+      PI_CONFIG_DIR: '.config/omp'
+    })
+  })
 
   it('uses the same login roots for merged local env and daemon pane deltas', async () => {
     const local = { XDG_DATA_HOME: '/old/data', PI_CONFIG_DIR: '.old-omp' }

@@ -1,5 +1,5 @@
 import type { Session } from 'electron'
-import type { ViewportUserAgentOverride } from './browser-viewport-user-agent'
+import type { BrowserTabIdentity, UserAgentMetadata } from './browser-tab-identity'
 export { cleanElectronUserAgent } from './browser-process-user-agent'
 import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 
@@ -19,7 +19,7 @@ export type BrowserSessionRequestUserAgentResolver = (args: {
   webContentsId?: number
   currentUserAgent?: string
   effectiveUserAgent?: string
-}) => ViewportUserAgentOverride | undefined
+}) => BrowserTabIdentity | undefined
 
 function quoteClientHint(value: string): string {
   return `"${value.replace(/["\\]/g, '\\$&')}"`
@@ -33,7 +33,7 @@ function formatClientHintBrands(brands: { brand: string; version: string }[]): s
 
 function applyUserAgentMetadataHeaders(
   headers: Record<string, string>,
-  metadata: NonNullable<ViewportUserAgentOverride['userAgentMetadata']>
+  metadata: UserAgentMetadata
 ): void {
   const values: Record<string, string> = {
     'sec-ch-ua': formatClientHintBrands(metadata.brands),
@@ -59,8 +59,7 @@ function applyUserAgentMetadataHeaders(
   }
 }
 
-// Desktop client hints remain browser-owned. Mobile overrides carry the same metadata CDP used,
-// so worker requests replace only hints Chromium already chose to emit without inventing them.
+// Rewrite only hints Chromium emitted; desktop hints remain browser-owned.
 export function installBrowserSessionUserAgentPolicy(
   sess: Session,
   resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
@@ -77,8 +76,7 @@ export function installBrowserSessionUserAgentPolicy(
       } catch {
         // The request can race guest teardown; the header and manager state still provide a fallback.
       }
-      // Firefox is delivered per-target and cannot reach workers; keep it clean-only to preserve one
-      // coherent identity per mode instead of pairing a Firefox document with native workers.
+      // Native mode must keep its process identity on auth requests.
       if (
         getBrowserProcessUserAgentIdentity().mode === 'clean' &&
         shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
@@ -101,15 +99,10 @@ export function installBrowserSessionUserAgentPolicy(
         callback({ requestHeaders: headers })
         return
       }
-      if (identity.userAgent) {
-        setUserAgentHeader(headers, identity.userAgent)
-      }
-      if (identity.userAgent === firefoxUa) {
+      setUserAgentHeader(headers, identity.userAgent)
+      if (identity.kind === 'google-auth') {
         stripClientHints(headers)
-        callback({ requestHeaders: headers })
-        return
-      }
-      if (identity.userAgentMetadata) {
+      } else if (identity.kind === 'mobile') {
         applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
       }
       callback({ requestHeaders: headers })

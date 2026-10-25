@@ -48,7 +48,7 @@ export function TroubleshootView({
   runDiagnostics: () => void
   onBack: () => void
   onConnectionLog: () => void
-  /** Slot the route fills only under `__DEV__`; null in every shipped build. */
+  /** Developer and shell rows the route fills in. */
   developerRow?: ReactNode
 }) {
   const insets = useSafeAreaInsets()

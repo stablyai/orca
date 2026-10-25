@@ -10,11 +10,12 @@
  * The only defensible default is the one that varies per layout. This
  * module fingerprints the active layout from Chromium's
  * navigator.keyboard.getLayoutMap() (ships in Chrome 69+, so every Electron
- * we could run). The base layer cannot separate US from US-International or
- * ABC, so every US-shaped layout maps to `true` here and `input-source-id.ts`
- * narrows that to plain US whenever macOS gives us the real input source ID.
+ * we could run). The base layer cannot separate standard ABC/US from
+ * US-International, so every US-shaped layout maps to `true` here and
+ * `input-source-id.ts` narrows that to ABC and US using the native input source ID.
  * Everything else — Dvorak, Colemak, UK, every international layout — maps
- * to `false`.
+ * to `false`. Missing native identity on macOS also stays conservative:
+ * an IME can expose a US-shaped backing layout without identifying itself.
  *
  */
 
@@ -59,7 +60,7 @@ export type DetectedLayoutCategory =
  * Semicolon (`o` vs `;`). Dvorak fails KeyQ immediately. Both get classified
  * as `non-us` and default to `'false'`; users who want `'true'` flip the
  * explicit override. The native input-source classifier distinguishes
- * plain US from US-shaped composition layouts.
+ * standard ABC/US from US-shaped international composition layouts.
  */
 const US_FINGERPRINT: Record<string, string> = {
   KeyQ: 'q',

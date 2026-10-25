@@ -50,6 +50,16 @@ export function buildRestoredRemoteBrowserPageHandles(
   return handles
 }
 
+/** Whether this desktop hosts the remote page itself rather than streaming it from the host. Staged
+ *  and restored rows count before the host confirms a placement, so they never mount as streams. */
+export function isClientHostedBrowserPageHandle(handle: RemoteBrowserPageHandle): boolean {
+  return (
+    handle.placement?.kind === 'client' ||
+    (handle.staged === true && handle.stagedClientHosted === true) ||
+    handle.restoredClientHosted === true
+  )
+}
+
 export function retainCookieImportExecutionHost(
   result: BrowserCookieImportResult,
   executionHostId: ExecutionHostId,
@@ -125,6 +135,32 @@ export function profileListByHostUpdate(
       ...state.browserSessionProfilesByHostId,
       [hostId]: profiles
     }
+  }
+}
+
+/** A host's full listing; it also drops a default pick the host no longer lists, so new tabs don't open on a deleted profile. */
+export function listedProfilesByHostUpdate(
+  state: AppState,
+  profiles: BrowserSessionProfile[],
+  hostId: ExecutionHostId
+): Partial<BrowserSlice> {
+  const isUnlisted = (profileId: string | null | undefined): boolean =>
+    !!profileId && !profiles.some((profile) => profile.id === profileId)
+  const update = profileListByHostUpdate(state, profiles, hostId)
+  return {
+    ...update,
+    // Why: the unkeyed default belongs to the Settings host, the one whose list the mirror follows.
+    ...(update.browserSessionProfiles && isUnlisted(state.defaultBrowserSessionProfileId)
+      ? { defaultBrowserSessionProfileId: null }
+      : {}),
+    ...(isUnlisted(state.defaultBrowserSessionProfileIdByHostId[hostId])
+      ? {
+          defaultBrowserSessionProfileIdByHostId: {
+            ...state.defaultBrowserSessionProfileIdByHostId,
+            [hostId]: null
+          }
+        }
+      : {})
   }
 }
 

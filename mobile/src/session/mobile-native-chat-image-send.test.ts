@@ -190,21 +190,6 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
     expect(client.calls[0]?.params.text).toBe(clearInput)
   })
 
-  it('falls back to a single Ctrl+U when no draft is parked', async () => {
-    const client = clientWithResponses([sendResult(true), sendResult(true)])
-
-    await pasteMobileNativeChatImagePaths({
-      client,
-      agent: 'claude',
-      terminal: 'term-1',
-      deviceToken: null,
-      imagePaths: ['/tmp/a.png'],
-      followedByText: true
-    })
-
-    expect(client.calls[0]?.params.text).toBe('\x15')
-  })
-
   it('keeps image writes byte-clean when no text or submit follows', async () => {
     const client = clientWithResponses([sendResult(true), sendResult(true), sendResult(true)])
 

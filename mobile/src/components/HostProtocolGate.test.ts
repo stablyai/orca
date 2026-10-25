@@ -2,7 +2,8 @@ import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { HostProtocolGate, useHostProtocolGates } from './HostProtocolGate'
+import { HostProtocolGate } from './HostProtocolGate'
+import { useHostProtocolGates } from './host-protocol-gates-context'
 
 const nativeTestState = vi.hoisted(() => ({
   openUrl: vi.fn(),
@@ -34,8 +35,14 @@ vi.mock('expo-router', () => ({
 const hostClient = vi.hoisted(() => ({
   current: { client: null as RpcClient | null, state: 'disconnected' as string }
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => hostClient.current
+}))
+// The wall's release offer: the native hook imports the update checker module.
+vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => null }))
+// Descriptor bookkeeping only; the real recorder reaches the native keychain through host-store.
+vi.mock('../transport/host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: vi.fn()
 }))
 
 function clientWithStatus(result: Record<string, unknown>): RpcClient {

@@ -53,6 +53,23 @@ function setPermissionStates(states: DeveloperPermissionState[]): void {
   api.developerPermissions.getStatus = vi.fn(async () => states)
 }
 
+it.each(['denied', 'unknown'] as const)(
+  'distinguishes app access from a %s terminal host',
+  async (terminalHostStatus) => {
+    setPermissionStates([{ id: 'full-disk-access', status: 'granted', terminalHostStatus }])
+    await act(async () => root.render(<DeveloperPermissionsPane />))
+    const row = container.querySelector(
+      '[data-settings-section="developer-permissions-full-disk-access"]'
+    )
+    expect(row?.textContent).toContain('App: Granted')
+    expect(row?.textContent).toContain(
+      terminalHostStatus === 'denied' ? 'Terminal hosts: Denied' : 'Terminal hosts: Check manually'
+    )
+    expect(row?.textContent).toContain('restarting closes its current terminals')
+    expect(window.api.developerPermissions.request).not.toHaveBeenCalled()
+  }
+)
+
 it('requests Local Network access without claiming a permission verdict', async () => {
   setPermissionStates([{ id: 'local-network', status: 'unknown' }])
 

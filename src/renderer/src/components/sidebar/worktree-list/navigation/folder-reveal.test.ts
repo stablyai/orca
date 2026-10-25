@@ -8,7 +8,7 @@ import {
   getKnownSidebarWorktreeById,
   sidebarWorkspaceStillExists
 } from './folder-reveal'
-import { getProjectGroupHeaderKey } from '../grouping/group-keys'
+import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
@@ -117,6 +117,64 @@ describe('worktree list folder reveal', () => {
         [child, root]
       )
     ).toEqual([getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
+  })
+
+  it.each(['local', 'ssh:builder', 'runtime:builder'] as const)(
+    'expands only the %s owner when folder and group ids repeat across hosts',
+    (executionHostId) => {
+      const otherHostId = executionHostId === 'local' ? 'runtime:other' : 'local'
+      const root = makeProjectGroup({ id: 'selected-root', executionHostId })
+      const child = makeProjectGroup({
+        id: 'group-child',
+        parentGroupId: root.id,
+        executionHostId
+      })
+      const otherRoot = makeProjectGroup({ id: 'other-root', executionHostId: otherHostId })
+      const otherChild = makeProjectGroup({
+        id: child.id,
+        parentGroupId: otherRoot.id,
+        executionHostId: otherHostId
+      })
+      const folderWorkspace = makeFolderWorkspace({ executionHostId })
+
+      expect(
+        getFolderWorkspaceRevealGroupKeys(
+          folderWorkspaceKey(folderWorkspace.id),
+          [{ ...folderWorkspace, executionHostId: otherHostId }, folderWorkspace],
+          [otherRoot, otherChild, root, child],
+          { executionHostId, defaultHostId: 'local' }
+        )
+      ).toEqual([
+        getProjectGroupHeaderKey(root.id),
+        getProjectGroupHeaderKey(child.id),
+        `host:${executionHostId}`
+      ])
+    }
+  )
+
+  it('follows the parents the sidebar draws when same-id group copies disagree (#30045)', () => {
+    // The sidebar draws one header per group id, from the last copy, so reveal must open its parent.
+    const localChild = makeProjectGroup({ id: 'group-child', executionHostId: 'local' })
+    const remoteRoot = makeProjectGroup({ id: 'remote-root', executionHostId: 'runtime:other' })
+    const remoteChild = makeProjectGroup({
+      id: localChild.id,
+      parentGroupId: remoteRoot.id,
+      executionHostId: 'runtime:other'
+    })
+    const folderWorkspace = makeFolderWorkspace({ executionHostId: 'local' })
+
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspaceKey(folderWorkspace.id),
+        [folderWorkspace],
+        [localChild, remoteRoot, remoteChild],
+        { executionHostId: 'local', defaultHostId: 'local' }
+      )
+    ).toEqual([
+      getProjectGroupHeaderKey(remoteRoot.id),
+      getProjectGroupHeaderKey(localChild.id),
+      'host:local'
+    ])
   })
 })
 

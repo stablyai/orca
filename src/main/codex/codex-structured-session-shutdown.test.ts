@@ -1,13 +1,13 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type {
-  CodexAppServerConnection,
-  openCodexAppServerConnection
-} from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch
 } from './codex-structured-session-adapter'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-1'
@@ -25,7 +25,7 @@ function identity(): AgentSessionJournalIdentity {
     workspaceId: 'workspace-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 
@@ -93,7 +93,11 @@ describe('CodexStructuredSessionAdapter shutdown', () => {
       readProcessStartTime: async () => 1_700_000_000_000
     })
 
-    await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-1' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity(),
+      fence: 7,
+      spawnToken: 'spawn-1'
+    })
     await expect(adapter.closeAll()).rejects.toThrow(
       'codex structured session shutdown could not prove every child stopped'
     )

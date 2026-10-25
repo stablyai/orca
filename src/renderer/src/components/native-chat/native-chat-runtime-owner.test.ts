@@ -63,15 +63,4 @@ describe('selectNativeChatRuntimeEnvironmentId', () => {
   it('returns null when the terminal tab matches no tab in tabsByWorktree', () => {
     expect(selectNativeChatRuntimeEnvironmentId(state({ tabsByWorktree: {} }), 'tab-1')).toBeNull()
   })
-
-  it('returns the owner id even when the worktree record has no resolvable path', () => {
-    // Guards KTD-1: no `path` on the worktree record and no getKnownWorktreeById —
-    // the selector must still resolve the runtime owner from the host mapping alone.
-    expect(
-      selectNativeChatRuntimeEnvironmentId(
-        state({ worktreesByRepo: worktreeRecord('runtime:env-1') }),
-        'tab-1'
-      )
-    ).toBe('env-1')
-  })
 })

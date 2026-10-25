@@ -4,7 +4,7 @@ import type { CommitMessageAiSettings } from '../../../src/shared/commit-message
 
 // Why: these specs create worktrees via raw `git worktree add`, which bypasses
 // Orca's own add/remove path — the one thing that invalidates the main-process
-// worktrees.list scan cache (DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000). So a
+// worktrees.listDetected scan cache (DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000). So a
 // read inside the TTL window can serve a stale miss. No renderer-reachable
 // cache-invalidation seam exists without adding product surface, so poll past
 // the deterministic 5s boundary. Budget 10s (not 6s, which sits dangerously
@@ -32,7 +32,7 @@ async function resolveE2eWorktreeId(
             if (!store) {
               throw new Error('window.__store is not available')
             }
-            await store.getState().fetchRepos()
+            await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
             const repo = store.getState().repos.find((entry) => entry.path === repoPath)
             if (!repo) {
               throw new Error(`Seeded E2E repo was not registered: ${repoPath}`)

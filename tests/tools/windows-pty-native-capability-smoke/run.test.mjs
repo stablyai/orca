@@ -1,16 +1,15 @@
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { checkoutRunProcessPath, formatProbeFailure, packagedProbeInvocation } from './run.mjs'
-
-const runnerSource = readFileSync(new URL('./run.mjs', import.meta.url), 'utf8')
 
 describe('packaged Windows native smoke runner boundary', () => {
   it('uses one checkout-owned runner for current and affected package paths', () => {
     const current = packagedProbeInvocation('/ci/current/dist/win-unpacked/Orca.exe')
     const affected = packagedProbeInvocation('/ci/1.4.158/dist/win-unpacked/Orca.exe')
 
-    expect(checkoutRunProcessPath()).toBe(path.resolve('out/shared/child-process/run-process.js'))
+    expect(checkoutRunProcessPath()).toBe(
+      createRequire(import.meta.url).resolve('@orca/process-host')
+    )
     expect(current.program).not.toBe(affected.program)
     expect(current.args[0]).toBe(affected.args[0])
     expect(current.args[1]).toBe('--exercise')
@@ -35,13 +34,5 @@ describe('packaged Windows native smoke runner boundary', () => {
     expect(failure).not.toContain('old-')
     expect(failure).toContain('stdout-tail')
     expect(failure).toContain('stage=target-spawn:start')
-  })
-
-  it('does not import child_process or resolve the runner from the artifact', () => {
-    expect(runnerSource).not.toContain('node:child_process')
-    expect(runnerSource).not.toMatch(
-      /path\.join\(resourcesDir[\s\S]*?app\.asar\.unpacked[\s\S]*?run-process\.js/
-    )
-    expect(runnerSource).toContain("'../../../out/shared/child-process/run-process.js'")
   })
 })

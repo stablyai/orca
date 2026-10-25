@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -50,7 +51,7 @@ describe('OrcaRuntimeService', () => {
       throw new Error('synchronous persistence must not run')
     })
     const runtime = new OrcaRuntimeService(
-      { ...runtimeStore, flushOrThrow, flushPendingOrThrowAsync } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow, flushPendingOrThrowAsync }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -160,7 +161,7 @@ describe('OrcaRuntimeService', () => {
       return retryDurableWrite.promise
     })
     const runtime = new OrcaRuntimeService(
-      { ...runtimeStore, flushPendingOrThrowAsync } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushPendingOrThrowAsync }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -272,11 +273,13 @@ describe('OrcaRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(
-      { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      reconcileMissingWorkerTerminal: vi.fn(),
       listLegacyWorkerTerminalRecoveryRows: () => [
         {
           dispatch_id: 'dispatch-exited',
@@ -304,8 +307,8 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     } as unknown as OrchestrationDb)
-    const listProcesses = vi.fn(async (connectionId?: string | null) => {
-      if (connectionId !== null) {
+    const listProcesses = vi.fn(async (hostId?: string) => {
+      if (hostId !== 'local') {
         throw new Error('unrelated SSH inventory must not run')
       }
       return [
@@ -344,7 +347,7 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(getSession().sleepingAgentSessionsByPaneKey?.[secondWorkerPaneKey]).toBeUndefined()
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([
       expect.objectContaining({ id: 'legacy-worker-two', ptyId: 'pty-exited-two' })
     ])
@@ -383,7 +386,7 @@ describe('OrcaRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(
-      { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -457,7 +460,12 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(1_000)
 
       expect(listProcesses).toHaveBeenCalledTimes(4)
-      expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([null, null, null, null])
+      expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([
+        'local',
+        'local',
+        'local',
+        'local'
+      ])
       expect(hasPty).not.toHaveBeenCalled()
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([
         expect.objectContaining({ id: 'legacy-worker', ptyId: 'pty-inventory-unavailable' })

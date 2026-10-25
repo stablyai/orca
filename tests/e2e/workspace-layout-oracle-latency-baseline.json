@@ -1,0 +1,522 @@
+{
+  "about": "Non-gating baseline from tests/e2e/workspace-layout-oracle-latency.spec.ts on main, with no layout subscriber. Milliseconds; inAppCommit/inAppDrawn are the in-window clock, outer includes one DevTools round trip. Event-loop delay is main's, beyond the 10 ms sampling interval. Taken with ORCA_LAYOUT_ORACLE_LATENCY_SAMPLES=100.",
+  "main": "73c53311dc03659f79375f79ac01dff1c9c66863",
+  "darwin": {
+    "machine": "Apple M5 Pro, macOS 27.0, hidden window (ORCA_BACKGROUND_LAUNCH=1)",
+    "latency": {
+      "split (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 22,
+          "p95": 24,
+          "max": 26
+        },
+        "inAppDrawn": {
+          "p50": 39,
+          "p95": 41,
+          "max": 44
+        },
+        "outer": {
+          "p50": 48,
+          "p95": 58,
+          "max": 67
+        }
+      },
+      "close pane (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 23,
+          "p95": 105,
+          "max": 174
+        },
+        "inAppDrawn": {
+          "p50": 24,
+          "p95": 106,
+          "max": 175
+        },
+        "outer": {
+          "p50": 26,
+          "p95": 108,
+          "max": 176
+        }
+      },
+      "new tab (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 43,
+          "p95": 87,
+          "max": 113
+        },
+        "inAppDrawn": {
+          "p50": 45,
+          "p95": 90,
+          "max": 115
+        },
+        "outer": {
+          "p50": 49,
+          "p95": 93,
+          "max": 132
+        }
+      },
+      "rename (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 8,
+          "p95": 16,
+          "max": 22
+        },
+        "inAppDrawn": {
+          "p50": 13,
+          "p95": 20,
+          "max": 22
+        },
+        "outer": {
+          "p50": 16,
+          "p95": 23,
+          "max": 49
+        }
+      },
+      "tab reorder (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 7,
+          "p95": 15,
+          "max": 19
+        },
+        "inAppDrawn": {
+          "p50": 10,
+          "p95": 17,
+          "max": 22
+        },
+        "outer": {
+          "p50": 11,
+          "p95": 18,
+          "max": 25
+        }
+      },
+      "close tab (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 12,
+          "p95": 15,
+          "max": 16
+        },
+        "inAppDrawn": {
+          "p50": 14,
+          "p95": 18,
+          "max": 20
+        },
+        "outer": {
+          "p50": 111,
+          "p95": 186,
+          "max": 245
+        }
+      },
+      "split (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 24,
+          "p95": 26,
+          "max": 27
+        },
+        "inAppDrawn": {
+          "p50": 42,
+          "p95": 45,
+          "max": 47
+        },
+        "outer": {
+          "p50": 53,
+          "p95": 65,
+          "max": 73
+        }
+      },
+      "close pane (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 30,
+          "p95": 87,
+          "max": 98
+        },
+        "inAppDrawn": {
+          "p50": 31,
+          "p95": 88,
+          "max": 98
+        },
+        "outer": {
+          "p50": 38,
+          "p95": 91,
+          "max": 99
+        }
+      },
+      "new tab (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 55,
+          "p95": 144,
+          "max": 192
+        },
+        "inAppDrawn": {
+          "p50": 58,
+          "p95": 147,
+          "max": 195
+        },
+        "outer": {
+          "p50": 62,
+          "p95": 149,
+          "max": 228
+        }
+      },
+      "rename (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 11,
+          "p95": 20,
+          "max": 20
+        },
+        "inAppDrawn": {
+          "p50": 17,
+          "p95": 24,
+          "max": 24
+        },
+        "outer": {
+          "p50": 19,
+          "p95": 26,
+          "max": 34
+        }
+      },
+      "tab reorder (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 9,
+          "p95": 15,
+          "max": 21
+        },
+        "inAppDrawn": {
+          "p50": 12,
+          "p95": 18,
+          "max": 24
+        },
+        "outer": {
+          "p50": 14,
+          "p95": 23,
+          "max": 48
+        }
+      },
+      "close tab (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 15,
+          "p95": 16,
+          "max": 18
+        },
+        "inAppDrawn": {
+          "p50": 17,
+          "p95": 20,
+          "max": 21
+        },
+        "outer": {
+          "p50": 89,
+          "p95": 183,
+          "max": 262
+        }
+      }
+    },
+    "eventLoopDelay": {
+      "idle": {
+        "process": "main",
+        "windows": 44,
+        "p99": 14.89,
+        "max": 17.8
+      },
+      "flood": {
+        "process": "main",
+        "windows": 48,
+        "p99": 14.94,
+        "max": 24.18
+      }
+    },
+    "closeConfirms": {
+      "idle": 0,
+      "flood": 0
+    },
+    "firstDrawn": {
+      "profile": {
+        "hiddenWorktrees": 12,
+        "tabsPerWorktree": 3,
+        "activePanes": 4
+      },
+      "firstDrawn": {
+        "n": 10,
+        "p50": 1334,
+        "p95": 2813,
+        "max": 2813
+      },
+      "eventLoopDelayMax": {
+        "p50": 73,
+        "p95": 96,
+        "max": 96
+      },
+      "caveat": "Measured from main process start, so it includes the test harness attaching DevTools before the first window; every relaunch keeps the PTY daemon warm. Compare only with itself, not with a user's cold start."
+    },
+    "note": "close pane rows re-taken after the clock moved from the modifier keydown to the w keydown; other rows unchanged."
+  },
+  "linux": {
+    "machine": "GitHub-hosted ubuntu-latest, Xvfb, hidden window; CI run 38165956663 job 114549487905",
+    "caveat": "Chromium runs a hidden window's animation frames at about 1 per second here, so inAppDrawn and outer are bounded by that throttle and only inAppCommit measures the app. Flood numbers are sensitive to runner CPU: three unthrottled `yes` panes compete with the app on a small runner, so Linux flood is not comparable with macOS or across runner types. The close pane rows were taken before the w-key fix, so their start includes one DevTools round trip (about 1 ms).",
+    "latency": {
+      "split (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 22,
+          "p95": 29,
+          "max": 32
+        },
+        "inAppDrawn": {
+          "p50": 1011,
+          "p95": 1013,
+          "max": 1018
+        },
+        "outer": {
+          "p50": 1014,
+          "p95": 1016,
+          "max": 1022
+        }
+      },
+      "close pane (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 30,
+          "p95": 51,
+          "max": 91
+        },
+        "inAppDrawn": {
+          "p50": 997,
+          "p95": 1000,
+          "max": 1002
+        },
+        "outer": {
+          "p50": 1001,
+          "p95": 1004,
+          "max": 1004
+        }
+      },
+      "new tab (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 49,
+          "p95": 62,
+          "max": 83
+        },
+        "inAppDrawn": {
+          "p50": 1008,
+          "p95": 1012,
+          "max": 1012
+        },
+        "outer": {
+          "p50": 1009,
+          "p95": 1013,
+          "max": 1014
+        }
+      },
+      "rename (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 13,
+          "p95": 16,
+          "max": 29
+        },
+        "inAppDrawn": {
+          "p50": 1010,
+          "p95": 1011,
+          "max": 1011
+        },
+        "outer": {
+          "p50": 1011,
+          "p95": 1012,
+          "max": 1014
+        }
+      },
+      "tab reorder (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 12,
+          "p95": 18,
+          "max": 19
+        },
+        "inAppDrawn": {
+          "p50": 1012,
+          "p95": 1013,
+          "max": 1013
+        },
+        "outer": {
+          "p50": 1013,
+          "p95": 1014,
+          "max": 1014
+        }
+      },
+      "close tab (idle)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 21,
+          "p95": 25,
+          "max": 38
+        },
+        "inAppDrawn": {
+          "p50": 1014,
+          "p95": 1015,
+          "max": 1016
+        },
+        "outer": {
+          "p50": 1015,
+          "p95": 1016,
+          "max": 1017
+        }
+      },
+      "split (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 44,
+          "p95": 77,
+          "max": 119
+        },
+        "inAppDrawn": {
+          "p50": 367,
+          "p95": 706,
+          "max": 962
+        },
+        "outer": {
+          "p50": 642,
+          "p95": 887,
+          "max": 1063
+        }
+      },
+      "close pane (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 366,
+          "p95": 575,
+          "max": 2210
+        },
+        "inAppDrawn": {
+          "p50": 1014,
+          "p95": 1331,
+          "max": 3168
+        },
+        "outer": {
+          "p50": 1154,
+          "p95": 1493,
+          "max": 3344
+        }
+      },
+      "new tab (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 570,
+          "p95": 2209,
+          "max": 2969
+        },
+        "inAppDrawn": {
+          "p50": 1261,
+          "p95": 2585,
+          "max": 3394
+        },
+        "outer": {
+          "p50": 1322,
+          "p95": 2719,
+          "max": 3505
+        }
+      },
+      "rename (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 202,
+          "p95": 341,
+          "max": 377
+        },
+        "inAppDrawn": {
+          "p50": 539,
+          "p95": 1057,
+          "max": 1207
+        },
+        "outer": {
+          "p50": 587,
+          "p95": 1140,
+          "max": 1319
+        }
+      },
+      "tab reorder (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 176,
+          "p95": 361,
+          "max": 397
+        },
+        "inAppDrawn": {
+          "p50": 577,
+          "p95": 743,
+          "max": 1334
+        },
+        "outer": {
+          "p50": 627,
+          "p95": 838,
+          "max": 1385
+        }
+      },
+      "close tab (flood)": {
+        "n": 100,
+        "inAppCommit": {
+          "p50": 207,
+          "p95": 363,
+          "max": 445
+        },
+        "inAppDrawn": {
+          "p50": 838,
+          "p95": 932,
+          "max": 965
+        },
+        "outer": {
+          "p50": 931,
+          "p95": 1147,
+          "max": 1333
+        }
+      }
+    },
+    "eventLoopDelay": {
+      "idle": {
+        "process": "main",
+        "windows": 713,
+        "p99": 138.9,
+        "max": 197.88
+      },
+      "flood": {
+        "process": "main",
+        "windows": 742,
+        "p99": 355.69,
+        "max": 355.69
+      }
+    },
+    "closeConfirms": {
+      "idle": 0,
+      "flood": 0
+    },
+    "firstDrawn": {
+      "profile": {
+        "hiddenWorktrees": 12,
+        "tabsPerWorktree": 3,
+        "activePanes": 4
+      },
+      "firstDrawn": {
+        "n": 10,
+        "p50": 3026,
+        "p95": 3086,
+        "max": 3086
+      },
+      "eventLoopDelayMax": {
+        "p50": 91,
+        "p95": 106,
+        "max": 106
+      },
+      "caveat": "Measured from main process start, so it includes the test harness attaching DevTools before the first window; every relaunch keeps the PTY daemon warm. Compare only with itself, not with a user's cold start. Also read on an animation frame, so up to ~1 s late here."
+    }
+  }
+}

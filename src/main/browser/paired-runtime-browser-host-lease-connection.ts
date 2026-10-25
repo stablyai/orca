@@ -63,16 +63,14 @@ export class PairedRuntimeBrowserHostLeaseConnection {
       let subscription: RemoteRuntimeSubscription
       try {
         subscription = await subscribeRemoteRuntimeRequest(
-          this.options.lease.pairing,
+          this.options.lease.connection,
           'browser.clientHost.attach',
           request.params,
           this.options.timeoutMs,
           this.callbacks(request),
           {
             ...this.options.lease.subscription,
-            // Why metadata is advertised here: page metadata is published back over this very
-            // connection (the runtime refuses page traffic from any other), and its handler gates
-            // on the capability being declared by the connection it arrives on.
+            // The runtime accepts page metadata only on the lease connection declaring this capability.
             clientCapabilities: [
               ...(this.options.lease.subscription?.clientCapabilities ?? []),
               BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,

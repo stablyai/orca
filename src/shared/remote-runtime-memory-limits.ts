@@ -6,6 +6,16 @@ import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import type { RuntimeOrchestrationEnvelope } from './runtime-rpc-envelope'
 
 export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
+// Why: a host refuses a larger client frame by closing the socket (1009), failing every call on it.
+export const REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES = 1024 * 1024
+// Why: a sealed frame is base64 of nonce, MAC and (v2) a 42-byte header around the request JSON.
+const REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES = 128
+/** The largest request JSON that still fits a host's inbound frame once sealed. */
+export const REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES =
+  Math.floor(REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES / 4) * 3 -
+  REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES
+// Why: sealing inflates a request by up to 4/3, so this much JSON-escaped content still fits a frame.
+export const REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES = 720 * 1024
 export const REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES = 8 * 1024 * 1024 + 64
 export const REMOTE_RUNTIME_MAX_SUBSCRIPTIONS = 256
 export const REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES = 1024 * 1024

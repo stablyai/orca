@@ -3,12 +3,12 @@ import {
   serializePaneTree
 } from '@/components/terminal-pane/layout-serialization'
 import type { AppState } from '@/store/types'
-import type {
-  RegisteredTerminalTab,
-  MobileSessionWorktreeInputs,
-  MountedTerminalSurfaceCapture
-} from './types'
-import { EMPTY_NARROWED_BY_KEY, findRegisteredTerminalTab, jsonContentEquals } from './graph-state'
+import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
+import { EMPTY_NARROWED_BY_KEY, jsonContentEquals } from './graph-state'
+import {
+  findRegisteredTerminalTab,
+  type RegisteredTerminalTab
+} from '../mounted-terminal-tab-registry'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 
 export function narrowRecordByKeys<T>(
@@ -26,24 +26,6 @@ export function narrowRecordByKeys<T>(
     }
     narrowed ??= new Map<string, T>()
     narrowed.set(key, value)
-  }
-  return narrowed ?? EMPTY_NARROWED_BY_KEY
-}
-
-export function narrowMapByKeys<T>(
-  source: ReadonlyMap<string, T>,
-  keys: readonly string[]
-): ReadonlyMap<string, T> {
-  if (source.size === 0 || keys.length === 0) {
-    return EMPTY_NARROWED_BY_KEY
-  }
-  let narrowed: Map<string, T> | null = null
-  for (const key of keys) {
-    if (!source.has(key)) {
-      continue
-    }
-    narrowed ??= new Map<string, T>()
-    narrowed.set(key, source.get(key) as T)
   }
   return narrowed ?? EMPTY_NARROWED_BY_KEY
 }

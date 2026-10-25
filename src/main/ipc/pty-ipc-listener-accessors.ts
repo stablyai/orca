@@ -5,7 +5,6 @@ type MainWindowDouble = {
   webContents: { on: { mock: { calls: unknown[][] } }; send: { mock: { calls: unknown[][] } } }
 }
 
-/** Accessors for the ipcMain listeners and renderer sends the pty IPC suites assert against. */
 export function createPtyIpcListenerAccessors(ctx: {
   handlers: IpcHandlerMap
   mainWindow: MainWindowDouble
@@ -67,7 +66,7 @@ export function createPtyIpcListenerAccessors(ctx: {
       throw new Error('missing pty:rendererDispatcherReady listener')
     }
     const listener = readyCall[1] as (event: unknown) => void
-    // Why: the production handler sender-guards its destructive reconcile, so tests must present as the main window.
+    // Destructive reconcile accepts only the main-window sender.
     return () => listener(mainWindowIpcEvent)
   }
 
@@ -111,6 +110,23 @@ export function createPtyIpcListenerAccessors(ctx: {
       throw new Error('missing pty:setHiddenRendererPty listener')
     }
     return hiddenCall[1] as (event: unknown, args: { id: string; hidden: boolean }) => void
+  }
+
+  function getPtyHiddenOutputRestoreAppliedListener(): (
+    event: unknown,
+    args: { id?: unknown; hiddenDropEpisode?: unknown }
+  ) => void {
+    const appliedCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:hiddenOutputRestoreApplied'
+    )
+    if (!appliedCall) {
+      throw new Error('missing pty:hiddenOutputRestoreApplied listener')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: found by channel name, so this is the listener resize-visibility.ts registered with this signature.
+    return appliedCall[1] as (
+      event: unknown,
+      args: { id?: unknown; hiddenDropEpisode?: unknown }
+    ) => void
   }
 
   function getPtySetDeliveryInterestListener(): (
@@ -188,6 +204,7 @@ export function createPtyIpcListenerAccessors(ctx: {
     getMainFrameNavigationListener,
     getPtyResizeListener,
     getPtySetHiddenRendererPtyListener,
+    getPtyHiddenOutputRestoreAppliedListener,
     getPtySetDeliveryInterestListener,
     DELIVERY_RESYNC_UNANSWERED_WARNING,
     countResyncUnansweredWarnings,

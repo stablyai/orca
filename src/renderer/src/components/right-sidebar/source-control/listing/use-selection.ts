@@ -12,22 +12,6 @@ export type FlatEntry = {
   area: 'unstaged' | 'staged' | 'untracked'
 }
 
-export function reconcileSelectionKeys(
-  selectedKeys: ReadonlySet<string>,
-  flatEntries: FlatEntry[]
-): Set<string> {
-  const validKeys = new Set(flatEntries.map((e) => e.key))
-  const nextSelected = new Set<string>()
-
-  for (const key of selectedKeys) {
-    if (validKeys.has(key)) {
-      nextSelected.add(key)
-    }
-  }
-
-  return nextSelected
-}
-
 export function reconcileSourceControlSelectionState(args: {
   selectedKeys: ReadonlySet<string>
   anchorKey: string | null

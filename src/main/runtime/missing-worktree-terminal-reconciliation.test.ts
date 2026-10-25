@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
+import { createAdapter } from '../daemon/daemon-pty-router-test-fixture'
+import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 
 function createProvider(sessionIds: string[]): IPtyProvider {
   return {
@@ -43,8 +45,7 @@ describe('stopMissingWorktreeTerminals', () => {
       [survivingId],
       {
         runtime,
-        getLocalProvider: () => provider,
-        getSshProvider: () => undefined
+        getLocalProvider: () => provider
       }
     )
 
@@ -59,33 +60,26 @@ describe('stopMissingWorktreeTerminals', () => {
     )
   })
 
-  it('uses the owning SSH provider without consulting the local provider', async () => {
+  it.each([
+    ['legacy connectionId', { connectionId: 'ssh-1' }],
+    ['unified executionHostId', { executionHostId: 'ssh:ssh-1' as const }]
+  ])('never sweeps an SSH repo (%s) through the local provider', async (_, host) => {
     const deletedId = 'repo-1::/workspace/deleted'
     const localProvider = createProvider([`${deletedId}@@local-session`])
-    const sshProvider = createProvider([`${deletedId}@@ssh-session`])
-    const getSshProvider = vi.fn(() => sshProvider)
     const runtime = createRuntime()
 
-    await stopMissingWorktreeTerminals({ ...localRepo, connectionId: 'ssh-1' }, [deletedId], [], {
+    await stopMissingWorktreeTerminals({ ...localRepo, ...host }, [deletedId], [], {
       runtime,
-      getLocalProvider: () => localProvider,
-      getSshProvider
+      getLocalProvider: () => localProvider
     })
 
-    expect(getSshProvider).toHaveBeenCalledWith('ssh-1')
     // The runtime graph holds both hosts' terminals under one id, so the sweep must fence to this one.
-    expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(
-      deletedId,
-      expect.objectContaining({
-        resolvedWorktreeId: deletedId,
-        resolvedConnectionId: 'ssh-1'
-      })
-    )
-    expect(sshProvider.shutdown).toHaveBeenCalledWith(
-      `${deletedId}@@ssh-session`,
-      expect.objectContaining({ immediate: true })
-    )
+    expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(deletedId, {
+      resolvedWorktreeId: deletedId,
+      resolvedConnectionId: 'ssh-1'
+    })
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
   })
 
   it('still stops graph-visible sessions when the owning provider is unavailable', async () => {
@@ -98,8 +92,7 @@ describe('stopMissingWorktreeTerminals', () => {
       [],
       {
         runtime,
-        getLocalProvider: () => null,
-        getSshProvider: () => undefined
+        getLocalProvider: () => null
       }
     )
 
@@ -113,23 +106,51 @@ describe('stopMissingWorktreeTerminals', () => {
   })
 
   // Why: an agent cleaning up workspaces deletes many at once. Enumerating the
-  // host once per missing worktree is O(N) relay round-trips carrying O(N^2)
-  // rows — on SSH that stalls teardown for minutes.
+  // host once per missing worktree is O(N) round-trips carrying O(N^2) rows.
   it('enumerates the host once for the whole sweep', async () => {
     const ids = Array.from({ length: 25 }, (_, index) => `repo-1::/workspace/wt-${index}`)
     const provider = createProvider(ids.map((id) => `${id}@@session`))
 
-    const result = await stopMissingWorktreeTerminals(
-      { ...localRepo, connectionId: 'ssh-1' },
-      ids,
-      [],
-      { runtime: createRuntime(), getLocalProvider: () => null, getSshProvider: () => provider }
-    )
+    const result = await stopMissingWorktreeTerminals(localRepo, ids, [], {
+      runtime: createRuntime(),
+      getLocalProvider: () => provider
+    })
 
     expect(result.stoppedWorktreeIds).toHaveLength(ids.length)
     expect(provider.listProcesses).toHaveBeenCalledTimes(1)
     expect(provider.shutdown).toHaveBeenCalledTimes(ids.length)
   })
+
+  it.each([false, true])(
+    'stops multiple workspaces through scoped daemon listings (unrelated duplicate: %s)',
+    async (duplicate) => {
+      const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b']
+      const targetSessions = ids.map((id) => `${id}@@session`)
+      const currentSessions = [...targetSessions, ...(duplicate ? ['unrelated'] : [])]
+      const current = createAdapter('current', currentSessions)
+      const legacy = createAdapter('legacy', duplicate ? ['unrelated'] : [])
+      const provider = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(
+        stopMissingWorktreeTerminals(localRepo, ids, [], {
+          runtime: createRuntime(),
+          getLocalProvider: () => provider
+        })
+      ).resolves.toEqual({ stoppedWorktreeIds: ids })
+
+      expect(currentSessions).toEqual(duplicate ? ['unrelated'] : [])
+      expect(
+        vi
+          .mocked(current.shutdown)
+          .mock.calls.map(([id]) => id)
+          .sort()
+      ).toEqual(targetSessions)
+      expect(legacy.shutdown).not.toHaveBeenCalled()
+      if (!duplicate) {
+        expect(current.listProcesses).toHaveBeenCalledOnce()
+      }
+    }
+  )
 
   // Why: real providers put listProcesses/shutdown on the prototype and use `this`;
   // batching them behind a wrapper must not break that binding.
@@ -152,16 +173,11 @@ describe('stopMissingWorktreeTerminals', () => {
     const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b', 'repo-1::/workspace/c']
     const provider = new PrototypeProvider(ids.map((id) => `${id}@@session`))
 
-    const result = await stopMissingWorktreeTerminals(
-      { ...localRepo, connectionId: 'ssh-1' },
-      ids,
-      [],
-      {
-        runtime: createRuntime(),
-        getLocalProvider: () => null,
-        getSshProvider: () => provider as unknown as IPtyProvider
-      }
-    )
+    const result = await stopMissingWorktreeTerminals(localRepo, ids, [], {
+      runtime: createRuntime(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep calls only listProcesses and shutdown, which this class implements.
+      getLocalProvider: () => provider as unknown as IPtyProvider
+    })
 
     expect(result.stoppedWorktreeIds).toHaveLength(ids.length)
     expect(provider.listCalls).toBe(1)
@@ -189,10 +205,10 @@ describe('stopMissingWorktreeTerminals', () => {
       ids.map((id) => ({ id: `${id}@@session`, cwd: '/workspace', title: 'shell' }))
     )
 
-    await stopMissingWorktreeTerminals({ ...localRepo, connectionId: 'ssh-1' }, ids, [], {
+    await stopMissingWorktreeTerminals(localRepo, ids, [], {
       runtime: createRuntime(),
-      getLocalProvider: () => null,
-      getSshProvider: () => provider as unknown as IPtyProvider
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep calls only listProcesses and shutdown, which this class implements.
+      getLocalProvider: () => provider as unknown as IPtyProvider
     })
 
     // One shared sweep scan, plus each shutdown's own live re-read.
@@ -209,10 +225,9 @@ describe('stopMissingWorktreeTerminals', () => {
       .mockResolvedValue([{ id: `${ids[1]}@@session`, cwd: '/workspace', title: 'shell' }])
     const provider = { listProcesses, shutdown: vi.fn(async () => {}) } as unknown as IPtyProvider
 
-    await stopMissingWorktreeTerminals({ ...localRepo, connectionId: 'ssh-1' }, ids, [], {
+    await stopMissingWorktreeTerminals(localRepo, ids, [], {
       runtime: createRuntime(),
-      getLocalProvider: () => null,
-      getSshProvider: () => provider
+      getLocalProvider: () => provider
     })
 
     expect(listProcesses.mock.calls.length).toBeGreaterThan(1)

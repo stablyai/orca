@@ -3,6 +3,7 @@ import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import { resolveHostedReviewCreationProvider } from '../../../../../../shared/hosted-review-creation-providers'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type {
   HostedReviewCreationProviderHint,
@@ -19,6 +20,7 @@ export function useSourceControlHostedReviewState({
   activeRepoId,
   activeWorktreeId,
   branchName,
+  currentHeadOid,
   hostedReviewCacheKey,
   hostedReviewEntryData,
   linkedPR,
@@ -28,6 +30,7 @@ export function useSourceControlHostedReviewState({
   activeRepoId: string | null
   activeWorktreeId: string | null
   branchName: string
+  currentHeadOid?: string | null
   hostedReviewCacheKey: string | null
   hostedReviewEntryData: SourceControlWorktreeContext['hostedReviewEntryData']
   linkedPR: number | null
@@ -51,15 +54,27 @@ export function useSourceControlHostedReviewState({
     branchName === hostedReviewCreationState.branch
       ? hostedReviewCreationState.data
       : null
+  const currentPrFromQueue = isStaleMergedGitHubReviewForHead(
+    { data: activePrFromQueue },
+    currentHeadOid
+  )
+    ? null
+    : activePrFromQueue
+  const currentHostedReview = isStaleMergedGitHubReviewForHead(
+    { data: hostedReviewEntryData },
+    currentHeadOid
+  )
+    ? null
+    : hostedReviewEntryData
   const rawHostedReview: HostedReviewInfo | null = useMemo(() => {
     if (!hostedReviewCacheKey) {
       return null
     }
-    if (activePrFromQueue) {
-      return { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
+    if (currentPrFromQueue) {
+      return { provider: 'github', ...currentPrFromQueue, status: currentPrFromQueue.checksStatus }
     }
-    return hostedReviewEntryData
-  }, [activePrFromQueue, hostedReviewCacheKey, hostedReviewEntryData])
+    return currentHostedReview
+  }, [currentPrFromQueue, hostedReviewCacheKey, currentHostedReview])
   const hasSuppressedGitHubPR =
     rawHostedReview?.provider === 'github' &&
     isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, rawHostedReview.number)
@@ -81,6 +96,7 @@ export function useSourceControlHostedReviewState({
   const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
 
   return {
+    currentPrFromQueue,
     hasSuppressedGitHubPR,
     hostedReview,
     hostedReviewCreateCopy,

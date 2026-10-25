@@ -8,9 +8,9 @@ import {
   getBridgePathFromCommandPath,
   getPosixDirname,
   getWslBridgeMarker,
-  getWslLauncherMarker,
-  quoteShell
+  getWslLauncherMarker
 } from './wsl-cli-scripts'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 const MANAGED_MARKER = getWslLauncherMarker()
 const BRIDGE_MANAGED_MARKER = getWslBridgeMarker()
@@ -22,15 +22,15 @@ export function buildWslCliInstallCommand(
   const bridgePath = getBridgePathFromCommandPath(status.commandPath)
   const legacyCommandPath = `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
   return [
-    // Why -eu not -euo pipefail: transported via runWslProcess's `sh -s`,
-    // and no pipe here needs pipefail -- dash on Ubuntu 20.04 lacks the option.
+    // Runs under sh; Ubuntu 20.04 dash lacks pipefail, and no pipeline here needs it.
     'set -eu',
-    `mkdir -p ${quoteShell(status.pathDirectory as string)}`,
-    `mkdir -p ${quoteShell(getPosixDirname(bridgePath))}`,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WSL status sets pathDirectory to dirname(commandPath) whenever commandPath is set, and the caller requires commandPath.
+    `mkdir -p ${quotePosixShellDoubleQuotedApostrophe(status.pathDirectory as string)}`,
+    `mkdir -p ${quotePosixShellDoubleQuotedApostrophe(getPosixDirname(bridgePath))}`,
     buildRegistrationLockPrelude(status.commandPath),
-    `command_tmp=${quoteShell(`${status.commandPath}.tmp`)}.$$`,
-    `bridge_path=${quoteShell(bridgePath)}`,
-    `legacy_command_path=${quoteShell(legacyCommandPath)}`,
+    `command_tmp=${quotePosixShellDoubleQuotedApostrophe(`${status.commandPath}.tmp`)}.$$`,
+    `bridge_path=${quotePosixShellDoubleQuotedApostrophe(bridgePath)}`,
+    `legacy_command_path=${quotePosixShellDoubleQuotedApostrophe(legacyCommandPath)}`,
     'bridge_tmp="${bridge_path}.tmp.$$"',
     'bridge_backup="${bridge_tmp}.backup"',
     'bridge_had_original=0',
@@ -40,7 +40,7 @@ export function buildWslCliInstallCommand(
     '  result=$?',
     '  set +e',
     '  if [ "$committed" -ne 1 ]; then',
-    `    if [ "$bridge_had_original" -eq 1 ]; then mv -f "$bridge_backup" ${quoteShell(bridgePath)}; elif [ "$bridge_touched" -eq 1 ]; then rm -f ${quoteShell(bridgePath)}; fi`,
+    `    if [ "$bridge_had_original" -eq 1 ]; then mv -f "$bridge_backup" ${quotePosixShellDoubleQuotedApostrophe(bridgePath)}; elif [ "$bridge_touched" -eq 1 ]; then rm -f ${quotePosixShellDoubleQuotedApostrophe(bridgePath)}; fi`,
     '  fi',
     '  rm -f "$command_tmp" "$bridge_tmp" "$bridge_backup"',
     '  exit "$result"',
@@ -58,10 +58,10 @@ export function buildWslCliInstallCommand(
     'chmod 644 "$bridge_tmp"',
     buildSafeReplaceGuard(status.commandPath, MANAGED_MARKER),
     buildSafeReplaceGuard(bridgePath, BRIDGE_MANAGED_MARKER),
-    `if [ -f ${quoteShell(bridgePath)} ]; then cp -p ${quoteShell(bridgePath)} "$bridge_backup"; bridge_had_original=1; fi`,
-    `mv -f "$bridge_tmp" ${quoteShell(bridgePath)}`,
+    `if [ -f ${quotePosixShellDoubleQuotedApostrophe(bridgePath)} ]; then cp -p ${quotePosixShellDoubleQuotedApostrophe(bridgePath)} "$bridge_backup"; bridge_had_original=1; fi`,
+    `mv -f "$bridge_tmp" ${quotePosixShellDoubleQuotedApostrophe(bridgePath)}`,
     'bridge_touched=1',
-    `mv -f "$command_tmp" ${quoteShell(status.commandPath)}`,
+    `mv -f "$command_tmp" ${quotePosixShellDoubleQuotedApostrophe(status.commandPath)}`,
     'committed=1',
     'rm -f "$bridge_backup"',
     buildManagedLegacyRemoveCommand('"$legacy_command_path"'),

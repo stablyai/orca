@@ -45,6 +45,13 @@ describe('HeadlessEmulator', () => {
       )
     })
 
+    it('parses a write synchronously through xterm _core.writeSync', () => {
+      // Durable rebase requires a parsed live snapshot; detect loss of xterm’s private sync API.
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24, scrollback: 10 })
+      expect(emulator.writeSync('SYNC_PARSED')).toBe(true)
+      expect(emulator.getBufferTailLines(24).join('\n')).toContain('SYNC_PARSED')
+    })
+
     it('captures colored text', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b[31mred text\x1b[0m')
@@ -114,9 +121,7 @@ describe('HeadlessEmulator', () => {
         '\x1b[?2026l'
       ].join('')
 
-      // Why: hidden rich TUI bytes may arrive split across DEC 2026 frame
-      // boundaries; model/view work needs the headless model to preserve the
-      // final visible state before renderer writes can be removed.
+      // Split a rich TUI frame across writes to exercise DEC 2026 state retention.
       await emulator.write(richFrame.slice(0, 17))
       await emulator.write(richFrame.slice(17, 91))
       await emulator.write(richFrame.slice(91))
@@ -338,7 +343,6 @@ describe('HeadlessEmulator', () => {
   describe('clear scrollback (CSI 3J)', () => {
     it('detects CSI 3J and clears scrollback', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
-      // Write enough lines to push into scrollback
       const lines = Array.from({ length: 30 }, (_, i) => `line ${i}\r\n`).join('')
       await emulator.write(lines)
 
@@ -398,9 +402,7 @@ describe('HeadlessEmulator', () => {
     })
 
     it('round-trips a pushed CSI > 1 u flag through the core-internals read path', async () => {
-      // Why: getKittyKeyboardFlags reads _core.coreService.kittyKeyboard.flags,
-      // a private xterm surface. If an xterm upgrade breaks that path this
-      // must fail loudly instead of the responder silently answering ?0u.
+      // Detect private xterm API changes before kitty queries silently degrade to zero flags.
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
 
       await emulator.write('\x1b[>1u')
@@ -409,8 +411,7 @@ describe('HeadlessEmulator', () => {
 
     it('snapshots the active-buffer kitty flags (alt screen keeps its own set)', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
-      // Kitty flags are per screen buffer: entering the alt screen swaps to
-      // its own (empty) flag set, exactly what a CSI ? u reply would report.
+      // Kitty flags belong to each screen buffer; entering the alternate screen starts with an empty set.
       await emulator.write('\x1b[=5;1u\x1b[?1049h')
       expect(emulator.getSnapshot().modes.kittyKeyboardFlags).toBe(0)
 
@@ -422,8 +423,7 @@ describe('HeadlessEmulator', () => {
     })
 
     it('never pushes kitty flags into rehydrateSequences', async () => {
-      // Why: POST_REPLAY_REATTACH_RESET's deliberate kitty reset must stay
-      // authoritative for renderer replays (terminal-query-authority.md).
+      // Renderer replay’s deliberate kitty reset must remain authoritative.
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b[?1049h\x1b[=5;1u')
 
@@ -447,7 +447,8 @@ describe('HeadlessEmulator', () => {
 
     it('tracks long split private mouse mode sequences', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
-      const fillerModes = Array.from({ length: 40 }, (_, i) => String(3000 + i)).join(';')
+      // Stay within xterm’s 32-parameter cap so this tests modes xterm actually parses.
+      const fillerModes = Array.from({ length: 29 }, (_, i) => String(3000 + i)).join(';')
 
       await emulator.write(`\x1b[?1002;${fillerModes};100`)
       await emulator.write('6h')
@@ -556,6 +557,16 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.modes.sgrMouseMode).toBe(false)
       expect(snapshot.rehydrateSequences).toContain('\x1b[?1002h')
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
+      // Replay readers must not guess the encoding of an active tracking mode.
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?1006l')
+    })
+
+    it('states no mouse encoding while nothing tracks the mouse', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b[?1002h\x1b[?1002l')
+
+      expect(emulator.getSnapshot().rehydrateSequences).not.toContain('\x1b[?1006')
     })
 
     it('tracks SGR-pixels mouse reporting as a separate active encoding', async () => {
@@ -677,13 +688,11 @@ describe('HeadlessEmulator', () => {
 
     it('records kitty flags without pushing them into renderer rehydration', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
-      // OMP/pi negotiate progressive enhancement with a level-1 push.
       await emulator.write('\x1b[>1u')
 
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.kittyKeyboardFlags).toBe(1)
-      // Why: renderer replay deliberately resets stale CSI-u state; the daemon
-      // warm-reattach path re-seeds the model from modes.kittyKeyboardFlags.
+      // Renderer replay resets kitty state; warm reattach restores it from snapshot modes.
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[=1;1u')
     })
 

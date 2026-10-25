@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import {
-  checkOutcome,
   firstFailingCheckKey,
   getPRReviewerRows,
   prCheckKey,
@@ -21,36 +20,32 @@ function check(over: Partial<PRCheckDetail>): PRCheckDetail {
   }
 }
 
-describe('checkOutcome', () => {
-  it('treats a completed null-conclusion check as neutral, not failure', () => {
-    expect(checkOutcome(check({ status: 'completed', conclusion: null }))).toBe('neutral')
-  })
-  it('treats queued/in_progress as pending', () => {
-    expect(checkOutcome(check({ status: 'queued', conclusion: null }))).toBe('pending')
-    expect(checkOutcome(check({ status: 'in_progress', conclusion: null }))).toBe('pending')
-  })
-  it('maps failure/cancelled/timed_out to failure', () => {
-    expect(checkOutcome(check({ conclusion: 'failure' }))).toBe('failure')
-    expect(checkOutcome(check({ conclusion: 'cancelled' }))).toBe('failure')
-    expect(checkOutcome(check({ conclusion: 'timed_out' }))).toBe('failure')
-  })
-  it('maps a merge-blocking action_required gate to failure', () => {
-    expect(checkOutcome(check({ conclusion: 'action_required' }))).toBe('failure')
-  })
-  it('maps skipped to success and neutral to neutral (desktop parity)', () => {
-    expect(checkOutcome(check({ conclusion: 'skipped' }))).toBe('success')
-    expect(checkOutcome(check({ conclusion: 'neutral' }))).toBe('neutral')
-  })
-})
-
 describe('sortPRChecks', () => {
-  it('orders failures first, then pending, then success', () => {
+  it('orders actionable failures, pending work, neutral checks, then successes', () => {
     const checks = [
       check({ name: 'ok', conclusion: 'success' }),
       check({ name: 'pending', status: 'in_progress', conclusion: null }),
-      check({ name: 'broke', conclusion: 'failure' })
+      check({ name: 'completed-without-conclusion', conclusion: null }),
+      check({ name: 'skipped', conclusion: 'skipped' }),
+      check({ name: 'broke', conclusion: 'failure' }),
+      check({ name: 'queued', status: 'queued', conclusion: null }),
+      check({ name: 'cancelled', conclusion: 'cancelled' }),
+      check({ name: 'neutral', conclusion: 'neutral' }),
+      check({ name: 'timed-out', conclusion: 'timed_out' }),
+      check({ name: 'action-required', conclusion: 'action_required' })
     ]
-    expect(sortPRChecks(checks).map((c) => c.name)).toEqual(['broke', 'pending', 'ok'])
+    expect(sortPRChecks(checks).map((c) => c.name)).toEqual([
+      'broke',
+      'cancelled',
+      'timed-out',
+      'action-required',
+      'pending',
+      'queued',
+      'completed-without-conclusion',
+      'neutral',
+      'ok',
+      'skipped'
+    ])
   })
   it('is stable within a bucket', () => {
     const checks = [

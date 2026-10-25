@@ -7,11 +7,10 @@ import {
 } from '../../../../shared/agent-session-resume'
 import type {
   AgentLaunchConfigRegistryEntry,
-  AgentLaunchConfigRegistrationMetadata,
-  AgentLaunchConfigStatusMetadata
+  AgentLaunchConfigRegistrationMetadata
 } from './agent-status-contract'
 import { getLeafIdFromPaneKey, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
-import { launchConfigsEqual } from './agent-status-recovery-equivalence'
+import { launchConfigsEqual } from '../../../../shared/agent-resume-record-equivalence'
 
 export function normalizeLaunchConfigRegistrationMetadata(
   paneKey: string,
@@ -139,25 +138,5 @@ export function getLaunchConfigForEntry(
       entry.providerSession
     )
     ? sleepingRecord.launchConfig
-    : undefined
-}
-
-export function getLaunchConfigForStatusMetadata(
-  state: AppState,
-  metadata: AgentLaunchConfigStatusMetadata
-): SleepingAgentLaunchConfig | undefined {
-  const registryEntry = state.agentLaunchConfigByPaneKey[metadata.paneKey]
-  return registryEntryMatchesStatus({
-    entry: registryEntry,
-    paneKey: metadata.paneKey,
-    agentType: metadata.agentType,
-    tabId: metadata.tabId ?? getTabIdFromPaneKey(metadata.paneKey) ?? undefined,
-    terminalHandle: metadata.terminalHandle,
-    launchToken: metadata.launchToken,
-    providerSession: metadata.providerSession,
-    existingProviderSession: metadata.existingProviderSession,
-    providerSessionChanged: metadata.providerSessionChanged ?? false
-  })
-    ? registryEntry?.launchConfig
     : undefined
 }

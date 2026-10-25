@@ -1,3 +1,4 @@
+import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
@@ -45,7 +46,7 @@ import {
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
-import { dashboardRowBucketProjection } from './dashboard-row-bucket'
+import { dashboardRowBucketProjection, readAgentRowTurnRecords } from './dashboard-row-bucket'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -82,6 +83,7 @@ export function buildDashboardSnapshot(
   state: DashboardSnapshotState,
   now: number,
   options: {
+    launchRouteStore?: AgentLaunchRouteView
     includeCardDetails?: boolean
     includeFilterOptions?: boolean
     /** Optional per-worktree row-pipeline reuse; card assembly always runs fresh
@@ -99,6 +101,7 @@ export function buildDashboardSnapshot(
   const includeCardDetails = options.includeCardDetails !== false
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
+  const turnRecords = readAgentRowTurnRecords(state)
   const activeWorktrees = collectActiveDashboardWorkspaces(state, includeCardDetails)
   const filterOptions =
     options.includeFilterOptions === false
@@ -168,7 +171,7 @@ export function buildDashboardSnapshot(
       // agent LABEL and a status word like "Idle". They're marked by
       // startedAt === 0, and must NOT be shown as real conversation.
       const { isTitleDerived, dotState, workingMode, unseen, bucket } =
-        dashboardRowBucketProjection(row, state.acknowledgedAgentsByPaneKey)
+        dashboardRowBucketProjection(row, turnRecords)
       const routingPaneKey = row.activationPaneKey ?? row.paneKey
       const parsed = parsePaneKey(routingPaneKey)
       const tabId = parsed?.tabId ?? row.tab.id
@@ -244,8 +247,7 @@ export function buildDashboardSnapshot(
         finishedAt,
         stateChangedAt: row.entry.stateStartedAt || row.startedAt,
         statusUpdatedAt: row.entry.updatedAt,
-        // Same derivation as WorktreeCardAgents' unvisitedByPaneKey, so the
-        // board and the sidebar bold/mute the same agents at the same time.
+        // `isAgentSubjectUnread`, the rule the sidebar card bolds by too.
         unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
         conversationName: boundedLabelOrUndefined(
@@ -278,7 +280,8 @@ export function buildDashboardSnapshot(
           launchableAgentsByWorktreeId: buildDashboardWorktreeLaunchOptions(
             state,
             cards,
-            workspaces
+            workspaces,
+            options.launchRouteStore
           )
         }
       : {}),

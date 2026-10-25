@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
+import { getProjectHeaderDragBucketKey } from './project-header-drop'
 import type { Repo } from '../../../../shared/repo-types'
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
@@ -17,12 +18,12 @@ function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
 }
 
 function makeSession(
-  repoId: string,
+  repo: Repo,
   sidebarRepoHeaderIds: readonly string[]
 ): ProjectHeaderDragSession {
   return {
-    repoId,
-    bucketKey: 'ungrouped',
+    repo,
+    bucketKey: getProjectHeaderDragBucketKey(repo),
     sidebarRepoHeaderIds,
     pointerId: 1,
     headerRects: [],
@@ -41,10 +42,11 @@ describe('commitProjectHeaderDragDrop', () => {
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
     commitProjectHeaderDragDrop({
-      session: makeSession('c', ['a', 'b', 'c']),
+      session: makeSession(makeRepo('c'), ['a', 'b', 'c']),
       sidebarDropIndex: 0,
       orderedRepoIds: ['a', 'b', 'c'],
       repoById,
+      liveRepos: repos,
       usesProjectGroupOrdering: false,
       onCommitRepoOrder,
       onCommitProjectGroupOrder: vi.fn()
@@ -59,10 +61,11 @@ describe('commitProjectHeaderDragDrop', () => {
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
     commitProjectHeaderDragDrop({
-      session: makeSession('same', ['b', 'same', 'c']),
+      session: makeSession(makeRepo('same'), ['b', 'same', 'c']),
       sidebarDropIndex: 0,
       orderedRepoIds: ['b', 'same', 'c', 'same'],
       repoById,
+      liveRepos: repos,
       usesProjectGroupOrdering: false,
       onCommitRepoOrder,
       onCommitProjectGroupOrder: vi.fn()
@@ -77,10 +80,11 @@ describe('commitProjectHeaderDragDrop', () => {
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
     commitProjectHeaderDragDrop({
-      session: makeSession('same', ['b', 'same', 'c']),
+      session: makeSession(makeRepo('same'), ['b', 'same', 'c']),
       sidebarDropIndex: 2,
       orderedRepoIds: ['b', 'same', 'c', 'same'],
       repoById,
+      liveRepos: repos,
       usesProjectGroupOrdering: false,
       onCommitRepoOrder,
       onCommitProjectGroupOrder: vi.fn()
@@ -89,25 +93,49 @@ describe('commitProjectHeaderDragDrop', () => {
     expect(onCommitRepoOrder).not.toHaveBeenCalled()
   })
 
-  it('commits projectGroupOrder when project groups are present', () => {
+  it('commits projectGroupOrder for the dragged row, not the id-keyed twin on another host', () => {
     const onCommitProjectGroupOrder = vi.fn()
     const repos = [
       makeRepo('a', { projectGroupId: 'group-1' }),
       makeRepo('b', { projectGroupId: 'group-1' }),
-      makeRepo('c', { projectGroupId: 'group-1' })
+      makeRepo('c', { projectGroupId: 'group-1', executionHostId: 'local' })
     ]
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+    const sshTwin = makeRepo('c', { projectGroupId: 'group-1', connectionId: 'ssh-1' })
 
     commitProjectHeaderDragDrop({
-      session: makeSession('c', ['a', 'b', 'c']),
+      session: makeSession(sshTwin, ['a', 'b', 'c']),
       sidebarDropIndex: 0,
       orderedRepoIds: ['a', 'b', 'c'],
       repoById,
+      liveRepos: [...repos, sshTwin],
       usesProjectGroupOrdering: true,
       onCommitRepoOrder: vi.fn(),
       onCommitProjectGroupOrder
     })
 
-    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-1', -1)
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(sshTwin, 'group-1', -1)
+  })
+
+  it('drops nothing when the dragged row changed group during the drag', () => {
+    const onCommitProjectGroupOrder = vi.fn()
+    const repos = [
+      makeRepo('a', { projectGroupId: 'group-1' }),
+      makeRepo('b', { projectGroupId: 'group-1' })
+    ]
+    const dragged = makeRepo('c', { projectGroupId: 'group-1' })
+
+    commitProjectHeaderDragDrop({
+      session: makeSession(dragged, ['a', 'b', 'c']),
+      sidebarDropIndex: 0,
+      orderedRepoIds: ['a', 'b', 'c'],
+      repoById: new Map([...repos, dragged].map((repo) => [repo.id, repo])),
+      liveRepos: [...repos, { ...dragged, projectGroupId: 'group-2' }],
+      usesProjectGroupOrdering: true,
+      onCommitRepoOrder: vi.fn(),
+      onCommitProjectGroupOrder
+    })
+
+    expect(onCommitProjectGroupOrder).not.toHaveBeenCalled()
   })
 })

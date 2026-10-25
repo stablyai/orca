@@ -21,9 +21,9 @@ export class CodexSubagentPollScheduler<T> {
     private readonly now: () => number = monotonicNow
   ) {}
 
-  schedule(key: string, value: T): void {
+  schedule(key: string, value: T, delayMs = this.delayMs): void {
     this.entries.delete(key)
-    this.entries.set(key, { value, dueAt: this.now() + this.delayMs })
+    this.entries.set(key, { value, dueAt: this.now() + delayMs })
     this.arm()
   }
 

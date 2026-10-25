@@ -193,3 +193,20 @@ export function getWslFilesystemBoundaryDistro(args: {
   }
   return args.wslRuntimeDistro || null
 }
+
+/**
+ * Groups paths by the host that must answer for them, so many dead
+ * subdirectories of one share share a lane. Returns null for local-disk paths,
+ * which never block long enough to be worth queueing.
+ */
+export function uncRouteKey(cwd: string): string | null {
+  if (!cwd.startsWith('\\\\')) {
+    return null
+  }
+  const wslInfo = parseWslUncPath(cwd)
+  if (wslInfo) {
+    return `wsl:${wslInfo.distro.trim().toLowerCase()}`
+  }
+  const server = cwd.slice(2).split(/[\\/]/, 1)[0]
+  return `unc:${server.toLowerCase()}`
+}

@@ -62,6 +62,8 @@ export type WsOutboundBackpressureQueue<TFrame> = {
   enqueue: (frame: TFrame) => boolean
   /** Queue-or-send a frame and allow its owner to cancel it before wire delivery. */
   enqueueCancelable: (frame: TFrame) => WsOutboundEnqueueResult
+  /** True when nothing is parked and the wire has room, so enqueue would send this size directly. */
+  isIdle: (frameBytes: number) => boolean
   /** Bytes currently held (not yet handed to the wire). */
   queuedBytes: () => number
   evidence: () => { queuedBytes: number; queuedFrames: number; storageSlots: number }
@@ -257,6 +259,12 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     }
   }
 
+  const isIdle = (bytes: number): boolean =>
+    queuedFrames === 0 &&
+    options.isWritable() &&
+    bufferedAmount() <= softCapBytes &&
+    (options.canSend?.(bytes, false) ?? true)
+
   const enqueueCancelable = (frame: TFrame): WsOutboundEnqueueResult => {
     if (disposed || overflowed) {
       return { accepted: false, queued: false, cancel: () => false }
@@ -267,12 +275,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       return { accepted: false, queued: false, cancel: () => false }
     }
     // Fast path: nothing parked and the wire is under the cap — send directly.
-    if (
-      queuedFrames === 0 &&
-      options.isWritable() &&
-      bufferedAmount() <= softCapBytes &&
-      (options.canSend?.(bytes, false) ?? true)
-    ) {
+    if (isIdle(bytes)) {
       return {
         accepted: sendFrame(frame),
         queued: false,
@@ -312,6 +315,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       return enqueueCancelable(frame).accepted
     },
     enqueueCancelable,
+    isIdle,
     queuedBytes: () => queued,
     evidence: () => ({
       queuedBytes: queued,

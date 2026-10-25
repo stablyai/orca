@@ -1,3 +1,4 @@
+import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
 export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string
@@ -177,6 +178,8 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
+  /** Set when Orca manages this profile for one repo or workspace; it goes when its owner is removed. */
+  owner?: ManagedBrowserProfileOwner
 }
 
 export type BrowserCookieImportSummary = {
@@ -184,9 +187,13 @@ export type BrowserCookieImportSummary = {
   importedCookies: number
   skippedCookies: number
   googleCookiesSkipped?: number
-  // Why (STA-4300): cookies whose source partition identity could not be read faithfully are
-  // skipped rather than written unpartitioned, and a skip is only honest if it is reported.
+  // Includes readable cookies withheld to preserve a site with an unreadable partition.
   partitionSkippedCookies?: number
+  // Older peers retain the combined count; no cookie details cross this boundary.
+  partitionSkipBreakdown?: {
+    unreadableCookies: number
+    preservedRelatedCookies: number
+  }
   domains: string[]
   warning?:
     | {

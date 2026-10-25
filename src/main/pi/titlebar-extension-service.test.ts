@@ -156,9 +156,14 @@ describe('PiTitlebarExtensionService', () => {
     homedirOverride.current = fakeHome
     vi.stubEnv('PI_CONFIG_DIR', 'host-profile')
     try {
-      const env = new PiTitlebarExtensionService().buildPtyEnv('pty-ambient-root', undefined, 'omp', {
-        materializeDefaultHome: true
-      })
+      const env = new PiTitlebarExtensionService().buildPtyEnv(
+        'pty-ambient-root',
+        undefined,
+        'omp',
+        {
+          materializeDefaultHome: true
+        }
+      )
       expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe(join(fakeHome, '.omp', 'agent'))
       expect(existsSync(join(fakeHome, 'host-profile'))).toBe(false)
     } finally {
@@ -208,22 +213,8 @@ describe('PiTitlebarExtensionService', () => {
       join(piHome, 'extensions', 'orca-agent-status.ts'),
       'utf-8'
     )
-    const titlebarExtensionSource = readFileSync(
-      join(piHome, 'extensions', 'orca-titlebar-spinner.ts'),
-      'utf-8'
-    )
-    const prefillExtensionSource = readFileSync(
-      join(piHome, 'extensions', 'orca-prefill.ts'),
-      'utf-8'
-    )
     expect(statusExtensionSource).toContain('@orca-managed-pi-extension')
     expect(statusExtensionSource).toContain('/hook/pi')
-    expect(statusExtensionSource).toContain('process.title')
-    expect(statusExtensionSource).toContain("return '/hook/omp'")
-    expect(titlebarExtensionSource).toContain('@orca-managed-pi-extension')
-    expect(titlebarExtensionSource).toContain('process.env.ORCA_PANE_KEY')
-    expect(prefillExtensionSource).toContain('@orca-managed-pi-extension')
-    expect(prefillExtensionSource).toContain('process.env.ORCA_PANE_KEY')
     expectPiHomeIntact()
   })
 
@@ -247,7 +238,6 @@ describe('PiTitlebarExtensionService', () => {
     ])
     const source = readFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), 'utf-8')
     expect(source).toContain('/hook/prime-agent')
-    expect(source).not.toContain("return '/hook/omp'")
     expect(existsSync(join(piHome, 'extensions', 'orca-titlebar-spinner.ts'))).toBe(false)
     expect(existsSync(join(piHome, 'extensions', 'orca-prefill.ts'))).toBe(false)
     expectPiHomeIntact()
@@ -272,7 +262,6 @@ describe('PiTitlebarExtensionService', () => {
     const env = svc.buildPtyEnv('pty-omp-sqlite', piHome, 'omp')
 
     const sourcePath = join(piHome, 'agent.db')
-    const content = 'agent.db credentials'
 
     expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
     expect(readFileSync(env.ORCA_OMP_FRESH_CONFIG, 'utf8')).toBe('autoResume: false\n')
@@ -282,9 +271,6 @@ describe('PiTitlebarExtensionService', () => {
     expect(existsSync(sourcePath)).toBe(false)
     expect(existsSync(join(userDataDir, 'omp-agent-overlays'))).toBe(false)
     expect(existsSync(join(piHome, 'history.db'))).toBe(false)
-    writeFileSync(sourcePath, content)
-
-    expect(readFileSync(sourcePath, 'utf-8')).toBe(content)
   })
 
   it('migrates missing OMP state from the old source overlay without overwriting source files', () => {

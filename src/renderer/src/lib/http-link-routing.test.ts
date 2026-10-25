@@ -8,6 +8,8 @@ import {
   resolveLocalhostHttpLinkDisplayUrl
 } from './http-link-routing'
 
+import type { ExecutionHostId } from '../../../shared/execution-host'
+
 const toastErrorMock = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
@@ -16,19 +18,34 @@ const openUrlMock = vi.fn()
 const registerLocalhostLabelMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
-const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
+const setActiveViewMock = vi.fn()
+const openRuntimeBrowserTabMock = vi.fn((): Promise<string | null> => Promise.resolve(null))
+const dispatchEventMock = vi.fn()
+
+function noActiveWorkspace(): {
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+} {
+  return { activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
+}
+
+type LinkTestSettings = {
+  openLinksInApp?: boolean
+  openLinksInAppModifierInverts?: boolean
+  openLinksInAppInBackground?: boolean
+  openLinksInAppPreferencePrompted?: boolean
+  activeRuntimeEnvironmentId?: string | null
+  localhostWorktreeLabelsEnabled?: boolean
+}
+const noSettings = (): LinkTestSettings | undefined => undefined
+const terminalView = (): 'terminal' | 'activity' => 'terminal'
 
 const storeState = {
-  settings: undefined as
-    | {
-        openLinksInApp?: boolean
-        openLinksInAppModifierInverts?: boolean
-        openLinksInAppPreferencePrompted?: boolean
-        activeRuntimeEnvironmentId?: string | null
-        localhostWorktreeLabelsEnabled?: boolean
-      }
-    | undefined,
+  settings: noSettings(),
   setActiveWorktree: setActiveWorktreeMock,
+  activeView: terminalView(),
+  setActiveView: setActiveViewMock,
+  ...noActiveWorkspace(),
   createBrowserTab: createBrowserTabMock,
   repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
   projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
@@ -46,10 +63,13 @@ const storeState = {
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
+  storeState.activeView = 'terminal'
+  Object.assign(storeState, noActiveWorkspace())
   storeState.workspacePortScansByKey = {}
   registerHttpLinkStoreAccessor(() => storeState)
   registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
   vi.stubGlobal('window', {
+    dispatchEvent: dispatchEventMock,
     api: {
       shell: {
         openUrl: openUrlMock
@@ -67,6 +87,16 @@ afterEach(() => {
 })
 
 describe('openHttpLink', () => {
+  it('keeps the selected host of the active workspace a link opens in', () => {
+    storeState.settings = { openLinksInApp: true }
+    storeState.activeWorktreeId = 'wt-1'
+    storeState.activeWorkspaceExecutionHostId = 'ssh:box'
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1', 'ssh:box')
+  })
+
   it('routes into Orca when openLinksInApp is on and a worktree is known', () => {
     storeState.settings = { openLinksInApp: true }
 
@@ -77,6 +107,28 @@ describe('openHttpLink', () => {
       activate: true
     })
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  // Why: #31530 — queued links must not pull focus or the selected workspace away from the source.
+  it('opens in the background without selecting the tab or its workspace', () => {
+    storeState.settings = { openLinksInApp: true, openLinksInAppInBackground: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: false
+    })
+  })
+
+  // Why: #7813 — a link clicked in Agents View landed in a tab layout that was not on screen.
+  it('brings the workspace tabs on screen for a link clicked in Agents View', () => {
+    storeState.settings = { openLinksInApp: true }
+    storeState.activeView = 'activity'
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveViewMock).toHaveBeenCalledWith('terminal')
   })
 
   it('defaults to the system browser when settings have not hydrated', () => {
@@ -196,6 +248,24 @@ describe('openHttpLink', () => {
       activate: true
     })
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  // Why: an SSH page renders on this desktop, so its link tab takes keyboard focus like a local one.
+  it('focuses the page an SSH link opened on this desktop', async () => {
+    storeState.settings = { openLinksInApp: true }
+    openRuntimeBrowserTabMock.mockResolvedValueOnce('ssh-page')
+
+    openHttpLink('https://example.com/', {
+      allowRemoteInApp: true,
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
+    })
+
+    await vi.waitFor(() =>
+      expect(dispatchEventMock).toHaveBeenCalledWith(
+        expect.objectContaining({ detail: { pageId: 'ssh-page', target: 'webview' } })
+      )
+    )
   })
 
   it('routes runtime and SSH document owners through their workspace browsers', () => {

@@ -126,7 +126,7 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
       // Echo a numeric probe index, then map it back to the opaque ID in Node.
       for (const [index, id] of candidateIds.entries()) {
         for (const input of candidateInputs[index] ?? []) {
-          window.api.pty.write(String(id), input)
+          window.api.pty.write(String(id), input, 'driving')
         }
       }
     },

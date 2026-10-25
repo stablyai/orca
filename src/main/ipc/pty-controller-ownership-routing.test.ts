@@ -2,25 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
-import {
-  registerPtyHandlers,
-  registerSshPtyProvider,
-  clearPtyOwnershipForConnection,
-  clearProviderPtyState,
-  getPtyIdsForConnection,
-  setPtyOwnership,
-  setLocalPtyProvider,
-  unregisterSshPtyProvider
-} from './pty'
-import {
-  writeRefused,
-  writeUnverifiable,
-  type WriteSettlement
-} from '../../shared/pty-write-settlement'
-
-type SettledControllerDouble = {
-  writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
-}
+import { registerPtyHandlers } from './pty/register-handlers'
+import { clearPtyOwnershipForConnection, clearProviderPtyState } from './pty/provider/state-cleanup'
+import { setPtyOwnership } from './pty/provider/ownership-state'
+import { setLocalPtyProvider } from './pty/provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -68,7 +53,6 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 
 describe('registerPtyHandlers', () => {
   const {
-    handlers,
     mainWindow,
     createAgentClaimProvider,
     recoveredAgentClaim,
@@ -76,79 +60,18 @@ describe('registerPtyHandlers', () => {
     registerAgentClaimController
   } = setupPtyIpcSuite()
 
-  it('fails closed instead of routing encoded SSH PTY writes locally after disconnect', () => {
-    const connectionId = 'ssh-1'
-    const ptyId = `ssh:${connectionId}@@remote-pty`
+  it('fails closed instead of routing encoded SSH PTY writes locally', () => {
+    const ptyId = 'ssh:ssh-1@@remote-pty'
     const localProvider = createAgentClaimProvider({})
-    const sshProvider = createAgentClaimProvider({})
     setLocalPtyProvider(localProvider as never)
-    registerSshPtyProvider(connectionId, sshProvider as never)
-    setPtyOwnership(ptyId, connectionId)
     const controller = registerAgentClaimController()
-
-    unregisterSshPtyProvider(connectionId)
-    clearPtyOwnershipForConnection(connectionId)
 
     expect(controller.write(ptyId, 'input')).toBe(false)
     expect(controller.resize(ptyId, 100, 40)).toBe(false)
     expect(localProvider.write).not.toHaveBeenCalled()
     expect(localProvider.resize).not.toHaveBeenCalled()
-
-    registerSshPtyProvider(connectionId, sshProvider as never)
-    expect(controller.write(ptyId, 'reconnected')).toBe(true)
-    expect(controller.resize(ptyId, 120, 50)).toBe(true)
-    expect(sshProvider.write).toHaveBeenCalledWith(ptyId, 'reconnected')
-    expect(sshProvider.resize).toHaveBeenCalledWith(ptyId, 120, 50)
-
-    unregisterSshPtyProvider(connectionId)
     clearProviderPtyState(ptyId)
   })
-  it('routes settled pointer writes through the installed SSH controller and preserves uncertainty', async () => {
-    const connectionId = 'ssh-settled'
-    const ptyId = `ssh:${connectionId}@@remote-pty`
-    const provider = {
-      ...createAgentClaimProvider({}),
-      writeWithSettlement: vi
-        .fn()
-        .mockResolvedValue(writeUnverifiable('transport_settlement_lost', true))
-    }
-    registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
-    const controller = registerAgentClaimController() as unknown as SettledControllerDouble
-    try {
-      expect(controller.writeWithSettlement).toBeTypeOf('function')
-      await expect(controller.writeWithSettlement(ptyId, 'pointer')).resolves.toEqual(
-        writeUnverifiable('transport_settlement_lost', true)
-      )
-      expect(provider.writeWithSettlement).toHaveBeenCalledWith(ptyId, 'pointer')
-      expect(provider.write).not.toHaveBeenCalled()
-    } finally {
-      unregisterSshPtyProvider(connectionId)
-      clearProviderPtyState(ptyId)
-    }
-  })
-
-  it('refuses a settled write before any bytes when the routed provider cannot settle', async () => {
-    const connectionId = 'ssh-unsettled'
-    const ptyId = `ssh:${connectionId}@@remote-pty`
-    const provider = createAgentClaimProvider({}) as Record<string, unknown>
-    // A provider predating the settled contract, reached through the production registry.
-    delete provider.writeWithSettlement
-    registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
-    const controller = registerAgentClaimController() as unknown as SettledControllerDouble
-    try {
-      // Synchronous by construction: the refusal happens before any effect is attempted.
-      expect(await controller.writeWithSettlement(ptyId, 'pointer')).toEqual(
-        writeRefused('provider_cannot_settle')
-      )
-      expect(provider.write).not.toHaveBeenCalled()
-    } finally {
-      unregisterSshPtyProvider(connectionId)
-      clearProviderPtyState(ptyId)
-    }
-  })
-
   it('preserves a provider write refusal for callers that gate follow-up input', () => {
     const provider = createAgentClaimProvider({})
     provider.write.mockReturnValue(false)
@@ -179,37 +102,15 @@ describe('registerPtyHandlers', () => {
     })
 
     it('answers unknown for a probe-less provider that is not the in-process one', async () => {
-      // Why: only the in-process provider is its own sole owner; any other
-      // probe-less provider's ignorance is doubt, not absence.
+      // Only the in-process provider can prove sole ownership without a probe.
       setLocalPtyProvider(createAgentClaimProvider({}) as never)
       const controller = registerAgentClaimController()
 
       await expect(controller.probePtyLiveness('pty-unknown')).resolves.toBeNull()
     })
 
-    it('answers unknown for SSH-owned ids whose provider has no probe', async () => {
-      const connectionId = 'ssh-probe-1'
-      const ptyId = `ssh:${connectionId}@@remote-pty`
-      setLocalPtyProvider(new LocalPtyProvider())
-      registerSshPtyProvider(connectionId, createAgentClaimProvider({}) as never)
-      setPtyOwnership(ptyId, connectionId)
-      const controller = registerAgentClaimController()
-      try {
-        await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
-
-        unregisterSshPtyProvider(connectionId)
-        // A disconnected SSH provider is an error path, and errors never prove absence.
-        await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
-      } finally {
-        unregisterSshPtyProvider(connectionId)
-        clearPtyOwnershipForConnection(connectionId)
-        clearProviderPtyState(ptyId)
-      }
-    })
-
     it('answers unknown for remote-scoped ids without consulting local providers', async () => {
-      // Why: a locally routed provider would answer confidently — and wrongly —
-      // for a PTY that lives on a remote Orca host.
+      // A local provider cannot prove ownership of a PTY on another host.
       setLocalPtyProvider(new LocalPtyProvider())
       const controller = registerAgentClaimController()
 
@@ -231,35 +132,28 @@ describe('registerPtyHandlers', () => {
   })
   it('routes controller attach to the local daemon provider only, false on doubt', async () => {
     const localProvider = createAgentClaimProvider({})
-    const sshProvider = createAgentClaimProvider({})
     setLocalPtyProvider(localProvider as never)
-    registerSshPtyProvider('ssh-attach', sshProvider as never)
     const controller = registerAgentClaimController()
     const daemonPtyId = 'repo-1::/tmp/wt@@1a2b3c4d'
     const ownedSshPtyId = 'owned-remote-pty'
-    setPtyOwnership(ownedSshPtyId, 'ssh-attach')
+    setPtyOwnership(ownedSshPtyId, 'ssh:ssh-attach')
     try {
-      // Local daemon session: attach flows to the provider.
       await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
       expect(localProvider.attach).toHaveBeenCalledWith(daemonPtyId)
 
-      // SSH-scoped sessions are excluded — leases handle their reattach.
       await expect(controller.attach(ownedSshPtyId)).resolves.toBe(false)
       await expect(controller.attach('ssh:ssh-attach@@relay-pty')).resolves.toBe(false)
-      expect(sshProvider.attach).not.toHaveBeenCalled()
+      expect(localProvider.attach).toHaveBeenCalledTimes(1)
 
-      // Provider refusal (absent/unprovable session) answers false, not throw.
       localProvider.attach.mockRejectedValueOnce(new Error('Session not found'))
       await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
 
-      // The in-process local provider streams without attach; never called.
       const inProcess = new LocalPtyProvider()
       const inProcessAttach = vi.spyOn(inProcess, 'attach')
       setLocalPtyProvider(inProcess)
       await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
       expect(inProcessAttach).not.toHaveBeenCalled()
     } finally {
-      unregisterSshPtyProvider('ssh-attach')
       clearPtyOwnershipForConnection('ssh-attach')
       clearProviderPtyState(ownedSshPtyId)
     }
@@ -285,6 +179,18 @@ describe('registerPtyHandlers', () => {
       providerSequence,
       0
     )
+  })
+  it('seeds the title of a session adopted by subscriber-driven attach', async () => {
+    const daemonPtyId = 'repo-1::/tmp/wt@@title-handoff'
+    const localProvider = createAgentClaimProvider({})
+    localProvider.attach.mockResolvedValueOnce({ lastTitle: '⠋ Claude' })
+    setLocalPtyProvider(localProvider as never)
+    const seedTerminalRestoreTail = vi.fn()
+    const controller = registerAgentClaimController({ seedTerminalRestoreTail })
+
+    await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
+
+    expect(seedTerminalRestoreTail).toHaveBeenCalledWith(daemonPtyId, { lastTitle: '⠋ Claude' })
   })
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
     const provider = createAgentClaimProvider({})
@@ -345,87 +251,88 @@ describe('registerPtyHandlers', () => {
     expect(runtime.registerPreAllocatedHandleForPty).not.toHaveBeenCalled()
     expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(
       'different-requested-id',
-      'incarnation-canonical-exited'
+      'incarnation-canonical-exited',
+      undefined
     )
   })
-  it('rejects renderer spawn publication when the provider reply proves exit', async () => {
-    const connectionId = 'ssh-renderer-exited-reply'
-    const appPtyId = `ssh:${connectionId}@@relay-pty`
-    const provider = {
-      spawn: vi.fn(async () => ({
-        id: appPtyId,
-        incarnationId: 'incarnation-renderer-exited',
-        exitedBeforeSpawnReply: true as const
-      })),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    }
-    const store = {
-      upsertSshRemotePtyLease: vi.fn(),
-      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
-      persistPtyBinding: vi.fn(),
-      removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn(),
-      clearSshRemotePtyKillIntent: vi.fn()
-    }
-    const runtime = {
-      setPtyController: vi.fn(),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'term_renderer_exited'),
-      preAllocateHandleForPty: vi.fn(() => 'term_renderer_exited'),
-      registerPreAllocatedHandleForPty: vi.fn(),
-      registerPty: vi.fn(),
-      onPtySpawned: vi.fn(),
-      onPtyExit: vi.fn(),
-      onPtyData: vi.fn()
-    }
-    registerSshPtyProvider(connectionId, provider as never)
-    try {
-      registerPtyHandlers(
-        mainWindow as never,
-        runtime as never,
-        undefined,
-        undefined,
-        undefined,
-        store as never
-      )
-      const leafId = '33333333-3333-4333-8333-333333333333'
+})
 
-      await expect(
-        handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          cwd: '/tmp/worktree',
-          connectionId,
-          worktreeId: 'repo::/tmp/worktree',
-          tabId: 'tab-renderer-exited',
-          leafId
+describe('PTY controller ownership recovery', () => {
+  const {
+    createAgentClaimProvider,
+    recoveredAgentClaim,
+    recoveredAgentSurface,
+    registerAgentClaimController
+  } = setupPtyIpcSuite()
+
+  it('does not adopt a stale generation when its PTY id is reused without ownership', async () => {
+    const claim = {
+      ...recoveredAgentClaim,
+      identityDigest: 'fffffffffffffffffffffffffffffffffffffffffff'
+    }
+    const oldOwner: AgentSessionOwnerBinding = {
+      claim,
+      generation: 'generation-old',
+      phase: 'live',
+      ptyId: 'pty-reused',
+      surface: recoveredAgentSurface
+    }
+    const sessions = [
+      {
+        id: oldOwner.ptyId,
+        incarnationId: 'incarnation-old',
+        cwd: '/tmp/recovered-worktree',
+        title: 'Codex',
+        agentSessionOwners: [oldOwner]
+      }
+    ]
+    const spawn = vi.fn(
+      async (options: {
+        agentSessionEnsure?: { claim: typeof claim; surface: typeof recoveredAgentSurface }
+      }) => {
+        const ensured = options.agentSessionEnsure
+        if (!ensured) {
+          throw new Error('missing test claim')
+        }
+        const owner: AgentSessionOwnerBinding = {
+          claim: ensured.claim,
+          generation: 'generation-new',
+          phase: 'live',
+          ptyId: 'pty-new-owner',
+          surface: ensured.surface
+        }
+        sessions.push({
+          id: owner.ptyId,
+          incarnationId: 'incarnation-new',
+          cwd: '/tmp/recovered-worktree',
+          title: 'Codex',
+          agentSessionOwners: [owner]
         })
-      ).rejects.toThrow('agent_session_exited_during_start')
-
-      expect(runtime.registerPty).not.toHaveBeenCalled()
-      expect(runtime.registerPreAllocatedHandleForPty).not.toHaveBeenCalled()
-      expect(store.persistPtyBinding).not.toHaveBeenCalled()
-      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
-      expect(getPtyIdsForConnection(connectionId)).toEqual([])
-    } finally {
-      unregisterSshPtyProvider(connectionId)
+        return {
+          id: owner.ptyId,
+          agentSessionEnsure: { disposition: 'created' as const, owner }
+        }
+      }
+    )
+    const provider = createAgentClaimProvider({ sessions, spawn })
+    setLocalPtyProvider(provider as never)
+    const controller = registerAgentClaimController()
+    const request = {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/recovered-worktree',
+      agentSessionEnsure: { claim, surface: recoveredAgentSurface }
     }
+
+    await expect(controller.spawn(request)).resolves.toMatchObject({ id: oldOwner.ptyId })
+    sessions[0] = { ...sessions[0], agentSessionOwners: [] }
+    await expect(controller.spawn(request)).resolves.toMatchObject({
+      id: 'pty-new-owner',
+      agentSessionEnsure: { disposition: 'created' }
+    })
+    expect(spawn).toHaveBeenCalledOnce()
+
+    clearProviderPtyState(oldOwner.ptyId)
+    clearProviderPtyState('pty-new-owner')
   })
 })

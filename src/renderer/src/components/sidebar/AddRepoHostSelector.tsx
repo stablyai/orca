@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { Check, ChevronRight, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Command, CommandItem, CommandList } from '@/components/ui/command'
+import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { useBoundedHostRows } from '../host-picker/use-bounded-host-rows'
+import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
+import { searchHostsLabel } from '../host-picker/host-picker-copy'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { SidebarHostOption } from './sidebar-host-options'
@@ -20,13 +23,21 @@ type AddRepoHostSelectorProps = {
   onConnectHost?: (hostId: ExecutionHostId) => void
   onAddSshHost?: () => void
   onAddRemoteServer?: () => void
+  /** Present only where WSL hosts are available and turned on. */
+  onAddWslHost?: () => void
+  /** Opens Experimental → WSL distros as hosts, for a WSL host listed while that is off. */
+  onOpenWslHostsSetting?: () => void
 }
 
 function getHostStatusDetail(host: SidebarHostOption): string {
+  // Why only the detail: "Disconnected" would read as a failure, not a switched-off feature.
+  if (host.wslUnavailable) {
+    return host.detail
+  }
   if (host.compatibility?.kind === 'blocked') {
     return describeRuntimeCompatBlock(host.compatibility)
   }
-  return `${getSidebarHostHealthLabel(host.health)}${host.detail ? ` - ${host.detail}` : ''}`
+  return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${host.detail ? ` - ${host.detail}` : ''}`
 }
 
 export function AddRepoHostSelector({
@@ -37,10 +48,13 @@ export function AddRepoHostSelector({
   onSelectHost,
   onConnectHost,
   onAddSshHost,
-  onAddRemoteServer
+  onAddRemoteServer,
+  onAddWslHost,
+  onOpenWslHostsSetting
 }: AddRepoHostSelectorProps): React.JSX.Element | null {
   const [addHostOpen, setAddHostOpen] = useState(false)
-  const showHostSetupActions = Boolean(onAddSshHost || onAddRemoteServer)
+  const rows = useBoundedHostRows(hosts, new Set(selectedHostId ? [selectedHostId] : []))
+  const showHostSetupActions = Boolean(onAddSshHost || onAddRemoteServer || onAddWslHost)
   if (!shouldShowHostScopeControls(hosts) && !showHostSetupActions) {
     return null
   }
@@ -69,7 +83,7 @@ export function AddRepoHostSelector({
                 title={getHostStatusDetail(selectedHost)}
                 className="shrink-0 text-[11px] font-normal text-muted-foreground"
               >
-                {getSidebarHostHealthLabel(selectedHost.health)}
+                {getSidebarHostHealthLabel(selectedHost.health, selectedHost.blockedReason)}
               </span>
             ) : null}
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
@@ -79,9 +93,18 @@ export function AddRepoHostSelector({
           align="start"
           className="w-[min(340px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
         >
-          <Command>
+          <Command shouldFilter={false} label={searchHostsLabel()}>
+            {rows.searchable ? (
+              <CommandInput
+                value={rows.query}
+                onValueChange={rows.setQuery}
+                placeholder={searchHostsLabel()}
+                aria-label={searchHostsLabel()}
+              />
+            ) : null}
             <CommandList>
-              {showHostSetupActions ? (
+              {/* Why hidden while searching: Enter must pick the matching host, not open setup. */}
+              {showHostSetupActions && rows.query === '' ? (
                 <Popover open={addHostOpen} onOpenChange={setAddHostOpen}>
                   <PopoverTrigger asChild>
                     <CommandItem
@@ -100,10 +123,15 @@ export function AddRepoHostSelector({
                           </span>
                         </span>
                         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                          {translate(
-                            'auto.components.sidebar.AddRepoHostSelector.addRemoteHostDetail',
-                            'SSH host or Orca server'
-                          )}
+                          {onAddWslHost
+                            ? translate(
+                                'auto.components.sidebar.AddRepoHostSelector.addRemoteHostDetailWithWsl',
+                                'SSH host, Orca server, or WSL distro'
+                              )
+                            : translate(
+                                'auto.components.sidebar.AddRepoHostSelector.addRemoteHostDetail',
+                                'SSH host or Orca server'
+                              )}
                         </span>
                       </span>
                       <ChevronRight className="mt-0.5 size-3.5 shrink-0" />
@@ -158,13 +186,41 @@ export function AddRepoHostSelector({
                         </span>
                       </button>
                     ) : null}
+                    {onAddWslHost ? (
+                      <button
+                        type="button"
+                        className="flex w-full flex-col rounded-sm px-2.5 py-2 text-left hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        onClick={() => {
+                          setAddHostOpen(false)
+                          onOpenChange(false)
+                          onAddWslHost()
+                        }}
+                      >
+                        <span className="text-xs font-medium">
+                          {translate(
+                            'auto.components.sidebar.AddRepoHostSelector.addWslHost',
+                            'Add WSL distro'
+                          )}
+                        </span>
+                        <span className="mt-0.5 text-[11px] text-muted-foreground">
+                          {translate(
+                            'auto.components.sidebar.AddRepoHostSelector.addWslHostDetail',
+                            'Run an Orca server inside a WSL 2 distro. Experimental.'
+                          )}
+                        </span>
+                      </button>
+                    ) : null}
                   </PopoverContent>
                 </Popover>
               ) : null}
-              {hosts.map((host) => {
+              {rows.shown.map((host) => {
                 const selected = host.id === selectedHostId
                 const disabled = !canSelectAddRepoHost(host)
-                const canConnect = canConnectAddRepoHost(host)
+                const canConnectHost = canConnectAddRepoHost(host)
+                const canTurnOn =
+                  host.wslUnavailable === 'turned-off' && onOpenWslHostsSetting !== undefined
+                // Why one flag: either action keeps the otherwise unselectable row interactive.
+                const canConnect = canConnectHost || canTurnOn
                 const isConnecting = host.health === 'connecting'
                 return (
                   <CommandItem
@@ -198,7 +254,7 @@ export function AddRepoHostSelector({
                         <span className="min-w-0 flex-1 truncate">{getHostStatusDetail(host)}</span>
                       </span>
                     </span>
-                    {canConnect ? (
+                    {canConnectHost ? (
                       <Button
                         type="button"
                         variant="link"
@@ -222,11 +278,30 @@ export function AddRepoHostSelector({
                               'Connect'
                             )}
                       </Button>
+                    ) : canTurnOn ? (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="xs"
+                        className="ml-2 self-center"
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          onOpenChange(false)
+                          onOpenWslHostsSetting()
+                        }}
+                      >
+                        {translate(
+                          'auto.components.sidebar.AddRepoHostSelector.turnOnWslHosts',
+                          'Turn on'
+                        )}
+                      </Button>
                     ) : null}
                   </CommandItem>
                 )
               })}
             </CommandList>
+            <HostListOverflowNote hiddenCount={rows.hiddenCount} />
           </Command>
         </PopoverContent>
       </Popover>

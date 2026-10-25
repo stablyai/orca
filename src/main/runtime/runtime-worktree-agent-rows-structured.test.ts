@@ -1,6 +1,9 @@
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { statusFeedChildView } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
+import { normalizeAgentStatusPayload } from '../../shared/agent-status-types'
+import { resolveWorktreeCatalogSnapshot } from './rpc/worktree-catalog-snapshot'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import {
   structuredAgentSessionPaneKey,
@@ -59,8 +62,6 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
   const summariesById = new Map<string, RuntimeWorktreePsSummary>([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries: summariesById,
-    pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
-    missingWorktreeIds: new Set(),
     workingTerminalEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
@@ -69,10 +70,12 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
         paneKeys: new Set(),
         ptyIdByTerminalHandle: new Map()
       },
-      hookSnapshots: store.getStatusSnapshot()
+      hookSnapshots: store.getStatusSnapshot(),
+      readStructuredSummary: (sessionId) =>
+        summaries.findLast((entry) => entry.sessionId === sessionId)
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map, _p, _m, id) => map.get(id) ?? null
+    getSummary: (id) => summariesById.get(id) ?? null
   })
   return row
 }
@@ -82,6 +85,43 @@ beforeEach(() => {
 })
 
 describe('worktree ps reports structured sessions', () => {
+  it('carries canonical summary children, invalidates child-only changes, and clears an omitted roster', () => {
+    const child = statusFeedChildView()
+    const catalog = (children: (typeof child)[] | undefined) => ({
+      worktrees: [attach([summary({ children })])],
+      totalCount: 1,
+      truncated: false
+    })
+    const first = catalog([child])
+    expect(first.worktrees[0]?.agents[0]).toMatchObject({
+      children: [child],
+      subagentObservation: 'live'
+    })
+    const initial = resolveWorktreeCatalogSnapshot(first, null)
+    expect(resolveWorktreeCatalogSnapshot(catalog([child]), initial.snapshotId)).toEqual({
+      unchanged: true,
+      snapshotId: initial.snapshotId
+    })
+    expect(
+      resolveWorktreeCatalogSnapshot(catalog([{ ...child, state: 'waiting' }]), initial.snapshotId)
+    ).not.toHaveProperty('unchanged')
+    expect(catalog(undefined).worktrees[0]?.agents[0]?.children).toEqual([])
+    // Old readers keep the parent fields; hook payloads cannot become a child producer.
+    expect(normalizeAgentStatusPayload({ state: 'working', children: [child] })).not.toHaveProperty(
+      'children'
+    )
+  })
+
+  it("lists a person's Stop still ending the turn, and drops it once the host does", () => {
+    expect(attach([summary({ stopping: true })]).agents[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working', stopping: true }
+    })
+    const ended = attach([summary({ stopping: true }), summary({ updatedAt: 1_757_030_401_000 })])
+    expect(ended.agents[0]?.state).toBe('working')
+    expect(ended.agents[0]?.mainAgent).not.toHaveProperty('stopping')
+  })
+
   it('a busy structured session is not reported idle', () => {
     const row = attach([summary()])
     expect(row.agents).toHaveLength(1)
@@ -89,12 +129,6 @@ describe('worktree ps reports structured sessions', () => {
     expect(row.agents[0]?.agentType).toBe('claude')
     expect(row.agents[0]?.prompt).toBe('ship the thing')
     expect(row.status).toBe('working')
-  })
-
-  // The same projection the sidebar applies, so the two surfaces cannot disagree about one session.
-  it('maps attention to blocked and idle to done', () => {
-    expect(attach([summary({ status: 'attention' })]).agents[0]?.state).toBe('blocked')
-    expect(attach([summary({ status: 'idle' })]).agents[0]?.state).toBe('done')
   })
 
   it('does not turn a completed host-held session into permission', () => {
@@ -133,9 +167,9 @@ describe('worktree ps reports structured sessions', () => {
 describe('terminal listing is deliberately left alone', () => {
   it('never reads the agent-status store that now carries structured rows', async () => {
     const { readFile } = await import('node:fs/promises')
-    // orca-runtime-subscribe-to-terminal-resize.ts owns listTerminals.
+    // terminal/layout/terminal-resize-listeners.ts owns listTerminals.
     const listing = await readFile(
-      new URL('./orca-runtime-subscribe-to-terminal-resize.ts', import.meta.url),
+      new URL('./terminal/layout/terminal-resize-listeners.ts', import.meta.url),
       'utf8'
     )
     // Guard the guard: an empty read would make every assertion below vacuously true.

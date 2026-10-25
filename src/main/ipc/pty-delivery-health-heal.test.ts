@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { getPtyRendererDeliveryDebugSnapshot } from './pty/delivery/debug'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -180,7 +181,6 @@ describe('registerPtyHandlers', () => {
         expect.objectContaining({ rendererPtyDataListenerCount: 1 })
       )
 
-      // Delivery is unwedged: fresh output flows to the renderer again.
       mockProc.emitData('after-heal')
       vi.advanceTimersByTime(2)
       expect(getPtyDataSendCalls()).toHaveLength(33)
@@ -309,7 +309,7 @@ describe('registerPtyHandlers', () => {
 
       handleRendererLoading()
 
-      // Why: reload kills the dispatcher that would ACK, so stale counters would gate PTYs in the fresh renderer forever.
+      // Reload destroys the ACK dispatcher; stale debt must not gate PTYs in the replacement page.
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightPtyCount: 0,
         rendererInFlightChars: 0

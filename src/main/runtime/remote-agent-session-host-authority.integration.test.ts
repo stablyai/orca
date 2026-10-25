@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import '../daemon/mock-descendant-sweep'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -5,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { parsePairingCode } from '../../shared/pairing'
-import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import type {
   RuntimeEnsureAgentSessionResult,
   RuntimeEnsureAgentSessionRequest
@@ -147,9 +148,15 @@ describe('remote agent-session host authority integration', () => {
       await server.start()
       cleanups.push(() => server.stop())
 
-      const firstClient = new RemoteRuntimeRequestConnection(requirePairing(server, 'client-one'))
-      const secondClient = new RemoteRuntimeRequestConnection(requirePairing(server, 'client-two'))
-      const retryClient = new RemoteRuntimeRequestConnection(requirePairing(server, 'retry-client'))
+      const firstClient = new RemoteRuntimeRequestConnection(
+        pairedRuntimeConnectionFromOffer(requirePairing(server, 'client-one'))
+      )
+      const secondClient = new RemoteRuntimeRequestConnection(
+        pairedRuntimeConnectionFromOffer(requirePairing(server, 'client-two'))
+      )
+      const retryClient = new RemoteRuntimeRequestConnection(
+        pairedRuntimeConnectionFromOffer(requirePairing(server, 'retry-client'))
+      )
       cleanups.push(() => firstClient.close())
       cleanups.push(() => secondClient.close())
       cleanups.push(() => retryClient.close())

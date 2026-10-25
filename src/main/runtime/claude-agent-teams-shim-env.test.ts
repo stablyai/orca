@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildClaudeAgentTeamsLaunchPlan,
   ensureClaudeAgentTeamsShimDir,
@@ -14,6 +14,7 @@ import {
 const roots: string[] = []
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })))
   roots.length = 0
 })
@@ -31,6 +32,9 @@ describe('claude agent teams shim env', () => {
   it('builds native shim env only for direct Claude commands', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
     roots.push(root)
+    // Why: the plan writes its tmux shim under ~/.orca.
+    vi.stubEnv('HOME', root)
+    vi.stubEnv('USERPROFILE', root)
     const cliName = process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev'
     const cliPath = join(root, cliName)
     await writeFile(cliPath, '#!/usr/bin/env sh\n', 'utf8')

@@ -60,8 +60,7 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
-// Why the real policy module behind a spy: the point of these tests is which half of the page
-// registry a channel reads, so a stub of it would prove nothing about what was consulted.
+// Spy on the real policy so registry selection remains observable.
 vi.mock('../browser/doc-preview-guest-policy', async (importOriginal) => {
   const actual = await importOriginal<typeof DocPreviewGuestPolicyModule>()
   return {
@@ -73,8 +72,7 @@ vi.mock('../browser/doc-preview-guest-policy', async (importOriginal) => {
   }
 })
 
-// Why spy rather than stub: the wait is real machinery the browser-page path still depends on;
-// only whether a preview target enters it is under test.
+// Keep registration waits real; observe only which targets enter them.
 vi.mock('./browser-tab-registration-wait', async (importOriginal) => {
   const actual = await importOriginal<typeof TabRegistrationWaitModule>()
   return {
@@ -101,14 +99,10 @@ import { buildDocPreviewUrl } from '../../shared/doc-preview-scheme'
 
 const HOST_RENDERER_ID = 91
 const OTHER_RENDERER_ID = 92
-/** Mirrors browser-grab-ipc's own wait, so elapsing it here settles the same parked request. */
+// Match browser-grab-ipc's registration timeout.
 const GRAB_REGISTRATION_WAIT_MS = 1_000
 
-/**
- * Every `browser:*` invoke channel, split by whether it acts on a guest the reader is looking at
- * (a tool) or manages browser-page, session and profile state. The split is asserted to be total,
- * so a new channel cannot be added without deciding which side of the preview seam it belongs on.
- */
+/** Exhaustively classify invoke channels as guest tools or browser/session/profile management. */
 const TOOL_CHANNELS = [
   'browser:setGrabMode',
   'browser:awaitGrabSelection',
@@ -125,15 +119,22 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:isGuestRegistered',
   'browser:unregisterGuest',
   'browser:respondWebAuthnAccount',
+  'browser:respondPagePrompt',
   'browser:proceedCertificate',
   'browser:activeTabChanged',
   'browser:openDevTools',
+  'browser:addWordToDictionary',
+  'browser:copyImageAt',
   'browser:setViewportOverride',
+  'browser:getPageSiteDisplay',
+  'browser:zoomPage',
+  'browser:setPageSiteColorScheme',
   'browser:publishClientPageMetadata',
   'browser:cancelDownload',
   'browser:session:listProfiles',
   'browser:session:createProfile',
   'browser:session:deleteProfile',
+  'browser:session:ensureManagedProfile',
   'browser:session:importCookies',
   'browser:session:resolvePartition',
   'browser:session:clearDefaultCookies',
@@ -144,7 +145,10 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:importFromBrowser',
   // Process-wide identity: reads/writes the host's own user-agent choice, never a viewed guest.
   'browser:identity:get',
-  'browser:identity:set'
+  'browser:identity:set',
+  // Remembered site answers for a browser profile, never a viewed guest.
+  'browser:sitePermissions:list',
+  'browser:sitePermissions:set'
 ]
 
 type Handler = (event: { sender: Electron.WebContents }, args: unknown) => unknown
@@ -182,13 +186,11 @@ function grantForNewDocPage(): { id: string; browserPageId: string } {
   return { id: grant.id, browserPageId }
 }
 
-/** The fake WebContents a preview's policy installs onto; tools are matched against its identity. */
 type PreviewGuestContents = {
   isDestroyed: () => boolean
   getURL: () => string
 }
 
-/** A preview guest already showing its document, which is the only state a tool can act in. */
 function renderPreviewForGrant(
   grant: { id: string; browserPageId: string },
   hostId: number = HOST_RENDERER_ID
@@ -203,8 +205,7 @@ function renderPreviewForGrant(
   const register = (event: string, handler: (...args: never[]) => void): void => {
     handlers[event] = handler
   }
-  // Why the guest already reports its URL: the embedder hands a preview over mid-load, so this is
-  // the state the policy really installs into.
+  // Policy attaches mid-load, when the guest already reports its document URL.
   const documentUrl = buildDocPreviewUrl(grant.id, 'index.html')
   let contentsDestroyed = false
   const guest = {
@@ -222,8 +223,7 @@ function renderPreviewForGrant(
     grantId: grant.id,
     browserPageId,
     contents: guest,
-    // Why without the `destroyed` event: Chromium tears the contents down before main runs that
-    // listener, so this is the window the authority has to answer for on its own.
+    // Contents can be destroyed before Chromium delivers the destroyed event.
     markContentsDestroyed: () => {
       contentsDestroyed = true
     }
@@ -258,7 +258,7 @@ function toolArgs(channel: string, browserPageId: string): Record<string, unknow
   }
 }
 
-/** The viewport bridge is handed a resolver rather than the contents, so unwrap one call argument. */
+// Unwrap viewport resolvers as well as direct guest arguments.
 function resolvesToGuest(argument: unknown, guest: PreviewGuestContents): boolean {
   return argument === guest || (typeof argument === 'function' && argument() === guest)
 }
@@ -273,13 +273,10 @@ const GUEST_RECEIVING_MOCKS = [
 
 beforeEach(() => {
   vi.stubEnv('ELECTRON_RENDERER_URL', '')
-  // Why before clearing: revoking the previous test's grants disposes their page state through the
-  // mocked manager, and those calls belong to that test, not this one.
+  // Revoke before clearing mocks so disposal calls belong to the previous test.
   revokeAllDocPreviewGrants()
   vi.clearAllMocks()
-  // Why the mocked manager still answers for documents: this file's subject is which channels may
-  // reach a document guest, not how the manager splits its registry — that lives in
-  // browser-manager-guest-policy-profile.test.ts, against the real manager.
+  // This suite checks channel authorization; real manager registry splitting is covered separately.
   getAuthorizedGuestMock.mockImplementation((browserPageId: string, senderWebContentsId: number) =>
     getWorkspaceDocPageGuest(browserPageId, senderWebContentsId)
   )
@@ -289,9 +286,7 @@ beforeEach(() => {
   extractHoverPayloadMock.mockResolvedValue(null)
   setAnnotationViewportBridgeMock.mockResolvedValue(true)
   registerBrowserHandlers()
-  // Why fake timers for the whole file: a tool asking for a page whose guest has not attached parks
-  // in the registration wait, and several cases here are exactly the ones that never attach. Real
-  // time would spend that wait for each of them.
+  // Fake timers settle registration waits for guests that never attach.
   vi.useFakeTimers()
 })
 
@@ -299,7 +294,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-/** Settles a tool request, elapsing the registration wait it may be parked in. */
 async function settle<T>(pending: Promise<T> | T | undefined): Promise<T | undefined> {
   await vi.advanceTimersByTimeAsync(GRAB_REGISTRATION_WAIT_MS)
   return pending
@@ -319,17 +313,14 @@ describe('doc preview tool authorization', () => {
 
     await handler?.(trustedSender(HOST_RENDERER_ID), toolArgs(channel, preview.browserPageId))
 
-    // Why assert on the guest and not on a return value: the whole point of the seam is which
-    // WebContents the tool ends up acting on.
+    // Assert the actual WebContents receiving the tool operation.
     const receivedGuest = GUEST_RECEIVING_MOCKS.some((mock) =>
       mock.mock.calls.some((args) => args.some((arg) => resolvesToGuest(arg, preview.contents)))
     )
     expect(receivedGuest || cancelGrabOpMock.mock.calls.length > 0).toBe(true)
   })
 
-  // The load-bearing containment claim: page and session management never reads the document half
-  // of the registry, so a document page can never be resolved as, or managed like, a browsing one.
-  // Nothing here is a per-channel guard — a document guest is simply not in the map these read.
+  // Browser/session management must never consult the document registry.
   it.each(BROWSER_PAGE_CHANNELS)('never reads the document registry from %s', async (channel) => {
     const preview = liveRenderedPreview()
     const handler = registeredHandlers().get(channel)
@@ -375,8 +366,7 @@ describe('doc preview tool authorization', () => {
     }
   })
 
-  // Why the contents check has to be its own condition: the grant is still live and the sender is
-  // still the host, so nothing else in the authority notices that the guest is gone.
+  // A live grant and trusted sender are insufficient once contents are destroyed.
   it.each(TOOL_CHANNELS)('refuses %s once the preview contents are destroyed', async (channel) => {
     const preview = liveRenderedPreview()
     preview.markContentsDestroyed()
@@ -391,9 +381,7 @@ describe('doc preview tool authorization', () => {
     }
   })
 
-  // Why this inverts what the split registries used to assert: a document page now registers under
-  // its own id, so the wait is reachable and useful — a tool opened while the guest is still
-  // attaching parks here instead of answering not-ready at the reader.
+  // Document tools wait for their own attaching guest instead of returning not-ready immediately.
   it('waits for a document page whose guest has not attached yet, and arms when it does', async () => {
     const grant = grantForNewDocPage()
     const handler = registeredHandlers().get('browser:setGrabMode')
@@ -411,8 +399,7 @@ describe('doc preview tool authorization', () => {
     expect(setGrabModeMock).toHaveBeenCalledWith(grant.browserPageId, true, preview.contents)
   })
 
-  // The absence half, with the same presence precondition: a page nothing ever renders still gives
-  // the reader an answer rather than hanging on the full timeout.
+  // Unrendered documents must eventually answer not-ready.
   it('answers not-ready once the wait for an unrendered page elapses', async () => {
     const handler = registeredHandlers().get('browser:setGrabMode')
 
@@ -439,8 +426,7 @@ describe('doc preview tool authorization', () => {
     expect(registrationWaitSpy).toHaveBeenCalledWith('browser-page-1')
   })
 
-  // Why the grant and not the guest: a preview withdraws by revoking, which is also what a
-  // re-mint does, and nothing else tells main that this tool target will never be used again.
+  // Revocation, including re-minting, is how previews withdraw and release retained tool state.
   it('disposes the grab state a preview target accumulated when its grant is revoked', async () => {
     const preview = liveRenderedPreview()
     const handler = registeredHandlers().get('browser:setGrabMode')
@@ -455,9 +441,7 @@ describe('doc preview tool authorization', () => {
     expect(cancelGrabOpMock).toHaveBeenCalledWith(preview.browserPageId, 'evicted')
   })
 
-  // Why both halves of this door: the manager refuses a preview id on its own, but the grab
-  // disposal beside it takes a renderer-supplied id, and the intent it drops is compared by
-  // identity — dropping it makes the grab settle ok without ever arming the guest.
+  // unregisterGuest must not drop preview intent and silently settle its grab without arming.
   it('leaves an in-flight preview grab armed when unregisterGuest names its target', async () => {
     const preview = liveRenderedPreview()
     const handlers = registeredHandlers()
@@ -466,22 +450,20 @@ describe('doc preview tool authorization', () => {
       enabled: true
     })
 
-    // Why synchronously here: the intent is recorded before the queued operation runs, so this is
-    // the exact window in which a disposal at this door would be invisible to the caller.
+    // Intent exists before the queued operation runs; test disposal in that gap.
     const unregistered = handlers.get('browser:unregisterGuest')?.(
       trustedSender(HOST_RENDERER_ID),
       { browserPageId: preview.browserPageId }
     )
 
-    // Why the guest and not the result: a dropped intent settles as ok either way, so only the
-    // guest actually being driven separates an armed grab from a silent no-op.
+    // A dropped intent also returns ok; only the driven guest proves the grab armed.
     await expect(pending).resolves.toEqual({ ok: true })
     expect(setGrabModeMock).toHaveBeenCalledWith(preview.browserPageId, true, preview.contents)
     expect(unregistered).toBe(false)
     expect(vi.mocked(browserManager.unregisterGuest)).not.toHaveBeenCalled()
   })
 
-  // The converse, so the guard above cannot be widened into a door that stops closing tabs.
+  // The same guard must still allow browser tabs to dispose their grabs.
   it('still disposes a browser page grab through the same door', async () => {
     getAuthorizedGuestMock.mockReturnValue({ isDestroyed: () => false })
     const handlers = registeredHandlers()
@@ -501,8 +483,7 @@ describe('doc preview tool authorization', () => {
     expect(vi.mocked(browserManager.unregisterGuest)).toHaveBeenCalledWith('browser-page-1')
   })
 
-  // Why with a live preview standing beside it: the halves are looked up in one door now, so the
-  // thing to prove is that a browsing id is not answered by whatever document happens to be open.
+  // An open document must not answer for a browsing page ID.
   it('never hands a browsing page id the guest of a document that is open', async () => {
     const preview = liveRenderedPreview()
     const handler = registeredHandlers().get('browser:extractHoverPayload')
@@ -512,7 +493,6 @@ describe('doc preview tool authorization', () => {
     expect(getAuthorizedGuestMock).toHaveBeenCalledWith('browser-page-1', HOST_RENDERER_ID)
     expect(previewAuthoritySpy).toHaveBeenCalledWith('browser-page-1', HOST_RENDERER_ID)
     expect(extractHoverPayloadMock).not.toHaveBeenCalled()
-    // The presence half: the same channel does reach that guest under the page it really renders.
     await handler?.(trustedSender(HOST_RENDERER_ID), { browserPageId: preview.browserPageId })
     expect(extractHoverPayloadMock).toHaveBeenCalledWith(preview.browserPageId, preview.contents)
   })

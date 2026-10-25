@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { Session } from './session'
+import type { DescendantSnapshot } from '../pty-descendant-termination'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+const terminateShutdownDescendantsMock = vi.hoisted(() => vi.fn())
+vi.mock('./terminal-descendant-shutdown', () => ({
+  terminateShutdownDescendants: terminateShutdownDescendantsMock
+}))
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
@@ -42,8 +47,7 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
   }
 
   it('win32 immediate kill taskkills the descendant tree before force-kill', async () => {
-    // Why: a live pnpm/node child otherwise survives the ConPTY close, keeps the console
-    // non-empty, and holds the worktree cwd — failing destructive removal (#10004/#10100).
+    // Surviving ConPTY descendants can hold the workspace cwd and prevent removal (#10004/#10100).
     setPlatform('win32')
     const session = createPlainShellSession()
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
@@ -64,8 +68,7 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
   it.each(['win32', 'linux', 'darwin'] as const)(
     '%s immediate kill claims termination before awaiting the sweep',
     async (platform) => {
-      // Why: createOrAttach rejects a doomed plain shell only via isTerminating, so the claim
-      // must land before the taskkill await or an attach can bind a pane to a dying session.
+      // Claim termination before awaiting taskkill so a concurrent attach cannot bind to the dying session.
       setPlatform(platform)
       const session = createPlainShellSession()
       const beginTermination = session.beginTermination as unknown as ReturnType<typeof vi.fn>
@@ -118,6 +121,58 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     expect(session.forceKillAndWaitForExit).toHaveBeenCalled()
   })
 
+  it('waits for a late immediate escalation after graceful descendant verification settles', async () => {
+    let finishDescendants = (): void => {}
+    let finishRoot = (): void => {}
+    const descendantVerification = new Promise<void>((resolve) => {
+      finishDescendants = resolve
+    })
+    const rootCompletion = new Promise<void>((resolve) => {
+      finishRoot = resolve
+    })
+    terminateShutdownDescendantsMock.mockReturnValueOnce(descendantVerification)
+    const snapshot: DescendantSnapshot = {
+      rootPgid: 4242,
+      descendants: [],
+      capturedAtMs: Date.now()
+    }
+    killWithDescendantSweepMock.mockImplementationOnce(
+      async (
+        _pid: number,
+        killRoot: () => void,
+        deps: {
+          terminateDescendants?: (value: DescendantSnapshot) => Promise<unknown>
+        }
+      ) => {
+        deps.terminateDescendants?.(snapshot)
+        killRoot()
+      }
+    )
+    const session = createPlainShellSession({
+      launchAgent: 'claude',
+      forceKillAndWaitForExit: vi.fn(() => rootCompletion)
+    })
+    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+
+    const graceful = teardown.killSession('s1', session, false)
+    await Promise.resolve()
+    const immediate = teardown.requestImmediate('s1')
+
+    expect(immediate).not.toBe(graceful)
+    let settled = false
+    void immediate?.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finishDescendants()
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finishRoot()
+    await immediate
+    expect(settled).toBe(true)
+  })
+
   it('non-immediate (graceful) kill uses the plain kill path without a sweep', async () => {
     setPlatform('win32')
     const session = createPlainShellSession()
@@ -132,9 +187,7 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
 })
 
 describe('pty job ownership reaches the daemon teardown path', () => {
-  // Why this test exists: worktree delete runs here, not in local-pty-provider
-  // (measured in #11047). A job wired only into the provider would never engage,
-  // so the detached grandchild that holds the worktree cwd survives the delete.
+  // Workspace deletion uses daemon teardown; provider-only job ownership misses detached tools holding its cwd.
   let platformDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {

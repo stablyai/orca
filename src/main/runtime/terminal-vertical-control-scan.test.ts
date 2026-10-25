@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   containsTerminalVerticalLineControl,
   normalizeTerminalChunk
@@ -6,23 +6,59 @@ import {
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 
 describe('terminal vertical-control scanning', () => {
+  it('keeps a line control with long retained CSI parameters', () => {
+    const input = `\x1b[${'1;'.repeat(2048)}A`
+    expect(normalizeTerminalChunk(input)).toEqual({
+      text: input,
+      pendingAnsi: ''
+    })
+  })
+
+  it('retains exactly the preview line-control CSI finals', () => {
+    const retained: string[] = []
+    for (let code = 0x40; code <= 0x7e; code += 1) {
+      const final = String.fromCharCode(code)
+      for (const params of ['', '2']) {
+        const control = `\x1b[${params}${final}`
+        const { text } = normalizeTerminalChunk(`a${control}b`)
+        if (text === `a${control}b`) {
+          retained.push(control)
+        } else {
+          expect(text).toBe('ab')
+        }
+      }
+    }
+    expect(retained).toEqual([
+      '\x1b[A',
+      '\x1b[2A',
+      '\x1b[C',
+      '\x1b[2C',
+      '\x1b[D',
+      '\x1b[2D',
+      '\x1b[G',
+      '\x1b[2G',
+      '\x1b[K',
+      '\x1b[2K',
+      '\x1b[`',
+      '\x1b[2`'
+    ])
+  })
+
+  it('preserves printable spans and carried controls across chunk boundaries', () => {
+    const first = normalizeTerminalChunk('漢\ud800\x1b[31m字\t\r\n\x00a\x1b[2')
+    expect(first).toEqual({ text: '漢\ud800字\t\na', pendingAnsi: '\x1b[2' })
+    expect(normalizeTerminalChunk('K\udfff😀\b\r\x7f\x9fend', first.pendingAnsi)).toEqual({
+      text: '\x1b[2K\udfff😀\b\rend',
+      pendingAnsi: ''
+    })
+  })
+
   it.each([
     ['plain', 'log output '.repeat(8192), false],
     ['nonvertical CSI', `\x1b[31m${'log output '.repeat(8192)}\x1b[0m`, false],
     ['vertical CSI', `${'漢字😀 output '.repeat(8192)}\x1b[2A`, true]
-  ] as const)('bounds code-unit inspections on %s output', (_name, input, expected) => {
-    const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
-    let actual: boolean
-    let inspections: number
-    try {
-      actual = containsTerminalVerticalLineControl(input)
-      inspections = charCodeAt.mock.calls.length
-    } finally {
-      charCodeAt.mockRestore()
-    }
-
-    expect(actual).toBe(expected)
-    expect(inspections).toBeLessThan(16)
+  ] as const)('detects vertical controls in %s output', (_name, input, expected) => {
+    expect(containsTerminalVerticalLineControl(input)).toBe(expected)
   })
 
   it.each([

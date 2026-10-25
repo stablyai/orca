@@ -56,7 +56,8 @@ export function useCombinedDiffSectionLoader({
     loadingIndicesRef,
     requestSectionReloadRef,
     sectionLoadTokensRef,
-    sectionsRef
+    sectionsRef,
+    supersededLoadIndicesRef
   } = registry
 
   const loadSectionNow = useCallback(
@@ -108,6 +109,31 @@ export function useCombinedDiffSectionLoader({
         } as GitDiffResult
       }
 
+      if (generationRef.current !== gen) {
+        // Why: the generation reset already cleared the in-flight set, and a newer load for this
+        // index may own the entry now — deleting it here would hide that load from the guard above.
+        return
+      }
+      loadingIndicesRef.current.delete(index)
+      const invalidatedMidFlight = (sectionLoadTokensRef.current.get(index) ?? 0) !== loadToken
+      if (invalidatedMidFlight && !supersededLoadIndicesRef.current.has(index)) {
+        // Why: an invalidation landed mid-flight and deferred its reload to this settle point, so
+        // the refetch happens once here instead of racing a second fetch against this one.
+        supersededLoadIndicesRef.current.add(index)
+        requestSectionReloadRef.current(index)
+        return
+      }
+      // Why: under sustained writes every load is invalidated mid-flight; after one discard, commit
+      // this newer result and refetch once more rather than never showing anything new.
+      supersededLoadIndicesRef.current.delete(index)
+      // Why: a section the user started editing keeps its draft; never commit disk content over it.
+      if (sectionsRef.current[index]?.dirty) {
+        loadedIndicesRef.current.add(index)
+        return
+      }
+      if (invalidatedMidFlight) {
+        queueMicrotask(() => requestSectionReloadRef.current(index))
+      }
       const largeDiffRenderLimit =
         !error && result.kind === 'text'
           ? (result.largeDiffRenderLimit ??
@@ -116,19 +142,6 @@ export function useCombinedDiffSectionLoader({
               modifiedContent: result.modifiedContent
             }))
           : null
-
-      if (generationRef.current !== gen) {
-        // Why: the generation reset already cleared the in-flight set, and a newer load for this
-        // index may own the entry now — deleting it here would hide that load from the guard above.
-        return
-      }
-      loadingIndicesRef.current.delete(index)
-      if ((sectionLoadTokensRef.current.get(index) ?? 0) !== loadToken) {
-        // Why: an invalidation landed mid-flight and deferred its reload to this settle point, so
-        // the refetch happens once here instead of racing a second fetch against this one.
-        requestSectionReloadRef.current(index)
-        return
-      }
       const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
       const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)
@@ -154,7 +167,7 @@ export function useCombinedDiffSectionLoader({
       }
       setSections((prev) => {
         return prev.map((s, i) =>
-          i === index
+          i === index && !s.dirty
             ? {
                 ...s,
                 diffResult: storedResult,

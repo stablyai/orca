@@ -8,7 +8,7 @@ const SSH_SCOPE = JSON.stringify({ kind: 'ssh', targetId: 'ssh-1' })
 const PROCESS_INCARNATION = 'remote:ssh-1:pty-1:inc-1'
 
 function runtimeWithInventory(
-  listProcesses: (connectionId?: string | null) => Promise<PtyProcessInfo[]>
+  listProcesses: (hostId?: string) => Promise<PtyProcessInfo[]>
 ): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService()
   runtime.setPtyController({
@@ -38,8 +38,8 @@ describe('terminal process incarnation liveness', () => {
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness('remote:ssh-1:pty-1:inc-old', SSH_SCOPE)
     ).resolves.toBe('exited')
-    expect(listProcesses).toHaveBeenNthCalledWith(1, 'ssh-1')
-    expect(listProcesses).toHaveBeenNthCalledWith(2, 'ssh-1')
+    expect(listProcesses).toHaveBeenNthCalledWith(1, 'ssh:ssh-1')
+    expect(listProcesses).toHaveBeenNthCalledWith(2, 'ssh:ssh-1')
   })
 
   it('keeps missing or malformed identity and unavailable inventory unverifiable', async () => {
@@ -77,16 +77,16 @@ describe('terminal process incarnation liveness', () => {
   })
 
   it.each([
-    [{ kind: 'local', hostId: 'local' }, null],
-    [{ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }, null]
-  ] as const)('uses the local provider inventory for %s scope', async (scope, connectionId) => {
+    [{ kind: 'local', hostId: 'local' }, 'local'],
+    [{ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }, 'local']
+  ] as const)('uses the local provider inventory for %s scope', async (scope, hostId) => {
     const listProcesses = vi.fn().mockResolvedValue([])
     const runtime = runtimeWithInventory(listProcesses)
 
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness('local-pty:inc-1', JSON.stringify(scope))
     ).resolves.toBe('exited')
-    expect(listProcesses).toHaveBeenCalledWith(connectionId)
+    expect(listProcesses).toHaveBeenCalledWith(hostId)
   })
 })
 

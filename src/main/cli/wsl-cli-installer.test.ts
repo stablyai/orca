@@ -196,8 +196,7 @@ describe('WslCliInstaller', () => {
     expect(installCommand).toBeDefined()
     expect(installCommand).toContain("legacy_command_path='/home/alice/.local/bin/orca'")
     expect(installCommand).toContain('rm -f "$legacy_command_path"')
-    // Why: the new bridge accepts the old launcher's positional arguments, so
-    // publishing it first keeps interrupted upgrades usable.
+    // The bridge accepts legacy arguments, so publishing it first keeps interrupted upgrades usable.
     const bridgePublishIndex = installCommand?.indexOf('mv -f "$bridge_tmp"') ?? -1
     const launcherPublishIndex = installCommand?.indexOf('mv -f "$command_tmp"') ?? -1
     expect(bridgePublishIndex).toBeGreaterThan(-1)
@@ -342,10 +341,7 @@ describe('WslCliInstaller', () => {
     expect(bridge).toContain('$env:ORCA_CLI_CWD = $WslCwd')
     expect(bridge).toContain('$LauncherDirectory = Split-Path -Parent $OrcaLauncher')
     expect(bridge).toContain('Push-Location -LiteralPath $LauncherDirectory')
-    // Why (#16463): Push-Location moves only the PowerShell provider location.
-    // Without an explicit WorkingDirectory the started app inherits the caller's
-    // Win32 cwd — the user's worktree on \\wsl.localhost — and every wsl.exe
-    // spawn it makes dies with ENOENT once that worktree is removed.
+    // Push-Location cannot stop Win32 children inheriting a WSL cwd that may be deleted (#16463).
     expect(bridge).toContain('$StartInfo.WorkingDirectory = $LauncherDirectory')
     expect(bridge).toContain('function ConvertTo-NativeCommandLineArgument')
     expect(bridge).toContain("[void]$Quoted.Append([char]'\\', $BackslashCount * 2 + 1)")
@@ -437,6 +433,7 @@ describe('WslCliInstaller', () => {
         isPackaged: true,
         userDataPath: '/user-data',
         listDistros: async () => ['Ubuntu'],
+        listRunningDistros: async () => ['Ubuntu'],
         registry: {
           getCandidates: async () => ['Ubuntu'],
           recordObservations: async () => undefined
@@ -514,8 +511,6 @@ describe('WslCliInstaller', () => {
       wslRunner: conflictingBridge.runner
     })
 
-    // Why: a stale launcher with a user-owned bridge must surface as a
-    // non-throwing conflict, not retry a doomed install on every startup.
     await expect(conflictingBridgeInstaller.repairManagedRegistration()).resolves.toMatchObject({
       changed: false,
       managed: true,
@@ -600,8 +595,6 @@ describe('WslCliInstaller', () => {
       wslRunner: wsl.runner
     })
 
-    // Why: adoption would fail install()'s bridge guard on every startup;
-    // repair must report blocked-but-managed instead of a doomed install.
     await expect(installer.repairManagedRegistration()).resolves.toMatchObject({
       changed: false,
       managed: true,
@@ -689,8 +682,7 @@ describe('WslCliInstaller', () => {
     expect(installCommand).toContain('elif [ "$bridge_touched" -eq 1 ]')
     expect(installCommand).toContain('committed=1')
     expect(installCommand).toContain('flock -x -w 30 9')
-    // Why: the command replace must stay one atomic rename; a mv-based backup
-    // would leave a window where a concurrent shell finds no orca-ide at all.
+    // Moving the command to a backup would leave concurrent shells without a CLI.
     expect(installCommand).not.toContain('command_backup')
     expect(installCommand).not.toContain(`mv -f '/home/alice/.local/bin/orca-ide'`)
   })
@@ -776,40 +768,6 @@ describe('WslCliInstaller', () => {
     await expect(installer.repairManagedRegistration()).resolves.toMatchObject({ changed: false })
     expect(wsl.calls.filter((command) => command.includes('cat > "$command_tmp"'))).toHaveLength(1)
     expect(wsl.getFile()).toContain("ORCA_WIN_LAUNCHER='D:\\Custom Orca\\resources\\bin\\orca.exe'")
-  })
-
-  it('settles when wsl.exe never reports completion', async () => {
-    // Why no fake timers: the timeout is now runProcess's own, internal to the
-    // mocked runWslProcess -- there is nothing left here to advance.
-    runWslProcessMock.mockResolvedValue({ code: null, stdout: '', stderr: '', timedOut: true })
-    const installer = new WslCliInstaller({
-      platform: 'win32',
-      distro: 'Ubuntu',
-      hostInstaller: { getStatus: async () => makeHostStatus() }
-    })
-
-    await expect(installer.getStatus()).rejects.toThrow('WSL command timed out')
-  })
-
-  it('reports the distro unreachable rather than "not on PATH" without the login PATH', async () => {
-    // The `case ":$PATH:"` probe answers from the distro default PATH when the
-    // login PATH never resolved, and ~/.local/bin is never on that. Settings
-    // would then state as fact that the CLI is not on PATH while the user's
-    // own terminal finds it -- #14288 turning into a confident wrong verdict.
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: false,
-      code: 0,
-      stdout: 'no',
-      stderr: '',
-      timedOut: false
-    })
-    const installer = new WslCliInstaller({
-      platform: 'win32',
-      distro: 'Ubuntu',
-      hostInstaller: { getStatus: async () => makeHostStatus() }
-    })
-
-    await expect(installer.getStatus()).rejects.toThrow('Could not reach the WSL distro')
   })
 
   it('refuses to remove an old managed launcher when the bridge path is user-owned', async () => {

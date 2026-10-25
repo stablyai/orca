@@ -26,7 +26,7 @@ export function useSourceControlPanelModel() {
     reviewFlows
   )
   const {
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktree,
     activeWorktreeId,
     branchEntries,
@@ -135,7 +135,7 @@ export function useSourceControlPanelModel() {
     runRemoteAction
   })
   useSourceControlUpstreamStatusFetch({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktree,
     activeWorktreeId,
     fetchUpstreamStatus,
@@ -146,7 +146,7 @@ export function useSourceControlPanelModel() {
   const gitHistoryCommitActions = useGitHistoryCommitActions({
     activeWorktreeId,
     worktreePath,
-    activeRepoSettings,
+    activeRepoTarget,
     resolveSplitTargetGroupId
   })
   const noteOpening = useSourceControlNoteOpening({
@@ -160,13 +160,13 @@ export function useSourceControlPanelModel() {
     sourceControlRef
   })
   const entryMutations = useSourceControlEntryMutations({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     refreshActiveGitStatusAfterMutation
   })
   const discardConfirmation = useSourceControlDiscardConfirmation({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     grouped,

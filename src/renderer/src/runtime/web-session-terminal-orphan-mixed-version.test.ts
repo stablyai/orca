@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { applyWebSessionTabsSnapshot, decideWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
@@ -15,7 +16,8 @@ import {
   recoverWebSessionTerminalOrphansBeforeApply
 } from './web-session-terminal-orphan-recovery'
 
-vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+// getState: snapshot receipt reads the held paired-tab closes; none here.
+vi.mock('../store', () => ({ useAppStore: { setState: vi.fn(), getState: () => ({}) } }))
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))

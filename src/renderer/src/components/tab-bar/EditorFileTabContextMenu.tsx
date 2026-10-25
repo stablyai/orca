@@ -1,16 +1,4 @@
-import {
-  Copy,
-  CopyX,
-  ExternalLink,
-  Eye,
-  ListX,
-  PanelLeftClose,
-  PanelRightClose,
-  Pencil,
-  Pin,
-  PinOff,
-  X
-} from 'lucide-react'
+import { Copy, CopyX, ExternalLink, Eye, ListX, Pencil, Pin, PinOff, X } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,34 +8,21 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
-import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
-import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
+import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import {
+  getRevealInFileManagerLabel,
+  getWorkspaceFileRevealOwner,
+  revealInFileManager
+} from '@/lib/reveal-in-file-manager'
+import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
-
-const isMac = navigator.userAgent.includes('Mac')
-const isLinux = navigator.userAgent.includes('Linux')
-
-/** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
-function getRevealLabel(): string {
-  return isMac
-    ? translate(
-        'auto.components.tab.bar.EditorFileTabContextMenu.revealInFinder',
-        'Reveal in Finder'
-      )
-    : isLinux
-      ? translate(
-          'auto.components.tab.bar.EditorFileTabContextMenu.openContainingFolder',
-          'Open Containing Folder'
-        )
-      : translate(
-          'auto.components.tab.bar.EditorFileTabContextMenu.revealInFileExplorer',
-          'Reveal in File Explorer'
-        )
-}
+import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
 type EditorFileTabContextMenuProps = {
   open: boolean
@@ -74,6 +49,7 @@ type EditorFileTabContextMenuProps = {
   onCloseAll: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
+  onCloseSplitPane?: () => void
   onOpenMarkdownPreview: (
     file: {
       filePath: string
@@ -94,8 +70,6 @@ export function EditorFileTabContextMenu({
   groupId,
   isPinned,
   isRenaming,
-  hasTabsToRight,
-  hasTabsToLeft,
   tabCount,
   canRename,
   canShowMarkdownPreview,
@@ -109,13 +83,19 @@ export function EditorFileTabContextMenu({
   onClose,
   onCloseOthers,
   onCloseAll,
-  onCloseToRight,
-  onCloseToLeft,
+  onCloseSplitPane,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const revealOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, file.worktreeId, {
+      connectionId: file.externalSshTargetId ?? repoConnectionId,
+      runtimeEnvironmentId: file.runtimeEnvironmentId
+    })
+  )
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -165,6 +145,7 @@ export function EditorFileTabContextMenu({
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
+        <CopyTabIdMenuItem unifiedTabId={unifiedTabId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           <X className="size-3.5" />
@@ -185,21 +166,8 @@ export function EditorFileTabContextMenu({
             <DropdownMenuShortcut>{closeAllShortcut}</DropdownMenuShortcut>
           ) : null}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
-          <PanelRightClose className="size-3.5" />
-          {translate(
-            'auto.components.tab.bar.EditorFileTabContextMenu.e5ff31ccaf',
-            'Close Tabs To The Right'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
-          <PanelLeftClose className="size-3.5" />
-          {translate(
-            'components.tab.bar.EditorFileTabContextMenu.closeTabsToLeft',
-            'Close Tabs To The Left'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
+        {isVirtualEditorFile(file) ? null : <DropdownMenuSeparator />}
         {canShowMarkdownPreview ? (
           <>
             <DropdownMenuItem
@@ -226,44 +194,42 @@ export function EditorFileTabContextMenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuItem
-          onSelect={() => {
-            void window.api.ui.writeClipboardText(file.filePath)
-          }}
-        >
-          <Copy className="size-3.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            void window.api.ui.writeClipboardText(file.relativePath)
-          }}
-        >
-          <Copy className="size-3.5" />
-          {translate(
-            'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
-            'Copy Relative Path'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => {
-            if (
-              shouldBlockEditorTabLocalOpen(
-                useAppStore.getState().settings,
-                file.runtimeEnvironmentId,
-                repoConnectionId
-              )
-            ) {
-              showLocalPathOpenBlockedToast()
-              return
-            }
-            window.api.shell.openPath(file.filePath)
-          }}
-        >
-          <ExternalLink className="size-3.5" />
-          {getRevealLabel()}
-        </DropdownMenuItem>
+        {/* Why: virtual editor tabs use synthetic ids instead of on-disk paths. */}
+        {!isVirtualEditorFile(file) && (
+          <>
+            <DropdownMenuItem
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(file.filePath)
+              }}
+            >
+              <Copy className="size-3.5" />
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.5b85754786',
+                'Copy Path'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(file.relativePath)
+              }}
+            >
+              <Copy className="size-3.5" />
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
+                'Copy Relative Path'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={revealBlocked}
+              onSelect={() => void revealInFileManager(file.filePath, revealOwner)}
+            >
+              <ExternalLink className="size-3.5" />
+              {getRevealInFileManagerLabel()}
+              {revealBlocked ? <LocalOnlyMenuHint /> : null}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

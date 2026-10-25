@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitSubmoduleStatus, type RuntimeGitContext } from '@/runtime/runtime-git-client'
+import { getRuntimeGitSubmoduleStatus } from '@/runtime/runtime-git-status-client'
 import {
   getSubmoduleExpansionKey,
   isExpandableSubmoduleEntry,
@@ -12,7 +14,7 @@ import {
 export type UseSourceControlSubmoduleStatusInput = {
   activeWorktreeId: string | null | undefined
   worktreePath: string | null
-  activeRepoSettings: RuntimeGitContext['settings']
+  activeRepoTarget: RuntimeClientTarget | null
   // Why: re-fetch expanded children whenever the parent status poll refreshes
   // its entries, so an expanded submodule's inner changes stay fresh.
   entries: readonly GitStatusEntry[]
@@ -34,9 +36,10 @@ export type UseSourceControlSubmoduleStatusResult = {
 export function useSourceControlSubmoduleStatus(
   input: UseSourceControlSubmoduleStatusInput
 ): UseSourceControlSubmoduleStatusResult {
-  const { activeWorktreeId, worktreePath, activeRepoSettings, entries } = input
+  const { activeWorktreeId, worktreePath, activeRepoTarget, entries } = input
   const [expandedSubmoduleKeys, setExpandedSubmoduleKeys] = useState<Set<string>>(() => new Set())
-  const activeRuntimeRouteKey = activeRepoSettings?.activeRuntimeEnvironmentId?.trim() ?? ''
+  const activeRuntimeRouteKey =
+    activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : ''
   const activeConnectionRouteKey = getConnectionId(activeWorktreeId ?? null) ?? ''
   const submoduleStatusScopeKey = `${activeConnectionRouteKey}\0${activeRuntimeRouteKey}\0${activeWorktreeId ?? ''}\0${worktreePath ?? ''}`
   // Why: scope lives in the status store so a late response from a previous
@@ -78,7 +81,7 @@ export function useSourceControlSubmoduleStatus(
         const result = await getRuntimeGitSubmoduleStatus(
           {
             // Why: route by the repo OWNER host, matching the rest of this panel.
-            settings: activeRepoSettings,
+            target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -118,7 +121,7 @@ export function useSourceControlSubmoduleStatus(
         )
       }
     },
-    [activeRepoSettings, activeWorktreeId, submoduleStatusScopeKey, worktreePath]
+    [activeRepoTarget, activeWorktreeId, submoduleStatusScopeKey, worktreePath]
   )
 
   const toggleSubmodule = useCallback((entry: Pick<GitStatusEntry, 'area' | 'path'>) => {

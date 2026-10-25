@@ -6,9 +6,9 @@
  * What is real here: node-pty running fish, `PtyStartupIngress`, `PtyStartupReplyDelivery`
  * and both echo probes, plus the host's own write gate
  * (`answerLiveQueryReply` — copied from local-pty-provider.write, which
- * is what decides whether a reply is deferred at all). Only the renderer is modelled: it
- * answers queries strictly in the order they appear in the stream, so any inversion the
- * child sees was produced by the delivery split and nothing else.
+ * is what decides whether a reply is deferred at all). The ingress answers OSC 10/11
+ * itself; only the renderer is modelled for the rest, answering strictly in stream order,
+ * so any inversion the child sees was produced by the delivery split and nothing else.
  *
  * The assertion is about a CHILD PROCESS'S STDIN, not the screen: a rendered-output check
  * passes while the bytes are still being eaten by the next `npx` / `brew` confirm prompt.
@@ -125,9 +125,15 @@ describe('a held query reply never reaches the next child process (#13892)', () 
       })
 
       let rendered = ''
+      let oscQueryCount = 0
       const ingress = new PtyStartupIngress({
         ownerBackend: 'posix-pty',
-        write: (data) => term.write(data),
+        write: (data) => {
+          if (data.startsWith('\x1b]1')) {
+            oscQueryCount += 1
+          }
+          term.write(data)
+        },
         onEmission: (emission) => {
           rendered += emission.data
           answerQueriesInOrder(emission.data)
@@ -144,7 +150,6 @@ describe('a held query reply never reaches the next child process (#13892)', () 
       }
 
       let tail = ''
-      let oscQueryCount = 0
       function answerQueriesInOrder(chunk: string): void {
         let buffer = tail + chunk
         tail = ''
@@ -160,9 +165,6 @@ describe('a held query reply never reaches the next child process (#13892)', () 
             match: candidate.re.exec(rest)
           })).find((entry) => entry.match)
           if (grammar?.match) {
-            if (grammar.candidate === QUERY_GRAMMARS[0]) {
-              oscQueryCount += 1
-            }
             hostWrite(grammar.candidate.reply(grammar.match))
             index = at + grammar.match[0].length
             continue

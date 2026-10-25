@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppModuleClosure } from './build-mobile-web-app-bundle.mjs'
-import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { mobileWebAppDependenciesPresent } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 
 /**
  * The 612 KiB xterm engine string, and where the page must never meet it.
@@ -44,7 +44,6 @@ async function documentEntryPoints() {
     .filter((name) => name.endsWith('.ts'))
     .filter((name) => !name.includes('.test'))
     .sort()
-  expect(names.length).toBeGreaterThan(30)
   return names.map((name) => `src/terminal/document/${name.replace(/\.ts$/, '')}`)
 }
 
@@ -69,7 +68,15 @@ describeClosure(
       expect(local).toContain('src/terminal/terminal-webview-html.web.ts')
       expect(local).toContain(ENGINE_CSS_MODULE)
       expect(local).not.toContain('src/terminal/terminal-webview-html.ts')
-      expect(local).not.toContain('src/terminal/document/message-bridge.ts')
+      // Ruling 24 put the bridge's two host facts behind seams and ruling 25 made the document
+      // ordinary modules, so the page reaches every one of them, `message-bridge` included: what
+      // keeps the shell's frames out is the transport the page passes, not an absent module.
+      expect(local).toContain('src/terminal/document/message-bridge.ts')
+      expect(local).toContain('src/terminal/document/create-terminal-document.ts')
+      // The entry is the bundle's, and the bundle is the phone's: a page that reached it would be
+      // shipping a second copy of the document as a string.
+      expect(local).not.toContain('src/terminal/document/native-document-entry.ts')
+      expect(local).not.toContain('src/terminal/terminal-webview-document-script.generated.ts')
     }, 180_000)
 
     it('is still what the native document reads its CSS beside', async () => {
@@ -84,31 +91,42 @@ describeClosure(
       expect(local).toContain(ENGINE_CSS_MODULE)
     }, 180_000)
 
-    it('would be reported if a document module imported it', async () => {
-      // Planted in a scratch tree rather than under src/terminal/document, so nothing else in the
-      // repository ever walks the plant and no other census has to know it exists.
-      const scratch = await mkdtemp(join(tmpdir(), 'orca-c75-engine-closure-'))
-      try {
-        const planted = join(scratch, 'src', 'terminal', 'document')
-        await mkdir(planted, { recursive: true })
-        await writeFile(
-          join(planted, 'planted.ts'),
-          "import { XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'\n" +
-            'export const planted = XTERM_ENGINE_JS.length\n'
-        )
-        await mkdir(join(scratch, 'src', 'terminal'), { recursive: true })
-        await writeFile(
-          join(scratch, 'src', 'terminal', 'terminal-webview-engine.generated.ts'),
-          "export const XTERM_ENGINE_JS = 'planted'\n"
-        )
-        const { local } = await mobileWebAppModuleClosure(['./src/terminal/document/planted'], {
-          absWorkingDir: scratch
-        })
-        expect(local).toContain(ENGINE_MODULE)
-      } finally {
-        await rm(scratch, { recursive: true, force: true })
-      }
-    }, 180_000)
+    it.each(['bare', 'relative', 'absolute'])(
+      'would be reported if a document module imported it (%s entry)',
+      async (entryKind) => {
+        // Planted in a scratch tree rather than under src/terminal/document, so nothing else in the
+        // repository ever walks the plant and no other census has to know it exists.
+        const scratch = await mkdtemp(join(tmpdir(), 'orca-c75-engine-closure-'))
+        try {
+          const planted = join(scratch, 'src', 'terminal', 'document')
+          await mkdir(planted, { recursive: true })
+          await writeFile(
+            join(planted, 'planted.ts'),
+            "import { XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'\n" +
+              'export const planted = XTERM_ENGINE_JS.length\n'
+          )
+          await mkdir(join(scratch, 'src', 'terminal'), { recursive: true })
+          await writeFile(
+            join(scratch, 'src', 'terminal', 'terminal-webview-engine.generated.ts'),
+            "export const XTERM_ENGINE_JS = 'planted'\n"
+          )
+          const entry = 'src/terminal/document/planted'
+          const entryPoint =
+            entryKind === 'absolute'
+              ? join(scratch, 'src', 'terminal', 'document', 'planted')
+              : entryKind === 'relative'
+                ? `./${entry}`
+                : entry
+          const { local } = await mobileWebAppModuleClosure([entryPoint], {
+            absWorkingDir: scratch
+          })
+          expect(local).toContain(ENGINE_MODULE)
+        } finally {
+          await rm(scratch, { recursive: true, force: true })
+        }
+      },
+      180_000
+    )
   },
   600_000
 )

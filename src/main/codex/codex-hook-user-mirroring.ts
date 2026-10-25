@@ -9,12 +9,12 @@ import {
   escapeTomlString,
   getCodexExplicitHomeHookSourcePath,
   parseTrustKey,
-  writeConfigAtomically,
+  writeLoadableHookTrustConfig,
+  type CodexEventLabel,
   type CodexTrustEntry
 } from './config-toml-trust'
 import { createCodexHookTrustEntry, getCodexHookTrustSignature } from './codex-hook-identity'
 import {
-  CODEX_MANAGED_EVENT_LABELS,
   CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS,
   getConfigPath,
   getSystemConfigPath
@@ -37,7 +37,7 @@ function commandUsesCodexPluginOnlyPlaceholder(command: string | undefined): boo
 }
 
 function removeCodexPluginEnvironmentCommands(definitions: HookDefinition[]): HookDefinition[] {
-  // Why: plugin placeholders only resolve for Codex plugin hook sources; mirroring them into a plain runtime hooks.json turns them into 127s.
+  // Plugin placeholders do not resolve in plain hooks.json and would cause exit 127.
   return removeManagedCommands(definitions, commandUsesCodexPluginOnlyPlaceholder)
 }
 
@@ -56,8 +56,7 @@ export function getRuntimeHooksWithSystemUserHooks(
 
   const { raw: systemRaw, config: systemConfig } = readHooksJsonWithRaw(systemConfigPath)
   if (!systemConfig && systemRaw === null) {
-    // Why: rebuilding from an unreadable source drops the last-known user hooks
-    // from the managed runtime; let launch prep retry without changing it.
+    // Preserve last-known runtime hooks when the system source is unreadable.
     return null
   }
   if (!systemConfig?.hooks) {
@@ -82,7 +81,7 @@ export function getRuntimeHooksWithSystemUserHooks(
       continue
     }
 
-    // Why: rebuild from system hooks; reusing old runtime copies would keep deleted/edited ~/.codex/hooks.json entries alive for new sessions.
+    // Rebuild from system hooks so deleted or edited entries cannot survive in the runtime copy.
     nextHooks[eventName] = dedupeHookDefinitions(systemUserDefinitions)
   }
 
@@ -145,10 +144,11 @@ function collectMirroredRuntimeUserHookTrustEntries(
 }
 
 export function moveMirroredRuntimeUserTrustAfterManagedStatusHook(
-  entries: readonly MirroredRuntimeUserHookTrustEntry[]
+  entries: readonly MirroredRuntimeUserHookTrustEntry[],
+  statusHookLabels: ReadonlySet<CodexEventLabel>
 ): MirroredRuntimeUserHookTrustEntry[] {
   return entries.map(({ entry, enabled }) => {
-    if (!CODEX_MANAGED_EVENT_LABELS.has(entry.eventLabel)) {
+    if (!statusHookLabels.has(entry.eventLabel)) {
       return { entry, enabled }
     }
     return {
@@ -175,7 +175,7 @@ function buildHookTrustHeaderKeyPattern(key: string): string {
   const alternatives = [...new Set(keyVariants)].flatMap((variant) => {
     const quoted = [`"${escapeRegex(escapeTomlString(variant))}"`]
     if (!variant.includes("'")) {
-      // Why: tolerate raw-backslash literal keys from Codex/manual approval while repairing mirrored runtime trust across both Windows variants.
+      // Codex/manual approval may use raw-backslash literal keys for either Windows path spelling.
       quoted.push(`'${escapeRegex(variant)}'`)
     }
     return quoted
@@ -202,7 +202,7 @@ export function applyMirroredRuntimeUserHookTrustStates(
     updated = updated.replace(pattern, `$1${enabled}`)
   }
   if (updated !== existing) {
-    writeConfigAtomically(tomlPath, updated)
+    writeLoadableHookTrustConfig(tomlPath, existing, updated)
   }
 }
 

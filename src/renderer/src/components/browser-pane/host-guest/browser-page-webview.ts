@@ -1,11 +1,12 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
 import {
   destroyPersistentWebview,
   registerPersistentWebview,
   replacePersistentWebview,
   webviewRegistry
 } from './webview-registry'
+import { handleGuestWindowCloseMessage } from './browser-page-window-close'
 
 export function setBrowserPageWebviewInputLock(
   webview: Electron.WebviewTag,
@@ -61,10 +62,7 @@ export function ensureBrowserPageWebview({
   // Why: Electron spreads the webpreferences keys verbatim, so the shared
   // camelCase attribute must stay intact for fullscreen containment to work.
   // Keep Chromium's normal page canvas opaque while the host underneath follows Orca's theme.
-  webview.setAttribute(
-    'webpreferences',
-    `${ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE},transparent=false`
-  )
+  webview.setAttribute('webpreferences', ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE)
   webview.style.display = 'flex'
   webview.style.flex = '1'
   webview.style.width = '100%'
@@ -82,6 +80,9 @@ export function ensureBrowserPageWebview({
   })
   guest.addEventListener('render-process-gone', () => {
     guest.style.visibility = 'hidden'
+  })
+  guest.addEventListener('ipc-message', (event) => {
+    handleGuestWindowCloseMessage(browserTabId, guest, event)
   })
   registerPersistentWebview(browserTabId, webview)
   activeContainer.appendChild(webview)

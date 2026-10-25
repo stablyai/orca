@@ -176,7 +176,7 @@ export async function setupTerminal(page, repoPath, logPhase) {
         })
       state = store.getState()
       state.setActiveTab(tab.id)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', worktree.id)
       state = store.getState()
       if (
         state.activeWorktreeId !== worktree.id ||

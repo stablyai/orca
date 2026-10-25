@@ -1,32 +1,20 @@
 import { useCallback } from 'react'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
-
-type StructuredNativeChatAttachment = {
-  id?: string
-  path: string
-  previewUri: string
-  contentFingerprint?: string
-}
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId | undefined
   sendStructured: (
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredNativeChatAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[]
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
-  holdUnconfirmedSend: (
-    origin: MobileNativeChatSendOrigin,
-    text: string,
-    onUnconfirmed: () => void
-  ) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   onSendError: (message: string) => void
 }): {
@@ -35,15 +23,13 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredNativeChatAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[]
   ) => Promise<MobileNativeChatSendOutcome>
 } {
   const {
-    acceptSend,
     agent,
     captureSendOrigin,
     clearDraftForSend,
-    holdUnconfirmedSend,
     onSendError,
     restoreRejectedDraft,
     sendStructured
@@ -53,7 +39,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredNativeChatAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[]
     ): Promise<MobileNativeChatSendOutcome> => {
       const origin = captureSendOrigin(text.trimEnd())
       if (!origin) {
@@ -70,42 +56,21 @@ export function useMobileStructuredNativeChatSendBridge(args: {
             : images !== undefined
               ? await sendStructured(text, images)
               : await sendStructured(text)
-      if (outcome === 'accepted') {
-        if (!isHostCommand) {
-          acceptSend(origin, text.trimEnd(), images)
-        }
-        return 'accepted'
+      // The structured session draws or holds a message the host took; a command's lost answer
+      // comes back instead.
+      if (outcome === 'rejected' || (outcome === 'unknown' && isHostCommand)) {
+        restoreRejectedDraft(origin, text)
       }
-      if (outcome === 'unknown') {
-        if (isHostCommand) {
-          restoreRejectedDraft(origin, text)
-          return 'unknown'
-        }
-        holdUnconfirmedSend(origin, text.trimEnd(), () =>
-          onSendError('Delivery unconfirmed — check chat before retrying')
-        )
-        return 'unknown'
-      }
-      restoreRejectedDraft(origin, text)
-      return 'rejected'
+      return outcome
     },
-    [
-      acceptSend,
-      agent,
-      captureSendOrigin,
-      clearDraftForSend,
-      holdUnconfirmedSend,
-      onSendError,
-      restoreRejectedDraft,
-      sendStructured
-    ]
+    [agent, captureSendOrigin, clearDraftForSend, onSendError, restoreRejectedDraft, sendStructured]
   )
   const send = useCallback(
     async (
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredNativeChatAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[]
     ) => (await sendWithOutcome(text, images, deadline, attachments)) !== 'rejected',
     [sendWithOutcome]
   )

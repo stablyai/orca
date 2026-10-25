@@ -5,6 +5,7 @@ import type {
   ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { tabHasProtectedTitle } from '../../../../shared/agent-generated-tab-title-rules'
 import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusTabPrefixDropState } from './agent-status-drop-reducer'
 
@@ -41,18 +42,14 @@ export function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
   const ownerTabs = worktreeId ? state.tabsByWorktree[worktreeId] : undefined
   if (ownerTabs) {
     const tab = ownerTabs.find((candidate) => candidate.id === tabId)
-    return Boolean(
-      tab?.customTitle?.trim() || tab?.quickCommandLabel?.trim() || tab?.generatedTitle?.trim()
-    )
+    return Boolean(tab && (tabHasProtectedTitle(tab) || tab.generatedTitle?.trim()))
   }
   for (const tabs of Object.values(state.tabsByWorktree)) {
     const tab = tabs.find((candidate) => candidate.id === tabId)
     if (!tab) {
       continue
     }
-    return Boolean(
-      tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || tab.generatedTitle?.trim()
-    )
+    return Boolean(tabHasProtectedTitle(tab) || tab.generatedTitle?.trim())
   }
   return false
 }
@@ -66,6 +63,22 @@ export function getLeafIdFromPaneKey(paneKey: string): string | null {
   return leafId.length > 0 ? leafId : null
 }
 
+/** Open non-terminal tabs (chats) whose rows their own projection writes and removes, so terminal
+ *  cleanup must leave them alone. Terminal owners must still exist in the terminal inventory
+ *  instead; unified metadata can lag a close. */
+export function openNonTerminalTabIds(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  worktreeId: string
+): Set<string> {
+  const tabIds = new Set<string>()
+  for (const tab of state.unifiedTabsByWorktree[worktreeId] ?? []) {
+    if (tab.contentType !== 'terminal') {
+      tabIds.add(tab.id)
+    }
+  }
+  return tabIds
+}
+
 export function findCompletedOrphanPaneKeysForTabClose(
   state: AgentStatusTabPrefixDropState,
   worktreeId: string | undefined,
@@ -74,7 +87,10 @@ export function findCompletedOrphanPaneKeysForTabClose(
   if (!worktreeId) {
     return []
   }
-  const openTabIds = new Set((state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+  const openTabIds = openNonTerminalTabIds(state, worktreeId)
+  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+    openTabIds.add(tab.id)
+  }
   const paneKeys: string[] = []
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     if (paneKey.startsWith(prefix) || entry.state !== 'done' || entry.worktreeId !== worktreeId) {

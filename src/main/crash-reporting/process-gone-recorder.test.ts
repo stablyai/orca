@@ -179,7 +179,7 @@ describe('recordProcessGoneCrash', () => {
       details: { serviceName: 'network.mojom.NetworkService', type: 'Utility' }
     })
 
-    // Observed peak in a real diagnostic bundle: 1459 suppressed crashes in one minute.
+    // Replay the observed peak: 1,459 suppressed crashes in one minute.
     for (let i = 0; i < 1_459; i++) {
       recordProcessGoneCrash({ record } as never, networkServiceCrash, dedupe)
     }
@@ -212,7 +212,6 @@ describe('recordProcessGoneCrash', () => {
       )
     }
 
-    // Why: the ring holds 30 entries, so an uncoalesced loop evicts every real breadcrumb.
     expect(getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.name)).toEqual([
       'renderer_error',
       'process_gone_suppressed'
@@ -242,8 +241,7 @@ describe('recordProcessGoneCrash', () => {
         data: expect.objectContaining({ suppressedSinceLast: 699 })
       })
     ])
-    // Why: the ring gets this count from the store itself, so only the span proves
-    // the exported telemetry carries it too.
+    // The store supplies the ring count, so inspect spans to verify exported telemetry too.
     expect(sink.records).toEqual([
       expect.objectContaining({ name: 'crash.breadcrumb' }),
       expect.objectContaining({
@@ -268,8 +266,6 @@ describe('recordProcessGoneCrash', () => {
     recordProcessGoneCrash({ record: vi.fn() } as never, utilityCrash(11), dedupe)
     recordProcessGoneCrash({ record: vi.fn() } as never, utilityCrash(139), dedupe)
 
-    // Why: a clean shutdown code and a segfault are different failures; collapsing
-    // them would hide the second behind the first for a full window.
     expect(getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.data?.exitCode)).toEqual([
       11, 139
     ])
@@ -303,8 +299,6 @@ describe('recordProcessGoneCrash', () => {
   })
 
   it('derives the crashed-process-absent flag from the crashed process type', async () => {
-    // Binds event.processType through to the diagnostics bucket check: a live
-    // Utility survivor clears the flag for a Utility crash but not a renderer one.
     appMetricsMock.mockReturnValue([
       { pid: 77, type: 'Utility', memory: { workingSetSize: 1024 * 50 } }
     ])
@@ -510,9 +504,7 @@ describe('recordProcessGoneCrash', () => {
     }
   }
 
-  // Why child exits: the decode gate is source-agnostic and reads
-  // process.platform synchronously at record time, so the platform stub is
-  // still in force when it runs.
+  // Child events exercise synchronous platform decoding while the platform stub is active.
   const nonRecoverableChildExit = (
     overrides: Partial<ProcessGoneCrashEvent>
   ): ProcessGoneCrashEvent =>
@@ -630,7 +622,6 @@ describe('minidump signature attachment', () => {
       event({
         source: 'child',
         processType: 'Utility',
-        // A utility outside the recoverable-service allowlist still reports.
         details: { type: 'Utility', serviceName: 'storage.mojom.StorageService' }
       }),
       new ProcessGoneDedupe(),
@@ -652,8 +643,6 @@ describe('minidump signature attachment', () => {
       capture
     )
 
-    // Why: GPU exits are recoverable Chromium churn (process-gone-classification.ts),
-    // so they never become a report — and must not burn an 8s dump poll either.
     await vi.waitFor(() =>
       expect(getCrashBreadcrumbSnapshot()).toEqual(
         expect.arrayContaining([expect.objectContaining({ name: 'process_gone_suppressed' })])
@@ -747,8 +736,6 @@ describe('minidump signature attachment', () => {
         ])
       )
     )
-    // Why: the report did persist; releasing the claim would let the same crash
-    // be recorded twice on the next process-gone event in the burst.
     expect(releaseSpy).not.toHaveBeenCalled()
     expect(getCrashBreadcrumbSnapshot()).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'crash_report_persist_failed' })])

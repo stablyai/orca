@@ -19,7 +19,7 @@ import type { SourceControlWorktreeContext } from './use-worktree-context'
  */
 export function useSourceControlFileListing({
   activeRemoteActionSequence,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   branchEntries,
   branchName,
@@ -35,6 +35,7 @@ export function useSourceControlFileListing({
   isMac,
   refreshActiveGitStatusAfterMutation,
   remoteActionError,
+  repositoryHuge,
   rightSidebarTab,
   sourceControlGroupOrder,
   sourceControlRef,
@@ -43,7 +44,7 @@ export function useSourceControlFileListing({
   worktreePath
 }: {
   activeRemoteActionSequence: number | null
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   branchEntries: SourceControlWorktreeContext['branchEntries']
   branchName: string
@@ -59,6 +60,7 @@ export function useSourceControlFileListing({
   isMac: boolean
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
   remoteActionError: SourceControlActionError | null
+  repositoryHuge: SourceControlWorktreeContext['repositoryHuge']
   rightSidebarTab: SourceControlWorktreeContext['rightSidebarTab']
   sourceControlGroupOrder: SourceControlPanelViewState['sourceControlGroupOrder']
   sourceControlRef: SourceControlPanelViewState['sourceControlRef']
@@ -70,7 +72,7 @@ export function useSourceControlFileListing({
     useSourceControlSubmoduleStatus({
       activeWorktreeId,
       worktreePath,
-      activeRepoSettings,
+      activeRepoTarget,
       entries
     })
   const {
@@ -78,7 +80,6 @@ export function useSourceControlFileListing({
     fileFilterState,
     normalizedFilter,
     isGitHistoryVisible,
-    filteredGrouped,
     displaySections,
     unfilteredDisplaySectionsById,
     filteredBranchEntries,
@@ -101,7 +102,7 @@ export function useSourceControlFileListing({
     collapsedSections
   })
   const { gitHistoryState, refreshGitHistory, refreshGitHistoryRef } = useSourceControlGitHistory({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     compareBaseRef,
@@ -157,15 +158,18 @@ export function useSourceControlFileListing({
     handleBulkStage,
     handleBulkUnstage,
     handleStageAllPaths,
+    handleStageSectionPaths,
     handleUnstagePaths,
-    handleStageAllPrimary
+    handleStageAllPrimary,
+    handleStageWorktreeChanges
   } = useSourceControlBulkActions({
     selectedKeys,
     flatEntriesByKey,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     grouped,
+    isStatusTruncated: repositoryHuge !== undefined,
     clearSelection,
     refreshActiveGitStatusAfterMutation
   })
@@ -200,7 +204,6 @@ export function useSourceControlFileListing({
     expandedSubmoduleKeys,
     fileFilterState,
     filteredBranchEntries,
-    filteredGrouped,
     flatEntriesByKey,
     gitHistoryState,
     grouped,
@@ -211,6 +214,8 @@ export function useSourceControlFileListing({
     handleSelect,
     handleStageAllPaths,
     handleStageAllPrimary,
+    handleStageSectionPaths,
+    handleStageWorktreeChanges,
     handleUnstagePaths,
     isExecutingBulk,
     isGitHistoryVisible,

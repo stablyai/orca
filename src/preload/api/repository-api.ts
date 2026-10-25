@@ -1,10 +1,6 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
-  HostRepoCatalogSnapshot,
-  ListReposForExecutionHostArgs
-} from '../../shared/host-repo-catalog-contract'
-import type {
   NestedRepoScanResult,
   ProjectGroup,
   ProjectGroupImportMode,
@@ -27,15 +23,11 @@ import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shar
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
-  listForExecutionHost?: (args: ListReposForExecutionHostArgs) => Promise<HostRepoCatalogSnapshot>
-  // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
   add: (args: {
     path: string
     kind?: 'git' | 'folder'
     displayName?: string
   }) => Promise<{ repo: Repo } | { error: string }>
-  remove: (args: { repoId: string }) => Promise<void>
-  // Forget a project on one execution host only, leaving the same repo id on other hosts intact.
   removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
   reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
   reorderForHost: (args: {
@@ -57,6 +49,7 @@ export type RepositoryApi = {
         | 'worktreeBasePath'
         | 'kind'
         | 'issueSourcePreference'
+        | 'defaultJiraProject'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
@@ -78,22 +71,7 @@ export type RepositoryApi = {
   pickFolders: () => Promise<string[]>
   pickDirectory: () => Promise<string | null>
   clone: (args: { url: string; destination: string }) => Promise<Repo>
-  cloneRemote: (args: { connectionId: string; url: string; destination: string }) => Promise<Repo>
-  createRemote: (args: {
-    connectionId: string
-    parentPath: string
-    name: string
-    kind: 'git' | 'folder'
-  }) => Promise<{ repo: Repo } | { error: string }>
   cloneAbort: () => Promise<void>
-  // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
-  addRemote: (args: {
-    connectionId: string
-    remotePath: string
-    displayName?: string
-    kind?: 'git' | 'folder'
-  }) => Promise<{ repo: Repo } | { error: string }>
-  // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
   create: (args: {
     parentPath: string
     name: string
@@ -102,7 +80,6 @@ export type RepositoryApi = {
   isGitAvailable: () => Promise<boolean>
   getDefaultCreateProjectParent: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
-  getGitUsername: (args: { repoId: string }) => Promise<string>
   getBaseRefDefault: (args: {
     repoId: string
     hostId?: ExecutionHostId
@@ -150,6 +127,7 @@ export type ProjectGroupsApi = {
     projectId: string
     groupId: string | null
     order?: number
+    hostId?: string
   }) => Promise<Repo | null>
   scanNested: (args: {
     path: string

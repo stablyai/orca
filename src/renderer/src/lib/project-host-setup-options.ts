@@ -4,9 +4,10 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { isMergedAwayExecutionHost } from '../../../shared/managed-orcad-execution-host'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { translate } from '@/i18n/i18n'
 import {
   getHostConnectAction,
@@ -16,6 +17,9 @@ import {
   isRuntimeOwnedSshSetupHost,
   canSetProjectLocation
 } from './project-host-setup-availability'
+import { dedupeReadySetupRows } from './project-host-setup-row-dedupe'
+
+export type ProjectHostSetupSelection = { id: string; hostId: ExecutionHostId }
 
 export type ProjectHostSetupOption =
   | {
@@ -27,6 +31,8 @@ export type ProjectHostSetupOption =
       label: string
       detail: string
       path: string
+      /** Same-checkout setups on this machine's other host id that this row stands for. */
+      aliasSetups?: readonly ProjectHostSetupSelection[]
     }
   | {
       id: string
@@ -48,6 +54,12 @@ export type ProjectHostSetupOption =
 export type ReadyProjectHostSetupOption = Extract<ProjectHostSetupOption, { kind: 'ready' }>
 
 export type NeedsSetupProjectHostOption = Extract<ProjectHostSetupOption, { kind: 'needs-setup' }>
+
+export function getProjectHostSetupSelectionKey(
+  option: Pick<ProjectHostSetupOption, 'id' | 'hostId'>
+): string {
+  return JSON.stringify([option.id, option.hostId])
+}
 
 type BuildReadySetupOptionsInput = {
   projectId: string
@@ -122,7 +134,7 @@ function buildReadySetupOptions({
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
   const hostById = new Map(hosts.map((host) => [host.id, host]))
-  return projectHostSetups
+  const options = projectHostSetups
     .filter((setup) => {
       const host = hostById.get(setup.hostId)
       return (
@@ -162,23 +174,7 @@ function buildReadySetupOptions({
         path: setup.path
       }
     })
-    .filter(dedupeByHost())
-}
-
-// Why: a project resolves to at most one setup per host — resolveWorkspaceCreationTarget takes the
-// first project+host match and ignores the rest, so extra same-host setups are unreachable. Legacy
-// profiles can still hold them (a linked worktree added as its own project projects a second local
-// setup), which rendered as repeated identical "Local Mac" rows. Keep the first in input order so
-// the row shown is the one workspace creation actually uses.
-function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
-  const seenHosts = new Set<ExecutionHostId>()
-  return (option) => {
-    if (seenHosts.has(option.hostId)) {
-      return false
-    }
-    seenHosts.add(option.hostId)
-    return true
-  }
+  return dedupeReadySetupRows(options, hostById)
 }
 
 function buildNeedsSetupOptions({
@@ -192,11 +188,17 @@ function buildNeedsSetupOptions({
       (host) =>
         !readySetupByHost.has(host.id) &&
         !isEphemeralVmProjectHost(host) &&
-        !isRuntimeOwnedSshSetupHost(host.id)
+        !isRuntimeOwnedSshSetupHost(host.id) &&
+        !isMergedAwayExecutionHost(host) &&
+        // Why: a machine whose other id already holds the project shows that ready row only.
+        !host.aliasHostIds?.some((aliasHostId) => readySetupByHost.has(aliasHostId))
     )
     .map((host) => {
       const pendingSetup = pendingSetupByHost.get(host.id)
-      const availability = getHostSetupAvailability(host)
+      // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
+      // so connection state needs to win over setup guidance.
+      const unavailableDetail = getHostSetupAvailability(host).detail || null
+      const isAvailable = unavailableDetail === null
       const connectAction = getHostConnectAction(host)
       return {
         id: `needs-setup:${host.id}`,
@@ -204,14 +206,12 @@ function buildNeedsSetupOptions({
         projectId,
         hostId: host.id,
         label: host.label || getExecutionHostLabel(host.id),
-        detail: availability.isAvailable
-          ? pendingSetup
-            ? getPendingSetupDetail(pendingSetup)
-            : 'Project location not set'
-          : availability.detail,
-        isAvailable: availability.isAvailable,
+        detail:
+          unavailableDetail ??
+          (pendingSetup ? getPendingSetupDetail(pendingSetup) : 'Project location not set'),
+        isAvailable,
         attention: host.health === 'error',
-        canSetLocation: canSetProjectLocation(projectId, availability.isAvailable, pendingSetup),
+        canSetLocation: canSetProjectLocation(projectId, isAvailable, pendingSetup),
         ...(connectAction ? { connectAction } : {})
       }
     })

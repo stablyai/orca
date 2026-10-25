@@ -18,7 +18,6 @@ export type TerminalPaneMountContext = {
   ptyDeps: PtyConnectionDeps
   /** Mount-local: numeric pane ids are remount-scoped, the handles are keyed by tab/leaf identity. */
   deferredSplitHandoffs: Map<number, DeferredSplitPaneHandoffHandle>
-  startupWithSetupSplitWait: PtyConnectionDeps['startup']
   startupCwd: string
   defaultTabCwd: string
   worktreePath: string

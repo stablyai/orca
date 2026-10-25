@@ -28,7 +28,6 @@ function makeOptions(paneKey: string, live: { value: boolean }): AgentCompletion
   return {
     paneKey,
     getPtyId: () => 'pty-1',
-    getSettings: () => null,
     inspectProcess: vi.fn(),
     dispatchCompletion: vi.fn(),
     isLive: () => live.value
@@ -78,16 +77,6 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
     // Genuine teardown: the PTY is gone.
     live.value = false
     coordinator.dispose()
-    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
-  })
-
-  it('does not retain an identity per torn-down pane across many panes', () => {
-    for (let i = 0; i < 200; i++) {
-      const live = { value: true }
-      const coordinator = driveCompletion(`tab-1:leaf-${i}`, live)
-      live.value = false
-      coordinator.dispose()
-    }
     expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
   })
 

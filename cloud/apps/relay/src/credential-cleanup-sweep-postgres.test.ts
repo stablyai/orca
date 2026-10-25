@@ -1,6 +1,11 @@
 import pg from 'pg'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { RelayCredentialStore, type RelayIdentity } from './credential-store.js'
+import {
+  AUDIT_EVENT_RETENTION_MS,
+  CONFIRM_RESULT_RETENTION_MS,
+  RelayCredentialStore,
+  type RelayIdentity
+} from './credential-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 
 // The outage this guards against: the credential cleanup ran every 30s in all 23 cells and both
@@ -84,6 +89,28 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     }
   }
 
+  async function cleanupPlan(prefix: string, occurrence = 0): Promise<string> {
+    const statements: { sql: string; params: unknown[] }[] = []
+    const probe: RelayDatabase = {
+      dialect: 'postgres',
+      query: async (sql, params = []) => {
+        statements.push({ sql, params })
+        return []
+      },
+      queryLocked: async () => {
+        throw new Error('unexpected cleanup lock')
+      },
+      transaction: async (operation) => await operation(probe),
+      close: async () => undefined
+    }
+    await new RelayCredentialStore(probe, () => NOW).cleanup()
+    const statement = statements.filter((item) => item.sql.startsWith(prefix))[occurrence]
+    if (!statement) {
+      throw new Error(`missing production cleanup statement: ${prefix}`)
+    }
+    return await plan(statement.sql, statement.params)
+  }
+
   it('plans both invite sweeps as index scans instead of scanning the whole table', async () => {
     // Production's shape: terminal invites outnumber live ones by orders of magnitude, which is
     // what makes the partial predicates worth having.
@@ -99,16 +126,8 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     // a seq scan wins on any index.
     await database.query(`ANALYZE relay_invites`)
 
-    const expiry = await plan(
-      `UPDATE relay_invites SET state = 'expired'
-       WHERE expires_at <= ? AND state IN ('available', 'reserved', 'cooldown')`,
-      [NOW]
-    )
-    const reservation = await plan(
-      `UPDATE relay_invites SET state = 'cooldown'
-       WHERE state = 'reserved' AND reservation_expires_at <= ? AND expires_at > ?`,
-      [NOW, NOW]
-    )
+    const expiry = await cleanupPlan('UPDATE relay_invites', 0)
+    const reservation = await cleanupPlan('UPDATE relay_invites', 1)
 
     // Which of the two partial indexes serves the reservation pass is the planner's call: both
     // predicates hold only live invites, so either one reads a handful of rows. The invariant is
@@ -143,10 +162,7 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     )
     await database.query(`ANALYZE relay_connection_bases`)
 
-    const sweep = await plan(
-      `UPDATE relay_connection_bases SET active = 0 WHERE active = 1 AND deadline <= ?`,
-      [NOW]
-    )
+    const sweep = await cleanupPlan('UPDATE relay_connection_bases')
 
     expect(sweep).not.toContain('Seq Scan on relay_connection_bases')
     expect(sweep).toContain('using relay_connection_bases_active_deadline')
@@ -168,12 +184,7 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     )
     await database.query(`ANALYZE relay_connection_bases`)
 
-    const reaper = await plan(
-      `DELETE FROM relay_connection_bases WHERE ctid IN (
-         SELECT ctid FROM relay_connection_bases WHERE active = ? AND deadline <= ? LIMIT 5000
-       )`,
-      [0, NOW - DAY_MS]
-    )
+    const reaper = await cleanupPlan('DELETE FROM relay_connection_bases')
 
     expect(reaper).toContain('relay_connection_bases_active_deadline')
     expect(reaper).not.toContain('Seq Scan on relay_connection_bases')
@@ -196,14 +207,8 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     await database.query(`ANALYZE relay_direct_authorizations`)
     await database.query(`ANALYZE relay_rate_windows`)
 
-    const pending = await plan(
-      `UPDATE relay_direct_authorizations SET consumed_at = ?
-       WHERE consumed_at IS NULL AND deadline <= ?`,
-      [NOW, NOW]
-    )
-    const windows = await plan(`DELETE FROM relay_rate_windows WHERE window_started_at < ?`, [
-      NOW - DAY_MS
-    ])
+    const pending = await cleanupPlan('UPDATE relay_direct_authorizations')
+    const windows = await cleanupPlan('DELETE FROM relay_rate_windows')
 
     expect(pending).toContain('relay_direct_authorizations_pending_deadline')
     expect(pending).not.toContain('Seq Scan on relay_direct_authorizations')
@@ -279,5 +284,51 @@ describePostgres('credential cleanup against PostgreSQL', () => {
       { state: 'available', total: '2' },
       { state: 'invalidated', total: '3' }
     ])
+  })
+
+  it('plans the audit reaper off relay_audit_events_at when most rows are past retention', async () => {
+    // Unordered, a LIMIT with this many matches is cheapest as a sequential scan from page 0, which
+    // in production would reread every retained row once the oldest pages are reaped.
+    await database.query(
+      `INSERT INTO relay_audit_events (id, at, type, user_id, relay_host_id, detail_json)
+       SELECT 'old-' || n, ?, 'resume-confirmed', ?, ?, '{}' FROM generate_series(1, 20000) AS n`,
+      [NOW - AUDIT_EVENT_RETENTION_MS - DAY_MS, identity.userId, identity.relayHostId]
+    )
+    await database.query(`ANALYZE relay_audit_events`)
+
+    const reaper = await cleanupPlan('DELETE FROM relay_audit_events')
+
+    expect(reaper).toContain('relay_audit_events_at')
+    expect(reaper).not.toContain('Seq Scan on relay_audit_events')
+  })
+
+  it('reaps old confirm results and audit events and keeps the ones inside retention', async () => {
+    await database.query(
+      `INSERT INTO relay_confirm_results
+       (user_id, relay_host_id, req_id, basis_conn_id, tuple_json, result_json, committed_at)
+       SELECT ?, ?, 'old-' || n, 'basis-1', '{}', '{}', ? FROM generate_series(1, 200) AS n`,
+      [identity.userId, identity.relayHostId, NOW - CONFIRM_RESULT_RETENTION_MS - 1]
+    )
+    await database.query(
+      `INSERT INTO relay_confirm_results
+       (user_id, relay_host_id, req_id, basis_conn_id, tuple_json, result_json, committed_at)
+       VALUES (?, ?, 'recent', 'basis-1', '{}', '{}', ?)`,
+      [identity.userId, identity.relayHostId, NOW - DAY_MS]
+    )
+    await database.query(
+      `INSERT INTO relay_audit_events (id, at, type, user_id, relay_host_id, detail_json)
+       VALUES ('old', ?, 'resume-confirmed', ?, ?, '{}'), ('recent', ?, 'resume-confirmed', ?, ?, '{}')`,
+      [
+        NOW - AUDIT_EVENT_RETENTION_MS - 1, identity.userId, identity.relayHostId,
+        NOW - DAY_MS, identity.userId, identity.relayHostId
+      ]
+    )
+
+    await store.cleanup()
+
+    expect(await database.query(`SELECT req_id FROM relay_confirm_results`)).toEqual([
+      { req_id: 'recent' }
+    ])
+    expect(await database.query(`SELECT id FROM relay_audit_events`)).toEqual([{ id: 'recent' }])
   })
 })

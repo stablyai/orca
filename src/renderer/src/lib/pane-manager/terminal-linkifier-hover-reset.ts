@@ -9,11 +9,41 @@ type LinkifierHoverCache = {
   // Set while xterm is showing a hovered link; cleared on mouseleave / when the
   // pointer moves off the link (Linkifier `_clearCurrentLink`).
   _currentLink?: unknown
+  _lastMouseEvent?: MouseEvent
+  _handleMouseMove?: (event: MouseEvent) => void
 }
 
 type TerminalCoreWithLinkifier = {
   _core?: {
     linkifier?: LinkifierHoverCache
+  }
+}
+
+export function refreshStaleTerminalLinkifierHover(terminal: Terminal): boolean {
+  try {
+    // SAFETY: private linkifier access is optional and every invoked member is checked below.
+    const linkifier = (terminal as unknown as TerminalCoreWithLinkifier)._core?.linkifier
+    const current = linkifier?._currentLink
+    if (
+      !current ||
+      typeof current !== 'object' ||
+      !('link' in current) ||
+      !current.link ||
+      typeof current.link !== 'object' ||
+      !('isBufferValid' in current.link) ||
+      typeof current.link.isBufferValid !== 'function' ||
+      current.link.isBufferValid()
+    ) {
+      return false
+    }
+    const event = linkifier?._lastMouseEvent
+    resetTerminalLinkifierHoverState(terminal)
+    if (event && typeof linkifier?._handleMouseMove === 'function') {
+      linkifier._handleMouseMove(event)
+    }
+    return true
+  } catch {
+    return false
   }
 }
 

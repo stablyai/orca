@@ -164,6 +164,8 @@ describe('relay assignment connection headroom', () => {
 
     expect((await store.cellDeploymentStatus(LIMITED_CELL.id)).connectionCapacity).toEqual({
       hardCap: 600,
+      reportedHardCap: 600,
+      effectiveHardCap: 600,
       controlRebindReserve: 100,
       ordinaryConnectionLimit: 500,
       unobservedBound: 50,
@@ -177,7 +179,7 @@ describe('relay assignment connection headroom', () => {
     })
   })
 
-  it('fails placement closed while a cell changes connection limits', async () => {
+  it('keeps placing against the old cap until the cell reports a raised one', async () => {
     const { store } = await setup(449)
     const expanded = {
       ...LIMITED_CELL,
@@ -185,12 +187,15 @@ describe('relay assignment connection headroom', () => {
     }
 
     await store.reconcileCells([expanded], true)
+    await expect(store.cellDeploymentStatus(expanded.id)).resolves.toMatchObject({
+      connectionCapacity: { hardCap: 1_000, effectiveHardCap: 600, heartbeatFresh: true }
+    })
     await expect(
       store.assign({ userId: 'transition-user', relayHostId: 'host000000000099' })
+    ).resolves.toMatchObject({ cellId: expanded.id })
+    await expect(
+      store.assign({ userId: 'transition-user-2', relayHostId: 'host000000000096' })
     ).rejects.toThrow('relay_capacity_exhausted')
-    await expect(store.cellDeploymentStatus(expanded.id)).resolves.toMatchObject({
-      connectionCapacity: { hardCap: 1_000, heartbeatFresh: false }
-    })
 
     await store.recordCellHeartbeat({
       cellId: expanded.id,
@@ -216,38 +221,38 @@ describe('relay assignment connection headroom', () => {
     })
   })
 
-  it('fails placement closed while the admin path changes connection limits', async () => {
-    const { store } = await setup(449)
-    const expanded = {
+  it('fails placement closed while the admin path changes the unobserved bound', async () => {
+    const { store } = await setup(0)
+    const lowered = {
       ...LIMITED_CELL,
-      connectionHardCap: 1_000 as const
+      connectionUnobservedBound: 49
     }
 
-    await store.configureCell(expanded, 'general')
+    await store.configureCell(lowered, 'general')
     await expect(
       store.assign({ userId: 'admin-transition', relayHostId: 'host000000000098' })
     ).rejects.toThrow('relay_capacity_exhausted')
-    await expect(store.cellDeploymentStatus(expanded.id)).resolves.toMatchObject({
-      connectionCapacity: { hardCap: 1_000, heartbeatFresh: false }
+    await expect(store.cellDeploymentStatus(lowered.id)).resolves.toMatchObject({
+      connectionCapacity: { hardCap: 600, heartbeatFresh: false }
     })
 
     await store.recordCellHeartbeat({
-      cellId: expanded.id,
-      cellUrl: expanded.url,
+      cellId: lowered.id,
+      cellUrl: lowered.url,
       cellIncarnation: '22222222-2222-4222-8222-222222222222',
       startedAt: 200,
       ready: true,
       observedRequests: 0,
-      totalConnections: 449,
+      totalConnections: 0,
       inFlightConnections: 0,
       reservedConnectionUnits: 0,
-      enforcedConnectionUnits: 449,
-      connectionHardCap: 1_000,
-      connectionUnobservedBound: 50
+      enforcedConnectionUnits: 0,
+      connectionHardCap: 600,
+      connectionUnobservedBound: 49
     })
     await expect(
       store.assign({ userId: 'admin-restored', relayHostId: 'host000000000097' })
-    ).resolves.toMatchObject({ cellId: expanded.id })
+    ).resolves.toMatchObject({ cellId: lowered.id })
   })
 
   it('admits exactly one reservation at the admission boundary', async () => {
@@ -448,34 +453,48 @@ describe('relay assignment connection headroom', () => {
     })
   })
 
-  it.each(['existing-only', 'migration-only'] as const)(
-    'keeps a zero-activity assignment pinned on a %s cell without connection headroom',
-    async (admission) => {
-      const { database, store, source } = await setupHeadroomReassignment()
-      const identity = {
-        userId: `pinned-${admission}-user`,
-        relayHostId: `pinned${admission.replace('-', '')}`
-      }
-      await store.setCellAdmissionState(source.id, admission)
-      await database.query(
-        `INSERT INTO relay_assignments
-         (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at,
-          last_activity_at, reserved_controls, reserved_splices, reserved_invites,
-          pending_installs, pending_confirmations, migration_leases)
-         VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0)`,
-        [identity.userId, identity.relayHostId, source.id, 7, 10_000, 100]
-      )
+  it('keeps a zero-activity assignment pinned on an existing-only cell', async () => {
+    const { database, store, source } = await setupHeadroomReassignment()
+    const identity = { userId: 'pinned-existing-only-user', relayHostId: 'pinnedexistingonl' }
+    await store.setCellAdmissionState(source.id, 'existing-only')
+    await database.query(
+      `INSERT INTO relay_assignments
+       (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at,
+        last_activity_at, reserved_controls, reserved_splices, reserved_invites,
+        pending_installs, pending_confirmations, migration_leases)
+       VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0)`,
+      [identity.userId, identity.relayHostId, source.id, 7, 10_000, 100]
+    )
 
-      await expect(store.assign(identity)).rejects.toThrow(
-        'relay_connection_headroom_exhausted'
-      )
-      expect(await store.resolve(identity)).toMatchObject({
-        cellId: source.id,
-        assignmentEpoch: 7
-      })
-      expect(await database.query(`SELECT * FROM relay_assignment_activity_leases`)).toEqual([])
-    }
-  )
+    await expect(store.assign(identity)).rejects.toThrow('relay_connection_headroom_exhausted')
+    expect(await store.resolve(identity)).toMatchObject({
+      cellId: source.id,
+      assignmentEpoch: 7
+    })
+    expect(await database.query(`SELECT * FROM relay_assignment_activity_leases`)).toEqual([])
+  })
+
+  it('keeps a zero-activity assignment pinned on an unstamped migration-only cell', async () => {
+    // Why: an evacuation target is deliberately migration-only and deliberately
+    // full. Without the roll's isolate stamp it must keep the hosts it holds.
+    const { database, store, source } = await setupHeadroomReassignment()
+    const identity = { userId: 'pinned-migration-only-user', relayHostId: 'pinnedmigrationonly' }
+    await store.setCellAdmissionState(source.id, 'migration-only')
+    await database.query(
+      `INSERT INTO relay_assignments
+       (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at,
+        last_activity_at, reserved_controls, reserved_splices, reserved_invites,
+        pending_installs, pending_confirmations, migration_leases)
+       VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0)`,
+      [identity.userId, identity.relayHostId, source.id, 7, 10_000, 100]
+    )
+
+    await expect(store.assign(identity)).rejects.toThrow('relay_connection_headroom_exhausted')
+    expect(await store.resolve(identity)).toMatchObject({
+      cellId: source.id,
+      assignmentEpoch: 7
+    })
+  })
 
   it('renames a pending reservation exactly once on control activation', async () => {
     const { database, store } = await setup(449)

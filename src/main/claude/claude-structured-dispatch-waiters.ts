@@ -9,13 +9,7 @@ export function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispat
   }
 }
 
-/**
- * A waiter with no deadline. The echo Claude sends is emitted when the provider
- * STARTS the turn, so a message queued behind a running turn cannot be echoed
- * until that turn ends — an interval bounded only by the previous turn. Elapsed
- * time is therefore not evidence about delivery, and nothing here expires.
- * Waiters are retired by process facts instead: a failed write, or child exit.
- */
+/** Queued sends may wait a whole turn; only provider or process evidence settles delivery, never time. */
 export function waitForReplay(
   session: ClaudeSession,
   acceptsResult: boolean,

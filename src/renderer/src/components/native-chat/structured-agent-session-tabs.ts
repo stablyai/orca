@@ -1,11 +1,7 @@
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import type { Tab } from '../../../../shared/tab-types'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
-
-export function isStructuredTab(tab: Tab): tab is StructuredTab {
-  return tab.contentType === 'agent-session' && isAgentSessionHandleProvider(tab.agentSessionAgent)
-}
 
 const structuredTabsByUnifiedTabsSnapshot = new WeakMap<
   Record<string, Tab[]>,

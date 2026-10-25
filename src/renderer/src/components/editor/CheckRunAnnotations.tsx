@@ -2,11 +2,7 @@ import React from 'react'
 import { ExternalLink } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { PRCheckAnnotation } from '../../../../shared/github/check-types'
-import {
-  cancelAnnotationRevealFrame,
-  getOpenableAnnotationLine,
-  openAnnotationLocation
-} from './check-annotation-open'
+import { getOpenableAnnotationLine, openAnnotationLocation } from './check-annotation-open'
 import { formatAnnotationsForClipboard } from './check-run-clipboard-text'
 import { CheckRunCopyButton } from './CheckRunCopyButton'
 
@@ -17,21 +13,12 @@ export function CheckRunAnnotations({
   annotations: PRCheckAnnotation[]
   worktreeId: string | null
 }): React.JSX.Element {
-  const revealRafRef = React.useRef<number | null>(null)
-  const revealInnerRafRef = React.useRef<number | null>(null)
-  React.useEffect(
-    () => () => {
-      cancelAnnotationRevealFrame(revealRafRef)
-      cancelAnnotationRevealFrame(revealInnerRafRef)
-    },
-    []
-  )
   const openAnnotation = React.useCallback(
     (path: string, line: number) => {
       if (!worktreeId) {
         return
       }
-      openAnnotationLocation({ worktreeId, path, line, revealRafRef, revealInnerRafRef })
+      openAnnotationLocation({ worktreeId, path, line })
     },
     [worktreeId]
   )

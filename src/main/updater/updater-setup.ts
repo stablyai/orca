@@ -1,7 +1,7 @@
 import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
+import type { ReleaseBuildListOptions } from '../updater-release-build-cache'
 import type {
   LinuxPackageInstallInstructions,
   UpdateCheckOptions,
@@ -19,7 +19,8 @@ import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
-import type { UpdateInstallMode } from './updater-state'
+import { configureMacShipItScheduling } from './macos-shipit-scheduling'
+import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 
 export type UpdaterSetupOptions = {
   getLastUpdateCheckAt?: () => number | null
@@ -31,6 +32,7 @@ export type UpdaterSetupOptions = {
   setDismissedUpdateNudgeId?: (id: string | null) => void
   getReleaseChannelOverride?: () => ReleaseChannel | null
   installMode?: UpdateInstallMode
+  onBeforeQuitFailure?: PreQuitCleanupFailureMode
 }
 
 /** Initializes electron-updater and attaches lifecycle/event bridges. */
@@ -94,8 +96,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     return super.showLinuxPackage()
   }
 
-  async listAvailableReleaseBuilds(channel: ReleaseChannel): Promise<ReleaseBuild[]> {
-    return super.listAvailableReleaseBuilds(channel)
+  async listAvailableReleaseBuilds(
+    channel: ReleaseChannel,
+    options?: ReleaseBuildListOptions
+  ): Promise<ReleaseBuild[]> {
+    return super.listAvailableReleaseBuilds(channel, options)
   }
 
   dismissNudge(): void {
@@ -106,9 +111,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.dismissAvailableUpdate()
   }
 
-  setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
-    this.mainWindowRef = mainWindow
+  setupAutoUpdater(mainWindow: BrowserWindow | null, opts?: UpdaterSetupOptions): void {
+    // Why keep: headless serve sets up without a window; a later window attach must not be undone.
+    this.mainWindowRef = mainWindow ?? this.mainWindowRef
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
+    this.onBeforeQuitFailure = opts?.onBeforeQuitFailure ?? 'continue'
     this.persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
     this._getLastUpdateCheckAt = opts?.getLastUpdateCheckAt ?? null
     this._getPendingUpdateNudgeId = opts?.getPendingUpdateNudgeId ?? null
@@ -129,14 +136,12 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       this.sendErrorStatus(`The server update did not complete: ${serveHandoffFailure}`, true)
     }
 
-    if (!app.isPackaged && !is.dev) {
-      return
-    }
-    if (is.dev) {
+    if (!app.isPackaged) {
       return
     }
 
     const autoUpdater = this.getAutoUpdater()
+    configureMacShipItScheduling()
     autoUpdater.autoDownload = false
     if (this.activeUpdateSource === 'release') {
       autoUpdater.allowDowngrade = false
@@ -193,6 +198,10 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       markMissingManifestPrereleaseFallbackChecking: () =>
         this.markMissingManifestPrereleaseFallbackChecking(),
       performQuitAndInstall: () => this.performQuitAndInstall(),
+      commitStagedMacInstall: () => this.commitStagedMacInstall(),
+      failMacStaging: (error) => this.failMacStaging(error),
+      isAwaitingMacStaging: () => this.isAwaitingMacStaging(),
+      isMacStagingDeferredToInstall: () => this.isMacStagingDeferredToInstall(),
       shouldDeferMacQuitForInstall: () => this.updateInstallMode === 'interactive',
       recordCompletedUpdateCheck: () => this.recordCompletedUpdateCheck(),
       restoreReleaseUpdateSource: () => this.restoreReleaseUpdateSource(),

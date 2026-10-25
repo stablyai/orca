@@ -8,6 +8,7 @@ import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
+import { unpricedCostLabel } from './unpriced-cost-label'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: CodexUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -97,6 +98,10 @@ export function CodexUsagePane(): React.JSX.Element {
   }
 
   const hasAnyData = summary?.hasAnyCodexData ?? scanState.hasAnyCodexData
+  const costCardLabel = unpricedCostLabel(
+    translate('auto.components.stats.CodexUsagePane.1a18fbd56b', 'Est. API-equivalent cost'),
+    summary
+  )
 
   return (
     <UsageTrackingPaneShell
@@ -191,10 +196,7 @@ export function CodexUsagePane(): React.JSX.Element {
             icon={<FolderKanban className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.CodexUsagePane.1a18fbd56b',
-              'Est. API-equivalent cost'
-            )}
+            label={costCardLabel}
             value={formatCost(summary?.estimatedCostUsd ?? null)}
             icon={<Coins className="size-4" />}
           />

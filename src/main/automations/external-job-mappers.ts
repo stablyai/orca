@@ -94,50 +94,6 @@ function mapExternalRuns({
     .map(({ run }) => run)
 }
 
-function hermesScheduleDisplay(job: ExternalJobRecord): string {
-  const direct = asString(job.schedule_display)
-  if (direct) {
-    return direct
-  }
-  const schedule = job.schedule
-  if (isRecord(schedule)) {
-    return (
-      asString(schedule.display) ??
-      asString(schedule.value) ??
-      asString(schedule.expr) ??
-      asString(schedule.run_at) ??
-      '?'
-    )
-  }
-  return asString(schedule) ?? '?'
-}
-
-function hermesRawSchedule(job: ExternalJobRecord): string | null {
-  const schedule = job.schedule
-  if (isRecord(schedule)) {
-    return (
-      asString(schedule.expr) ??
-      asString(schedule.value) ??
-      asString(schedule.display) ??
-      asString(schedule.run_at)
-    )
-  }
-  return asString(schedule) ?? asString(job.schedule_display)
-}
-
-function hermesPromptPreview(job: ExternalJobRecord): string {
-  const prompt = asString(job.prompt) ?? ''
-  if (prompt) {
-    return prompt.length > 120 ? `${prompt.slice(0, 117)}...` : prompt
-  }
-  const script = asString(job.script)
-  if (script) {
-    return job.no_agent ? `Script: ${script}` : `Prompt uses script context: ${script}`
-  }
-  const skills = Array.isArray(job.skills) ? job.skills.map((skill) => String(skill)) : []
-  return skills.length > 0 ? `Skills: ${skills.join(', ')}` : ''
-}
-
 function openClawScheduleDisplay(job: ExternalJobRecord): string {
   const schedule = job.schedule
   if (!isRecord(schedule)) {
@@ -173,41 +129,6 @@ function openClawPromptPreview(job: ExternalJobRecord): string {
   }
   const text = asString(payload.message) ?? asString(payload.text) ?? ''
   return text.length > 120 ? `${text.slice(0, 117)}...` : text
-}
-
-export function mapHermesJobs(managerId: string, rawJobs: unknown): ExternalAutomationJob[] {
-  if (!Array.isArray(rawJobs)) {
-    return []
-  }
-  return rawJobs.filter(isRecord).map((job) => {
-    const id = asString(job.id) ?? 'unknown'
-    const enabled = job.enabled !== false && job.state !== 'paused'
-    const preview = hermesPromptPreview(job)
-    return {
-      id,
-      managerId,
-      provider: 'hermes',
-      name: (asString(job.name) ?? preview) || id,
-      schedule: hermesScheduleDisplay(job),
-      rawSchedule: hermesRawSchedule(job),
-      enabled,
-      state: asString(job.state) ?? (enabled ? 'scheduled' : 'paused'),
-      prompt: asString(job.prompt),
-      promptPreview: preview,
-      nextRunAt: asString(job.next_run_at),
-      lastRunAt: asString(job.last_run_at),
-      lastStatus: asString(job.last_status),
-      lastError: asString(job.last_error) ?? asString(job.last_delivery_error),
-      workdir: asString(job.workdir),
-      runCount: asNumber(job.run_count) ?? (Array.isArray(job.runs) ? job.runs.length : 0),
-      runs: mapExternalRuns({
-        managerId,
-        provider: 'hermes',
-        jobId: id,
-        rawRuns: job.runs
-      })
-    }
-  })
 }
 
 export function mapOpenClawJobs(managerId: string, rawJobs: unknown): ExternalAutomationJob[] {

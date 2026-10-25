@@ -1,9 +1,11 @@
 import type { KeybindingOverrides } from '../../shared/keybindings'
+import type { LowCommitOomVerdict } from '../crash-reporting/low-commit-oom-recovery-gate'
 import type {
   RecoveryExhaustionCause,
   RecoveryReloadMilestone,
   RecoveryReloadTrigger
 } from './renderer-recovery-reload-watchdog'
+import type { RendererLivenessAtDeath } from './renderer-liveness-at-death'
 
 /** Per-load outcome from Electron's load promise, which is scoped to that one load unlike `did-finish-load`. */
 export type MainWindowLoadObserver = {
@@ -18,7 +20,8 @@ export type CreateMainWindowOptions = {
   onQuitAborted?: () => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
-    webContentsId: number
+    webContentsId: number,
+    liveness: RendererLivenessAtDeath
   ) => void
   /** Returns true when Orca should reload after renderer loss; update-relaunch/quit tear down children intentionally, so don't fight shutdown. */
   shouldRecoverRenderer?: (
@@ -31,6 +34,8 @@ export type CreateMainWindowOptions = {
     webContentsId: number
     recentRecoveryCount: number
     cause?: RecoveryExhaustionCause
+    /** Set with cause 'low-commit': the Windows commit reading that stopped the auto-reload. */
+    lowCommit?: LowCommitOomVerdict
     /** Watched manual retry for the recovery prompt; an unwatched one cannot re-raise the prompt when it stalls too. */
     retry?: () => void
   }) => void

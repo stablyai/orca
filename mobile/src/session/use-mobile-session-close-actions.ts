@@ -1,3 +1,4 @@
+import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
 import {
   sessionTabClose,
   sessionTerminalClose,
@@ -11,9 +12,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     worktreeId,
     client,
     setTerminals,
-    terminals,
     terminalsRef,
     setSessionTabs,
+    setFileDocs,
+    setMarkdownDocs,
     sessionTabsRef,
     reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
@@ -25,10 +27,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     renameTarget,
     setRenameTarget,
     terminalRefs,
-    initializedHandlesRef,
     activeHandleRef,
     activeSessionTabTypeRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     pendingBrowserFocusPageIdRef,
     scheduleDelayedAction,
     unsubscribeTerminal,
@@ -76,15 +77,20 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       if (response.accepted) {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
-        initializedHandlesRef.current.delete(target.handle)
         clearTerminalLiveInputDefault(target.handle)
-        const next = terminals.filter((terminal) => terminal.handle !== target.handle)
-        setTerminals(next)
+        const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
         terminalsRef.current = next
+        setTerminals(next)
         if (activeHandleRef.current === target.handle) {
           const replacement = next[0] ?? null
           activeHandleRef.current = replacement?.handle ?? null
-          pendingActiveTerminalHandleRef.current = replacement?.handle ?? null
+          pendingSelectionRef.current = replacement
+            ? {
+                kind: 'terminal',
+                handle: replacement.handle,
+                tabId: pendingSelectionTabId(pendingSelectionRef.current)
+              }
+            : withoutPendingHandle(pendingSelectionRef.current)
           setActiveHandle(replacement?.handle ?? null)
           if (replacement) {
             subscribeToTerminal(replacement.handle)
@@ -111,6 +117,27 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted) {
+        if (tab.type === 'markdown') {
+          setMarkdownDocs((prev) => {
+            const doc = prev.get(tab.id)
+            if (!doc || (doc.status === 'ready' && doc.isDirty)) {
+              return prev
+            }
+            const next = new Map(prev)
+            next.delete(tab.id)
+            return next
+          })
+        }
+        if (tab.type === 'file') {
+          setFileDocs((prev) => {
+            if (!prev.has(tab.id)) {
+              return prev
+            }
+            const next = new Map(prev)
+            next.delete(tab.id)
+            return next
+          })
+        }
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
@@ -120,7 +147,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           const terminalHandle = tab.terminal
           unsubscribeTerminal(terminalHandle)
           terminalRefs.current.delete(terminalHandle)
-          initializedHandlesRef.current.delete(terminalHandle)
           clearTerminalLiveInputDefault(terminalHandle)
         }
         sessionTabsRef.current = remainingTabs

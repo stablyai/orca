@@ -31,9 +31,7 @@ export function normalizeRawUsage(value: unknown): CodexUsageRawUsage | null {
     cachedInputTokens,
     outputTokens,
     reasoningOutputTokens,
-    // Why: legacy Codex logs can omit total_tokens. Reasoning is already billed
-    // inside output, so synthesizing input+output matches Codex pricing instead
-    // of double-counting reasoning as another billable bucket.
+    // Legacy logs may omit totals; reasoning is already included in output.
     totalTokens: totalTokens > 0 ? totalTokens : inputTokens + outputTokens
   }
 }
@@ -117,8 +115,7 @@ export function resolveCodexUsageDelta(
     ) {
       return null
     }
-    // Why: Codex totals are mutable snapshots after compaction/resume. The
-    // last_token_usage payload is the billable increment; totals are the baseline.
+    // Compaction/resume can rewrite totals; last_token_usage is the billable increment.
     return { kind: 'event', delta: lastUsage, nextTotals: totalUsage }
   }
 
@@ -160,10 +157,7 @@ export function buildCodexUsageEventKey(
   totalUsage: CodexUsageRawUsage | null,
   lastUsage: CodexUsageRawUsage | null
 ): string {
-  // Why: fork/resume copies token_count records byte-for-byte into a new
-  // rollout file, but session_meta.id is often rewritten to the new session.
-  // Key only on the raw record fields (timestamp + usage tuples) so the copy
-  // matches the original regardless of surrounding parse context / session id.
+  // Forks rewrite session IDs but retain usage records; exclude session identity from deduplication.
   const tupleOf = (usage: CodexUsageRawUsage | null): string =>
     usage
       ? [

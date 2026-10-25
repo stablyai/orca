@@ -1,22 +1,29 @@
 import { afterWritesDrained, disposeTermObservers } from './write-queue'
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { updateScrollIndicator } from './viewport-transform'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 import { logFeedAndEvict } from './selection-state-and-eviction'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
+import { reportLaidOutCellBox } from './laid-out-cell-box'
 
-export function attachTermObservers() {
+export function attachTermObservers(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return
   }
-  disposeTermObservers()
+  disposeTermObservers(scope)
   try {
-    scope.termObserverDisposables.push(scope.term.onLineFeed!(logFeedAndEvict))
+    scope.termObserverDisposables.push(
+      scope.term.onLineFeed!(function () {
+        logFeedAndEvict(scope)
+      })
+    )
   } catch {}
   try {
     scope.termObserverDisposables.push(
       scope.term.onScroll!(function () {
-        updateScrollIndicator(false)
+        updateScrollIndicator(scope, false)
+        paintBottomRowBackdrop(scope)
       })
     )
   } catch {}
@@ -26,15 +33,27 @@ export function attachTermObservers() {
     if (scope.term.onWriteParsed) {
       scope.termObserverDisposables.push(
         scope.term.onWriteParsed(function () {
-          emitModesIfChanged()
-          emitKeyboardAvoidanceMetrics()
+          emitModesIfChanged(scope)
+          emitKeyboardAvoidanceMetrics(scope)
+          paintBottomRowBackdrop(scope)
+        })
+      )
+    }
+  } catch {}
+  // Why: onDimensionsChange skips a renderer swap and a DPR change; every one of them re-renders.
+  try {
+    if (scope.term.onRender) {
+      scope.termObserverDisposables.push(
+        scope.term.onRender(function () {
+          reportLaidOutCellBox(scope)
+          paintBottomRowBackdrop(scope)
         })
       )
     }
   } catch {}
   // Initial emit once buffer settles.
-  afterWritesDrained(function () {
-    emitModesIfChanged()
-    emitKeyboardAvoidanceMetrics()
+  afterWritesDrained(scope, function () {
+    emitModesIfChanged(scope)
+    emitKeyboardAvoidanceMetrics(scope)
   })
 }

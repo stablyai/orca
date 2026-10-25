@@ -3,8 +3,8 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes,
-  buildAgentPromptSubmitBytes,
   agentPromptSubmitJoinsPasteFrame,
+  agentPromptTakesLeadLine,
   getAgentPromptSubmitDelayMs,
   getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
@@ -26,13 +26,33 @@ describe('agent prompt injection bytes', () => {
 
   it('always bracket-pastes prompts so agent TUIs treat newlines as content', () => {
     expect(buildAgentPromptPasteBytes('line one\nline two')).toBe(
-      `${BEGIN}line one\nline two${END}`
+      '\x1b[200~line one\nline two\x1b[201~'
     )
   })
 
-  it('keeps submit separate from the paste frame', () => {
-    expect(buildAgentPromptPasteBytes('hello')).not.toContain('\r')
-    expect(buildAgentPromptSubmitBytes()).toBe('\r')
+  it('types the lead line only for Claude agents and unidentified ones', () => {
+    expect(agentPromptTakesLeadLine('claude')).toBe(true)
+    expect(agentPromptTakesLeadLine('claude-agent-teams')).toBe(true)
+    expect(agentPromptTakesLeadLine(null)).toBe(true)
+    expect(agentPromptTakesLeadLine('codex')).toBe(false)
+    expect(agentPromptTakesLeadLine('opencode')).toBe(false)
+  })
+
+  it('types the lead line ahead of the paste frame on one line', () => {
+    expect(buildAgentPromptPasteBytes('brief', 'Please\r\nfollow\x03\x1b[201~\x7f')).toBe(
+      `Please follow [201~  ${BEGIN}brief${END}`
+    )
+    expect(buildAgentPromptPasteBytes('brief', '')).toBe(`${BEGIN}brief${END}`)
+  })
+
+  it('keeps generic prompt behavior for recognition-only agents', () => {
+    expect(agentPromptTakesLeadLine('dsb')).toBe(agentPromptTakesLeadLine(undefined))
+    expect(agentPromptSubmitJoinsPasteFrame('dsb')).toBe(false)
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(resolveAgentPromptSubmitDelayForAgent(platform, 'first\nsecond', 'dsb')).toBe(
+        resolveAgentPromptSubmitDelayForAgent(platform, 'first\nsecond', undefined)
+      )
+    }
   })
 
   it('costs a common-sized prompt far less than the old flat Windows delay', () => {
@@ -118,12 +138,15 @@ describe('agent prompt injection bytes', () => {
     expect(sanitizeAgentPromptText('a\x1bb')).toBe('a<ESC>b')
   })
 
-  it('chunks without changing the reconstructed paste frame', () => {
-    const prompt = `header\n${'abc123'.repeat(200)}`
+  it('chunks a sanitized paste frame within the UTF-8 byte limit', () => {
+    const body = 'a😀é'.repeat(200)
+    const prompt = `header\n${body}\x1b[201~`
     const chunks = [...iterateAgentPromptPasteChunks(prompt, 31)]
     expect(chunks.length).toBeGreaterThan(1)
-    expect(chunks.join('')).toBe(buildAgentPromptPasteBytes(prompt))
-    expect(chunks.join('')).toContain(`${BEGIN}header\n`)
-    expect(chunks.join('')).toContain(END)
+    expect(chunks.join('')).toBe(`\x1b[200~header\n${body}<ESC>[201~\x1b[201~`)
+    for (const chunk of chunks) {
+      expect(Buffer.byteLength(chunk, 'utf8')).toBeLessThanOrEqual(31)
+      expect(Buffer.from(chunk, 'utf8').toString('utf8')).toBe(chunk)
+    }
   })
 })

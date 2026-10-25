@@ -4,7 +4,7 @@ import { resolveLocalGitUsernameDetailed } from './git/git-username'
 
 type RepoUsernameStore = {
   getRepos(): Repo[]
-  // Why the repo and not its id: duplicate repo ids across execution hosts make an id-only write ambiguous.
+  // Repo ids can repeat across hosts.
   setResolvedRepoGitUsername(
     target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
     username: string
@@ -15,15 +15,11 @@ type EnrichmentOptions = {
   onChanged?: () => void
 }
 
-// Why: resolution spawns git (and possibly gh) subprocesses, so run it at most
-// once per repo location per app session — hydrateRepo serves the persisted
-// value in between, and a relaunch picks up config changes.
+// Probe once per location per session; serve the persisted value between launches.
 const attemptedLocations = new Set<string>()
 let enrichmentInFlight: Promise<void> | null = null
 let rerunRequested = false
 
-// Why the execution host and not connectionId: a runtime repo has no connectionId, so a
-// connectionId-only key collides with a local repo at the same path and blocks one of them for the session.
 function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>): string {
   return `${getRepoExecutionHostId(repo)}\0${repo.path}`
 }
@@ -44,8 +40,6 @@ async function enrichRepoGitUsernamesInBackground(
   const candidates = repos.filter(
     (repo) =>
       repo.kind !== 'folder' &&
-      // Why: SSH repo paths are remote; local git cannot inspect them. The
-      // SSH username path (getSshGitUsername) stays caller-driven.
       !repo.connectionId &&
       !attemptedLocations.has(getRepoLocationKey(repo))
   )
@@ -53,10 +47,7 @@ async function enrichRepoGitUsernamesInBackground(
   for (const repo of candidates) {
     attemptedLocations.add(getRepoLocationKey(repo))
     const { username, authoritative } = await resolveLocalGitUsernameDetailed(repo.path)
-    // Why: a non-authoritative '' means a probe timed out and says nothing
-    // about the account — keep the persisted value. An authoritative result
-    // (including '') is the current truth: it must also CLEAR a stale
-    // persisted username after the user removes github.user or logs out.
+    // Preserve cached usernames on failure; authoritative empty results clear stale accounts.
     if (!authoritative && !username) {
       continue
     }
@@ -69,18 +60,13 @@ async function enrichRepoGitUsernamesInBackground(
   }
 }
 
-/**
- * Resolve git usernames for repos that haven't been probed this session, off
- * the caller's critical path. Fire-and-forget by design: repos:list must stay
- * subprocess-free (issue #7225 — a stuck sync probe froze startup for minutes).
- */
+// Keep repo-list calls subprocess-free to avoid blocking startup.
 export function enrichRepoGitUsernames(
   store: RepoUsernameStore,
   options: EnrichmentOptions = {}
 ): void {
   if (enrichmentInFlight) {
-    // Why: a repo added mid-pass would otherwise be dropped until some later
-    // repos:list happens to fire — queue one follow-up pass instead.
+    // Pick up repos added while the current pass was probing.
     rerunRequested = true
     return
   }

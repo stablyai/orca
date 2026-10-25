@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 // STA-4557: #14866 deferred command-finished retirement for OpenCode panes behind an
 // async "is the foreground still OpenCode?" read. These pin the two ways a finished
@@ -56,7 +58,10 @@ async function launchOpenCodePane(options: {
   retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
   attestAgentHookCompatibilityAuthority?: OrcaRuntimeServiceDeps['attestAgentHookCompatibilityAuthority']
 }): Promise<LaunchedOpenCodePane> {
-  const spawn = vi.fn().mockResolvedValue({ id: options.ptyId, incarnationId: 'incarnation-1' })
+  const spawn = vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+    id: options.ptyId,
+    incarnationId: 'incarnation-1'
+  }))
   const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
     attestAgentHookCompatibilityAuthority:
       options.attestAgentHookCompatibilityAuthority ??
@@ -66,7 +71,7 @@ async function launchOpenCodePane(options: {
       : {})
   })
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: options.getForegroundProcess
@@ -76,9 +81,9 @@ async function launchOpenCodePane(options: {
     launchConfig: { agentCommand: 'opencode', agentArgs: '', agentEnv: {} },
     launchAgent: 'opencode'
   })
-  const env = (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-  const paneKey = env.ORCA_PANE_KEY as string
-  const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN as string
+  const env = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
+  const paneKey = env.ORCA_PANE_KEY
+  const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN
   expect(paneKey).toBeTruthy()
   expect(launchToken).toBeTruthy()
   return {

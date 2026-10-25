@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createEditorStore, ownedEditorFileId } from './editor-slice-test-harness'
 import type { AppState } from '../types'
+import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -33,7 +34,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
   const openUrlMock = vi.fn()
   const openFileUriMock = vi.fn()
   const pathExistsMock = vi.fn()
-  const authorizeExternalPathMock = vi.fn()
   const fsStatMock = vi.fn()
   const runtimeEnvironmentCallMock = vi.fn()
   const runtimeEnvironmentTransportCallMock = vi.fn()
@@ -45,7 +45,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
     openFileUriMock.mockReset()
     pathExistsMock.mockReset()
     pathExistsMock.mockResolvedValue(true)
-    authorizeExternalPathMock.mockReset()
     fsStatMock.mockReset()
     fsStatMock.mockImplementation(async ({ filePath }: { filePath: string }) => {
       const exists = await pathExistsMock(filePath)
@@ -78,7 +77,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
         pathExists: pathExistsMock
       },
       fs: {
-        authorizeExternalPath: authorizeExternalPathMock,
         stat: fsStatMock
       },
       runtimeEnvironments: {
@@ -379,8 +377,21 @@ describe('createEditorSlice activateMarkdownLink', () => {
   it('reveals active-runtime markdown line anchors on the owner-qualified tab id', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store under test reads only these fields of the partial state.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      // The server's rows are stamped as they land; focus alone never names a file's owner.
+      worktreesByRepo: {
+        'wt-1': [
+          makeWorktree({
+            id: 'wt-1',
+            repoId: 'wt-1',
+            path: '/repo',
+            hostId: 'runtime:env-active',
+            runtimeOwnerEnvironmentId: 'env-active'
+          })
+        ]
+      },
       openFiles: [
         {
           id: '/repo/docs/guide.md',
@@ -558,14 +569,13 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
-  it('opens explicit file URLs outside the worktree in Orca after authorizing them', async () => {
+  it('opens explicit file URLs outside the worktree in Orca as user-named tabs', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('file:///tmp/image.png', {
       sourceFilePath: '/repo/docs/note.md',
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/image.png' })
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
         filePath: '/tmp/image.png',
@@ -621,7 +631,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
       worktreeRoot: '/repo'
     })
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Opening remote paths in the local OS is not available.'

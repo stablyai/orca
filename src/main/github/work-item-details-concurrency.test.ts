@@ -1,3 +1,4 @@
+import type * as WorkItemDetailsTestLookup from './work-item-details-test-lookup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -27,8 +28,11 @@ vi.mock('./gh-utils', () => ({
   })
 }))
 
-vi.mock('./client', () => ({
+vi.mock('./client', async () => ({
   getWorkItem: getWorkItemMock,
+  getWorkItemWithRepository: (
+    await vi.importActual<typeof WorkItemDetailsTestLookup>('./work-item-details-test-lookup')
+  ).makeWorkItemDetailsLookupMock(getWorkItemMock),
   getPRComments: getPRCommentsMock,
   getPRChecks: getPRChecksMock
 }))
@@ -38,7 +42,6 @@ vi.mock('./github-api-repository', () => ({
   getOriginGitHubApiRepository: vi.fn(),
   githubHostExecOptions: (repository?: { host?: string } | null) =>
     repository?.host ? { host: repository.host } : {},
-  // Why: getWorkItemDetails awaits resolveGitHubRepoExecution and reads .ownerRepo.
   resolveGitHubRepoExecution: vi.fn(
     async (
       _repoPath: string,

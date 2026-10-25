@@ -22,6 +22,7 @@ function pinnedRecord(pinnedUntilMs: number | null): ParkVerdictFlipRecord {
     windowStartMs: 0,
     flips: 0,
     notified: false,
+    lastFlipMs: 0,
     burstStartMs: 0,
     burstFlips: 0,
     pinnedUntilMs

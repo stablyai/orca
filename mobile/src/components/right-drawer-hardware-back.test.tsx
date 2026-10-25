@@ -31,6 +31,7 @@ vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
 vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
   useSafeAreaInsets: () => ({ top: 62, bottom: 34, left: 0, right: 0 })
 }))
 vi.mock('react-native-gesture-handler', () => {
@@ -62,18 +63,18 @@ function DrawerBody(): null {
   return null
 }
 
-function drawer(visible: boolean): ReactElement {
+function drawer(visible: boolean, onClose: () => void = () => {}): ReactElement {
   return (
-    <RightDrawer visible={visible} onClose={() => {}}>
+    <RightDrawer visible={visible} onClose={onClose}>
       <DrawerBody />
     </RightDrawer>
   )
 }
 
-function render(visible: boolean): ReactTestRenderer {
+function render(visible: boolean, onClose?: () => void): ReactTestRenderer {
   let renderer!: ReactTestRenderer
   act(() => {
-    renderer = create(drawer(visible))
+    renderer = create(drawer(visible, onClose))
   })
   return renderer
 }
@@ -89,22 +90,20 @@ afterEach(() => {
 })
 
 /**
- * React Native Web logs "BackHandler is not supported on web and should not be used." and hands
- * back an inert subscription, so inside the shell's page every open of this drawer put that line on
- * the console and armed nothing. There is no hardware back in a WebView; the shell owns the phone's.
+ * The drawer claims the device Back key through one seam on both platforms. Here that seam is the
+ * hardware key; inside the shell's page it is a claim the shell hands one press over on, which is
+ * `use-back-claim.web.ts` and is tested there.
  */
 describe('the right drawer and the phone hardware back button', () => {
-  it('arms it on iOS while the drawer is open', () => {
-    const renderer = render(true)
+  it('consumes an iOS hardware back press and closes the open drawer', () => {
+    const onClose = vi.fn()
+    const renderer = render(true, onClose)
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
     expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
-    act(() => renderer.unmount())
-  })
-
-  it('arms it on Android while the drawer is open', () => {
-    native.platform.os = 'android'
-    const renderer = render(true)
-    expect(native.addEventListener).toHaveBeenCalledTimes(1)
+    const handler = native.addEventListener.mock.calls[0]![1]
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => expect(handler()).toBe(true))
+    expect(onClose).toHaveBeenCalledTimes(1)
     act(() => renderer.unmount())
   })
 
@@ -116,10 +115,11 @@ describe('the right drawer and the phone hardware back button', () => {
     act(() => renderer.unmount())
   })
 
-  it('does not reach for it on web', () => {
-    native.platform.os = 'web'
+  // Which module answers is the bundler's and not this component's: inside the page
+  // `use-back-claim.web.ts` claims the key from the shell instead of registering here.
+  it('releases it on unmount, so a drawer taken off screen leaves the key alone', () => {
     const renderer = render(true)
-    expect(native.addEventListener).not.toHaveBeenCalled()
     act(() => renderer.unmount())
+    expect(native.remove).toHaveBeenCalledTimes(1)
   })
 })

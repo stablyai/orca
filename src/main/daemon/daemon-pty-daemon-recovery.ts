@@ -7,10 +7,10 @@ import { isDaemonGoneError } from './daemon-endpoint-errors'
 import { DaemonPtyCheckpointPersistence } from './daemon-pty-checkpoint-persistence'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import type { ListSessionsResult } from './types'
-import type { PtyBackgroundStreamEvent } from '../providers/types'
+import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 
 export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {
-  // Why: the token read no longer throws, so audit its absence directly after an authenticated drop.
+  // Token reads no longer throw; check absence explicitly after an authenticated disconnect.
   protected isRetiredEndpointTokenMissing(): boolean {
     return this.client.hasObservedAuthenticatedDisconnect() && !existsSync(this.tokenPath)
   }
@@ -39,7 +39,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       try {
         return await fn()
       } finally {
-        // Why: the retried op may reject before any connection attempt (e.g. a tombstone racing respawn).
+        // A tombstone can reject retry before connect; release its temporary adoption lease anyway.
         this.releasePendingRespawnAdoptionLease()
       }
     }
@@ -55,11 +55,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       return
     }
     this.writeRecoveryAttempted = true
-    // Why: the dead endpoint took down every session on this daemon. Signal all
-    // active panes now — while they are still in activeSessionIds, so the
-    // renderer's liveness gate still reads them live — so background panes
-    // remount + re-attach alongside the one that was written, instead of being
-    // left frozen with silently dropped input until each is typed into.
+    // Notify every pane before clearing active IDs so sibling recovery passes the renderer's liveness gate.
     this.notifyActiveSessionsWriteUnavailable()
     const recovery = this.withDaemonRetry(() => this.ensureConnected())
       .catch((error) => console.warn('[daemon] Failed to recover after rejected PTY input:', error))
@@ -72,9 +68,15 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     this.writeRecoveryPromise = recovery
   }
 
+  // Reconnect on endpoint loss without waiting for input; only daemon-gone errors permit respawn.
+  protected recoverAfterEndpointLoss(): void {
+    if (this.activeSessionIds.size > 0) {
+      this.reconnectAfterWriteFailure()
+    }
+  }
+
   protected notifyActiveSessionsWriteUnavailable(): void {
-    // Snapshot first: a listener that kills a pane would mutate activeSessionIds
-    // mid-iteration and silently skip the sibling this fan-out exists to reach.
+    // Snapshot IDs before callbacks mutate the set so no sibling misses recovery.
     const ids = [...this.activeSessionIds]
     for (const id of ids) {
       this.sessionsAwaitingDaemonRecovery.add(id)
@@ -142,7 +144,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       return
     }
 
-    // Why: replacing the daemon kills its sessions without exit fanout; emit exits first so panes don't write to dead PTYs.
+    // Replacement has no exit fanout; notify panes before their PTYs disappear.
     this.fanoutSyntheticExits(-1)
     if (!this.respawnPromise) {
       this.respawnPromise = this.doRespawn(
@@ -211,7 +213,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
 
   /** Replace a TCC-severed daemon only after its live sessions drain. */
   protected async replaceSeveredMacTccDaemonBeforeNewPty(): Promise<void> {
-    // Why no platform gate: getMacDaemonTccAttributionHealth returns 'unknown' off macOS.
+    // Attribution health returns unknown off macOS.
     if (!this.respawnFn || !this.runtimeDir) {
       return
     }
@@ -273,7 +275,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     this.client.disconnect()
     const releaseAdoptionLease = await this.respawnFn!(reason)
     if (this.respawnAdoptionClosed) {
-      // Why: app teardown may win mid-respawn; a late result must not reinstall a lease nobody owns.
+      // Teardown can win during respawn; release a late lease instead of leaving it unowned.
       releaseAdoptionLease?.()
       throw new Error('Daemon adapter closed during respawn')
     }

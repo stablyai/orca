@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT,
   REGIONAL_REHOME_SQL_FAILURES_LIMIT,
-  regionalRehomeSafetyFailure
+  REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS,
+  REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS,
+  nextRegionalRehomeSqlFailuresBreach,
+  regionalRehomeSafetyFailure,
+  regionalRehomeSqlFailuresSustained,
+  type RegionalRehomeSqlFailuresBreach
 } from './regional-rehome-safety.js'
 
 const NOW = 1_787_900_000_000
@@ -127,5 +132,46 @@ describe('regionalRehomeSafetyFailure', () => {
     expect(
       regionalRehomeSafetyFailure(safety({ observedAt: NOW - 61_000 }), NOW, 19)
     ).toBe('monitoring_stale')
+  })
+})
+
+describe('regional rehome sql failure breach', () => {
+  const STORM = REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1
+  function observe(samples: [at: number, sqlFailures: number][]): RegionalRehomeSqlFailuresBreach {
+    let breach: RegionalRehomeSqlFailuresBreach = null
+    for (const [at, sqlFailures] of samples) {
+      breach = nextRegionalRehomeSqlFailuresBreach(breach, sqlFailures, NOW + at)
+    }
+    return breach
+  }
+
+  it('does not sustain a single-stall spike', () => {
+    // 10-06 06:16Z: one 5-7 s stall published 396 for up to ~90 s.
+    const spike = observe([[0, 396], [30_000, 396], [60_000, 396], [90_000, 396]])
+    expect(spike && regionalRehomeSqlFailuresSustained(spike)).toBe(false)
+    expect(observe([[0, 396], [90_000, 396], [96_000, 0]])).toBeNull()
+  })
+
+  it('sustains a breach watched for the whole window', () => {
+    const samples: [number, number][] = []
+    for (let at = 0; at <= REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS; at += 6_000) samples.push([at, STORM])
+    const breach = observe(samples)
+    expect(breach && regionalRehomeSqlFailuresSustained(breach)).toBe(true)
+  })
+
+  it('restarts the window after an unwatched gap', () => {
+    const breach = observe([
+      [0, STORM],
+      [REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS + 1, STORM],
+      [REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS + 30_000, STORM]
+    ])
+    expect(breach?.since).toBe(NOW + REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS + 1)
+    expect(breach && regionalRehomeSqlFailuresSustained(breach)).toBe(false)
+  })
+
+  it('reports a latching reason over a concurrent sql spike', () => {
+    expect(
+      regionalRehomeSafetyFailure(safety({ sqlFailures: STORM, controlActivityRecoveryFailures: 1 }), NOW, 19)
+    ).toBe('control_recovery_failures')
   })
 })

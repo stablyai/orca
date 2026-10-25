@@ -8,13 +8,28 @@ import {
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION
 } from './bridge-envelope'
-import { GRANTS, INIT, createPageClient } from './bridge-page-client-test-harness'
+import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { GRANTS, INIT, createPageClient as createPage } from './bridge-page-client-test-harness'
+
+const resources = new Set<ReturnType<typeof createPage>>()
+function createPageClient(...args: Parameters<typeof createPage>): ReturnType<typeof createPage> {
+  const resource = createPage(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+  }
+  resources.clear()
+}
 
 beforeEach(() => {
   vi.useFakeTimers()
 })
 
 afterEach(() => {
+  closeResources()
   vi.useRealTimers()
 })
 
@@ -54,14 +69,19 @@ describe('bridge client page faults', () => {
   })
 
   it('answers false for a port that refused the frame, and reports it once', () => {
+    let fails = false
     const page = createPageClient({
       send: () => {
-        throw new Error('the channel is gone')
+        if (fails) {
+          throw new Error('the channel is gone')
+        }
       }
     })
     startGranted(page)
+    expect(page.diagnostics).toEqual([])
+    fails = true
     expect(page.client.notifyPageFault(new Error('the route threw'))).toBe(false)
-    expect(page.diagnostics.map((diagnostic) => diagnostic.kind)).toContain('send-failed')
+    expect(page.diagnostics).toEqual([{ kind: 'send-failed', error: expect.any(Error) }])
   })
 })
 
@@ -103,6 +123,14 @@ describe('the notify guard before init', () => {
       name: 'navigate',
       href: '/h/host-1'
     })
+    expect(page.client.notifyStorageWrite('orca:last-visited-worktree', 'wt-1')).toBe(true)
+    expect(page.frames().at(-1)).toEqual({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'notify',
+      name: 'storage',
+      key: 'orca:last-visited-worktree',
+      value: 'wt-1'
+    })
   })
 })
 
@@ -132,12 +160,6 @@ describe('navigate-back', () => {
     const beforeNotify = page.sent.length
     expect(page.client.notifyNavigateBack()).toBe(false)
     expect(page.sent).toHaveLength(beforeNotify)
-  })
-
-  it('asks for no grant of its own, which no route may declare', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_NAVIGATE_BACK_NOTIFY] } })
-    expect(page.client.notifyNavigateBack()).toBe(false)
   })
 
   it('answers false after close rather than throwing into a teardown', () => {
@@ -205,5 +227,53 @@ describe('externalLink', () => {
     const page = granted()
     page.client.close()
     expect(page.client.notifyExternalLink('https://example.com')).toBe(false)
+  })
+})
+
+/**
+ * The haptic the page asks for and hears nothing back about.
+ *
+ * Gated at the call site as well as at the frame, for the reason every gated notify is: `notify` is
+ * a closed list, so a shell that granted no haptics refuses the whole frame, and a caller told the
+ * frame left would be told a lie. Unlike `externalLink` nobody reads the answer — a tap that did
+ * not buzz is every tap on every phone before this page existed — so it is returned and not logged.
+ */
+describe('bridge client haptics', () => {
+  const granted = (page: ReturnType<typeof createPageClient>): void => {
+    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_GRANT] } })
+  }
+
+  it('posts one frame per kind, carrying the kind it was asked for', () => {
+    const page = createPageClient()
+    granted(page)
+    const kinds = ['mediumImpact', 'selection', 'success', 'error', 'edgeBump'] as const
+    for (const kind of kinds) {
+      expect(page.client.notifyHaptics(kind), kind).toBe(true)
+    }
+    expect(page.frames().slice(1)).toEqual(
+      kinds.map((kind) => ({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: BRIDGE_HAPTICS_NOTIFY,
+        kind
+      }))
+    )
+  })
+
+  it('stays quiet against a shell that granted nothing, because the frame would be refused whole', () => {
+    const page = createPageClient()
+    page.start()
+    expect(page.client.notifyHaptics('selection')).toBe(false)
+    expect(page.sent).toHaveLength(1)
+  })
+
+  it('answers false before a session and after close rather than throwing inside a tap handler', () => {
+    const early = createPageClient()
+    expect(early.client.notifyHaptics('selection')).toBe(false)
+    const page = createPageClient()
+    granted(page)
+    page.client.close()
+    expect(page.client.notifyHaptics('selection')).toBe(false)
+    expect(page.frames().at(-1)).toEqual({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
   })
 })

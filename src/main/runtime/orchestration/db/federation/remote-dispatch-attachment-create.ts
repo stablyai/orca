@@ -4,6 +4,7 @@ import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
 import { federatedStubHomeRunId } from '../contract-constants'
 import { insertRemoteDispatchAttachmentRow } from '../dispatch-row-writer'
+import { REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST } from '../row-column-lists'
 
 export function createRemoteDispatchAttachment(
   this: OrchestrationDb,
@@ -92,9 +93,26 @@ export function getRemoteDispatchAttachment(
   this: OrchestrationDb,
   dispatchId: string
 ): RemoteDispatchAttachmentRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
   return this.db
-    .prepare('SELECT * FROM remote_dispatch_attachments WHERE dispatch_id = ?')
+    .prepare(
+      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments WHERE dispatch_id = ?`
+    )
     .get(dispatchId) as RemoteDispatchAttachmentRow | undefined
+}
+
+/** The newest remote Dispatch this host runs for a Run whose home is another computer. */
+export function findRemoteAttachmentForHomeRun(
+  this: OrchestrationDb,
+  runId: string
+): RemoteDispatchAttachmentRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
+  return this.db
+    .prepare(
+      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
+       WHERE home_run_id = ? ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(runId) as RemoteDispatchAttachmentRow | undefined
 }
 
 export function recordRemoteAttachmentStage(
@@ -176,6 +194,7 @@ export function updateRemoteAttachmentSetupEvidence(
 export type RemoteDispatchAttachmentCreateMethods = {
   createRemoteDispatchAttachment: typeof createRemoteDispatchAttachment
   getRemoteDispatchAttachment: typeof getRemoteDispatchAttachment
+  findRemoteAttachmentForHomeRun: typeof findRemoteAttachmentForHomeRun
   recordRemoteAttachmentStage: typeof recordRemoteAttachmentStage
   updateRemoteAttachmentSetupEvidence: typeof updateRemoteAttachmentSetupEvidence
 }
@@ -184,6 +203,7 @@ export function attachRemoteDispatchAttachmentCreate(ctor: { prototype: object }
   Object.assign(ctor.prototype, {
     createRemoteDispatchAttachment,
     getRemoteDispatchAttachment,
+    findRemoteAttachmentForHomeRun,
     recordRemoteAttachmentStage,
     updateRemoteAttachmentSetupEvidence
   })

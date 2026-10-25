@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
@@ -75,6 +76,25 @@ describe('README local link check', () => {
     expect(findBrokenReadmeLinks(makeFixture(validReadmes))).toEqual([])
   })
 
+  it('checks tracked media outside the detector sparse checkout', () => {
+    const root = makeFixture(validReadmes)
+    const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
+    const checkout = workflow.jobs.code_paths.steps.find((step) =>
+      step.uses?.startsWith('actions/checkout@')
+    )
+    const patterns = checkout.with['sparse-checkout'].trim().split('\n')
+    expect(checkout.with['sparse-checkout-cone-mode']).toBe(false)
+    git(root, ['sparse-checkout', 'set', '--no-cone', ...patterns])
+
+    expect(existsSync(path.join(root, 'resources/build/icon.png'))).toBe(false)
+    expect(findBrokenReadmeLinks(root)).toEqual([])
+    git(root, ['update-index', '--force-remove', 'resources/build/icon.png'])
+    expect(findBrokenReadmeLinks(root).map((link) => link.resolved)).toEqual([
+      'resources/build/icon.png',
+      'resources/build/icon.png'
+    ])
+  })
+
   it('reports a deleted media file for the root and translated READMEs', () => {
     const { 'docs/site/public/docs/tab-split.gif': _gif, ...files } = validReadmes
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -137,16 +157,21 @@ describe('README local link check', () => {
     ])
   })
 
-  // Why the ungated job: static_analysis is skipped for docs-only diffs, which is
-  // exactly the kind of PR that deletes a docs-site GIF the README embeds.
-  it('runs on every PR through the ungated guard job and in the lint script', () => {
+  // Ready docs-only diffs skip preflight, so the detector must check README links.
+  it('checks ready PRs through the detector and in the lint script', () => {
     const { scripts } = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'))
     const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const guardJob = workflow.jobs.root_directory_guard
+    const guardJob = workflow.jobs.code_paths
     const step = guardJob.steps.find((candidate) => candidate.name === 'Check README local links')
+    const runsFor = (draft) =>
+      runInNewContext(guardJob.if, {
+        github: { event_name: 'pull_request', event: { pull_request: { draft } } }
+      })
 
-    expect(guardJob.if).toBeUndefined()
+    expect(runsFor(false)).toBe(true)
+    expect(runsFor(true)).toBe(false)
     expect(guardJob.needs).toBeUndefined()
+    expect(step.if).toBeUndefined()
     expect(step.run).toBe('node config/scripts/check-readme-local-links.mjs')
     expect(scripts['check:readme-local-links']).toBe(
       'node config/scripts/check-readme-local-links.mjs'

@@ -2,11 +2,16 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
+  maxFeedbackImageBatchBytes,
   readFeedbackImageFiles,
   releaseFeedbackImageDraft,
   type FeedbackImageDraft
 } from '@/lib/feedback-image-attachments'
 import { useFeedbackImageDrop } from './use-feedback-image-drop'
+
+function sumImageBytes(images: readonly FeedbackImageDraft[]): number {
+  return images.reduce((total, image) => total + image.bytes, 0)
+}
 
 export function useSidebarFeedbackImages(params: {
   open: boolean
@@ -22,16 +27,18 @@ export function useSidebarFeedbackImages(params: {
   handleRemoveImage: (id: string) => void
   clearImages: () => void
   hasPendingImageReads: () => boolean
-  /** Live committed+pending count for paste capacity checks. */
-  getReservedImageSlots: () => number
+  /** Live committed+pending count and bytes, for the synchronous paste gate. */
+  getReservedImageCapacity: () => { count: number; bytes: number }
 } {
   const [images, setImages] = useState<FeedbackImageDraft[]>([])
   const [pendingImageReadCount, setPendingImageReadCount] = useState(0)
   const liveImageDraftsRef = useRef<FeedbackImageDraft[]>([])
-  // Why: committed state lags in-flight reads, so batches still being read count
-  // against capacity — otherwise two quick pastes both see room for four.
-  const pendingImageReadsRef = useRef(0)
-  const imageCount = images.length
+  // Why: the paste gate answers synchronously, so batches still queued or being
+  // read count against it — otherwise two quick pastes both see room for four.
+  const pendingImageReadsRef = useRef({ count: 0, bytes: 0 })
+  // Why: a shrunk image's size is unknown until it is read, so batches read one
+  // at a time, each sized against what the batches before it actually committed.
+  const readQueueRef = useRef<Promise<void> | null>(null)
 
   const clearImages = useCallback(() => {
     liveImageDraftsRef.current.forEach(releaseFeedbackImageDraft)
@@ -48,6 +55,17 @@ export function useSidebarFeedbackImages(params: {
     []
   )
 
+  // Why: a read's callback moves its batch from pending to the live ref in one
+  // step, but rendered state lags a render, so only the ref covers that gap.
+  const getReservedImageCapacity = useCallback((): { count: number; bytes: number } => {
+    const liveDrafts = liveImageDraftsRef.current
+    const pendingReads = pendingImageReadsRef.current
+    return {
+      count: liveDrafts.length + pendingReads.count,
+      bytes: sumImageBytes(liveDrafts) + pendingReads.bytes
+    }
+  }, [])
+
   const handleAddFiles = useCallback(
     (files: readonly File[]) => {
       if (files.length === 0) {
@@ -62,14 +80,24 @@ export function useSidebarFeedbackImages(params: {
         )
         return
       }
-      // Why: read the committed count from the closure rather than a ref. A ref
-      // synced in an effect can still be stale-low right after an add.
-      const existingCount = imageCount + pendingImageReadsRef.current
-      pendingImageReadsRef.current += files.length
+      const pendingReads = pendingImageReadsRef.current
+      // Why: earlier reads can fail and attached images can be removed before this reads.
+      const batchBytes = maxFeedbackImageBatchBytes(files, 0, 0)
+      pendingReads.count += files.length
+      pendingReads.bytes += batchBytes
       setPendingImageReadCount((current) => current + files.length)
-      void readFeedbackImageFiles(files, existingCount).then(
-        ({ images: added, errors }) => {
-          pendingImageReadsRef.current -= files.length
+      const read = (readQueueRef.current ?? Promise.resolve()).then(() => {
+        // Why: an unmounted dialog discards whatever this reads, so skip the decode and re-encodes.
+        if (!params.mountedRef.current) {
+          return { images: [], errors: [], notices: [] }
+        }
+        const committed = liveImageDraftsRef.current
+        return readFeedbackImageFiles(files, committed.length, sumImageBytes(committed))
+      })
+      const settled = read.then(
+        ({ images: added, errors, notices }) => {
+          pendingReads.count -= files.length
+          pendingReads.bytes -= batchBytes
           if (!params.mountedRef.current) {
             added.forEach(releaseFeedbackImageDraft)
             return
@@ -79,11 +107,13 @@ export function useSidebarFeedbackImages(params: {
             liveImageDraftsRef.current = [...liveImageDraftsRef.current, ...added]
             setImages((existing) => [...existing, ...added])
           }
-          // Why: never drop an attachment without telling the user.
+          // Why: never drop or degrade an attachment without telling the user.
+          notices.forEach((notice) => toast.info(notice))
           errors.forEach((error) => toast.warning(error))
         },
         (error: unknown) => {
-          pendingImageReadsRef.current -= files.length
+          pendingReads.count -= files.length
+          pendingReads.bytes -= batchBytes
           console.error('Failed to read feedback image attachments:', error)
           if (params.mountedRef.current) {
             setPendingImageReadCount((current) => Math.max(0, current - files.length))
@@ -96,8 +126,13 @@ export function useSidebarFeedbackImages(params: {
           }
         }
       )
+      // Why: the tail is what the next batch waits on, so a throw inside either
+      // callback would leave it rejected and report every later attach as unreadable.
+      readQueueRef.current = settled.catch((error: unknown) => {
+        console.error('Failed to settle a feedback image batch:', error)
+      })
     },
-    [imageCount, params.isSubmitting, params.mountedRef]
+    [params.isSubmitting, params.mountedRef]
   )
 
   const handleRemoveImage = useCallback((id: string) => {
@@ -123,7 +158,7 @@ export function useSidebarFeedbackImages(params: {
     handleAddFiles,
     handleRemoveImage,
     clearImages,
-    hasPendingImageReads: () => pendingImageReadsRef.current > 0,
-    getReservedImageSlots: () => liveImageDraftsRef.current.length + pendingImageReadsRef.current
+    hasPendingImageReads: () => pendingImageReadsRef.current.count > 0,
+    getReservedImageCapacity
   }
 }

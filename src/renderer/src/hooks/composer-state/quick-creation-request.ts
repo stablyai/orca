@@ -4,6 +4,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/folder-workspace-composer-helpers'
@@ -41,7 +42,8 @@ export type QuickCreationRequestInput = {
   linkedGitLabIssue: number | null
   includeGitLabLinks: boolean
   startup: WorktreeCreationRequest['startup']
-  issueCommand: WorktreeCreationRequest['issueCommand']
+  issueCommand?: WorktreeCreationRequest['issueCommand']
+  hookPreparation?: WorktreeCreationRequest['hookPreparation']
   pendingFirstAgentMessageRename: boolean
   note: string
   startupPlan: AgentStartupPlan | null
@@ -50,6 +52,12 @@ export type QuickCreationRequestInput = {
   promptDelivery: 'draft' | 'auto-submit'
   quickTelemetry: AgentStartedTelemetry | null
   suppressTerminalFocusOnCompletion: boolean
+  setupOnly: boolean
+}
+
+export type QuickSubmitOptions = {
+  setupOnly?: boolean
+  launchChoice?: AgentLaunchChoice
 }
 
 export function buildQuickCreationRequest(
@@ -103,6 +111,7 @@ export function buildQuickCreationRequest(
       ? { linkedGitLabIssue: input.linkedGitLabIssue }
       : {}),
     ...(input.startup ? { startup: input.startup } : {}),
+    ...(input.hookPreparation ? { hookPreparation: input.hookPreparation } : {}),
     ...(input.issueCommand ? { issueCommand: input.issueCommand } : {}),
     pendingFirstAgentMessageRename: input.pendingFirstAgentMessageRename,
     note: input.note,
@@ -111,6 +120,7 @@ export function buildQuickCreationRequest(
     ...(input.launchDraftPrompt ? { launchDraftPrompt: input.launchDraftPrompt } : {}),
     promptDelivery: input.promptDelivery,
     quickTelemetry: input.quickTelemetry,
-    ...(input.suppressTerminalFocusOnCompletion ? { suppressTerminalFocusOnCompletion: true } : {})
+    ...(input.suppressTerminalFocusOnCompletion ? { suppressTerminalFocusOnCompletion: true } : {}),
+    ...(input.agent === null ? { setupOnly: input.setupOnly } : {})
   }
 }

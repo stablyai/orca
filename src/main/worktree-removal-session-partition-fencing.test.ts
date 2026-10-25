@@ -1,6 +1,12 @@
-// Why this file exists: worktree removal writes to host session partitions, and the two hazards below
-// are only visible across a removal followed by a renderer session write — persistence.test.ts covers
-// removal and partitioning separately, so neither suite catches the interaction.
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  testState
+} from './persistence/persistence-test-harness'
+import { Store as CanonicalStore } from './persistence/loading-store/store'
+import { initDataPath as initCanonicalDataPath } from './persistence/loading-store/user-data-path'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -8,10 +14,11 @@ import { tmpdir } from 'node:os'
 import type { TerminalTab } from '../shared/terminal-tab-types'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import { toRuntimeExecutionHostId } from '../shared/execution-host'
+import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -31,10 +38,17 @@ vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
 
 async function createStore() {
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    initCanonicalDataPath()
+    return createSqliteTestStore(CanonicalStore, {
+      dataFile: join(testState.dir, 'orca-data.json')
+    })
+  }
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => ({
@@ -55,20 +69,21 @@ const LIVE = 'repo-gone::/workspace/live'
 
 describe('worktree removal across host session partitions', () => {
   beforeEach(() => {
+    hasCreatedStoreInCase = false
+    resetRetirementCollisionKeyCacheForTests()
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  // Regression: removal fenced the never-written partition, so main's empty copy became authoritative
-  // and rebased away every sibling worktree's tabs on the first renderer write for that host.
   it('keeps sibling tabs when a worktree is removed before its host partition was ever persisted', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(STALE, { hostId: ENV_A })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
 
-    store.removeWorktreeMeta(STALE)
+    removeWorktreeMetaRow(store, STALE, undefined)
 
     store.setWorkspaceSession(
       {
@@ -85,9 +100,9 @@ describe('worktree removal across host session partitions', () => {
 
   it('does not materialize an unwritten host partition when removing a worktree', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(STALE, { hostId: ENV_A })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
 
-    store.removeWorktreeMeta(STALE)
+    removeWorktreeMetaRow(store, STALE, undefined)
 
     expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
   })
@@ -95,15 +110,14 @@ describe('worktree removal across host session partitions', () => {
   it('does not materialize an unwritten host partition when removing session state directly', async () => {
     const store = await createStore()
 
-    store.removeWorkspaceSessionStateForWorktree(STALE, ENV_A)
+    store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: STALE, hostId: ENV_A }))
 
     expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
   })
 
-  // A persisted partition must still be fenced so main's copy wins over the renderer's stale tabs.
   it('still fences a host partition that was persisted before the removal', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(STALE, { hostId: ENV_A })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
     store.setWorkspaceSession(
       {
         ...getDefaultWorkspaceSession(),
@@ -112,7 +126,7 @@ describe('worktree removal across host session partitions', () => {
       ENV_A
     )
 
-    store.removeWorktreeMeta(STALE)
+    removeWorktreeMetaRow(store, STALE, undefined)
 
     expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[STALE]).toBeUndefined()
     expect(store.getWorkspaceSession(ENV_A).terminalTopologyRevisionByRepoId?.['repo-gone']).toBe(1)
@@ -127,11 +141,9 @@ describe('worktree removal across host session partitions', () => {
     expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[STALE]).toEqual([])
   })
 
-  // Regression: runtime removal purged only the host partition, so tabs the renderer had parked in the
-  // local blob (its fallback whenever worktree ownership is unresolved) leaked forever.
   it('purges a runtime-owned worktree from the local blob as well as its host partition', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(STALE, { hostId: ENV_A })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -146,17 +158,15 @@ describe('worktree removal across host session partitions', () => {
       ENV_A
     )
 
-    store.removeWorktreeMeta(STALE)
+    removeWorktreeMetaRow(store, STALE, undefined)
 
     expect(store.getWorkspaceSession().tabsByWorktree[STALE]).toBeUndefined()
     expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[STALE]).toBeUndefined()
   })
 
-  // Regression: an empty local blob counted as "no sibling to rebase", so a runtime removal claimed
-  // repo-wide authority there and the renderer's next ownership-unresolved write lost its tabs.
   it('does not fence the local blob for a runtime removal it never held tabs for', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(STALE, { hostId: ENV_A })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
     store.setWorkspaceSession(
       {
         ...getDefaultWorkspaceSession(),
@@ -165,7 +175,7 @@ describe('worktree removal across host session partitions', () => {
       ENV_A
     )
 
-    store.removeWorktreeMeta(STALE)
+    removeWorktreeMetaRow(store, STALE, undefined)
 
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),
@@ -180,11 +190,10 @@ describe('worktree removal across host session partitions', () => {
     ).toBeUndefined()
   })
 
-  // The owner's own partition still fences on emptiness: nothing of the repo lives there to rebase.
   it('fences the owning partition that holds no tabs for the removed worktree', async () => {
     const store = await createStore()
     const otherRepoWorktree = 'repo-other::/workspace/live'
-    store.setWorktreeMeta(STALE, { hostId: ENV_A })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
     store.setWorkspaceSession(
       {
         ...getDefaultWorkspaceSession(),
@@ -197,7 +206,7 @@ describe('worktree removal across host session partitions', () => {
       ENV_A
     )
 
-    store.removeWorktreeMeta(STALE)
+    removeWorktreeMetaRow(store, STALE, undefined)
 
     expect(store.getWorkspaceSession(ENV_A).terminalTopologyRevisionByRepoId?.['repo-gone']).toBe(1)
 
@@ -212,16 +221,15 @@ describe('worktree removal across host session partitions', () => {
     expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[STALE]).toEqual([])
   })
 
-  // The widened local purge must not fence the local blob when only siblings live there.
   it('does not fence the local blob that holds only sibling worktrees of the removed runtime worktree', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(STALE, { hostId: ENV_A })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
     })
 
-    store.removeWorktreeMeta(STALE)
+    removeWorktreeMetaRow(store, STALE, undefined)
 
     expect(
       store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.['repo-gone']

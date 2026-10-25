@@ -1,22 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { getSessionTabsInventoryPublication } from './session-tabs/session-tabs-inventory-test-fixture'
+import type { RuntimeStore } from './runtime-store-contract'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
+import { makeRuntimeStoreWithWorkspaceSession } from './orca-runtime-test-fixtures.spec'
 
-type InventoryInternals = {
-  sessionTabsInventoryWaiters: Set<() => void>
-}
-
-function createInventoryRuntime(): OrcaRuntimeService {
-  const runtime = new OrcaRuntimeService()
+function createInventoryRuntime(
+  runtimeStore: ConstructorParameters<typeof OrcaRuntimeService>[0] = null
+): OrcaRuntimeService {
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({ listProcesses: vi.fn(async () => []) } as never)
   return runtime
 }
 
 async function waitForInventoryWaiter(runtime: OrcaRuntimeService): Promise<void> {
-  const internals = runtime as unknown as InventoryInternals
-  for (let index = 0; index < 20 && internals.sessionTabsInventoryWaiters.size === 0; index += 1) {
+  const publication = getSessionTabsInventoryPublication(runtime)
+  for (let index = 0; index < 20 && publication.pendingWaiterCount === 0; index += 1) {
     await Promise.resolve()
   }
-  expect(internals.sessionTabsInventoryWaiters.size).toBe(1)
+  expect(publication.pendingWaiterCount).toBe(1)
 }
 
 describe('authoritative session tab inventory publication', () => {
@@ -199,7 +204,10 @@ describe('authoritative session tab inventory publication', () => {
   })
 
   it('restores a renderer-owned PTY discovered by the authoritative inventory refresh', async () => {
-    const runtime = createInventoryRuntime()
+    // Why a store: main's layout binds the restored pane in the store's workspace session.
+    const runtime = createInventoryRuntime(
+      makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore
+    )
     const ptyId = 'pty-survived-host-relaunch'
     const worktreeId = 'repo::/survived'
     const tabId = '11111111-1111-4111-8111-111111111111'
@@ -215,7 +223,7 @@ describe('authoritative session tab inventory publication', () => {
       runtime as unknown as { refreshMobileSessionPtyInventory: () => Promise<unknown> },
       'refreshMobileSessionPtyInventory'
     ).mockImplementation(async () => {
-      runtime.registerPty(ptyId, worktreeId, null, {
+      registerBoundPty(runtime, ptyId, worktreeId, null, {
         tabId,
         leafId,
         incarnationId: 'incarnation-survived-host-relaunch'
@@ -365,7 +373,7 @@ describe('authoritative session tab inventory publication', () => {
     controller.abort()
 
     await expect(pending).rejects.toThrow('client_disconnected')
-    expect((runtime as unknown as InventoryInternals).sessionTabsInventoryWaiters.size).toBe(0)
+    expect(getSessionTabsInventoryPublication(runtime).pendingWaiterCount).toBe(0)
   })
 
   it('does not scan when the inventory request is already cancelled', async () => {
@@ -399,10 +407,7 @@ describe('authoritative session tab inventory publication', () => {
     ).toThrow('Runtime graph publisher does not match the authoritative window')
     await Promise.resolve()
     expect(settled).toBe(false)
-    expect(
-      (runtime as unknown as { sessionTabsInventoryPublicationEpoch: number | null })
-        .sessionTabsInventoryPublicationEpoch
-    ).toBeNull()
+    expect(getSessionTabsInventoryPublication(runtime).epoch).toBeNull()
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     await expect(pending).resolves.toEqual({ snapshots: [], authoritative: true })
@@ -415,5 +420,131 @@ describe('authoritative session tab inventory publication', () => {
     } finally {
       vi.unstubAllEnvs()
     }
+  })
+})
+
+describe('workspace-terminal-resume-records characterization', () => {
+  type ResumeStore = Pick<
+    RuntimeStore,
+    'getWorkspaceSession' | 'setWorkspaceSession' | 'runDurableMutation'
+  >
+  const WORKTREE_ID = 'repo::/workspace'
+  const HOST_ID = 'runtime:original-partition'
+
+  function clear(runtime: InstanceType<typeof OrcaRuntimeService>): Promise<void> {
+    return runtime['clearWorktreeTerminalResumeRecords'](WORKTREE_ID, HOST_ID, ['closed'])
+  }
+
+  describe('workspace terminal resume mutation ownership', () => {
+    it('reads the current mutation and rollback stores with their original receivers', async () => {
+      const runtime = new OrcaRuntimeService(null)
+      let runMutation = (): void => {
+        throw new Error('mutation was not reserved')
+      }
+      let rollback = (): void => {
+        throw new Error('rollback was not installed')
+      }
+      let finish = (): void => {
+        throw new Error('mutation was not staged')
+      }
+      const before: WorkspaceSessionState = {
+        ...getDefaultWorkspaceSession(),
+        terminalPtyIncarnationsByPaneKey: { 'closed:leaf': 'old', 'other:leaf': 'other' }
+      }
+      let mutationSession = before
+      let rollbackSession = before
+      const reservation: ResumeStore = {
+        getWorkspaceSession: () => {
+          throw new Error('reservation store read')
+        },
+        setWorkspaceSession: () => {
+          throw new Error('reservation store write')
+        },
+        runDurableMutation<Value>(
+          mutate: () => DurableProfileStateMutation<Value>
+        ): Promise<Value> {
+          expect(this).toBe(reservation)
+          const deferred = Promise.withResolvers<Value>()
+          runMutation = () => {
+            const staged = mutate()
+            rollback =
+              staged.rollback ??
+              (() => {
+                throw new Error('rollback absent')
+              })
+            finish = () => deferred.resolve(staged.value)
+          }
+          return deferred.promise
+        }
+      }
+      const mutation: ResumeStore = {
+        getWorkspaceSession(hostId) {
+          expect(this).toBe(mutation)
+          expect(hostId).toBe(HOST_ID)
+          return mutationSession
+        },
+        setWorkspaceSession(session, hostId) {
+          expect(this).toBe(mutation)
+          expect(hostId).toBe(HOST_ID)
+          mutationSession = session
+        }
+      }
+      const recovery: ResumeStore = {
+        getWorkspaceSession(hostId) {
+          expect(this).toBe(recovery)
+          expect(hostId).toBe(HOST_ID)
+          return rollbackSession
+        },
+        setWorkspaceSession(session, hostId) {
+          expect(this).toBe(recovery)
+          expect(hostId).toBe(HOST_ID)
+          rollbackSession = session
+        }
+      }
+      let current: ResumeStore | null = reservation
+      Object.defineProperty(runtime, 'store', { get: () => current })
+      const pending = clear(runtime)
+      current = mutation
+      runMutation()
+      expect(mutationSession.terminalPtyIncarnationsByPaneKey).toEqual({ 'other:leaf': 'other' })
+      rollbackSession = {
+        ...mutationSession,
+        activeWorktreeId: 'another-worktree',
+        terminalPtyIncarnationsByPaneKey: {
+          ...mutationSession.terminalPtyIncarnationsByPaneKey,
+          'new:leaf': 'new'
+        }
+      }
+      current = recovery
+      rollback()
+      expect(rollbackSession.activeWorktreeId).toBe('another-worktree')
+      expect(rollbackSession.terminalPtyIncarnationsByPaneKey).toEqual({
+        'closed:leaf': 'old',
+        'other:leaf': 'other',
+        'new:leaf': 'new'
+      })
+      finish()
+      await pending
+    })
+
+    it.each([
+      { label: 'null', store: null },
+      { label: 'missing reader', store: {} },
+      {
+        label: 'missing writer',
+        store: { getWorkspaceSession: () => getDefaultWorkspaceSession() }
+      },
+      {
+        label: 'missing reservation',
+        store: {
+          getWorkspaceSession: () => getDefaultWorkspaceSession(),
+          setWorkspaceSession: () => {}
+        }
+      }
+    ])('refuses admission with $label', async ({ store }) => {
+      const runtime = new OrcaRuntimeService(null)
+      Object.defineProperty(runtime, 'store', { get: () => store })
+      await expect(clear(runtime)).rejects.toThrow('workspace_session_unavailable')
+    })
   })
 })

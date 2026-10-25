@@ -111,3 +111,27 @@ export function createShortcutKeyComboModule() {
     }
   }
 }
+
+export function createWorkspaceTabDragLayerModule() {
+  return {
+    WorkspaceTabDragLayer: function WorkspaceTabDragLayer(): never {
+      throw new Error('The floating panel probe must not mount workspace drag behavior')
+    }
+  }
+}
+
+export function createTabGroupSplitNodeTreeModule() {
+  return {
+    TabGroupSplitNodeTree: function TabGroupSplitNodeTree(): never {
+      throw new Error('The floating panel probe must not mount a workspace split tree')
+    }
+  }
+}
+
+export function createWorkspacePaneOverlayLayersModule() {
+  return {
+    WorkspacePaneOverlayLayers: function WorkspacePaneOverlayLayers(): never {
+      throw new Error('The floating panel probe must not mount retained pane layers')
+    }
+  }
+}

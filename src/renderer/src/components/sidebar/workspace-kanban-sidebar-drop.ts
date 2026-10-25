@@ -1,14 +1,10 @@
-import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type {
-  WorkspaceStatus,
-  WorkspaceStatusDefinition,
-  Worktree
-} from '../../../../shared/worktree/types'
+import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
   parseWorkspaceLaneFullIds,
   resolveFullLaneDropIndex
 } from './workspace-kanban-filtered-drop-index'
 import { getWorkspaceStatus } from './workspace-status'
+import { collectDropWrites, type DropWriteRows } from './worktree-list/drag/dragged-worktree-copies'
 import {
   buildManualOrderUpdatesForGroupDrop,
   shouldWriteManualOrderForGroupDrop,
@@ -215,7 +211,8 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
   status: WorkspaceStatus
   dropIndex: number
   groups: readonly WorktreeDragGroup[]
-  worktreeById: ReadonlyMap<string, Worktree>
+  /** The rows each id may write; a twin's id names another host's copy too. */
+  rowsFor: DropWriteRows
   allWorktreeIds: readonly string[]
   rankByWorktreeId: ReadonlyMap<string, number>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -225,10 +222,9 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
   updates: WorktreeMetaBatchUpdate[]
   shouldSwitchToManual: boolean
 } {
-  const sourceGroupKeys = args.worktreeIds.flatMap((worktreeId) => {
-    const worktree = args.worktreeById.get(worktreeId)
-    return worktree ? [getWorkspaceStatus(worktree, args.workspaceStatuses)] : []
-  })
+  const sourceGroupKeys = args.worktreeIds.flatMap((worktreeId) =>
+    args.rowsFor.status(worktreeId).map((row) => getWorkspaceStatus(row, args.workspaceStatuses))
+  )
   const writeManualOrder = shouldWriteManualOrderForGroupDrop({
     sortBy: args.sortBy,
     sourceGroupKeys,
@@ -246,41 +242,14 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
       })
     : { changed: false, updates: new Map<string, { manualOrder: number }>() }
 
-  const updates: WorktreeMetaBatchUpdate[] = []
-  for (const worktreeId of args.worktreeIds) {
-    const current = args.worktreeById.get(worktreeId)
-    if (!current) {
-      continue
-    }
-    const next: Partial<WorktreeMeta> = {}
-    if (getWorkspaceStatus(current, args.workspaceStatuses) !== args.status) {
-      next.workspaceStatus = args.status
-    }
-    updates.push({
-      worktreeId,
-      updates: next,
-      executionHostId: current.hostId ?? 'local'
-    })
-  }
-
-  if (writeManualOrder) {
-    for (const [worktreeId, manualOrder] of order.updates) {
-      const current = args.worktreeById.get(worktreeId)
-      const entry = updates.find((candidate) => candidate.worktreeId === worktreeId)
-      if (entry) {
-        entry.updates = { ...entry.updates, ...manualOrder }
-      } else if (current) {
-        updates.push({
-          worktreeId,
-          updates: manualOrder,
-          executionHostId: current.hostId ?? 'local'
-        })
-      }
-    }
-  }
-
   return {
-    updates: updates.filter((entry) => Object.keys(entry.updates).length > 0),
+    updates: collectDropWrites({
+      rowsFor: args.rowsFor,
+      statusIds: args.worktreeIds,
+      status: args.status,
+      workspaceStatuses: args.workspaceStatuses,
+      orderUpdates: order.updates
+    }),
     shouldSwitchToManual: writeManualOrder && order.changed
   }
 }

@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { ipcRenderer } from 'electron'
 import type {
   SpeechErrorEvent,
@@ -11,8 +12,10 @@ import type { PreloadApi } from '../api-types'
 export const speechApi = {
   getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
   getModelStates: (): Promise<SpeechModelState[]> => ipcRenderer.invoke('speech:getModelStates'),
-  getOpenAiApiKeyStatus: (): Promise<{ configured: boolean }> =>
-    ipcRenderer.invoke('speech:getOpenAiApiKeyStatus'),
+  getOpenAiApiKeyStatus: (): Promise<{
+    configured: boolean
+    protection: SecretAtRestProtection | null
+  }> => ipcRenderer.invoke('speech:getOpenAiApiKeyStatus'),
   saveOpenAiApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
     ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
   clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
@@ -29,7 +32,7 @@ export const speechApi = {
     sessionId: string
   ): Promise<void> => ipcRenderer.invoke('speech:startDictation', modelId, hotwords, sessionId),
   feedAudio: (samples: Float32Array, sampleRate: number, sessionId = 'desktop'): Promise<void> =>
-    // Why: Float32Array is zeroed crossing the contextBridge/IPC boundary; wrap in a Buffer to preserve bytes.
+    // Buffer preserves sample bytes across the contextBridge/IPC boundary.
     ipcRenderer.invoke(
       'speech:feedAudio',
       Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength),

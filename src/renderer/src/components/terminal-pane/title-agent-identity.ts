@@ -1,3 +1,4 @@
+import { isQoderTerminalTitle } from '../../../../shared/qoder-terminal-title'
 import {
   detectAgentStatusFromTitle,
   isGeminiTerminalTitle,
@@ -21,6 +22,7 @@ export function titleHasExplicitAgentIdentity(title: string): boolean {
     title.startsWith('. ') ||
     title.startsWith('* ') ||
     title.startsWith('\u2733') ||
+    isQoderTerminalTitle(title) ||
     isGeminiTerminalTitle(title) ||
     isPiTerminalTitle(title)
   ) {

@@ -18,7 +18,8 @@ export function SshHostFields({
   preferAdvancedOpen = false,
   configIdentityAlias = null,
   onFormChange,
-  onSubmit
+  onSubmit,
+  offerProxyConnectionReuse = false
 }: {
   form: EditingTarget
   disabled: boolean
@@ -28,6 +29,7 @@ export function SshHostFields({
   configIdentityAlias?: string | null
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
   onSubmit: () => void
+  offerProxyConnectionReuse?: boolean
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(preferAdvancedOpen)
   return (
@@ -134,6 +136,7 @@ export function SshHostFields({
         form={form}
         disabled={disabled}
         onFormChange={onFormChange}
+        offerProxyConnectionReuse={offerProxyConnectionReuse}
       />
     </form>
   )
@@ -211,8 +214,8 @@ export function RemoteServerFields({
         />
         <p id="add-server-pairing-code-help" className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.sidebar.AddRemoteHostDialog.pairingHelpSuffix',
-            'Create this under Settings → Remote Orca Servers → Share this host on the other computer.'
+            'auto.components.sidebar.AddRemoteHostDialog.pairingHelpShareComputer',
+            'Create this under Settings → Remote Orca Servers → Share this computer on the other computer.'
           )}
         </p>
         {inputError ? (

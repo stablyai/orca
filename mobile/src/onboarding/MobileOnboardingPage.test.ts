@@ -89,8 +89,7 @@ describe('MobileOnboardingPage', () => {
   function collectText(): string {
     return renderer!.root
       .findAllByType('Text')
-      .map((node) => node.props.children)
-      .flat()
+      .flatMap((node) => node.props.children)
       .join(' ')
   }
 
@@ -98,7 +97,7 @@ describe('MobileOnboardingPage', () => {
     const callbacks = await renderPage('session-view')
 
     act(() => button('Open sessions in Chat UI').props.onPress())
-    expect(callbacks.onSessionChoice).toHaveBeenCalledWith('chat')
+    expect(callbacks.onSessionChoice).toHaveBeenCalledExactlyOnceWith('chat')
     expect(callbacks.onNotificationChoice).not.toHaveBeenCalled()
   })
 

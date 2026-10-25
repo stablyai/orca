@@ -8,7 +8,6 @@ import {
 } from './terminal-appearance'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
-import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
 import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 
@@ -25,13 +24,6 @@ function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
     sendInputImmediate: vi.fn<(data: string) => boolean>(() => sendOk)
   }
 }
-
-describe('mode2031SequenceFor', () => {
-  it('maps dark to CSI ?997;1n and light to CSI ?997;2n', () => {
-    expect(mode2031SequenceFor('dark')).toBe('\x1b[?997;1n')
-    expect(mode2031SequenceFor('light')).toBe('\x1b[?997;2n')
-  })
-})
 
 describe('maybePushMode2031Flip', () => {
   it('does nothing when the pane has not subscribed to mode 2031', () => {

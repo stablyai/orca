@@ -47,12 +47,39 @@ let lastProcessFootprint: RendererProcessMemory | null = null
 let processFootprintReadGeneration = 0
 let processFootprintReadInFlight = false
 let rendererSurface: RendererSurface = 'main'
+let longTaskObserver: PerformanceObserver | null = null
+let longTasks = { longTaskMs: 0, longTaskCount: 0, longestTaskMs: 0 }
+let longTaskSampleStartedAt = 0
+
+function accumulateLongTasks(entries: PerformanceEntry[]): void {
+  for (const entry of entries) {
+    longTasks.longTaskMs += entry.duration
+    longTasks.longTaskCount += 1
+    longTasks.longestTaskMs = Math.max(longTasks.longestTaskMs, entry.duration)
+  }
+}
+
+export function startRendererLongTaskSampling(): void {
+  if (
+    longTaskObserver ||
+    typeof PerformanceObserver === 'undefined' ||
+    !PerformanceObserver.supportedEntryTypes?.includes('longtask')
+  ) {
+    return
+  }
+  longTaskSampleStartedAt = performance.now()
+  longTaskObserver = new PerformanceObserver((list) => accumulateLongTasks(list.getEntries()))
+  longTaskObserver.observe({ type: 'longtask' })
+}
 
 export function setRendererMemorySamplingSurface(surface: RendererSurface): void {
   rendererSurface = surface
 }
 
 export function resetRendererMemorySampling(): void {
+  longTaskObserver?.disconnect()
+  longTaskObserver = null
+  longTasks = { longTaskMs: 0, longTaskCount: 0, longestTaskMs: 0 }
   emittedHighwaterRatios.clear()
   emittedPrivateHighwaterMarks.clear()
   lastProcessFootprint = null
@@ -75,10 +102,22 @@ export function recordRendererMemorySample(reason: string): void {
   const footprint = lastProcessFootprint
   refreshProcessFootprint()
 
+  let longTaskSample: (typeof longTasks & { sampleWindowMs: number }) | undefined
+  if (longTaskObserver) {
+    // Charge whole tasks to the sample that collects them, including queued deliveries.
+    accumulateLongTasks(longTaskObserver.takeRecords())
+    const now = performance.now()
+    longTaskSample = { ...longTasks, sampleWindowMs: now - longTaskSampleStartedAt }
+    longTasks = { longTaskMs: 0, longTaskCount: 0, longestTaskMs: 0 }
+    longTaskSampleStartedAt = now
+  }
+
   recordRendererCrashBreadcrumb(
     'renderer_memory',
     compactBreadcrumbData({
       reason,
+      rendererSurface,
+      ...longTaskSample,
       usedHeapMB: toMegabytes(memory.usedJSHeapSize),
       totalHeapMB: toMegabytes(memory.totalJSHeapSize),
       heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),

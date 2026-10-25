@@ -1,0 +1,178 @@
+name: Dependency security
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - '**/package.json'
+      - '**/pnpm-lock.yaml'
+      - '**/pnpm-workspace.yaml'
+      - '**/.npmrc'
+      - 'native/**/Cargo.toml'
+      - 'native/**/Cargo.lock'
+      - 'config/dependency-security-exceptions.json'
+      - 'config/cargo-deny.toml'
+      - 'config/scripts/*dependency-security*'
+      - 'config/scripts/pnpm-cli-invocation.mjs'
+      - 'config/pnpmfile.cjs'
+      - '**/patches/**'
+      - '.github/workflows/dependency-security.yml'
+      - '.github/workflows/release-cut.yml'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/prepare-dependency-audit/**'
+      - 'src/packages/process-host/**'
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact release tag to audit using the workflow commit's tooling
+        required: true
+        type: string
+      runner:
+        description: Runner override for GitHub-hosted signing provenance.
+        type: string
+        default: blacksmith-4vcpu-ubuntu-2404
+    secrets:
+      SLACK_WEBHOOK_URL:
+        description: Existing orca-releases incoming webhook
+        required: false
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ inputs.ref && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+
+jobs:
+  javascript:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ${{ inputs.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 15
+    outputs:
+      audit_result: ${{ steps.audit.outcome }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - uses: ./.github/actions/prepare-dependency-audit
+        if: inputs.ref != ''
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Audit JavaScript lockfiles
+        id: audit
+        continue-on-error: true
+        shell: bash
+        env:
+          RELEASE_REF: ${{ inputs.ref }}
+        run: |
+          if [ -n "$RELEASE_REF" ]; then
+            pnpm check:dependencies candidate . mobile
+          else
+            pnpm check:dependencies
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dependency-security-javascript
+          path: tmp/dependency-security/*.json
+          if-no-files-found: error
+
+  rust:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ${{ inputs.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 20
+    outputs:
+      audit_result: ${{ steps.audit.outcome }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/cache@v5
+        id: scanner
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: cargo-deny-0.20.2-${{ runner.os }}-${{ runner.arch }}
+      - if: steps.scanner.outputs.cache-hit != 'true'
+        run: cargo install cargo-deny --locked --version 0.20.2
+      - uses: ./.github/actions/prepare-dependency-audit
+        if: inputs.ref != ''
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Audit native Rust lockfiles
+        id: audit
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ inputs.ref != '' && 'candidate' || '.' }}
+        run: |
+          set -euo pipefail
+          report_dir="$GITHUB_WORKSPACE/tmp/dependency-security"
+          mkdir -p "$report_dir"
+          status=0
+          for manifest in native/*/Cargo.toml; do
+            name="$(basename "$(dirname "$manifest")")"
+            cargo deny --manifest-path "$manifest" --locked --config "$GITHUB_WORKSPACE/config/cargo-deny.toml" check advisories 2>&1 | tee "$report_dir/$name.log" || status=1
+          done
+          exit "$status"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dependency-security-rust
+          path: tmp/dependency-security/*.log
+          if-no-files-found: error
+
+  notify:
+    needs: [javascript, rust]
+    if: >-
+      !cancelled() && github.repository == 'stablyai/orca' &&
+      (needs.javascript.outputs.audit_result == 'failure' ||
+      needs.rust.outputs.audit_result == 'failure' ||
+      needs.javascript.result == 'failure' || needs.rust.result == 'failure')
+    runs-on: ${{ inputs.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 5
+    steps:
+      - name: Send dependency review to orca-releases
+        uses: actions/github-script@v8
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RELEASE_REF: ${{ inputs.ref }}
+          AUDIT_RESULTS: ${{ toJSON(needs) }}
+        with:
+          script: |
+            if (!process.env.SLACK_WEBHOOK_URL) {
+              core.notice('Slack notification unavailable for this run; see the dependency reports in Actions.')
+              return
+            }
+            const results = JSON.parse(process.env.AUDIT_RESULTS)
+            const checks = [['javascript', 'JavaScript'], ['rust', 'Rust']].map(([job, label]) => {
+              const result = results[job]
+              const status = result.result !== 'success' ? 'scan incomplete'
+                : result.outputs.audit_result === 'success' ? 'passed' : 'review suggested'
+              return `${label}: ${status}`
+            })
+            const target = context.payload.pull_request
+              ? `PR #${context.payload.pull_request.number}`
+              : process.env.RELEASE_REF || context.ref
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+            const text = `Orca dependency review for ${target}\n${checks.join(' · ')}\nReports and logs: ${runUrl}`
+            let response
+            try {
+              response = await fetch(process.env.SLACK_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, mrkdwn: false, unfurl_links: false, unfurl_media: false }),
+                signal: AbortSignal.timeout(15000)
+              })
+            } catch {
+              throw new Error('Slack dependency review notification could not be sent')
+            }
+            if (!response.ok) {
+              throw new Error(`Slack dependency review notification returned HTTP ${response.status}`)
+            }

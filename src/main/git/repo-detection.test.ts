@@ -49,10 +49,7 @@ describe('isGitRepo', () => {
   })
 
   it('accepts a real repository when git itself cannot be run', () => {
-    // Why: regression guard for the spurious "Open as Folder" prompt. When the
-    // `git rev-parse` probe fails for an environmental reason (here simulated by
-    // making `git` unresolvable), a directory carrying valid Git metadata must
-    // still be recognized rather than silently downgraded to a plain folder.
+    // Valid metadata must survive an unavailable Git probe instead of triggering Open as Folder.
     const realRepo = path.join(tmpDir, 'real')
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
@@ -80,7 +77,7 @@ describe('isGitRepo', () => {
     git(realRepo, ['init', '--quiet'])
 
     withGitUnavailable(() => {
-      expect(getGitRepoRoot(nestedDir)).toBe(realRepo)
+      expect(getGitRepoRoot(nestedDir)).toBe(realRepo.replaceAll('\\', '/'))
     })
   })
 
@@ -310,9 +307,7 @@ describe('isGitRepo', () => {
     mkdirSync(nestedDir, { recursive: true })
     git(tmpDir, ['init', '--quiet', repoRoot])
 
-    // Why: derive the expected root from git's own --show-toplevel so the
-    // assertion matches getGitRepoRoot's canonicalization (e.g. macOS resolves
-    // the /var tmpdir symlink to /private/var) across all platforms.
+    // Ask Git for the canonical root, including macOS /var-to-/private/var resolution.
     const expectedRoot = git(repoRoot, ['rev-parse', '--show-toplevel']).trim().replace(/\\/g, '/')
     expect(getGitRepoRoot(nestedDir)).toBe(expectedRoot)
   })
@@ -326,11 +321,20 @@ describe('isGitRepo', () => {
     ).toBe(String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps a literal backslash in a POSIX checkout root',
+    () => {
+      expect(normalizeGitRepoRootForInputPath('/tmp/repo\\name/sub', '/tmp/repo\\name')).toBe(
+        '/tmp/repo\\name'
+      )
+    }
+  )
+
   it('preserves bare repository paths when no worktree root exists', () => {
     const bareRepo = path.join(tmpDir, 'bare.git')
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
-    expect(getGitRepoRoot(bareRepo)).toBe(bareRepo)
+    expect(getGitRepoRoot(bareRepo)).toBe(bareRepo.replaceAll('\\', '/'))
   })
 })
 
@@ -413,21 +417,14 @@ describe('getLinkedWorktreeMainRepoRoot', () => {
   })
 })
 
-/**
- * Run `fn` with `git` removed from PATH so the in-process git probe fails the
- * same way a transient spawn failure would, exercising the `.git`-marker
- * fallback path. PATH is restored afterward.
- */
+/** Remove Git from PATH temporarily to exercise metadata fallback after a spawn failure. */
 function withGitUnavailable(fn: () => void): void {
   const originalPath = process.env.PATH
-  // An empty PATH leaves no directory to resolve the bare `git` binary, so the
-  // probe throws ENOENT — the indeterminate failure the fallback exists for.
   process.env.PATH = ''
   try {
     fn()
   } finally {
-    // Why: restoring an originally-unset PATH via assignment would write the
-    // string "undefined", corrupting PATH for later tests in this process.
+    // Assignment of undefined would corrupt PATH with the literal string.
     if (originalPath === undefined) {
       delete process.env.PATH
     } else {

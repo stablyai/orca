@@ -1,73 +1,65 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "source-control.changes-load",
   "family": "git.changes-load",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "48ccada93f208a24160483e98ee94a771ab6d63222f29ac4bbd6979157f98333",
-  "scenarioSha256": "f2c4d64b3761fcd036d9538155037edc4e35492e67ce5eb158372ddc76e55cc9",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "02adc1911747": {
-      "name": "git.branchCompare#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "entries": [
-              {
-                "added": 2,
-                "path": "src/app.ts",
-                "removed": 1,
-                "status": "modified"
-              }
-            ],
-            "summary": {
-              "baseOid": "base-oid",
-              "baseRef": "origin/dev",
-              "changedFiles": 1,
-              "compareRef": "feature",
-              "headOid": "head-oid",
-              "mergeBase": "merge-base",
-              "status": "ready"
-            }
-          }
-        }
-      }
-    },
     "02d5719960a0": {
       "name": "source-control.status-load-success",
       "ordinal": 6,
       "value": {}
+    },
+    "1d461278a0ae": {
+      "branchCompareState": {
+        "kind": "ready",
+        "result": {
+          "entries": [
+            {
+              "added": 2,
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            }
+          ],
+          "summary": {
+            "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "baseRef": "origin/dev",
+            "changedFiles": 1,
+            "compareRef": "feature",
+            "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+            "mergeBase": "0123456789abcdef0123456789abcdef01234567",
+            "status": "ready"
+          }
+        }
+      },
+      "screenState": {
+        "kind": "ready",
+        "status": {
+          "branch": "feature",
+          "entries": [
+            {
+              "added": 4,
+              "area": "unstaged",
+              "path": "src/app.ts",
+              "removed": 1,
+              "status": "modified"
+            },
+            {
+              "area": "staged",
+              "oldPath": "src/older.ts",
+              "path": "src/old.ts",
+              "status": "renamed"
+            }
+          ],
+          "head": "head-oid",
+          "upstreamStatus": {
+            "ahead": 1,
+            "behind": 0,
+            "hasUpstream": true,
+            "upstreamName": "origin/feature"
+          }
+        }
+      }
     },
     "21b68b754dce": {
       "name": "worktree.show#1",
@@ -131,58 +123,6 @@
         "startedAt": 0
       }
     },
-    "35fa5a183b27": {
-      "branchCompareState": {
-        "kind": "ready",
-        "result": {
-          "entries": [
-            {
-              "added": 2,
-              "path": "src/app.ts",
-              "removed": 1,
-              "status": "modified"
-            }
-          ],
-          "summary": {
-            "baseOid": "base-oid",
-            "baseRef": "origin/dev",
-            "changedFiles": 1,
-            "compareRef": "feature",
-            "headOid": "head-oid",
-            "mergeBase": "merge-base",
-            "status": "ready"
-          }
-        }
-      },
-      "screenState": {
-        "kind": "ready",
-        "status": {
-          "branch": "feature",
-          "entries": [
-            {
-              "added": 4,
-              "area": "unstaged",
-              "path": "src/app.ts",
-              "removed": 1,
-              "status": "modified"
-            },
-            {
-              "area": "staged",
-              "oldPath": "src/older.ts",
-              "path": "src/old.ts",
-              "status": "renamed"
-            }
-          ],
-          "head": "head-oid",
-          "upstreamStatus": {
-            "ahead": 1,
-            "behind": 0,
-            "hasUpstream": true,
-            "upstreamName": "origin/feature"
-          }
-        }
-      }
-    },
     "586549d3cea5": {
       "name": "repo.list#1",
       "ordinal": 4,
@@ -213,6 +153,57 @@
           "ok": true,
           "result": {
             "repos": []
+          }
+        }
+      }
+    },
+    "7ab1473c6d87": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "entries": [
+              {
+                "added": 2,
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              }
+            ],
+            "summary": {
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "baseRef": "origin/dev",
+              "changedFiles": 1,
+              "compareRef": "feature",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
+              "status": "ready"
+            }
           }
         }
       }
@@ -434,12 +425,12 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["d7f430c1de90", "21b68b754dce", "586549d3cea5", "02adc1911747"],
+          "sender": ["d7f430c1de90", "21b68b754dce", "586549d3cea5", "7ab1473c6d87"],
           "payloads": ["ddee63fd3bf5", "e9aa1da11c9c", "92bee926780c", "fbb97a8eabc3"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "35fa5a183b27",
+          "state": "1d461278a0ae",
           "effects": ["995fa685a11d", "02d5719960a0"]
         }
       }

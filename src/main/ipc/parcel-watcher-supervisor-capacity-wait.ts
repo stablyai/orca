@@ -1,7 +1,7 @@
 import {
   onWatcherChildCapacityAvailable,
   WatcherChildCapacityError
-} from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-registry'
 import { watcherHostFailure, WatcherProcessFailure } from './parcel-watcher-process-failure'
 import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 
@@ -33,8 +33,7 @@ export class WatcherSupervisorCapacityWait {
       if (lifecycleGeneration !== this.lifecycleGeneration) {
         throw watcherHostFailure('file watcher supervisor disposed', 'supervisor_disposed')
       }
-      // Why: subscribe() wraps each retry in a fresh capacity wait, so a slot
-      // reclaimed by crash recovery remains pending without polling or failure.
+      // subscribe() owns a fresh capacity wait for each retry, including slots reclaimed by crash recovery.
       return retry()
     })
   }
@@ -49,8 +48,7 @@ export class WatcherSupervisorCapacityWait {
       createAbortError: createCapacityAbortError,
       onAbandon: () => {
         if (state.waiters.waiterCount === 0 && this.state === state) {
-          // Why: one cancelled root must not strand a shared listener after all
-          // same-supervisor capacity waiters have left.
+          // Release the shared listener when the last same-supervisor waiter cancels.
           this.state = null
           state.cancel()
           state.reject(createCapacityAbortError())
@@ -90,8 +88,7 @@ export class WatcherSupervisorCapacityWait {
       cancel: () => undefined
     }
     this.state = state
-    // Why: one physical slot launches the shared supervisor child; every root
-    // awaiting this barrier can then subscribe through that same child.
+    // One physical slot launches the shared child for all roots awaiting this barrier.
     state.cancel = onWatcherChildCapacityAvailable(() => {
       if (this.state === state) {
         this.state = null

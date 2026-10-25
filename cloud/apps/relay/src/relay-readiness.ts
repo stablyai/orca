@@ -31,6 +31,8 @@ export type RelayReadinessGraceEvent = {
 export type RelayReadinessProbe = {
   check: () => Promise<boolean>
   degradedDependencies: () => RelayReadinessDependency[]
+  // Failing on the last probe, in grace or past it.
+  failingDependencies: () => RelayReadinessDependency[]
 }
 
 // The token verifier caches keys in process, so a cell keeps verifying tokens right through a JWKS
@@ -131,8 +133,10 @@ export function createRelayReadiness(
   const settleSql = createDependencyGrace('sql', options.sqlGraceMs ?? RELAY_READINESS_SQL_GRACE_MS)
   let cachedAt = Number.NEGATIVE_INFINITY
   let cached = false
+  let pending: Promise<boolean> | null = null
   let lastObservedReady: boolean | undefined
   let degraded: RelayReadinessDependency[] = []
+  let failing: RelayReadinessDependency[] = []
 
   const probeJwks = async (): Promise<RelayReadinessFailure | undefined> => {
     try {
@@ -153,8 +157,7 @@ export function createRelayReadiness(
     }
   }
 
-  const check = async (): Promise<boolean> => {
-    if (now() - cachedAt < cacheMs) return cached
+  const probe = async (): Promise<boolean> => {
     const startedAt = now()
     const [jwks, sql] = await Promise.all([timed(now, probeJwks), timed(now, probeSql)])
     const completedAt = now()
@@ -163,6 +166,9 @@ export function createRelayReadiness(
     const failures = [jwks.value, sql.value].filter((value) => value !== undefined)
     const failure = failures[0]
     degraded = []
+    failing = []
+    if (jwks.value !== undefined) failing.push('jwks')
+    if (sql.value !== undefined) failing.push('sql')
     if (jwksSettlement.degraded) degraded.push('jwks')
     if (sqlSettlement.degraded) degraded.push('sql')
     cached = jwksSettlement.satisfied && sqlSettlement.satisfied
@@ -185,5 +191,17 @@ export function createRelayReadiness(
     return cached
   }
 
-  return { check, degradedDependencies: () => [...degraded] }
+  const check = async (): Promise<boolean> => {
+    if (now() - cachedAt < cacheMs) return cached
+    pending ??= probe().finally(() => {
+      pending = null
+    })
+    return pending
+  }
+
+  return {
+    check,
+    degradedDependencies: () => [...degraded],
+    failingDependencies: () => [...failing]
+  }
 }

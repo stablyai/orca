@@ -3,6 +3,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { shouldOpenAutoRenameBranchAdvanced } from './AutoRenameBranchFromWorkSetting'
@@ -151,7 +152,7 @@ describe('GitPane', () => {
     expect(markup).toContain(
       translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
     )
-    expect(markup).toContain(
+    expect(markup).not.toContain(
       translate('auto.components.settings.GitPane.untrackedFirst', 'Untracked first')
     )
   })
@@ -264,5 +265,76 @@ describe('GitPane', () => {
     )
     ;(branchUpstreamControl.props.onChange as (value: string) => void)('repository-default')
     expect(updateSettings).toHaveBeenCalledWith({ sourceControlCompareAgainstUpstream: false })
+  })
+})
+
+function renderBranchPrefixGitPane(
+  settings: GlobalSettings,
+  displayedGitUsername = 'jdoe'
+): string {
+  return renderToStaticMarkup(
+    React.createElement(
+      TooltipProvider,
+      null,
+      React.createElement(GitPane, {
+        settings,
+        updateSettings: () => {},
+        writeSourceControlAiSettings: async () => {},
+        displayedGitUsername,
+        settingsSearchQuery: ''
+      })
+    )
+  )
+}
+
+function customPrefixSettings(branchPrefixCustom: string): GlobalSettings {
+  return {
+    ...getDefaultSettings('/home/test'),
+    branchPrefix: 'custom',
+    branchPrefixCustom
+  }
+}
+
+function gitUsernamePrefixSettings(): GlobalSettings {
+  return {
+    ...getDefaultSettings('/home/test'),
+    branchPrefix: 'git-username',
+    branchPrefixCustom: ''
+  }
+}
+
+describe('GitPane branch prefix feedback', () => {
+  it('previews the resulting branch name and drops a redundant trailing slash', () => {
+    const html = renderBranchPrefixGitPane(customPrefixSettings('team/'))
+    expect(html).toContain('team/feature')
+    expect(html).not.toContain('team//feature')
+  })
+
+  it('warns when the custom prefix contains invalid characters', () => {
+    const html = renderBranchPrefixGitPane(customPrefixSettings('team x'))
+    expect(html).toContain('Prefix cannot contain spaces')
+  })
+
+  it('shows neither preview nor warning when no custom prefix is set', () => {
+    const html = renderBranchPrefixGitPane(customPrefixSettings(''))
+    expect(html).not.toContain('/feature')
+    expect(html).not.toContain('Prefix cannot contain spaces')
+    expect(html).not.toContain('No prefix will be applied')
+  })
+
+  it('explains when a custom prefix normalizes away to empty', () => {
+    const html = renderBranchPrefixGitPane(customPrefixSettings('/'))
+    expect(html).toContain('No prefix will be applied')
+    expect(html).not.toContain('/feature')
+  })
+
+  it('warns in git-username mode when the displayed username is invalid', () => {
+    const html = renderBranchPrefixGitPane(gitUsernamePrefixSettings(), 'team x')
+    expect(html).toContain('Prefix cannot contain spaces')
+  })
+
+  it('previews in git-username mode when the displayed username is valid', () => {
+    const html = renderBranchPrefixGitPane(gitUsernamePrefixSettings(), 'jdoe/')
+    expect(html).toContain('jdoe/feature')
   })
 })

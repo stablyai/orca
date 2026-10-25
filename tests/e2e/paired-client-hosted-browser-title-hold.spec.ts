@@ -299,7 +299,7 @@ async function run(args: {
       await page.evaluate(
         ({ pageId, worktreeId }) => {
           const state = window.__store?.getState()
-          state?.setActiveTabType('terminal')
+          state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
           state?.focusBrowserTabInWorktree(worktreeId, pageId, { surfacePane: true })
         },
         { pageId, worktreeId }
