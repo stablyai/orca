@@ -24,6 +24,7 @@ export class RuntimeRpcShutdown extends RuntimeRpcMobilePairing {
 
   async stop(): Promise<void> {
     // Fence new exposure and await pending rebind before snapshotting transports, or late wide listeners can leak into cleared arrays (STA-2370).
+    this.runtime.clearChatStopInputs()
     this.stopping = true
     const pendingExposure = this.networkExposurePromise
     if (pendingExposure) {

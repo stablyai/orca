@@ -3,7 +3,7 @@ import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord
 } from '../../runtime-terminal-state-records'
-import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-title-tracker'
+import { OrcaRuntimeWithChatStopInputObservation } from './terminal-chat-stop-input'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
 import { terminalTitleBlocksExplicitAgentStatus } from '../../runtime-worktree-status-projection'
@@ -11,7 +11,7 @@ import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-
 import type { OrchestrationMailboxLeaf } from '../../orchestration/mailbox-owner'
 import type { PtyLaneMailboxTarget } from '../query/pty-terminal-summary'
 
-export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
+export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithChatStopInputObservation {
   protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
   protected abstract recordAgentPromptLifecycleState(
     ptyId: string,
@@ -262,6 +262,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** Cancel the per-PTY title tracker (stale-title timer included) on PTY
    *  teardown so it cannot fire into pruned records. */
   protected disposePtyTitleTracker(ptyId: string): void {
+    this.clearChatStopInputs(ptyId)
     this.observeClaudeTerminalEvidence(ptyId, { kind: 'reset' })
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)

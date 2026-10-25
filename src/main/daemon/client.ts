@@ -1,7 +1,7 @@
+import { reportWriteSettlement, type WriteSettlementSink } from '../../shared/chat-stop-input'
 import type { Socket } from 'node:net'
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { encodeNdjson } from './ndjson'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -22,13 +22,12 @@ import {
   attachControlResponseReader,
   attachStreamEventReader
 } from './daemon-client-ndjson-readers'
-import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
+import * as Notify from './daemon-client-notify-settlement'
 import { requestDaemonRpc } from './daemon-client-rpc-request'
 
 const CONNECT_TIMEOUT_MS = 5000
 const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
 const REQUEST_TIMEOUT_MS = 30000
-const NOTIFY_SETTLEMENT_TIMEOUT_MS = 5000
 
 export type DaemonClientOptions = {
   socketPath: string
@@ -214,38 +213,33 @@ export class DaemonClient {
       payload,
       timeoutMs,
       ...(signal ? { signal } : {}),
-      unmatchedCancelGraceMs: NOTIFY_SETTLEMENT_TIMEOUT_MS,
+      unmatchedCancelGraceMs: Notify.NOTIFY_SETTLEMENT_TIMEOUT_MS,
       onCreateCancellationFailure: () => this.handleDisconnect(generation),
       settleCreateCancellation: (sessionId, requestId) =>
         this.request<{ canceled: boolean }>(
           'cancelCreateOrAttach',
           { sessionId, requestId },
-          NOTIFY_SETTLEMENT_TIMEOUT_MS
+          Notify.NOTIFY_SETTLEMENT_TIMEOUT_MS
         )
     })
   }
 
   // Why: fire-and-forget writes need a local delivery signal to trigger dead-endpoint recovery.
-  notify(type: string, payload: unknown): boolean {
+  notify(type: string, payload: unknown, onSettlement?: WriteSettlementSink): boolean {
     if (!this.connected || !this.controlSocket) {
+      reportWriteSettlement(onSettlement, writeRefused('endpoint_disconnected'))
       return false
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    try {
-      this.controlSocket.write(encodeNdjson(msg))
-      return true
-    } catch {
-      // Notifications are best-effort; an oversized payload must not tear down the caller.
-      return false
-    }
+    return Notify.notifyDaemonSocket(this.controlSocket, msg, onSettlement)
   }
 
   async notifyWithSettlement(
     type: string,
     payload: unknown,
-    timeoutMs = NOTIFY_SETTLEMENT_TIMEOUT_MS
+    timeoutMs = Notify.NOTIFY_SETTLEMENT_TIMEOUT_MS
   ): Promise<WriteSettlement> {
     if (!this.connected || !this.controlSocket) {
       return writeRefused('endpoint_disconnected')
@@ -254,7 +248,7 @@ export class DaemonClient {
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const socket = this.controlSocket
     const generation = this.connectionGeneration
-    return await writeNotifyWithSettlement({
+    return await Notify.writeNotifyWithSettlement({
       socket,
       message: { id, type, ...(payload !== undefined ? { payload } : {}) },
       timeoutMs,

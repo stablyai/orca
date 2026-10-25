@@ -1,3 +1,4 @@
+import type { WriteSettlementSink } from '../../shared/chat-stop-input'
 import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
@@ -136,8 +137,9 @@ export class DaemonPtyRouter implements IPtyProvider {
     return await this.ownerResolver.probe(id)
   }
 
-  write(id: string, data: string): boolean {
-    return this.adapterFor(id).write(id, data)
+  write(id: string, data: string, onSettlement?: WriteSettlementSink): boolean {
+    const provider = this.adapterFor(id)
+    return onSettlement ? provider.write(id, data, onSettlement) : provider.write(id, data)
   }
 
   writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {

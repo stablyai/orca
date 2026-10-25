@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Socket } from 'node:net'
+import { writeNotify } from '../../../../main/daemon/daemon-client-notify-settlement'
 
 // Mock PTY I/O to isolate write ordering and delays from local/remote routing.
 const sendRuntimePtyInput = vi.fn()
@@ -456,6 +458,40 @@ describe('sendNativeChatAskAnswer', () => {
   afterEach(() => {
     resetNativeChatPtySendQueuesForTests()
     vi.useRealTimers()
+  })
+
+  it('paces tagged controls at 1000ms despite a stalled passive daemon callback and cancels unsent controls', async () => {
+    const physical = vi.fn(() => true)
+    // SAFETY: the settlement primitive uses only Socket.write; this fixture deliberately never drains.
+    const socket = { write: physical } as unknown as Socket
+    const sink = vi.fn()
+    sendRuntimePtyInputVerified.mockImplementation(async (_id, data) =>
+      writeNotify(
+        {
+          socket,
+          message: { type: 'write', payload: { data } },
+          timeoutMs: 5000,
+          onUndeliverable: () => {}
+        },
+        sink
+      )
+    )
+    sendNativeChatAskAnswer(PTY, [{ raw: '\x1b' }, { raw: '\x1b' }], undefined, 'stop')
+    await vi.advanceTimersByTimeAsync(999)
+    expect(physical).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(physical).toHaveBeenCalledTimes(2)
+    expect(sink).not.toHaveBeenCalled()
+    expect(sendRuntimePtyInputVerified.mock.calls.map((call) => call[3])).toEqual([
+      { chatStop: { id: 'stop', index: 1 } },
+      { chatStop: { id: 'stop', index: 2 } }
+    ])
+    await vi.advanceTimersByTimeAsync(5000)
+    const next = sendNativeChatAskAnswer(PTY, [{ raw: '\x1b' }, { raw: '\x1b' }], undefined, 'next')
+    await vi.advanceTimersByTimeAsync(0)
+    next.cancel()
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(physical).toHaveBeenCalledTimes(3)
   })
 
   it('returns a no-op handle for an empty key group list', () => {

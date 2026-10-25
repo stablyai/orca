@@ -1,3 +1,4 @@
+import type { WriteSettlementSink } from '../../shared/chat-stop-input'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
@@ -129,7 +130,12 @@ export type RuntimePtyController = {
   /** The local terminal owner's automatic-restore state; null when it has no fork gate. */
   getAutomaticWorkStatus?(): Promise<AutomaticWorkStatus | null>
   resumeAutomaticWork?(): Promise<AutomaticWorkResumeOutcome>
-  write(ptyId: string, data: string, inputKind: TerminalInputKind): boolean
+  write(
+    ptyId: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    onSettlement?: WriteSettlementSink
+  ): boolean
   /** Three-valued settlement; local providers settle synchronously. */
   writeWithSettlement?(
     ptyId: string,

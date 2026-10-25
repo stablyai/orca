@@ -62,7 +62,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     // Automatic-work gates belong to the local provider; SSH runtimes own theirs.
     getAutomaticWorkStatus: () => getLocalAutomaticWorkStatus(localProvider),
     resumeAutomaticWork: () => resumeLocalAutomaticWork(localProvider),
-    write: (ptyId, data, inputKind) => writePtyFromRuntimeController(deps, ptyId, data, inputKind),
+    write: (ptyId, data, inputKind, onSettlement) =>
+      writePtyFromRuntimeController(deps, ptyId, data, inputKind, { onSettlement }),
     writeWithSettlement: (ptyId, data, inputKind) =>
       writePtyFromRuntimeController(deps, ptyId, data, inputKind, { waitForSettlement: true }),
     probePtyLiveness: (ptyId) => probePtyLivenessFromRuntimeController(deps, ptyId),

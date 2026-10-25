@@ -1,3 +1,5 @@
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { nativeChatStopEscapeCount } from '../../../../shared/native-chat-agent-support'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
@@ -151,13 +153,24 @@ export function useNativeChatInteractiveSend(
 
   const cancel = useCallback(() => {
     cancelInFlight()
-    if (resolveNativeChatTranscriptAgent(agent) === 'opencode' && targetPtyId) {
-      // OpenCode confirms interruption with a second Escape; pace writes like mobile Stop.
-      inFlightRef.current = sendNativeChatAskAnswer(targetPtyId, [{ raw: ESC }, { raw: ESC }])
+    if (!targetPtyId) {
       return
     }
-    sendRaw(ESC)
-  }, [agent, cancelInFlight, sendRaw, targetPtyId])
+    const id = createBrowserUuid()
+    if (nativeChatStopEscapeCount(agent) === 2) {
+      // OpenCode confirms interruption with a second Escape; pace writes like mobile Stop.
+      inFlightRef.current = sendNativeChatAskAnswer(
+        targetPtyId,
+        [{ raw: ESC }, { raw: ESC }],
+        undefined,
+        id
+      )
+      return
+    }
+    void sendRuntimePtyInputVerified(targetPtyId, ESC, 'driving', {
+      chatStop: { id, index: 1 }
+    }).catch(() => {})
+  }, [agent, cancelInFlight, targetPtyId])
 
   return { sendAnswer, sendRaw, sendRawVerified, cancelPending: cancelInFlight, cancelAsk, cancel }
 }

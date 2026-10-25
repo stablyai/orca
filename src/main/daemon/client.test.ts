@@ -675,6 +675,27 @@ describe('DaemonClient', () => {
       expect(client.isConnected()).toBe(false)
     })
 
+    it('observes ordinary settlement without holding the reply or disconnecting on timeout', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      // SAFETY: this connected fixture owns the control socket being intercepted.
+      const internals = client as unknown as { controlSocket: Socket }
+      const physical = vi.spyOn(internals.controlSocket, 'write').mockImplementation(() => true)
+      vi.useFakeTimers()
+      const sink = vi.fn()
+      expect(client.notify('write', { sessionId: 'session-1', data: '\x1b' }, sink)).toBe(true)
+      expect(sink).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(sink).toHaveBeenCalledWith({
+        outcome: 'unverifiable',
+        reason: 'settlement_timeout',
+        bytesHandedToTransport: true
+      })
+      expect(client.isConnected()).toBe(true)
+      expect(physical).toHaveBeenCalledTimes(1)
+    })
+
     it('disconnects a daemon socket whose write settlement exceeds its deadline', async () => {
       await startMockDaemon()
       client = new DaemonClient({ socketPath, tokenPath })

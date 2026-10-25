@@ -85,7 +85,10 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     return generation
   }
 
+  abstract clearChatStopInputs(ptyId?: string): void
+
   protected advancePtyLifecycleGeneration(ptyId: string): void {
+    this.clearChatStopInputs(ptyId)
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
     this.clearAgentPromptCorrelationForPty(ptyId)
     // A stop intent belongs to one process incarnation; never let it label a

@@ -1,3 +1,5 @@
+import { ChatStopInputObserver } from './chat-stop-input-observer'
+import type { ChatStopBinding, ChatStopInput } from '../../../shared/chat-stop-input'
 import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-interrupt-reconciliation'
 import {
   markClaudeLeadTurnInterrupted,
@@ -25,6 +27,19 @@ import {
 } from '../../../shared/claude-terminal-interrupt'
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
+  readonly chatStopInputs = new ChatStopInputObserver(
+    (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),
+    (request) => this.inferInterrupt(request)
+  )
+
+  clearChatStopInput(paneKey?: string): void {
+    this.chatStopInputs.clear(paneKey)
+  }
+
+  captureChatStopInput(paneKey: string, input: ChatStopInput, binding: ChatStopBinding) {
+    return this.chatStopInputs.capture(paneKey, input, binding)
+  }
+
   private remoteInterruptListeners = new Set<(command: RemoteAgentInterruptDispatch) => void>()
 
   subscribeRemoteInterruptRequests(

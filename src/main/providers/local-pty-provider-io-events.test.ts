@@ -156,12 +156,17 @@ describe('LocalPtyProvider', () => {
   describe('write', () => {
     it('writes data to the PTY process', async () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
-      expect(provider.write(id, 'hello')).toBe(true)
+      const sink = vi.fn()
+      expect(provider.write(id, 'hello', sink)).toBe(true)
+      expect(sink).toHaveBeenCalledWith({ outcome: 'accepted' })
+      expect(mockProc.write).toHaveBeenCalledTimes(1)
       expect(mockProc.write).toHaveBeenCalledWith('hello')
     })
 
     it('is a no-op for unknown PTY ids', () => {
-      expect(provider.write('nonexistent', 'hello')).toBe(false)
+      const sink = vi.fn()
+      expect(provider.write('nonexistent', 'hello', sink)).toBe(false)
+      expect(sink).toHaveBeenCalledWith({ outcome: 'refused', reason: 'provider_refused_write' })
       expect(mockProc.write).not.toHaveBeenCalled()
     })
   })

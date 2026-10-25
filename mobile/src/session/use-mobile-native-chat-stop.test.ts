@@ -81,6 +81,25 @@ describe('useMobileNativeChatStop', () => {
     expect(sendRequest).toHaveBeenCalledTimes(1)
   })
 
+  it('overlaps the original 80ms controls while the first ordinary reply stalls', async () => {
+    sendRequest.mockReturnValue(new Promise(() => {}))
+    await render(true, 'stream-1')
+    act(() => stop?.())
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(79)
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    const first = sendRequest.mock.calls[0]![1]
+    const second = sendRequest.mock.calls[1]![1]
+    expect(first).toMatchObject({ text: '\x1b', chatStop: { id: expect.any(String), index: 1 } })
+    expect(second).toEqual({ ...first, chatStop: { id: first.chatStop.id, index: 2 } })
+    expect(first.requireWriteSettlement).toBeUndefined()
+  })
+
   it('handles a rejected Escape without leaking an unhandled rejection', async () => {
     sendRequest.mockRejectedValue(new Error('disconnected'))
     await render(true, 'stream-1')

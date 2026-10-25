@@ -202,10 +202,12 @@ describe('useNativeChatInteractiveSend', () => {
     act(() => result.current.cancel())
 
     expect(mocks.cancel).toHaveBeenCalledOnce()
-    expect(mocks.sendRuntimePtyInput).toHaveBeenCalledWith('pty-1', '\x1b', 'driving')
+    expect(mocks.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', '\x1b', 'driving', {
+      chatStop: { id: expect.any(String), index: 1 }
+    })
   })
 
-  it.each(['opencode', 'opencode2'] as const)(
+  it.each(['opencode', 'opencode2', 'zcode'] as const)(
     'paces two Escape writes for %s Stop and cancels them on rebind',
     (agent) => {
       const { result, rerender } = renderHook(
@@ -213,10 +215,12 @@ describe('useNativeChatInteractiveSend', () => {
         { initialProps: { ptyId: 'pty-1' } }
       )
       act(() => result.current.cancel())
-      expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith('pty-1', [
-        { raw: '\x1b' },
-        { raw: '\x1b' }
-      ])
+      expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith(
+        'pty-1',
+        [{ raw: '\x1b' }, { raw: '\x1b' }],
+        undefined,
+        expect.any(String)
+      )
       rerender({ ptyId: 'pty-2' })
       expect(mocks.cancel).toHaveBeenCalledOnce()
     }

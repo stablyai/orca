@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseChatStopInput } from '../chat-stop-input'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { isTuiAgent } from '../tui-agent-config'
@@ -128,6 +129,7 @@ export const TerminalSetPaneTitle = TerminalHandle.extend({
 })
 
 export const TerminalSend = TerminalHandle.extend({
+  chatStop: z.unknown().transform(parseChatStopInput).optional(),
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),

@@ -19,6 +19,8 @@ import { AgentHookServerAuthorityFences } from './server-authority-fences'
 import { recordAgentExit } from './agent-exit-evidence'
 
 export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
+  abstract clearChatStopInput(paneKey?: string): void
+
   /** Resume identity survives teardown without claiming live work. */
   protected toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
@@ -300,6 +302,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    this.clearChatStopInput(resolvedPaneKey)
     if (!existing) {
       return this.deleteTmuxSelectedStatus(resolvedPaneKey) ?? null
     }

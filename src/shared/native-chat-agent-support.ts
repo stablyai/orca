@@ -58,6 +58,10 @@ export function resolveNativeChatTranscriptAgent(
   return null
 }
 
+export function nativeChatStopEscapeCount(agent: string | null | undefined): 1 | 2 {
+  return resolveNativeChatTranscriptAgent(agent) === 'opencode' ? 2 : 1
+}
+
 export function nativeChatApprovalAcceptKey(agent: string | null | undefined): string {
   return resolveNativeChatTranscriptAgent(agent) === 'opencode' ? '\r' : '1'
 }

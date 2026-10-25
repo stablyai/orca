@@ -1,3 +1,4 @@
+import type { ChatStopInput } from '../../../../shared/chat-stop-input'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import {
@@ -9,7 +10,7 @@ import {
 
 export function sendNativeChatObservedWrites(
   ptyId: string,
-  writes: readonly { data: string; delayBeforeMs: number }[],
+  writes: readonly { data: string; delayBeforeMs: number; chatStop?: ChatStopInput }[],
   options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
 ) {
   // Dismiss answer cards only after provider acknowledgment.
@@ -45,7 +46,12 @@ export function sendNativeChatObservedWrites(
           if (isCancelled()) {
             return
           }
-          void sendRuntimePtyInputVerified(ptyId, write.data, 'driving', writeOptions)
+          void sendRuntimePtyInputVerified(
+            ptyId,
+            write.data,
+            'driving',
+            write.chatStop ? { ...writeOptions, chatStop: write.chatStop } : writeOptions
+          )
             .then((accepted) => {
               if (isCancelled()) {
                 return

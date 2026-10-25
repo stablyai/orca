@@ -184,7 +184,8 @@ export function submitNativeChatPrompt(ptyId: string): void {
 export function sendNativeChatAskAnswer(
   ptyId: string,
   groups: AskAnswerKeyGroup[],
-  onSettled?: (delivered: boolean) => void
+  onSettled?: (delivered: boolean) => void,
+  chatStopId?: string
 ): NativeChatSendHandle {
   if (groups.length === 0) {
     return { cancel: () => {}, settleAfterMs: 0 }
@@ -193,7 +194,10 @@ export function sendNativeChatAskAnswer(
     ptyId,
     groups.map((group, index) => ({
       data: 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text),
-      delayBeforeMs: index === 0 ? 0 : NATIVE_CHAT_QUESTION_STEP_MS
+      delayBeforeMs: index === 0 ? 0 : NATIVE_CHAT_QUESTION_STEP_MS,
+      ...(chatStopId && (index === 0 || index === 1)
+        ? { chatStop: { id: chatStopId, index: index === 0 ? (1 as const) : (2 as const) } }
+        : {})
     })),
     {
       clearInput: '',

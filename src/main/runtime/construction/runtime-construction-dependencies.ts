@@ -1,3 +1,8 @@
+import type {
+  ChatStopInput,
+  ChatStopBinding,
+  WriteSettlementSink
+} from '../../../shared/chat-stop-input'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
@@ -23,6 +28,12 @@ import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platf
 import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
+  captureChatStopInput?: (
+    paneKey: string,
+    input: ChatStopInput,
+    binding: ChatStopBinding
+  ) => WriteSettlementSink
+  clearChatStopInput?: (paneKey?: string) => void
   getLocalProvider?: () => IPtyProvider
   prepareClaudeAuth?: PrepareClaudeAuth
   onPtyStopped?: (ptyId: string) => void

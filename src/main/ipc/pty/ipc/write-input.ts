@@ -1,3 +1,4 @@
+import { parseChatStopInput, type ChatStopInput } from '../../../../shared/chat-stop-input'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -33,6 +34,7 @@ export type PtyWritePayload = {
   data: string
   inputKind: TerminalInputKind
   requireWriteSettlement?: true
+  chatStop?: ChatStopInput
 }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
@@ -224,7 +226,19 @@ export function createPtyWriteInput(deps: {
       }
       return accepted
     }
-    const result = writePtyProviderInput(provider, args.id, args.data, verify)
+    const chatStop =
+      !verify && args.data === '\x1b' && args.inputKind === 'driving'
+        ? parseChatStopInput(args.chatStop)
+        : undefined
+    const result = chatStop
+      ? provider.write(
+          args.id,
+          args.data,
+          ptyOwnership.get(args.id) === LOCAL_EXECUTION_HOST_ID
+            ? runtime?.captureChatStopInput(args.id, chatStop)
+            : undefined
+        ) !== false
+      : writePtyProviderInput(provider, args.id, args.data, verify)
     return typeof result === 'boolean' ? observe(result) : result.then(observe)
   }
 
@@ -263,6 +277,9 @@ export function createPtyWriteInput(deps: {
     }
     if (args.requireWriteSettlement === true) {
       return writePtyInputSettled(args)
+    }
+    if (args.data === '\x1b' && args.inputKind === 'driving' && parseChatStopInput(args.chatStop)) {
+      return writePtyInput(args)
     }
     // Only local ownership can acknowledge delivery; SSH relay writes remain fire-and-forget.
     if (ptyOwnership.get(args.id) !== LOCAL_EXECUTION_HOST_ID) {

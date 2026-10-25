@@ -1,3 +1,4 @@
+import type { WriteSettlementSink } from '../../shared/chat-stop-input'
 import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
@@ -17,11 +18,17 @@ export type RuntimeTerminalWriteOptions = {
   afterWrite?: (ptyId: string) => void | Promise<void>
   suffixFailureError?: string
   requireWriteSettlement?: true
+  onSettlement?: WriteSettlementSink
 }
 
 export class RuntimeTerminalWriter {
   constructor(
-    private readonly write: (ptyId: string, data: string, inputKind: TerminalInputKind) => boolean,
+    private readonly write: (
+      ptyId: string,
+      data: string,
+      inputKind: TerminalInputKind,
+      onSettlement?: WriteSettlementSink
+    ) => boolean,
     private readonly getWriteHostPlatform: (ptyId: string) => NodeJS.Platform = () =>
       process.platform,
     private readonly getAgent: (ptyId: string) => TerminalAgent | null = () => null,
@@ -147,7 +154,7 @@ export class RuntimeTerminalWriter {
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
     if (!options.requireWriteSettlement) {
-      if (!this.write(ptyId, data, options.inputKind)) {
+      if (!this.write(ptyId, data, options.inputKind, options.onSettlement)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
       return undefined

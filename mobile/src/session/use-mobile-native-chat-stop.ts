@@ -1,3 +1,4 @@
+import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -51,6 +52,7 @@ export function useMobileNativeChatStop(args: {
     cancelSecondEscape()
     const stopStreamIdentity = streamIdentity
     const deadline = openMobileNativeChatSendBudget()
+    const id = randomV4Uuid()
     // Wait for both paced Escapes and report failure only if neither was accepted; one Stop must not invite another after either key changed prompt state.
     let pending = 1
     let sawAccepted = false
@@ -68,7 +70,7 @@ export function useMobileNativeChatStop(args: {
       // Lost-ack/cutover Escape may have stopped work; report uncertainty instead of inviting a second key.
       onSendError(sawUnknown ? 'Stop unconfirmed — check chat before retrying' : 'Stop not sent')
     }
-    const sendEscape = (): void => {
+    const sendEscape = (index: 1 | 2): void => {
       const activeRoute = activeRouteRef.current
       if (
         !activeRoute.enabled ||
@@ -91,6 +93,7 @@ export function useMobileNativeChatStop(args: {
           client,
           {
             terminal: handle,
+            chatStop: { id, index },
             text: String.fromCharCode(27),
             ...(deviceTokenRef.current
               ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
@@ -121,7 +124,7 @@ export function useMobileNativeChatStop(args: {
           reportIfSettled()
         })
     }
-    sendEscape()
+    sendEscape(1)
     dropSecondEscapeRef.current = () => {
       pending -= 1
       reportIfSettled()
@@ -130,7 +133,7 @@ export function useMobileNativeChatStop(args: {
     timerRef.current = setTimeout(() => {
       timerRef.current = null
       dropSecondEscapeRef.current = null
-      sendEscape()
+      sendEscape(2)
       pending -= 1
       reportIfSettled()
     }, 80)

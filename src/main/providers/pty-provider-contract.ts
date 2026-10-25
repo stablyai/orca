@@ -1,3 +1,4 @@
+import type { WriteSettlementSink } from '../../shared/chat-stop-input'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
@@ -140,7 +141,7 @@ export type IPtyProvider = {
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
-  write(id: string, data: string): boolean | void
+  write(id: string, data: string, onSettlement?: WriteSettlementSink): boolean | void
   /** Durable claims require real write settlement; fire-and-forget providers must report inability to settle. */
   writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   resize(id: string, cols: number, rows: number): void

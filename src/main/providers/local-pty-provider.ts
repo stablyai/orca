@@ -1,3 +1,4 @@
+import { reportWriteSettlement, type WriteSettlementSink } from '../../shared/chat-stop-input'
 import type * as pty from 'node-pty'
 import type {
   IPtyProvider,
@@ -83,8 +84,13 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
-  write(id: string, data: string): boolean {
-    return writeLocalPty(id, data)
+  write(id: string, data: string, onSettlement?: WriteSettlementSink): boolean {
+    const accepted = writeLocalPty(id, data)
+    reportWriteSettlement(
+      onSettlement,
+      accepted ? WRITE_ACCEPTED : writeRefused('provider_refused_write')
+    )
+    return accepted
   }
 
   // In-process node-pty owns the write endpoint; its synchronous answer settles delivery.

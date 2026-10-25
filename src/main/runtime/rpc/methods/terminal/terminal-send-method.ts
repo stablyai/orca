@@ -1,3 +1,4 @@
+import { chatStopWriteObservation } from './terminal-chat-stop-observation'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
@@ -247,7 +248,7 @@ export const TERMINAL_SEND_METHODS = [
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
                 ...(params.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
-                ...(reserveWrite ? { reserveWrite } : {}),
+                ...chatStopWriteObservation(runtime, params, reserveWrite),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
                   : {})

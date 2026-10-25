@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { OptionalString, requiredString } from '../../../shared/rpc-contract/rpc-param-primitives'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendRuntimePtyInputVerified } from './runtime-terminal-verified-input'
 import {
@@ -121,5 +123,84 @@ describe('owner of the PTY', () => {
     expect(runtimeSend).toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-1', method: 'terminal.send' })
     )
+  })
+})
+
+// Frozen terminal.send schema from e04f4dc8a9ecf2da598e9393e46cbfb28bfe4d6d.
+const legacyTerminalSend = z.object({
+  terminal: requiredString('Missing terminal handle'),
+  expectedIncarnationId: requiredString('Missing PTY incarnation').optional(),
+  text: OptionalString,
+  enter: z.unknown().optional(),
+  interrupt: z.unknown().optional(),
+  agentPrompt: z.literal(true).optional(),
+  requireWriteSettlement: z.literal(true).optional(),
+  waitSubmitMs: z.number().int().min(0).max(3_600_000).optional(),
+  resolvedLaunchDraft: z
+    .object({
+      text: z.string(),
+      createdAt: z.number().finite()
+    })
+    .optional(),
+  requireAgentStatus: z.enum(['sendable']).optional(),
+  inputKind: z.enum(['query-reply']).optional(),
+  client: z
+    .object({
+      id: requiredString('Missing client ID'),
+      type: z.enum(['mobile', 'desktop']).default('desktop').optional()
+    })
+    .optional(),
+  viewport: z
+    .object({
+      cols: z.number().int().min(1).max(1000),
+      rows: z.number().int().min(1).max(500)
+    })
+    .optional(),
+  claimViewport: z.literal(true).optional()
+})
+
+describe('tagged Stop keeps one legacy delivery', () => {
+  it.each([false, true])(
+    'does not resend a local/SSH Stop after ordinary verdict %s',
+    async (accepted) => {
+      localWriteAccepted.mockResolvedValue(accepted)
+      await expect(
+        sendRuntimePtyInputVerified('ssh:conn-1@@pty-1', '\x1b', 'driving', {
+          chatStop: { id: 'stop', index: 1 }
+        })
+      ).resolves.toBe(accepted)
+      expect(localWriteAccepted).toHaveBeenCalledOnce()
+      expect(localWrite).not.toHaveBeenCalled()
+    }
+  )
+  it('does not resend after a provider throws after handoff', async () => {
+    localWriteAccepted.mockRejectedValue(new Error('lost reply'))
+    await expect(
+      sendRuntimePtyInputVerified('pty-1', '\x1b', 'driving', {
+        chatStop: { id: 'stop', index: 1 }
+      })
+    ).rejects.toThrow('lost reply')
+    expect(localWrite).not.toHaveBeenCalled()
+  })
+  it('lets a frozen older paired host strip only metadata and return the original reply', async () => {
+    runtimeSend.mockImplementation(async (request) => {
+      expect(legacyTerminalSend.parse(request.params)).toEqual({
+        terminal: 'terminal-1',
+        text: '\x1b',
+        client: { id: 'orca-desktop', type: 'desktop' }
+      })
+      return {
+        ok: true,
+        result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } },
+        _meta: { runtimeId: 'runtime-1' }
+      }
+    })
+    await expect(
+      sendRuntimePtyInputVerified(REMOTE_PTY, '\x1b', 'driving', {
+        chatStop: { id: 'stop', index: 1 }
+      })
+    ).resolves.toBe(true)
+    expect(runtimeSend).toHaveBeenCalledOnce()
+    expect(localWrite).not.toHaveBeenCalled()
   })
 })

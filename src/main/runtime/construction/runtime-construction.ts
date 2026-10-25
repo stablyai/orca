@@ -51,6 +51,13 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly onTerminalAgentStatus: HostServices['onTerminalAgentStatus']
   declare protected readonly onTerminalProgramStatusFacet: HostServices['onTerminalProgramStatusFacet']
   declare protected readonly onTerminalSideEffects: HostServices['onTerminalSideEffects']
+  declare protected readonly captureChatStopInputFn:
+    | RuntimeConstructionBindings['captureChatStopInput']
+    | null
+  declare protected readonly clearChatStopInputFn:
+    | RuntimeConstructionBindings['clearChatStopInput']
+    | null
+
   declare protected readonly onClaudeTerminalEvidence: HostServices['onClaudeTerminalEvidence']
   declare readonly getAgentStatusSnapshotFn: HostServices['getAgentStatusSnapshotFn']
   declare protected readonly structuredAgentStatusSinkFn: HostServices['structuredAgentStatusSinkFn']
@@ -238,6 +245,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.onTerminalProgramStatusFacet = deps?.onTerminalProgramStatusFacet ?? null
+    this.captureChatStopInputFn = deps?.captureChatStopInput ?? null
+    this.clearChatStopInputFn = deps?.clearChatStopInput ?? null
     this.onClaudeTerminalEvidence = deps?.onClaudeTerminalEvidence ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')

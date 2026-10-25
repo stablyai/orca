@@ -1,3 +1,4 @@
+import type { WriteSettlementSink } from '../../../../shared/chat-stop-input'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
@@ -22,7 +23,8 @@ export function writePtyFromRuntimeController(
   deps: RuntimeWriteDeps,
   ptyId: string,
   data: string,
-  inputKind: TerminalInputKind
+  inputKind: TerminalInputKind,
+  options?: { onSettlement?: WriteSettlementSink }
 ): boolean
 export function writePtyFromRuntimeController(
   deps: RuntimeWriteDeps,
@@ -36,7 +38,7 @@ export function writePtyFromRuntimeController(
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind,
-  options?: { waitForSettlement: true }
+  options?: { waitForSettlement?: true; onSettlement?: WriteSettlementSink }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
   const observeAcceptedInput = (): void => {
     if (isDrivingInputKind(inputKind) && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
@@ -71,7 +73,10 @@ export function writePtyFromRuntimeController(
   }
   deps.runtime?.terminalRunFacts?.recordInput(ptyId, inputKind, data)
   try {
-    const accepted = provider.write(ptyId, data) !== false
+    const accepted =
+      (options?.onSettlement
+        ? provider.write(ptyId, data, options.onSettlement)
+        : provider.write(ptyId, data)) !== false
     if (accepted) {
       observeAcceptedInput()
     }

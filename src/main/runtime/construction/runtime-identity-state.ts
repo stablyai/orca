@@ -323,7 +323,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   protected readonly terminalWaiters = new RuntimeTerminalWaiterRegistry()
 
   protected readonly terminalWriter = new RuntimeTerminalWriter(
-    (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind) ?? false,
+    (ptyId, data, inputKind, onSettlement) =>
+      this.ptyController?.write(ptyId, data, inputKind, onSettlement) ?? false,
     (ptyId) => this.getPtyWriteHostPlatform(ptyId),
     (ptyId) => this.getPtyAgent(ptyId),
     (ptyId, data, inputKind) =>

@@ -1,3 +1,4 @@
+import type { WriteSettlementSink } from '../../shared/chat-stop-input'
 import { shutdownRoutedDegradedSession } from './daemon-routed-session-shutdown'
 import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
@@ -118,8 +119,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.ownerRecovery.resolveFencedOwner(request.id, request.expectedIncarnationId)
     )
 
-  write(id: string, data: string): boolean | void {
-    return this.providerFor(id).write(id, data)
+  write(id: string, data: string, onSettlement?: WriteSettlementSink): boolean | void {
+    const provider = this.providerFor(id)
+    return onSettlement ? provider.write(id, data, onSettlement) : provider.write(id, data)
   }
 
   async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {

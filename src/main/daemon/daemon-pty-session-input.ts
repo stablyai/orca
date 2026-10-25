@@ -1,15 +1,20 @@
+import { reportWriteSettlement, type WriteSettlementSink } from '../../shared/chat-stop-input'
 import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
 
 export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
-  write(id: string, data: string): boolean {
+  write(id: string, data: string, onSettlement?: WriteSettlementSink): boolean {
     // Remount recovery cannot reopen a live child's retired PTY master; refuse instead of dropping.
     if (this.inputClosedIncarnations.isClosed(id, this.sessionIncarnations.get(id))) {
+      reportWriteSettlement(onSettlement, writeRefused('provider_refused_write'))
       return false
     }
     const recoverable = this.prepareWrite(id)
-    return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
+    const accepted = onSettlement
+      ? this.client.notify('write', { sessionId: id, data }, onSettlement)
+      : this.client.notify('write', { sessionId: id, data })
+    return this.finishWrite(id, accepted, recoverable)
   }
 
   /** Preserve ambiguous delivery as a settlement: throwing would look like proven refusal and permit replay. */

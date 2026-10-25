@@ -1,3 +1,4 @@
+import type { WriteSettlementSink } from '../../../../shared/chat-stop-input'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
@@ -142,6 +143,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       suffixFailureError?: string
       inputKind: TerminalInputKind
       requireWriteSettlement?: true
+      onSettlement?: WriteSettlementSink
     }
   ): Promise<RuntimeTerminalSend> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
