@@ -54,9 +54,10 @@ function transcriptLayoutStore(): RuntimeStore {
 
 export async function createTranscriptPane(
   options: TranscriptPaneOptions,
-  runtimeDeps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
+  runtimeDeps?: ConstructorParameters<typeof OrcaRuntimeService>[2],
+  Runtime: typeof OrcaRuntimeService = OrcaRuntimeService
 ): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
-  const runtime = new OrcaRuntimeService(
+  const runtime = new Runtime(
     ORCA_LAYOUT_OWNER_IS_MAIN ? transcriptLayoutStore() : null,
     undefined,
     runtimeDeps

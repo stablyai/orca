@@ -21,3 +21,18 @@ export function normalizeAndAccept(
   }
   return event
 }
+
+export function codexCompactionSequence(state: 'done' | 'waiting'): Record<string, unknown>[] {
+  return [
+    { hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Do work' },
+    state === 'done'
+      ? { hook_event_name: 'Stop', turn_id: 'turn-1' }
+      : {
+          hook_event_name: 'PreToolUse',
+          turn_id: 'turn-1',
+          tool_name: 'request_user_input',
+          tool_input: { questions: [{ id: 'choice', question: 'Which option?' }] }
+        },
+    { hook_event_name: 'SessionStart', source: 'compact' }
+  ].map((payload) => ({ session_id: 'compact-session', ...payload }))
+}
