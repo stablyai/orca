@@ -170,6 +170,10 @@
               {
                 "regex": "(?i)(?:^|[/\\\\])(?:web-session-tabs-sync-test-harness|web-runtime-browser-creation-placement-test-rig)(?:\\.[cm]?[jt]sx?)?(?:[?#].*)?$",
                 "message": "This module is unit-test support. Import the production web-session owner instead."
+              },
+              {
+                "regex": "\\.fixture(?:\\.tsx?)?(?:[?#].*)?$",
+                "message": "Component fixtures are dev-only and load through the fixture explorer's import.meta.glob; importing one would ship it in a production bundle."
               }
             ]
           }

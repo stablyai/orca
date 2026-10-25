@@ -70,6 +70,7 @@ desktop.ini
 /.cache/vite/
 /.cache/vite.lock/
 /.cache/typecheck/
+/.cache/fixtures/
 
 # Logs
 *.log
@@ -116,6 +117,7 @@ docs/**
 !docs/reference/cross-platform-support.md
 !docs/reference/git-workflow.md
 !docs/reference/test-antipatterns.md
+!docs/reference/component-fixtures.md
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/mobile-terminal-shortcut-bar.md
 

@@ -96,6 +96,8 @@
     "dev": "pnpm run build:packages && pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs",
     "dev-stable-name": "pnpm run build:packages && pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs --stable-name",
     "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1",
+    "dev:fixtures": "vite --config vite.fixtures.config.ts",
+    "fixtures:shot": "node config/scripts/component-fixtures/fixtures-shot.mjs",
     "build:wsl-guest": "pnpm run build:packages && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/build-wsl-guest.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",
     "build:keyboard-layout-macos": "node config/scripts/build-keyboard-layout-macos.mjs",
