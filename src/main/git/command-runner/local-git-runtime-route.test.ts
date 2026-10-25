@@ -84,3 +84,19 @@ describe('admitWslGit', () => {
     ).toBeNull()
   })
 })
+
+describe('the missing-distro cache with the router off', () => {
+  afterEach(() => {
+    resetWslGitAdmissionForTests()
+  })
+
+  it('is never armed or consulted, so every call runs as before D1c', () => {
+    const routed = { cwd: String.raw`C:\wsl-project`, wslDistro: 'Ubuntu' }
+    setLocalGitRuntimeRouter(null)
+    noteWslGitFailure(routed, new Error('WSL_E_DISTRO_NOT_FOUND'), 1_000)
+    expect(admitWslGit(routed, 2_000)).toBeNull()
+    // Turning the router on later finds nothing recorded while it was off.
+    setLocalGitRuntimeRouter(() => 'Ubuntu')
+    expect(admitWslGit(routed, 2_000)).toBeNull()
+  })
+})

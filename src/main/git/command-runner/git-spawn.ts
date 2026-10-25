@@ -10,7 +10,7 @@ import type { GitAdmissionTier } from './git-exec-options'
 import { acquireGitAdmission } from './git-subprocess-admission'
 import { classifyGitCommand } from '../../../shared/git-command-classification'
 import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
-import { admitWslGit, routeLocalGitOptions } from './local-git-runtime-route'
+import { admitWslGit, noteWslGitFailure, routeLocalGitOptions } from './local-git-runtime-route'
 
 export type GitSpawnOptions = SpawnOptions & {
   cwd: string
@@ -79,11 +79,26 @@ export async function withGitAdmission(
     const child = spawnRouted()
     let finalized = false
     let liveError: Error | null = null
+    // wsl.exe says a distro is missing on stderr; keep a tail so the failure can name it.
+    let stderrTail = ''
+    const keepStderr = (chunk: Buffer | string): void => {
+      stderrTail = `${stderrTail}${String(chunk)}`.slice(-2_048)
+    }
+    if (options.wslDistro) {
+      child.stderr?.on('data', keepStderr)
+    }
     const finalize = (error?: Error): void => {
       if (finalized) {
         return
       }
       finalized = true
+      child.stderr?.off('data', keepStderr)
+      if (error) {
+        noteWslGitFailure(
+          options,
+          stderrTail ? new Error(`${error.message}\n${stderrTail}`) : error
+        )
+      }
       child.off('error', handleError)
       child.off('close', handleClose)
       grant?.release()
@@ -114,6 +129,7 @@ export async function withGitAdmission(
   } catch (error) {
     grant?.release()
     span.fail(error instanceof Error ? error : new Error(String(error)))
+    noteWslGitFailure(options, error)
     throw error
   }
 }

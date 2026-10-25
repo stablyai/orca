@@ -78,7 +78,8 @@ export function admitWslGit(
   now: number = Date.now()
 ): Promise<void> | null {
   const distro = options.wslDistro
-  if (!distro) {
+  // Only with the router installed (D1c); otherwise every call runs exactly as before it.
+  if (!distro || !router) {
     return null
   }
   const until = missingUntil.get(distroKey(distro))
@@ -105,7 +106,7 @@ export function noteWslGitFailure(
   error: unknown,
   now: number = Date.now()
 ): void {
-  if (options.wslDistro && isWslDistroNotFoundFailure(error)) {
+  if (router && options.wslDistro && isWslDistroNotFoundFailure(error)) {
     missingUntil.set(distroKey(options.wslDistro), now + MISSING_DISTRO_TTL_MS)
   }
 }
