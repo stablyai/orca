@@ -78,8 +78,7 @@ describe('getInstalledAgentSkillVerdict', () => {
     expect(unverifiable({ sources: [source('repo', 'unavailable')] })).toBe(false)
   })
 
-  // The reported bug: `sources` is empty until a result lands, so a scan that
-  // errored before answering is invisible to the unreadable-root check.
+  // Pre-answer failure leaves sources empty, so missing results need a separate unknown check.
   it('cannot vouch for a negative when the scan errored before ever answering', () => {
     expect(unverifiable({ settled: false, error: 'scan failed' })).toBe(true)
   })

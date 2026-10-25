@@ -76,6 +76,7 @@ function createParseContext(
       sessionCwd: resume.sessionCwd,
       currentCwd: resume.currentCwd,
       currentModel: resume.currentModel,
+      currentTurnId: resume.currentTurnId,
       previousTotals: resume.previousTotals,
       totalOnlyBaselinePending: false
     }

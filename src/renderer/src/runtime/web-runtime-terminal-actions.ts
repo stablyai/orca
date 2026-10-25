@@ -44,7 +44,7 @@ export function splitWebRuntimeTerminal(
     return false
   }
 
-  // Why: split must run on the host pane; a local split mints a web-only pane the host mirrors back as a tab, not a split.
+  // Split on the host pane; local splits mint web-only panes the host mirrors as separate tabs.
   const pendingMirrorSuppressionId = reservePendingWebRuntimeSplitMirrorTelemetry(ptyId, direction)
   const releasePendingMirrorSuppression = schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
     ptyId,
@@ -78,8 +78,7 @@ export function splitWebRuntimeTerminal(
     .catch((error) => {
       releasePendingMirrorSuppression()
       const message = error instanceof Error ? error.message : String(error)
-      // Why: a split that fails only in the console leaves the user with a pane that silently
-      // never appears.
+      // Report failed splits visibly or the requested pane silently never appears.
       toast.error(message)
       console.warn('[web-runtime-session] failed to split terminal:', message)
     })
@@ -176,7 +175,7 @@ export function closeWebRuntimeTerminal(
     return false
   }
 
-  // Why: host owns the real pane graph; close the host terminal first so later snapshots can't resurrect the removed pane.
+  // Close host terminal first or later authoritative snapshots resurrect the pane.
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,
@@ -202,7 +201,7 @@ export function closeWebRuntimeTerminal(
   return true
 }
 
-// Why: pane geometry is host-authoritative for remote tabs; local-only changes revert on next snapshot, so push to host.
+// Push remote geometry to its host or the next authoritative snapshot reverts it.
 export async function updateWebRuntimePaneLayout(args: {
   worktreeId: string
   tabId: string
@@ -221,8 +220,7 @@ export async function updateWebRuntimePaneLayout(args: {
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
-  // Switch point: a frame-drawn workspace's pane geometry goes as layout.apply intents (sizes, moves,
-  // chat pane) and its frames draw it back; only a pane rename still needs this push.
+  // Frame-drawn geometry uses layout.apply (sizes, moves, chat pane); only rename still needs this push.
   if (!args.renamedLeafIds?.length && isServerFrameDrawnWorkspace(environmentId, args.worktreeId)) {
     return true
   }
@@ -255,7 +253,7 @@ export async function updateWebRuntimePaneLayout(args: {
   }
 }
 
-// Why: tab color/pin are host-authoritative; mirror the change so it persists (undefined field = leave as-is on host).
+// Push color/pin to the authoritative host for persistence; undefined means unchanged.
 export function setWebRuntimeTabProps(args: {
   worktreeId: string
   tabId: string

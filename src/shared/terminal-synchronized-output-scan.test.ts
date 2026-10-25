@@ -13,8 +13,7 @@ const CLOSE = SYNCHRONIZED_OUTPUT_END_SEQUENCE
 
 describe('advanceDroppedSynchronizedOutputLatch', () => {
   it('releases the latch when the dropped span ended mid-frame', () => {
-    // The close was inside the bytes the renderer will never receive, so xterm
-    // would paint nothing until its 1000ms forced flush.
+    // The dropped close never reaches xterm, freezing repaint until its 1s forced flush.
     const result = advanceDroppedSynchronizedOutputLatch(
       `${OPEN}rows`,
       INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE

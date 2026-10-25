@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: image surface size is measured with ResizeObserver and DOM refs, which are external layout systems outside render derivation. */
 import { Image as ImageIcon, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -31,11 +30,9 @@ type ImageViewerProps = {
   filePath: string
   mimeType?: string
   layout?: 'fill' | 'intrinsic'
-  // Why: callers without an owner identity (for example diff and conflict
-  // panes) must not persist a preference under a path-only key.
+  // Persist zoom only with owner-qualified identity; diff/conflict callers must not use a path-only key.
   preferenceKey?: string | null
-  // Why: absent means "no PDF scroll memory" — diff and conflict-review callers
-  // mount several viewers on one path, so they deliberately pass nothing.
+  // Omission disables PDF scroll memory because diff/conflict surfaces can share a path.
   scrollCacheKey?: string | null
 }
 
@@ -155,8 +152,7 @@ export default function ImageViewer({
       inlineSurfaceRef.current = surface
       if (surface) {
         setInlineSurfaceSize(getElementSurfaceSize(surface))
-        // Why: Chromium exposes trackpad pinch as ctrl-wheel and requires a
-        // native non-passive listener to stop browser/app zoom.
+        // Chromium reports pinch as ctrl-wheel; a non-passive listener must cancel browser zoom.
         surface.addEventListener('wheel', handleInlineImageSurfaceWheel, { passive: false })
       } else {
         setInlineSurfaceSize(null)
@@ -331,8 +327,7 @@ export default function ImageViewer({
                     ? 'block h-auto max-h-none max-w-full'
                     : inlineImageLayoutSize
                       ? 'block h-full w-full'
-                      : // Why: the w-max/h-max scroll box makes percentage maxes resolve to
-                        // none, so only viewport units bound the image before onLoad.
+                      : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
                         'block max-h-[100vh] max-w-[100vw]'
                 )}
                 onLoad={(event) => {
@@ -340,8 +335,7 @@ export default function ImageViewer({
                   setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
                   setFailedPreviewSrc(null)
                 }}
-                // Why: track the failed source identity, not a boolean, so a new
-                // image retries immediately without waiting for an Effect reset.
+                // Key failures by source so new images retry immediately without an effect reset.
                 onError={() => setFailedPreviewSrc(previewSrc)}
               />
             </div>

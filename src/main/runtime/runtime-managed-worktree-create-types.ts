@@ -65,13 +65,14 @@ export type RuntimeManagedWorktreeCreateArgs = {
   terminalImageViewerSupported?: boolean
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string
-  /** Main-internal: set by a caller that delivers an uncarried `startupPrompt` itself, so the text
-   *  rides only a typed line that can carry it; reports whether it did. */
+  /** Main-only: caller delivers any uncarried startupPrompt through a compatible typed line and receives delivery status. */
   onStartupPromptCarry?: (carried: boolean) => void
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
   /** Main-internal: an automation's saved extras, merged over the startup agent's arguments. */
   startupExtraAgentArgs?: string
+  /** Main-internal: Orca, not a user, types into the startup agent once it starts. */
+  startupSuppressUpdatePrompt?: boolean
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string
@@ -81,17 +82,13 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupAccountEnv?: Record<string, string>
   pendingFirstAgentMessageRename?: boolean
   automationProvenance?: AutomationWorkspaceProvenance
-  /**
-   * Host-side only, never on the wire: lets an offline create from a remote base use the local
-   * branch it names. Only creates a person initiated opt in.
-   */
+  /** Host-only opt-in for user-initiated offline creates to use the remote base's named local branch; never sent over wire. */
   allowLocalBaseFallback?: boolean
   cliProvenance?: CliWorkspaceProvenance
   creatorProvenance?: Worktree['creatorProvenance']
   startup?: WorktreeStartupLaunch
   startupDraft?: string
-  /** Main-internal: the agent a launch already chose for `startupDraft`, so the create does not
-   *  choose again. Steers only the draft; `createdWithAgent` stays what the caller asked for. */
+  /** Reuse the launch-selected draft agent without changing caller-requested createdWithAgent. */
   startupDraftAgent?: TuiAgent
   startupDraftPaste?: WorktreeStartupDraftPaste
   lineage?: {

@@ -18,8 +18,7 @@ export function mirrorWebRuntimeTabMove(
   if (!isWebRuntimeSessionActive(environmentId)) {
     return
   }
-  // Switch point: a tab only this desktop has moves here only; the server never had it, and its
-  // frames keep it where this window drew it.
+  // Desktop-only tabs move locally; server frames cannot place tabs the server never owned.
   if (
     ORCA_LAYOUT_OWNER_IS_MAIN &&
     isDesktopCreatedTabInFrameDrawnServerWorkspace(args.worktreeId, args.tabId)

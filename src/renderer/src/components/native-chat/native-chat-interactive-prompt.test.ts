@@ -215,9 +215,7 @@ const single = (options: string[], multiSelect = false): AskPrompt => ({
 
 describe('buildAskAnswerKeys', () => {
   it('single-select: sends the picked option NUMBER (not the label), no trailing Enter', () => {
-    // STA-1860 regression: picking the 2nd option must deliver the 2nd option.
-    // '2' is the selector marker Claude commits on; a label + Enter committed the
-    // highlighted default (option 1) instead.
+    // Claude commits numbered selector markers; label-plus-Enter would choose the highlighted default instead.
     expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
       { raw: '2' }
     ])
@@ -272,6 +270,52 @@ describe('buildAskAnswerKeys', () => {
 
   it('is empty when nothing is answered', () => {
     expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [] }])).toEqual([])
+  })
+
+  it('preview single-select: focuses the option number, notes free text, then commits with Enter', () => {
+    // #16865: Claude's preview selector only moves focus on a digit.
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [
+          {
+            question: 'Layout?',
+            options: [
+              { label: 'Alpha', preview: '+--+' },
+              { label: 'Beta', preview: '|  |' }
+            ]
+          },
+          { question: 'Color?', options: [{ label: 'Red' }, { label: 'Blue' }] }
+        ]
+      })
+    )!
+    expect(buildAskAnswerKeys(prompt, [{ indices: [1] }, { indices: [1] }])).toEqual([
+      { raw: '2' },
+      { raw: '\r' },
+      { raw: '2' },
+      { raw: '\r' }
+    ])
+    expect(
+      buildAskAnswerKeys(prompt, [{ indices: [1], other: 'wider' }, { indices: [0] }])
+    ).toEqual([
+      { raw: '2' },
+      { raw: 'n' },
+      { text: 'wider' },
+      { raw: '\r' },
+      { raw: '1' },
+      { raw: '\r' }
+    ])
+    // Claude drops the pick on an unmoved first row, answering "(notes only)".
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0], other: 'wider' }, { indices: [] }])).toEqual(
+      [
+        { raw: '2' },
+        { raw: '1' },
+        { raw: 'n' },
+        { text: 'wider' },
+        { raw: '\r' },
+        { raw: '\x1b[C' },
+        { raw: '\r' }
+      ]
+    )
   })
 })
 

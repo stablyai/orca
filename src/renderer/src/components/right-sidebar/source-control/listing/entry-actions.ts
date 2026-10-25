@@ -1,13 +1,7 @@
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { isStageableStatusEntry } from '../commit/discard-all-sequence'
 
-/**
- * Per-row Source Control action eligibility, centralized so the stage/unstage/
- * discard gates stay consistent between the row UI, bulk selection, and tests.
- * A submodule-internal row (`submoduleRoot` set) is read-only from the parent
- * worktree: the parent repo's git can't stage/unstage/discard changes that live
- * in the submodule's own working tree, so those actions are suppressed here.
- */
+/** Share row/bulk eligibility; submodule-internal rows are read-only because parent Git cannot mutate their working tree. */
 
 export function canStageStatusEntry(entry: GitStatusEntry): boolean {
   return isStageableStatusEntry(entry)

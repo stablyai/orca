@@ -129,12 +129,11 @@ afterEach(() => {
   container.remove()
 })
 
-// Text only that option's own control renders; Group by's heading belongs to the section.
+// Probe the control’s own text because Group by’s heading belongs to the whole section.
 const PROBE: Partial<Record<WorkspaceViewOptionKey, string>> = {
   groupBy: WORKSPACE_GROUP_BY_CHOICES[0].label
 }
 
-/** The options whose control the menu rendered, in document order. */
 function renderedOptionKeys(): WorkspaceViewOptionKey[] {
   const text = container.textContent ?? ''
   return WORKSPACE_VIEW_OPTIONS.map((option) => ({

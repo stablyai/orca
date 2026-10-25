@@ -30,8 +30,7 @@ export type FeatureWallSetupProgress = {
 }
 
 function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree[]>): number {
-  // Why: imported git worktrees count as real parallel-work capacity, but
-  // partially hydrated placeholders can appear before a worktree path is known.
+  // Count imported worktrees, but exclude unhydrated placeholders without paths.
   return Object.values(worktreesByRepo).reduce(
     (sum, worktrees) =>
       sum +
@@ -75,8 +74,6 @@ export function getFeatureWallSetupProgress(
       input.settings?.notifications.enabled === true &&
       input.settings.notifications.agentTaskComplete === true,
     'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
-    // Why: the 'browser' interaction fires when a non-blank page is viewed, so
-    // opening any real page in Orca's browser durably completes this milestone.
     browser: hasFeatureInteraction(input.featureInteractions, 'browser'),
     'task-sources': input.hasConnectedTaskSource,
     'agent-capabilities': agentCapabilitiesDone,

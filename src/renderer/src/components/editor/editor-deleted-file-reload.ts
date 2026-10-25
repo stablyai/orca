@@ -4,8 +4,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import type { FileContent } from './editor-panel-content-types'
 
-// Node's fs message names the syscall and the path; IPC and runtime RPC both carry it verbatim.
-// Greedy to the last quote: file names may contain apostrophes.
+// IPC/RPC preserve fs syscall/path text; match through the last quote because filenames can contain apostrophes.
 const MISSING_FILE_MESSAGE = /ENOENT: no such file or directory, \w+ '(.+)'/
 
 /** True only when the failure names this exact file as missing — never a worktree or host lookup. */
@@ -18,11 +17,7 @@ export function isPathSpecificMissingFileError(error: unknown, filePath: string)
   )
 }
 
-/**
- * Shows a failed read. A reload of a tab that already read the file (catch-up, watch event, stale reveal) found it gone:
- * mark the tab deleted as a watch event would, and keep its last content instead of an empty error.
- * Works without any existence probe, so hosts that predate one are covered too.
- */
+/** On proven file absence after a prior load, retain content and mark deleted; path-specific read errors support hosts without existence probes. */
 export function applyEditorFileLoadFailure(args: {
   error: unknown
   fileId: string

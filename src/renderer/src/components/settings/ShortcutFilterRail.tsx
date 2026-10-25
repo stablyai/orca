@@ -60,8 +60,7 @@ export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEnt
   }
 }
 
-// Why: a sidebar query can select this pane by title alone while matching zero
-// rows; that would blank the list, so zero-row queries keep every row visible.
+// Title-only sidebar queries can select the pane without matching rows; keep all rows rather than blanking it.
 export function buildShortcutGlobalSearchMatcher(
   rows: readonly ShortcutRowModel[],
   searchQuery: string

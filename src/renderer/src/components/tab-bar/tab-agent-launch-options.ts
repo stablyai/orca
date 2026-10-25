@@ -91,10 +91,7 @@ export function buildTabAgentLaunchOptionsFromRows(
   })
 }
 
-// Scores how well a query matches an agent. Exact alias equality is the
-// strongest signal; otherwise every query token must prefix some alias token.
-// Why prefix-only (not substring): agent rows rank above file matches, so a
-// mid-string match like "ode" → "opencode" would noisily hijack the list.
+// Require exact aliases or token prefixes; substring hits would outrank files and hijack the omnibox.
 function scoreAgentLaunchOption(
   normalizedQuery: string,
   compactQuery: string,
@@ -115,9 +112,7 @@ function scoreAgentLaunchOption(
       if (candidateToken === queryToken) {
         best = Math.max(best, 3)
       } else if (queryToken.length >= 2 && candidateToken.startsWith(queryToken)) {
-        // Why: a single-character prefix matches almost every agent, flooding the
-        // list and letting one keystroke auto-launch the wrong agent; require an
-        // exact token match below 2 chars.
+        // Require exact tokens below two characters to avoid accidental one-keystroke agent launches.
         best = Math.max(best, 2)
       }
     }

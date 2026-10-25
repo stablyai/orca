@@ -1,8 +1,4 @@
-/**
- * A run that executed on a paired server (#21213) names the server's tab, pane and PTY. This client
- * shows that pane as a mirrored tab keyed by the server's terminal handle, so matching the server's
- * PTY id against local state always failed and the run read "Run terminal is unavailable.".
- */
+/** Paired runs use server PTY IDs while local mirrors use terminal handles; comparing those IDs falsely made available run terminals appear missing (#21213). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'

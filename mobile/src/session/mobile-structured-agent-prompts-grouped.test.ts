@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import {
   projectStructuredQuestion,
   type StructuredQuestionItem
 } from './mobile-structured-agent-prompts'
 
-/** The shape the host emits for a Claude AskUserQuestion carrying more than one question:
- *  the flat `question`/`options` pair is a placeholder and the real content is in `questions`. */
+// Grouped Claude prompts leave flat question/options as placeholders; real content lives in questions.
 function groupedPrompt(): StructuredQuestionItem {
   return {
     itemId: 'item-1',
     revision: 1,
+    sequence: 1,
+    observedAt: 1,
     body: {
       kind: 'question',
       question: '2 grouped questions from Claude',
@@ -31,16 +31,16 @@ function groupedPrompt(): StructuredQuestionItem {
           freeTextQuestionId: 'q2'
         }
       ],
-      resolution: { state: 'pending' }
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
     }
-  } as unknown as AgentJournalRenderItem as StructuredQuestionItem
+  }
 }
 
 describe('structured question projection for grouped Claude prompts', () => {
   it('renders an answerable question instead of the empty placeholder card', () => {
     const projected = projectStructuredQuestion(groupedPrompt())
 
-    expect(projected?.question).not.toBe('2 grouped questions from Claude')
+    expect(projected?.question).toBe('Which database? (1 of 2)')
     expect(projected?.options).toEqual(['Postgres'])
     expect(projected?.optionDescriptions).toEqual(['Durable server'])
     expect(projected?.optionTokens.filter(Boolean)).toHaveLength(1)

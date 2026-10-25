@@ -33,9 +33,7 @@ function readsChildViews(ctx: BackgroundTaskReader): boolean {
   )
 }
 
-/** A reader that predates child views never gets the views it cannot read. Every roster it is
- *  handed lists running work (`tasks`), so its reading of any roster as live work holds. Deleted
- *  with the legacy shapes: see `structured-agent-session-child-work-legacy`. */
+/** Older readers interpret every roster as running work; withhold unreadable child views until legacy shapes retire (structured-agent-session-child-work-legacy). */
 function withoutChildViews(
   state: AgentSessionBackgroundTaskState
 ): AgentSessionBackgroundTaskState {
@@ -43,12 +41,8 @@ function withoutChildViews(
   return legacy
 }
 
-/** A reader that predates `stoppable` draws a per-row stop on every row it is
- *  handed, and the host cannot honour one on a row marked unstoppable — the
- *  dead button the field exists to remove. The host publishing such rows at all
- *  is new, so withholding them hands that reader exactly its pre-feature view;
- *  a state whose every row is withheld becomes no strip, as it was. A host that
- *  offers no targeted stop draws no per-row stop, so it has nothing to withhold. */
+/** Older readers draw stop on every row; with targeted-stop support, hide unstoppable rows or they get dead buttons.
+ * Without targeted stop there are no buttons to withhold. Empty projected states retain the pre-feature no-strip view. */
 function withoutUnstoppableRows(
   state: AgentSessionBackgroundTaskState
 ): AgentSessionBackgroundTaskState | null {

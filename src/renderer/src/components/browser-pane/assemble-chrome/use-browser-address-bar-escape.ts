@@ -35,8 +35,7 @@ export function useBrowserAddressBarEscape({
   const typedValueRef = useRef<string | null>(null)
   const selectAllOnCommitRef = useRef(false)
 
-  // Why after commit: React moves the caret to the end when it writes a new value into a focused
-  // input, so selecting in the handler would be undone by the reverted text landing.
+  // Select after React commits reverted text; a handler-time selection would be reset to the end.
   useLayoutEffect(() => {
     if (!selectAllOnCommitRef.current) {
       return
@@ -56,8 +55,7 @@ export function useBrowserAddressBarEscape({
       }
       event.preventDefault()
       event.stopPropagation()
-      // Why both: the typed text tells a retyped page address from an untouched one, and the
-      // comparison covers drafts handed over from a pane that remounted mid-edit.
+      // Track explicit typing as well as text differences so retyped committed URLs and remount drafts both count as edits.
       const inputInProgress = value === typedValueRef.current || value !== committedValue
       if (previewing) {
         restoreTypedQuery()

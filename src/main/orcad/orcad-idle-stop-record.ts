@@ -1,8 +1,4 @@
-/**
- * The record that tells a clean idle stop apart from a crash. Written just before an idle
- * stop and discarded if that stop fails; the next start reports it once and removes it, so a
- * later crash never inherits it.
- */
+// Consume clean idle-stop evidence once; discard failed stops so later crashes cannot inherit it.
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
@@ -40,7 +36,6 @@ export function writeOrcadIdleStopRecord(
   }
 }
 
-/** The previous run's idle stop, or null when it ended any other way (or never ran). */
 export function consumeOrcadIdleStopRecord(userDataPath: string): OrcadIdleStopRecord | null {
   const path = orcadIdleStopRecordPath(userDataPath)
   let record: OrcadIdleStopRecord | null = null

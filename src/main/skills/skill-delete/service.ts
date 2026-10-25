@@ -42,7 +42,7 @@ export type SkillDeleteServiceInput = {
   stateDirectory: string
   wslDistro?: string | null
   homeDir?: string
-  /** Mirrors install's own knob; the shared 5s default applies when unset. */
+  /** Shared lock default is 5s. */
   lockTimeoutMs?: number
 }
 
@@ -52,11 +52,7 @@ export async function previewSkillDeletion(
   return (await buildSkillDeletePlan(input)).plan
 }
 
-/**
- * Recomputes the plan rather than trusting a client-supplied one, and executes
- * it per skill: one lock, one journal, stage → remove → receipt cleanup. A
- * failure is confined to its own skill; the rest of the batch continues.
- */
+/** Recompute host-owned plans; isolate each skill with its lock/journal so a failure cannot stop the batch. */
 export async function deleteSkills(input: SkillDeleteServiceInput): Promise<SkillDeleteResult> {
   const resolved = await buildSkillDeletePlan(input)
   const skills: SkillDeleteResultEntry[] = []
@@ -73,16 +69,13 @@ export async function deleteSkills(input: SkillDeleteServiceInput): Promise<Skil
         : await deleteOneSkill(entry, resolved, input)
     )
   }
-  // Once per batch, on the executing host: the target coalescer, the per-root
-  // cache, and the last-known-good retention would otherwise serve a pre-delete
-  // answer and the row visibly comes back.
+  // Clear coalesced, per-root and retained pre-delete answers or the removed skill row reappears.
   clearSkillDiscoveryCaches()
   recordSkillDeleteOperation({
     operationId: resolved.plan.operationId,
     hostKind: input.target.kind,
     skills,
-    // Root *ids* only. A repo or plugin id is already a hash, where a label
-    // carries the repo name and a path carries the user's directory names.
+    // Log hashed root ids only; labels and paths expose private names.
     rootIds: [
       ...new Set(
         [...resolved.placementRoots.values()].flatMap((placements) =>
@@ -101,14 +94,7 @@ async function deleteOneSkill(
 ): Promise<SkillDeleteResultEntry> {
   const api = nativeSkillPathSemantics().sep === '\\' ? pathWin32 : pathPosix
   const canonical = entry.placements.find((placement) => placement.kind === 'canonical')
-  // The lock key is the canonical placement's own LITERAL directory path, in the
-  // filesystem's spelling — not `canonicalPath`'s dirname. Install hashes the
-  // literal destination without realpath'ing it, so a symlinked component (a
-  // symlinked home, macOS `/tmp`) would hash to a different, uncontended lock.
-  //
-  // With no canonical placement (a tool-managed skill linked in from outside the
-  // roots) no install could have created one, so any stable key excludes
-  // correctly; prefer a path Orca owns over the out-of-root canonical.
+  // Install locks literal placement paths, so realpath keys would not contend under symlinked homes. Without canonical placement, prefer an owned alias over external content.
   const lockKeyPath = resolved.toFilesystemPath(
     canonical?.path ?? entry.placements[0]?.path ?? api.dirname(entry.canonicalPath)
   )
@@ -119,8 +105,6 @@ async function deleteOneSkill(
       ...(input.lockTimeoutMs === undefined ? {} : { timeoutMs: input.lockTimeoutMs })
     })
   } catch {
-    // Someone else is mid-transaction on this exact skill. The rest of the batch
-    // is unaffected.
     return { id: entry.id, name: entry.name, status: 'busy', removedPaths: [] }
   }
   try {
@@ -155,8 +139,7 @@ async function runStagedDeletion(
     movedCount,
     moves
   })
-  // Written before anything is renamed: a crash between staging and cleanup must
-  // not orphan a directory nothing will ever revisit.
+  // Persist intent before rename so a crash cannot orphan staged directories.
   await writeSkillDeleteJournal(input.stateDirectory, journal('prepared', 0))
 
   const staging = await stageSkillDeleteMoves({
@@ -191,9 +174,7 @@ async function runStagedDeletion(
   return {
     id: entry.id,
     name: entry.name,
-    // Staging fully succeeded, so the skill is gone from every discovered
-    // location. A receipt cleanup failure remains journaled for startup retry,
-    // but does not leave skill content on disk.
+    // Full staging removes discovered content; receipt-cleanup failure keeps its retry journal.
     status: removal.unremoved.length > 0 ? 'partial' : 'deleted',
     removedPaths: sourcePathsFor(moves, removal.removedPaths),
     ...(removal.unremoved.length > 0 ? { stagedPaths: removal.unremoved } : {})

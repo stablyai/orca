@@ -12,7 +12,6 @@ export function startRun(): CellRun {
   }
 }
 
-/** Ends the executing run, if any, and drops every queued cell. */
 export function stopRuns(session: NotebookKernelSession, extraOutputs: NotebookOutput[] = []) {
   const key = runningCellKey(session)
   const run = key === null ? null : session.runs[key]

@@ -1,21 +1,4 @@
-/**
- * Memory-leak regression: nine per-tab / per-pty terminal+agent store maps were
- * evicted on the SINGLE removeWorktree path (via closeTab / shutdownWorktreeTerminals)
- * but NOT on the BULK path — `buildWorktreePurgeState`, reached by removeProject, the
- * external-worktree-removal authoritative-scan reconcile, and the hydration-stale
- * reconcile. That path runs no terminal teardown, so before the fix each map stranded
- * an entry per tab/pane of every externally-removed worktree for the renderer's whole
- * session (unbounded across add/remove-repo cycles). tabId and ptyId are ephemeral,
- * never-reused key spaces.
- *
- * Tab-keyed (evicted via the doomed-tab set):
- *   lastKnownRelayPtyIdByTabId, pendingReconnectPtyIdByTabId,
- *   deferredSshSessionIdsByTabId, pendingInitialCwdByTabId,
- *   pendingIssueCommandSplitByTabId, pendingStartupByTabId
- * Pty-keyed (evicted via the doomed-pty set derived from live and durable bindings):
- *   codexRestartNoticeByPtyId, migrationUnsupportedByPtyId,
- *   suppressedPtyExitIds, pendingPaneAccountRestarts
- */
+/** Bulk purge runs no terminal teardown; evict tab maps and PTY maps from live/durable bindings like single removal. External scans/project removal/hydration otherwise leak ephemeral terminal/agent keys for renderer lifetime. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
@@ -73,8 +56,7 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
       [WT1]: [makeTab({ id: TAB1, worktreeId: WT1, ptyId: PTY1 })],
       [WT2]: [makeTab({ id: TAB2, worktreeId: WT2, ptyId: PTY2 })]
     },
-    // A slept/stale tab has already left the live index, so purge must recover
-    // its owned PTY ids from the durable tab/layout wake hints instead.
+    // Slept/stale tabs lack live PTY index entries; recover owned IDs from durable wake bindings.
     ptyIdsByTabId: { [TAB1]: [], [TAB2]: [PTY2] },
     terminalLayoutsByTabId: {
       [TAB1]: {
@@ -234,8 +216,7 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
 
     store.getState().purgeWorktreeTerminalState([WT1])
 
-    // Why: guard keys stay scoped to their environment, so purge can delete
-    // exact identities without parsing aliases or scanning surviving terminals.
+    // Environment-scoped guard identities permit exact purge without parsing aliases or scanning survivors.
     expect(parseRemotePtyId).not.toHaveBeenCalled()
   })
 })

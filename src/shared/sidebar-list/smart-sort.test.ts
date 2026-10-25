@@ -108,10 +108,6 @@ function ptyMapForTabs(tabsByWorktree: Record<string, TerminalTab[]>): Record<st
   return out
 }
 
-/**
- * Sort helper: builds the attention map and runs the smart comparator. Mirrors
- * what callers do in production (visible-worktrees, WorktreeList).
- */
 function sortSmartAt(
   now: number,
   worktrees: Worktree[],
@@ -149,14 +145,12 @@ describe('smart sort — class invariants', () => {
       [paneKey('tab-blocked', '1')]: makeEntry({
         paneKey: paneKey('tab-blocked', '1'),
         state: 'blocked',
-        // older than the done timestamp
         stateStartedAt: NOW - 5 * 60_000,
         updatedAt: NOW - 1_000
       }),
       [paneKey('tab-done', '1')]: makeEntry({
         paneKey: paneKey('tab-done', '1'),
         state: 'done',
-        // newer
         stateStartedAt: NOW - 10_000,
         updatedAt: NOW - 1_000
       })
@@ -196,8 +190,7 @@ describe('smart sort — class invariants', () => {
     const idle = makeWorktree({
       id: 'idle',
       displayName: 'Idle',
-      // Make sure idle's effective recency is high enough that without the
-      // class layer it would outrank the working worktree on a recency tie.
+      // Give Idle enough recency to beat Working if the class layer regresses.
       lastActivityAt: NOW - 1_000
     })
     const tabs = {
@@ -262,8 +255,7 @@ describe('smart sort — within-class recency', () => {
       [paneKey('tab-fresh', '1')]: makeEntry({
         paneKey: paneKey('tab-fresh', '1'),
         state: 'working',
-        // Even newer current stateStartedAt — but with no history, falls back
-        // to this timestamp (older than the prior done above).
+        // No attention history: fall back to this older working start.
         stateStartedAt: NOW - 2 * 60_000,
         updatedAt: NOW - 1_000
       })
@@ -298,8 +290,6 @@ describe('smart sort — within-class recency', () => {
       })
     }
     const sorted = sortSmart([onlyInterrupted, fresh], tabs, entries)
-    // fresh has newer current stateStartedAt and onlyInterrupted's history is
-    // skipped, so fresh wins on within-class recency.
     expect(sorted.map((w) => w.id)).toEqual(['fresh', 'only-interrupted'])
   })
 })
@@ -386,7 +376,7 @@ describe('smart sort — interrupted and stale handling', () => {
       })
     }
     const sorted = sortSmart([stale, fresh], tabs, entries)
-    // fresh is Class 2; stale falls to Class 4.
+    // Fresh Done ranks in Class 2; stale-with-live-PTY decays to Class 4.
     expect(sorted.map((w) => w.id)).toEqual(['fresh', 'stale'])
   })
 })
@@ -464,7 +454,7 @@ describe('smart sort — Class 4 ordering', () => {
       [lessRecentlyActive.id]: [makeTab({ id: 'tab-o', worktreeId: lessRecentlyActive.id })]
     }
     const sorted = sortSmart([lessRecentlyActive, recentlyActive], tabs, {})
-    // Both Class 4, recency wins despite alphabetical ordering being inverted.
+    // Both are Idle, so recency must beat alphabetical order.
     expect(sorted.map((w) => w.id)).toEqual(['recently-active', 'older'])
   })
 
@@ -546,9 +536,7 @@ describe('sortWorktreesSmart — cold start fallback', () => {
   it('falls back to persisted sortOrder when no PTY is alive', () => {
     const a = makeWorktree({ id: 'a', displayName: 'A', sortOrder: 1 })
     const b = makeWorktree({ id: 'b', displayName: 'B', sortOrder: 2 })
-    // No tabs, no PTYs — cold start path.
     const sorted = sortWorktreesSmart([a, b], {}, repoMap, {}, {}, {})
-    // Higher sortOrder wins on cold start.
     expect(sorted.map((w) => w.id)).toEqual(['b', 'a'])
   })
 
@@ -625,15 +613,12 @@ describe('sortWorktreesSmart — cold start fallback', () => {
   })
 
   it('treats slept tabs (tab.ptyId without live entry) as cold start', () => {
-    // Why: tab.ptyId is the wake-hint sessionId preserved under sleep — not a
-    // liveness signal. With slept tabs but no live PTYs, sortWorktreesSmart
-    // must fall back to persisted sortOrder.
+    // Slept tab.ptyId is a wake hint, not live evidence; empty live PTYs retain persisted cold-start order.
     const a = makeWorktree({ id: 'a', sortOrder: 1, displayName: 'a' })
     const b = makeWorktree({ id: 'b', sortOrder: 2, displayName: 'b' })
     const tabsByWorktree = {
       [a.id]: [makeTab({ id: 'ta', worktreeId: a.id, ptyId: 'wake-hint' })]
     }
-    // ptyIdsByTabId is empty — slept tab has wake-hint ptyId but no live entry.
     const sorted = sortWorktreesSmart([a, b], tabsByWorktree, repoMap, {}, {}, {})
     expect(sorted.map((w) => w.id)).toEqual(['b', 'a'])
   })
@@ -667,15 +652,12 @@ describe('sortWorktreesSmart — cold start fallback', () => {
       {},
       ptyMapForTabs(tabsByWorktree)
     )
-    // Smart comparator wins over sortOrder because at least one PTY is live.
     expect(sorted.map((w) => w.id)).toEqual(['blocked', 'done'])
   })
 })
 
 describe('sortWorktreesSmart — palette caller regression', () => {
-  // Why: WorktreeJumpPalette routes typed queries through sortWorktreesSmart.
-  // This test pins that the palette path uses the class layer (not just the
-  // recent-activity fallback) when threading agentStatusByPaneKey.
+  // Palette callers must supply agent status to retain class priority instead of recency-only fallback.
   it('palette ranks blocked above working when both flow through sortWorktreesSmart', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'A-Blocked' })
     const working = makeWorktree({ id: 'working', displayName: 'B-Working' })
@@ -683,9 +665,7 @@ describe('sortWorktreesSmart — palette caller regression', () => {
       [blocked.id]: [makeTab({ id: 'tab-blocked', worktreeId: blocked.id })],
       [working.id]: [makeTab({ id: 'tab-working', worktreeId: working.id })]
     }
-    // Why live clock: sortWorktreesSmart reads Date.now(), so fixed-epoch stamps would be
-    // stale and land both worktrees in the same decayed class — the class layer this test
-    // exists to pin would never run.
+    // Use a live clock: fixed epochs would decay both rows and fail to exercise class priority.
     const liveNow = Date.now()
     const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {
       [paneKey('tab-blocked', '1')]: makeEntry({

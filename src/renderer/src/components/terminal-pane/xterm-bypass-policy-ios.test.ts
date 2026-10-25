@@ -5,9 +5,7 @@ import {
 } from './xterm-bypass-policy'
 import { event } from './xterm-bypass-event-fixture'
 
-// iPadOS reports a real physical key for every jamo — `key: 'ㅎ'`, `code: 'KeyG'`,
-// `keyCode: 71`, `isComposing: false` — and runs no composition session. Only by
-// leaving those keys to the default handler does the system compose them.
+// iPadOS sends physical jamo keys without composition; native field edits must compose them.
 const HANGUL_JAMO_KEYDOWN = { key: 'ㅎ', code: 'KeyG', keyCode: 71 }
 
 describe('shouldBypassXtermForIosTextEdit', () => {
@@ -30,9 +28,7 @@ describe('shouldBypassXtermForIosTextEdit', () => {
   })
 
   it('leaves other non-ASCII scripts alone, since nothing downstream re-sends them', () => {
-    // Why: this claims the keydown, the keypress and (through the preedit
-    // controller) the `input` too. Only Hangul has a handler on the other side;
-    // a Cyrillic or kana key would reach the PTY as nothing at all.
+    // Only Hangul has a downstream preedit handler; claiming Cyrillic/kana would swallow them.
     for (const key of ['п', 'あ', 'é', '中']) {
       expect(shouldBypassXtermForIosTextEdit(event({ key }), true)).toBe(false)
     }
@@ -41,8 +37,7 @@ describe('shouldBypassXtermForIosTextEdit', () => {
   it('claims Shift-typed double consonants, which start 깨 꿈 딸 빵 쓰다 짜다', () => {
     for (const key of ['ㄲ', 'ㄸ', 'ㅃ', 'ㅆ', 'ㅉ']) {
       expect(shouldBypassXtermForIosTextEdit(event({ key, shiftKey: true }), true)).toBe(true)
-      // Orca's own Shift rule already hides these keydowns from xterm, so only
-      // the keypress claim keeps `_keyPress` from sending the raw jamo.
+      // The Shift rule already claims keydown; claim keypress too or xterm sends raw jamo.
       expect(
         shouldBypassXtermForIosTextEdit(event({ key, shiftKey: true, type: 'keypress' }), true)
       ).toBe(true)
@@ -68,8 +63,7 @@ describe('shouldBypassXtermForIosTextEdit', () => {
   })
 
   it('leaves composing keystrokes to xterm, for iOS sources that do compose', () => {
-    // Why: the on-screen keyboard and the Japanese/Chinese IMEs run a real
-    // composition session, which xterm's CompositionHelper already commits.
+    // On-screen and Japanese/Chinese IMEs use composition sessions already handled by xterm.
     expect(
       shouldBypassXtermForIosTextEdit(event({ ...HANGUL_JAMO_KEYDOWN, isComposing: true }), true)
     ).toBe(false)
@@ -89,8 +83,7 @@ describe('shouldBypassXtermKeyboardEvent — iOS web', () => {
   })
 
   it('does not bypass the same key on a Mac desktop browser', () => {
-    // Why: iPadOS reports `Macintosh` in its default desktop mode, so `isMac`
-    // alone must not turn the iOS path on for real Macs.
+    // Desktop-mode iPadOS reports Macintosh; isMac alone would also enable this on real Macs.
     expect(shouldBypassXtermKeyboardEvent(event(HANGUL_JAMO_KEYDOWN), macOptions)).toBe(false)
   })
 

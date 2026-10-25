@@ -42,8 +42,7 @@ export function containsBrailleSpinner(title: string): boolean {
 }
 
 export function isGeminiTerminalTitle(title: string): boolean {
-  // Why: DSH-TUI's idle prefix is `✦`, Gemini's working glyph. The whale is decisive
-  // and is checked first so a resting DSH pane never reads as a working Gemini.
+  // Reject other agents’ identity frames before generic Gemini glyphs; DSH shares ✦ with Gemini.
   if (isQoderTerminalTitle(title)) {
     return false
   }
@@ -59,30 +58,19 @@ export function isGeminiTerminalTitle(title: string): boolean {
   ) {
     return true
   }
-  // Why: Pi/OMP titles include cwd/session text; substring matching made
-  // paths like "gemini-project" masquerade as Gemini CLI.
+  // Pi/OMP session paths can mention Gemini without identifying the agent.
   if (isPiAgentTitle(title)) {
     return false
   }
-  // Why: Antigravity's models are named "Gemini <n.n> <Name>", so an agy pane's own
-  // title carries a whole `gemini` token. Gemini CLI is checked before Antigravity in
-  // getAgentLabel, so without this the model name wins and an agy pane reads as Gemini
-  // CLI. Only the token path defers — the four Gemini OSC glyphs stay decisive, and agy
-  // emits none of them.
+  // Antigravity model names contain Gemini; defer token matches to agy identity while keeping explicit Gemini glyphs decisive.
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return false
   }
   return titleHasAgentName(title, 'gemini')
 }
 
-// Why: Grok Build's working OSC titles use a fixed frame shape —
-// "spinner - <rotating phrase> - grok" — so every frame is a distinct title
-// that flips tab and sidebar labels. Require BOTH the post-spinner " - "
-// delimiter and the trailing identity " - grok" so Claude/Codex task text
-// like "⠋ fix the flaky suite - grok" or "⠋ wire up grok" is not mislabeled.
-// Spinner marks working; no-spinner session titles ("Fix the auth bug - grok")
-// pass through. The bare "spinner + grok" branch keeps our own collapsed
-// label idempotent under re-normalization.
+// Collapse only Grok’s spinner - phrase - grok frame; both delimiters exclude Claude/Codex task mentions.
+// Keep unspun session titles unchanged and accept spinner + grok so our collapsed label stays idempotent.
 const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
 const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
 
@@ -97,31 +85,22 @@ export function isPiAgentTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title)
 }
 
-/**
- * Returns true when the terminal title matches Claude Code's title conventions.
- * Used to scope prompt-cache-timer behavior to Claude sessions only — other
- * agents have different (or no) caching semantics.
- */
+/** Scope Claude-only prompt-cache timing to Claude title conventions. */
 function computeIsClaudeAgent(title: string): boolean {
   if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
     return false
   }
-  // Why: DSH's working title is `⠂ 🐋 …`/`⠐ 🐋 …`, and the braille branch below would
-  // otherwise claim every frame of it for Claude.
+  // DSH uses braille too; its whale identity must win over the generic Claude spinner heuristic.
   if (isDshTerminalTitle(title)) {
     return false
   }
   const lower = title.toLowerCase()
 
-  // Why: Claude Code titles are prefixed with status indicators (✳, ". ", "* ",
-  // braille spinners) followed by the task description. The task text can
-  // legitimately mention other agents, so Claude-specific prefixes must win.
+  // Claude-specific status prefixes outrank agent names mentioned in task text.
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return true
   }
-  // Why: ". " (working) and "* " (idle) are Claude Code title conventions.
-  // Other supported agents do not use them, and rejecting titles that mention
-  // another agent in the task text caused false negatives for real Claude tabs.
+  // Claude owns . / * status prefixes even when its task mentions another agent.
   if (title.startsWith('. ') || title.startsWith('* ')) {
     return true
   }
@@ -130,13 +109,10 @@ function computeIsClaudeAgent(title: string): boolean {
     return false
   }
   if (containsAgentSpinnerGlyph(title)) {
-    // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
-    // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
+    // Other agents use braille; reject Cursor identity, but keep Claude tasks merely mentioning a cursor.
     return !isCursorAgentTitle(title) && !lower.includes('openclaude')
   }
-  // Why: permission/action-required Claude titles can omit the usual prefixes.
-  // Token-match so cwd/worktree titles like "claude-scratch" do not become
-  // Claude tabs, while task text that merely mentions Claude still stays out.
+  // Permission titles can omit status prefixes; token boundaries exclude claude-scratch paths and task mentions.
   const trimmedTitle = title.trimStart()
   if (
     trimmedTitle.toLowerCase().startsWith('claude') &&
@@ -160,13 +136,11 @@ function computeAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
   }
-  // Why: the native marker owns the whole title; its session text may name or
-  // include status glyphs from other agents without changing OpenCode identity.
+  // The native OpenCode marker owns the whole title; names/glyphs in its session text cannot rebrand it.
   if (isOpenCodeNativeTitle(title)) {
     return 'OpenCode'
   }
-  // Why: Claude Code title text is often the task title. If that task mentions
-  // another CLI, the Claude-specific prefix is the identity signal, not the words.
+  // Claude’s prefix identifies the agent; task-text CLI mentions do not.
   if (
     title.startsWith(`${CLAUDE_IDLE} `) ||
     title === CLAUDE_IDLE ||
@@ -189,22 +163,16 @@ function computeAgentLabel(title: string): string | null {
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
-  // Why: Pi-compatible synthetic titles can carry braille spinners, which the
-  // generic agent-title heuristics would otherwise claim first.
+  // Pi-compatible synthetic identities must win over generic braille heuristics.
   const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)
   if (piCompatibleSyntheticAgentLabel) {
     return piCompatibleSyntheticAgentLabel
   }
-  // Why: Pi working titles include a braille spinner prefix, which would be
-  // mistaken for Claude Code if we checked `isClaudeAgent` first.
+  // Pi working titles use braille too; check Pi before Claude’s fallback.
   if (isPiAgentTitle(title)) {
     return 'Pi'
   }
-  // Why: Codex/OpenCode/Aider can also use braille spinner prefixes while
-  // working. Prefer explicit name matches before Claude's generic spinner
-  // heuristic so mixed-agent hovercards stay truthful. Token-match (not
-  // substring) so cwd/worktree titles like "opencode-blinker" don't mint a
-  // false agent identity.
+  // Prefer explicit agent tokens over Claude’s generic spinner; token boundaries exclude similarly named workspace paths.
   if (titleHasAgentName(title, 'codex')) {
     return 'Codex'
   }
@@ -238,18 +206,15 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
-  // Why: `cursor` is ordinary editor vocabulary, not identity. Match Cursor's closed
-  // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.
+  // Use Cursor’s closed title set before Claude’s braille fallback; ordinary cursor mentions are not identity.
   if (isCursorAgentTitle(title)) {
     return 'Cursor'
   }
-  // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.
-  // Token matching avoids labeling ordinary Android terminal titles as Droid.
+  // Match synthesized Droid before Claude’s braille fallback; token boundaries exclude Android text.
   if (DROID_AGENT_NAME_RE.test(title)) {
     return 'Droid'
   }
-  // Why: synthesized "⠋ Hermes" working titles need to be matched before
-  // Claude's generic braille-spinner heuristic.
+  // Match synthesized Hermes before Claude’s braille fallback.
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
@@ -315,18 +280,12 @@ export function resolveTerminalTitleAgentType(title: string): TerminalAgent | nu
   const parsed = label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
   return resolveCanonicalPaneAgentIdentity({
     title,
-    // Preserve this public title-parser adapter's historical answer; pane identity
-    // consumers pass raw titles to the canonical resolver and enforce its fence.
+    // Preserve this public parser’s legacy fallback; pane-identity consumers enforce the canonical resolver’s fence on raw titles.
     uncoveredFallback: { agent: parsed, titleOnly: false }
   }).agent
 }
 
-/**
- * Resolve a terminal title's agent identity, but treat Claude's bare status
- * prefixes (spinner / "✳" / ". " / "* ") as activity-only. They are evidence
- * that something is running, not proof the agent is Claude — so a task or
- * worktree title cannot become Claude without an explicit "Claude Code" name.
- */
+/** Treat bare Claude-style prefixes as activity only; explicit identity requires a Claude Code name, not a task/workspace spinner. */
 function computeExplicitTerminalTitleAgentType(title: string): TerminalAgent | null {
   const titleAgent = resolveTerminalTitleAgentType(title)
   if (isGenericClaudeStatusClaim(title, titleAgent)) {

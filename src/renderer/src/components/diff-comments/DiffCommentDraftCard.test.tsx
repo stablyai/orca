@@ -91,8 +91,7 @@ describe('DiffCommentDraftCard', () => {
     expect(document.activeElement).toBe(submitBtn)
     fireEvent.click(submitBtn)
 
-    // Chromium moves focus to <body> when a focused button turns disabled, which would stop the
-    // draft zone from handing focus back to the editor once the save lands.
+    // Disabled buttons drop Chromium focus to body; preserve card focus so successful saves can return it to Monaco.
     expect(onSubmit).toHaveBeenCalledTimes(1)
     expect(submitBtn.hasAttribute('disabled')).toBe(true)
     expect(document.activeElement).toBe(textarea)
@@ -130,11 +129,9 @@ describe('DiffCommentDraftCard', () => {
     const textarea = view.getByRole('textbox')
     fireEvent.change(textarea, { target: { value: 'First line' } })
 
-    // Shift+Enter should NOT submit
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
     expect(onSubmit).not.toHaveBeenCalled()
 
-    // Plain Enter SHOULD submit
     await act(async () => {
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
     })
@@ -217,7 +214,6 @@ describe('DiffCommentDraftCard', () => {
     const textarea = view.getByRole('textbox')
     fireEvent.change(textarea, { target: { value: 'nihon' } })
 
-    // IME composition
     fireEvent.keyDown(textarea, { key: 'Enter', isComposing: true })
     expect(onSubmit).not.toHaveBeenCalled()
   })
@@ -261,7 +257,6 @@ describe('DiffCommentDraftCard', () => {
     fireEvent.change(textarea, { target: { value: 'line 1' } })
     expect(onContentResize).toHaveBeenCalledTimes(1)
 
-    // Height increases
     scrollHeight = 120
     fireEvent.change(textarea, { target: { value: 'line 1\nline 2\nline 3' } })
     expect(onContentResize).toHaveBeenCalledTimes(2)

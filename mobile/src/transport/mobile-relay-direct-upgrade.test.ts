@@ -107,7 +107,7 @@ describe('existing direct pairing relay upgrade', () => {
 
     expect(journal).not.toBeNull()
     expect(deps.writeJournal.mock.invocationCallOrder[0]).toBeLessThan(
-      client.sendRequest.mock.invocationCallOrder[0]!
+      vi.mocked(client.sendRequest).mock.invocationCallOrder[0]!
     )
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'pairing.provisionRelay', {
       reqId: journal!.reqId,
@@ -157,12 +157,7 @@ describe('existing direct pairing relay upgrade', () => {
     expect(deps.setRelayRouting).not.toHaveBeenCalled()
   })
 
-  // Why 'forbidden': a desktop that predates pairing.getEndpoints has it on neither its mobile
-  // allowlist nor its dispatcher, and the allowlist gate answers first — so scope refusal, not
-  // absence, is what an old desktop actually sends. This is the site that reached: keyed on
-  // absence alone the refusal threw into the controller's swallowing catch, so the write-once
-  // journal — and the pending resume secret in it — was never retired. See
-  // pairing-relay-rpc-unavailable.ts.
+  // Old hosts refuse pairing.getEndpoints at the mobile allowlist before dispatch; handle forbidden too so pending install secrets can retire.
   it('cleans pending state and leaves direct access unchanged for a scope-refusing old desktop', async () => {
     const deps = dependencies()
     const client = clientWith([

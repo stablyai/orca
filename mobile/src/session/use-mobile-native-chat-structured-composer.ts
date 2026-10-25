@@ -1,14 +1,12 @@
 import { useMemo } from 'react'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatStructuredComposer } from './MobileNativeChatComposer'
-import type { MobileNativeChatFileAttachments } from './use-mobile-native-chat-file-attachments'
+import type { MobileNativeChatFileAttachments } from './native-chat/composer/use-mobile-native-chat-file-attachments'
 import { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
-/** What a structured chat's composer adds: its session's `/` list, and files where the host
- *  stores them for phones. Null on a terminal-backed chat. */
 export function useMobileNativeChatStructuredComposer(args: {
   client: RpcClient | null
   hostId: string | null
@@ -29,7 +27,7 @@ export function useMobileNativeChatStructuredComposer(args: {
     enabled: structured && connected
   })
   const { files: pendingFiles, attachFiles, removeFiles } = files
-  // Its own memo: an attach or an upload landing leaves the `/` menu's catalog as it was.
+  // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const catalog = useMemo(
     () => ({ reported: commands, conversationCommands }),
     [commands, conversationCommands]

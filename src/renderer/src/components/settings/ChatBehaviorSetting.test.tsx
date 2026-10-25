@@ -21,7 +21,6 @@ const SHELL_ENV_TOGGLE = '[aria-label="Toggle using your shell environment"]'
 const NAME_INPUT = '#settings-native-chat-shell-environment-name'
 
 function renderSetting(overrides: Partial<GlobalSettings>, updateSettings = vi.fn()) {
-  // The wrapper also covers rerender: the permission picker's tooltip needs the app's provider.
   return render(
     <ChatBehaviorSetting
       settings={{ ...getDefaultSettings('/tmp'), ...overrides }}

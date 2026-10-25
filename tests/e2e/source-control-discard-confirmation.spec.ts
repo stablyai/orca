@@ -80,18 +80,14 @@ async function refreshGitStatus(page: Page): Promise<string[]> {
 
 async function deleteUntrackedFileFromRow(row: Locator): Promise<void> {
   const deleteButton = row.getByRole('button', { name: 'Delete untracked file' })
-  // Why: row actions are hover/focus revealed; keyboard activation avoids
-  // CI hover hit-test drift while exercising the same accessible control.
+  // Use keyboard activation for hover/focus row actions to avoid CI hit-test drift.
   await deleteButton.focus()
   await expect(deleteButton).toBeFocused()
   await deleteButton.press('Enter')
 }
 
 async function confirmPendingDelete(page: Page): Promise<void> {
-  // Why: the confirm button is auto-focused when the dialog opens
-  // (see focusDiscardDialogConfirmButton in source-control-discard-dialog.tsx).
-  // Pressing Enter on the row's original button just retriggers open; we need
-  // to target the dialog confirm by accessible name.
+  // Target the dialog’s auto-focused confirm; Enter on the original row button only reopens it.
   const confirmButton = page.getByRole('button', { name: 'Delete' }).last()
   await expect(confirmButton).toBeVisible()
   await confirmButton.click()

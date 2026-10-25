@@ -1,11 +1,10 @@
-/** What a connect publishes when the managed server doesn't serve the host; there is no fallback. */
 import type { NodeDistMirrorAttempt } from '../../shared/node-dist-mirror'
 import type { SshManagedServerStatus } from '../../shared/ssh-types'
 import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
 
 type UnservedDecision = Extract<HostServerOnConnectResult, { route: 'unserved' }>
 
-// Why `kind: 'relay'`: the published status keeps its shipped shape; it now means "not served".
+// Keep shipped kind:relay wire compatibility even though it now means unserved.
 export function unservedServerStatus(
   decision: UnservedDecision
 ): Extract<SshManagedServerStatus, { kind: 'relay' }> {
@@ -41,7 +40,7 @@ const NODE_DOWNLOAD_BLOCKED_MESSAGES: Record<NodeDistMirrorAttempt, string> = {
     'Neither this computer nor this host could download Node.js, which Orca’s server needs. Check the network or proxy on both machines, then connect again.'
 }
 
-/** Untranslated twin of the renderer's status line, for logs and callers without the catalog. */
+/** Reuse untranslated status wording for logs/clients without the catalog. */
 export function unservedHostServerMessage(decision: UnservedDecision): string {
   if (decision.held && (decision.reason === 'failed' || decision.reason === 'deferred')) {
     return HELD_MOVE_MESSAGE

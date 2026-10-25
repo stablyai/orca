@@ -45,7 +45,6 @@ vi.mock('@/lib/workspace-session-host-persistence', async (importOriginal) => ({
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 
 const WT = 'repo1::/repo1/wt'
-/** A workspace only main holds: the window draws none of its tabs yet. */
 const UNDRAWN = 'repo1::/repo1/undrawn'
 const FILE = { filePath: '/repo1/wt/notes.md', relativePath: 'notes.md' }
 
@@ -85,7 +84,6 @@ function setup(): {
     }
   })
   store.getState().setActiveWorktree(WT)
-  // The tab main wrote, as the window already draws it: these cases test the reveal, not the open.
   store.setState({
     openFiles: [
       {
@@ -100,7 +98,6 @@ function setup(): {
     ]
   })
   store.getState().createUnifiedTab(WT, 'editor', { entityId: FILE.filePath, label: 'notes.md' })
-  // A terminal tab in front, so showing the file's tab is visible in the selection.
   store.getState().createTab(WT)
   const fileTab = store
     .getState()

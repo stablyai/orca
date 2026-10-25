@@ -1,5 +1,4 @@
-// Module mocks for the hybrid shell screen's tests, shared so a suite split by concern mounts the
-// same world. Each test file registers them with `vi.mock(path, mocks[path])`.
+// Register these factories in each suite so split screen tests use the same environment.
 import * as React from 'react'
 import { vi } from 'vitest'
 import { parseMobileWebShellLoadState } from '../../modules/orca-mobile-web-shell/src/load-state'
@@ -14,8 +13,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         addEventListener: () => ({ remove: () => {} })
       },
       Easing: { in: (fn: unknown) => fn, out: (fn: unknown) => fn, quad: 'quad' },
-      // Enough of it for the cover to mount, fade and unmount, and for the download bar's fill to be
-      // read. An animation lands at once: what the motion looks like is not this test's business.
+      // Finish animations immediately so cover/bar state can be asserted without testing visual motion.
       Animated: {
         View: 'Animated.View',
         Value: class {
@@ -56,22 +54,18 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       Pressable: 'Pressable',
       StyleSheet: {
         create: (styles: unknown) => styles,
-        // The real values, so a case that reads them off the cover reads something.
         absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
       },
       Text: 'Text',
       View: 'View',
       useWindowDimensions: () => ({ width: 390, height: 844 })
     }),
-    // Reaching the real one imports the Expo runtime this test does not have. The screen only passes
-    // the handler through; what it does with a verb is `native-clipboard.test.ts`.
+    // Stub Expo-dependent native handlers; native-clipboard.test.ts covers their behavior.
     'expo-clipboard': () => ({
       setStringAsync: () => Promise.resolve(true),
       getStringAsync: () => Promise.resolve('')
     }),
-    // Same reason, and the screen only hands `playPageHaptic` over: which expo member each kind
-    // reaches is `page-haptics.test.ts`. `Platform.OS` above is pinned to `ios`, so the Android
-    // members are never evaluated and are not listed.
+    // Stub Expo haptics; page-haptics.test.ts covers dispatch. Pinned iOS means Android members are never evaluated.
     'expo-haptics': () => ({
       impactAsync: () => Promise.resolve(),
       notificationAsync: () => Promise.resolve(),
@@ -114,9 +108,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         back: dependencies.back,
         canGoBack: () => dependencies.canGoBack
       }),
-      // Read by the pop latch, which clears on the route this shell is mounted at changing.
       usePathname: () => dependencies.pathname,
-      // The screen's own place on the stack, which is where the iOS swipe-back is taken away.
       useNavigation: () => ({
         setOptions: dependencies.setScreenOptions,
         dispatch: dependencies.dispatch
@@ -124,8 +116,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       useNavigationContainerRef: () => ({ getRootState: () => dependencies.rootState }),
       useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect])
     }),
-    // A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
-    // and a mount/unmount log is the only thing that can tell a remount from a prop update.
+    // Use a component to observe keyed remounts; host-string prop updates cannot prove WebView replacement.
     '../../modules/orca-mobile-web-shell/src': () => {
       return {
         OrcaMobileWebShellView: (props: {
@@ -139,8 +130,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
               dependencies.lifecycle.push(`unmount:${props.sessionId}`)
             }
           }, [props.sessionId])
-          // The handle the real view exposes, which nothing here used to attach: without it every
-          // post rejected as a view that is gone, so no case could see a frame reach the page.
+          // Attach the real view’s handle so posted frames can reach the simulated page.
           const attach = props.ref
           React.useLayoutEffect(() => {
             attach?.({
@@ -160,20 +150,15 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         parseMobileWebShellLoadState: parseMobileWebShellLoadState
       }
     },
-    // The wall's release offer: the native hook imports the update checker module.
     '../app-update/use-wall-app-update': () => ({ useWallAppUpdate: () => null }),
-    // The real bridge hook runs, so the props it owns are the ones the view is handed here; only the
-    // client lookup is stubbed, because reaching it imports the Expo runtime this test does not have.
+    // Keep the real bridge hook; stub only Expo-dependent client lookup.
     '../transport/host-client-hooks': () => ({
       useHostClient: () => ({ client: dependencies.client })
     }),
-    // Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo
-    // global this test does not have. What it answers is the screen's input, not its behaviour.
+    // Stub host-store input to avoid expo-secure-store’s unavailable global.
     './use-page-host-snapshot': () => ({
       usePageHostSnapshot: () => ({
-        // One object for the life of the file, as the real hook's `useState` gives. A fresh literal per
-        // render changes the identity the host effect is keyed on, so the bridge host was being torn
-        // down and rebuilt on every render of this screen — and every pending request settled with it.
+        // Keep preference identity stable like useState; fresh objects would rebuild the bridge on every render and settle pending requests.
         snapshot: SCREEN_SNAPSHOT,
         unreadable: dependencies.snapshotUnreadable,
         readStorage: () => ({ storage: {}, storageOversize: [] }),

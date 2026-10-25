@@ -11,8 +11,7 @@ import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
 
 describe('Cmd+J palette query normalization', () => {
   it('lowercases supplementary-plane characters as whole code points', () => {
-    // Why: code-unit iteration split '\u{10400}' into surrogate halves, which lowercase to
-    // themselves, so the query never matched its lowercase counterpart.
+    // Code-unit iteration splits supplementary-plane characters and misses their lowercase counterparts.
     expect(normalizeCmdJPaletteQuery('\u{10400} HELLO')).toBe('\u{10428} hello')
     expect(tokenizeCmdJPaletteQuery('\u{10400} HELLO')).toEqual(['\u{10428}', 'hello'])
   })
@@ -22,7 +21,6 @@ describe('Cmd+J palette query normalization', () => {
   })
 
   it('folds CJK, accented, and non-breaking-space text exactly like the shared matcher', () => {
-    // Why: Cmd+J sections that fold a query differently disagree about what the user typed.
     const query = ' CAFE\u0301 系统\u3000ÉCOLE\u00a0Test '
 
     expect(normalizeCmdJPaletteQuery(query)).toBe('café 系统 école test')
@@ -35,8 +33,6 @@ describe('Cmd+J palette query normalization', () => {
 
 describe('Cmd+J palette token scoring', () => {
   it('matches a CJK compound query against its keyword parts', () => {
-    // Why: CJK is written without spaces, so the natural query for the terminal settings
-    // pane is one token that CONTAINS the keyword rather than being contained by it.
     expect(cmdJPaletteTokenScore(['终端设置'], ['终端', '设置'])).toBeGreaterThan(0)
     expect(cmdJPaletteTokenScore(['终端'], ['终端', '设置'])).toBeGreaterThan(0)
   })
@@ -46,8 +42,6 @@ describe('Cmd+J palette token scoring', () => {
   })
 
   it('does not score a Latin keyword merely contained in the query token', () => {
-    // Why: `database` does not mean the keyword `base`. Reverse containment exists for
-    // scripts that carry no spaces, so it must not fire on space-delimited text.
     expect(cmdJPaletteTokenScore(['database'], ['base'])).toBe(0)
     expect(cmdJPaletteTokenScore(['worktree'], ['tree'])).toBe(0)
   })
@@ -83,8 +77,7 @@ describe('Cmd+J palette query token ceiling', () => {
   })
 
   it('counts punctuation-bearing tokens as one top-level token', () => {
-    // Why: this file's scoring tokenizer splits `1.4.182` into three, but the ceiling is a
-    // whitespace-split query rule shared with the entity sections.
+    // Top-level counting treats punctuation-bearing words as one token; the scorer’s expansion has a separate ceiling.
     expect(isCmdJPaletteQueryOverTokenLimit('08-13 1.4.182 orca/main #123')).toBe(false)
   })
 })

@@ -8,18 +8,7 @@ import {
   writeMobileWebBundleTree
 } from './mobile-web-bundle-manifest.mjs'
 
-/**
- * A small, real bundle tree for the suites that test the packaging guard rather than the page.
- *
- * The guard reads a manifest and the bytes beside it; what those bytes are is not its business.
- * Building the app bundle to get them would make every one of those cases pay for esbuild over
- * the whole mobile graph, and would fail for a reason that has nothing to do with the guard on any
- * machine where mobile's dependencies are absent.
- *
- * Real rather than hand-written: it goes through the same manifest writer the page does, so a
- * change to the manifest shape reaches these suites instead of leaving them asserting a shape
- * nothing produces any more.
- */
+// Use real manifest writer with tiny assets: packaging guard judges manifest/bytes, so full mobile build adds unrelated dependency failures and cost.
 /** A 1x1 transparent PNG, the smallest real image the content-type rule accepts. */
 const PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
@@ -31,8 +20,7 @@ export async function writeMobileWebBundleFixtureTree({ outDir, body = 'fixture'
     readDesktopVersion(),
     readProtocolWindow()
   ])
-  // One asset per content type the guard's own cases reach for by extension: a script, a
-  // stylesheet and an image. Fewer would make those cases read `undefined.path` rather than fail.
+  // Provide script/style/image assets used by guard cases; missing type would throw undefined.path instead of testing rule.
   const script = hashedAsset(
     Buffer.from(`globalThis.orca = ${JSON.stringify(body)}\n`, 'utf8'),
     'js'

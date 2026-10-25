@@ -44,11 +44,7 @@ export function useRuntimeServerRowState(
   const runtimeStatusEntry = useAppStore((state) =>
     state.runtimeStatusByEnvironmentId.get(environment.id)
   )
-  // Why the shared verdict and not `entry.status`: an unverifiable probe nulls it while the
-  // transport is still up, and this row then read "error" and offered Connect for a host that
-  // RepositoryHostSetupsSection -- which already derives through this same function -- was
-  // showing as reachable. One host, two surfaces, opposite answers. A probe that did not come
-  // back is not a host that went away (docs/reference/ssh-execution-boundary.md).
+  // Share the host verdict across Settings surfaces: an unverifiable probe can leave transport connected, so raw entry.status would offer Connect while repository setup still reports reachability.
   const entryReachable =
     runtimeStatusEntry !== undefined &&
     isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(runtimeStatusEntry))
@@ -80,7 +76,7 @@ export function useRuntimeServerRowState(
       ? 'checking'
       : getRuntimeServerConnectionState(effectiveDetails)
   const isReachable = isRuntimeServerTransportConnected(connectionState)
-  // Why: the snapshot keeps the last answered status across a lost probe; `status` is only the latest answer.
+  // Keep last verified descriptors across lost probes; latest status alone can be absent.
   const descriptorStatus = lastVerifiedRuntimeStatus(runtimeStatusEntry)
   const hostDisplay = resolveHostDisplay({
     name: environment.name,
@@ -108,7 +104,7 @@ export function useRuntimeServerRowState(
 
 function getRevokedDescription(name: string, repairRoute: RuntimePairingRepairRoute): string {
   if (repairRoute === 'ssh') {
-    // Why: Orca pairs a managed server over SSH by itself; it reaches here only when that failed.
+    // Managed SSH pairing normally happens automatically; reaching this error means it failed.
     return translate(
       'auto.components.settings.RuntimeEnvironmentsPane.managedAccessRevoked',
       "{{value0}} no longer accepts this computer, and Orca couldn't pair with it again over SSH. Connect to try again.",

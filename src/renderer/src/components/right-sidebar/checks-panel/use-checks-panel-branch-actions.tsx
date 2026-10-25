@@ -95,7 +95,7 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     } catch {
       // Store remote actions already surface the publish failure toast.
     } finally {
-      // Why: publishing changes the upstream boundary the panel uses to decide between Publish, Create PR, and Push & Create PR.
+      // Publishing changes the upstream boundary used to choose Publish/Create/Push & Create.
       setGitStatusRefreshNonce((value) => value + 1)
       setIsPublishingBranch(false)
     }
@@ -112,7 +112,7 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     setGitStatusRefreshNonce
   ])
 
-  // Sync via the same runtime-scoped operation and push target as Source Control so a `needs_sync` create blocker is actionable here.
+  // Reuse Source Control's runtime-scoped sync and push target to satisfy needs_sync blockers.
   const handleSyncBranch = useCallback(async (): Promise<void> => {
     if (!activeWorktreeId || !activeWorktree?.path || isSyncingBranch || isRemoteOperationActive) {
       return
@@ -139,7 +139,7 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     } catch {
       // Store remote actions already surface the sync failure toast.
     } finally {
-      // Why: syncing changes ahead/behind, which the panel uses to choose between Sync, Create PR, and Push & Create PR.
+      // Sync changes ahead/behind and therefore the available review-creation action.
       setGitStatusRefreshNonce((value) => value + 1)
       setIsSyncingBranch(false)
     }

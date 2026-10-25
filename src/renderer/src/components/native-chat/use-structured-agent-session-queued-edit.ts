@@ -1,6 +1,4 @@
-// Editing one queued card in place, inside the card itself, so it works while a question or an
-// approval holds the composer's slot. The host owns the card; this pane holds only the typing,
-// an edit lease that keeps automatic delivery off the card, and Save's compare-and-set.
+// Edit inside the card while prompts own the composer; host owns durable content, this pane owns typing, a delivery hold lease and compare-and-set Save.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -110,8 +108,7 @@ export function useStructuredAgentSessionQueuedEdit(args: {
       releaseQueuedEditImages(edit)
     }
   }, [render])
-  /** The card left the queue under the editor: typing is never thrown away, it goes to the
-   *  chat box, after whatever draft is already there. */
+  /** Return dirty text to its conversation’s composer after existing draft content when the card leaves the queue. */
   const gone = useCallback(
     (edit: Edit) => {
       if (active.current !== edit) {
@@ -125,8 +122,7 @@ export function useStructuredAgentSessionQueuedEdit(args: {
     [close]
   )
 
-  // Another chat, host or composer, the pane going away, or a reload (which unmounts nothing):
-  // unsaved typing goes quietly to the chat box of the chat it was typed in.
+  // On chat/host/composer changes, unmount or reload, hand unsaved typing back to its original chat.
   useEffect(() => {
     const handOff = (): void => {
       const edit = active.current
@@ -253,8 +249,7 @@ export function useStructuredAgentSessionQueuedEdit(args: {
       } else if (status === 'gone') {
         gone(edit)
       } else if (status === 'changed') {
-        // Someone else's edit landed first: the typing goes to the chat box, and the editor
-        // opens again on the newer text. A removal alone has nothing to hand off.
+        // Preserve typing after a competing edit, then reopen on the newer text; removal alone needs no handoff.
         toast.error(queuedEditChangedNotice(handOffQueuedEdit(edit), latest.current.promptOpen))
         reopen.current = { scope, messageId: edit.messageId, stale: edit.baseFingerprint }
         close()
@@ -264,9 +259,7 @@ export function useStructuredAgentSessionQueuedEdit(args: {
       }
       return
     }
-    // No answer this pane can read (a lost reply, or one dropped for a moved runtime fence, which
-    // a text edit does not depend on): the published card says whether this Save landed. A card
-    // that left went out with this Save's body, or before the Save could land.
+    // When Save’s reply is lost/unread, published card state proves whether its body landed; leaving the queue may mean delivery before or after Save.
     const desired = agentSessionSendBodyFingerprint(sessionId, edited.body)
     const standing = queuedEditStanding(latest.current, sessionId, edit.messageId, desired)
     if (standing === 'sent' || standing === 'holds') {
@@ -282,9 +275,7 @@ export function useStructuredAgentSessionQueuedEdit(args: {
     }
   }, [close, gone, imagesCapable, render, scope, sessionId, write])
 
-  // Sent or removed elsewhere, or a lapsed lease lost the race to delivery. While a Save is out,
-  // its answer decides instead: its own text going out right after it lands is a success.
-  // An unloaded list (`null`) proves nothing: a stream that went quiet did not send the card.
+  // Let in-flight Save decide delivery races; otherwise reconcile departures, but never infer them from an unloaded list.
   useEffect(() => {
     const edit = active.current
     if (edit && !edit.saving && messages !== null) {

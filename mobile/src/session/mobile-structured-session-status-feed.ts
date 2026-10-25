@@ -1,8 +1,4 @@
-// The connected host's status stream, which every structured chat on that host reads the host's
-// "Stopping…" from. One per client, opened by the first chat that reads it and kept for the
-// client's life: a phone has no way to end just this stream, so one per chat would leave a host
-// subscriber behind each. The client replays it after a reconnect, and the host's fresh snapshot
-// then replaces what contact loss revoked.
+// Share one status stream per client lifetime because mobile cannot end individual host subscriptions; reconnect snapshots replace revoked liveness.
 
 import {
   foldAgentSessionStatusEvent,
@@ -36,7 +32,6 @@ function isStatusEvent(value: unknown): value is AgentSessionStatusEvent {
   }
 }
 
-/** The stream's refusal, as the client hands a failed opener to its listener. */
 function streamRefusal(value: unknown): { code?: string; message?: string } | null {
   if (typeof value !== 'object' || value === null || !('type' in value) || value.type !== 'error') {
     return null
@@ -52,7 +47,7 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
   let snapshot: AgentSessionStatusSnapshot = new Map()
   // `unavailable`: the host refused the method to phones; asked again only on a new connection.
   let stream: 'closed' | 'open' | 'unavailable' = 'closed'
-  // Released once the host ends the stream, so the client never replays it on a later session.
+  // Release ended streams so the client cannot replay them into later sessions.
   let releaseStream = (): void => {}
   const release = (): void => {
     const pending = releaseStream
@@ -103,7 +98,7 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
       }
     }
   }
-  // Losing contact is never exit: only what a live host vouches for goes until it answers again.
+  // Contact loss revokes host-vouched liveness, not process existence.
   client.onStateChange((state) => {
     if (state === 'connected') {
       open()

@@ -19,8 +19,7 @@ export function useMobileInstallQr(
 ): string | null {
   const [installQrUrl, setInstallQrUrl] = useState<string | null>(null)
 
-  // Why: render install QRs lazily after flow entry, and clear stale platform
-  // images synchronously while the replacement QR is rendering.
+  // Generate only during the flow and hide stale platform images while their replacement renders.
   useEffect(() => {
     if (stage !== 'flow') {
       return

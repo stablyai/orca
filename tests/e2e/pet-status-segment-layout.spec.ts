@@ -2,8 +2,7 @@ import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
-// Why: post-fix trailing overhang is ~0px; 16px is subpixel headroom that still
-// fails the old pr-[6.5rem] (~104px) reservation.
+// 16px tolerates subpixel overhang but still rejects the old ~104px pr-[6.5rem] reservation.
 const MAX_TRAILING_CHROME_PX = 16
 const VIEWPORTS = [
   { name: 'desktop', size: { width: 1440, height: 900 } },
@@ -30,14 +29,12 @@ async function enableExperimentalPet(page: Page): Promise<void> {
 
 async function assertPetTriggerFitsLabel(page: Page): Promise<void> {
   const trigger = page.getByRole('button', { name: 'Pet menu' })
-  // Why: only the label span is a direct child; avoid matching nested menu spans
-  // if the open state ever leaks into the measurement.
+  // Match the direct label span to exclude any nested open-menu spans.
   const label = trigger.locator(':scope > span')
 
   await expect(trigger).toBeVisible()
   await expect(label).toBeVisible()
-  // Why: measure trailing overhang (trigger right − label right), not total width
-  // delta — the regression is empty space *after* the label (the old pr-[6.5rem]).
+  // Measure space after the label, where the old pr-[6.5rem] reservation regressed.
   await expect
     .poll(
       async () => {

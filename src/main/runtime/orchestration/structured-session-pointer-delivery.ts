@@ -1,12 +1,4 @@
-/**
- * What orchestration mail delivery reads of a host-owned structured ("native") agent session.
- *
- * A structured session has no PTY the pointer can be typed into, so the nudge travels as a session
- * turn instead of as bytes: steered into a busy session's running turn, or held by its queue until
- * the turn ends when its agent cannot take a message mid-turn.
- * Everything here is pure. Orchestration's database stays the source of truth: nothing here
- * consumes mail.
- */
+/** Pure gate facts for session-turn nudges; busy input steers or queues while the orchestration DB retains mail ownership. */
 
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
@@ -25,28 +17,14 @@ export type StructuredPointerRetainReason =
 /** The dispatch states both provider adapters converge on. */
 export type StructuredDispatchState = 'accepted' | 'rejected' | 'unknown'
 
-/**
- * Whether a session is busy, in the vocabulary group addressing (`@idle`) matches on.
- *
- * Deliberately two booleans rather than the journal: the caller reads the FULL reduced timeline
- * (see `readStructuredSessionGateFacts`), so nothing downstream can be tempted to re-derive them
- * from a page.
- */
+/** Read both facts from the full reduced timeline so downstream callers cannot infer idle from a page. */
 export type StructuredSessionGateFacts = {
   turnRunning: boolean
   /** A pending approval or question only a human can clear. */
   awaitingHuman: boolean
 }
 
-/**
- * Projects the gate facts off a session's live items.
- *
- * Reuses the projection the chat view already reads, so `@idle` and the visible
- * "working" state can never disagree. Both must be answered from the fully reduced timeline: a
- * settled turn is TOMBSTONED rather than rewritten to `completed`, so on a bounded tail page an
- * idle session and a running turn whose lifecycle item was pushed off the end look identical —
- * and idle-with-history is the normal steady state of a working agent.
- */
+/** Share the chat projection over the full timeline: settled lifecycle items disappear, and busy ones can lie outside any tail page. */
 export function structuredSessionGateFacts(
   items: readonly AgentJournalRenderItem[],
   /** The host's projection of current work (`structuredAgentSessionCurrentWork`). */
@@ -62,13 +40,7 @@ export function structuredSessionGateFacts(
   }
 }
 
-/**
- * Only an accepted dispatch may mark mail delivered.
- *
- * `unknown` covers a dead provider child and a slow acknowledgement alike — the
- * adapters cannot tell them apart — so it must retain. Treating it as delivered
- * would drop mail whenever a child died mid-send.
- */
+/** Only accepted consumes mail; unknown cannot distinguish a dead provider from delayed acknowledgment. */
 export function structuredDispatchDelivered(state: StructuredDispatchState): state is 'accepted' {
   return state === 'accepted'
 }

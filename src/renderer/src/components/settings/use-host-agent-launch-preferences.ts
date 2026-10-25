@@ -19,10 +19,10 @@ type Preferences = Pick<AgentLaunchSettings, 'defaultTuiAgent' | 'disabledTuiAge
 type Snapshot = Preferences | 'desktop'
 type Observation = { key: string; snapshot: Snapshot | null }
 
-// Why: a stalled host must not hold the menu on placeholders for the full RPC timeouts.
+// Bound placeholder time when a host stalls before the RPC timeout.
 const FIRST_READ_DEADLINE_MS = 3_000
 
-// Why: menus mount on open; the last answer per host lets them render at once while revalidating.
+// Menus remount on open; cache each host’s answer while revalidating.
 const snapshotByEnvironment = new Map<string, { key: string; snapshot: Snapshot }>()
 subscribeHostAgentLaunchSettings((owner) => {
   snapshotByEnvironment.delete(owner.environmentId)
@@ -45,7 +45,7 @@ function cachedSnapshot(environmentId: string | undefined, key: string): Snapsho
   return cached?.key === key ? cached.snapshot : null
 }
 
-/** The launch preferences the worktree's menu last applied, so shortcuts launch what the menu shows. */
+/** Shortcuts must use the launch preferences last shown by the worktree menu. */
 export function readAgentLaunchPreferencesForWorktree(
   state: AppState,
   worktreeId: string
@@ -125,7 +125,7 @@ export function useHostAgentMenuSettings(
         },
         () => {
           if (live && !readController.signal.aborted) {
-            // Why: a failed refresh keeps this runtime's last answer; with none, desktop choices apply as before.
+            // Failed refreshes retain this host’s last answer; absent one, use desktop choices.
             setObservation({ key, snapshot: cachedSnapshot(environmentId, key) ?? 'desktop' })
           }
         }

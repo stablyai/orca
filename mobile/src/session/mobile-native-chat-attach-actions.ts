@@ -1,11 +1,9 @@
 import { AtSign, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 
-/** The composer's + sheet: every way to add to the message, then the session's skills and
- *  commands. Each runs once the sheet is gone, since iOS cannot present a picker over it. */
+// Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.
 export function mobileNativeChatAttachActions(args: {
   onPhotos: (() => void) | undefined
-  /** Absent where the host cannot take a file from a phone. */
   onFiles: (() => void) | undefined
   onWorkspaceFile: () => void
   onSkills: () => void

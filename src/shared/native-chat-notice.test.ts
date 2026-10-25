@@ -39,6 +39,8 @@ describe('nativeChatNoticeBlock', () => {
   it('finds the block with a presentation or tone, and none in plain words', () => {
     const notice = block({ tone: 'warning' })
     expect(nativeChatNoticeBlock([block({}), notice])).toBe(notice)
+    const presentation = block({ presentation: 'context-cleared' })
+    expect(nativeChatNoticeBlock([block({}), presentation])).toBe(presentation)
     expect(nativeChatNoticeBlock([block({})])).toBeUndefined()
   })
 })

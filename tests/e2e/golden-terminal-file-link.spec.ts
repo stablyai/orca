@@ -122,8 +122,7 @@ test('opens a terminal file link and observes an external edit @golden', async (
   const original = readFileSync(filePath, 'utf8')
   const resolvedDestination =
     process.platform === 'win32' ? filePath.replaceAll('\\', '/') : filePath
-  // Why: Mac/Windows tmp paths soft-wrap across xterm rows; locateLink only
-  // indexOf's each physical row, so print a cwd-relative path that stays on one.
+  // Print a short relative path: locateLink searches physical rows, while macOS/Windows temp paths can soft-wrap.
   const printedPath = './package.json'
   const changedMarker = `golden-external-edit-${Date.now()}`
 
@@ -202,7 +201,7 @@ test('opens a terminal file link and observes an external edit @golden', async (
   }
 })
 
-test('opens a sibling workspace file here read-only, and the hint opens it there @golden', async ({
+test('reuses a terminal file link already open in a sibling workspace @golden', async ({
   orcaPage
 }) => {
   test.setTimeout(180_000)
@@ -250,8 +249,7 @@ test('opens a sibling workspace file here read-only, and the hint opens it there
     const state = window.__store?.getState()
     state?.setSidebarOpen(false)
     state?.setRightSidebarOpen(false)
-    // Why: closing the left sidebar can drop activeWorktreeId on mac CI,
-    // which remounts Landing and leaves terminal.cols at 0.
+    // Restore worktree activation after sidebar close or Landing may remount with terminal.cols at zero.
     if (state && state.activeWorktreeId !== sourceWorktreeId) {
       state.setActiveWorktree(sourceWorktreeId)
     }
@@ -298,33 +296,20 @@ test('opens a sibling workspace file here read-only, and the hint opens it there
 
   const editorHeader = orcaPage.locator('.editor-header-path').first()
   await expect(editorHeader).toContainText('package.json', { timeout: 20_000 })
-  const renderedFile = (): Promise<{ filePath: string; activeWorktreeId: string | null }> =>
-    orcaPage
-      .evaluate(() => ({
-        filePath: window.__monacoEditorE2E?.filePath ?? '',
-        activeWorktreeId: window.__store?.getState()?.activeWorktreeId ?? null
-      }))
-      .then((rendered) => ({ ...rendered, filePath: canonicalFileIdentity(rendered.filePath) }))
-  // #32158: the click keeps the user in the workspace whose terminal printed the link.
   await expect
-    .poll(renderedFile, { timeout: 20_000, message: 'the linked file never rendered here' })
-    .toEqual({ filePath: canonicalFileIdentity(filePath), activeWorktreeId: sourceWorktreeId })
-  await expect(orcaPage.getByText('Loading...', { exact: true })).toHaveCount(0)
-  const sourceTabReadOnly = await orcaPage.evaluate(
-    ({ filePath, sourceWorktreeId }) =>
-      window.__store
-        ?.getState()
-        .openFiles.find(
-          (file) => file.worktreeId === sourceWorktreeId && file.filePath === filePath
-        )?.readOnly === true,
-    { filePath, sourceWorktreeId }
-  )
-  expect(sourceTabReadOnly).toBe(true)
-
-  const hint = orcaPage.locator('[data-sonner-toast]').filter({ hasText: 'This file is in' })
-  await expect(hint).toBeVisible()
-  await hint.getByRole('button', { name: 'Open there' }).click()
-  await expect
-    .poll(renderedFile, { timeout: 20_000, message: 'the hint never opened the file there' })
+    .poll(
+      async () => {
+        const rendered = await orcaPage.evaluate(() => ({
+          filePath: window.__monacoEditorE2E?.filePath ?? '',
+          activeWorktreeId: window.__store?.getState()?.activeWorktreeId ?? null
+        }))
+        return {
+          filePath: canonicalFileIdentity(rendered.filePath),
+          activeWorktreeId: rendered.activeWorktreeId
+        }
+      },
+      { timeout: 20_000, message: 'sibling workspace never rendered the linked file' }
+    )
     .toEqual({ filePath: canonicalFileIdentity(filePath), activeWorktreeId: sibling.id })
+  await expect(orcaPage.getByText('Loading...', { exact: true })).toHaveCount(0)
 })

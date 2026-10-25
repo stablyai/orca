@@ -11,8 +11,8 @@ const contracts = [
   'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/sqlite/sync-database.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
-  'src/shared/native-chat-tool-attribution-allocation.test.ts',
-  'src/shared/native-chat-tool-pairing.performance.test.ts',
+  'src/shared/native-chat/tools/native-chat-tool-attribution-allocation.test.ts',
+  'src/shared/native-chat/tools/native-chat-tool-pairing.performance.test.ts',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/jsonl-file-reader.test.ts',
@@ -24,12 +24,16 @@ const contracts = [
   'src/renderer/src/store/store-identity-churn-probe.test.ts',
   'config/scripts/app-store-performance-plugin.test.mjs',
   'config/scripts/quadratic-buffer-concat-plugin.test.mjs',
-  'config/scripts/sort-comparator-performance-plugin.test.mjs',
   'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 ]
+// Wall-clock budgets with no CI job yet; `pnpm test:perf:benchmarks` runs them.
+const benchmarks = [
+  'src/renderer/src/components/editor/monaco-content-sync.bench.ts',
+  'src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts'
+]
 
-for (const contract of contracts) {
+for (const contract of [...contracts, ...benchmarks]) {
   if (!existsSync(resolve(contract))) {
     throw new Error(`Missing performance contract: ${contract}`)
   }
@@ -43,6 +47,7 @@ export default defineConfig({
     projects: undefined,
     ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: contracts,
+    benchmark: { include: benchmarks },
     fileParallelism: false,
     retry: 0
   }

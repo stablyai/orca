@@ -296,8 +296,7 @@ describe('terminal tab retirement planning', () => {
     expect(plan.unroutablePtyIds).toEqual(['ssh:private@@pty-1'])
   })
 
-  // STA-2639: these surfaces publish no runtime owner, so teardown read them as unresolved and
-  // dropped their ordinary local PTYs instead of killing them.
+  // Ownerless host-agnostic surfaces still own local PTYs; teardown previously dropped them without killing (STA-2639).
   describe('host-agnostic terminal surfaces are killed, not dropped', () => {
     const localSurfaces: [string, string][] = [
       ['floating terminal', FLOATING_TERMINAL_WORKTREE_ID],
@@ -307,8 +306,7 @@ describe('terminal tab retirement planning', () => {
 
     for (const [label, worktreeId] of localSurfaces) {
       it(`kills a local ${label} PTY while a runtime is focused`, () => {
-        // Why: a focused runtime must not make a local surface read as runtime-owned — that focus
-        // also flips as the runtime catalog hydrates, so teardown cannot trust it.
+        // Runtime focus changes during catalog hydration; it cannot retarget teardown of local surfaces.
         const state = makeState({
           settings: { activeRuntimeEnvironmentId: 'hub-a' },
           runtimeEnvironments: [{ id: 'hub-a' }],
@@ -359,9 +357,7 @@ describe('terminal tab retirement planning', () => {
     })
 
     it('never kills a HUB wake hint on a worktree owned only by the focused runtime', () => {
-      // Why: an ownerless mixed-version row legitimately spawns on the focused HUB (see
-      // pty-connection "uses the focused runtime only for ownerless mixed-version publications"),
-      // and its wake hint is `ssh:`-shaped, not `remote:` — killing it would hit the wrong host.
+      // Ownerless legacy rows may spawn on focused runtime with ssh:-shaped hints; shape alone must not route kill to the wrong host.
       const state = makeState({
         repos: [{ id: 'repo1', connectionId: null }],
         worktreesByRepo: { repo1: [{ id: 'wt-legacy', repoId: 'repo1' }] },
@@ -389,8 +385,7 @@ describe('terminal tab retirement planning', () => {
     })
 
     it('never kills an unknown worktree PTY when every owner catalog is absent', () => {
-      // Why: spawn falls back to the focused runtime (local when none) while catalogs load, but
-      // teardown taking that fail-open would kill an unidentified PTY on a guess.
+      // Spawn may fall back during catalog hydration; teardown must refuse unknown ownership rather than kill by guess.
       const state = makeState({
         worktreesByRepo: undefined,
         detectedWorktreesByRepo: undefined,

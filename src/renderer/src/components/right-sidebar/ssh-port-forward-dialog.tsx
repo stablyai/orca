@@ -10,8 +10,7 @@ import { Button } from '@/components/ui/button'
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 
-// Why: ports < 1024 require root to bind on the local machine. Remap them
-// to a high port so the default "Forward" action doesn't fail with EACCES.
+// Remap privileged ports to avoid EACCES when binding locally without root.
 function safeLocalPort(remotePort: number): number {
   if (remotePort < 1024) {
     return remotePort + 10000
@@ -74,9 +73,7 @@ export function SshPortForwardDialog({
         ? (state.defaults.label ?? '')
         : ''
 
-  // Why: capture the target at dialog-open time via defaults.targetId so
-  // switching worktrees while the dialog is open doesn't redirect the
-  // forward to the wrong SSH connection.
+  // Pin the dialog-open target so worktree navigation cannot redirect the SSH forward.
   const targetId =
     state.mode === 'edit'
       ? state.entry.connectionId

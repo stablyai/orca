@@ -1,7 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawn, spawnSync } from 'node:child_process'
+import { runProcessSync } from '@orca/process-host'
+import { buildPosixAgentHookPostCommand } from './hook-post-command'
 import { createServer, type Server, type Socket } from 'node:net'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -101,6 +111,12 @@ const JSON_INSTALLERS = [
     install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, REMOTE_HOME)
   },
   {
+    agent: 'droid',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.factory/settings.json`,
+    install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
     agent: 'devin',
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
     configPath: `${REMOTE_HOME}/.config/devin/config.json`,
@@ -154,6 +170,57 @@ function countManagedCarriersWithTimeout(
 }
 
 describe('managed agent hook timeouts', () => {
+  it.skipIf(process.platform === 'win32').each(['raw-json-v1', ''])(
+    'scopes the C numeric locale to the custom curl command for transport %s',
+    (transport) => {
+      const tmpDir = mkdtempSync(join(tmpdir(), 'orca-custom-curl-locale-'))
+      try {
+        const curlPath = join(tmpDir, 'curl with spaces')
+        const observed = join(tmpDir, 'curl-locale')
+        const shellObserved = join(tmpDir, 'shell-locale')
+        const payloadPath = join(tmpDir, 'custom-curl-payload')
+        writeFileSync(
+          curlPath,
+          '#!/bin/sh\nprintf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_CURL_LOCALE"\ncat > "$ORCA_TEST_CURL_PAYLOAD"\n'
+        )
+        chmodSync(curlPath, 0o755)
+        const payload = '{"prompt":"漢字 $HOME & quoted"}'
+        const command = [
+          'payload="$ORCA_TEST_PAYLOAD"',
+          'curl_bin="$ORCA_TEST_CURL_BIN"',
+          ...buildPosixAgentHookPostCommand('codex', { curlCommand: '"$curl_bin"' }),
+          'printf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_SHELL_LOCALE"'
+        ].join('\n')
+        const result = runProcessSync({
+          program: '/bin/sh',
+          args: ['-c', command],
+          env: {
+            PATH: '/usr/bin:/bin',
+            LC_ALL: 'de_DE.UTF-8',
+            LC_NUMERIC: 'de_DE.UTF-8',
+            ORCA_AGENT_HOOK_TRANSPORT: transport,
+            ORCA_AGENT_HOOK_PORT: '1234',
+            ORCA_AGENT_HOOK_TOKEN: 'token',
+            ORCA_TEST_CURL_BIN: curlPath,
+            ORCA_TEST_CURL_LOCALE: observed,
+            ORCA_TEST_SHELL_LOCALE: shellObserved,
+            ORCA_TEST_CURL_PAYLOAD: payloadPath,
+            ORCA_TEST_PAYLOAD: payload
+          },
+          timeoutMs: 5000
+        })
+        expect(result.timedOut).toBe(false)
+        expect(result.code, result.stderr.toString()).toBe(0)
+        expect(existsSync(observed)).toBe(true)
+        expect(readFileSync(observed, 'utf8')).toBe('|C')
+        expect(readFileSync(shellObserved, 'utf8')).toBe('de_DE.UTF-8|de_DE.UTF-8')
+        expect(readFileSync(payloadPath, 'utf8')).toBe(payload)
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('writes a config-level timeout on every managed JSON hook entry', async () => {
     for (const installer of JSON_INSTALLERS) {
       const { agent, configPath, install, timeout } = installer
@@ -190,7 +257,7 @@ describe('managed agent hook timeouts', () => {
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
   })
 
-  it('writes a config-level timeout on local-only Droid hooks', () => {
+  it('writes a config-level timeout on local Droid hooks', () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'orca-droid-hook-timeout-'))
     homedirMock.mockReturnValue(homeDir)
     try {
@@ -216,6 +283,7 @@ describe('managed agent hook timeouts', () => {
     async () => {
       const captureDir = mkdtempSync(join(tmpdir(), 'orca-hook-curl-args-'))
       const capturePath = join(captureDir, 'curl-args')
+      const localePath = join(captureDir, 'curl-locale')
       try {
         const installers = [
           ...JSON_INSTALLERS,
@@ -233,12 +301,13 @@ describe('managed agent hook timeouts', () => {
               continue
             }
             rmSync(capturePath, { force: true })
+            rmSync(localePath, { force: true })
             const result = spawnSync(
               '/bin/sh',
               [
                 '-c',
                 [
-                  'curl() { printf "%s\\n" "$@" > "$ORCA_TEST_CURL_ARGS"; command -p cat >/dev/null; }',
+                  'curl() { printf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_CURL_LOCALE"; printf "%s\\n" "$@" > "$ORCA_TEST_CURL_ARGS"; command -p cat >/dev/null; }',
                   content
                 ].join('\n')
               ],
@@ -255,12 +324,17 @@ describe('managed agent hook timeouts', () => {
                   ORCA_PANE_KEY: 'pane-1',
                   CLAUDE_JOB_DIR: '',
                   DEVIN_PROJECT_DIR: '',
+                  LC_ALL: 'de_DE.UTF-8',
+                  LC_NUMERIC: 'de_DE.UTF-8',
+                  ORCA_TEST_CURL_LOCALE: localePath,
                   ORCA_TEST_CURL_ARGS: capturePath
                 }
               }
             )
             expect(result.error, `${agent} wrapper execution`).toBeUndefined()
             expect(result.status, `${agent} wrapper exit`).toBe(0)
+            expect(existsSync(localePath), `${agent} ${path} delivered to curl`).toBe(true)
+            expect(readFileSync(localePath, 'utf8'), `${agent} ${path} curl locale`).toBe('|C')
             const args = readFileSync(capturePath, 'utf8').trimEnd().split('\n')
             expect(args, `${agent} delivery endpoint`).toContain(
               `http://127.0.0.1:1/hook/${agent === 'openclaude' ? 'claude' : agent}`
@@ -278,6 +352,89 @@ describe('managed agent hook timeouts', () => {
       }
     }
   )
+
+  describe('comma-decimal curl locale', () => {
+    let tempDir: string | null = null
+
+    afterEach(() => {
+      if (tempDir) {
+        rmSync(tempDir, { recursive: true, force: true })
+        tempDir = null
+      }
+    })
+
+    it.skipIf(process.platform === 'win32')(
+      'clears inherited LC_ALL and sets LC_NUMERIC only for curl',
+      async () => {
+        const { sftp, fs } = createFakeSftp()
+        await new GeminiHookService().installRemote(sftp, REMOTE_HOME)
+        const wrapperBody = fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/gemini-hook.sh`)!
+
+        tempDir = mkdtempSync(join(tmpdir(), 'orca-hook-lc-numeric-'))
+        const binDir = join(tempDir, 'bin')
+        mkdirSync(binDir)
+        const observed = join(tempDir, 'lc-numeric')
+        const shellObserved = join(tempDir, 'shell-locale')
+        writeFileSync(
+          join(binDir, 'curl'),
+          `#!/bin/sh\nprintf '%s|%s' "$LC_ALL" "$LC_NUMERIC" > "${observed}"\nexit 0\n`
+        )
+        chmodSync(join(binDir, 'curl'), 0o755)
+        const scriptPath = join(tempDir, 'gemini-hook.sh')
+        writeFileSync(scriptPath, wrapperBody, 'utf8')
+        chmodSync(scriptPath, 0o755)
+
+        await new Promise<void>((resolve, reject) => {
+          const child = spawn(
+            'sh',
+            [
+              '-c',
+              `trap 'printf "%s|%s" "$LC_ALL" "$LC_NUMERIC" > "$ORCA_TEST_SHELL_LOCALE"' EXIT; . "$1"`,
+              'hook',
+              scriptPath
+            ],
+            {
+              env: {
+                ...process.env,
+                PATH: `${binDir}:${process.env.PATH ?? ''}`,
+                LC_ALL: 'de_DE.UTF-8',
+                LC_NUMERIC: 'de_DE.UTF-8',
+                ORCA_TEST_SHELL_LOCALE: shellObserved,
+                ORCA_AGENT_HOOK_ENDPOINT: '',
+                ORCA_AGENT_HOOK_PORT: '9',
+                ORCA_AGENT_HOOK_TOKEN: 'test-token',
+                ORCA_PANE_KEY: 'pane-1',
+                ORCA_TAB_ID: 'tab-1',
+                ORCA_WORKTREE_ID: 'wt-1'
+              },
+              stdio: ['pipe', 'ignore', 'ignore']
+            }
+          )
+          const timeout = setTimeout(() => {
+            child.kill('SIGKILL')
+            reject(new Error('hook script exceeded test timeout'))
+          }, 10_000)
+          child.on('error', (error) => {
+            clearTimeout(timeout)
+            reject(error)
+          })
+          child.on('close', (status) => {
+            clearTimeout(timeout)
+            if (status === 0) {
+              resolve()
+              return
+            }
+            reject(new Error(`hook script exited ${String(status)}`))
+          })
+          child.stdin.end('{"hook_event_name":"Stop"}')
+        })
+
+        expect(existsSync(observed)).toBe(true)
+        expect(readFileSync(observed, 'utf8')).toBe('|C')
+        expect(readFileSync(shellObserved, 'utf8')).toBe('de_DE.UTF-8|de_DE.UTF-8')
+      }
+    )
+  })
 
   describe('dead-endpoint transport budget', () => {
     let tempDir: string | null = null

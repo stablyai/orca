@@ -66,8 +66,7 @@ export async function focusRuntimeOrchestrationTask(
   if (focusRendererTerminal?.(terminal)) {
     return
   }
-  // Why: task IDs are stable orchestration DB records, but terminal.focus owns
-  // the app-side navigation contract for local and SSH runtime terminals.
+  // Task IDs belong to orchestration DB; terminal.focus owns local/SSH app navigation.
   await callRuntimeRpc(target, 'terminal.focus', { terminal, navigation: 'host' })
 }
 

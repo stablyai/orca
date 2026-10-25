@@ -26,6 +26,7 @@ export type PtyIpcSpawnState = {
   spawnTiming: PtySpawnTiming
   codexHomeLaunchStartedAt: Date | undefined
   codexHomeLaunchStartedSequence: number | undefined
+  spawnRequestedAt: number
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   cwd: string | undefined
   prevalidatedCwd: string | undefined
@@ -110,6 +111,7 @@ export function createPtyIpcSpawnState(
     spawnTiming: createPtySpawnTiming(),
     codexHomeLaunchStartedAt: undefined,
     codexHomeLaunchStartedSequence: undefined,
+    spawnRequestedAt: Date.now(),
     reattachedCodexHomeRoutes: new Map(),
     cwd: undefined,
     prevalidatedCwd: undefined,

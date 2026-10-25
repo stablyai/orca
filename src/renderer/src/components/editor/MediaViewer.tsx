@@ -36,7 +36,7 @@ export default function MediaViewer({
     media.src = src
     return () => {
       media.removeEventListener('loadedmetadata', restorePosition)
-      // Why: before metadata loads, currentTime is 0 and would clobber the saved position.
+      // Unloaded metadata leaves currentTime at zero, which must not replace saved progress.
       if (playbackCacheKey && Number.isFinite(media.duration)) {
         if (media.ended) {
           mediaPlaybackPositionCache.delete(playbackCacheKey)

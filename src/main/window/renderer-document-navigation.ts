@@ -1,11 +1,6 @@
 import type { WebContents } from 'electron'
 
-/**
- * True when the target stays inside the window's own privileged document: for `file:`
- * the exact same host+path (query/hash may differ, as a reload keeps them), for http(s)
- * the same origin. Also gates preload privilege in installPrivilegedWindowNavigationPolicy,
- * so loosening it past a same-origin document hands a foreign page the Orca bridge.
- */
+/** Preload privilege boundary: exact file host/path (query/hash may vary), or same HTTP(S) origin. Broadening this grants foreign pages the Orca bridge. */
 export function isRendererDocumentNavigation(currentUrl: string, nextUrl: string): boolean {
   try {
     const current = new URL(currentUrl)
@@ -48,7 +43,7 @@ export function registerRendererDocumentNavigation(
     cancelReload = null
     cancel?.()
   }
-  // Why: did-start-loading also fires for blocked external links whose renderer document survives.
+  // Blocked external links also emit did-start-loading while the privileged document survives.
   webContents.on('did-start-navigation', (_event, url, isSameDocument, isMainFrame) => {
     if (isMainFrame && !isSameDocument && isRendererDocumentNavigation(webContents.getURL(), url)) {
       if (!fenceActive) {

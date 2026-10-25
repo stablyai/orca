@@ -106,8 +106,7 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
         return
       }
 
-      // Why: Electron's preload bridge stops native drops before React sees
-      // them, so board drops commit from this scoped capture listener.
+      // Preload intercepts native drops before React; commit board drops from this capture listener.
       event.preventDefault()
       event.stopPropagation()
       commitWorkspaceStatusDocumentDrop({

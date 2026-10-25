@@ -6,13 +6,7 @@ import { expect, test } from './helpers/orca-app'
 import { pressShortcut } from './helpers/shortcuts'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-/**
- * Selecting a range of diff lines for an AI note, through the real gutter
- * gesture rather than the store. What matters here and cannot be unit-tested:
- * the press is taken away from Monaco's own gutter selection, the band tracks
- * the pointer while the button is held, it stays lit under the open composer,
- * and a plain click still produces the single-line note it always did.
- */
+// Exercise real gutter ownership and pointer tracking: the range must survive composer open without starting Monaco selection.
 
 const BAND = '.orca-diff-comment-range-highlight'
 const COMPOSER = '.orca-diff-comment-popover'
@@ -21,12 +15,10 @@ const COMPOSER_TEXTAREA = '.orca-diff-comment-popover-textarea'
 
 type StoredNote = { startLine?: number; lineNumber: number; body: string }
 
-// Committed baseline: the gesture needs a real unstaged modification of a tracked
-// file. A brand-new file is untracked, and its diff opens with no gutter lines.
+// Commit a baseline: untracked files open without the diff gutter this gesture needs.
 const SEED_BASELINE = 'export const seed = true\n'
 const SEED_LINE_COUNT = 24
-// Highest gutter line any test below reaches; seeing it proves the modified model
-// (not just the first cell) has landed before the gesture starts.
+// Wait for the highest tested line so first-cell paint cannot hide an unloaded modified model.
 const SEED_SYNC_LINE = 9
 
 async function seedDiffFile(page: Page, worktreeId: string, relative: string): Promise<void> {
@@ -48,8 +40,7 @@ async function seedDiffFile(page: Page, worktreeId: string, relative: string): P
     { wId: worktreeId, rel: relative }
   )
 
-  // Commit the baseline when it is not already tracked (idempotent across reruns
-  // on the worker-scoped fixture repo), then rewrite the working tree on top.
+  // Commit before rewriting, idempotently across reruns on the worker-scoped repo.
   const absolutePath = path.join(worktreePath, ...relative.split('/'))
   mkdirSync(path.dirname(absolutePath), { recursive: true })
   writeFileSync(absolutePath, SEED_BASELINE)
@@ -84,8 +75,7 @@ async function seedDiffFile(page: Page, worktreeId: string, relative: string): P
         throw new Error('active worktree not found')
       }
       const separator = worktree.path.includes('\\') ? '\\' : '/'
-      // Inline keeps the modified side's line numbers in its own margin, which is the
-      // column the gesture is aimed at.
+      // Inline view keeps modified line numbers in the gesture’s margin.
       await state.updateSettings({ diffDefaultView: 'inline' })
       state.openDiff(wId, `${worktree.path}${separator}${rel}`, rel, 'typescript', false)
     },
@@ -211,7 +201,6 @@ test.describe('Diff note line range', () => {
 
     await orcaPage.mouse.move(from.x, from.y)
     await orcaPage.mouse.down()
-    // Anchor alone is lit before the pointer travels.
     await expect(orcaPage.locator(BAND)).toHaveCount(1)
 
     await orcaPage.mouse.move(to.x, (from.y + to.y) / 2)
@@ -239,12 +228,10 @@ test.describe('Diff note line range', () => {
     const card = orcaPage.locator('.orca-diff-comment-card').first()
     await expect(card, 'saved note card did not render').toBeVisible({ timeout: 15_000 })
     await expect(card).toContainText('lines 4-9')
-    // The draft band belongs to the composer, so it clears with it.
     await expect(orcaPage.locator(BAND)).toHaveCount(0)
   })
 
-  // Bottom-to-top: the anchor is the lower line, so the committed range only reads in document
-  // order if the drag keeps anchor and focus apart instead of sorting them as it goes.
+  // Drag upward to prove anchor/focus stay distinct and commit in document order.
   test('dragging the gutter upward commits the same range as dragging down', async ({
     orcaPage
   }) => {
@@ -278,8 +265,7 @@ test.describe('Diff note line range', () => {
     await expect(orcaPage.locator('.orca-diff-comment-card').first()).toContainText('lines 4-9')
   })
 
-  // The gesture that used to collapse to a single line: the press starts on the "+", a node
-  // Monaco does not own, so hit-testing under the pointer resolved nothing for the whole drag.
+  // Start on the non-Monaco + node to exercise the hit-test path that previously lost the whole drag.
   test('dragging from the "+" itself selects a range and the button rides the selection', async ({
     orcaPage
   }) => {
@@ -336,7 +322,6 @@ test.describe('Diff note line range', () => {
 
     await submitNote(orcaPage, 'Single line still works.')
 
-    // startLine stays undefined: the stored shape is byte-identical to the pre-range one.
     expect(await readNotes(orcaPage, worktreeId)).toEqual([
       { startLine: undefined, lineNumber: 6, body: 'Single line still works.' }
     ])

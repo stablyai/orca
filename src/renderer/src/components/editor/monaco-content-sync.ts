@@ -8,8 +8,7 @@ function normalizeToModelEol(
   currentContent: string
 ): string {
   const eol = model.getEOL()
-  // Why: Monaco normalizes model line endings, while filesystem content keeps
-  // its raw EOLs. Compare the representation Monaco can actually retain.
+  // Compare normalized EOLs because Monaco cannot retain the filesystem’s raw line endings.
   if ((eol === '\n' && !content.includes('\r')) || content === currentContent) {
     return content
   }
@@ -25,8 +24,7 @@ function applyModelEdit(
   withUndoStops: boolean
 ): void {
   if (mode === 'read-only-live-tail') {
-    // Why: live-tail updates are machine-owned and cannot be undone by users;
-    // recording them would retain the growing log again in Monaco's undo service.
+    // Machine-owned live tails need no undo; recording them retains another growing log copy.
     model.applyEdits([edit])
     return
   }
@@ -54,16 +52,7 @@ function replaceModelContent(
   applyModelEdit(editorInstance, model, { range: fullRange, text: content }, mode, withUndoStops)
 }
 
-/**
- * Reconcile a freshly-mounted editor's retained model against the current
- * `content`. Used from handleMount.
- *
- * Why: `keepCurrentModel` retains Monaco models across unmounts so undo/redo
- * survives tab switches. But @monaco-editor/react skips its value→model sync
- * on the first render after a remount and reuses the retained model — so
- * external changes that arrived while the tab was unmounted are invisible
- * until we explicitly push them into the model here.
- */
+/** Reconcile retained models on remount: the React wrapper skips its initial value sync, hiding intervening external writes. */
 export function syncContentOnMount(
   editorInstance: editor.IStandaloneCodeEditor,
   content: string,
@@ -78,21 +67,12 @@ export function syncContentOnMount(
   if (currentContent === normalizedContent) {
     return false
   }
-  // Why: no undo stop on mount — the retained model's text was already the
-  // user's last-known state, and adding an undo entry here would make Cmd+Z
-  // revert to the pre-remount text, which is confusing.
+  // Avoid an undo stop on mount that would let Undo restore pre-remount text.
   replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, false)
   return true
 }
 
-/**
- * Push a prop-driven content change into the live model. Used from a
- * useEffect that runs whenever `content` changes.
- *
- * Why: handles the live-mount update path — external file changes that
- * arrive while the editor stays mounted. The emitted-content short-circuit
- * is done at the call site before invoking this.
- */
+/** Sync mounted prop updates; callers filter their own emitted-content echoes first. */
 export function syncContentUpdate(
   editorInstance: editor.IStandaloneCodeEditor,
   content: string,
@@ -112,8 +92,7 @@ export function syncContentUpdate(
     normalizedContent.length > currentContent.length &&
     normalizedContent.startsWith(currentContent)
   ) {
-    // Why: preserving the existing prefix lets Monaco retain viewport,
-    // selection, find-widget, and tokenization state above a live-file append.
+    // Append in place to preserve viewport, selection, find and tokenization state above the new text.
     const fullRange = model.getFullModelRange()
     applyModelEdit(
       editorInstance,

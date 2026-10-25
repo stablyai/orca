@@ -296,4 +296,33 @@ describe('shared agent-hook-listener', () => {
     expect(done?.payload.prompt).toBe('summarize')
     expect(done?.payload.lastAssistantMessage).toBe('Hermes is wired up.')
   })
+
+  // Order captured from a real Hermes `delegate_task` run (session ids shortened).
+  it("keeps the Hermes pane's provider session on the parent, never a delegate child", () => {
+    const parent = { session_id: 'local-parent' }
+    const child = { session_id: '20261024_child' }
+    const sessions = (
+      [
+        ['on_session_start', { ...parent, platform: 'cli' }],
+        ['pre_llm_call', { ...parent, platform: 'cli', user_message: 'delegate it' }],
+        ['pre_tool_call', { ...parent, tool_name: 'delegate_task' }],
+        ['on_session_start', { ...child, platform: 'subagent' }],
+        ['pre_llm_call', { ...child, platform: 'subagent' }],
+        ['pre_tool_call', { ...child, tool_name: 'read_file' }],
+        ['post_llm_call', { ...child, platform: 'subagent' }],
+        ['on_session_end', child],
+        ['post_tool_call', { ...parent, tool_name: 'delegate_task' }],
+        ['on_session_end', parent]
+      ] as const
+    ).map(
+      ([hook_event_name, payload]) =>
+        normalizeHookPayload(
+          state,
+          'hermes',
+          { paneKey: PANE_KEY, payload: { hook_event_name, ...payload } },
+          'production'
+        )?.providerSession?.id ?? null
+    )
+    expect(sessions).toEqual(Array(10).fill('local-parent'))
+  })
 })

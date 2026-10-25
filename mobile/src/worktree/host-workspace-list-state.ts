@@ -8,14 +8,12 @@ export type HostWorkspaceListStateInput = {
   catalogError: string | null
 }
 
-// Why (STA-3123): one owner for the list's loading/failed/empty precedence, so a
-// failed worktree.ps can never render as a healthy host with zero workspaces.
+// A failed catalog must not appear as a healthy empty host (STA-3123).
 export function selectHostWorkspaceListState(
   input: HostWorkspaceListStateInput
 ): 'loading' | 'catalog-error' | 'empty' | null {
   const { connState, worktreesLoaded, displayCount, sectionCount, catalogError } = input
-  // Why: a blank disconnected list read as "no workspaces"; spin instead — the
-  // header verdict owns escalating a long outage. auth-failed keeps its own UI.
+  // Let the header escalate disconnected outages; do not present them as empty workspace lists.
   const pending =
     connState === 'connecting' ||
     connState === 'handshaking' ||

@@ -1,4 +1,4 @@
-import type { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import type { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 
 /** Retain exact failed-child ownership until its native handles are gone. */
 export class RuntimeWatcherPredecessorBarriers {

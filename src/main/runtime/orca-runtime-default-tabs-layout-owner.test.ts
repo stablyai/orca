@@ -32,7 +32,6 @@ describe('layout-owner build: a worktree’s default tabs start in main', () => 
     ])
     expect(spawn.mock.calls.map(([args]) => args.tabId)).toEqual(rows.map((row) => row.id))
     expect(session().defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE_ID]).toBe(true)
-    // No window round trip writes a default tab's look.
     expect(renameTerminal).not.toHaveBeenCalled()
   })
 })

@@ -4,8 +4,7 @@ import { getMobilePaneSearchEntries, shouldOpenMobilePairingAddress } from './mo
 import { matchesSettingsSearch } from './settings-search'
 
 describe('getMobilePaneSearchEntries', () => {
-  // Why: the network entries were split into their own catalog and spliced back
-  // in. Search ranking breaks ties by index, so a reorder silently reranks rows.
+  // Catalog order breaks search-score ties; preserve Network Interface ranking after catalog splits.
   it('keeps Network Interface in its original catalog position', () => {
     expect(getMobilePaneSearchEntries().map((entry) => entry.title)).toEqual([
       'Mobile Pairing',
@@ -17,7 +16,6 @@ describe('getMobilePaneSearchEntries', () => {
   })
 
   it('keeps the shared machine-name entry searchable from the Mobile pane', () => {
-    // Why: the entry is shared with Remote Servers; the Mobile pane only adds its own keyword.
     const entries = getMobilePaneSearchEntries()
 
     expect(matchesSettingsSearch('machine name', entries)).toBe(true)
@@ -27,8 +25,7 @@ describe('getMobilePaneSearchEntries', () => {
 
 describe('shouldOpenMobilePairingAddress', () => {
   it('stays closed for an empty or blank query', () => {
-    // Why: an empty query scores as a match for every entry, so the disclosure
-    // would spring open the moment Settings mounts without a search.
+    // Blank queries match all entries; guard them to keep disclosure closed on mount.
     expect(shouldOpenMobilePairingAddress('')).toBe(false)
     expect(shouldOpenMobilePairingAddress('   ')).toBe(false)
   })

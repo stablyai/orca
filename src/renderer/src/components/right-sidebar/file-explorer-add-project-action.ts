@@ -8,7 +8,7 @@ export type AddProjectFromFolderModalData = {
   runtimeEnvironmentId: string | null
 }
 
-// Why not an `ssh:` folder: only a paired server adds projects on an SSH host.
+// Only paired servers can add projects on SSH hosts; direct ssh: folders cannot.
 export function canShowAddAsProjectAction(node: TreeNode, activeRepo: Repo | null): boolean {
   if (!node.isDirectory || !activeRepo || !isFolderRepo(activeRepo)) {
     return false
@@ -20,7 +20,7 @@ export function buildAddProjectFromFolderModalData(
   node: TreeNode,
   activeRepo: Repo
 ): AddProjectFromFolderModalData {
-  // Why: subfolder paths must stay on their owning repo host, not the mutable global selection.
+  // Keep subfolders on their repo's owner host rather than the mutable global selection.
   const host = parseExecutionHostId(getRepoExecutionHostId(activeRepo))
   return {
     folderPath: node.path,

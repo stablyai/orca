@@ -7,10 +7,6 @@ import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-h
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
 
-/**
- * Exactly the fields this hook reads, so the whole lifecycle model still fits and a test can build
- * one. Most of them are forwarded to the viewport refit; the rest are named where they are used.
- */
 export type MobileSessionKeyboardScope = Pick<
   MobileSessionLifecycleModel,
   | 'activeHandleRef'
@@ -68,7 +64,6 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
-  // Why: non-subscribe layout refits (tab strip, fold, rotation) live in a dedicated hook — see terminal-viewport-refit.ts.
   const {
     notifyTerminalFrameHeight,
     notifyTerminalFrameWidth,
@@ -90,9 +85,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     subscribeToTerminal
   })
 
-  // Why: react-native-web's `Keyboard` never fires, so inside the shell's page this screen heard no
-  // keyboard at all — the platform seam answers on both hosts. Visibility before height, as the
-  // listeners had it: the flag is what defers the refit the height change would otherwise trigger.
+  // Use the keyboard seam because web Keyboard emits nothing; publish visibility before height so refits defer while it opens.
   const softKeyboard = useSoftKeyboard()
   useEffect(() => {
     notifyKeyboardVisibility(softKeyboard.visible)
@@ -109,8 +102,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     }
   }, [])
   useEffect(() => cancelHeldTabStripReveal, [cancelHeldTabStripReveal])
-  // Why: a double-tap's second tap must land on the tab the first one hit, so a tap's reveal waits
-  // out that window and every other strip scroll, activation's included, holds until it runs.
+  // Hold strip movement through double-tap detection so its second tap reaches the same tab.
   const holdTabStripReveal = useCallback(
     (offset: number, delayMs: number) => {
       cancelHeldTabStripReveal()
@@ -146,7 +138,6 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     }
   }, [])
 
-  // Reveal the active tab on change; defer one frame so freshly mounted tab layouts are recorded.
   useEffect(() => {
     const id = requestAnimationFrame(() => scrollActiveTabIntoView(activeSessionTabId, true))
     return () => cancelAnimationFrame(id)

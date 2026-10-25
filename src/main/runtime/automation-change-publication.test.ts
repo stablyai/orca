@@ -1,13 +1,5 @@
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
-/**
- * A definition change must name the host it affected, and a change that moves a
- * record between hosts must name both — a subscriber that never hears about the
- * source keeps rendering a row that has left it.
- *
- * Runs against the real Store so the published selectors are the ones the
- * persistence layer actually derives, not fixture stand-ins. The runtime methods
- * are the single publication site for every transport (local IPC and remote RPC).
- */
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
+// Moving a definition must publish both hosts or source subscribers retain a stale row.
 
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -148,8 +140,7 @@ const runNow = async (
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-publish-'))
-  // Why: the store resolves orca-data.json through the app environment, so the
-  // suite's fixture directory must be what `userData` answers with.
+  // Store resolves its data path through the app environment; point it at the fixture.
   installFakeAppEnvironment({
     getPath: (name) => (name === 'userData' ? testState.dir : tmpdir())
   })
@@ -251,9 +242,7 @@ describe('scoped automationsChanged publication', () => {
     expect(published).toEqual([{ reason: 'definition', selector: { kind: 'self' } }])
   })
 
-  // Why: an unnameable destination is exactly when scoping is unsafe — a subscriber scoped
-  // elsewhere would never hear about the row it is still rendering. The publication has to
-  // degrade to one unscoped authority event rather than name only the stale source.
+  // Unknown destinations require an unscoped event so every affected subscriber hears the change.
   it('degrades to an unscoped event when the store cannot name the destination', async () => {
     const { store, runtime, published } = await makeRuntime()
     const selector = store.automationChangeSelector.bind(store)
@@ -273,7 +262,6 @@ describe('scoped automationsChanged publication', () => {
   })
 })
 
-// Manual refusals record host loss while preserving typed conflicts for stale callers.
 describe('manual run refused before dispatch', () => {
   it('answers the caller with the conflict and still leaves the user a run record', async () => {
     const { store, runtime } = await makeManualRunRuntime()
@@ -282,7 +270,6 @@ describe('manual run refused before dispatch', () => {
       code: AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved
     })
 
-    // Manual and scheduled refusals use the same run-history reason.
     expect(store.listAutomationRuns('orphan-1')).toMatchObject([
       {
         status: 'skipped_unavailable',

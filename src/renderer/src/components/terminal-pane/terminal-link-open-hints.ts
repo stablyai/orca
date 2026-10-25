@@ -66,8 +66,7 @@ export function terminalUrlOpenHintOptionsFor(
   }
 }
 
-// Why: with modifierInverts on, Shift no longer always means "system browser" —
-// it means "the other one" — so the hint has to name the actual destination.
+// With inversion, Shift means the other destination; name the resolved one instead of always promising the system browser.
 export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {}): string {
   const invertsToOrca = options.modifierInverts === true && options.openLinksInApp !== true
   const prefix = terminalLinkActionHintPrefix(options.showActions !== false)
@@ -85,8 +84,7 @@ export function getTerminalUrlSystemBrowserHint(): string {
   return isMacPlatform() ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
 }
 
-// Why: the mirror of the system-browser hint for surfaces where inverting sends the
-// modifier the other way; a plain click there already opens the system browser.
+// Invert the hint too when plain click already opens the system browser.
 export function getTerminalUrlOrcaBrowserHint(): string {
   return isMacPlatform() ? '⇧⌘+click to open in Orca' : 'Shift+Ctrl+click to open in Orca'
 }

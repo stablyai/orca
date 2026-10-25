@@ -63,8 +63,7 @@ export default function ImageViewerPopup({
                   'object-contain',
                   imageLayoutSize
                     ? 'block h-full w-full'
-                    : // Why: the w-max/h-max scroll box makes percentage maxes resolve to
-                      // none, so only viewport units bound the image before onLoad.
+                    : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
                       'block max-h-[100vh] max-w-[100vw]'
                 )}
               />

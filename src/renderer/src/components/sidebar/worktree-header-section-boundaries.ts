@@ -16,9 +16,7 @@ function getEstimatedRenderRowStarts(
   return starts
 }
 
-// Why indexed once instead of a findIndex per header: both boundary passes ran a full row scan
-// for every header row, so the sidebar row model cost O(headers x rows) on every rebuild — and it
-// rebuilds on agent-status ticks, not just on drag. First match wins, matching findIndex.
+// Index once to avoid O(headers × rows) rebuilds on agent ticks; preserve findIndex’s first-match behavior.
 function indexHeaderRenderRows(
   rows: readonly RenderRow[],
   keyOf: (row: GroupHeaderRow) => string | null | undefined
@@ -33,8 +31,7 @@ function indexHeaderRenderRows(
   return indexByKey
 }
 
-// Kept per bucket: an id can sit in more than one bucket, and the caller's bucket lookup decides
-// which ordering applies. First occurrence wins within a bucket, matching indexOf.
+// Index successors per bucket; duplicate IDs retain each bucket’s first occurrence, matching indexOf.
 function indexBucketSuccessors(
   idsByBucket: ReadonlyMap<string, readonly string[]>
 ): Map<string, ReadonlyMap<string, string | undefined>> {

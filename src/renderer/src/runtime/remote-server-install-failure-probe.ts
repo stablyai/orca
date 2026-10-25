@@ -11,12 +11,7 @@ type InstallFailureProbeTransport = {
   ) => Promise<RemoteServerUpdaterSnapshot>
 }
 
-/**
- * The install RPC is accepted before the installer runs, so a server that failed to restart keeps
- * publishing the reason through `updater.getStatus`. Reading it turns a three-minute reconnect
- * timeout into the actual cause. Both runtime-id guards matter: a snapshot from a process that is
- * not the one we asked to install describes some other attempt.
- */
+/** Install RPC accepts before installer runs; original runtime’s updater.getStatus exposes restart failure instead of a three-minute reconnect timeout. Both runtime-ID fences exclude other attempts. */
 export async function readRemoteServerInstallFailure(
   environmentId: string,
   transport: InstallFailureProbeTransport,

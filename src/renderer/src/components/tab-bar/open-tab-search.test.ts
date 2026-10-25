@@ -309,8 +309,7 @@ describe('searchOpenTabs ranking', () => {
     ])
   })
 
-  // Both use secondary coverage, so match rank has to beat tab position: the
-  // agent tab sits earlier in the group and would win a position-only tie-break.
+  // Rank path matches above snippets before using tab position as a tie-breaker.
   it('ranks a path match above an agent-snippet match on tabs in the same group', () => {
     const results = search({
       query: 'zebra',
@@ -416,8 +415,7 @@ describe('searchOpenTabs ranking', () => {
 })
 
 describe('searchOpenTabs filtering', () => {
-  // The focused tab is only unreachable from its own column; hiding it here would
-  // make it unreachable from every other column's "+" too.
+  // Other columns must still be able to switch to the focused tab.
   it('still returns the focused tab, page and emulator', () => {
     const results = search({
       query: 'zebra',
@@ -509,8 +507,7 @@ describe('searchOpenTabs filtering', () => {
     ).toEqual([])
   })
 
-  // Both tokens land on the "ios simulator" alias, so the row fills no title or
-  // secondary range — the inverse test would drop it.
+  // Alias-only matches can span keywords without filling title or secondary highlight ranges.
   it('keeps a simulator alias match that spans two keywords', () => {
     const results = search({
       query: 'ios sim',
@@ -674,9 +671,9 @@ describe('searchOpenTabs query guards', () => {
     expect(
       search({
         query,
-        workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'Zebra tab' })],
-        browserPages: [makeBrowserPage({ id: 'page-1', title: 'Zebra page' })],
-        simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Zebra emulator' })]
+        workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: query })],
+        browserPages: [makeBrowserPage({ id: 'page-1', title: query })],
+        simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: query })]
       })
     ).toEqual([])
   })

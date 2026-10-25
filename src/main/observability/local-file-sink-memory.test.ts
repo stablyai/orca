@@ -65,7 +65,6 @@ describe('trace sink rejected record retention', () => {
     sink.push({ valid: true })
     vi.advanceTimersByTime(200)
     const written = readFileSync(filePath, 'utf8').split('\n').filter(Boolean).map(parseLine)
-    // Each rejected record leaves a marker, so the gap is readable instead of silent.
     expect(written.filter((entry) => entry.type === DROPPED_RECORD_TYPE)).toHaveLength(24)
     expect(written.at(-1)).toEqual({ valid: true })
   })
@@ -87,7 +86,7 @@ describe('trace sink rejected record retention', () => {
       traceId: 'a'.repeat(32)
     })
     expect(marker.droppedChars).toBeGreaterThan(1024 * 1024)
-    // Timestamped so the bundle collector's lookback filter ages markers out like any other span.
+    // The collector must be able to age dropped-record markers out of its lookback window.
     expect(BigInt(marker.endTimeUnixNano as string)).toBeGreaterThan(0n)
   })
 

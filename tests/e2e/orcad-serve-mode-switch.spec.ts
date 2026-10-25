@@ -1,16 +1,5 @@
-/**
- * D7 across a real `orca serve` host switch: a terminal opened under Electron serve survives a
- * switch to orcad serve on the same profile (same daemon adopted, terminal reattached) and back,
- * and a terminal orcad's daemon owns survives a switch to Electron serve. Also the shared-profile
- * lock: each host refuses to serve a profile the other holds.
- *
- * Needs the packaged orcad slot (`pnpm build:orcad`). Background launch only; nothing is focused.
- *
- * Run:
- *   ORCA_E2E_ORCAD_SERVE=1 ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/orcad-serve-mode-switch.spec.ts --config tests/playwright.config.ts \
- *     --project electron-headless --workers=1
- */
+// D7: switch Electron serve ↔ orcad serve on one profile without replacing surviving daemon terminals; each host must refuse the other’s profile lock.
+// Build pnpm build:orcad, then run electron-headless with ORCA_E2E_ORCAD_SERVE=1 ORCA_BACKGROUND_LAUNCH=1.
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

@@ -1,23 +1,4 @@
-/**
- * When an update may restart orcad, and when going back is still sound.
- *
- * Two constraints shape everything here.
- *
- * **The daemon must outlive the restart.** orcad forks the terminal daemon and deliberately
- * does not kill it on stop (`orcad-daemon-supervision.ts` uses `disconnectDaemon`, never
- * `shutdownDaemon`). An update that killed it would destroy every terminal on the host —
- * the thing the daemon exists to prevent. After an update the surviving daemon was forked
- * from the OUTGOING bundle, so `daemon-init` sees an entry-path/version mismatch and takes
- * its `shouldPreserveDaemonWithLiveSessions` branch: with live sessions it preserves the old
- * daemon; at exactly zero it replaces it. Both are correct, and both mean the outgoing
- * version's directory is still load-bearing.
- *
- * **The state root is shared across versions.** `~/.orca/` (or `$ORCA_USER_DATA`) is outside
- * every version dir, and Orca's persisted state carries no schema version — migrations run
- * on load and rewrite in place. So "is the old version able to read what the new one wrote"
- * has no answer that can be computed. That is why rollback is defined against a
- * pre-activation snapshot rather than against a version comparison.
- */
+/** Daemon terminals survive orcad swaps and may retain the outgoing bundle, so keep its directory. Shared state migrates in place without schema versions; safe rollback therefore restores a pre-activation snapshot rather than comparing build versions. */
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import {
@@ -29,11 +10,13 @@ type OrcadUpdateDecision =
   | { action: 'noop'; reason: string }
   | {
       action: 'proceed'
-      /** True when a live daemon will be carried across the restart rather than replaced. */
       preservesLiveDaemon: boolean
       notes: string[]
     }
   | { action: 'defer'; code: OrcadUpdateDeferCode; reason: string }
+
+/** `live-terminals` passes only a counted live-terminal deferral, never an uncounted census. */
+export type OrcadUpdateForce = boolean | 'live-terminals'
 
 export type OrcadUpdateDeferCode =
   | 'orcad_update_terminals_running'
@@ -42,21 +25,13 @@ export type OrcadUpdateDeferCode =
   | 'orcad_update_daemon_protocol_unverifiable'
   | 'orcad_update_ends_in_process_terminals'
 
-/**
- * Decide whether to restart orcad onto `candidateVersion`.
- *
- * Deferring on live terminals is a deliberate choice, not caution. The restart itself is
- * non-destructive, but it leaves the host running a NEW orcad against an OLD daemon until
- * every one of those terminals exits — a mixed pair whose duration the operator, not the
- * deploy, should decide. `force` is how they decide it.
- */
+/** Defer live-session mixed-build pairs unless the operator chooses force; force cannot authorize an unsupported daemon protocol. */
 export function planOrcadUpdate(input: {
   record: OrcadActivationRecord
   candidateVersion: string
   census: OrcadTerminalCensus
-  /** The candidate's daemon protocol and the older ones it can still attach to. */
   candidateDaemonProtocol: OrcadDaemonProtocolFacts
-  force?: boolean
+  force?: OrcadUpdateForce
 }): OrcadUpdateDecision {
   if (input.record.active === input.candidateVersion) {
     return {
@@ -65,8 +40,7 @@ export function planOrcadUpdate(input: {
     }
   }
   const inProcess = input.census.inProcessSessions ?? 0
-  // First, and force cannot override it: these run inside orcad, so no daemon carries them
-  // across, and an empty daemon list would otherwise read as an unreported protocol.
+  // In-process terminals cannot survive restart; force cannot override this even if daemon census is empty.
   if (inProcess > 0) {
     return {
       action: 'defer',
@@ -80,7 +54,7 @@ export function planOrcadUpdate(input: {
     }
   }
   const crossing = assessOrcadLiveDaemonCrossing(input.census, input.candidateDaemonProtocol)
-  // Why force cannot override: the operator can accept a mixed pair, not unreachable terminals.
+  // Force can accept mixed builds, never unreachable terminals.
   if (crossing === 'strands-live-terminals') {
     return {
       action: 'defer',
@@ -103,7 +77,7 @@ export function planOrcadUpdate(input: {
     }
   }
   if (liveSessions === null) {
-    if (!input.force) {
+    if (input.force !== true) {
       return {
         action: 'defer',
         code: 'orcad_update_terminal_census_unavailable',
@@ -115,8 +89,7 @@ export function planOrcadUpdate(input: {
     }
     return {
       action: 'proceed',
-      // Why true: an unverifiable census must be planned for as if sessions exist. Assuming
-      // the daemon is replaceable is the assumption that destroys terminals.
+      // Unknown census must preserve possible live sessions; never assume the daemon replaceable.
       preservesLiveDaemon: true,
       notes: [
         'Forced with an unverifiable session count. Planning as if terminals are live: the ' +
@@ -150,8 +123,7 @@ export function planOrcadUpdate(input: {
   }
   return {
     action: 'proceed',
-    // Zero live sessions is the one case where daemon-init's freshness branch replaces the
-    // daemon, so nothing is carried across and nothing is lost.
+    // At zero sessions daemon-init can safely replace the old daemon.
     preservesLiveDaemon: false,
     notes: [
       'No terminals are running, so the daemon is replaced by one forked from the new bundle.'
@@ -173,23 +145,7 @@ type OrcadRollbackUnsafeCode =
   | 'orcad_rollback_strands_live_terminals'
   | 'orcad_rollback_daemon_protocol_unverifiable'
 
-/**
- * How safe it is to switch back to `record.previous`.
- *
- * **The point past which rollback is unsafe is the first terminal created after
- * activation.** Not the first state write, and not any schema comparison:
- *
- *  - Rolling back means restoring the pre-activation snapshot, because there is no schema
- *    version to prove the old build can read what the new one wrote.
- *  - The snapshot predates activation, so it does not describe sessions created since.
- *  - The daemon survives the binary swap and still owns those sessions. After the restore,
- *    a live daemon holds PTYs that the restored store has no rows for: work that is running,
- *    that no client can reattach to, and that the host will report as neither `live` nor
- *    `exited` for any session anyone can name.
- *
- * Settings and UI churn written after activation are merely discarded, which is `lossy`.
- * Orphaning running work is not something a deploy gets to do quietly, so it is `unsafe`.
- */
+/** Restoring a pre-activation snapshot discards later state. Post-activation terminal creation makes rollback unsafe: the surviving daemon would own PTYs absent from restored rows. Settings/UI-only changes are merely lossy. */
 export function assessOrcadRollback(input: {
   record: OrcadActivationRecord
   /** Whether the snapshot is still on the host; `null` means the probe was unverifiable. */
@@ -197,11 +153,7 @@ export function assessOrcadRollback(input: {
   census: OrcadTerminalCensus
   /** The rollback target's daemon protocol facts, from the client's copy of its bytes. */
   targetDaemonProtocol: OrcadDaemonProtocolFacts
-  /**
-   * Whether the shared store has been written since activation, from its mtime against
-   * `record.activatedAt`. `null` means unknown, which is treated as "yes" — claiming a
-   * lossless rollback we cannot demonstrate is the failure mode, not the caution.
-   */
+  /** Compare shared-store mtime to activation; unknown writes are treated as present rather than claiming unproven lossless rollback. */
   stateWritesSinceActivation: boolean | null
 }): OrcadRollbackSafety {
   const target = input.record.previous

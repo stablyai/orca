@@ -1,42 +1,25 @@
-// Pure last-intent-wins guard for optimistic mutations (KTD6/R6). No React or
-// react-native imports so it stays unit-testable under the node Vitest config —
-// the hook holds the ref and the field via useRef/useState.
+// Only the latest user intent may commit or revert optimism; stale responses must leave newer edits visible.
 
 export type OptimisticSeqRef = { current: number }
 
-// Bump the monotonic counter and return the sequence stamp for this write. The
-// hook tags each in-flight mutation with the returned value.
 export function nextSeq(ref: OptimisticSeqRef): number {
   ref.current += 1
   return ref.current
 }
 
-// A response is allowed to win only if its write is still the most recent intent;
-// a slow earlier response (smaller seq) is stale and must be ignored.
 export function isLatest(ref: OptimisticSeqRef, seq: number): boolean {
   return ref.current === seq
 }
 
-// A single optimistically-mutated field. `resolve` renders `optimistic ??
-// authoritative`; on settle, only the latest write affects the rendered value —
-// a stale (superseded) response neither commits nor reverts.
 export type OptimisticField<T> = {
-  // The sequence of the currently-shown optimistic value, or 0 when none.
   begin: (value: T) => number
-  // Returns true when this seq was the latest and optimism was cleared.
   settleSuccess: (seq: number) => boolean
-  // Returns true when this seq was the latest and its optimistic value was reverted.
   settleFailure: (seq: number) => boolean
-  // Render value: optimistic when present, else the passed authoritative value.
   resolve: (authoritative: T) => T
-  // Current optimistic value (undefined when none) — for read-only inspection.
   peek: () => T | undefined
-  // Clears any currently-shown optimism. Returns true if a value was cleared.
   reset: () => boolean
 }
 
-// Factory holds the per-field sequence ref + optimistic value. Pure logic; the
-// hook re-creates one per field and triggers re-renders via its own state.
 export function createOptimisticField<T>(onChange?: () => void): OptimisticField<T> {
   const seqRef: OptimisticSeqRef = { current: 0 }
   let optimisticSeq = 0
@@ -57,7 +40,6 @@ export function createOptimisticField<T>(onChange?: () => void): OptimisticField
       return seq
     },
     settleSuccess(seq: number): boolean {
-      // Only the latest write commits; a stale success leaves the newer intent shown.
       if (!isLatest(seqRef, seq) || optimisticSeq !== seq) {
         return false
       }
@@ -65,8 +47,6 @@ export function createOptimisticField<T>(onChange?: () => void): OptimisticField
       return true
     },
     settleFailure(seq: number): boolean {
-      // Revert only when this failing write is still the value on screen; a stale
-      // failure must not blow away a newer intent (last-intent-wins).
       if (!isLatest(seqRef, seq) || optimisticSeq !== seq) {
         return false
       }

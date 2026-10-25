@@ -48,8 +48,7 @@ export function truncateLogTailForPrompt(logTail: string): string {
 }
 
 function findPromptLogTailStart(logTail: string): number {
-  // Why: CI logs may be pasted/generated as huge newline-heavy tails; keeping
-  // only the prompt suffix should not allocate one array entry per log line.
+  // Scan only needed log-tail newlines; splitting huge pasted/generated CI logs would allocate an entry per line.
   const scanStart = Math.max(0, logTail.length - PROMPT_LOG_TAIL_SCAN_CODE_UNITS)
   let lineBreakCount = 0
   for (let index = logTail.length - 1; index >= scanStart; index -= 1) {

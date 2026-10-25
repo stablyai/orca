@@ -1,11 +1,8 @@
-// Real-store coverage: a launch into the floating workspace must leave the main window's tab alone.
-
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../store/slices/store-cascades-test-harness'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -42,7 +39,6 @@ function seedMainWindowOnEditor(): ReturnType<typeof createTestStore> {
     activeWorktreeId: MAIN_WORKTREE_ID
   })
   const mainTerminal = store.getState().createTab(MAIN_WORKTREE_ID)
-  // The main window is showing a non-terminal tab, as in the report.
   store.getState().setActiveTabType('editor', MAIN_WORKTREE_ID)
   expect(store.getState().activeTabId).toBe(mainTerminal.id)
   return store
@@ -70,7 +66,7 @@ describe('launchAgentInNewTab main-window surface', () => {
     expect(state.activeTabType).toBe('editor')
     expect(state.activeTabId).toBe(before.activeTabId)
     expect(state.activeTabTypeByWorktree[MAIN_WORKTREE_ID]).toBe('editor')
-    // Why: the floating panel renders the group's active tab, so the launch still lands selected there.
+    // Select inside the floating group because its active tab controls the rendered pane.
     const floatingGroup = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
     expect(floatingGroup?.activeTabId).toBe(tabId)
     expect(state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(tabId)

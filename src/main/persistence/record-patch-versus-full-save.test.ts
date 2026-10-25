@@ -1,6 +1,4 @@
-// Ledger L104: each writer of the touched-records patch against a full save of main's model. They
-// differ on 50 of the 51 legacy fixture x writer pairs, only on records the Loader rewrites; every
-// pair is pinned exactly, so the patch goes only once no partition holds such rows.
+// Pin per-writer divergences on loader-normalized records before enabling stored-record patches.
 
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -37,7 +35,6 @@ import { windowViewPatchForMain, windowViewSaveForMain } from './window-save-vie
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-/** Each patch a writer made: the stored partition, the full saves before and after, the patch. */
 type PatchCall = {
   hostId: ExecutionHostId
   stored: WorkspaceSessionState
@@ -78,7 +75,6 @@ const MOVED_FILE = {
   language: 'markdown'
 }
 
-/** Records (or session fields) two partitions hold differently. */
 const recordsDiffering = (left: WorkspaceSessionState, right: WorkspaceSessionState) =>
   [
     ...new Set(
@@ -88,14 +84,13 @@ const recordsDiffering = (left: WorkspaceSessionState, right: WorkspaceSessionSt
     )
   ].sort()
 
-/** What the partition loads to; the revision is exempt, as every load's tombstone pass bumps it. */
+/** Ignore revision bumps from load-time tombstone pruning. */
 const reloaded = (hostId: ExecutionHostId, session: WorkspaceSessionState) =>
   stableJson({
     ...saveWorkspaceLayout(loadWorkspaceLayout(hostId, session, nameBasedLoadContext())),
     terminalTopologyRevisionByRepoId: undefined
   })
 
-/** The patches one write made, each with the partition it wrote (in the order it patches them). */
 function captured(hostIds: readonly ExecutionHostId[], run: () => void): PatchCall[] {
   patches.calls = []
   patches.hostIds = [...hostIds]
@@ -227,7 +222,7 @@ const WRITERS: Record<WriterName, Writer> = {
   [SAVE]: (profile) => {
     const stored = profile.build()
     const firstTab = Object.values(stored.tabsByWorktree).flat()[0]
-    // The window echoes the stored partition with a new selection and a title its view reported.
+    // Simulate a window echo with updated selection and reported title.
     const save: WorkspaceSessionState = {
       ...stored,
       activeTabId: firstTab?.id ?? null,
@@ -247,7 +242,6 @@ const WRITERS: Record<WriterName, Writer> = {
   }
 }
 
-/** The session list each record table is stored in: a record the load rewrites can change it. */
 const LIST_FIELD_OF_TABLE: Readonly<Record<string, string>> = {
   row: 'tabsByWorktree',
   terminalEntry: 'unifiedTabs',
@@ -258,10 +252,7 @@ const LIST_FIELD_OF_TABLE: Readonly<Record<string, string>> = {
   browser: 'browserTabsByWorktree'
 }
 
-/**
- * Whether a session list field's workspace keys differ only where the load rewrote a record of
- * that list: a full save drops a workspace's emptied list that the patch keeps with its stored row.
- */
+/** Full saves drop emptied lists; patches preserve stored rows until normalization. */
 function listKeysFollowLoad(change: LayoutLoadChange, normalized: readonly string[]): boolean {
   const tables = Object.keys(LIST_FIELD_OF_TABLE).filter(
     (table) => LIST_FIELD_OF_TABLE[table] === change.field
@@ -282,7 +273,6 @@ function listKeysFollowLoad(change: LayoutLoadChange, normalized: readonly strin
   )
 }
 
-/** The records a writer's patches differ from its full saves in. */
 function differingRecords(calls: readonly PatchCall[]): string[] {
   const differing = new Set<string>()
   for (const call of calls) {
@@ -292,9 +282,9 @@ function differingRecords(calls: readonly PatchCall[]): string[] {
       (change) => change.table === 'session' && listKeysFollowLoad(change, normalized)
     )
     const allowed = [...normalized, ...listKeyChanges.map((change) => `session/${change.field}`)]
-    // Only records the load rewrites from what the stored partition says can differ.
+    // Only loader-normalized records may differ.
     expect(differs.filter((record) => !allowed.includes(record))).toEqual([])
-    // Either way the partition loads to main's model.
+    // Both representations must load to the same model.
     expect(reloaded(call.hostId, call.patched)).toBe(reloaded(call.hostId, call.full))
     differs.forEach((record) => differing.add(record))
   }
@@ -302,12 +292,10 @@ function differingRecords(calls: readonly PatchCall[]): string[] {
 }
 
 const GIT = 'repo-1::/Users/dev/orca'
-// The two a switch-off window restores differently from their full save, dropping tab-b or adding
-// it (legacy-partition-full-save-hydration.test.ts); the others differ only in records on disk.
+// These fixtures also differ visibly in switch-off windows; other divergences affect stored rows only.
 const SURFACE_TOMBSTONE = 'legacy surface tombstone on a pane still showing its terminal'
 const HIDDEN_ROW = 'row without a tab-bar entry or a terminal'
 
-/** Every legacy fixture's difference per writer; absent is none. */
 const PINNED: Readonly<Record<string, Partial<Record<WriterName, readonly string[]>>>> = {
   [HIDDEN_ROW]: {
     [APPLY]: [`entry/${GIT}|$order`, `group/${GIT}|g1`, `terminalEntry/${GIT}|tab-b`],
@@ -515,7 +503,15 @@ describe.each(([APPLY, MOVE, SAVE] as const).map((name) => [name, WRITERS[name]]
     it.each(WORKSPACE_LAYOUT_PROFILES.map((profile) => [profile.name, profile] as const))(
       '%s: the same session, key order aside, as its load normalizes nothing',
       (_name, profile) => {
-        for (const call of write(profile).flat()) {
+        const calls = write(profile).flat()
+        const skipsPatch =
+          profile.name === 'empty profile'
+            ? writer !== SAVE
+            : writer === MOVE
+              ? profile.hostId !== LOCAL_EXECUTION_HOST_ID
+              : writer === SAVE && profile.hostId.startsWith('runtime:')
+        expect(calls.length === 0).toBe(skipsPatch)
+        for (const call of calls) {
           expect(recordsDiffering(call.stored, call.before)).toEqual([])
           expect(stableJson(call.patched)).toBe(stableJson(call.full))
         }
@@ -528,7 +524,7 @@ describe.each(([APPLY, MOVE, SAVE] as const).map((name) => [name, WRITERS[name]]
         const calls = write(profile).flat()
         expect(calls.length).toBeGreaterThan(0)
         const differing = differingRecords(calls)
-        // Exact both ways: a fixture that converges, or a new divergence, fails here.
+        // Fail on convergence as well as new divergences so the pinned inventory stays current.
         expect(differing).toEqual(PINNED[profile.name]?.[writer] ?? [])
       }
     )

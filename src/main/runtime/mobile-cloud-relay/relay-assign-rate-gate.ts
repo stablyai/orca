@@ -1,15 +1,9 @@
-// Why: the director rate-limits /v1/assign per host at 5s, but every desktop
-// retry path (coordinator full-jitter, drain full-jitter, reconcile() cancelling
-// the Retry-After timer) can fire immediately, so hosts sit permanently limited.
-// The gate lives below all of them, at the single call site that issues assigns.
+// Enforce the director's 5s host limit below all retry/reconcile paths, which can otherwise retry immediately.
 const ASSIGN_MIN_INTERVAL_MS = 5_000
 const ASSIGN_INTERVAL_JITTER_MS = 500
-// Sleep in slices so a raise landing mid-wait is honored and a superseded
-// caller aborts promptly instead of holding its IPC path for the full wait.
+// Slice waits to honor raised deadlines and supersession promptly.
 const ASSIGN_WAIT_SLICE_MS = 1_000
-// Beyond this, fail fast with the remaining wait instead of parking the caller
-// (pairing IPC awaits reconcile inline): a Retry-After can legitimately reach
-// minutes, and the gate keeps the deadline for the scheduled retry.
+// Fail long Retry-After waits inline; pairing IPC cannot park for minutes, but scheduled retry retains the deadline.
 const ASSIGN_MAX_INLINE_WAIT_MS = 15_000
 
 export class RelayAssignAbortedError extends Error {
@@ -26,8 +20,7 @@ export class RelayAssignRateLimitedError extends Error {
 
 export type RelayAssignRateGateOptions = {
   now?: () => number
-  // Test fakes MUST advance `now` when sleeping — the wait loop re-reads the
-  // clock each slice, so a no-op sleep against a frozen clock never terminates.
+  // Test sleeps must advance now or the clock-rereading loop never terminates.
   sleep?: (ms: number) => Promise<void>
   random?: () => number
 }
@@ -41,8 +34,6 @@ export class RelayAssignRateGate {
   private readonly sleep: (ms: number) => Promise<void>
   private readonly random: () => number
   private readonly nextPermittedAt = new Map<string, number>()
-  // Per-key promise chain: concurrent callers queue behind each other's booking
-  // instead of stampeding out of one shared sleep.
   private readonly tails = new Map<string, Promise<void>>()
 
   constructor(options: RelayAssignRateGateOptions = {}) {
@@ -55,8 +46,6 @@ export class RelayAssignRateGate {
     return this.nextPermittedAt.size
   }
 
-  // Waits out the remaining interval for this host, then books the next slot.
-  // Resolves only when the caller may send; throws if isCurrent went false while waiting.
   async reserve(key: string, isCurrent?: () => boolean): Promise<void> {
     const prior = this.tails.get(key)
     let release = (): void => {}
@@ -68,8 +57,7 @@ export class RelayAssignRateGate {
     let stale = false
     try {
       await prior
-      // Re-read the deadline every slice: a sibling's Retry-After can raise it
-      // mid-wait, and a caller superseded mid-wait must not spend the slot.
+      // Recheck sibling Retry-After and caller currency each slice; stale callers cannot spend slots.
       for (;;) {
         stale = isCurrent ? !isCurrent() : false
         if (stale) {
@@ -100,7 +88,6 @@ export class RelayAssignRateGate {
     }
   }
 
-  // Retry-After outlives the coordinator's armed timer, which reconcile() cancels.
   noteRetryAfter(key: string, retryAfterMs: number): void {
     if (retryAfterMs <= 0) {
       return
@@ -129,6 +116,5 @@ export class RelayAssignRateGate {
   }
 }
 
-// Shared so every assign path — coordinator, drain recovery, any reconcile()
-// bypass — books against the same per-host interval.
+// Every assign path shares this per-host booking interval.
 export const sharedRelayAssignRateGate = new RelayAssignRateGate()

@@ -27,6 +27,12 @@ export type OrcadManagedDeferral = {
   forceable?: boolean
 }
 
+/** The one deferral Update anyway may pass: counted terminals the daemon carries across. */
+export const ORCAD_UPDATE_TERMINALS_RUNNING_CODE = 'orcad_update_terminals_running'
+
+/** Update anyway passes counted live-terminal deferrals, preserves version admission, and requires the confirmed incumbent build. */
+export type OrcadManagedPastLiveTerminals = { incumbentVersion: string | null }
+
 export type OrcadManagedDeployResult =
   | {
       outcome: 'created' | 'updated' | 'already-current'
@@ -70,10 +76,7 @@ export type OrcadManagedStopResult =
     }
   | OrcadManagedRefusal
 
-/**
- * Restarting the server from the current SSH session. Refused while any terminal runs or can't be
- * counted (`liveSessions: null`): the terminal daemon outlives orcad and keeps what it inherited.
- */
+/** Refuse restart with live or unverifiable terminals: the daemon outlives orcad and retains its inherited environment. */
 export type OrcadManagedRestartResult =
   | { outcome: 'restarted'; environmentId: string }
   | { outcome: 'terminals-running'; liveSessions: number | null }
@@ -102,22 +105,15 @@ export type OrcadManagedStaleLockReclaimResult =
       evidence?: OrcadStaleLockEvidence
       notRestarted?: string
     }
-  /**
-   * The host can't run the command from here; nothing changed. `reclaimWithoutPin`: its orcad has
-   * the reclaim, but not the pin a confirmation from here needs, so the user runs the reclaim
-   * themselves. Otherwise `lockPath` names the lock to delete by hand.
-   */
+  /** No remote reclaim occurred. reclaimWithoutPin requires manual reclaim because the host cannot pin confirmation;
+   * otherwise lockPath names the lock to delete manually. */
   | { status: 'unsupported'; message: string; lockPath?: string; reclaimWithoutPin?: true }
   /** The slot runs the command but gave no answer this client understands; nothing is known. */
   | { status: 'no-answer'; message: string }
   /** Another lifecycle step holds the host; nothing changed. */
   | { status: 'busy'; message: string }
 
-/**
- * Unlinks the server from this desktop without reaching its host, for a host that is gone or
- * unreachable. Never a claim of exit: the server may still run there, so the verdict stays
- * `unverifiable`.
- */
+/** Forget only unlinks this desktop; an unreachable server may still run, so its verdict remains unverifiable. */
 export type OrcadManagedForgetResult =
   | {
       outcome: 'forgotten'
@@ -177,6 +173,10 @@ export type OrcadManagedRuntimeStatus = {
   } | null
   /** The last update this client deferred for this server, cleared once one goes through. */
   deferredUpdate: (OrcadManagedDeferral & { deferredAt: string }) | null
+  /** The Orca release that activated `activeVersion`; absent when unknown or from older desktops. */
+  activeAppVersion?: string | null
+  /** This desktop's bundled build when Update would move the host to it; absent from older desktops. */
+  availableUpdate?: string | null
 }
 
 export type OrcadManagedConversionResult =

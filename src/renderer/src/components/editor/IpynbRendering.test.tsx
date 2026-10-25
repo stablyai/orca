@@ -171,7 +171,6 @@ describe('notebook outputs', () => {
     )
     const frame = screen.getByTitle('Notebook HTML output')
     const source = frame.getAttribute('srcdoc') ?? ''
-    // An empty sandbox keeps the frame an opaque origin with scripts off.
     expect(frame.getAttribute('sandbox')).toBe('')
     expect(source).toContain("default-src 'none'; img-src data:")
     expect(source).not.toContain('<script')

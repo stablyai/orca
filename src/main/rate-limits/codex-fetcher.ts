@@ -4,8 +4,7 @@ import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-lo
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../codex-cli/command'
-// Why: import from the shared module, not the codex-cli re-export, so a test that
-// mocks '../codex-cli/command' does not have to restate this pure helper.
+// Import the pure helper directly so CLI-command mocks do not replace it.
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
   resolveCodexHomeProcessLockKey,
@@ -92,12 +91,11 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     ? buildWslCodexCommand(options.codexHomePath, codexArgs)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
-  // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
-  // Why a worker thread (#27362): a cold codex.exe can block process creation for seconds.
+  // Worker spawn avoids cold Windows process-creation stalls (#27362); bare npm shims stay visible to spawnProcess.
   const child = spawnProcessOnWorkerThread({
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
-    // Why: WSL holds wsl.exe's cwd busy ~60s, so never hand it a folder inside the profile (#29845).
+    // wsl.exe holds cwd busy for ~60s; keep probes outside profile folders (#29845).
     cwd: wslCodex ? resolveWslInteropSpawnCwd() : resolveHiddenRateLimitPtyCwd(),
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
@@ -225,7 +223,7 @@ export async function fetchCodexRateLimits(
   if (isWslHome) {
     return rpcFailure
   }
-  // Why: read usage over HTTP, never by driving the interactive Codex TUI — keystrokes sent there can accept startup dialogs such as "Update now" (#17415).
+  // Interactive Codex keystrokes can accept startup dialogs, including updates; read HTTP usage instead (#17415).
   const backendResult = await fetchBackendUsage(options)
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()

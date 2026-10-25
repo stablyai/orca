@@ -36,8 +36,7 @@ export function MobileFileMarkdownPreview({
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
   const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
-  // Why: opening a different file or line target must switch modes before paint,
-  // never briefly retain the prior file's manually selected mode.
+  // Switch modes before paint for a new file or line target; do not flash the previous manual mode.
   if (relativePath !== previousRelativePath || initialLine !== previousInitialLine) {
     setPreviousRelativePath(relativePath)
     setPreviousInitialLine(initialLine)

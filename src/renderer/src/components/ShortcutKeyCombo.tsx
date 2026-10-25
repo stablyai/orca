@@ -21,9 +21,7 @@ type ShortcutKeyComboProps = {
   separatorClassName?: string
   // Override cap colors when chips sit on a non-default surface (e.g. a filled primary card).
   keyCapClassName?: string
-  // When true the chips render a double-tap gesture: no "+" separator (reads
-  // "Shift Shift"), with a title clarifying the gesture. Note: the title uses
-  // the displayed label, so on Mac it reads as the glyph (e.g. 'Double-tap ⇧').
+  // Double taps use repeated labels/glyphs with a space instead of +.
   doubleTap?: boolean
 }
 
@@ -50,9 +48,7 @@ export function ShortcutKeyCombo({
       {keys.map((key, index) => (
         <React.Fragment key={`${key}-${index}`}>
           <KeyCap label={key} className={keyCapClassName} />
-          {/* Why: Orca renders Mac shortcuts as adjacent glyphs, but Windows/Linux
-              shortcuts read more naturally with explicit "+" separators. A
-              double-tap reads as the same key twice, so it gets a space, not "+". */}
+          {/* Mac uses adjacent glyphs; Windows/Linux use +. Double taps use a space. */}
           {!isMac && !doubleTap && index < keys.length - 1 ? (
             <span className={separatorClassName ?? 'mx-0.5 text-xs text-muted-foreground'}>+</span>
           ) : null}

@@ -1,6 +1,4 @@
-// What `agentSession.subscribeAvailability` publishes: one health snapshot of this host's agents,
-// shared by every reader and kept without them. Each agent's location rule and installed-release
-// check run once, in the server's home rather than a workspace; a launch checks again in its own.
+// Share/cache this host's agent health independently of readers. Probe each registration in server home; launches recheck in their workspace.
 
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute } from 'node:path'
@@ -14,7 +12,10 @@ import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment
 } from './structured-agent-launch-support'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from './structured-agent-runtime-metadata'
+import {
+  STRUCTURED_AGENT_RUNTIME_METADATA,
+  structuredAgentRuntimeMetadata
+} from './structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from './structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from './structured-agent-shell-environment'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -66,8 +67,7 @@ async function observeHostAgent(
     : { agent, state: 'unknown' }
 }
 
-/** Where a chat start would find its program, spawning nothing. A bare name back is a miss unless
- *  PATH has relative entries, which only the workspace's directory resolves. */
+/** Resolve chat program without spawn; bare names miss unless relative PATH entries require workspace resolution. */
 async function observeChatProgram(
   { definition: { agent }, chatProgram }: StructuredAgentRuntimeMetadata,
   runtime: HealthRuntime
@@ -92,8 +92,19 @@ async function observeChatProgram(
   return chatProgram.installable?.() ? 'installable' : 'missing'
 }
 
-/** The runtime's snapshot: taken after a fresh shell capture, initially and on launch settings or
- *  agent Refresh or runtime install. No reader gates it, so a later one reads it at once. */
+/** True when a chat start would fail until Orca installs the agent's chat program on this host. */
+export async function structuredAgentChatProgramNeedsInstall(
+  agent: string,
+  runtime: HealthRuntime
+): Promise<boolean> {
+  const metadata = structuredAgentRuntimeMetadata(agent)
+  return Boolean(
+    metadata?.chatProgram?.installable &&
+    (await observeChatProgram(metadata, runtime)) === 'installable'
+  )
+}
+
+/** Refresh shell facts on install, settings or agent Refresh; retain health without readers for immediate later subscription. */
 export function installStructuredAgentAvailability(
   store: Pick<RuntimeStore, 'onSettingsChanged'> | null,
   runtime: HealthRuntime

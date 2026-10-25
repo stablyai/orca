@@ -1,4 +1,3 @@
-/** Singleton PTY event dispatcher and eager buffer helpers, split out from pty-transport.ts. */
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import {
   clearProcessedPtyCharTotal,
@@ -46,8 +45,7 @@ export {
   unregisterPtyDataHandlers
 } from './pty-shutdown-data-suspension'
 
-// ── Singleton PTY event dispatcher ───────────────────────────────────
-// One global IPC listener per channel (routed by PTY ID) avoids the N-listener MaxListenersExceededWarning with many panes.
+// One IPC listener per channel routes by PTY ID, avoiding MaxListenersExceededWarning across many panes.
 
 export type PtyDataMeta = {
   seq?: number
@@ -203,8 +201,7 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
       deliverPtyExitToHandlers({
         ptyId: payload.id,
         code: payload.code,
-        // Why forwarded: pty ids are reused, so a buffered exit needs the lifetime it describes to
-        // tell "this pane's shell died" from "the id's previous owner died" (#16970).
+        // Buffered exits carry their PTY lifetime because reused IDs can name a new shell (#16970).
         ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {}),
         ...(payload.replacedByRestart === true ? { replacedByRestart: true } : {}),
         ...(primary ? { primary } : {}),
@@ -249,8 +246,7 @@ export function subscribeToPtyExit(
   }
 }
 
-// ─── Eager PTY buffer for reconnection on restart ────────────────────
-// Why: PTYs spawn before TerminalPane mounts; buffer the early shell output (prompt/MOTD) so attach() can replay it.
+// Buffer output from pre-mount PTYs so attach can replay early prompts/MOTD.
 
 export type EagerPtyHandle = { flush: () => string; dispose: () => void }
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
@@ -262,9 +258,7 @@ export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefin
 // Why: cap matches TerminalPane's scrollback serialization limit so a restored shell (e.g. tail -f) can't grow unbounded.
 const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
-/** `incarnationId` names the lifetime the caller just spawned. Without it a background launch that
- *  is handed a relay-recycled id drains whatever the id's PREVIOUS owner left here and tears its own
- *  freshly started agent session down seconds after launch. */
+/** Fence the spawned incarnation so recycled relay IDs cannot deliver the prior owner’s exit to a fresh background agent. */
 export function registerEagerPtyBuffer(
   ptyId: string,
   onExit: (ptyId: string, code: number) => void,

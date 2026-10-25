@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/context-menu'
 import { translate } from '@/i18n/i18n'
 
-// ─── Context Menu for Activity Bar Position ───────────
 export function ActivityBarPositionMenu({
   currentPosition,
   onChangePosition

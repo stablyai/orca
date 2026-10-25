@@ -119,7 +119,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 function renderCard(worktree: Worktree): string {
-  // Static markup escapes the quotes in Git's message.
   return renderToStaticMarkup(
     <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
   ).replaceAll('&#x27;', "'")
@@ -142,7 +141,6 @@ describe('WorktreeCard for a delete that failed partway', () => {
 
     expect(markup).toContain('data-worktree-card-delete-failed')
     expect(markup).toContain('Delete failed')
-    // The tooltip primitive is rendered inline by this harness.
     expect(markup).toContain(FAILURE)
   })
 

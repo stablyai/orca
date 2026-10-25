@@ -108,11 +108,10 @@ describe('orcad scrollback snapshot transfer', () => {
     expect(readFinal(descriptor)).toBeNull()
   })
 
-  it('recognizes an already-materialized matching final file after restart', () => {
+  it('recognizes an already-materialized matching final file without staged bytes', () => {
     const bytes = Buffer.from('already committed bytes', 'utf8')
     const descriptor = snapshot('3', 'tab-3', 'leaf-3', bytes)
     const manifest = migrationManifest('materialized', [descriptor])
-    stagedState(manifest)
     writeFinal(descriptor, bytes)
 
     expect(inspectOrcadMigrationSnapshotUploads(manifest, storage)?.[0]?.receivedBytes).toBe(
@@ -220,7 +219,6 @@ function migrationManifest(
   }
 }
 
-/** The manifests the destination importer holds staged. */
 function stagedState(...manifests: OrcadMigrationManifest[]): OrcadMigrationManifest[] {
   return manifests
 }

@@ -28,8 +28,6 @@ export function FolderWorkspacePrChecksRow({
 }: FolderWorkspacePrChecksRowProps): React.JSX.Element {
   const ReviewIcon = row.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const StatusIcon = CHECK_ICON[row.checkTone] ?? CHECK_ICON.neutral
-  // Why: match the regular PR checks header; the review identity leads,
-  // while aggregate check state stays with the summary metadata.
   const showStatusIcon = row.checkTone !== 'neutral'
   const animateStatusIcon = row.checkTone === 'pending'
   const reviewProviderLabel = row.provider === 'gitlab' ? 'MR' : 'PR'

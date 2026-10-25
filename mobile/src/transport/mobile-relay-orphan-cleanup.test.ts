@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
 
 describe('mobile relay orphan cleanup', () => {
-  it('durably schedules credential deletion before removing an orphan overlay pointer', async () => {
+  it('schedules each orphan credential cleanup before removing its overlay pointer', async () => {
     const order: string[] = []
     const deleteCredential = vi.fn(async () => {})
     const scheduleCleanup = vi.fn(async (hostId: string) => {
@@ -23,7 +23,7 @@ describe('mobile relay orphan cleanup', () => {
     expect(scheduleCleanup).toHaveBeenCalledWith('host-1', deleteCredential)
   })
 
-  it('retains the overlay pointer when durable cleanup scheduling fails', async () => {
+  it('retains the overlay pointer when the cleanup scheduler rejects', async () => {
     const removeOverlay = vi.fn(async () => {})
     await scheduleOrphanedMobileRelayCleanup({
       hostIds: ['host-1'],

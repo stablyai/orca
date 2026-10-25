@@ -77,8 +77,7 @@ function printKeys(label, keys) {
 async function extractToTemporaryCatalog(root, tempDir) {
   const cliPath = path.join(root, 'node_modules', 'i18next-cli', 'dist', 'esm', 'cli.js')
   const outputPattern = path.join(tempDir, '{{language}}.json')
-  // Why: extraction output is evidence for this check, not another committed
-  // catalog that feature authors must keep synchronized.
+  // Treat extraction as check evidence, not another committed catalog feature authors must synchronize.
   const [{ runProcessSync }, { describeProcessFailure }, { resolvePinnedBunExecutable }] =
     await Promise.all([
       import('@orca/process-host'),

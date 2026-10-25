@@ -188,9 +188,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     ])
   })
 
-  // Hiddenness is the host's side of this: see structured-agent-session-subscribers.test.ts,
-  // which drives an unsubscribed journal through the feed. Here the transport is a mock, so
-  // only the summary-to-store mapping is under test.
+  // Test summary projection here; structured-agent-session-subscribers.test.ts covers real unsubscribed host liveness.
   it('keeps host-held working evidence active past the normal freshness window', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -328,8 +326,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([expect.objectContaining({ subagents: undefined })])
   })
 
-  // The same fold the hook lane applies to a subagent roster: an idle lead is not idle
-  // while its children run, and a backgrounded shell reads as monitoring.
+  // Match hook semantics: live children keep the lead working; background shells keep it monitoring.
   it('keeps an idle session working while a subagent runs, and monitoring while a shell runs', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -389,8 +386,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     ])
   })
 
-  // A watch loop's age is not how long the agent has been working: the clock restarts when the
-  // user's prompt turns a monitoring row into a real turn.
+  // A user turn restarts the working clock; a monitor’s age is not turn duration.
   it('restarts the state clock when monitoring becomes a real turn', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -430,8 +426,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
     ])
   })
 
-  // Mirrors the host ingest: the journal clock cannot date child work, so a row held open by a
-  // live roster alone must not age into staleness while the work is still running.
+  // A live roster can outlast journal activity; date child work by receipt so it cannot age into staleness.
   it('dates a child-work row by when this client saw it, not by the journal clock', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -873,7 +868,7 @@ describe('the main agent fact the bridge writes', () => {
       })
     ])
 
-    // The shell drains: the row settles, the main agent was done all along, so its clock holds.
+    // Draining shells settle monitoring without changing the main agent’s already-ended duration.
     act(() =>
       feed().emit({
         type: 'status',

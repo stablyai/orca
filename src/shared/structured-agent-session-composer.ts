@@ -8,7 +8,7 @@ import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion
 } from './native-chat-slash-commands'
-import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from './agent-session-wire'
 
 const MODEL_COMMAND: SlashCommandSuggestion = {
@@ -41,13 +41,11 @@ export type StructuredAgentSessionComposerOptions = {
   runConversationCommand?: (
     command: AgentSessionConversationCommand
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
-  /** Present only where the host can set this session's goal; otherwise `/goal`
-   *  stays message text the agent acts on itself. */
+  /** Without host goal support, /goal remains agent-handled text. */
   setThreadGoalObjective?: (objective: string) => Promise<boolean>
 }
 
-/** What the chat shows a refused command waiting on: the agent working, a pending prompt, its
- *  background tasks, a message of this window's still being sent, or one showing its Retry. */
+/** Visible condition holding a refusal: agent/prompt/background work, an in-flight send or a Retry card. */
 export type StructuredAgentSessionCommandRefusalCause =
   | 'working'
   | 'prompt'
@@ -59,7 +57,7 @@ export type StructuredAgentSessionCommandOutcome = {
   handled: boolean
   accepted: boolean
   error: string | null
-  /** The refusal is said only while this still holds. */
+  /** Show refusal only while this condition holds. */
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
 
@@ -71,10 +69,7 @@ function commandParts(text: string): { name: string; argument: string } | null {
   return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
 }
 
-/** The commands the composer menu offers when the host reports no catalog of its
- *  own: the host's own commands, plus the ones this agent acts on from message
- *  text. Both are honored — the first here, the second by the agent — so a menu
- *  pick is never answered with "not available". */
+/** Fallback menu combines host-owned and agent text-driven commands when no catalog is reported. */
 export function structuredSlashCommands(
   commands: readonly AgentSessionConversationCommand[] = [],
   agent?: AgentType | null
@@ -85,8 +80,7 @@ export function structuredSlashCommands(
       commands.includes(entry.name as AgentSessionConversationCommand)
     )
   ]
-  // Why: a host with no catalog to report would otherwise hide the commands the
-  // agent itself implements, e.g. Codex's `/goal`.
+  // No reported catalog must not hide agent-handled commands such as Codex /goal.
   return [
     ...hostOwned,
     ...getTextDrivenNativeChatCommands(agent).filter(
@@ -95,8 +89,7 @@ export function structuredSlashCommands(
   ]
 }
 
-/** A structured chat's `/` commands. The host answers its own for every agent, so they stay
- *  first whatever the session reports; the report adds the agent's commands of other names. */
+/** Host commands remain first; reported catalogs add other names. */
 export function structuredSessionSlashCommands(
   agent: AgentType,
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
@@ -113,10 +106,7 @@ export function structuredSessionSlashCommands(
   ]
 }
 
-/** Wider than the offered menu on purpose: a TUI-only command still has to be
- *  claimed here and answered, or a hand-typed `/clear` reaches the model as
- *  literal prompt text. Commands the agent itself implements are deliberately
- *  absent — the profile unclaims those so they pass through as text. */
+/** Claim hidden TUI-only commands too, preventing literal prose delivery; leave agent-handled commands unclaimed for passthrough. */
 function structuredRecognizedCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return [
     ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
@@ -169,8 +159,7 @@ export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
   return command?.name === 'goal' && command.argument === ''
 }
 
-/** The objective a goal-mode draft names. A `/goal …` typed there out of habit
- *  names the same objective it would outside goal mode, never the literal command. */
+/** Goal mode strips an optional /goal prefix instead of treating it as objective text. */
 export function structuredAgentSessionGoalObjective(text: string): string {
   const command = commandParts(text)
   return command?.name === 'goal' ? command.argument : text.trim()

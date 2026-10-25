@@ -1,10 +1,7 @@
 import type { PairingOffer } from './pairing'
 import type { KnownRuntimeEnvironment } from './runtime-environments'
 
-/**
- * The saved server holding this host key. Why the key: it is the server's persisted identity,
- * so two pairings carrying it are one server whatever endpoint or name each was saved under.
- */
+/** Match persisted host-key identity: different saved names/endpoints can still describe one server. */
 export function findEnvironmentWithHostKey<T extends Pick<KnownRuntimeEnvironment, 'endpoints'>>(
   environments: readonly T[],
   publicKeyB64: string
@@ -20,10 +17,7 @@ function canonicalHostKeyB64(publicKeyB64: string): string {
   return publicKeyB64.trim().replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '')
 }
 
-/**
- * The spelling a saved server already holds for this offer's key. Why: the host-key fingerprint
- * hashes the string, so a respelled key would read as another machine and retire its workspaces.
- */
+/** Retain saved key spelling: the fingerprint hashes its text, so respelling would retire the server’s workspaces. */
 export function savedHostKeySpelling(
   environment: Pick<KnownRuntimeEnvironment, 'endpoints'>,
   offer: Pick<PairingOffer, 'publicKeyB64'>

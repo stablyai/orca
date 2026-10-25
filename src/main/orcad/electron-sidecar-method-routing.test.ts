@@ -4,29 +4,18 @@ import { BROWSER_EXTRA_METHODS } from '../runtime/rpc/methods/browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from '../runtime/rpc/methods/browser-screencast'
 import { electronSidecarRuntimeMethodName } from './electron-sidecar-method-routing'
 
-/**
- * Why drive the real registry: the Electron provider reaches the sidecar by
- * reversing a string transform, so a browser RPC method whose name is not a
- * mechanical camel-case of its runtime command is silently unreachable — the
- * sidecar answers "unknown method", not "wrong route".
- */
+// Exercise real RPC registration: names that diverge from runtime camel-casing can become unreachable.
 const BROWSER_RPC_METHODS = [
   ...BROWSER_CORE_METHODS,
   ...BROWSER_SCREENCAST_METHODS,
   ...BROWSER_EXTRA_METHODS
 ]
 
-/**
- * Known-broken today (PR #16193 shipped these mis-routed): the RPC names drop
- * the `Log` suffix that the runtime command carries. Fix the transform and
- * delete the entry — do not add to this list to silence a new mismatch.
- */
+// Known Log-suffix mismatches: remove entries when fixed; never add entries to hide new failures.
 const UNROUTABLE_RUNTIME_COMMANDS = new Set(['browserConsoleLog', 'browserNetworkLog'])
 
-/** `browser.screencast.unsubscribe` cleans up a subscription without a browser command. */
 const RPC_METHODS_WITHOUT_BROWSER_COMMAND = new Set(['browser.screencast.unsubscribe'])
 
-/** Records the `runtime.browserX` the handler dispatches to, without a live runtime. */
 async function runtimeCommandFor(
   method: (typeof BROWSER_RPC_METHODS)[number]
 ): Promise<string | null> {

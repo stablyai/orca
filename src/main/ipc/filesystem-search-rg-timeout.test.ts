@@ -60,7 +60,7 @@ vi.mock('./filesystem-list-files', () => ({
   listQuickOpenFiles: vi.fn()
 }))
 
-vi.mock('./filesystem-mutations', () => ({
+vi.mock('./filesystem/filesystem-mutations', () => ({
   registerFilesystemMutationHandlers: vi.fn()
 }))
 
@@ -77,7 +77,7 @@ vi.mock('./markdown-documents', () => ({
   listMarkdownDocuments: vi.fn()
 }))
 
-import { registerFilesystemHandlers } from './filesystem'
+import { registerFilesystemHandlers } from './filesystem/filesystem'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
@@ -329,11 +329,10 @@ describe('filesystem rg search timeout', () => {
     parseWslPathMock.mockReturnValue({ distro: 'Ubuntu' })
     registerFilesystemHandlers({} as never)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fs:search handlers return Promise<SearchResult>.
     const promise = handlers.get('fs:search')!(
       { sender: { id: 7 } },
       { rootPath: '\\\\wsl.localhost\\Ubuntu\\repo', query: 'ok' }
-    ) as Promise<unknown>
+    )
     await flushMicrotasks()
     child.emit('close', 1, null)
 

@@ -1,23 +1,9 @@
 import type { DirCache } from './file-explorer-types'
 
-/**
- * Directories with a directory read in flight.
- *
- * Why this is not a `dirCache` field: every `dirCache` identity change re-walks and re-flattens the
- * whole visible tree (the ignored-path query plus the row projection). A read that starts and a read
- * that lands would each pay for that, and the first one commits a byte-identical row set because the
- * spinner is the only thing that changed. Keeping the flag in a sibling set lets `dirCache` change
- * only when `children` do.
- */
+/** Track loading outside dirCache so spinner changes do not rebuild the entire tree projection. */
 export const EMPTY_FILE_EXPLORER_LOADING_DIRS: ReadonlySet<string> = new Set<string>()
 
-/**
- * Applies one mark/clear to the loading set.
- *
- * Why not `Dispatch<SetStateAction<…>>`: the owner keeps the set in a ref as well as in state, and
- * the ref must be current the moment a mark is made — a refresh wave marks every expanded dir
- * before the render that would refresh a mirrored copy.
- */
+/** Update the owner ref synchronously as well as state; refresh waves mark all expanded dirs before the next render. */
 export type FileExplorerLoadingDirsUpdater = (
   update: (prev: ReadonlySet<string>) => ReadonlySet<string>
 ) => void
@@ -52,14 +38,7 @@ export function clearFileExplorerDirsLoading(
   return next.size === 0 ? EMPTY_FILE_EXPLORER_LOADING_DIRS : next
 }
 
-/**
- * Adds an empty listing for dirs a read is about to populate for the first time.
- *
- * Why: a `dirCache` key is what tells the watcher reconciler that a path is a directory the
- * Explorer tracks. Without the placeholder, a create/delete arriving while the very first read of
- * that dir is still in flight resolves to no cached dir and is dropped, leaving the listing stale.
- * Returns `prev` unchanged once every dir is known, which is the common case.
- */
+/** Register first-read placeholders so watcher changes during the read are recognized; preserve identity for known dirs. */
 export function withPendingFileExplorerDirCacheEntries(
   prev: Record<string, DirCache>,
   dirPaths: readonly string[]

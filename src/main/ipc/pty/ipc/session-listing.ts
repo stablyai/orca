@@ -102,6 +102,7 @@ export function installPtySessionListingIpcHandler(deps: {
                 hostId === LOCAL_EXECUTION_HOST_ID &&
                 provider.supportsFencedTermination?.(session.id) === true,
               ...(session.worktreeId !== undefined ? { worktreeId: session.worktreeId } : {}),
+              ...(session.paneKey !== undefined ? { paneKey: session.paneKey } : {}),
               ...(session.exiting === true ? { exiting: true as const } : {}),
               // During restore, claims provide liveness evidence; only listing-capable providers can prove ownership absent (#8459).
               agentOwnership:

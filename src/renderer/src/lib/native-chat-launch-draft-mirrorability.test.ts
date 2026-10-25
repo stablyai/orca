@@ -17,11 +17,7 @@ import { AGENT_TUI_CLEAR_MAX_LINES } from '../../../shared/agent-tui-input-clear
 const maxLineDraft = Array.from({ length: AGENT_TUI_CLEAR_MAX_LINES }, () => 'line').join('\n')
 const overMaxLineDraft = `${maxLineDraft}\nline`
 
-/**
- * Every shape a launch draft takes today. `formatDraftContextBlock` appends a
- * trailing newline and note+URL joins with a blank line, so the multi-line
- * cases are the majority of real draft launches, not edge cases.
- */
+/** Cover multiline launch defaults too: context blocks end in newline and note+URL uses a blank line. */
 const DRAFT_TEXTS = [
   'https://github.com/o/r/issues/12',
   'Reproduce on Windows first\n\nhttps://github.com/o/r/issues/12',

@@ -21,29 +21,22 @@ describe('extractPartialEscapeTail', () => {
   })
 
   it('returns the dangling OSC (unterminated) sequence', () => {
-    // OSC 0 title with no BEL/ST terminator yet.
     expect(extractPartialEscapeTail('\x1b]0;my-title')).toBe('\x1b]0;my-title')
-    // Terminated OSC is clean.
     expect(extractPartialEscapeTail('\x1b]0;title\x07after')).toBe('')
     expect(extractPartialEscapeTail('\x1b]0;title\x1b\\after')).toBe('')
   })
 
   it('treats a fresh ESC as aborting a pending CSI', () => {
-    // The second ESC starts a new (complete) sequence.
     expect(extractPartialEscapeTail('\x1b[3\x1b[0m')).toBe('')
-    // ...and a new dangling one.
     expect(extractPartialEscapeTail('\x1b[3\x1b[')).toBe('\x1b[')
   })
 
   it('treats CAN/SUB as aborting an in-progress escape back to ground', () => {
-    // CAN (0x18) / SUB (0x1a) abort the sequence in xterm's VT500 parser.
-    // esc state:
+    // CAN/SUB abort every VT500 parser state, including ESC/intermediate states.
     expect(extractPartialEscapeTail('\x1b\x18')).toBe('') // ESC CAN
     expect(extractPartialEscapeTail('\x1b\x1a')).toBe('') // ESC SUB
-    // escIntermediate state (ESC then an intermediate byte, then CAN):
     expect(extractPartialEscapeTail('\x1b \x18')).toBe('') // ESC SP CAN
     expect(extractPartialEscapeTail('\x1b#\x1a')).toBe('') // ESC # SUB
-    // csi/osc/string already aborted — keep them green:
     expect(extractPartialEscapeTail('\x1b[38;\x18')).toBe('') // CSI ... CAN
     expect(extractPartialEscapeTail('\x1b]0;title\x18')).toBe('') // OSC ... CAN
     // A CAN that aborts, followed by a fresh dangling sequence, tracks the new one:
@@ -51,9 +44,7 @@ describe('extractPartialEscapeTail', () => {
   })
 
   it('aborts to ground on CAN/SUB inside a string sequence', () => {
-    // ESC inside DCS/SOS/PM/APC parks in stringEsc; a CAN/SUB there aborts to ground rather
-    // than being re-read as the byte after an ESC (which used to leave a bogus `\x1b\x18…` tail
-    // and broke the fold, since extract() of the prefix drops to ground).
+    // CAN/SUB in stringEsc must abort, not become an ESC suffix; that bogus tail broke fold equivalence.
     expect(extractPartialEscapeTail('\x1bPx\x1b\x18X0abc')).toBe('')
     expect(extractPartialEscapeTail('\x1bPx\x1b\x1aX0abc')).toBe('')
     // Same state reached through OSC (oscEsc).
@@ -63,8 +54,7 @@ describe('extractPartialEscapeTail', () => {
   })
 
   it('starts the new sequence at the second ESC inside OSC/DCS', () => {
-    // ESC ESC in oscEsc/stringEsc: the second ESC opens its own sequence at itself, not one
-    // byte earlier — matching xterm, and required for the fold to agree at that boundary.
+    // The second ESC owns the new sequence; starting one byte earlier breaks fold equivalence.
     expect(extractPartialEscapeTail('\x1b] \x1b\x1b^')).toBe('\x1b^')
     expect(extractPartialEscapeTail('\x1bPq\x1b\x1b[3')).toBe('\x1b[3')
     expect(extractPartialEscapeTail('\x1b]0;t\x1b\x1b')).toBe('\x1b')
@@ -111,8 +101,7 @@ describe('advancePartialEscapeTail', () => {
 })
 
 describe('advancePartialEscapeTail ESC-free fast path', () => {
-  // Every pending-tail state the scanner can be left in x every chunk shape, asserted
-  // indistinguishable from the unconditional fold the gate sits in front of.
+  // Compare every pending-state/chunk pairing against the unconditional fold.
   const pieces = [
     '',
     'plain output\n',
@@ -132,9 +121,7 @@ describe('advancePartialEscapeTail ESC-free fast path', () => {
   it('matches an unconditional fold for every pending-tail and chunk pairing', () => {
     for (const pending of pieces.map((piece) => extractPartialEscapeTail(piece))) {
       for (const chunk of pieces) {
-        // The cap belongs in the expectation: `advancePartialEscapeTail` abandons a tail over
-        // MAX_PARTIAL_ESCAPE_TAIL_LENGTH, so comparing it against an uncapped extract would stop
-        // modelling the function the moment a pairing crossed the cap.
+        // Apply the cap to the oracle too or large pairings compare different contracts.
         const unguarded = extractPartialEscapeTail(pending + chunk)
         expect(advancePartialEscapeTail(pending, chunk), JSON.stringify({ pending, chunk })).toBe(
           unguarded.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : unguarded

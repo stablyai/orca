@@ -112,8 +112,7 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     ).toThrow('unavailable or ambiguous')
   })
 
-  // Why two hosts: a single-SSH fixture passes even when the route is read off another host's
-  // row, which is the shape of the `ssh:m4air` -> openclaw leak.
+  // Two hosts expose cross-host row lookup errors that a single SSH fixture would hide.
   it('routes both spellings of SSH ownership to their own host', () => {
     const legacy = resolveAgentBackgroundLaunchHost({
       store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,

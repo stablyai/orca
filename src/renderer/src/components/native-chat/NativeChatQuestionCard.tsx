@@ -27,24 +27,14 @@ export type NativeChatQuestionCardProps = {
   onCollapse?: () => void
   /** Take focus when the card takes the input region; number keys pick while it holds. */
   shouldFocus?: boolean
-  /** Exposes the free-text row so pane-level Paste can target it while the
-   *  card replaces the composer. */
+  /** Paste target while the card replaces the composer. */
   answerInputRef?: RefObject<HTMLInputElement | null>
 }
 
-// Selection entry for the typed answer (never a real option index), so a single-select
-// question holds exactly one choice: an option or the typed answer.
+// Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
 
-/**
- * Native renderer for an agent's AskUserQuestion prompt: a numbered pick-list
- * (mobile/Claude-Code parity) with a header + close, a hover-highlighted row per
- * option, and an optional free-text row for a custom answer. Single-select
- * holds one answer (an option or the typed text, whichever was chosen last) and
- * picking an option moves on by itself; multi-select toggles options, adds any typed
- * text, and confirms via the trailing action. Number keys pick the numbered row.
- * Multi-question prompts step through tabs across the top. Neutral shadcn tokens.
- */
+/** Single-select advances after a pick; multi-select confirms explicitly, and multi-question prompts retain earlier answers. */
 export function NativeChatQuestionCard({
   prompt,
   isSubmitting = false,
@@ -61,8 +51,7 @@ export function NativeChatQuestionCard({
   const autoAdvance = useNativeChatQuestionAutoAdvance()
   const [index, setIndex] = useState(0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
-  // Keep option identity by index: labels are display text and are not guaranteed
-  // unique, while Claude's selector commits the numbered row (STA-1860).
+  // Use indices because labels can repeat and the agent commits numbered rows.
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() =>
     prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
@@ -82,8 +71,7 @@ export function NativeChatQuestionCard({
   const typedText = (qi: number, oth = otherText): string =>
     freeTextInputs?.[qi]?.allowEmpty ? (oth[qi] ?? '') : (oth[qi] ?? '').trim()
 
-  // Picking an option replaces a chosen typed answer on single-select; the text stays in
-  // the field, unsent, until the user types or clicks there again.
+  // Picking an option deselects typed text without erasing it from the field.
   const typedAnswerChosen = (qi: number, sel = selections, oth = otherText): boolean =>
     acceptsEmpty(qi) || ((sel[qi] ?? []).includes(TYPED_ANSWER) && typedText(qi, oth).length > 0)
 
@@ -113,7 +101,6 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // The resolved answer for a question: picked labels plus the typed answer when chosen.
   const answerFor = (qi: number, sel = selections, oth = otherText): string => {
     const question = prompt.questions[qi]
     const picked = pickedOptions(qi, sel)
@@ -141,9 +128,7 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // Advance to the next question, or submit on the last one — always from an
-  // explicit snapshot so a just-committed single-select pick isn't lost to the
-  // async setState.
+  // Submit from an explicit snapshot so the latest pick cannot be lost to asynchronous state updates.
   const advanceOrSubmit = (sel: number[][], oth: string[]): void => {
     if (isLast) {
       submitAll(sel, oth)
@@ -152,8 +137,7 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // A single-select pick answers the question, so the card moves on after a beat that
-  // shows the row chosen; picking it again in that beat takes the answer back.
+  // Briefly show a single-select pick before advancing; picking again retracts it.
   const pickOption = (optionIndex: number): void => {
     const cur = selections[index] ?? []
     const picked = !cur.includes(optionIndex)
@@ -171,12 +155,7 @@ export function NativeChatQuestionCard({
   }
   useNativeChatQuestionKeys(cardRef, shouldFocus && !isSubmitting, q.options.length, pickOption)
 
-  // Trailing action (also fired by Enter). On any non-final question this just
-  // advances — "Next" when answered, "Skip" when not — so skipping one question
-  // never discards answers already given on the others. Only the final question
-  // submits; an explicit Skip click there with nothing answered anywhere
-  // dismisses, but a reflexive Enter in the empty field is a no-op so it can't
-  // throw away the whole prompt.
+  // Only the final question submits; an empty final Skip dismisses, while empty Enter preserves the prompt.
   const confirm = (fromKeyboard = false): void => {
     autoAdvance.cancel()
     if (!isLast) {
@@ -208,9 +187,6 @@ export function NativeChatQuestionCard({
     : undefined
 
   return (
-    // Part of the composer: docked in the bottom input region, matching the
-    // composer's width and padding, rendered as the "ask" dialog card directly
-    // above the text input. Its free-text row is the answer input.
     <div
       ref={cardRef}
       data-native-chat-prompt-card-focus={shouldFocus || undefined}
@@ -290,8 +266,6 @@ export function NativeChatQuestionCard({
             </button>
           </div>
 
-          {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
-              the card's right edge instead of crowding the choices. */}
           <div className="max-h-[50vh] divide-y divide-border/60 overflow-y-auto border-t border-border scrollbar-sleek">
             {q.options.map((opt, i) => (
               <OptionRow
@@ -322,11 +296,7 @@ export function NativeChatQuestionCard({
                       <Pencil className="size-3.5" />
                     )}
                   </span>
-                  {/* No `/` or `@` picker here — that autocomplete belongs to the composer,
-                      which this card replaces. What you type is delivered verbatim as the
-                      AskUserQuestion tool result: it reaches the model but never the command
-                      parser, so `/compact` and friends are inert, while a skill name can
-                      still be acted on. */}
+                  {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
                   {freeTextInput?.multiline ? (
                     <Textarea
                       data-native-chat-prompt-card-focus-target={fieldTakesFocus}
@@ -344,8 +314,7 @@ export function NativeChatQuestionCard({
                       disabled={isSubmitting}
                       value={otherText[index]}
                       onChange={(e) => setOther(index, e.target.value)}
-                      // Click, not focus: tabbing through the field toward Submit must not
-                      // replace the option the user just picked.
+                      // Select typed text on click; tabbing toward Submit must not replace a picked option.
                       onClick={() => {
                         autoAdvance.cancel()
                         if ((otherText[index] ?? '').trim().length > 0) {
@@ -426,8 +395,6 @@ function OptionRow({
       type="button"
       disabled={disabled}
       onClick={onSelect}
-      // Selection is otherwise only the visual check/badge swap; expose it to
-      // assistive tech.
       aria-pressed={selected}
       data-native-chat-prompt-card-focus-target={initialFocus || undefined}
       className={cn(

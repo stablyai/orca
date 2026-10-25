@@ -23,7 +23,7 @@ describe('classifyTruncatedHookRequest', () => {
   })
 
   it('stays silent without a usable Content-Length', () => {
-    // Why: chunked bodies and malformed headers prove nothing — reporting them would drown the signal.
+    // Chunked/malformed lengths prove no truncation; reporting them would drown the signal.
     expect(classifyTruncatedHookRequest(undefined, 10)).toBeNull()
     expect(classifyTruncatedHookRequest('', 10)).toBeNull()
     expect(classifyTruncatedHookRequest('not-a-number', 10)).toBeNull()
@@ -85,7 +85,7 @@ describe('describeHookTransportInterference', () => {
     expect(message).toContain('/hook/codex')
     expect(message).toContain('10/900 bytes')
     expect(message).toContain('security software')
-    // Why: the client's own --max-time can truncate too; a single-cause message would misdiagnose a stall.
+    // The client timeout can truncate too; avoid claiming a single cause.
     expect(message).toContain('stalled past the hook client timeout')
   })
 

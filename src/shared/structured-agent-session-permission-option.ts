@@ -1,4 +1,4 @@
-// The chat's permission mode as a picker descriptor: shows the mode the host states, never derives it.
+// Show host-stated permission mode; never infer what is running.
 
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -54,7 +54,6 @@ function agentDescriptions(agent: string): Partial<Record<AgentChatPermissionMod
   return AGENT_DESCRIPTIONS.get(agent) ?? OTHER_AGENT_DESCRIPTIONS
 }
 
-/** Only decides whether the menu offers Approve for me, by the host's own rule. */
 function currentModelSupportsAutoMode(
   catalog: AgentSessionOptionCatalog | null,
   record: StructuredAgentSessionOptionRecord
@@ -101,10 +100,10 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   }
 }
 
-/** The value a host predating per-chat modes shows: it runs its own Agent Permissions. */
+/** Older hosts apply their own Agent Permissions instead of per-chat modes. */
 export const LEGACY_HOST_PERMISSION_VALUE = 'host'
 
-/** A read-only pill for a host that ignores per-chat modes, so its chats never look unset. */
+/** Read-only legacy-host mode prevents unsupported per-chat settings from looking unset. */
 export function legacyHostPermissionDescriptor(): SessionOptionDescriptor {
   return {
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,

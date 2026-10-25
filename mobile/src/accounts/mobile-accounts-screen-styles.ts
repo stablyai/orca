@@ -79,10 +79,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     gap: 4
   },
-  // Why: fixed-width trailing slot so the usage bars in `rowMain` keep the
-  // same width whether or not the row is currently selected (otherwise the
-  // checkmark on the active account squeezes the bars narrower than the
-  // inactive rows above/below it).
+  // Reserve trailing width so selected checkmark cannot squeeze active usage bars relative to other rows.
   rowTrailing: {
     width: 24,
     alignItems: 'flex-end',

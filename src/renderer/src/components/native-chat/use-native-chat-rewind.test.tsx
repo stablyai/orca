@@ -410,7 +410,7 @@ describe('structured chat rewind', () => {
       const props = input()
       props.send.mockResolvedValue(
         notDone(
-          // Parsed as a reply is, so a reason this build does not know is dropped.
+          // Parse like a wire reply so unknown future reasons are dropped.
           parseAgentSessionWriteFailure({
             kind: 'refused',
             code: 'agent_session_operation_invalid',

@@ -115,10 +115,7 @@ describe('hosted review in-flight invalidation', () => {
     const oldResponse = Promise.withResolvers<HostedReviewInfo | null>()
     const admitted = withHostedReviewBranchCache(identity, options, () => oldResponse.promise)
     invalidateHostedReviewBranchCache(identity.repoPath, identity.executionHostId)
-    // Nothing replaced it, so only the scope generation stands between this
-    // pre-invalidation "no review" and the key it no longer owns. Adopting it
-    // would read as fresh and short-circuit the lookup for the review Orca just
-    // opened.
+    // Scope generation must fence this pre-invalidation null even without a replacement owner.
     oldResponse.resolve(null)
     expect(await admitted).toBeNull()
     const freshLookup = vi.fn(async () => review)

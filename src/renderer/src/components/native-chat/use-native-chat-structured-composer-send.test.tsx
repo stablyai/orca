@@ -69,9 +69,7 @@ function harness(
   return { send: result.current, structuredTransport, setDraft }
 }
 
-// The guard exists because a host command sends no message, so its attachments
-// would be dropped without a word. A pass-through command IS the message, so the
-// attachments ride along with it.
+// Host-owned commands send no message and would drop images; pass-through commands carry their attachments.
 describe('attachment guard follows what the host claims', () => {
   it.each([
     ['claude', '/clear'],
@@ -129,8 +127,6 @@ describe('an attachment still uploading', () => {
   })
 })
 
-// The pane brings the latest into view on this: a conversation command at the press, a message
-// once admitted, and neither for a refusal or a command the chat does not run.
 describe('reports the sends that bring the latest into view', () => {
   it('reports a conversation command at the press, then not a message the transport refused', async () => {
     const onSubmitted = vi.fn()

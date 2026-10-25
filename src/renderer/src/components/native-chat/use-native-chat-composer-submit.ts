@@ -33,11 +33,7 @@ export type NativeChatComposerGoalMode = {
   ) => (item: TItem) => void
 }
 
-/**
- * What submitting the composer does: set the goal in goal mode, otherwise send
- * through the structured or PTY path. Goal mode exists only where the host can
- * set a goal, so it is inert everywhere else.
- */
+/** Submit objectives only where host goals are supported; route other drafts through structured/PTY sends. */
 export function useNativeChatComposerSubmit(args: {
   structuredTransport?: NativeChatStructuredComposerTransport
   draftScopeKey: string
@@ -75,10 +71,7 @@ export function useNativeChatComposerSubmit(args: {
     [caret, draft, setCaret, setDraft, threadGoal]
   )
 
-  // Setting a goal is a host round trip; the draft is cleared only if it is still
-  // the one that was submitted, as with any other host command.
-  // In-flight changes are serialized by the session's goal controller, which
-  // answers false to a second submit while the first is unsettled.
+  // Clear only the submitted draft after host acceptance; the goal controller refuses concurrent submissions.
   const setGoal = useCallback(() => {
     const objective = structuredAgentSessionGoalObjective(
       resolveNativeChatPastedText(draftScopeKey, draft)
@@ -128,8 +121,7 @@ export function useNativeChatComposerSubmit(args: {
       return
     }
     if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
-      // Same entrance as picking `/goal`: the token becomes the chip. Typed inside
-      // goal mode it is still the entrance, never an objective.
+      // Bare /goal always enters goal mode; even there it must not become an objective.
       setDraft('')
       setCaret(0)
       setEntered(true)

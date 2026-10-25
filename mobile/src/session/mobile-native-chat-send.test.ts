@@ -94,15 +94,13 @@ describe('sendMobileNativeChatMessage', () => {
     await expect(
       sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe('unknown')
-    // The boolean wrapper still treats unknown as not-accepted.
     await expect(
       sendMobileNativeChatMessage({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe(false)
   })
 
   it('reports an unknown outcome when the request timeout expires', async () => {
-    // The request-timeout path: the frame was written and only the ack is missing,
-    // so calling it "Message not sent" would hide a message the desktop received.
+    // A written frame with missing acknowledgement is unknown delivery, never definite failure.
     const client = {
       sendRequest: vi
         .fn()
@@ -115,8 +113,7 @@ describe('sendMobileNativeChatMessage', () => {
   })
 
   it('reports a definite rejection when the connect wait times out', async () => {
-    // The same timeout budget also covers the pre-connect wait, which is deliberately
-    // NOT marked delivery-unknown — no frame was ever written.
+    // Pre-connect timeout spends the same budget but proves nondelivery because no frame was written.
     const client = {
       sendRequest: vi
         .fn()
@@ -136,7 +133,6 @@ describe('sendMobileNativeChatMessage', () => {
     await expect(
       sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe('unknown')
-    // The boolean wrapper still treats unknown as not-accepted (never retried here).
     await expect(
       sendMobileNativeChatMessage({ client, terminal: 'term', text: 'hello' })
     ).resolves.toBe(false)
@@ -176,50 +172,6 @@ describe('sendMobileNativeChatMessage', () => {
     ).resolves.toBe('rejected')
   })
 
-  it('never bundles terminal controls into the submitted body', async () => {
-    const client = clientWithResponse({
-      id: 'request',
-      ok: true,
-      result: { send: { accepted: true } },
-      _meta: { runtimeId: 'runtime' }
-    })
-
-    await sendMobileNativeChatMessage({
-      client,
-      terminal: 'term',
-      text: 'hello'
-    })
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'terminal.send',
-      {
-        terminal: 'term',
-        text: 'hello',
-        enter: true
-      },
-      { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
-    )
-  })
-
-  it('sends the text verbatim when clearInputFirst is not set', async () => {
-    // An image send pastes the image (behind its own leading Ctrl+U) before this
-    // text write; a clear byte here would kill the pasted image off the input line.
-    const client = clientWithResponse({
-      id: 'request',
-      ok: true,
-      result: { send: { accepted: true } },
-      _meta: { runtimeId: 'runtime' }
-    })
-
-    await sendMobileNativeChatMessage({
-      client,
-      terminal: 'term',
-      text: 'what is this'
-    })
-    const sent = vi.mocked(client.sendRequest).mock.calls[0]?.[1] as { text: string }
-    expect(sent.text).toBe('what is this')
-    expect(sent.text.startsWith('\x15')).toBe(false)
-  })
-
   it('sends a single non-submitting Escape for prompt cancellation', async () => {
     const client = clientWithResponse({
       id: 'request',
@@ -246,6 +198,8 @@ describe('sendMobileNativeChatMessage', () => {
   })
 
   it('spends only what is left of a shared budget', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
     const client = clientWithResponse({
       id: 'request',
       ok: true,
@@ -259,12 +213,16 @@ describe('sendMobileNativeChatMessage', () => {
       text: 'hi',
       deadline: Date.now() + 4_000
     })
-    const options = vi.mocked(client.sendRequest).mock.calls[0]?.[2] as { timeoutMs: number }
-    expect(options.timeoutMs).toBeGreaterThan(3_000)
-    expect(options.timeoutMs).toBeLessThanOrEqual(4_000)
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      { terminal: 'term', text: 'hi', enter: true },
+      { timeoutMs: 4_000, budgetSpansConnect: true }
+    )
   })
 
   it('refuses a write whose shared budget cannot fund the final acknowledgement', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
     const client = clientWithResponse({
       id: 'request',
       ok: true,
@@ -272,22 +230,34 @@ describe('sendMobileNativeChatMessage', () => {
       _meta: { runtimeId: 'runtime' }
     })
 
-    // Nothing reaches the wire, so this is a definite non-send rather than ambiguous.
     await expect(
       sendMobileNativeChatMessageWithOutcome({
         client,
         terminal: 'term',
         text: 'hi',
-        deadline: Date.now() + 400
+        deadline: 2999
       })
     ).resolves.toBe('rejected')
     expect(client.sendRequest).not.toHaveBeenCalled()
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({
+        client,
+        terminal: 'term',
+        text: 'hi',
+        deadline: 3000
+      })
+    ).resolves.toBe('accepted')
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      { terminal: 'term', text: 'hi', enter: true },
+      { timeoutMs: 2000, budgetSpansConnect: true }
+    )
   })
 
   it('opens a budget bounded by the send timeout', () => {
-    const budget = openMobileNativeChatSendBudget() - Date.now()
-    expect(budget).toBeGreaterThan(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS - 1_000)
-    expect(budget).toBeLessThanOrEqual(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS)
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    expect(openMobileNativeChatSendBudget()).toBe(16_000)
   })
 })
 
@@ -341,8 +311,7 @@ describe('typeMobileNativeChatCommandWithOutcome', () => {
     await vi.runAllTimersAsync()
     await result
 
-    // Why the filter: an accepted send also fires the unawaited takeover report, which is not a
-    // terminal.send and carries no draft.
+    // Filter the unawaited takeover report out of terminal input assertions.
     const params = vi
       .mocked(client.sendRequest)
       .mock.calls.filter((call) => call[0] === 'terminal.send')
@@ -369,8 +338,7 @@ describe('clearMobileNativeChatInput', () => {
     vi.mocked(client.sendRequest).mock.calls[0]![1] as { text: string; enter: boolean }
 
   it('writes the burst as its OWN non-submitting write', async () => {
-    // Bundling the burst into the body write reached the agent as LITERAL Ctrl+U
-    // text and the parked draft concatenated (observed live).
+    // A bundled multiline clear was observed as literal Ctrl+U inside the body; clear in a separate write.
     const client = clientWithResponse(accepted)
     const clearInput = buildAgentTuiClearInputForText('Linked Linear issue: ABC-123\nhttps://x')
     await expect(

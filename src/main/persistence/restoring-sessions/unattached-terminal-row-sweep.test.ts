@@ -1,6 +1,4 @@
-// A stored terminal row with no tab-bar entry: main's load sweeps it once, as the window's startup
-// does, unless the window's reconnect plan would reattach it; main's layout then never draws an
-// empty extra terminal tab the window would not show.
+// Match renderer startup: sweep hidden terminal rows unless reconnect would retain them.
 
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
@@ -17,7 +15,6 @@ import { sweepPersistedUnattachedTerminalRows } from './tab-terminal-pane-bindin
 
 const CLI_KEY = 'repo-1::/Users/dev/orca-cli'
 
-/** tab-a in the tab bar; tab-b only as a row, bound to nothing. */
 function unattachedRow(): WorkspaceSessionState {
   const session = addWorkspace(emptySession(), GIT_KEY, [
     {

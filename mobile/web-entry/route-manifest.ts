@@ -1,10 +1,6 @@
 import type { RequireContext } from 'expo-router/build/types'
 
-/**
- * Replaced wholesale at build time by config/scripts/build-mobile-web-app-bundle.mjs, which
- * generates the static imports esbuild needs in place of Metro's require.context. This body is
- * what typechecking and Metro see; it never runs, because only the web build resolves this file.
- */
+// The web builder replaces this placeholder with static imports; esbuild cannot use Metro’s require.context.
 const routeContext: RequireContext = Object.assign(
   (id: string): never => {
     throw new Error(`[orca-mobile-web-app] route manifest was not generated: ${id}`)

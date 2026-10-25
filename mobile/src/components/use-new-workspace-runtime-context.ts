@@ -19,12 +19,10 @@ import { useMobileJiraConnectionState } from '../tasks/use-mobile-jira-connectio
 import type { NewWorktreeRuntimeSettings } from './new-worktree-agent-selection'
 import { newWorkspaceUiStateRead } from './new-workspace-operations'
 
-/** One member off a probe payload the drawer only re-typed, keeping its optional-chaining read. */
 function readProbeMember(payload: unknown, key: string): unknown {
   return payload == null ? undefined : Object(payload)[key]
 }
 
-/** A settled probe's accepted payload, or undefined when it never landed or was refused. */
 function settledValue(
   entry: PromiseSettledResult<RpcResponse>,
   interpret: (reply: RpcResponse) => RpcAcceptedResult<unknown>

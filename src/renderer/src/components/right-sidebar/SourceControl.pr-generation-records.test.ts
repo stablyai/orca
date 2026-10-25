@@ -187,7 +187,7 @@ describe('SourceControl pull request generation records', () => {
       'wt-a': worktreeA
     }
 
-    // Switching to B and pressing stop must not manufacture or cancel A's record.
+    // Stopping in B must neither create a B record nor cancel A.
     const canceledB = resolvePullRequestGenerationCancel(records['wt-b'])
     expect(canceledB).toBeNull()
     expect(records['wt-a'].status).toBe('running')

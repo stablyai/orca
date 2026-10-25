@@ -47,7 +47,6 @@ function unmountRenderers(): void {
   renderers.clear()
 }
 
-/** A host whose feed this page cannot read: the notice, above the rows the page already holds. */
 function listWith(rows: number) {
   const section = {
     key: 'all',

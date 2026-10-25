@@ -4,9 +4,7 @@ const getAllProcessesMock = vi.fn()
 
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
-// A real snapshot always contains the process doing the querying; the reader
-// rejects a table without it, because that is what a blocked
-// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+// Toolhelp denial may return an empty table; require the querying process to distinguish a readable snapshot.
 const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
 const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
   SELF_PROCESS_ROW,
@@ -68,8 +66,7 @@ describe('Pi Windows foreground recognition', () => {
   it.each(['cli.js', String.raw`bundle\cli.js`])(
     'anchors a collapsed omp name to the omp pid, not the embedded pi leaf at dist/%s',
     async (entrypoint) => {
-      // Pi restarts under a live OMP; an anchor on pi's pid would read that as
-      // OMP's exit and fire a false "agent done" when the next snapshot degrades.
+      // Anchor OMP itself: embedded Pi restarts must not report a false OMP exit.
       const rows = [
         { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
         { pid: 101, ppid: 100, name: 'omp.exe', commandLine: 'omp' },

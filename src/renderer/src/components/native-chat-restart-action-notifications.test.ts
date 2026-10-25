@@ -51,7 +51,6 @@ it('offers Review on an error toast for chats a resume could not carry on', () =
   expect(show).toHaveBeenCalledTimes(1)
 })
 
-// An unconfirmed chat may already be working, so it warns rather than errs.
 it('offers Review on a warning toast when a resume could not be confirmed', () => {
   announceRestartResults(
     ['a', 'b'],
@@ -70,7 +69,6 @@ it('offers Review on a warning toast when a resume could not be confirmed', () =
   })
 })
 
-// One resume, one toast: the chats it resumed ride along under the ones it could not.
 it('reports a mixed resume in one toast', () => {
   announceRestartResults(
     ['a', 'b', 'c'],
@@ -114,8 +112,6 @@ it('puts each extra count on its own line when a resume had all three outcomes',
   )
 })
 
-// `b` finished on its own, or the user already answered it: the host no longer lists it, so the
-// notice must not count a failure the list it opens cannot show.
 it('counts only the requested chats the host still lists as failed', () => {
   announceRestartResults(['a', 'b'], refusedBoth, [{ sessionId: 'a', outcome: 'refused' }], show)
   expect(titles()).toEqual(['1 chat couldn’t be resumed'])
@@ -126,28 +122,23 @@ it('says nothing when the host lists none of them as failed', () => {
   expect(toast).not.toHaveBeenCalled()
 })
 
-// A request that never reached the host leaves no read to narrow by, so every chat it named failed.
 it('counts every chat not carried on when no failure list was read, with nothing to open', () => {
   announceRestartResults(['a', 'b'], [], undefined, show)
   expect(titles()).toEqual(['2 chats couldn’t be resumed'])
   expect(vi.mocked(toast).mock.calls[0]?.[1]).not.toHaveProperty('action')
 })
 
-// An answer without outcomes may still have sent the message.
 it('counts every chat as unconfirmed when the answer carried no outcomes', () => {
   announceRestartResults(['a', 'b'], undefined, undefined, show)
   expect(titles()).toEqual(['Couldn’t confirm 2 chats were resumed'])
 })
 
-// The host retires an unconfirmed send once the agent is seen carrying on it; the resume must still
-// report the chat, and as resumed, not as a failure the list can no longer show.
 it('counts an unconfirmed chat the host no longer lists as resumed', () => {
   announceRestartResults(['a'], [{ sessionId: 'a', outcome: 'unknown' }], [], show)
   expect(titles()).toEqual(['Resumed 1 chat'])
 })
 
-// Unconfirmed means the agent may well be working; "couldn't be resumed" would invite a second send.
-// `b` reattached with no continuation row: only the host's filed outcome says it is unconfirmed.
+// Unconfirmed sends may already be running; use the host’s recorded outcome to avoid inviting duplicate sends.
 it('counts a chat the host filed as unconfirmed on its own line, as the list does', () => {
   announceRestartResults(
     ['a', 'b'],

@@ -105,8 +105,7 @@ function createSoftNewlineJoin(
       return null
     }
 
-    // Why: ProseMirror Transform.join substitutes paragraph text `\n` with
-    // hardBreak nodes at textblock boundaries, which makes hard-wrapped prose narrow.
+    // Join content directly because Transform.join converts soft newline text to hardBreaks, narrowing prose.
     const content = left.content.append(right.content)
     if (!left.type.validContent(content)) {
       return null
@@ -176,8 +175,7 @@ export function deleteAdjacentEmptyParagraph(editor: Editor, direction: 'backwar
       if (!before) {
         return false
       }
-      // Why: ProseMirror's default Backspace join converts soft `\n` text in
-      // the previous paragraph into hardBreak nodes. Delete the blank block only.
+      // Delete only the blank block to avoid Backspace join converting preceding soft newlines to hardBreaks.
       const tr = editor.state.tr.delete(currentStart, currentEnd)
       setSelectionNear(tr, currentStart - 1)
       editor.view.dispatch(tr)
@@ -220,8 +218,7 @@ export function deleteAdjacentEmptyParagraph(editor: Editor, direction: 'backwar
   }
 
   if (after && isEmptyParagraph(after)) {
-    // Why: Delete at the end of a soft-wrapped paragraph should remove the
-    // blank line without running ProseMirror's newline-to-hardBreak join path.
+    // Remove the blank line without ProseMirror’s newline-to-hardBreak join path.
     const tr = editor.state.tr.delete(currentEnd, currentEnd + after.nodeSize)
     setSelectionNear(tr, currentEnd - 1)
     editor.view.dispatch(tr)

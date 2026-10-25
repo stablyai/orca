@@ -33,9 +33,7 @@ describe('SourceControlActionVariableChips', () => {
     expect(markup).toContain('Generate a commit message.')
   })
 
-  // Why: the description is the only in-product warning that a bare `Fixes #{linkedIssue}`
-  // degrades to `Fixes #`, and the only place a GitLab user learns why it is always empty.
-  // A workspace preview must add to it, never replace it.
+  // Keep the linkedIssue warning beside previews: unlinked workspaces produce Fixes #, and GitLab has no value.
   it.each([
     { label: 'a linked workspace', preview: '4242', expected: '4242' },
     { label: 'an unlinked workspace', preview: '', expected: '(empty)' }

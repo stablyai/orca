@@ -27,8 +27,7 @@ vi.mock('./pr-files-combined-diff-body', () => ({
 
 vi.mock('./pr-files-combined-diff-load', () => ({
   addPRFilesCombinedDiffLineComment: () => Promise.resolve(),
-  // Why: stands in for the network fetch, keeping only the state shape a real load produces —
-  // a new sections array with one patched section and untouched keys.
+  // Match network settlement: replace the sections array while preserving untouched keys.
   loadPRFilesCombinedDiffSection: ({
     index,
     setSections

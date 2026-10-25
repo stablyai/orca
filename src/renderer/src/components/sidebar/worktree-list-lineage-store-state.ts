@@ -144,8 +144,7 @@ export function setLineageFixtureState(
     toggleCollapsedGroup: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),
-    // Why: multi-host added a host scope filter; 'all' (the store default)
-    // bypasses it so the fixture's worktrees aren't dropped before rendering.
+    // Use the all-host default so host filtering cannot remove fixture rows.
     workspaceHostScope: 'all',
     workspaceStatuses: groupBy === 'workspace-status' ? cloneDefaultWorkspaceStatuses() : [],
     worktreeCardProperties: ['status', 'inline-agents'],

@@ -1,12 +1,9 @@
-// issue1-ui-flash (host half): `session.tabs` must not manufacture completion or
-// freshness. A neutral live title ('Terminal', an editor, a cwd) is not proof the
-// agent finished, and the identity-only fallback must date its evidence instead of
-// the byte stream — otherwise the host frame is perpetually newer than a paired
-// client's own live status and the pane flaps between the two writers.
+// Neutral titles prove no completion; stamp identity fallback with evidence time so output cannot outrank live client status.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { projectSessionTabAgentStatus } from './rpc/methods/session-tab-agent-status-projection'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -56,8 +53,7 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
   return runtime
 }
 
-/** Publish a renderer graph: one terminal pane with a live title and the
- *  renderer's own byte-derived agent status (what a paired host mirrors). */
+/** Publish the renderer's terminal/title/byte-derived status as a paired host mirrors it. */
 function publishRendererWorkingPane(runtime: OrcaRuntimeService, paneTitle: string): void {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
@@ -191,7 +187,6 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
     )
   })
 
-  // #1437 preserved: a genuine shell prompt is proof the agent released the pane.
   it.each(['zsh', 'bash', 'pwsh'])(
     'clears a stale working to identity-only done under the shell title %s',
     async (shell) => {
@@ -239,11 +234,10 @@ describe('mobile session tabs: identity-only fallback freshness', () => {
       providerSessionOnly: true
     }
     const runtime = await createRuntime([resumeRow])
-    // Title evidence lands once...
     runtime.onPtyData(PTY_ID, '\x1b]0;Terminal\x07', T0)
     const titleObservedAt = Date.now()
 
-    // ...then the pane keeps streaming output with no new status evidence.
+    // Output without new status evidence must not refresh the identity fallback.
     vi.setSystemTime(T0 + 60_000)
     runtime.onPtyData(PTY_ID, 'building...\r\n', T0 + 60_000)
 
@@ -256,11 +250,53 @@ describe('mobile session tabs: identity-only fallback freshness', () => {
       })
     )
 
-    // Republishing after still more output must not refresh the frame.
     vi.setSystemTime(T0 + 120_000)
     runtime.onPtyData(PTY_ID, 'still building...\r\n', T0 + 120_000)
     expect(await projectAgentStatus(runtime)).toEqual(
       expect.objectContaining({ updatedAt: titleObservedAt })
+    )
+  })
+})
+
+// STA-12043: a restored host starts a new shell in the pane; the old run's Done is not this one's.
+describe('mobile session tabs: a process started after its pane last reported', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('publishes identity only, and legacy done to clients that cannot read it', async () => {
+    const completedBeforeRestart: AgentStatusIpcPayload = {
+      paneKey: PANE_KEY,
+      state: 'done',
+      prompt: 'ship it',
+      agentType: 'codex',
+      connectionId: null,
+      receivedAt: T0 - 120_000,
+      stateStartedAt: T0 - 120_000,
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      providerSession: PROVIDER_SESSION
+    }
+    const runtime = await createRuntime([completedBeforeRestart])
+    runtime.noteTerminalSpawnCommit({ id: PTY_ID })
+    runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0)
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
+      expect.objectContaining({ restoredUnconfirmed: true, providerSession: PROVIDER_SESSION })
+    )
+    const legacy = projectSessionTabAgentStatus(result, 'runtime', []).tabs[0]
+    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).toEqual(
+      expect.objectContaining({ state: 'done', providerSession: PROVIDER_SESSION })
+    )
+    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).not.toHaveProperty(
+      'restoredUnconfirmed'
     )
   })
 })

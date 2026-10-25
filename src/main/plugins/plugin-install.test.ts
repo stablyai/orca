@@ -243,8 +243,7 @@ describe('installPluginFromLocalPath', () => {
     })
     expect(reinstalled).toMatchObject({ ok: true })
 
-    // Recovery from the newly backfilled provenance must retain the accepted
-    // legacy source rather than the same-byte reinstall's alternate source.
+    // Backfilled provenance must retain the accepted legacy source through same-byte reinstall.
     await rm(join(pluginsDir, 'plugins.lock.json'))
     const recovered = await readPluginLockfile(pluginsDir)
     expect(recovered.plugins[first.pluginKey]?.source).toEqual({

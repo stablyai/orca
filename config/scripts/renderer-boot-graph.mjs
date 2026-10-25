@@ -4,11 +4,7 @@ import process from 'node:process'
 
 export const RENDERER_BUILD_DIR = path.join('out', 'renderer')
 
-/**
- * Every chunk the main renderer window fetches and evaluates before first
- * paint: the entry module plus its `<link rel="modulepreload">` graph. Anything
- * in here is startup cost on every launch, whether or not the feature is used.
- */
+// Entry/modulepreload closure is fetched/evaluated before first paint and costs every launch regardless of feature use.
 export function readRendererBootGraph(rendererDir) {
   const html = fs.readFileSync(path.join(rendererDir, 'index.html'), 'utf8')
   const entries = [...html.matchAll(/<script[^>]+type="module"[^>]+src="([^"]+)"/g)].map(
@@ -28,12 +24,7 @@ export function readRendererBootGraph(rendererDir) {
   }
 }
 
-/**
- * Payloads that must never come back to the boot graph, each identified by a
- * literal only that payload emits. Every one of them is loaded eagerly — just
- * after first paint, or from a route chunk — so a hit here means a static
- * import crept back in, not that a feature stopped working.
- */
+// Match unique payload literals: these features load after first paint/from routes, so a boot-graph hit exposes a regressed static import.
 export function bootGraphForbiddenPayloads(root = process.cwd()) {
   return [
     { label: '@xterm/addon-webgl', signature: 'WebGL2 not supported' },
@@ -42,22 +33,11 @@ export function bootGraphForbiddenPayloads(root = process.cwd()) {
       signature: 'invalid storageLimit, should be at least 0.5 MB and not exceed 1G'
     },
     { label: 'i18n/locales/en.json', signature: prunedAwayEnglishSignature(root) }
-    // Not zod: six other shared modules on the boot path (runtime environments,
-    // closed-tab tombstones, the browser page protocol, shared/constants…)
-    // still import it, so there is nothing to ratchet yet.
-    //
-    // Not emojibase-data either: deferring it made the shortcode transform
-    // return an empty catalog until the load settled, so a `:wink:` submitted
-    // in that window persisted literally. Nothing that resolves a shortcode can
-    // be async without that race, so the data stays statically imported.
+    // Exclude zod: other boot-path modules still need it. Keep emojibase-data static: async catalog loading can persist submitted :wink: literally.
   ]
 }
 
-/**
- * A string only the full translator catalog carries: the longest English value
- * the runtime-required prune drops. Derived rather than hardcoded so the guard
- * keeps working as copy changes.
- */
+// Derive full-catalog-only marker from longest English value pruned at runtime so copy edits cannot stale the guard.
 export function prunedAwayEnglishSignature(root = process.cwd()) {
   const flatten = (value, prefix = '', out = new Map()) => {
     if (typeof value === 'string') {

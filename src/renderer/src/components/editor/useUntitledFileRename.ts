@@ -80,8 +80,7 @@ export function useUntitledFileRename({
       }
 
       try {
-        // Retarget the untitled tab in place (the coordinator's rekey consumes
-        // its untitled status on this explicit rename), instead of close+reopen.
+        // Rekey in place so explicit rename consumes untitled status without closing/reopening the tab.
         await executeOpenEditorPathMove({
           context: fileContext,
           fromPath: oldPath,

@@ -136,7 +136,7 @@ export function useAiVaultSearch(
 // Answers that a retry from this client cannot change; `not-ready` can, so it keeps searching.
 const TITLE_ONLY_UNAVAILABLE_REASONS = new Set<string>(['disabled', 'no-service'])
 
-/** Under `all` every hit names its own host; a single-host answer belongs to the host we addressed. */
+// All-host hits name their host; single-host responses belong to the addressed host.
 function hitExecutionHostId(hit: AiVaultSearchHit, host: ExecutionHostId | null): ExecutionHostId {
   return host ?? parseExecutionHostId(hit.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
 }
@@ -158,22 +158,17 @@ export function useAiVaultPanelSearch(
   const hasQuery = trimmed.length > 0
   const needsLocalConsent =
     executionHostScope === 'local' && !isWebClientLocation() && !policy.enabled
-  // Why: another computer's index is not this client's to turn on (a relay keeps its
-  // own off by design), so once a single host says its search is off, the box goes
-  // back to the title filter for that host instead of walling the list (#22453).
+  // A client cannot enable another host’s index; fall back to title filtering when it reports search off (#22453).
   const [titleOnlyScope, setTitleOnlyScope] = useState<ExecutionHostScope | null>(null)
   const titleOnly =
     scope !== null && scope !== ALL_EXECUTION_HOSTS_SCOPE && titleOnlyScope === scope
-  // Until indexing is on the box is still the legacy title filter, not index search.
   const searching = hasQuery && !needsLocalConsent && !titleOnly
-  // `within` is memoized by the caller; a fresh object per render would restart
-  // the search on every render and never let one settle.
+  // Callers must memoize within; new objects restart the search before it can settle.
   const request = useMemo(
     () =>
       searching && scope && agents.length > 0
         ? {
             query: trimmed,
-            // Relevance is the host's own default, so only the other order travels.
             filters: { agents: [...agents], ...(sort === 'relevance' ? {} : { sort }) },
             ...(within ? { within } : {})
           }

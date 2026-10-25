@@ -1,7 +1,4 @@
-/**
- * A mirror of nodejs.org/dist (an internal artifact proxy, or a regional mirror) for the pinned
- * Node runtime. It only changes where bytes come from: the SHA-256 pin decides what is accepted.
- */
+/** Pinned Node download mirror changes byte source only; SHA-256 pins still decide acceptance. */
 
 /** The variables Node tooling already reads for the same mirror; read on this computer only. */
 export const NODE_DIST_MIRROR_ENV_KEYS = ['NODEJS_ORG_MIRROR', 'NVM_NODEJS_ORG_MIRROR'] as const

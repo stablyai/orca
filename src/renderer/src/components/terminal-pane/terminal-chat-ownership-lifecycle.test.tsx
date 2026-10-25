@@ -270,7 +270,6 @@ describe('terminal chat ownership lifecycle', () => {
       .getPanes()
       .find((pane) => pane.leafId === hook.result.current.chatLeafId)
     expect(chatPane?.id).toBe(10)
-    // Closing the restored chat leaf must leave the left terminal untouched.
     restored.managerRef.current.getPanes().pop()?.container.remove()
     hook.rerender()
     expect(restored.managerRef.current.getPanes().map((pane) => pane.leafId)).toEqual([LEFT])

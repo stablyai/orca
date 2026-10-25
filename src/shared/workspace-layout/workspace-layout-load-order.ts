@@ -1,6 +1,4 @@
-// The one tab order from stored data whose three orders can disagree (written by older builds).
-// Fixed precedence, no merging: the owning group's tab order, then tab-bar sortOrder, then row
-// sortOrder, then creation time.
+// Legacy order precedence: owning group tab order, tab-bar sortOrder, row sortOrder, then creation time. Do not merge disagreeing orders.
 
 import type { TabGroup } from '../tab-types'
 import type { LayoutGroup } from './workspace-layout-model'

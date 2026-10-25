@@ -32,7 +32,7 @@ function collectMethodNames(
   return names
 }
 
-// Why: the chain used to live on the facade, so a facade override (test spy) has to win for re-entrant `this` calls too.
+// Preserve facade overrides/spies on reentrant this calls through the chain.
 function overrideAwareReceiver(
   facade: LinearFacadeInstance,
   commands: LinearMethodBag,

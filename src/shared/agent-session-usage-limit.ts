@@ -1,5 +1,4 @@
-// Which of the agent's usage limits a turn hit and when it resets, as the provider reported it.
-// Carried on a `usageLimitReached` failure fact; every reader words it in its own clock.
+// Carry provider usage-limit facts; each reader formats resets in its own clock.
 
 /** `session`: the rolling few-hour limit. `weekly`: the account's weekly limit. `weeklyModel`: a
  *  weekly limit on one model. `credits`: paid usage beyond the plan ran out. */

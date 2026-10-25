@@ -153,8 +153,7 @@ export class RpcClientSocketSession {
     }
   }
 
-  // Why: hosts that predate direct v2 refuse the v2 hello with 4001 before any ready;
-  // that is an auth verdict only for a host already proven to speak v2.
+  // Before v2 ready, old hosts answer 4001 to an unsupported hello; treat it as auth failure only after prior v2 proof.
   private classifyClose(closeCode: number | undefined): number | undefined {
     if (this.framingKind !== 'v2' || this.readyAccepted || closeCode !== UNAUTHORIZED_CLOSE_CODE) {
       return closeCode

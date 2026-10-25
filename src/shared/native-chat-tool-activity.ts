@@ -1,6 +1,4 @@
-// Live tool-activity derivation and copy for native chat's tool runs. Mobile's
-// "Running …" row renders this copy directly (it ships English only); desktop
-// uses the count and failure strings as i18n fallbacks, so the two never drift.
+// Shared tool activity/copy for direct English mobile rows and desktop i18n fallbacks.
 
 import { createToolInputDisplay } from './native-chat-tool-summary'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
@@ -15,8 +13,7 @@ export const NATIVE_CHAT_TOOL_ACTIVITY_COPY = {
   countOne: '1 tool call',
   countN: '{{value0}} tool calls',
   moreCalls: '+{{value0}} more',
-  /** Quiet decoration on a settled collapsed header; the run's lines carry the
-   *  detail. Count-agnostic wording so one entry serves any number. */
+  /** Count-neutral failure mark for settled collapsed headers; individual rows retain detail. */
   failedCount: '{{value0}} failed',
   /** Spoken form of the same mark — `1 failed` alone does not say failed what. */
   failedCallsLabel: 'Failed tool calls: {{value0}}',
@@ -25,8 +22,7 @@ export const NATIVE_CHAT_TOOL_ACTIVITY_COPY = {
   interruptedCallsLabel: 'Interrupted tool calls: {{value0}}'
 } as const
 
-/** Tools whose call is a shell command, so the row reads as terminal activity
- *  (and takes the terminal glyph) rather than a named tool invocation. */
+/** Shell-command rows use terminal activity wording/glyphs rather than named-tool presentation. */
 export const COMMAND_TOOL_NAMES: ReadonlySet<string> = new Set([
   'bash',
   'shell',
@@ -75,9 +71,7 @@ export function formatActiveToolLabel(descriptor: NativeChatActiveToolDescriptor
     .replaceAll('{{toolName}}', descriptor.toolName)
 }
 
-/** What a live run names beside its sentence: the command itself, or the tool's
- *  word and argument. Tense-free on purpose — the sentence carries the state, so
- *  this never claims a call that just finished is still running. */
+/** Tense-free command/tool arguments; surrounding activity text carries state so this never claims a just-finished call still runs. */
 export function describeLatestToolCall(call: NativeChatToolCallBlock): string {
   const { toolName, preview, isCommand } = describeActiveToolCall(call)
   if (isCommand) {
@@ -86,9 +80,7 @@ export function describeLatestToolCall(call: NativeChatToolCallBlock): string {
   return preview ? `${toolName} ${preview}` : toolName
 }
 
-/** The most recent still-running call in a run, or null once the run is settled.
- *  A block without lifecycle `state` only counts while the turn is known to be
- *  working, so a restored transcript never spins on an orphaned call. */
+/** Newest active call; lifecycle-less blocks count only during a known working turn so restored orphan calls cannot spin forever. */
 export function selectActiveToolCall(
   blocks: readonly NativeChatBlock[],
   { activeTurnIsWorking }: { activeTurnIsWorking?: boolean }

@@ -99,12 +99,7 @@ function isIdentitySelector(selector) {
   )
 }
 
-/**
- * `everyBranch` decides how a conditional counts. An inline selector is flagged
- * when ANY branch allocates; a helper the selector delegates to must allocate on
- * EVERY branch, so the `cache.get(k) ?? build(state)` identity-caching shape is
- * not a false positive.
- */
+// Inline selectors flag ANY allocating branch; delegated helpers require EVERY branch so cache.get(k) ?? build(state) remains valid.
 function allocates(expression, everyBranch) {
   const branches =
     expression?.type === 'ConditionalExpression'
@@ -190,11 +185,7 @@ function resolveSelector(argument, state) {
     : null
 }
 
-/**
- * One hop: a selector that delegates to a module-scope helper is the idiomatic
- * shape here, and neither the inline-body check nor a reviewer reading the call
- * site can see what that helper returns. An unresolvable helper is left alone.
- */
+// Inspect one delegated module helper hop to catch hidden allocations; leave unresolved helpers alone.
 function expandThroughNamedHelper(expression, state) {
   const helper =
     expression?.type === 'CallExpression' && expression.callee.type === 'Identifier'
@@ -267,10 +258,7 @@ function requireSelectorRule(sourceCode) {
   }
 }
 
-/**
- * Selector arguments are collected during traversal and judged at Program:exit so a
- * selector hoisted below its call site still resolves.
- */
+// Judge at Program:exit so selectors declared after call sites resolve.
 function deferredSelectorRule(sourceCode, inspect) {
   const state = createRuleState(sourceCode)
   return {

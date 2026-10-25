@@ -120,8 +120,6 @@ describe('resolveMobileNativeChat', () => {
     ).toBeNull()
   })
 
-  // Why: omp's hook reports no transcript path either, so mobile can only show
-  // its chat when the serving host is the one holding the session file.
   it('admits omp only when its transcript is readable by the serving host', () => {
     const tab = { type: 'terminal', launchAgent: 'omp' }
     expect(resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable(null))).toMatchObject({
@@ -236,8 +234,7 @@ describe('withRememberedNativeChatIdentity', () => {
   })
   const seen = withRememberedNativeChatIdentity([terminalTab('h1', claude)], [])
 
-  // #31977: a typed `claude` has no launchAgent, so a frame without agentType dropped chat.
-  // Read-only: the agent may have exited to a shell, and a send would run as a command there.
+  // Remembered agent identity keeps chat readable, never writable: it may have exited to a shell.
   it('keeps chat read-only on the same handle when a frame omits the agent', () => {
     const [next] = withRememberedNativeChatIdentity([terminalTab('h1', status())], seen)
     expect(resolveMobileNativeChat(next)).toEqual({
@@ -249,7 +246,6 @@ describe('withRememberedNativeChatIdentity', () => {
     expect(resolveMobileNativeChatSessionId(next)).toBe('sess-1')
   })
 
-  // #32134: a frame with no agentStatus at all left chat with no session to read.
   it('keeps the session through a frame with no agent status, and a pending handle', () => {
     const [pending] = withRememberedNativeChatIdentity([terminalTab(null)], seen)
     const [back] = withRememberedNativeChatIdentity([terminalTab('h1')], [pending])

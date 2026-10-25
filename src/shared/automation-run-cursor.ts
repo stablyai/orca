@@ -2,9 +2,7 @@ import type { AutomationRun, AutomationRunsPage } from './automations-types'
 
 const MAX_PAGE_SIZE = 100
 
-/** A keyset boundary (`createdAt:id` of the previous page's last run), or the
- *  bare offset older hosts emitted — still read so a cursor issued before an
- *  upgrade keeps working. */
+/** Read keyset createdAt:id boundaries and legacy offsets so pre-upgrade cursors remain usable. */
 type AutomationRunCursor =
   | { kind: 'key'; createdAt: number; id: string }
   | { kind: 'offset'; offset: number }
@@ -23,8 +21,7 @@ function decodeAutomationRunCursor(cursor: string | undefined): AutomationRunCur
   return Number.isFinite(createdAt) && id ? { kind: 'key', createdAt, id } : null
 }
 
-/** The single total order pages and cursors agree on. Ties on `createdAt` fall
- *  back to `id`, so a pruned boundary cannot take the runs tied with it. */
+/** Order by createdAt then id so pruning a boundary cannot hide tied runs. */
 export function compareAutomationRunsNewestFirst(
   left: Pick<AutomationRun, 'createdAt' | 'id'>,
   right: Pick<AutomationRun, 'createdAt' | 'id'>
@@ -48,17 +45,12 @@ function pageStartIndex(
   if (boundary !== -1) {
     return boundary + 1
   }
-  // Boundary run pruned between pages: resume at the first run the total order
-  // places after it, so runs tied on `createdAt` are not dropped with it.
+  // Resume after pruned keyset boundaries without dropping createdAt ties.
   const older = runs.findIndex((run) => compareAutomationRunsNewestFirst(cursor, run) < 0)
   return older === -1 ? runs.length : older
 }
 
-/**
- * Pages `runs`, which must already be sorted by `compareAutomationRunsNewestFirst`.
- * The cursor names the previous page's last run rather than an index, so runs
- * created between two page requests cannot shift the window and drop a run.
- */
+/** Require newest-first sorted runs; keyset boundaries prevent inter-page inserts shifting offsets and skipping runs. */
 export function paginateAutomationRuns(
   runs: readonly AutomationRun[],
   limit?: number,

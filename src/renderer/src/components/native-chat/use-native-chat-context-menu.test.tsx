@@ -262,7 +262,6 @@ describe('useNativeChatContextMenu', () => {
       render(<ImageHarness />)
       const field = screen.getByRole('textbox', { name })
 
-      // fireEvent returns false when the handler prevented the default.
       expect(fireEvent.pointerDown(field, { button: 2 })).toBe(true)
       expect(fireEvent.contextMenu(field)).toBe(true)
       expect(markPlainTextContextMenuTarget).toHaveBeenCalledOnce()
@@ -302,7 +301,6 @@ describe('useNativeChatContextMenu', () => {
       vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent)
       render(<ImageHarness />)
 
-      // fireEvent returns false when the handler prevented the default.
       expect(fireEvent.pointerDown(screen.getByText('text'), init)).toBe(defaultRuns)
     }
   )
@@ -429,7 +427,6 @@ describe('useNativeChatContextMenu', () => {
 
     renderToStaticMarkup(<Harness onSwitchToTerminal={onSwitchToTerminal} />)
 
-    // Keep the assertions tied to the mocked menu item's semantic children.
     const labels = items.list.map((candidate) => childrenText(candidate.children))
 
     expect(labels.some((label) => label.startsWith('Continue with Terminal Agent'))).toBe(true)

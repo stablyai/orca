@@ -22,11 +22,7 @@ type BackgroundSleepingAgentWakeDispatcherOptions = {
   wake?: (worktreeId: string) => void
 }
 
-/**
- * Buffers main's one-shot mobile wake until persisted sleeping records exist.
- * Why: the renderer can attach its IPC listener before workspace hydration;
- * dropping an early event leaves the phone connected to frozen slept panes.
- */
+/** Buffer main’s one-shot mobile wake until sleeping records hydrate; early listener attachment otherwise drops the only event and leaves frozen panes. */
 export function createBackgroundSleepingAgentWakeDispatcher(
   options: BackgroundSleepingAgentWakeDispatcherOptions = {}
 ): { request: (worktreeId: string) => void; dispose: () => void } {
@@ -124,8 +120,7 @@ function getCanonicalPassiveWakeRecords(
     canonicalRecords.push(canonical)
     for (const duplicate of grouped) {
       if (duplicate !== canonical) {
-        // Why: two cold panes mount after the event-scoped claim collector is
-        // gone. Keep one provider-session record so only one can issue resume.
+        // Canonicalize provider sessions before cold panes mount after event claims expire, preventing duplicate resumes.
         duplicatePaneKeys.push(duplicate.paneKey)
       }
     }
@@ -134,37 +129,12 @@ function getCanonicalPassiveWakeRecords(
   return canonicalRecords
 }
 
-/**
- * Wakes a worktree's slept agents on the desktop host renderer with NO desktop
- * navigation — used when a phone (`clientKind: 'mobile'`) opens the worktree.
- * Runs up to four steps, in order:
- *  (a) fire the armed cold-restore `--resume` of the worktree's mounted hidden
- *      hibernated panes (the experimental agent-sleep records; the primary
- *      wake mechanism, since those records are passive for path C). Panes that
- *      consume — or latch, when the wake races the hibernation kill — the
- *      in-place wake claim their provider sessions via the event detail;
- *  (b) background-mount the tabs holding passive hibernated records that are
- *      NOT currently mounted (post-restart / evicted) so they take the
- *      fresh-connect cold-restore path. The mount is targeted by tabId so one
- *      sleeping pane does not permanently mount every saved tab, and skips
- *      `restoreOnTabOpenOnly` records so an explicit workspace sleep is not
- *      undone wholesale by a phone opening the workspace;
- *  (c) resume the non-passive record classes (manual sleep of a still-working
- *      agent, `origin: 'quit'`) with navigation suppressed, skipping the
- *      claims from (a);
- *  (d) background-mount the tabs (c) created — they are `activate: false`, so
- *      nothing else would mount them and their queued `--resume` startup
- *      would otherwise never reach a PTY.
- * Woken PTYs auto-publish to mobile via the renderer graph republish, so no
- * spawn is awaited.
- */
+/** Wake mobile-visible sleepers without desktop navigation: wake mounted hibernated panes and collect claims; target-mount unmounted passive hibernation tabs; resume other records without navigation, skipping claims; mount those activate:false resume tabs so startup reaches PTYs. Skip restoreOnTabOpenOnly records to preserve explicit sleep. PTYs republish automatically, so await no spawn. */
 export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): void {
   const sleptRecords = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey).filter(
     (record) => record.worktreeId === worktreeId
   )
-  // Why: nothing is slept here, so there is no wake work. Skipping is what keeps
-  // a phone browsing many worktrees from permanently background-mounting each one
-  // (and reattaching its PTYs) on the desktop host it is paired to.
+  // No sleepers means no mounting: phone browsing must not accumulate desktop workspaces/PTYS.
   if (sleptRecords.length === 0) {
     return
   }
@@ -181,15 +151,10 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   if (worktreeRecords.length === 0) {
     return
   }
-  // Why: only a passive completed-hibernation record has a not-yet-mounted pane
-  // that needs a fresh-connect cold-restore (step b). Non-passive records are
-  // recovered by step (c) into a fresh tab, mounted in step (d).
+  // Only passive completed-hibernation records need fresh-connect mounting; nonpassive recovery creates/mounts new tabs later.
   const passiveTabIds = new Set<string>()
   let hasUntargetablePassiveRecord = false
-  // Why: a workspace the user explicitly slept must not respawn every finished agent because a
-  // phone opened it. Those panes cold-restore `--resume` when their own tab is opened, which is
-  // also what the desktop does (#11598). Filtering before canonicalization keeps a lazy record
-  // from winning — and deleting — the claim of a hibernated record that does need mounting.
+  // Phone workspace opens must preserve explicit sleep until each tab opens (#11598). Filter before canonicalization so lazy records cannot steal/delete active hibernation claims.
   const backgroundWakeRecords = worktreeRecords.filter(
     (record) => record.restoreOnTabOpenOnly !== true
   )
@@ -202,8 +167,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
     }
   }
   if (passiveTabIds.size > 0 || hasUntargetablePassiveRecord) {
-    // Why: a record whose tab cannot be resolved falls back to the untargeted
-    // whole-worktree mount rather than silently never waking.
+    // If tab identity is unresolved, mount the whole workspace rather than strand recovery.
     dispatchBackgroundMount(
       worktreeId,
       hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
@@ -212,13 +176,10 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   const resumeOptions = {
     suppressNavigation: true,
     skipClaimKeys: wokenClaimKeys,
-    // Why: a mirror-parked sweep replays after this call returns, so each tab
-    // must request its own mount instead of a batch collected here.
+    // Mirror-deferred sweeps replay after this call; request each tab’s mount instead of collecting one early batch.
     onSessionLaunched: (tabId: string) => dispatchBackgroundMount(worktreeId, [tabId])
   }
-  // Why the gate (STA-3859): this worktree is usually not the active one, so an unmounted pane
-  // whose PTY the host still runs looks unowned locally; only the host's PTY inventory can prove it
-  // exited. A paired-runtime workspace has no such inventory here and keeps its mirror park instead.
+  // Inactive panes look unowned locally even with live host PTYs; require host inventory to prove exit (STA-3859). Paired runtimes instead retain per-pane mirror parking.
   if (resolveActivationPtyListScope(useAppStore.getState(), worktreeId)) {
     void gateWorktreeAgentActivation(worktreeId, resumeOptions)
     return

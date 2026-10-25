@@ -4,10 +4,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { remoteRunHomeUnreachable } from '../routing'
 import { sendRemoteMessage } from './send-remote'
 
-/**
- * Coordinator mail imported under a remote Run's mirror is answered at the Run's home: through the
- * replying pane's own Dispatch link, or not at all.
- */
+/** Reply to mirrored remote-Run mail only at its home, through this pane's own Dispatch link. */
 export async function replyToRemoteRunHome(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -23,7 +20,7 @@ export async function replyToRemoteRunHome(args: {
     !paneKey ||
     !attachment ||
     attachment.home_run_id !== original.run_id ||
-    // Why: another worker of the same Run here must not answer mail sent to this one's Dispatch.
+    // Another worker in the same Run cannot answer this Dispatch's mail.
     original.to_handle !== `dispatch:${attachment.dispatch_id}`
   ) {
     throw remoteRunHomeUnreachable(db, original.run_id)
@@ -46,6 +43,6 @@ export async function replyToRemoteRunHome(args: {
     signal: args.signal
   })
   db.markAsRead([original.id])
-  // Why `message`: every shipped CLI prints the reply's id from it.
+  // Preserve message: every shipped CLI reads its reply id there.
   return { message: { id: sent.relay.messageId, subject }, ...sent }
 }

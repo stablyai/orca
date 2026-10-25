@@ -12,8 +12,7 @@ export type RelayRecoveryLog = (
 
 let relayLoggerInstanceSequence = 0
 
-// Why: relay recovery failed silently in production for weeks; every decision
-// must reach logcat and the in-app connection log.
+// Log every recovery decision to native and in-app diagnostics so relay failures remain inspectable.
 export function createRelayRecoveryLog(
   now: () => number,
   onLog?: ConnectionLogSink

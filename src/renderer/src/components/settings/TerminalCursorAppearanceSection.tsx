@@ -40,7 +40,6 @@ export function TerminalCursorAppearanceSection({
           )}
           keywords={['terminal', 'cursor', 'bar', 'block', 'underline']}
         >
-          {/* Why: Bar/Block/Underline options convey the meaning; helper text pruned. */}
           <SettingsRow
             label={translate(
               'auto.components.settings.TerminalAppearanceSection.db270cc9a9',

@@ -1,7 +1,4 @@
-/**
- * #29973: a phone paired straight to a headless `orca serve` sees the Claude chat in Session
- * History, but not the one-shot request Orca ran in the same folder to name that chat.
- */
+// Headless Session History must include the chat but exclude its one-shot naming request (#29973).
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'

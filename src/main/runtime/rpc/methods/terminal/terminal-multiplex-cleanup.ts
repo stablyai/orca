@@ -23,7 +23,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
     stream.unregisterBinaryHandler()
     streams.delete(streamId)
     state.flushAllAckPendingOutput()
-    // Why: release the runtime exit-waiter for this slot (see the field's note); delete before abort so its .catch no-ops instead of re-detaching.
+    // Delete before abort so the released exit-waiter's catch cannot re-detach.
     stream.exitWaiterAbort.abort()
     if (stream.isMobile && stream.client?.id) {
       runtime.handleMobileUnsubscribe(stream.ptyId, stream.client.id)
@@ -32,7 +32,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
       stream.registeredRemoteDesktopDriver &&
       stream.client?.id
     ) {
-      // Why: release the width floor only if THIS stream took it, so a passive stream can't release a peer's floor.
+      // Release width floors only this stream took; passive streams cannot release peers' floors.
       runtime.unregisterRemoteDesktopViewer(stream.ptyId, stream.remoteDesktopSubscriptionKey)
     }
     if (endVerdict) {
@@ -71,7 +71,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
       }
       state.detachStream(streamId, null, false)
     }
-    // Why: one connection can own many panes on the same PTY; remove floors together so close scans each registry once.
+    // Batch same-PTY connection floors so cleanup scans each registry once.
     for (const [ptyId, subscriptionKeys] of remoteDesktopKeysByPty) {
       void runtime.unregisterRemoteDesktopViewers(ptyId, subscriptionKeys)
     }

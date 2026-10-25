@@ -11,8 +11,7 @@ export type DiffViewerProps = {
   relativePath: string
   sideBySide: boolean
   editable?: boolean
-  // Why: optional because DiffViewer is also used by GitHubItemDialog for PR
-  // review, where there is no local worktree to attach comments to.
+  // Hosted review dialogs may have no workspace for local comments.
   worktreeId?: string
   onAddLineComment?: (args: {
     lineNumber: number
@@ -25,7 +24,6 @@ export type DiffViewerProps = {
   onContentChange?: (content: string) => void
   onSave?: (content: string) => void
   largeDiffRenderLimit?: LargeDiffRenderLimit
-  // Why: main-process limited diffs intentionally blank text bodies before IPC;
-  // the fallback must not treat that placeholder as a saveable draft.
+  // Render-limited IPC bodies are blank placeholders, never saveable drafts.
   largeDiffSaveContentAvailable?: boolean
 }

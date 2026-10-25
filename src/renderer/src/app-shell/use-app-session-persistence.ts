@@ -34,39 +34,29 @@ import {
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
 } from '../../../shared/renderer-shutdown-events'
 
-// Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
+// Capture unchanged-skipping resume records each minute to bound hard-kill loss.
 const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
 
-/**
- * Writes durable renderer session state to disk: the debounced per-host writer and the synchronous
- * shutdown checkpoint.
- */
+/** Persist renderer sessions through per-host debounced writes and a synchronous shutdown checkpoint. */
 export function useAppSessionPersistence(): void {
   useEffect(() => registerUpdaterBeforeUnloadBypass(), [])
 
-  // Why: session persistence only writes to disk; a Zustand subscribe() outside React drops ~15 render-cycle subscriptions and their re-renders on every tab/file/browser change.
+  // Subscribe outside React: disk persistence needs no renders on tab/file/browser changes.
   useEffect(() => {
     return createSessionWriteSubscriber({
       store: useAppStore,
       onPersistError: (error) => console.warn('[session] Session patch failed:', error),
       persist: ({ patch }) => {
-        // Why: route each host's worktree-scoped slice to its own partition.
+        // Route each host’s workspace slice to its own partition.
         return patchWorkspaceSessionByHost(window.api.session, patch, useAppStore.getState())
           .written
       }
     })
   }, [])
 
-  // On shutdown, capture terminal scrollback buffers and flush all durable
-  // renderer state through one synchronous main-process checkpoint.
+  // Capture renderer-owned state into one synchronous shutdown checkpoint.
   useEffect(() => {
-    // Why: beforeunload fires twice during a manual quit — once from the
-    // synthetic dispatch in the onWindowCloseRequested handler (captures
-    // good data while TerminalPanes are still mounted), and again from the
-    // native window close triggered by confirmWindowClose(). Between these
-    // two firings, PTY exit events can arrive and unmount TerminalPanes,
-    // emptying shutdownBufferCaptures. The guard prevents the second call
-    // from overwriting the good session data with an empty snapshot.
+    // Quit can trigger synthetic and native beforeunload. Preserve the first capture before PTY exits unmount panes and empty their buffers.
     const shutdownCheckpointPersist = createShutdownCheckpointPersist({
       shouldCaptureSession: () => shouldPersistWorkspaceSession(useAppStore.getState()),
       captureTerminalBuffers: () => {
@@ -78,17 +68,11 @@ export function useAppSessionPersistence(): void {
           }
         }
       },
-      // Why: agent provider session ids live only in agentStatusByPaneKey,
-      // which is in-memory. Capture them into the persisted sleeping-session
-      // map so a daemon/session death while the app is closed can still
-      // cold-restore via the agent's resume command (#5232).
-      // Switch point: main captures its panes' agents itself as it stages the quit.
+      // Persist in-memory provider session IDs for cold resume after daemon death (#5232); layout-owner main captures its own panes during quit staging.
       captureSleepingAgentSessions: ORCA_LAYOUT_OWNER_IS_MAIN
         ? () => {}
         : () => useAppStore.getState().captureAllSleepingAgentSessions('quit'),
-      // Why: re-read state after capture() calls populated scrollback buffers
-      // into the store via Zustand setters. The shouldCaptureSession read is
-      // only for the gating flags and would miss those updates.
+      // Reread after capture setters populate scrollback; the earlier gating snapshot lacks it.
       buildSessionSnapshots: () => {
         const freshState = useAppStore.getState()
         return buildWorkspaceSessionHostSnapshots(
@@ -98,8 +82,7 @@ export function useAppSessionPersistence(): void {
       },
       buildUiPatch: () => buildActiveViewUnloadPatch(useAppStore.getState()),
       hasDirtyOpenFiles: () => useAppStore.getState().openFiles.some((file) => file.isDirty),
-      // Why: an app-level quit degrades too — the pre-fix alternative was a quit
-      // the user could only complete with SIGKILL, which loses strictly more (#15352).
+      // Allow quit fallback too; SIGKILL to escape a blocked quit loses more state (#15352).
       isDegradableShutdownInProgress: () =>
         isIntentionalAppRestartInProgress() || isWindowCloseCheckpointInProgress(),
       stageBeforeUnloadSync: (args) => window.api.app.stageBeforeUnloadSync(args)
@@ -138,7 +121,7 @@ export function useAppSessionPersistence(): void {
     }
   }, [])
 
-  // Why: beforeunload never fires on a hard kill (crash, forced update, TerminateProcess), so periodically capture agent session ids (not scrollback) so live agents keep a resume record.
+  // Hard kills skip beforeunload; periodically retain agent resume IDs, without expensive scrollback capture.
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
@@ -149,10 +132,10 @@ export function useAppSessionPersistence(): void {
     return () => window.clearInterval(timer)
   }, [])
 
-  // Why: subscribe at the always-mounted App root — Terminal owns the confirm flow but isn't mounted on the landing page, so subscribing there left File→Exit / Ctrl+Q with no listener (#5144).
+  // App remains mounted on Landing, where File→Exit/Ctrl+Q still need a listener (#5144).
   useEffect(() => {
     return window.api.ui.onWindowCloseRequested(dispatchWindowCloseRequest)
   }, [])
 
-  // Why no periodic scrollback save: the old 3-min re-serialize (#461) stalled the main thread for seconds; the out-of-process daemon (#729) is the durable replacement, non-daemon users lose in-session scrollback on unexpected exit.
+  // Periodic scrollback serialization stalled main for seconds (#461); daemon history replaces it (#729). Non-daemon unexpected exits still lose in-session scrollback.
 }

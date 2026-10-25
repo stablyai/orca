@@ -1,19 +1,4 @@
-/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 10 AutomationsPage specs, not shipped code, and it falls outside
-   the *.test / *.spec / tests glob set. Inlining these 13 stubs would duplicate them into all 10 specs and push the largest
-   past the max-lines ratchet. */
-/**
- * The mount rig for AutomationsPage tests: child stand-ins, the preload API
- * double, and the per-test store reset.
- *
- * The presentational children are stood in for because what these tests check
- * is the data flow into them, not their markup — asserting on the real picker,
- * badges, and empty states would test the wrong layer. The stand-ins record the
- * props they were handed so a test can read them back.
- *
- * The `vi.mock` calls live here rather than in each test file: they must run
- * before `./AutomationsPage` is imported, which importing this module first
- * guarantees.
- */
+/** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
 import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -120,8 +105,7 @@ type AutomationsPageMocks = {
   setPendingRunNavigation: Mock
 }
 
-// Not `vi.hoisted`: the mock factories below only close over this, and a hoisted
-// binding cannot be exported.
+// Mock factories only close over this exported binding; vi.hoisted bindings cannot be exported.
 export const mocks: AutomationsPageMocks = {
   state: {},
   repoMap: new Map<string, unknown>(),
@@ -300,8 +284,7 @@ export const RUNTIME_SELF_FILTER = {
   }
 }
 
-/** The local authority's automation RPC surface, served from the same programmable
- *  `api.automations` mocks; an environment target answers from `runtimeHost()` state. */
+/** Serve desktop-local RPCs from the programmable API mocks and runtime-target RPCs from runtimeHost state. */
 async function answerAutomationRpc(
   target: unknown,
   method: string,
@@ -368,8 +351,7 @@ export async function renderPage(options?: { strict?: boolean }): Promise<{
   roots.push(root)
   const rerender = async (): Promise<void> => {
     await act(async () => {
-      // Strict mounts double-invoke effects the way the dev app does, which is
-      // where a dispose-without-revive lifecycle bug becomes visible.
+      // StrictMode doubles effects to expose dispose-without-revive controller bugs.
       const page = options?.strict
         ? createElement(StrictMode, null, createElement(AutomationsPage))
         : createElement(AutomationsPage)

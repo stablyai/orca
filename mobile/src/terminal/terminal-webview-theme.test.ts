@@ -10,13 +10,7 @@ import type {
 const DARK_FLOOR = 3
 const LIGHT_FLOOR = 4.5
 
-/**
- * A scope with the theme's two inputs and nothing else.
- *
- * The module is imported rather than evaluated: it is ordinary TypeScript, and the state it reads
- * is the scope handed to it, so a case builds the state it wants and passes it. The paint seam is a
- * no-op because what these cases read is the contrast decision, not the page's background.
- */
+// Use minimal theme state; background paint is inert because assertions measure contrast, not rendering.
 function themeScope(term: TerminalDocumentThemeTarget | null = null) {
   const scope = createTerminalDocumentScope({ paintDocumentBackground: () => {} })
   scope.defaultTheme = { background: '#1a1b26', foreground: '#c0caf5' }
@@ -27,7 +21,6 @@ function themeScope(term: TerminalDocumentThemeTarget | null = null) {
   return scope
 }
 
-/** Pure: the floor is a function of the colour, so no scope reaches it. */
 function loadContrastFloorResolver(): (bg: unknown) => number {
   return (bg: unknown) => resolveTerminalContrastFloor(bg)
 }
@@ -56,9 +49,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
 
   it('composites transparency over the dark app surface before deciding', () => {
     const resolveTerminalContrastFloor = loadContrastFloorResolver()
-    // Fully transparent → app surface (dark) → dark floor.
     expect(resolveTerminalContrastFloor('transparent')).toBe(DARK_FLOOR)
-    // Faint white over the dark surface stays dark; opaque-enough white flips light.
     expect(resolveTerminalContrastFloor('rgba(255,255,255,0.15)')).toBe(DARK_FLOOR)
     expect(resolveTerminalContrastFloor('rgba(255,255,255,0.9)')).toBe(LIGHT_FLOOR)
   })
@@ -81,8 +72,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
     expect(term.options.minimumContrastRatio).toBe(DARK_FLOOR)
   })
 
-  // #10754: the desktop user can lower or disable the floor. Mobile mirrors the desktop gate, so the
-  // published value has to win here or the same session renders differently on the phone.
+  // Published desktop overrides, including disabled contrast, must win so the same session renders consistently.
   describe('published desktop override', () => {
     function applyOn(term: TerminalDocumentThemeTarget, input: TerminalDocumentThemeMessage): void {
       loadThemeApplier(term)(input)

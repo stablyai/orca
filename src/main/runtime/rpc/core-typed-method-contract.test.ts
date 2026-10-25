@@ -1,5 +1,4 @@
-// The preserved types are the whole point of defineMethod, so they are asserted here: if a name
-// widens to `string` or a result to `unknown`, these assertions fail at typecheck, not at runtime.
+// Compile-time assertions detect widened RPC names and results.
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
 import {
@@ -72,7 +71,7 @@ describe('defineMethod preserves the declared contract', () => {
     expectTypeOf<StatusGet>().not.toBeNever()
     expectTypeOf<StatusGet['handler']>().returns.resolves.toExtend<{ runtimeId: string }>()
     expectTypeOf<ListDistros['handler']>().returns.toEqualTypeOf<Promise<string[]>>()
-    // The manifest is the erasure boundary's input, so the literal names have to survive it too.
+    // Literal method names must survive the manifest input to type erasure too.
     expectTypeOf<ByName<(typeof ALL_RPC_METHODS)[number], 'status.get'>>().not.toBeNever()
   })
 })
@@ -95,7 +94,6 @@ describe('eraseRpcMethods is the registry boundary', () => {
     expect(registry.get('status.get')).toBe(STATUS_METHODS[0])
     expect(isStreamingMethod(registry.get('test.streamingProbe')!)).toBe(true)
     expect(registered && isStreamingMethod(registered)).toBe(false)
-    // The dispatcher parses params itself and then calls the erased handler with `unknown`.
     const parsed: unknown = probe.params.parse({ id: 'a' })
     expect(
       registered && !isStreamingMethod(registered)

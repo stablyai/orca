@@ -15,7 +15,6 @@ export type HostAccountSignInPhase =
 
 /** What a login running on the host asks of the person on another device. */
 export type HostAccountSignInPrompt = {
-  /** The page to open in that device's browser. */
   url: string
   /** Codex's one-time device code, typed into that page. */
   userCode: string | null
@@ -25,7 +24,6 @@ export type HostAccountSignInPrompt = {
 
 /** How a login running on the host reaches the person signing in elsewhere. */
 export type HostAccountSignInChannel = {
-  /** Aborts the login: the person cancelled, or the flow ended. */
   signal: AbortSignal
   onPrompt: (prompt: HostAccountSignInPrompt) => void
   /** The code the person pasted back; rejects if the flow ends first. */

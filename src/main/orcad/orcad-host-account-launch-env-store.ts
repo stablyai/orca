@@ -1,7 +1,4 @@
-/**
- * Keeps the account env a desktop pushed to this orcad across orcad restarts, so a launch that
- * runs before the desktop reconnects (an automation, a CLI agent) still uses the selected account.
- */
+// Persist desktop-pushed account environment so launches before reconnect keep the selected account.
 import { randomUUID } from 'node:crypto'
 import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

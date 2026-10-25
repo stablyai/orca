@@ -1,6 +1,6 @@
 import { setImmediate } from 'node:timers/promises'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CODEX_RESTORE_MAX_OPERATIONS } from './codex-structured-journal-translation-restore'
 import {
   readCodexJournalRecord,

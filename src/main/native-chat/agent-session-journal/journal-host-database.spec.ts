@@ -8,7 +8,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { spawnProcess } from '@orca/process-host'
-import { tearDownRuntime } from '../../runtime/structured-agent-session-runtime-teardown'
+import { tearDownRuntime } from '../../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { journalDatabasePath } from './journal-host-database'
 import {
   closeTestJournalHostDatabases,

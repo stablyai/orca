@@ -1,9 +1,4 @@
-// A worktree identity rename re-keys the layout twice: main migrates its stored sessions first,
-// then the window re-keys its slices on the `worktrees:changed` rename event. The window's next
-// save must leave main's layout model as main's own migration left it, and both must match the
-// model's `identityRenamed` transition, so the save is never the only carrier of the rekey.
-// The event's one producer is the first-work folder rename (first-work-folder-rename.ts), local
-// only and compiled off (ENABLE_FIRST_WORK_FOLDER_RENAME); a paired server's event carries no rename.
+// Main migrates sessions before window handles rename; its next save must agree with identityRenamed, never carry the rekey alone. Only compiled-off local first-work-folder-rename emits this event; paired events omit rename.
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultPersistedState } from '../../../../../../shared/constants'

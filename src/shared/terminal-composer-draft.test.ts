@@ -47,8 +47,7 @@ describe('detectTerminalComposerDraft', () => {
   })
 
   it('keeps a typed draft whose stock placeholder is still rendered to its right', () => {
-    // The placeholder normally clears the moment you type, but a repaint can land the two on the
-    // row together. Classifying that as a placeholder would mask the row the user's text is on.
+    // Repaints can leave the placeholder beside typed text; do not mask that user draft.
     const context = {
       rows: ['\u203a \uc548\ub155Ask Codex to do anything'],
       typedRows: ['\u203a \uc548\ub155'],

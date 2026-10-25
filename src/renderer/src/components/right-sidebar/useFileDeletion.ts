@@ -55,8 +55,7 @@ export function useFileDeletion({
 }: UseFileDeletionParams): UseFileDeletionResult {
   const confirm = useConfirmationDialog()
   const deleteShortcutLabel = useShortcutLabel('fileExplorer.delete')
-  // Why: track in-flight deletes per-path so repeated Del presses on the same
-  // node don't issue duplicate IPC calls; the map is a ref to avoid re-renders.
+  // Deduplicate in-flight deletes per path without rerendering.
   const inFlightRef = useRef<Set<string>>(new Set())
 
   const runDelete = useCallback(
@@ -67,9 +66,7 @@ export function useFileDeletion({
       inFlightRef.current.add(node.path)
 
       const operationOwner = node.operationOwner ?? { kind: 'unresolved' as const }
-      // Why: treat every non-local owner (ssh, runtime, unresolved) as remote
-      // for confirm/error copy, then fail closed below when the route is null
-      // so an unresolved owner never reaches local filesystem authorization.
+      // Unresolved owners use remote copy and fail closed below; they must never reach local filesystem authorization.
       const isRemote = operationOwner.kind !== 'local'
 
       try {
@@ -77,9 +74,7 @@ export function useFileDeletion({
           activeWorktreeId,
           node.operationOwner
         )
-        // Why: remote deletes bypass OS Trash, and undo cannot recover
-        // directories or unreadable files. Batch deletes confirm once up
-        // front instead, so they skip the per-node prompt.
+        // Remote deletes bypass Trash and may be unrecoverable; batches confirm once up front.
         if (isRemote && !options?.skipConfirmation) {
           const confirmed = await confirm({
             title: translate(
@@ -114,19 +109,13 @@ export function useFileDeletion({
           node.path,
           operationRoute
         )
-        // Why: force-save any dirty buffers before trashing so the undo snapshot
-        // reads the user's latest edits from disk — not an older version that
-        // predates debounced autosave or a buffer with autosave disabled.
-        // Quiesce-only would cancel pending timers and discard those edits.
-        // If a save fails, surface the error and abort the delete instead of
-        // silently trashing the stale on-disk content.
+        // Save dirty buffers before snapshot/trash; quiescing alone would discard edits, and failed saves must abort deletion.
         const dirtyFiles = filesToClose.filter((file) => file.isDirty)
         await Promise.all(dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id })))
-        // After saving, quiesce any remaining scheduled autosaves so trailing
-        // writes cannot recreate the file after it's been trashed.
+        // Quiesce trailing autosaves so they cannot recreate trashed files.
         await Promise.all(filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
 
-        // Why: confirmation and autosave can outlive a reconnect or graph replacement; mutations require the owner generation that produced the row.
+        // Confirmation/autosave may outlive reconnects; require the row’s original owner generation.
         operationGuard.assertCurrent()
         const state = useAppStore.getState()
         const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
@@ -141,9 +130,7 @@ export function useFileDeletion({
         }
 
         const parentDir = dirname(node.path)
-        // Why: read file content before deleting so undo can restore it.
-        // We capture content first but only commit the undo entry after the
-        // delete succeeds — otherwise a failed delete would poison the stack.
+        // Snapshot before deletion, but record undo only after success to avoid poisoning the stack.
         let undoContent: string | undefined
         if (!node.isDirectory) {
           try {
@@ -158,8 +145,7 @@ export function useFileDeletion({
               undoContent = rf.content
             }
           } catch {
-            // If we cannot read the file (race, permission), skip undo recording
-            // so a failed undo cannot restore stale content.
+            // Unreadable snapshots cannot safely support undo.
           }
         }
 
@@ -170,7 +156,7 @@ export function useFileDeletion({
           commitFileExplorerOp({
             undo: async () => {
               const currentRoute = operationGuard.assertCurrent()
-              // Why: something may have recreated the path since the delete; undo must not replace it.
+              // Undo must not overwrite a path recreated since deletion.
               assertFileWriteApplied(
                 await writeRuntimeFile(
                   {
@@ -228,9 +214,7 @@ export function useFileDeletion({
           })
         }
 
-        // Why: use targeted refreshDir instead of refreshTree so only the parent
-        // directory is reloaded, preserving scroll position and avoiding redundant
-        // full-tree reloads (the watcher will also trigger a targeted refresh).
+        // Refresh only the parent to preserve scroll position and avoid redundant full-tree reloads.
         await refreshDir(dirname(node.path))
 
         return true
@@ -276,25 +260,18 @@ export function useFileDeletion({
         return
       }
       const roots = selectDeletionRoots(nodes)
-      // Why: the batch confirms whenever any root is a permanent remote delete,
-      // but the selection can also include local roots that only go to the
-      // Trash — so a mixed batch needs copy that keeps that distinction.
+      // Mixed batches must distinguish permanent remote deletion from local Trash.
       const hasLocalDelete = roots.some(isLocalDeleteNode)
       const trashName = isWindows ? 'Recycle Bin' : 'Trash'
-      // Why: selection is cleared once after the entire batch settles rather
-      // than per-node, so no concurrent completion can restore a partial
-      // stale set.
+      // Clear selection after the whole batch so concurrent completions cannot restore stale partial sets.
       void (async () => {
         const deletedRoots = await runBatchDeletion({
           roots,
-          // Why: only remote deletes confirm at all — local deletes go to the
-          // OS Trash and stay prompt-free in batches too.
+          // Local Trash remains prompt-free; only remote roots need confirmation.
           needsConfirmation: roots.some(needsRemoteDeleteConfirmation),
           confirmBatch: () =>
             confirm({
-              // Why: count the full selection, not the filtered roots —
-              // deleting a folder still deletes the selected children inside
-              // it, and the prompt should match what the user sees selected.
+              // Count selected children even when ancestor roots subsume their deletes.
               title: hasLocalDelete
                 ? translate(
                     'auto.components.right.sidebar.useFileDeletion.77fdc36183',

@@ -57,8 +57,7 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
 }
 
 function readBoundedOscTitle(data: string, titleStart: number, titleEnd: number): string {
-  // Why: PTY output can contain pasted or remote-controlled OSC titles; keep
-  // downstream title detection bounded while preserving trailing status words.
+  // Bound remote/pasted OSC title work while retaining trailing status words.
   const length = titleEnd - titleStart
   if (length <= MAX_OSC_TITLE_CHARS) {
     return data.slice(titleStart, titleEnd)
@@ -78,8 +77,7 @@ export function extractLastOscTitle(data: string): string | null {
 
   let last: string | null = null
   let searchStart = 0
-  // Why: raw PTY chunks can include large pasted content. Parse OSC titles
-  // directly instead of running a global regex over the whole chunk.
+  // Direct scanning avoids a global regex over arbitrarily large pasted PTY chunks.
   while (searchStart < data.length) {
     const start = data.indexOf('\x1b]', searchStart)
     if (start === -1) {

@@ -54,7 +54,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
 
   const setActionsRootNode = React.useCallback(
     (node: HTMLDivElement | null): void => {
-      // Why: the deferred floating-terminal toggle belongs to this settings control.
+      // Cancel this control’s deferred floating-terminal toggle on detach.
       if (!node) {
         cancelFloatingTerminalToggleFrame()
       }
@@ -83,8 +83,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
         (file) => file.filePath === filePath && file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       )
       if (existingFile && !existingFile.isDirty) {
-        // Why: a prior failed read can leave a focused error tab. Reopen a
-        // clean tab so the editor retries the file load.
+        // Reopen clean error tabs so a prior failed read can retry.
         closeFile(existingFile.id)
       }
       openFile(

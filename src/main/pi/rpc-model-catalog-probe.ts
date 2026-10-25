@@ -15,18 +15,16 @@ import { PI_UNMAPPED_THINKING_LEVELS } from './rpc-options'
 
 export type PiModelCatalogProbeDeps = {
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
-  /** Rereads that environment when Pi is not found in it; absent never retries. */
+  /** Refresh once on a missing Pi binary; absent disables retry. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   resolveCommand?: typeof resolveCliCommand
-  /** Test seams; production runs the shared supervised listing. */
   probeVersion?: AgentCliVersionReader
   runListing?: typeof runAgentModelCatalogListing
   homePath?: string
 }
 
-/** Pi's table names each model and whether it reasons; its live thinking menu is model-specific,
- *  so a reasoning model lists the levels every map keeps and names no default. */
+/** Listings omit default/model-specific thinking choices; expose only levels common to reasoning maps. */
 export function piModelCatalogFromListing(stdout: string): AgentModelCatalogSuccess['models'] {
   return parsePiModels(stdout).map((model) => ({
     id: model.id,
@@ -38,7 +36,6 @@ export function piModelCatalogFromListing(stdout: string): AgentModelCatalogSucc
   }))
 }
 
-/** Lists Pi's models with `pi --list-models`, under the binary and environment its chats run. */
 export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentModelCatalogProbe {
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
     const cwd = deps.homePath ?? homedir()
@@ -53,7 +50,6 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
     if ((await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)).status === 'tooOld') {
       throw new Error(`pi at ${command} does not run structured chats`)
     }
-    // The chat launch's own env rules; only the arguments differ.
     const launch = buildPiRpcLaunch({
       command,
       cwd,

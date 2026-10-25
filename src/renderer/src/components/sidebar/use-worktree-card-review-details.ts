@@ -89,7 +89,7 @@ export function useWorktreeCardReviewDetails({
       : ''
   // Saved workspace bindings keep equal Linear identifiers separate.
   const nextLinearSourceContext = getWorkspaceAttachmentSourceContext('linear', repo, worktree)
-  // Why: every workspace write rebuilds this object; holding it while equal keeps the card's Linear fetch effects from re-running.
+  // Preserve equal source-context identity so metadata writes do not retrigger Linear fetches.
   const [linearSourceContext, setLinearSourceContext] = useState(nextLinearSourceContext)
   if (!areTaskSourceContextsEqual(linearSourceContext, nextLinearSourceContext)) {
     setLinearSourceContext(nextLinearSourceContext)

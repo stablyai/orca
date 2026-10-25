@@ -7,23 +7,24 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { useAppStore } from '@/store'
 import {
   beginTaskPageGitHubWorkItemMutation,
-  canStartTaskPageGitHubWorkItemMutation,
+  canStartTaskPageGitHubWorkItemMutation
+} from '@/components/task-page/github/task-page-github-work-item-mutations'
+import {
   confirmTaskPageGitHubWorkItemMutation,
   rollbackTaskPageGitHubWorkItemMutation
-} from '@/components/task-page-github-work-item-mutations'
-import type { TaskPageGitHubMutationIntent } from '@/components/task-page-github-work-item-mutation-patches'
-import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page-github-work-item-mutation-types'
+} from '@/components/task-page/github/task-page-github-work-item-mutation-lifecycle'
+import type { TaskPageGitHubMutationIntent } from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
+import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page/github/task-page-github-work-item-mutation-types'
 import {
   getTaskPageGitHubSoftHiddenItemKeys,
   subscribeTaskPageGitHubMutationRegistry,
   setTaskPageGitHubMutationQueryKey
-} from '@/components/task-page-github-work-item-mutation-registry'
+} from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 import { useMountedRef } from './useMountedRef'
 
 export type UseTaskPageGitHubWorkItemMutationArgs = {
   queryKey: string
   query: ParsedTaskQuery
-  /** Local gh viewer login only; may be null. */
   viewerLogin: string | null
   patchWorkItem: TaskPageGitHubPatchWorkItem
 }
@@ -32,7 +33,7 @@ export function shouldSkipLocalViewerQualifiers(sourceContext?: TaskSourceContex
   if (!sourceContext) {
     return false
   }
-  // Why: local gh viewer must not evaluate @me soft-hide for SSH/environment rows.
+  // The local gh viewer cannot evaluate @me soft-hide for SSH/environment rows.
   const hostKind = parseExecutionHostId(sourceContext.hostId)?.kind
   if (hostKind === 'ssh' || hostKind === 'runtime') {
     return true
@@ -158,7 +159,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
           serverEntity,
           patchWorkItem,
           sourceContext: input.sourceContext,
-          // Quiet revalidate: mark dirty; TaskPage runner is registered separately.
+          // The separately registered TaskPage runner performs the revalidation.
           scheduleQuiet: false
         })
         if (confirmed === 'confirmed') {

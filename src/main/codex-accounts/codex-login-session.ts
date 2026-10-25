@@ -145,29 +145,33 @@ async function runCodexLoginProcess(
       }
     }
 
-    // Keep stderr from splitting a streamed auth URL before its one-time publication.
-    let stdoutText = ''
+    // Browser link is on stderr, device-auth on stdout; per-stream buffers stop interleaving splits.
     let publishedAuthUrl = false
-    const publishAuthUrl = (chunk: Buffer): void => {
-      if (publishedAuthUrl) {
-        return
-      }
-      stdoutText = `${stdoutText}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
-      if (deviceAuth) {
-        const prompt = parseCodexDeviceAuthPrompt(stdoutText)
-        if (prompt) {
-          publishedAuthUrl = true
-          deviceAuth.onPrompt(prompt)
+    const readLoginStream = (): ((chunk: Buffer) => void) => {
+      let text = ''
+      return (chunk) => {
+        appendOutput(chunk)
+        if (publishedAuthUrl) {
+          return
         }
-        return
-      }
-      const authUrl = parseCodexLoginAuthUrl(stdoutText)
-      if (authUrl) {
-        publishedAuthUrl = true
-        dependencies.onAuthUrl(authUrl)
-        openAuthUrl?.(authUrl)
+        text = `${text}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
+        if (deviceAuth) {
+          const prompt = parseCodexDeviceAuthPrompt(text)
+          if (prompt) {
+            publishedAuthUrl = true
+            deviceAuth.onPrompt(prompt)
+          }
+          return
+        }
+        const authUrl = parseCodexLoginAuthUrl(text)
+        if (authUrl) {
+          publishedAuthUrl = true
+          dependencies.onAuthUrl(authUrl)
+          openAuthUrl?.(authUrl)
+        }
       }
     }
+    const [readStdout, readStderr] = [readLoginStream(), readLoginStream()]
 
     let timeout: ReturnType<typeof setTimeout> | null = null
     let authWatchInterval: ReturnType<typeof setInterval> | null = null
@@ -187,9 +191,8 @@ async function runCodexLoginProcess(
         clearTimeout(postAuthExitTimeout)
         postAuthExitTimeout = null
       }
-      child.stdout?.off('data', appendOutput)
-      child.stdout?.off('data', publishAuthUrl)
-      child.stderr?.off('data', appendOutput)
+      child.stdout?.off('data', readStdout)
+      child.stderr?.off('data', readStderr)
       child.off('error', onError)
       child.off('close', onClose)
       spawnConfig.interactiveLogin?.cleanup?.()
@@ -277,9 +280,8 @@ async function runCodexLoginProcess(
       })
     }
 
-    child.stdout?.on('data', appendOutput)
-    child.stdout?.on('data', publishAuthUrl)
-    child.stderr?.on('data', appendOutput)
+    child.stdout?.on('data', readStdout)
+    child.stderr?.on('data', readStderr)
     child.on('error', onError)
     child.on('close', onClose)
   })

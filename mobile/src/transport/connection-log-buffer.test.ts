@@ -34,7 +34,6 @@ describe('connection log buffer', () => {
 
     store.append('host-a', entry(2))
     expect(store.get('host-a')).not.toBe(first)
-    // Empty hosts must also be referentially stable (useSyncExternalStore).
     expect(store.get('host-b')).toBe(store.get('host-b'))
   })
 

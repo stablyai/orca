@@ -25,15 +25,13 @@ describe('getTabIdsAwaitingHostHydrationRemount', () => {
   })
 
   it('ignores tabs that never parked', () => {
-    // A tab whose shell merely exited also has no PTY; remounting it on every
-    // repos:changed would churn a terminal the user is looking at.
+    // No PTY can also mean an exited shell; only parked panes may remount on repos:changed.
     expect(getTabIdsAwaitingHostHydrationRemount(baseState as never)).toEqual([])
   })
 
   it('remounts a parked tab only once per park', () => {
     recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
     expect(getTabIdsAwaitingHostHydrationRemount(baseState as never)).toEqual(['tab-1'])
-    // repos:changed fires repeatedly; the second pass must not remount again.
     expect(getTabIdsAwaitingHostHydrationRemount(baseState as never)).toEqual([])
   })
 
@@ -41,7 +39,6 @@ describe('getTabIdsAwaitingHostHydrationRemount', () => {
     recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
     const unresolved = { ...baseState, repos: [] }
     expect(getTabIdsAwaitingHostHydrationRemount(unresolved as never)).toEqual([])
-    // Once the repo lands, the still-parked tab is recovered.
     expect(getTabIdsAwaitingHostHydrationRemount(baseState as never)).toEqual(['tab-1'])
   })
 

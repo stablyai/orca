@@ -103,9 +103,7 @@ describe('relay database transient errors', () => {
     expect(isRelayDatabaseTransientError(error)).toBe(true)
   })
 
-  // Staging B1: pg_terminate_backend mid-request answered /v1/assign with 500. A dropped
-  // connection is 503 + Retry-After, as 08006 always was; transaction() still never retries it,
-  // since the commit outcome is unknown.
+  // Database-layer drops answer 503/Retry-After (staging B1); never retry transaction work with unknown commit outcome.
   it('classifies a mid-statement drop only from the database layer', async () => {
     const failures = [
       (): Error => new Error('Connection terminated unexpectedly'),

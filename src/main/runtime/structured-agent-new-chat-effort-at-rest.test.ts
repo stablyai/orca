@@ -1,5 +1,4 @@
-// A new chat reads its options at rest before its agent starts. That answer must name the model and
-// effort the catalog's first frame showed for its workspace, or the picker changes before any start.
+// Before start, new-chat options must match the workspace catalog's first model/effort frame so the picker stays stable.
 
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

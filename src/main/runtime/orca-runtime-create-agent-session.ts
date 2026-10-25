@@ -36,7 +36,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     agentTeamsEnv?: Record<string, string>
   ): Record<string, string>
 
-  abstract getAuthoritativeWindow(): BrowserWindow
+  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
 
   abstract waitForTerminalHandle(tabId: string, timeoutMs?: number): Promise<string>
 
@@ -102,15 +102,13 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
       return { ...replayed, disposition: 'replayed' }
     }
     if (now - operationTimestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
-      // Why: once a tombstone could have expired, an unseen replay must never
-      // be reinterpreted as permission to start another fresh agent.
+      // Expired tombstones must never turn unseen retries into fresh-spawn permission.
       throw new Error('agent_session_operation_expired')
     }
     let retainReplayFence = false
     const reclaim: AgentSessionCreateOperation['reclaim'] = {}
     const operation = (async (): Promise<RuntimeCreateAgentSessionResult> => {
-      // Why: reserve the client operation before any async preflight so concurrent retries cannot
-      // both observe an empty ledger and reach the execution owner independently.
+      // Reserve before async preflight so racing retries cannot independently dispatch.
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
       if (
         !(await this.executionOwnerSupportsAgentSessionOperation(
@@ -119,12 +117,11 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           caller.signal
         ))
       ) {
-        // Why: the exact legacy launch remains client-owned until this pre-spawn check succeeds.
+        // Legacy launch remains client-owned until this pre-spawn check passes.
         throw new Error('agent_session_legacy_required')
       }
       const startupCwd = this.resolveWorkspaceTerminalStartupCwd(workspace, request.startupCwd)
-      // Why: aliases and object property order are client syntax, not authority;
-      // fingerprint the host-resolved fields in one fixed order.
+      // Fingerprint resolved authority in fixed order; aliases/property order are only client syntax.
       const resolvedFingerprint = createHash('sha256')
         .update(
           JSON.stringify([
@@ -163,8 +160,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
       const operationLeafId =
         request.placement?.leafId ?? deterministicAgentSessionUuid(`${executionOperationId}:leaf`)
       const operationHandle = `term_${deterministicAgentSessionUuid(`${executionOperationId}:handle`)}`
-      // Why: recorded before dispatch — this handle is exported into the PTY as
-      // ORCA_TERMINAL_HANDLE, so it is the only name a lost spawn can be re-found by.
+      // Record before dispatch: ORCA_TERMINAL_HANDLE is the only identity recoverable after a lost spawn.
       reclaim.identity = {
         worktreeId: workspace.id,
         connectionId: workspace.connectionId ?? null,
@@ -172,8 +168,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
       }
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
-          // A fresh agent the host planner builds; the request has no surface field, so its launch
-          // counts as `unknown`.
+          // No requested surface: the host-planned launch uses unknown.
           startupAgent: request.agent,
           ...(request.prompt ? { startupPrompt: request.prompt } : {}),
           startupPromptDelivery: request.promptDelivery,
@@ -181,7 +176,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           startupPromptCarry: 'force-line',
           ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
           launchPreferences: request.launchPreferences,
-          // Why outside both fingerprints: the desktop re-prepares it per attempt; the first spawn wins.
+          // Account env is re-prepared per attempt; exclude from fingerprints and let first spawn win.
           accountEnv: request.accountEnv,
           terminalImageViewerSupported: caller.terminalImageViewerSupported,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
@@ -231,8 +226,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
       return result
     } catch (error) {
       if (retainReplayFence) {
-        // Why: the first PTY may still be alive; replay the same failure until
-        // expiry instead of interpreting a lost outcome as a fresh spawn grant.
+        // Unknown outcome may hide a live PTY; replay failure until expiry, never grant another spawn.
         expireOperation()
       } else if (this.agentSessionCreateOperations.get(operationKey)?.promise === operation) {
         this.agentSessionCreateOperations.delete(operationKey)
@@ -241,9 +235,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     }
   }
 
-  // Why: the host may still hold the PTY this operation launched. Adoption-only —
-  // this never spawns and never kills, so an unreachable or silent host just replays
-  // the original failure instead of authorising anything.
+  // Adoption only: never spawn/kill during recovery; unreachable or ambiguous hosts replay the original failure.
   private async reclaimFencedAgentSessionSpawn(
     identity: AgentSessionCreateReclaimIdentity | undefined
   ): Promise<RuntimeTerminalCreate | null> {

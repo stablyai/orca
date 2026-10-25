@@ -1,15 +1,4 @@
-/**
- * zustand middleware that samples store writes during a suspected React commit
- * cascade, so the crash report names the code driving it.
- *
- * Why middleware and not a setState patch: create() hands slices the `set`
- * closure built before `api` exists (zustand/esm/vanilla.mjs), so patching
- * useAppStore.setState afterwards misses every slice-internal set() — and the
- * slices are where the writes are. Wrapping the creator catches both, the same
- * way store-listener-census has to reach the inner api to see hook subscribers.
- *
- * Cost when no cascade is suspected: one boolean field load per write.
- */
+/** Sample suspected commit cascades through creator middleware: late store.setState patches miss slice set closures captured before api exists. Wrap both slice/external writes for crash attribution; idle cost is one boolean read per write. */
 import {
   noteReactCommitCascadeStoreWrite,
   reactCommitCascadeWriteProbe
@@ -34,8 +23,7 @@ export function withReactCommitCascadeWriteProbe<TState>(
           try {
             noteReactCommitCascadeStoreWrite(wrapped, args[0])
           } catch {
-            // This is the app's universal write path: a diagnostic that throws here
-            // would drop the write itself.
+            // Never throw from diagnostics on the universal write path or the app write is lost.
           }
         }
         if (args[1] === true) {

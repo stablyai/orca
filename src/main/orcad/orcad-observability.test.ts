@@ -36,7 +36,7 @@ describe('orcad trace file', () => {
       exit: () => {},
       getAppMetrics: () => []
     })
-    // The lane is off in CI and when diagnostics are disabled; this asserts the default host.
+    // Clear diagnostics gates to exercise the default host.
     for (const name of [...CI_ENV, 'ORCA_DIAGNOSTICS_DISABLED']) {
       vi.stubEnv(name, '')
     }
@@ -93,7 +93,6 @@ describe('orcad trace file', () => {
   })
 
   it('still starts when the logs folder cannot be opened, with tracing off', () => {
-    // A regular file where the folder belongs fails the open as a read-only mount or EACCES does.
     writeFileSync(join(dataRoot, 'logs'), 'not a folder')
     const warn = vi.mocked(console.warn)
 
@@ -109,8 +108,7 @@ describe('orcad trace file', () => {
   })
 })
 
-// Booting orcad here would need its whole runtime; the wiring is pinned the way the agent-status
-// store's is, by the entry point's own text.
+// Inspect entry wiring without booting the full runtime.
 it('orcad installs the trace file before its runtime and closes it after every quit handler', () => {
   const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
   const install = entry.indexOf('closeOrcadObservability = installOrcadObservability()')
@@ -120,6 +118,5 @@ it('orcad installs the trace file before its runtime and closes it after every q
   expect(quit).toBeGreaterThan(-1)
   const close = entry.indexOf('      closeOrcadObservability()\n', quit)
   expect(close).toBeGreaterThan(quit)
-  // A failing quit handler must not skip the close.
   expect(entry.slice(quit, close)).toContain('} finally {')
 })

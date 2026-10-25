@@ -18,7 +18,6 @@ export function handleRepoHeaderActionPointerDown(event: React.PointerEvent<HTML
 export function handleRepoHeaderCollapseAffordancePointerDown(
   event: React.PointerEvent<HTMLElement>
 ): void {
-  // Why: keep collapse-chevron clicks from arming the repo-header row drag.
   event.stopPropagation()
 }
 

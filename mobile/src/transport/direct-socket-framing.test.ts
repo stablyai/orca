@@ -13,7 +13,11 @@ describe('legacy direct socket framing', () => {
     const host = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
     let latched = false
     const sent: string[] = []
-    const onProtocolError = vi.fn()
+    let reportError!: (error: Error) => void
+    const protocolError = new Promise<Error>((resolve) => {
+      reportError = resolve
+    })
+    const onProtocolError = vi.fn((error: Error) => reportError(error))
     const framing = createDirectSocketFraming({
       framing: 'legacy',
       mayUseLegacy: () => !latched,
@@ -38,10 +42,12 @@ describe('legacy direct socket framing', () => {
     })
     framing.start()
     framing.handleInbound(JSON.stringify({ type: 'e2ee_ready' }))
-    await vi.waitFor(() => expect(onProtocolError).toHaveBeenCalledOnce())
+    await expect(protocolError).resolves.toBeInstanceOf(PairedE2EEDowngradeError)
+    expect(onProtocolError).toHaveBeenCalledOnce()
 
     expect(onProtocolError.mock.calls[0]?.[0]).toBeInstanceOf(PairedE2EEDowngradeError)
     expect(sent).toHaveLength(1)
     expect(JSON.parse(sent[0]!)).toMatchObject({ type: 'e2ee_hello' })
+    framing.dispose()
   })
 })

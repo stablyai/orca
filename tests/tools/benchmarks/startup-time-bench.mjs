@@ -48,17 +48,12 @@ function parseArgs(argv) {
     timeoutMs: 240000,
     stateProfile: 'none',
     sessionTabs: 0,
-    // Seeds N SSH targets pointed at TEST-NET-3 (RFC 5737, guaranteed
-    // unroutable) and lists them as live-at-shutdown, so startup reconnect
-    // dials a host that never answers. Reproduces "one asleep remote machine
-    // delays every local terminal".
+    // Seed TEST-NET-3 targets connected at shutdown so startup attempts reconnect, modeling one unreachable host delaying local terminals.
     sshUnreachableTargets: 0,
     githubRepos: 0,
     ghHangMs: 0,
     waitForEvent: 'did-finish-load',
-    // How long the app stays alive after did-finish-load before the harness
-    // kills it. Raise to let background work (e.g. the async win32 ACL grant)
-    // complete the way it would in a real session.
+    // Linger after did-finish-load to capture trailing/background milestones such as async Windows ACL work.
     lingerMs: 500
   }
   for (let i = 2; i < argv.length; i++) {
@@ -110,11 +105,7 @@ function parseArgs(argv) {
   return args
 }
 
-/**
- * Build a userData tree shaped like a real long-lived profile. The file count
- * drives the win32 icacls walk cost; contents are irrelevant, so files are
- * tiny. Layout mirrors Chromium cache dirs plus a few Orca-owned dirs.
- */
+// Seed tiny Chromium/Orca cache files; count/tree shape drives icacls walk cost, contents do not.
 function ensureFixture(fixtureDir, options) {
   const { fileCount, stateProfile, sessionTabs, githubRepos, sshUnreachableTargets } = options
   const manifestPath = join(fixtureDir, 'bench-fixture-manifest.json')
@@ -179,13 +170,7 @@ function ensureFixture(fixtureDir, options) {
   console.log(`[fixture] done in ${((Date.now() - started) / 1000).toFixed(1)}s`)
 }
 
-/**
- * Fake `gh` that hangs like a blackholed api.github.com. The hang lives in a
- * child process (ping/sleep) that inherits the probe's stdio pipes, so even
- * after a probe timeout kills the shim itself, the child keeps the pipe open —
- * reproducing the mechanism that lets a hung real gh outlive execSync's
- * timeout on the Electron main thread.
- */
+// Hang fake gh in a child holding inherited stdio, reproducing blackholed API children outliving the parent’s execSync timeout.
 function writeGhShim(fixtureDir, ghHangMs) {
   if (!ghHangMs) {
     return null
@@ -208,8 +193,7 @@ function writeGhShim(fixtureDir, ghHangMs) {
 }
 
 function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
-  // Why: keep Codex home work inside the benchmark fixture and keep the
-  // default-ON rollout from adding unrelated migration work to timings.
+  // Isolate Codex home and rollout migration work inside the fixture to keep timings/profile effects controlled.
   const isolatedHome = join(fixtureDir, 'home')
   mkdirSync(isolatedHome, { recursive: true })
   const env = {
@@ -246,10 +230,7 @@ function killProcessTree(proc) {
     }
     return
   }
-  // Why the whole group and not just the child: Electron's helper processes
-  // inherit the stderr pipe, so killing only the launcher leaves them holding it
-  // open — the harness then never sees EOF and never exits after its last run.
-  // Requires the `detached: true` spawn below.
+  // Kill the detached launcher group: surviving Electron helpers retain stderr and prevent EOF/harness exit.
   try {
     process.kill(-proc.pid, 'SIGKILL')
   } catch {
@@ -286,8 +267,7 @@ function parseStartupLine(line) {
 
 function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
   return new Promise((resolvePromise) => {
-    // Why: npm's `electron` package exposes the platform-specific executable;
-    // hardcoding electron.exe made this benchmark unusable on macOS/Linux.
+    // Resolve electron package’s platform executable; hardcoded electron.exe breaks macOS/Linux.
     const command = exe ?? require('electron')
     const commandArgs = exe ? [] : [repoRoot]
     const events = []
@@ -295,8 +275,7 @@ function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
     const child = spawn(command, commandArgs, {
       env: launchEnv,
       stdio: ['ignore', 'ignore', 'pipe'],
-      // Why: gives the launcher its own process group so teardown can reap every
-      // Electron helper it spawned (see killProcessTree).
+      // Own a process group so teardown can reap all Electron helpers.
       detached: process.platform !== 'win32'
     })
     let finished = false
@@ -307,8 +286,7 @@ function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
       }
       finished = true
       clearTimeout(timer)
-      // Keep the app alive briefly so trailing diagnostic lines (and, with
-      // --linger-ms raised, background work like the async ACL grant) finish.
+      // Linger for trailing diagnostics/background work, including async ACL grant.
       setTimeout(() => {
         killProcessTree(child)
         resolvePromise({ outcome, events })
@@ -377,8 +355,7 @@ function derivePhases(events) {
       'renderer-startup-hydration-done'
     ),
     totalToWorkspaceReady: eventTime(events, 'renderer-startup-hydration-done', 'harness'),
-    // Time the terminal-restoration gate spent on SSH reconnect, and on the
-    // main-process barrier that used to fence worktree hydration.
+    // Measure terminal restoration’s SSH reconnect and former main hydration barrier.
     rendererSshReconnectMs: eventDetailsNumber(events, 'renderer-ssh-reconnect-done', 'durationMs'),
     rendererStartupBarrierMs:
       eventDetailsNumber(events, 'renderer-git-environment-barrier-await-done', 'durationMs') ??
@@ -390,8 +367,7 @@ function derivePhases(events) {
         'renderer-first-window-services-await-done',
         'renderer-reconnect-terminals-done'
       ),
-    // Worst single main-thread stall observed by the event-loop probe — the
-    // direct measurement of issue #7225's "Not Responding" freeze.
+    // Record worst event-loop stall as the direct #7225 freeze measurement.
     maxEventLoopStallMs: maxEventDetailsNumber(events, 'event-loop-stall', 'maxGapMs')
   }
 }

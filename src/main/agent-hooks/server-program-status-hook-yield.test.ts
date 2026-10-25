@@ -239,6 +239,7 @@ describe('OSC 7501 status beside hooks', () => {
       programStatus({ state: 'done', agentType: 'pi' })
       vi.advanceTimersByTime(1_000)
       programStatus({ state: 'working', agentType: 'pi' })
+      expect(paneRow()?.state).toBe('waiting')
       vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS)
       expect(paneRow()?.state).toBe('working')
     })

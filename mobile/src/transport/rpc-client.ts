@@ -4,20 +4,17 @@ import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 
-// Re-export shim: the options type moved to the port module with the sender it belongs to,
-// and re-exporting is what keeps that move from touching every importer.
 export type { SendRequestOptions } from './unvalidated-rpc-request-port'
 
 type SubscribeOptions = {
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  /** Extra top-level wire fields, sent with the subscribe and every resend and unsubscribe of it. */
+  // Repeat these top-level fields on subscription replay and unsubscribe.
   envelope?: RpcEnvelopeFields
 }
 
 type StreamingListener = (result: unknown) => void
 
-// Still structurally carries the raw sender, so holding a client is still holding the port —
-// which is why the boundary is inventoried rather than merely declared.
+// Holding a client also exposes the raw port, so the boundary inventory must cover client holders.
 export type RpcClient = UnvalidatedRpcRequestPort & {
   subscribe: (
     method: string,
@@ -33,29 +30,14 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null
   getLastInboundAt?: () => number | null
-  /**
-   * The logical authority epoch, advanced by `StableLogicalRpcClient.migrateTo`. Read-only and
-   * optional so a holder of a bare `RpcClient` can scope cached work to it without every
-   * implementation growing a counter it does not have.
-   */
+  // Optional logical authority epoch for scoping cached work across migrateTo; physical clients need no counter.
   getGeneration?: () => number
   /** False when this transport would refuse an `envelope`; absent means it carries one. */
   carriesRpcEnvelope?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
-  /**
-   * Must settle every pending `sendRequest` promise before returning.
-   *
-   * `StableLogicalRpcClient.migrateTo` no longer rejects pendings itself — the physical
-   * sender is the only layer that knows whether a request reached the wire, so
-   * `previous.close()` is the sole settlement path for the retiring generation. An
-   * implementation that leaves a request pending strands its caller for good.
-   *
-   * Requests that did reach the wire must reject with a delivery-unknown error
-   * (`markRpcDeliveryUnknown`), since the host may already have executed them. Pinned
-   * against the real clients in `rpc-client-delivery-ambiguity.test.ts` (direct) and
-   * `mobile-relay-rpc-session.test.ts` (relay) — a new implementation needs its own case.
-   */
+  // Settle every pending request before returning; only the physical sender knows which reached the wire.
+  // Reject written requests with markRpcDeliveryUnknown: the host may already have executed them.
   close: () => void
 }
 

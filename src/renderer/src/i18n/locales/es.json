@@ -1147,6 +1147,11 @@
         "openInChat": "Esta conversación de {{value0}} está abierta en un chat. Actualiza el historial de sesiones para abrirla.",
         "ownershipUnknown": "Orca no pudo confirmar quién es el propietario de esta conversación de {{value0}}. Actualiza el historial de sesiones e inténtalo de nuevo."
       },
+      "composerCreateHandoff": {
+        "reopen": "Reabrir",
+        "preparationTimedOut": "Se agotó el tiempo de preparación del worktree.",
+        "needsInput": "No se creó el worktree porque necesita más información."
+      },
       "pendingWorktreeCreation": {
         "checkingOutFiles": "Extrayendo archivos… {{percent}}%",
         "provisioningVm": "Provisionando VM…",
@@ -3520,16 +3525,28 @@
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
-            "retryingTitle": "Reconectando con el entorno de ejecución remoto",
             "pairingRefusedTitle": "Este host ya no acepta este equipo",
             "pairingRefusedBody": "Orca no pudo volver a emparejarse con él por SSH. No se detuvo nada en el host. Vuelve a conectar para intentarlo de nuevo.",
             "disconnectedTitle": "Remote runtime disconnected",
-            "retryingBody": "Orca está reintentando automáticamente. Este terminal se reanudará si vuelve la conexión.",
             "disconnectedBody": "Se detuvieron los reintentos automáticos. Vuelva a conectarse para reanudar esta sesión de terminal.",
-            "reconnectButton": "Reconnect",
+            "reconnectButton": "Reconectar",
             "signInTitle": "Esperando el inicio de sesión SSH",
             "signInBody": "Este terminal continuará por sí solo cuando inicie sesión en el host.",
-            "signInButton": "Iniciar sesión"
+            "signInButton": "Iniciar sesión",
+            "serverRestartingTitle": "{{server}} se está reiniciando",
+            "serverRestartingBody": "Orca se reconectará cuando el servidor vuelva, y los terminales se reanudarán entonces.",
+            "streamStalledTitle": "El terminal dejó de responder",
+            "streamStalledBody": "{{server}} dejó de enviar la salida de este terminal. Orca lo está reconectando automáticamente.",
+            "sessionEndedTitle": "Reconectando el terminal",
+            "sessionEndedBody": "{{server}} cerró el flujo de este terminal. Orca lo está reconectando automáticamente.",
+            "waitingTitle": "Esperando a {{server}}",
+            "waitingBody": "Orca reconectará este terminal cuando el servidor vuelva a ofrecerlo o cambie la conexión. Pulsa Reconectar para intentarlo ahora.",
+            "downFor": "Sin conexión desde hace {{duration}}",
+            "tailscaleHint": "Comprueba la ruta de Tailscale:",
+            "fallbackServerName": "el servidor",
+            "connectionLostTitle": "Reconectando con {{server}}",
+            "connectionLostBody": "Se perdió la conexión con el servidor. Orca está reintentando automáticamente y los terminales se reanudarán cuando vuelva.",
+            "reattachingBody": "Orca está reconectando automáticamente este terminal a {{server}}."
           },
           "TerminalRestoringPlaceholder": {
             "restoring": "Restaurando terminal…"
@@ -3553,11 +3570,7 @@
             "downloadOpenWithDefaultApp": "Descargar y abrir con la aplicación predeterminada",
             "downloadOpenFailed": "No se pudo descargar '{{value0}}'.",
             "openInThisGroup": "Abrir en este grupo",
-            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo",
-            "fileInOtherWorkspace": "Este archivo está en {{value0}}",
-            "fileInAnotherWorkspace": "Este archivo está en otro espacio de trabajo",
-            "openInOwningWorkspace": "Abrir allí",
-            "openedHereReadOnly": "Abierto aquí en modo de solo lectura"
+            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Anfitrión no disponible",
@@ -11913,7 +11926,8 @@
           "failed": "Update failed",
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Las compilaciones de desarrollo deben actualizarse desde su copia del código fuente.",
-          "legacyHelp": "Las actualizaciones remotas no están disponibles para este servidor. Actualiza Orca en el servidor."
+          "legacyHelp": "Las actualizaciones remotas no están disponibles para este servidor. Actualiza Orca en el servidor.",
+          "managedOverSshHelp": "Este escritorio actualiza este servidor por SSH. Usa Actualizar en su fila de Servidores remotos de Orca."
         },
         "BrowserLinkRoutingSetting": {
           "description": "Abre los enlaces http(s) del terminal, Markdown y el editor en el navegador integrado de Orca. {{shortcut}} siempre usa el navegador del sistema.",
@@ -12687,7 +12701,10 @@
             "forgetDescription": "Desvincula este servidor aquí sin contactar con su host. Si el host vuelve, es posible que el servidor siga ejecutándose allí.",
             "orcaVersion": "Orca en este host: {{version}}",
             "stopOrcaDescription": "Detiene Orca en el host SSH y lo quita de esta lista.",
-            "updateOrcaOnHost": "Actualizar Orca en este host"
+            "updateOrcaOnHost": "Actualizar Orca en este host",
+            "updateAnyway": "Actualizar de todos modos",
+            "notNow": "Ahora no",
+            "forceUpdate": "Hay terminales en ejecución en este host. Seguirán ejecutándose durante la actualización y sus paneles se reconectarán cuando se reinicie el servidor de Orca."
           },
           "title": "Orca en tus hosts SSH",
           "description": "Orca se instala en un host SSH vacío y se mantiene actualizado.",
@@ -14655,6 +14672,17 @@
             "scanning": "Analizando {{value0}}",
             "checking": "Comprobando {{value0}}",
             "scanned": "Analizados {{value0}}"
+          },
+          "ssh": {
+            "unrestored": {
+              "port": {
+                "row": {
+                  "04adb5f5e7": "No se pudo iniciar: {{value0}}",
+                  "4c119f5e2a": "Aún no iniciado",
+                  "b817a96fcf": "Detenido: {{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -15948,7 +15976,6 @@
           "6c4f1a8d2e": "Los detalles del check no están disponibles."
         },
         "EditorPanelHeader": {
-          "readOnlyBadge": "Solo lectura",
           "fb8331694e": "Abrir vista previa al lado",
           "4157f3cbf3": "Abrir vista previa de Markdown",
           "269ce4842b": "Copiar ruta relativa",
@@ -19366,7 +19393,9 @@
           "switchToChatView": "Continuar en la interfaz de chat"
         },
         "BrowserTab": {
-          "closeOthers": "Cerrar otras"
+          "closeOthers": "Cerrar otras",
+          "muteTab": "Silenciar pestaña",
+          "unmuteTab": "Reactivar sonido de la pestaña"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Cerrar otras"

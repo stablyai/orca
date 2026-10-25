@@ -15,8 +15,7 @@ export {
   type FrameDecoderOptions
 } from '../shared/relay-frame-decoder-contract'
 
-// Why: the relay runs standalone on remote hosts with no renderer to surface
-// decode faults, so an omitted handler must still reach stderr.
+// Default faults to stderr because standalone relays have no renderer to surface them.
 export class FrameDecoder extends SharedFrameDecoder {
   constructor(
     onFrame: (frame: DecodedFrame) => void,

@@ -1,11 +1,4 @@
-/**
- * orcad's SecretStore: credentials are sealed on the execution host, with a master key the host
- * owns, kept in an owner-only file beside the credentials in `~/.orca`, mixed with the machine ID.
- *
- * Why always "available": answering false makes every credential writer fall back to plaintext.
- * When the recorded key cannot be loaded (changed machine, unreadable record), seal and unseal
- * throw instead, so saves fail closed and existing sealed files are left untouched.
- */
+// Always report available to prevent plaintext fallback; throw on seal/unseal when the key is unavailable.
 import type { SecretStore } from '../../shared/secret-store'
 import { sweepStaleRecordStaging } from './orcad-secret-key-record'
 import {
@@ -17,7 +10,6 @@ import {
 import { openOrcadSecret, sealOrcadSecret } from './orcad-secret-sealing'
 
 export type OrcadSecretStore = SecretStore & {
-  /** Resolves whether sealing works now, i.e. the key loaded. */
   prepare(options: OrcadSecretStorePrepareOptions): Promise<boolean>
 }
 

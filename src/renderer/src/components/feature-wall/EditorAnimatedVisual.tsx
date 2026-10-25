@@ -7,9 +7,7 @@ import { TB_ICON, ToolbarBtn, ToolbarSep } from './editor-animated-toolbar-icons
 import { activeLineClass, caretClass } from './editor-animated-visual-markup'
 import { useEditorAnimatedVisualAnimation } from './use-editor-animated-visual-animation'
 
-// Why: the visual leans on direct DOM mutation (typing into a node, swapping
-// classes, anchoring a floating menu by measured rect) so the loop reads
-// like the HTML mock instead of fighting React's reconciliation.
+// The animation owns these DOM mutations; React rerenders must not overwrite its timed state.
 
 const KBD_CLASS_DOC =
   'rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground'
@@ -35,8 +33,6 @@ function CursorIcon(): JSX.Element {
   )
 }
 
-// Slash menu row — visible always; the active row gets the highlight
-// background, mirroring RichMarkdownSlashMenu.tsx.
 function SlashRow(props: {
   refCb?: (el: HTMLDivElement | null) => void
   iconKey: keyof typeof TB_ICON
@@ -89,8 +85,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
 
   return (
     <div className="relative overflow-visible rounded-xl border border-border bg-card text-foreground shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
-      {/* Faux titlebar with the editing path so the surface reads as a
-          real document, not a generic notes widget. */}
+      {/* Match the document editor titlebar. */}
       <div className="flex h-7 items-center gap-1.5 border-b border-border bg-muted/40 px-3">
         <span className="size-2.5 rounded-full bg-rose-400/70" />
         <span className="size-2.5 rounded-full bg-amber-400/70" />
@@ -103,7 +98,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
         </span>
       </div>
 
-      {/* Toolbar — visual-only, mirrors RichMarkdownToolbar.tsx button order. */}
+      {/* Match RichMarkdownToolbar button order. */}
       <div className="flex items-center gap-0.5 border-b border-border bg-muted/30 px-2 py-1.5">
         <ToolbarBtn iconKey="pilcrow" />
         <ToolbarBtn iconKey="h1" />
@@ -126,8 +121,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
         </span>
       </div>
 
-      {/* Document surface. Height is driven by the modal's right-column
-          width, so we leave it intrinsic and rely on the inner layout. */}
+      {/* Let stage width determine the document’s intrinsic height. */}
       <div
         ref={docRef}
         className="relative overflow-hidden bg-background px-6 pb-5 pt-4"
@@ -157,13 +151,12 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
           )}
         </DocBlock>
 
-        {/* Active line where the slash menu fires. The animation imperatively
-            mutates this node — typing a glyph, swapping role to h1, etc. */}
+        {/* The animation owns this line’s text and role. */}
         <ActiveLine activeLineRef={activeLineRef} activeTextRef={activeTextRef} />
 
         <div ref={afterRef} />
 
-        {/* Slash menu, absolutely-positioned and anchored at runtime. */}
+        {/* Anchor the slash menu using measured geometry. */}
         <div
           ref={menuRef}
           data-slash-menu
@@ -237,8 +230,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
           />
         </div>
 
-        {/* Fake cursor — the loop translates it onto the highlighted slash row
-            and triggers the click ripple. */}
+        {/* Position the demo cursor over the active slash row. */}
         <div
           ref={cursorRef}
           aria-hidden
@@ -256,9 +248,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
         </div>
       </div>
 
-      {/* Standalone keyboard hint below the visual — same chip pattern as
-          WorkbenchAnimatedVisual so the workbench sub-steps share a footer
-          shape. */}
+      {/* Match the workbench sub-step footer. */}
       <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
         {translate('auto.components.feature.wall.EditorAnimatedVisual.3fe42a1da0', 'Type')}
         <kbd className={KBD_CLASS_DOC}>/</kbd>{' '}
@@ -269,10 +259,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
         {translate('auto.components.feature.wall.EditorAnimatedVisual.7a763daf2f', 'italic')}
       </div>
 
-      {/* Why: the imperative loop adds .slash-active and toggles
-          [data-cursor-ripple] state via [data-clicking]. We pin those
-          presentation rules here instead of TS so the React tree stays
-          declarative. */}
+      {/* Keep class-driven animation styling here while the loop changes only state attributes. */}
       <style>
         {translate(
           'auto.components.feature.wall.EditorAnimatedVisual.e16479c1c5',

@@ -132,8 +132,7 @@ export function createAgentStatusLiveActions(
     // Zustand's updater runs synchronously, but TypeScript cannot observe the closure assignment.
     const builtResult = built as AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null
     if (!builtResult?.entry) {
-      // Keep standalone calls' deferred freshness contract when a stale event is rejected, but a
-      // suppressed inherited-terminal frame returns without buying the deferred O(entries) scan.
+      // Rejected stale standalone events retain deferred scan contract; suppressed inherited-terminal frames must skip O(entries) work.
       if (builtResult?.reason !== 'suppressed-inherited-terminal') {
         requestFreshness(false)
       }

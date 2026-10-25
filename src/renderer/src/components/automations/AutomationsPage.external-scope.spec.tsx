@@ -1,12 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * What the page actually asks the main process about external managers.
- *
- * The engine-level tests hand a pre-narrowed scope list to the client, so they
- * prove the plumbing and nothing about the producer. These drive the page: the
- * selection is the input and the IPC calls it issues are the observation.
- */
+/** Drive the page’s scope producer and inspect IPC; client tests with pre-narrowed scopes cannot verify which hosts the page asks. */
 
 import { describe, expect, it } from 'vitest'
 import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
@@ -80,7 +74,7 @@ describe('AutomationsPage external manager probes', () => {
     expect(probedOwners()).toEqual([DESKTOP_SELF_OWNER])
   })
 
-  it('retains only the selected host, so probes elsewhere are cancelled', async () => {
+  it('asks the external-manager client to retain only the selected host', async () => {
     withSshHosts('staging', 'web-01', 'web-02')
     mocks.state.automationHostFilter = DESKTOP_SELF_FILTER
     openclawOnly()
@@ -91,7 +85,7 @@ describe('AutomationsPage external manager probes', () => {
     expect(lastRetainedOwners()).toEqual([DESKTOP_SELF_OWNER])
   })
 
-  it('cancels the previous host as soon as the filter moves off it', async () => {
+  it('updates the retained external-manager owner when the filter changes', async () => {
     withSshHosts('staging')
     mocks.state.automationHostFilter = DESKTOP_SELF_FILTER
     openclawOnly()

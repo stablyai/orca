@@ -8,9 +8,7 @@ type Props = {
   selectedRepoIsGit: boolean
 }
 
-// The Advanced-section source controls: the editable Name appears once a source
-// pill is shown (the field itself is no longer the name input); the branch-name
-// override and reuse toggle mirror the desktop composer's advanced branch fields.
+// Show editable Name after source pill; branch override/reuse follow desktop’s advanced composer fields.
 export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Props) {
   const selection = composer.smartNameSelection
   const showBranchOverride = selectedRepoIsGit && (!selection || selection.kind === 'branch')

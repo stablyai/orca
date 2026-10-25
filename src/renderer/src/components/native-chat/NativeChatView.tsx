@@ -10,7 +10,6 @@ import { NativeChatMarkdownImageOwnerProvider } from './native-chat-markdown-ima
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
-/** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (
     <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">

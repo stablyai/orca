@@ -246,7 +246,8 @@ export async function acquireAcpStructuredSession(input: {
             slot.reattaching = false
           }
         },
-        onSettled: input.onSettled
+        onSettled: input.onSettled,
+        onSessionLost: (error) => input.onConnectionLost(child, error)
       }),
     dispose: () => {
       slot.lane?.dispose()

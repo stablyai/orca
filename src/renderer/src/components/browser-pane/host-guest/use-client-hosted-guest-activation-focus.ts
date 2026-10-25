@@ -2,14 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react'
 import type { BrowserPageGuestFocus } from '../assemble-chrome/browser-page-guest-focus'
 import { useWebviewDragPassthroughActive } from './use-webview-drag-passthrough-active'
 
-/**
- * Hands focus to a client-hosted pane's guest once per activation.
- *
- * Once per activation rather than once per effect run because the drag gate makes this reactive:
- * a drag ending anywhere in the window would otherwise pull focus out of the address bar of a tab
- * that was already active, and the URL-follow guard only holds the user's draft while the bar
- * still owns focus.
- */
+/** Focus once per activation; rerunning after every drag would steal an active address-bar draft and release its URL-follow guard. */
 export function useClientHostedGuestActivationFocus({
   isActive,
   guestFocus,
@@ -31,10 +24,7 @@ export function useClientHostedGuestActivationFocus({
     if (focusedForActivationRef.current) {
       return
     }
-    // Why the drag gate: a tab drag preview-activates whatever it hovers, and focusing the guest
-    // hands focus to another WebContents — the embedder blur that follows reads as an aborted drag.
-    // Why it alone leaves the latch down: the activation it suppressed still wants its focus, and
-    // this effect is reactive, so it lands as soon as the drag ends.
+    // Guest focus blurs the embedder and aborts drags; defer without latching so this activation receives focus when the drag ends.
     if (dragPassthroughActive) {
       return
     }

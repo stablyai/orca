@@ -71,9 +71,7 @@ import {
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 import { registerWindowsPathAccessEnvironments } from '@/lib/windows-path-access'
 
-// Why dev-only: nothing in the app arms the churn probe, so a shipped build would
-// pay its wrapper frame on every write for a diagnostic it can never read. The
-// cascade probe stays unconditional because crash telemetry arms it in the field.
+// Dev-only churn probe cannot be armed in shipped builds; avoid its per-write wrapper. Cascade probe stays enabled for field crash telemetry.
 const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>) =>
   import.meta.env.DEV || e2eConfig.exposeStore
     ? withStoreIdentityChurnProbe(createState)
@@ -157,24 +155,19 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
   return openWorkspaceBrowserTab(request)
 })
 
-// Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
-// so OOM crash reports identify what grew without a local repro.
+// Name largest slices in renderer_memory_highwater breadcrumbs so OOM reports identify growth without local repro.
 registerRendererMemoryProfileContributor('store', () =>
   summarizeStateCollectionSizes(useAppStore.getState(), 20)
 )
 
-// Why bytes too: counts miss value-weight growth (97b9e86d leaked ~700MB while
-// its biggest slice grew by 4 entries); sampled KB names what got FAT.
+// Sample bytes too: value-weight leaks can add ~700MB through only four entries (97b9e86d).
 registerRendererMemoryProfileContributor('storeKB', () =>
   estimateStateCollectionKB(useAppStore.getState(), 16)
 )
 
 export type { AppState } from './types'
 
-// Why: exposes the Zustand store on window for console debugging (dev) and
-// E2E tests (VITE_EXPOSE_STORE). The E2E suite reads store state directly
-// to avoid fragile DOM scraping. Harmless — the store is already reachable
-// via React DevTools in any environment.
+// Expose store for dev console or VITE_EXPOSE_STORE E2E assertions, avoiding fragile DOM scraping.
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   const testWindow = window as unknown as Record<string, unknown>
   testWindow.__store = useAppStore

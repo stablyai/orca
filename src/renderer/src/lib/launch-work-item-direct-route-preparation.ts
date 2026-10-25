@@ -30,7 +30,6 @@ export type DirectWorkItemAgentLaunchPreparation = {
   draftLaunchedNatively: boolean
   startupPlanFailed: boolean
   structuredLaunch: boolean
-  /** Null when no agent was selected. */
   plan: AgentSessionLaunchPlan | null
 }
 
@@ -54,8 +53,7 @@ function directLaunchProjectRuntime(
 }
 
 function resolveDirectWorkItemLaunchHost(args: DirectLaunchHostArgs): KnownExecutionHostPlatform {
-  // Why the repo's owner: the worktree was created on that host and may not be hydrated yet; its
-  // own path and runtime still refine the OS (a WSL worktree on a Windows host runs in Linux).
+  // Use the creation repo’s host before workspace hydration, refined by its path/runtime (for example Windows-host WSL runs Linux).
   const fact = resolveRepoExecutionHostPlatform(
     args.latestStore,
     args.repoHost,
@@ -96,7 +94,6 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   repoLaunchHost: KnownExecutionHostPlatform
   repoProjectRuntime?: ProjectExecutionRuntimeResolution
   planLaunch: typeof planAgentSessionLaunch
-  /** The start action this launch serves. */
   requestId: AgentLaunchRequestId
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const launchConnectionId = getConnectionId(args.worktreeId) ?? args.repoConnectionId

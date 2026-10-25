@@ -189,7 +189,6 @@ describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
     }
 
     async function scratchStoreRequestsOverTwoChecks(failure: Error): Promise<unknown[]> {
-      // No branch-only merge commits, so each check runs merge-tree exactly once.
       const runGit = baseProofResponses({
         'merge-tree --write-tree target refs/heads/feature/test': failure,
         'rev-list --right-only --merges --count target...refs/heads/feature/test': '0\n'

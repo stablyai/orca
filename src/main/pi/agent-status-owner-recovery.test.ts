@@ -8,9 +8,7 @@ describe('Pi status owner recovery', () => {
   it.each(['pi', 'omp', 'prime-agent'] as const)(
     'claims the pane for a restarted %s agent whose inherited owner PID is dead',
     async (kind) => {
-      // Why: STA-5245 -- a restart leaves a dead owner PID in the inherited env.
-      // Without a liveness probe the guard suppresses every later load, so the
-      // pane never reports status again.
+      // STA-5245: restart can inherit a dead owner PID that would suppress every later status event.
       const ownerKey =
         kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
       const harness = createHarness({
@@ -34,8 +32,7 @@ describe('Pi status owner recovery', () => {
   it.each(['EPERM', 'EACCES', 'EINVAL', undefined])(
     'keeps suppression for unverifiable probe error %s',
     (code) => {
-      // Why: EPERM means the owner exists but belongs to another user, so
-      // claiming the pane there would reintroduce double-reporting.
+      // EPERM cannot prove exit; claiming this pane would duplicate reporting.
       const harness = createHarness({
         kind: 'pi',
         pid: SELF_PID,
@@ -51,7 +48,6 @@ describe('Pi status owner recovery', () => {
   )
 
   it('claims the pane when the inherited owner PID is not a usable pid', () => {
-    // Why: a truncated/garbage marker is not evidence of a live owner.
     const harness = createHarness({
       kind: 'pi',
       pid: SELF_PID,

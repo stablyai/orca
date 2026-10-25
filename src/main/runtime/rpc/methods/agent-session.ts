@@ -26,7 +26,7 @@ function withExecutionHostAgentPresentation<T extends { presentation?: 'backgrou
   params: T,
   clientKind: 'mobile' | 'runtime' | undefined
 ): T {
-  // Why: paired viewers focus their own mirror; the execution host may have no renderer.
+  // Paired viewers focus their own mirror; the execution host may have no renderer.
   return clientKind && params.presentation === 'focused'
     ? { ...params, presentation: 'background' }
     : params
@@ -35,7 +35,7 @@ function withExecutionHostAgentPresentation<T extends { presentation?: 'backgrou
 function assertOperationTimestampWithinFutureSkew(clientOperationId: string): void {
   const timestamp = parseAgentSessionOperationTimestamp(clientOperationId)
   if (timestamp === null || timestamp > Date.now() + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) {
-    // Why: a future-dated ID could look new again after its idempotency tombstone is collected.
+    // Reject future ids that could appear new after tombstone collection.
     throw new Error('agent_session_operation_invalid')
   }
 }

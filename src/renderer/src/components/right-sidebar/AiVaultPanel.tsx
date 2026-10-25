@@ -147,8 +147,7 @@ export default function AiVaultPanel({
     sessions: history,
     loadedSessionLimit
   } = useAiVaultSessionRefresh(scopePaths, executionHostScope, sessionLimit)
-  // Why an identity and not paths: a project's worktrees are the host's to
-  // enumerate, and a repo with hundreds of them has no path list a request can carry.
+  // Send scope identity: the host owns project worktree enumeration, and hundreds of paths cannot fit a request.
   const searchWithin = useMemo(
     () =>
       aiVaultSearchScopeIdentity({
@@ -169,8 +168,7 @@ export default function AiVaultPanel({
   })
   const scanProgress = useAiVaultScanProgress(executionHostScope, requestedScanKey)
   const stripProgress = searching ? null : scanProgress
-  // Deliberately blind to the active repo/worktree: rebuilding these session
-  // maps on every worktree switch is what made switching visibly slow (#10841 era).
+  // Keep session maps independent of active workspace switches to avoid rebuilding them during navigation (#10841).
   const sessionProjectById = useMemo(
     () =>
       buildAiVaultSessionProjectById({

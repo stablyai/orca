@@ -1,10 +1,6 @@
 import type { AgentType } from './agent-status-types'
 
-/**
- * The owner-evidence signals a terminal pane can carry, strongest launch intent
- * first, ending in the durable host-stamped identity. Every field is optional so
- * each call site passes only what it holds; absent signals are skipped.
- */
+/** Optional owner signals preserve launch-first precedence and durable host identity; each caller supplies what it holds. */
 export type PaneAgentOwnerSignals = {
   /** Tab-scoped launch intent — what Orca launched into this tab. */
   launchAgent?: AgentType | null
@@ -47,23 +43,9 @@ const PANE_OWNER_RANK: readonly {
   { key: 'sleepingSessionAgent', ownerIsLaunch: false }
 ]
 
-/**
- * Compatibility owner lookup shared by the existing consumer surfaces.
- *
- * Tranche 0 intentionally preserves this pre-migration precedence byte-for-byte; switching
- * these consumers to canonical evidence belongs to tranche 1.
- *
- * Why this precedence: launch intent is the authoritative bootstrap before any
- * process signal exists, so it leads. Once launch metadata is gone — a mirrored
- * or restored pane drops the host-owned launchAgent — the owner must fall
- * through to a durable pane identity rather than to the raw title, because a
- * wrapper agent's title (OMP emits Pi-compatible frames) cannot be told apart
- * from the agent it wraps. The host-stamped hook identity is that durable,
- * published, mirror-safe anchor; the last completed hook and the hibernated
- * session record carry it across the windows where no live hook exists. Ranking
- * launch/live-hook above the completed/sleeping records keeps a genuine pane on
- * its real agent and stops a stale record from hijacking it.
- */
+/** Preserve compatibility precedence until consumers migrate to canonical evidence. Launch intent bootstraps identity;
+ * mirrored/restored panes lose it, so fall through to host hooks, completed hooks and sleeping records instead of raw titles.
+ * Wrapper titles (OMP’s Pi frames) cannot identify their owner; prefer launch/live hooks to prevent stale records hijacking it. */
 export function resolvePaneAgentOwnerRecord(
   signals: PaneAgentOwnerSignals
 ): ResolvedPaneAgentOwner | null {

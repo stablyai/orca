@@ -32,8 +32,7 @@ export function mergeProjectCompatibilityProject(base: Project, overlay: Project
     ...overlay,
     // Why: all-host startup fetches hosts separately; one host's record must not erase repo ownership learned from another host with the same id.
     sourceRepoIds: [...new Set([...base.sourceRepoIds, ...overlay.sourceRepoIds])],
-    // Why not plain min/max: a host whose repos carry no `addedAt` projects 0, and 0 means
-    // unknown, not epoch — it must not win over the real timestamp the other host knows.
+    // Zero means unknown, not epoch; plain min/max would let missing timestamps beat real evidence.
     createdAt: mergeCatalogCreatedAt(base.createdAt, overlay.createdAt),
     updatedAt: mergeCatalogUpdatedAt(base.updatedAt, overlay.updatedAt)
   }
@@ -121,9 +120,7 @@ export function getMergedSourceRepoIdsForHostRefresh(
   reposById: ReadonlyMap<string, readonly Repo[]>,
   hostId: string
 ): string[] {
-  // Why: current-first keeps the order independent of which host refreshed. Prefixing the
-  // cross-host remainder made it a function of hostId, so a cross-host project's ids oscillated
-  // between refreshes and the projects reconcile could never reuse the row.
+  // Current-first ownership order stays stable across host refreshes; prefixing other hosts prevented row identity reuse.
   return [
     ...new Set([
       ...getCurrentSourceRepoIds(current, new Set(reposById.keys())),

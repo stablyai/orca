@@ -1,5 +1,4 @@
-// Why: xterm flags pointer-derived bytes as user input alongside keystrokes; callers
-// that must treat pointer input differently need to recognise it by shape.
+// xterm marks pointer reports as user input too; callers needing keystrokes must distinguish their byte shape.
 
 /** True for an xterm mouse report (X10 `CSI M` or SGR `CSI <`): pointer input, never a keystroke. */
 export function isXtermMouseReport(data: string): boolean {

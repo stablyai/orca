@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { Tab } from '../../../shared/tab-types'
-import { isAgentSessionConversationName } from '../../../shared/agent-session-conversation-name'
+import { isAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary

@@ -16,8 +16,7 @@ describe('agentNeutralTerminalWaitBlockedReason', () => {
     expect(agentNeutralTerminalWaitBlockedReason(legacy)).toBe(neutral)
   })
 
-  // Why no alias: this build still publishes it, so aliasing it would rename a live reason rather
-  // than reinterpret an older host's -- and 'codex just got an upgrade' does name Codex.
+  // This build still publishes the Codex-specific migration reason; aliasing would rename a live reason, not interpret an old host.
   it('leaves the agent-specific codex-model-migration-prompt alone', () => {
     expect(agentNeutralTerminalWaitBlockedReason('codex-model-migration-prompt')).toBeNull()
   })
@@ -29,8 +28,7 @@ describe('agentNeutralTerminalWaitBlockedReason', () => {
     }
   )
 
-  // Why: the reason is JSON off the wire with no enum to validate it, and an object-literal lookup
-  // would answer these from Object.prototype -- the CLI would then print a function to the user.
+  // Wire tokens are unvalidated; prototype keys must not resolve to Object.prototype functions.
   it.each(['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty'])(
     'reports no alias for the prototype key %s',
     (reason) => {
@@ -41,8 +39,7 @@ describe('agentNeutralTerminalWaitBlockedReason', () => {
   )
 })
 
-// Why one formatter: the CLI's wait/show output and the worker and federation "Agent startup
-// blocked:" receipts all render this token, and only the CLI used to alias it.
+// Share neutral rendering across CLI wait/show and worker/federation startup-blocked receipts.
 describe('describeTerminalWaitBlockedReason', () => {
   it('names the neutral spelling beside a legacy token', () => {
     expect(describeTerminalWaitBlockedReason('codex-trust-workspace')).toBe(

@@ -15,11 +15,7 @@ export function isAutomationListSearchQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(rawQuery, maxBytes)
 }
 
-/**
- * Caps the controlled input value so a multi-MB paste cannot pin renderer
- * memory. Keeping maxBytes+1 code units is enough for the over-limit check
- * (`length > maxBytes`) while discarding the rest of the paste.
- */
+/** Keep at most maxBytes+1 code units for the byte-limit check; discard the rest before storing a multi-MB paste. */
 export function clampAutomationListSearchQueryInput(
   rawQuery: string,
   maxBytes = AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES

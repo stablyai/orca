@@ -28,7 +28,6 @@ export type FeatureTip = {
   description: string
   action: FeatureTipAction
   ctaLabel: string
-  /** Feature interactions that mean this tip is no longer useful to show. */
   completedByFeatureInteractions?: readonly FeatureInteractionId[]
 }
 
@@ -44,7 +43,7 @@ export type CompletedFeatureTipState = {
 
 export const FEATURE_TIPS = [
   {
-    // Why: first so its audience sees it on the first launch after the upgrade.
+    // Show the upgrade tip first for its audience’s first launch.
     id: 'native-chat-upgrade',
     priority: 'new',
     eyebrow: 'New',
@@ -80,8 +79,7 @@ export const FEATURE_TIPS = [
     id: 'cmd-j-palette',
     priority: 'new',
     eyebrow: 'Tip',
-    // Why: "<shortcut>" is a placeholder token; the cmd-j dialog splits the
-    // title on it and inlines the live, platform-correct keybinding as a <kbd>.
+    // The dialog replaces <shortcut> with a live platform-aware <kbd>.
     title: 'Jump to a worktree with <shortcut>',
     description:
       'Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.',

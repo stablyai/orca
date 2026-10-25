@@ -26,14 +26,14 @@ import {
 } from '../../../src/shared/native-chat-tool-activity'
 import { nativeChatToolRunIconName } from '../../../src/shared/native-chat-tool-icon'
 import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat-tool-line-identity'
-import { pairNativeChatToolResults } from '../../../src/shared/native-chat-tool-pairing'
+import { pairNativeChatToolResults } from '../../../src/shared/native-chat/tools/native-chat-tool-pairing'
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import {
   NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH,
   nativeChatToolRunSentence
 } from '../../../src/shared/native-chat-tool-run-sentence'
 import { countToolCalls } from '../../../src/shared/native-chat-tool-summary'
-import { buildEditCards } from '../../../src/shared/native-chat-edit-cards'
+import { buildEditCards } from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
   isToolCallBlock,
   type NativeChatBlock,
@@ -62,15 +62,13 @@ export type { MobileNativeChatToolRunAsides } from './mobile-native-chat-tool-ru
 
 /** Desktop's 18rem: an opened run lists this much before it scrolls in place. */
 const MEMBERS_MIN_HEIGHT = 288
-/** Desktop's `NATIVE_CHAT_FOLLOW_REARM_PX`: this close to the end, the box follows new work. */
 const FOLLOW_REARM_PX = 24
 
 function fill(template: string, value: number): string {
   return template.replaceAll('{{value0}}', String(value))
 }
 
-/** Desktop's `animate-pulse` on a live run's sentence. One element either way, so the
- *  header never remounts as the run settles. */
+// Keep one header element so live-to-settled changes cannot remount it.
 function PulsingText({
   pulsing,
   style,
@@ -102,9 +100,6 @@ function PulsingText({
   )
 }
 
-/** Desktop parity: `NativeChatToolRunMembers`. An opened run's members in a bounded
- *  box, so live work fills it instead of lengthening the chat. A live run opens on
- *  what it is doing now and follows it while the reader stays at the end. */
 function ToolRunMembers({
   followKey,
   startsAtEnd,
@@ -112,11 +107,9 @@ function ToolRunMembers({
   owner,
   children
 }: {
-  /** How much work the run holds: a reader at the end follows it growing. Opening a detail
-   *  must not count. */
+  // Follow only new work, not a reader opening existing detail.
   followKey: number
   startsAtEnd: boolean
-  /** The run's disclosure key. The list recycles rows; the box comes back as the reader left it. */
   memoryKey?: string
   owner?: string
   children: React.ReactNode
@@ -131,8 +124,7 @@ function ToolRunMembers({
   const scroller = useRef<ScrollView>(null)
   const followsEnd = useRef(remembered?.followsEnd ?? startsAtEnd)
   const pendingRestore = useRef(remembered !== undefined && !remembered.followsEnd)
-  // Desktop's rule: follow when the work changes, and only if the reader was at the end before
-  // it. Resolved here, with the update, so a later detail opening never inherits a follow.
+  // Decide follow in the work update so later detail expansion cannot inherit it.
   useLayoutEffect(() => {
     if (!owned && followsEnd.current) {
       scroller.current?.scrollToEnd({ animated: false })
@@ -140,7 +132,6 @@ function ToolRunMembers({
   }, [followKey, owned])
   const details = useRef(new Map<string, number>())
   const [openedHeight, setOpenedHeight] = useState(0)
-  // Room for the list plus what the reader has opened in it, up to half the screen.
   const reportDetail = useCallback((detailId: string, detailHeight: number | null) => {
     if (detailHeight === null) {
       details.current.delete(detailId)
@@ -168,7 +159,7 @@ function ToolRunMembers({
       }
     }
   }
-  // The remembered offset needs the rows laid out first, which the box's first size reports.
+  // Restore the saved offset only after content layout exists.
   const onContentSizeChange = () => {
     if (!owned && pendingRestore.current && remembered) {
       pendingRestore.current = false
@@ -189,7 +180,6 @@ function ToolRunMembers({
           { maxHeight: Math.min(height / 2, MEMBERS_MIN_HEIGHT + openedHeight) }
         ]}
         nestedScrollEnabled
-        // As the transcript's own list: a row or file tap lands while the composer's keyboard is up.
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={32}
         onScroll={onScroll}
@@ -201,8 +191,6 @@ function ToolRunMembers({
   )
 }
 
-/** Desktop parity: `NativeChatToolRun`. A run of tool calls under one sentence that
- *  opens to the individual tool lines. */
 export function ToolRun({
   blocks,
   disclosureId,
@@ -217,13 +205,11 @@ export function ToolRun({
 }: MobileNativeChatToolRunProps): React.JSX.Element {
   const runKey = disclosureId === undefined ? undefined : `run:${disclosureId}`
   const [open, setOpen] = useMobileNativeChatDisclosure(runKey, false)
-  // Rows drawn among the calls count as work too: a reader at the end follows them arriving.
   const asideCount = asides
     ? asides.after.length +
       Array.from(asides.before.values()).reduce((count, rows) => count + rows.length, 0)
     : 0
-  // Live is the turn's state, not a call's: deriving it from "some call is running"
-  // flipped the header to settled and back around every call.
+  // Use turn liveness; individual calls settling must not flicker the header between live and settled.
   const live =
     activeTurnIsWorking === true && !awaitingAnswer
       ? trailing !== false
@@ -257,8 +243,7 @@ export function ToolRun({
 
   return (
     <View style={styles.run} testID={mobileNativeChatMemberId('run')}>
-      {/* One element for the run's whole life: live and settled are states of this
-          button, not two buttons. */}
+      {/* Keep one button through live/settled states so accessibility focus survives. */}
       <Pressable
         style={styles.header}
         onPress={() => setOpen(!open)}
@@ -276,12 +261,11 @@ export function ToolRun({
           {sentence ?? fallbackLabel}
         </PulsingText>
         {marks.length > 0 ? (
-          // Never shrinks: it is the one thing the reader cannot afford to miss.
           <Text style={[styles.lineMeta, styles.headerMarks, type.meta]} numberOfLines={1}>
             {` · ${marks.join(', ')}`}
           </Text>
         ) : null}
-        {/* Only a stated success is marked done, and never while live. */}
+        {}
         {!live && outcome.succeeded ? (
           <Check size={12 * fontScale} color={colors.textMuted} strokeWidth={2} />
         ) : null}
@@ -313,8 +297,7 @@ export function ToolRun({
   )
 }
 
-/** Desktop parity: `NativeChatToolRunMemberList`. Mounted only while the run is open,
- *  so a collapsed run pays for none of the pairing. */
+// Mount pairing only while open so collapsed runs avoid its work.
 function ToolRunMemberList({
   blocks,
   disclosureId,
@@ -343,8 +326,7 @@ function ToolRunMemberList({
   const { editCards, consumedResults } = useMemo(() => buildEditCards(blocks), [blocks])
   const { resultByCall, pairedResults } = useMemo(() => pairNativeChatToolResults(blocks), [blocks])
   const seen = new Map<string, number>()
-  // Each drawn member's line identity: the page finds the reader's line by this, and a card keyed by
-  // it keeps its state when older calls join the run above it.
+  // Stable member keys preserve reading position and card state when older calls join above.
   const memberSeen = new Map<string, number>()
   const memberIdentity = (block: NativeChatBlock) =>
     nativeChatToolLineIdentity(block, memberSeen, true)
@@ -382,7 +364,6 @@ function ToolRunMemberList({
         </View>
       )
     }
-    // A result its call now owns is drawn by that call's line, not as a row of its own.
     if (
       taskLists.consumedResults.has(block) ||
       consumedResults.has(block) ||
@@ -409,7 +390,7 @@ function ToolRunMemberList({
 
   return (
     <>
-      {/* One flat keyed list with or without asides, so a row gaining its first never remounts a line. */}
+      {/* Keep one keyed list so adding the first aside cannot remount tool lines. */}
       {blocks.flatMap((block) => [...(asides?.before.get(block) ?? []), member(block)])}
       {asides?.after}
     </>

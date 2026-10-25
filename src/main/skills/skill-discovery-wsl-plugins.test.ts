@@ -85,8 +85,7 @@ describe('WSL Claude plugin skill discovery', () => {
     async (explicitWorkspace) => {
       const homeDir = '/home/alice'
       const cwd = explicitWorkspace ? '/work/orca' : homeDir
-      // Why: a Windows host's own Hermes location says nothing about the distro's,
-      // so neither variable may reach the posix scan script.
+      // Windows host Hermes paths must not leak into distro discovery.
       vi.stubEnv('HERMES_HOME', 'C:\\Users\\alice\\hermes')
       vi.stubEnv('LOCALAPPDATA', 'C:\\Users\\alice\\AppData\\Local')
       const pluginId = 'compound-engineering@compound-engineering-plugin'

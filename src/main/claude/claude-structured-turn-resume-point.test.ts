@@ -13,7 +13,7 @@ import {
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session-provider-handle-transition'
+import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionAdapterDeps,

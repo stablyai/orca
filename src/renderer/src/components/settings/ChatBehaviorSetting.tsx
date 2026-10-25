@@ -15,8 +15,7 @@ import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavi
 import { getChatPermissionSearchEntry } from './chat-permission-search'
 import { matchesSettingsSearch } from './settings-search'
 
-// This screen edits this machine's settings, so it asks this machine's runtime; a paired host that
-// predates queueing sends a follow-up right away whatever the switch says.
+// Edit this machine’s runtime; older paired hosts ignore queueing and send follow-ups immediately.
 const STRUCTURED_CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 
 type ChatBehaviorSettingProps = {

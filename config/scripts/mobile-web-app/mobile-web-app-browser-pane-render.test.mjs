@@ -1,20 +1,6 @@
-/**
- * The browser pane, mounted in a real page and painted with a real frame.
- *
- * Every other C6 check reads one half: the shell suites drive `BridgeHostSubscriptions` with no
- * page, the page suites drive the hooks with no shell, and the parity pin certifies the input
- * path from a recording. This is the only place the whole frame path runs — the encoder's base64
- * crossing the bridge, the page's decoder rebuilding the frame, the `.web.ts` layer writes
- * painting it, and the decode-then-flip that native gets for free from `Image.onLoad`.
- *
- * C6 ruling 4: no route is added for it. `bundleMobileWebApp` already takes an `appDir`, so the
- * check builds a one-route tree of its own, mounts the pane in it, and nothing under `mobile/app`
- * moves or is registered.
- *
- * The frames are JPEGs the page encodes from a noise canvas, for the reason the budget uses noise:
- * it is the image JPEG compresses least, so the over-cap case is over the cap for the reason a
- * real page would be rather than because the check inflated one.
- */
+// Exercise entire browser-frame bridge: base64 encode/decode, web layer paint and native-equivalent decode-before-flip.
+// Bundle a scratch single-route tree without registering production route (C6 ruling 4).
+// JPEG noise resists compression, making over-cap frames realistic rather than artificially inflated.
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -51,36 +37,15 @@ const SCREENCAST = 'browser.screencast'
 /** The frame's source viewport, which is what a tap is mapped back into. */
 const SOURCE = { deviceWidth: 390, deviceHeight: 712 }
 
-/**
- * The frame the pane asks this viewport for, read off its own subscribe: `maxWidth` 390 by
- * `maxHeight` 698 in web view mode.
- *
- * Not the phone's mobile-mode frame, which is 780x1424 and, as noise, encodes to 811,168 base64
- * characters — 124% of the cap, which is the measurement the area budget exists for. That one is
- * the over-cap case below rather than the frame that paints.
- */
+// Use pane-requested web viewport 390×698; noisy native 780×1424 is 811,168 base64 chars (124% cap), reserved for rejection case.
 const FRAME = { width: 390, height: 698 }
-/**
- * The page scale Chromium reports for a page with no `<meta name="viewport">`.
- *
- * Measured on Chromium 1217, 2026-09-20 against the C6.6 `dialog.html` fixture: under a mobile
- * emulation the page lays out at Chromium's 980 px default and is scaled into the device width, so
- * `deviceWidth` stays the emulated width and `pageScaleFactor` carries the ratio. The browser's
- * input commands take page CSS pixels, so a tap sent in the frame's device space lands at that
- * fraction of the aim — 41% on the phone, which is how the proof found it. The case above is the
- * control a page with a viewport meta produces, where the scale is one and the mapping is exact.
- */
+// Without viewport meta, Chromium lays out at 980 CSS px and scales to phone width; input expects CSS pixels, not source-device pixels.
+// Chromium 1217 measurement (2026-09-20) exposed ~41% targeting; viewport-meta control has scale one.
 const NO_VIEWPORT_META_PAGE_SCALE = SOURCE.deviceWidth / 980
 /** Noise at the largest layout the clamps admit, measured at 3,761,580 characters: 574% of the cap. */
 const OVER_CAP_FRAME = { width: 2400, height: 2160 }
 
-/**
- * The scratch route: the pane and nothing else.
- *
- * The imports are relative and of a fixed depth, so this source carries no path from the machine
- * that generated it. `screencastSupported` is the desktop's answer, which this route stands in for
- * because the capability probe is the session screen's to make and C7's to prove.
- */
+// Scratch pane-only route uses fixed-depth relative imports for reproducibility; substitute desktop screencastSupported answer, leaving capability probe to C7.
 const ROUTE_SOURCE = `
 import { useHostClient } from '../../../src/transport/host-client-hooks'
 import { MobileBrowserPane } from '../../../src/browser/MobileBrowserPane'
@@ -134,8 +99,7 @@ beforeAll(async () => {
   bridgeVersion = await readBridgeProtocolVersion()
   faultGrant = await readBridgeFaultGrant()
   windowCaps = await readBridgeWindowCaps()
-  // Inside mobile/ rather than the system temp dir: the route resolves `react-native` and the
-  // pane's own modules, and esbuild resolves a bare specifier from the importer upward.
+  // Keep scratch inside mobile/ so esbuild’s upward bare-import resolution finds react-native and pane deps.
   await mkdir(join(mobileDir, '.tmp'), { recursive: true })
   scratch = await mkdtemp(join(mobileDir, '.tmp', 'browser-pane-render-'))
   const routeDir = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
@@ -160,8 +124,7 @@ afterAll(async () => {
   await browser?.close()
   server?.close()
   if (scratch) {
-    // This run's directory only. `mobile/.tmp` is a shared ignored root and another suite may be
-    // holding one of its own.
+    // Remove this run’s scratch only; sibling suites share mobile/.tmp.
     await rm(scratch, { recursive: true, force: true })
   }
 })
@@ -272,14 +235,7 @@ function emitFrame(page, { b64, frameSeq, width, height, pageScaleFactor = 1 }) 
   )
 }
 
-/**
- * The frame on screen, read off the DOM the way RN Web paints it.
- *
- * Selected by the inline `background-image` rather than by a testID, because that write is the
- * thing under test: `browser-frame-layer-paint.web.ts` puts the data URI on the element RN Web
- * gives `<Image>` a background on, and a handle added for this check could be on an element the
- * paint never touches.
- */
+// Select RN-Web background-image, the actual browser-frame-layer-paint write; testID could name an unpainted element.
 function readPaintedLayers(page) {
   return page.evaluate(() => {
     const painted = [...document.querySelectorAll('*')].filter((element) =>
@@ -316,21 +272,8 @@ async function visibleLayerIndex(page) {
   return layers.findIndex((layer) => layer.opacity === '1')
 }
 
-/**
- * Waits for the page's own applied-frame signal: the double buffer's flip.
- *
- * The pacer writes the next frame's URI onto the hidden layer as soon as the frame lands and
- * only flips the opacity once the decode resolves, so "some painted layer carries a new digest" is
- * true before the frame is on screen. Measured here on 2026-09-20: the write landed at 80.7 ms
- * after the emit and the flip at 85.7 ms, a 5 ms window in which a wait on the digest returns and
- * the visible layer is still the previous frame. That is what made this file fail once in CI with
- * the second frame's digest equal to the first's and no console errors.
- *
- * The flip is one opacity write, at the pacer's `flip`, and it is the behaviour under test
- * rather than a proxy for it, so waiting on it can neither return early nor depend on how long a
- * decode takes. Asserting the exact layer, not merely a change, keeps a pane with nothing visible
- * from reading as a flip.
- */
+// Wait for exact visible layer: URI writes precede decode/opacity flip (observed 80.7ms vs 85.7ms), so digest changes can return early.
+// Exact layer assertion also rejects a pane with nothing visible.
 async function waitForLayerFlip(page, staleIndex) {
   await expect
     .poll(() => visibleLayerIndex(page), { timeout: 15_000, interval: 25 })
@@ -351,10 +294,7 @@ describePane('the browser pane in a page', () => {
       await waitForPaint(view.page, 1)
 
       const layers = await readPaintedLayers(view.page)
-      // Both layers, because the first frame is painted on both, and one visible.
-      // This does not prove the decode-then-flip ran: with the probe removed entirely, the first
-      // frame still paints and a layer is still visible, because the visible layer starts at 0 and
-      // never needed to move. The flip is the next case's to prove.
+      // First frame paints both layers with initial layer 0 visible; only next frame proves decode-then-flip.
       expect(layers.length).toBeGreaterThan(0)
       expect(layers.filter((layer) => layer.opacity === '1').map((layer) => layer.uri)).toEqual([
         `url("data:image/jpeg;base64,${b64}")`
@@ -440,10 +380,7 @@ describePane('the browser pane in a page', () => {
   }, 120_000)
 
   it('streams past the unacked window because the page acks, and drops nothing', async () => {
-    // The two `canCarry` arms the size check hides. Thirty frames of about 200 KB is roughly 6 MB
-    // through a 4 MiB window, so a page that did not ack, or a shell double that ignored the acks
-    // it sent, starts dropping partway. Nothing here is over the message cap, so a drop can only
-    // come from the window.
+    // Thirty ~200KB frames exceed 4MiB window but each fits message cap; missing/ignored acks must cause drops.
     const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
     try {
       await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
@@ -476,8 +413,7 @@ describePane('the browser pane in a page', () => {
       await emitFrame(view.page, { b64, frameSeq: 1, ...FRAME })
       await waitForPaint(view.page, 1)
 
-      // The centre of the rendered frame, which maps back to the centre of the source viewport
-      // whatever the letterboxing did, so the expectation is exact rather than approximate.
+      // Frame centre maps exactly to source viewport centre regardless of letterboxing.
       const box = await view.page.evaluate(() => {
         const painted = [...document.querySelectorAll('*')].find((element) =>
           element.style?.backgroundImage?.startsWith('url("data:image/jpeg')
@@ -489,8 +425,7 @@ describePane('the browser pane in a page', () => {
       await view.page.waitForFunction(() => globalThis.__orcaRenderCheckRequests.length > 0)
 
       const requests = await view.page.evaluate(() => globalThis.__orcaRenderCheckRequests)
-      // One, not four: the double replies, so the pane never takes its move/down/up fallback. With
-      // the refusal the double gives every other method, this is four requests instead.
+      // One request proves double’s click reply prevented move/down/up fallback (four requests).
       expect(requests).toHaveLength(1)
       expect(requests[0].method).toBe('browser.mouseClick')
       expect(requests[0].params).toMatchObject({
@@ -499,10 +434,7 @@ describePane('the browser pane in a page', () => {
         button: 'left',
         modifiers: []
       })
-      // The centre of the rendered frame is the centre of the source viewport, to within the one
-      // device pixel the rendered width's own fraction costs: the frame is 382.33 CSS px wide for
-      // 390 source px, so the centre is not on a pixel boundary in either space. Wider than that
-      // is a scale, an axis or a letterbox offset being wrong, which is what this is here for.
+      // Allow one source-device pixel: fractional 382.33 CSS px width for 390 source px offsets centre; larger error means scale/axis/letterbox bug.
       expect(Math.abs(requests[0].params.x - SOURCE.deviceWidth / 2)).toBeLessThanOrEqual(1)
       expect(Math.abs(requests[0].params.y - SOURCE.deviceHeight / 2)).toBeLessThanOrEqual(1)
       expect(await view.csp()).toEqual([])
@@ -536,9 +468,7 @@ describePane('the browser pane in a page', () => {
 
       const requests = await view.page.evaluate(() => globalThis.__orcaRenderCheckRequests)
       expect(requests[0].method).toBe('browser.mouseClick')
-      // The centre of the frame is the centre of the layout Chromium scaled into it: 980 CSS px
-      // wide, and 712 device px tall over the same scale. The tolerance is three CSS px because
-      // one device px is 2.5 of them here, and the rendered width's own fraction costs one.
+      // Scaled 980 CSS px layout maps from 712-device-px frame height; allow three CSS px since one device pixel is 2.5 CSS px plus fractional width.
       expect(Math.abs(requests[0].params.x - 980 / 2)).toBeLessThanOrEqual(3)
       expect(
         Math.abs(requests[0].params.y - SOURCE.deviceHeight / 2 / NO_VIEWPORT_META_PAGE_SCALE)

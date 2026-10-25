@@ -49,8 +49,7 @@ function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolati
     launchEnv: {
       NODE_ENV: 'development',
       ORCA_E2E_HEADLESS: '1',
-      // Why: production builds always use the lock; this opt-in makes the dev
-      // E2E bundle exercise the same second-instance ownership path.
+      // Opt dev E2E builds into production’s single-instance ownership path.
       ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
     },
     extraEnv: {},

@@ -1,7 +1,4 @@
-// Bi-directional mapping between the mobile workspaces screen's local view model
-// and the desktop's shared PersistedUIState (read/written via the ui.get/ui.set
-// RPCs). Keeping these settings in the same global store is what lets a grouping
-// or filter change on the phone show up on desktop and vice-versa.
+// Sync phone view settings through the shared ui.get/ui.set store so edits converge across clients.
 
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import {
@@ -28,7 +25,6 @@ import {
   WORKSPACE_SORT_BY_CHOICES
 } from '../../../src/shared/workspace-view/workspace-view-options'
 
-// Desktop PersistedUIState fields this screen syncs (a structural subset).
 export type WorkspaceViewSettings = {
   [
     Key in keyof FilterState as (typeof WORKSPACE_ROW_FILTER_UI_FIELDS)[Key]
@@ -57,18 +53,14 @@ export type MobileViewState = {
   /** May hold a property a newer desktop added; it is carried back unchanged. */
   worktreeCardProperties: readonly WorktreeCardProperty[]
   agentActivityDisplayMode: AgentActivityDisplayMode
-  /**
-   * Whether the desktop shares "Hide other-client workspaces" with this phone. One that does not
-   * (before #28986) marks a row other-client only while its own filter hides it. Null until the
-   * first ui.get, so a new desktop's marks don't hide rows before its filter value arrives.
-   */
+  // Null until ui.get arrives, preventing new-host other-client marks from hiding rows before their filter value.
+  // Older desktops mark only rows their own filter hides.
   sharesOtherClientFilter: boolean | null
   /** Desktop settings, not UI state: read with settings.get; Card layout writes the first. */
   compactWorktreeCards: boolean
   newCardStyle: boolean
 }
 
-/** What the screen shows until the desktop's own values arrive. */
 export const INITIAL_MOBILE_VIEW: MobileViewState = {
   groupBy: 'repo',
   sortBy: 'recent',
@@ -83,10 +75,7 @@ export const INITIAL_MOBILE_VIEW: MobileViewState = {
   newCardStyle: false
 }
 
-/**
- * An edit: the fields it sets, and for filters only the filters it touches. compactWorktreeCards
- * is a desktop setting, not ui.set state: only setCardLayout patches it, once the host accepted the setting.
- */
+// Patch only touched fields; compactWorktreeCards is written as a setting after host acceptance.
 export type MobileViewPatch = Partial<
   Omit<MobileViewState, 'filters' | 'sharesOtherClientFilter' | 'newCardStyle'>
 > & {
@@ -104,20 +93,13 @@ function isSortBy(value: string | undefined): value is PersistedUIState['sortBy'
   return value !== undefined && SORT_BY_VALUES.includes(value)
 }
 
-/** The filters the list applies: an older desktop's other-client marks are already its verdict. */
 export function rowFiltersForView(view: MobileViewState): FilterState {
   return view.sharesOtherClientFilter === false
     ? { ...view.filters, hideWorkspacesFromOtherDevices: true }
     : view.filters
 }
 
-/**
- * Map a user edit to the ui.set payload, carrying only the fields the edit touched.
- *
- * Why patch-only (STA-5781): the shared store is edited concurrently by desktop and web clients.
- * Echoing the whole snapshot let a stale mirror revert sibling fields another client had just
- * changed; the host merges partial updates field-by-field.
- */
+// Send only edited fields so stale mirrors cannot revert concurrent edits from other clients (STA-5781).
 export function buildWorkspaceViewSettingsUpdate(
   patch: MobileViewPatch,
   next: MobileViewState,
@@ -163,14 +145,12 @@ export function buildWorkspaceViewSettingsUpdate(
   return update
 }
 
-// Apply a desktop PersistedUIState onto the local view state, leaving any field
-// the desktop hasn't set untouched (so a partial ui.get doesn't clobber).
+// Preserve local values for fields absent from partial desktop state.
 export function applyDesktopViewSettings(
   current: MobileViewState,
   settings: WorkspaceViewSettings
 ): MobileViewState {
-  // Why: a partially hydrated desktop settings payload may carry an empty
-  // status catalog; mobile must keep renderable groups instead of hiding rows.
+  // Keep renderable status groups while desktop settings hydrate with an empty catalog.
   const workspaceStatuses = settings.workspaceStatuses
     ? withDefaultWorkspaceStatuses(settings.workspaceStatuses)
     : current.workspaceStatuses

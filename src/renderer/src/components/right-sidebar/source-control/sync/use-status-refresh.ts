@@ -47,7 +47,6 @@ export function useSourceControlStatusRefresh({
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
-  // Why: activeRepoTarget is pinned to the repo owner's runtime.
   const localIgnoreBlocked = isLocalPathOpenBlocked(
     getLocalPathOpenOwnerForRoute({
       runtimeEnvironmentId:
@@ -62,7 +61,7 @@ export function useSourceControlStatusRefresh({
       }
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       await refreshGitStatusForWorktree({
-        // Why: route git status by the repo OWNER host, not the focused runtime.
+        // Read status on the repo owner, which may differ from the focused host.
         target: activeRepoTarget,
         worktreeId: activeWorktreeId,
         worktreePath,
@@ -97,7 +96,7 @@ export function useSourceControlStatusRefresh({
     }
   }, [refreshActiveGitStatus])
 
-  // Why: when status is truncated, offer once per worktree to .gitignore the flooding folder; desktop-only since the probe and write run on this machine, and managed repos have no connectionId.
+  // Offer huge-folder ignores once per desktop worktree; the probe/write is local and managed repos can lack connectionId.
   useEffect(() => {
     if (!repositoryHuge || !activeWorktreeId || !worktreePath || localIgnoreBlocked) {
       return
@@ -133,7 +132,7 @@ export function useSourceControlStatusRefresh({
                 'Add to .gitignore'
               ),
               onClick: () => {
-                // Why: the toast can outlive its worktree; a purged probe must not write .gitignore in a same-path replacement.
+                // Toasts can outlive worktrees; a purged probe must not write into a same-path replacement.
                 if (!hasDismissedHugeRepoWarning(warningProbe)) {
                   return
                 }
@@ -166,7 +165,7 @@ export function useSourceControlStatusRefresh({
       }
       try {
         await refreshGitStatusForWorktree({
-          // Why: generation can finish after a host switch; refresh the host that owned the generation request.
+          // Generation may finish after host navigation; refresh its original owner.
           target: context.runtimeTarget,
           worktreeId: context.worktreeId,
           worktreePath: context.worktreePath,

@@ -541,8 +541,7 @@ describe('release install targets', () => {
     }
   )
 
-  // A transient `read ECONNRESET` fetching this Node version's headers for
-  // native/windows-registry's node-gyp rebuild failed a blocking golden gate and the cut.
+  // Transient Node-header ECONNRESET once failed windows-registry rebuild and blocked the release cut.
   it('retries every release-cut install so one transient download cannot fail a cut', () => {
     const installs = installSteps('release-cut')
     expect(installs.length).toBeGreaterThan(0)

@@ -202,28 +202,23 @@ export function useRichMarkdownReviewController({
     ]
   )
 
-  // Why: reports whether a composer actually opened (or an open draft was kept)
-  // so keyboard callers can leave the chord unconsumed only on true no-ops.
+  // Report opened/retained composers so keyboard callers consume only handled chords.
   const openAnnotationPopover = useCallback(
     (requireLiveSelection = false): boolean => {
       if (!canAnnotateRichMarkdown) {
         return false
       }
-      // Why: product B — second chord while drafting must consume the key without
-      // remounting the composer and silently discarding the in-progress note.
+      // Consume repeated open requests without remounting a composer and losing its draft.
       if (annotationPopoverRef.current) {
         return true
       }
       const editor = editorRef.current
       const root = rootRef.current
-      // Why: an immediate chord after a mouse-drag can run before ProseMirror
-      // copies the native selection into editor.state; flush it before reading
-      // the target so the composer opens on the live selection, not stale state.
+      // Flush native mouse selection before choosing the target; a chord can precede ProseMirror’s selection sync.
       if (editor) {
         flushPendingProseMirrorSelection(editor)
       }
-      // Why: keyboard callers require the live selection to avoid stale-target
-      // races; the mouse button may use the target from the render that exposed it.
+      // Keyboard actions need live targets; mouse buttons may use the target their render exposed.
       const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
       const baseTarget = liveTarget ?? (requireLiveSelection ? null : annotationTarget)
       if (!baseTarget) {
@@ -242,8 +237,7 @@ export function useRichMarkdownReviewController({
           activeRange: { from: target.from, to: target.to }
         })
       )
-      // Why: claim the draft ref before setState so a same-tick second chord
-      // (or OS key-repeat racing the open) cannot remount and discard text.
+      // Claim the draft before setState so same-tick chords/repeats cannot remount it and discard typing.
       annotationPopoverRef.current = target
       // Why: opening a draft should reserve the notes rail immediately; saved notes stay visible.
       setReviewRailOpen(true)
@@ -266,8 +260,7 @@ export function useRichMarkdownReviewController({
     if (canAnnotateRichMarkdown) {
       return
     }
-    // Why: disabling annotations must immediately remove stale popovers and
-    // highlights that cannot be derived from the next non-annotatable render.
+    // Remove transient highlights/popovers immediately when annotations become unavailable.
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setAnnotationTarget(null)
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change

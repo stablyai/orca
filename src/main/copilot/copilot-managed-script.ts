@@ -1,3 +1,4 @@
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import {
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath
@@ -52,7 +53,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  exit 0',
     'fi',
     // Keep large tool payloads off curl's command line to avoid EDR false positives.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\',
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',

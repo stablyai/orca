@@ -60,8 +60,7 @@ export function useWorktreeCardWorkspaceActions({
           )
           return
         }
-        // Why the host (STA-4343): this row is one of possibly two for the same
-        // `repoId::path`, so it has to name its own or the delete lands on the other.
+        // Qualify deletion with the row’s host so a twin with the same repo/path ID cannot be removed.
         runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
       }
     },

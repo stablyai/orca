@@ -1,23 +1,6 @@
 #!/usr/bin/env node
-// Benchmark: routing one `fs.changed` relay notification to SSH watch registrations.
-//
-// routeSshFilesystemWatchNotification called isPathInsideOrEqual(root, event.path)
-// for every (registration x event) pair. That helper NFC-normalizes BOTH sides, so
-// each event path was re-normalized once per watch root, and each root was
-// re-normalized once per event -- O(roots * events) normalizations for what is
-// O(roots + events) distinct work.
-//
-// The fix normalizes each event path once up front and builds one pre-normalized
-// matcher per root, leaving only string compare in the inner loop.
-//
-// This is a hot path on SSH: the relay watcher batches up to MAX_BATCHED_WATCHER_EVENTS
-// per notify, and a single `git checkout` or `pnpm install` on the remote host emits
-// thousands of paths through it.
-//
-// Both arms are run against the same inputs and their outputs are compared before
-// timing, so a matcher that changed which events route where cannot be reported as
-// a win. The normalizer is imported from the real module (via tsx) rather than
-// re-modelled here, so folding-rule drift cannot silently invalidate the result.
+// Compare repeated per-registration/event NFC normalization with pre-normalized root matchers/event paths for SSH watcher batches.
+// Assert identical routed results before timing and import production normalizer so folding drift cannot invalidate measurement.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
@@ -36,9 +19,7 @@ for (const [name, value] of [
   }
 }
 
-// Why re-read the source: this benchmark's whole claim is that the normalizer is
-// the expensive part. If someone makes it cheap (or drops the NFC fold), the
-// numbers below stop meaning what the header says, so fail loudly instead.
+// Recheck production normalization source: if NFC fold/cost changes, benchmark’s assumption no longer holds.
 const PATH_SOURCE = readFileSync(
   new URL('../../src/shared/cross-platform-path.ts', import.meta.url),
   'utf8'
@@ -83,8 +64,7 @@ function routeAfter(roots, events, sink) {
   }
 }
 
-// Why real repo paths: path length and segment count drive normalization cost, and
-// a synthetic `/a/b/c` fixture would understate it against real source trees.
+// Use real paths: length/segments determine normalization cost, which short synthetic paths understate.
 const REPO_PATHS = execFileSync('git', ['ls-files'], {
   cwd: REPO_ROOT,
   maxBuffer: 256 * 1024 * 1024
@@ -93,8 +73,7 @@ const REPO_PATHS = execFileSync('git', ['ls-files'], {
   .split('\n')
   .filter(Boolean)
 
-// A remote host running several worktrees: each is its own watch root, and the
-// file explorer plus the worktree-base-directory watcher both register.
+// Model multi-worktree host with explorer and base-directory watchers per root.
 function makeRoots(count) {
   return Array.from({ length: count }, (_, index) => `/home/dev/worktrees/orca-${index}`)
 }
@@ -102,9 +81,7 @@ function makeRoots(count) {
 function makeEvents(roots, count) {
   const events = []
   for (let index = 0; index < count; index += 1) {
-    // Spread events across roots so most roots match some events, as a real
-    // multi-worktree checkout does. Paths outside any root also occur (node_modules
-    // of a sibling checkout), so include a slice of those too.
+    // Spread events across roots and include sibling paths outside them, as remote checkouts/install storms do.
     const root = index % 11 === 0 ? '/home/dev/other-checkout' : roots[index % roots.length]
     events.push({
       kind: 'update',
@@ -122,10 +99,7 @@ function collect(roots, events, route) {
   return seen.join('\n')
 }
 
-// Why interleaved: running one arm's whole batch before the other's lets CPU
-// frequency drift and background load correlate with the arm being measured. On a
-// loaded machine that alone swung the 12x200 row between 6.7x and 23.3x. Alternating
-// per round and taking per-arm medians keeps the drift common to both.
+// Interleave rounds and compare medians to share CPU/load drift; batch ordering alone varied observed win from 6.7x to 23.3x.
 function measureInterleaved(roots, events) {
   const noop = () => undefined
   for (let index = 0; index < WARMUP; index += 1) {
@@ -159,9 +133,7 @@ console.log(
   `${pad('roots', 6)} ${pad('events', 7)} ${pad('per-pair', 11)} ${pad('hoisted', 11)} ${pad('speedup', 9)}`
 )
 
-// roots x events: 3x20 is a typical few-worktree session with a small save; the
-// larger rows are a remote `git checkout` or `pnpm install` storm, which the relay
-// batches up to MAX_BATCHED_WATCHER_EVENTS (5,000) per notification.
+// Model ordinary 3x20 saves and large checkout/install storms up to relay’s 5,000-event batch cap.
 for (const [rootCount, eventCount] of [
   [3, 20],
   [6, 50],

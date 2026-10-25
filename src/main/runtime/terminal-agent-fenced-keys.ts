@@ -7,10 +7,7 @@ export type FencedAgentKeysOutcome =
   | { outcome: 'refused'; error?: unknown }
   | { outcome: 'unknown' }
 
-/**
- * Keys for an agent's own UI (an answer, an interrupt), without Enter. `fence` runs last before
- * the write and throws to refuse; once it passed, a failure may have written, so it is `unknown`.
- */
+/** Send UI keys without Enter; fence immediately before write. Failure after the fence is unknown because bytes may have landed. */
 export async function writeFencedAgentKeys(
   runtime: Pick<OrcaRuntimeService, 'sendTerminal'>,
   handle: string,

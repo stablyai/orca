@@ -4,10 +4,7 @@ import {
   type WslMoveFieldDisposition
 } from './wsl-move-dispositions'
 
-/**
- * Renderer modules that use localStorage, by what they keep. A new module fails the census test
- * until it is listed here.
- */
+/** Census tests require a disposition for each renderer module using localStorage. */
 export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> = {
   'src/renderer/src/lib/quick-open-file-history.ts': {
     disposition: 'rewrite-desktop',
@@ -59,6 +56,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/jira-linked-view-storage.ts',
       'src/renderer/src/components/jira-list-columns.ts',
       'src/renderer/src/components/jira-prompt-templates.ts',
+      'src/renderer/src/components/jira-view-mode-storage.ts',
       'src/renderer/src/components/landing-preflight-dismissal.ts',
       'src/renderer/src/components/linear-issue-view-storage.ts',
       'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',
@@ -104,7 +102,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
   'src/main/ai-vault/session-parse-cache-database.ts': 'ai-vault-parse-cache',
   'src/main/ai-vault/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
-  'src/main/browser/browser-cookie-staged-import.ts': 'browser-cookie-import',
+  'src/main/browser/cookies/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
   'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
@@ -125,7 +123,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/session-scanner-opencode-sqlite-fixture.ts': 'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
-  'src/main/browser/browser-cookie-import-test-database.ts': 'test-fixture',
+  'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
   'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'
 }

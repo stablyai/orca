@@ -62,8 +62,7 @@ function seedRuntimeWithStoredProof(): {
   return { runtime, internals }
 }
 
-// Why: subscribers dedupe on (epoch, version), so a frame emitted at the stored version but
-// built from the pre-store object would strand the proofs until an unrelated later bump.
+// Subscribers dedupe epoch/version; emitting a pre-store frame at the stored version would hide proofs until another bump.
 it('emits the stored retirement proofs on the frame a runtime-owned create publishes', async () => {
   const { runtime, internals } = seedRuntimeWithStoredProof()
   const events: RuntimeMobileSessionTabsResult[] = []

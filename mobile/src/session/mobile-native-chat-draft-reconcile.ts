@@ -5,11 +5,8 @@ import {
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from './mobile-native-chat-image-transcript-markers'
-export { normalizeNativeChatUserText as normalizeReconcileText } from './mobile-native-chat-image-transcript-markers'
+} from '../../../src/shared/native-chat-image-transcript-markers'
 
-/** An ack-lost ('unknown' outcome) send held until its transcript echo lands or
- *  the deadline surfaces the uncertainty. */
 export type UnconfirmedSend = {
   draftKey: string
   pendingKey: string | null
@@ -36,10 +33,7 @@ export function countUserTextOccurrences(
   return count
 }
 
-/** Number of `[Image: source: …]` echo turns strictly after `tailId` (or the
- *  whole transcript when the tail was paginated out). An image-only send has no
- *  caption to match, so it reconciles by ordinal against this count — counting
- *  only image echoes keeps an unrelated text send's echo from clearing it. */
+// Match image-only sends by image-echo ordinal; unrelated text echoes must not clear them even after the captured tail paginates out.
 export function countImageSourceTurnsAfter(
   messages: readonly NativeChatMessage[],
   tailId: string | null
@@ -63,7 +57,6 @@ export type PendingImagePreviewEcho = {
   baselineTailMessageId: string | null
 }
 
-/** This phone's photos for the row they were sent in. */
 export type SentImagePreview = {
   messageId: string
   images: string[]
@@ -117,8 +110,7 @@ function imagePreviewReplacementMessageId(
     : null
 }
 
-/** Moves previews forward when a progressive source-only transcript frame later
- *  folds into the marker-bearing prompt with a different authoritative id. */
+// Move local previews when progressive source-only rows fold into a new marker-bearing authoritative id.
 export function migrateImagePreviewMessageIds(
   previous: Record<string, Record<string, string[]>>,
   sessionKey: string,
@@ -146,18 +138,14 @@ export function migrateImagePreviewMessageIds(
   return nextSession ? { ...previous, [sessionKey]: nextSession } : previous
 }
 
-/** Binds local preview URIs to the authoritative transcript turn that replaced
- *  the optimistic bubble. Host paths and marker-only Codex turns cannot render
- *  the phone-local photo without this handoff. */
+// Carry phone-local preview URIs onto authoritative rows because host paths/marker-only turns cannot display those photos.
 export function findLandedImagePreviewEchoes(
   messages: readonly NativeChatMessage[],
   entries: readonly PendingImagePreviewEcho[]
 ): LandedImagePreviewEcho[] {
   const normalized = normalizeImageTranscriptMessages(messages)
   const messageIndexById = new Map(normalized.map((message, index) => [message.id, index]))
-  // Keep provenance from the raw transcript: normalization removes image markers,
-  // so a plain text row must not become a candidate merely because it shares a
-  // caption prefix with a glued image send.
+  // Use raw image-marker provenance; normalized text alone could misidentify a caption-prefix match.
   const imageMessageIds = new Set(
     messages
       .filter(
@@ -186,11 +174,7 @@ export function findLandedImagePreviewEchoes(
         if (text === null) {
           return false
         }
-        // Why not equality alone: a send is glued onto the agent's input line with any
-        // send adjacent to it, so an image send that shares a turn with a following
-        // text-only send lands in a row whose text is the concatenation. Requiring the
-        // whole row to equal this echo left it unmatched, and since both other
-        // retirement paths skip image echoes, nothing could ever retire it.
+        // Adjacent TUI sends may concatenate; allow prefix matches only for proven image rows or image echoes can never retire.
         return (
           text === targetText || (imageMessageIds.has(message.id) && text.startsWith(targetText))
         )
@@ -225,10 +209,7 @@ export function findLandedUnconfirmedSends(
   messages: readonly NativeChatMessage[],
   entries: readonly UnconfirmedSend[]
 ): UnconfirmedSend[] {
-  // Why: pagination prepends old equal text; only unclaimed matches after each
-  // captured tail prove new echoes. User turns are keyed by text; an image echo
-  // (`[Image: source: …]` or no text) keys under '' so an empty-text send can
-  // claim it.
+  // Only unclaimed echoes after the captured tail prove new sends; prepended equal history must not count. Image echoes use the empty-text key.
   const messageIndexById = new Map<string, number>()
   const userMessagesByText = new Map<string, Array<{ id: string; index: number }>>()
   for (const [index, message] of messages.entries()) {

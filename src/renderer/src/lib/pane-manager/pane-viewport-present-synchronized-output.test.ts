@@ -35,7 +35,7 @@ function firstCodexFrameWithErase(): { erased: string; rest: string } {
   throw new Error('fixture has no erasing synchronized frame')
 }
 
-// xterm parses writes on a timer; fake timers must be stepped for the callback to fire.
+// Step fake timers so xterm’s asynchronous writes reach their callbacks.
 async function write(terminal: Terminal, data: string): Promise<void> {
   let parsed = false
   terminal.write(data, () => {

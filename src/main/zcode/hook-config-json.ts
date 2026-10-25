@@ -25,14 +25,12 @@ export function parseZCodeConfigText(text: string, diagnosticName: string): ZCod
   return isPlainObject(parsed) ? (parsed as ZCodeConfig) : null
 }
 
-/** Original file text alongside its parsed form, so a write can edit the text in place. */
 export function readZCodeConfigSource(configPath: string): ZCodeConfigSource | null {
   let text: string
   try {
     text = readFileSync(configPath, 'utf-8')
   } catch (error) {
-    // Why: only a definitive "no such file" is a fresh install; an EACCES/EIO must not
-    // be mistaken for one and overwrite the user's config with a stub.
+    // Only definitive absence is a fresh install; unreadable files must never be replaced by stub configs.
     return isDefinitiveAbsence(error) ? { text: null, config: {} } : null
   }
   const config = parseZCodeConfigText(text, 'ZCode config.json')
@@ -41,16 +39,12 @@ export function readZCodeConfigSource(configPath: string): ZCodeConfigSource | n
 
 const JSON_EDIT_FORMATTING = { formattingOptions: { insertSpaces: true, tabSize: 2 } } as const
 
-/** Set one path in the JSON text; `undefined` removes the key. */
+/** Undefined removes the JSON key. */
 function editJsonPath(text: string, path: readonly string[], value: unknown): string {
   return applyEdits(text, modify(text, [...path], value, JSON_EDIT_FORMATTING))
 }
 
-/**
- * Serialize by editing the original text one hook event at a time, so the user's key order
- * and indentation survive. A parse -> JSON.stringify round trip would reformat the whole
- * file. (ZCode's loader is a strict `JSON.parse`, so there are no comments to preserve.)
- */
+/** Edit original JSON text so user key order/indentation survive. ZCode uses strict JSON.parse, so JSONC comments are unsupported. */
 export function serializeZCodeConfig(originalText: string | null, nextConfig: ZCodeConfig): string {
   if (originalText === null) {
     return `${JSON.stringify(nextConfig, null, 2)}\n`
@@ -65,14 +59,12 @@ export function serializeZCodeConfig(originalText: string | null, nextConfig: ZC
   if (isZCodeHooksEnabled(previous) !== nextEnabled) {
     text = editJsonPath(text, ['hooks', 'enabled'], nextEnabled)
   }
-  // Why: touch only the events that actually changed, so the user's key order and
-  // indentation around their own untouched hook entries stay put.
+  // Edit only changed events so unrelated user hook formatting stays untouched.
   for (const eventName of new Set([...Object.keys(previousEvents), ...Object.keys(nextEvents)])) {
     const nextValue = nextEvents[eventName]
     if (JSON.stringify(previousEvents[eventName]) === JSON.stringify(nextValue)) {
       continue
     }
-    // `undefined` removes the key, which is how remove() drops an emptied event.
     text = editJsonPath(text, ['hooks', 'events', eventName], nextValue)
   }
   return text

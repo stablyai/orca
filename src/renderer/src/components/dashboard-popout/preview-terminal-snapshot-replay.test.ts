@@ -28,9 +28,7 @@ function apply(
   return { modes: kittyKeyboardModes, written }
 }
 
-// The Preview's mirror is the only thing that can tell the IME
-// forwarder what the TUI negotiated, and snapshot ANSI never carries kitty
-// pushes — so the flags have to arrive as metadata and be applied in order.
+// Snapshot ANSI omits kitty pushes; restore proven metadata in order before the IME forwarder reads it.
 describe('replayPreviewConnectionSnapshot', () => {
   it('adopts flags the snapshot owner proved, before any live output', () => {
     const { modes } = apply({ kittyKeyboardFlags: 8 })
@@ -57,9 +55,7 @@ describe('replayPreviewConnectionSnapshot', () => {
   })
 
   it('carries live-proven flags across a resync snapshot that proves nothing', () => {
-    // A grid change or capture overflow against an old host fetches a
-    // replacement snapshot with no kitty metadata; wiping the mirror there
-    // reintroduces the raw-text-into-a-bit-3-TUI bug on every resync.
+    // Old hosts omit kitty metadata; retain live-proven flags so resync cannot downgrade an active CSI-u TUI.
     const modes = new TerminalKittyKeyboardModeTracker()
     apply({ data: 'first frame' }, [], modes)
     modes.scan('\x1b[>8u')
@@ -69,8 +65,7 @@ describe('replayPreviewConnectionSnapshot', () => {
   })
 
   it('carries nothing across a flagless snapshot when the mirror never proved state', () => {
-    // The constructor's known-zero was never proven for the previewed PTY;
-    // carrying it would launder a fresh default into a host-proven inactive.
+    // Fresh default zero is not proof of this PTY’s negotiation state.
     const modes = new TerminalKittyKeyboardModeTracker()
     apply({ data: 'first frame' }, [], modes)
     apply({ data: 'second frame' }, [], modes)
@@ -79,8 +74,6 @@ describe('replayPreviewConnectionSnapshot', () => {
   })
 
   it('keeps proven flags across a replacement snapshot whose ANSI carries no kitty bytes', () => {
-    // The resync path used to reset the mirror and then scan kitty-free ANSI,
-    // which is what silently dropped a live TUI's negotiation.
     const modes = new TerminalKittyKeyboardModeTracker()
     apply({ data: 'first frame' }, [], modes)
     apply({ data: 'second frame', cols: 90, rows: 30, kittyKeyboardFlags: 8 }, [], modes)
@@ -100,8 +93,7 @@ describe('replayPreviewConnectionSnapshot', () => {
   it('advances a proven suffix with live semantics and applies redelivery idempotently', () => {
     const { modes } = apply({ kittyKeyboardFlags: 0 }, [
       { data: '\x1b[>8u', mode: 'live' },
-      // A redelivered push applied as a push would leave the app's single pop
-      // landing on a stale frame.
+      // Redelivered pushes must not leave stale stack frames after the app’s single pop.
       { data: '\x1b[>8u', mode: 'replay' }
     ])
     expect(modes.flags).toBe(8)

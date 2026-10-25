@@ -49,8 +49,7 @@ export function GeneralEditorSettingsSection({
     settings.editorAutoSaveDelayMs
   )
   if (resolvedAutoSaveDelayDraftState !== autoSaveDelayDraftState) {
-    // Why: Settings can be updated outside this pane; reconcile drafts before
-    // paint so the visible input never lags behind the persisted value.
+    // Reconcile external settings before paint so drafts cannot lag persisted values.
     setAutoSaveDelayDraftState(resolvedAutoSaveDelayDraftState)
   }
   const autoSaveDelayDraft = resolvedAutoSaveDelayDraftState.draft

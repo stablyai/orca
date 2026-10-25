@@ -2,12 +2,7 @@ import { renderInline } from './markdown-inline-render'
 import { listKind, type ParsedListItem } from './markdown-list-parse'
 import type { RichMarkdownEditorScope } from './document-scope'
 
-/**
- * A parsed list tree as markup, one list element per run of a single kind.
- *
- * A task item's checkbox mirrors the surface's own editability, because a checkbox left enabled
- * under a read-only document is a control the user can move and the document will not record.
- */
+// Render one list per same-kind run; disable task checkboxes under read-only surface or user toggles would go unrecorded.
 export function renderListItems(scope: RichMarkdownEditorScope, items: ParsedListItem[]): string {
   const html: string[] = []
   let index = 0

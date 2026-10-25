@@ -109,8 +109,7 @@ export class OpenAiTranscriptionSession {
     const form = new FormData()
     form.append('model', apiModel)
     form.append('response_format', 'json')
-    // Why: OpenAI's transcription endpoint expects a multipart file object;
-    // a named WAV blob avoids filesystem temp files and works in packaged apps.
+    // A named WAV blob satisfies multipart uploads without temporary files.
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 
     const response = await fetch(OPENAI_TRANSCRIPTION_URL, {

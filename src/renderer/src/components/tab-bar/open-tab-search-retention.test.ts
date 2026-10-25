@@ -218,8 +218,7 @@ describe('retainOpenTabResultsForQuery', () => {
     expect(retain({ entries, deferredQuery: 'add tab', query: '   ' }).titles).toEqual([])
   })
 
-  // The row text alone cannot answer these three: the engines match fields the
-  // result never carries once the match came from somewhere else.
+  // Retain engine matches on fields absent from row text, including aliases, paths and snippets.
   it('keeps a terminal row the newer query matches through its type alias', () => {
     const aliased = makeEntries({
       workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'zsh' })]

@@ -1,7 +1,6 @@
 import { appendFileSync } from 'node:fs'
 
-// Action-state and output plumbing via the runner's file protocol, so the action needs no
-// @actions/core dependency. Values are single-line by construction; anything else is rejected.
+// Use runner files without @actions/core; reject multiline values rather than corrupting their protocol.
 
 /** The detached renewer's stdio is ignored, so it appends here instead and `post` echoes it. */
 export function renewerLogPath() {

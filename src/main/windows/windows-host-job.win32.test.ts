@@ -5,18 +5,7 @@ import { spawn } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
-/**
- * The second half of the two-job design.
- *
- * A per-PTY job cannot carry KILL_ON_JOB_CLOSE — its handle is released when
- * the shell exits, which would reap whatever the user had backgrounded. So the
- * host process takes a second job that IS kill-on-close, and children inherit
- * membership. This asserts the property that buys: a host that dies without
- * unwinding strands nothing.
- *
- * It needs a real second process, because the assertion is about what happens
- * when that process is killed. Runs only on win32; skipped elsewhere.
- */
+/** Per-PTY jobs preserve background children on clean shell exit; a separate kill-on-close host job must reap them on host death. Real Windows processes prove inherited ownership. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -57,8 +46,7 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
   it('kills a pty and its detached grandchild when the host is force-killed', async () => {
     const nodePtyDir = join(process.cwd(), 'node_modules', 'node-pty')
     const hostScript = join(dir, 'host.js')
-    // The host assigns itself, then opens a pty whose shell spawns a DETACHED
-    // grandchild — the process a parent-pid walk cannot see.
+    // A detached grandchild escapes parent-PID walks but must inherit the host job.
     writeFileSync(
       hostScript,
       [
@@ -93,8 +81,7 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
     expect(Number.isInteger(grandchildPid)).toBe(true)
     expect(isAlive(grandchildPid)).toBe(true)
 
-    // Force-kill only the host: no tree kill, nothing given a chance to unwind.
-    // This is the daemon-crash shape.
+    // Kill only the host to reproduce daemon death without cleanup.
     process.kill(host.pid!, 'SIGKILL')
     try {
       const [shellExited, grandchildExited] = await Promise.all([

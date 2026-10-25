@@ -49,6 +49,7 @@ it('captures the pairing revision before awaiting the compatibility probe', asyn
   })
 
   await expect(request).resolves.toEqual({ ok: true })
+  expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
   expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
     selector: 'env-cas',
     method: 'status.get',

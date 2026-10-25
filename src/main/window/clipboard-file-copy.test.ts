@@ -59,7 +59,6 @@ describe('writeFileToClipboard', () => {
     expect(writeBuffer).toHaveBeenCalledTimes(1)
     const [format, buffer] = writeBuffer.mock.calls[0]
     expect(format).toBe('public.file-url')
-    // spaces are percent-encoded into the file URL
     expect(buffer.toString('utf8')).toBe('file:///repo/a%20b.png')
   })
 
@@ -107,7 +106,7 @@ describe('writeFileToClipboard', () => {
       'Set-Clipboard -LiteralPath $env:ORCA_CLIPBOARD_FILE'
     ])
     expect(spec.env?.ORCA_CLIPBOARD_FILE).toBe("/repo/o'brien $(calc).png")
-    // PowerShell cannot start without the inherited environment.
+    // Preserve inherited environment or PowerShell cannot start.
     expect(spec.env?.ORCA_TEST_INHERITED).toBe('kept')
   })
 

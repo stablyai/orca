@@ -14,26 +14,10 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-/**
- * Wrap a rendered markdown fragment in a standalone HTML document suitable
- * for Electron `webContents.printToPDF()`.
- *
- * The result is intentionally self-contained (inline CSS, no external links
- * except whatever the rendered fragment already references) so that loading
- * it from a temp file produces a stable paint regardless of the caller's
- * working directory.
- */
+/** Build a standalone printToPDF document with inline CSS so temp-file loading is independent of the working directory. */
 export function buildMarkdownExportHtml(args: BuildMarkdownExportHtmlArgs): string {
   const title = escapeHtml(args.title || 'Untitled')
-  // Why (CSP): the generated HTML is loaded in an Electron BrowserWindow with
-  // `javascript: true` (required for printToPDF layout). Without a CSP, any
-  // <script> tag that leaked into the cloned rendered subtree — e.g. from a
-  // malicious markdown paste or a compromised upstream renderer — would
-  // execute with renderer privileges during the export. Forbidding script-src
-  // entirely (no 'default-src' fallback to scripts) closes this hole while
-  // still allowing inline styles (for the <style> block and element-level
-  // style attributes the renderer emits), images from common schemes, and
-  // data/https fonts.
+  // The export window enables JavaScript; CSP must block scripts leaked from untrusted Markdown while allowing document styles, images and fonts.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

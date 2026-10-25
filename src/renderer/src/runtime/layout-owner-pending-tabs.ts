@@ -1,5 +1,4 @@
-// Tabs this window asked main to open or close in a layout-owner build, until the frame holding
-// main's answer is in. An action on such a tab (select, focus, reveal, clean up) waits for it here.
+// Defer select/focus/reveal/cleanup for layout-owner opens/closes until main’s answering frame arrives.
 
 /** The tab main's frame shows (its own id for a repeat open), or null when main refused. */
 type Outcome = string | null

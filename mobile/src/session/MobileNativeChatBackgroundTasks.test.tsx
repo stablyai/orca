@@ -188,7 +188,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expand(mounted)
     const rows = mounted.root.findAll((node) => node.props.testID === 'background-task-row')
     expect(rows.map(textOf)).toEqual(['review a · Agent18.1k · 1m 5s'])
-    // Uppercased by style, so a screen reader hears the word itself.
     const label = mounted.root.find(
       (node) => String(node.type) === 'Text' && node.props.children === 'Agents'
     )
@@ -256,6 +255,7 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expect(rowText.props.ellipsizeMode).toBe('tail')
     expect(styleOf(rowText)).toMatchObject({ flex: 1, minWidth: 0, fontSize: 12 })
     const headerTexts = header(mounted).findAll((node) => String(node.type) === 'Text')
+    expect(headerTexts.length).toBeGreaterThan(0)
     for (const text of headerTexts) {
       expect(text.props).toMatchObject({ numberOfLines: 1, ellipsizeMode: 'tail' })
       expect(styleOf(text)).toMatchObject({ flexShrink: 1, fontSize: 12 })
@@ -294,7 +294,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expect(stop).toHaveBeenCalledTimes(1)
     expect(stop).toHaveBeenCalledWith('task-a')
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(true)
-    // Unconfirmed: the row is the verdict, so its Stop is offered again.
     await act(async () => finish(UNCONFIRMED))
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(false)
   })
@@ -333,7 +332,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
     act(() => stopButtons(mounted)[0]!.props.onPress())
     await act(async () => finish(STOPPED))
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(true)
-    // The helper's next run, with no render between: same provider id, a new invocation.
     act(() => {
       mounted.update(
         createElement(MobileNativeChatBackgroundTasks, {
@@ -451,7 +449,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
   })
 
   it("reads elapsed on the host's clock when the phone's runs ahead", () => {
-    // The phone is 30 s ahead of the host that stamped the child's start.
     const mounted = mount(
       tasksFor(
         { state: 'monitoring', children: [view('a', { totalTokens: 900 })] },
@@ -488,21 +485,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
       tasksFor({ state: 'monitoring', children: [view('a'), view('b', { state: 'waiting' })] })
     )
     expect(header(mixed).props.accessibilityLabel).toBe('2 agents — 1 working, 1 waiting')
-  })
-
-  it('cuts the header off on one line on the smallest phones, never wrapping it', () => {
-    windowWidth.value = 320
-    const mounted = mount(
-      tasksFor({
-        state: 'monitoring',
-        children: [view('a'), view('b', { state: 'waiting' }), view('c', { state: 'unverifiable' })]
-      })
-    )
-    const texts = header(mounted).findAll((node) => String(node.type) === 'Text')
-    expect(texts.length).toBeGreaterThan(0)
-    expect(texts.map((text) => [text.props.numberOfLines, text.props.ellipsizeMode])).toEqual(
-      texts.map(() => [1, 'tail'])
-    )
   })
 
   it('claims no live work once the stream is lost', () => {

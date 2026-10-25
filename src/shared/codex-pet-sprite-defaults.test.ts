@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   CODEX_PET_ANIMATIONS,
   CODEX_PET_DEFAULT_COLUMNS,
-  CODEX_PET_DEFAULT_FPS,
   applyCodexSpriteTimingDefaults,
   type CustomPetSprite
 } from './codex-pet-sprite-defaults'
@@ -15,15 +14,19 @@ function legacyCodexSprite(): CustomPetSprite {
     rows: 9,
     sheetWidth: 1536,
     sheetHeight: 1872,
-    fps: CODEX_PET_DEFAULT_FPS,
+    fps: 8,
     defaultAnimation: 'idle',
-    // Pre-durations builds baked exactly this shape from the old defaults.
-    animations: Object.fromEntries(
-      Object.entries(CODEX_PET_ANIMATIONS).map(([name, anim]) => [
-        name,
-        { row: anim.row, frames: anim.frames }
-      ])
-    )
+    animations: {
+      idle: { row: 0, frames: 6 },
+      'running-right': { row: 1, frames: 8 },
+      'running-left': { row: 2, frames: 8 },
+      waving: { row: 3, frames: 4 },
+      jumping: { row: 4, frames: 5 },
+      failed: { row: 5, frames: 8 },
+      waiting: { row: 6, frames: 6 },
+      running: { row: 7, frames: 6 },
+      review: { row: 8, frames: 6 }
+    }
   }
 }
 
@@ -103,8 +106,7 @@ describe('applyCodexSpriteTimingDefaults', () => {
 
   it('does not throw on a corrupted animation entry that matches the outer fingerprint', () => {
     const sprite = legacyCodexSprite()
-    // Persisted data is untrusted: a null value under a matching key must be a
-    // non-match, not a crash.
+    // Corrupt persisted entries must fail fingerprint matching without throwing.
     sprite.animations = { ...sprite.animations, idle: null as never }
     expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
   })

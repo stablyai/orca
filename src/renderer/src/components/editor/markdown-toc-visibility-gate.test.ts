@@ -12,8 +12,7 @@ describe('selectMarkdownTableOfContents', () => {
   })
 
   it('returns a stable empty-array reference across content changes while closed', () => {
-    // Why: a fresh [] every call would change the memo's value and force the
-    // downstream TOC panel/handlers to re-render even though nothing is shown.
+    // Stable empty results must not rerender hidden TOC consumers.
     const first = selectMarkdownTableOfContents(false, 'a')
     const second = selectMarkdownTableOfContents(false, 'a\nb')
     expect(first).toBe(second)

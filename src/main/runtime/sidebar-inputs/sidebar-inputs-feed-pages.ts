@@ -25,10 +25,7 @@ function jsonBytes(text: string): number {
   return Buffer.byteLength(JSON.stringify(text), 'utf8')
 }
 
-/**
- * Splits changes into pages of at most `budgetBytes` encoded, envelope included. An entity too
- * large for any page travels as JSON text parts, each filling its own page.
- */
+/** Paginate within encoded byte budget including envelope; oversized entities travel as ordered JSON-text parts. */
 export function paginateFeedChanges(changes: Iterable<FeedChange>, budgetBytes: number) {
   const room = budgetBytes - FEED_PAGE_ENVELOPE_BYTES
   const pages: FeedPageBody[] = []

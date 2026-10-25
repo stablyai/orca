@@ -1,6 +1,4 @@
-// Open files renamed or moved on disk, in a layout-owner build: the window sends each workspace's
-// renames under the ids the move coordinator picked, and the frame that shows main's rename
-// rekeys the files' drafts, buffers and autosave gate in the same update. A refusal changes nothing.
+// In layout-owner builds propose per-workspace rename IDs to main; its frame atomically rekeys drafts/buffers/autosave gate. Refusal changes nothing.
 
 import { isTwinWorkspace, runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { sendLayoutApply } from '@/runtime/layout-apply-send'
@@ -61,12 +59,7 @@ function tabRekeysOf(
   })
 }
 
-/**
- * Checks the rekey against the store as it is, then sends every workspace main lays out in one
- * rename, applied or refused as a whole (each partition's part written in one durable write); a
- * twin, which main may route to a paired server, goes alone on today's path; a paired server's
- * workspace rekeys here, as today.
- */
+/** Preflight current store, then atomically rename all main-owned workspaces with one durable write per partition. Send twins alone to isolate paired host_not_owned refusal; paired workspaces use direct window rekey. */
 export function renameEditorFilesThroughLayoutOwner(
   set: EditorSet,
   get: EditorGet,

@@ -79,9 +79,7 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
     expect(recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(1)
   })
 
-  // Why: the active worktree changes under a persisting duplicate, and coalescing
-  // keeps only the newest payload — keyed on the tab id alone, whichever verdict
-  // a tab reported first would suppress the other for the rest of the session.
+  // Duplicates can change verdict across worktree switches; once-per-tab guards would coalesce away one verdict forever.
   it('still reports a non-converging verdict after that tab id reported a converging one', () => {
     const maps = { 'wt-other': [tab('t1', 'wt-other')], 'wt-active': [tab('t1', 'wt-active')] }
     resolveActiveTabOwnerWorktreeId(maps, 'wt-active', 't1')
@@ -100,9 +98,7 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
     ])
   })
 
-  // Why the count and not just "reports twice": a guard keyed on the active
-  // worktree id passes the two tests above yet emits once per worktree, which is
-  // the flood this guard exists to prevent.
+  // Require counts too: per-worktree dedupe passes earlier cases but floods per tab ID.
   it('never exceeds two crumbs for one tab id however the active worktree moves', () => {
     const maps = { 'wt-a': [tab('t1', 'wt-a')], 'wt-b': [tab('t1', 'wt-b')] }
     const activeWorktreeIds = ['wt-a', 'wt-b', 'wt-c', '', 'wt-d', 'wt-a']

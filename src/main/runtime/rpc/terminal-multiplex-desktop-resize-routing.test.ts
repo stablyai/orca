@@ -353,8 +353,7 @@ describe('terminal multiplex RPC', () => {
           .join('')
       ).toBe('authoritative snapshot')
 
-      // A viewport-less stream is passive: it must neither register nor later
-      // release the active stream's width floor when the connection closes.
+      // Passive streams must neither register nor release active peers' width floors on disconnect.
       handlers.get(0)?.(
         decodeTerminalStreamFrame(
           encodeTerminalStreamFrame({
@@ -379,8 +378,7 @@ describe('terminal multiplex RPC', () => {
         ).toBe(true)
       )
 
-      // A second active floor on the same PTY is released in the same batch,
-      // keeping connection teardown to one registry recomputation per PTY.
+      // Two active floors on one PTY should require only one teardown recomputation.
       handlers.get(0)?.(
         decodeTerminalStreamFrame(
           encodeTerminalStreamFrame({
@@ -494,11 +492,9 @@ describe('terminal multiplex RPC', () => {
       await vi.waitFor(() =>
         expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
       )
-      // Ignore the subscribe-time floor registration; assert only the drained one.
       vi.mocked(runtime.updateRemoteDesktopViewer).mockClear()
 
-      // A snapshot request opens the buffering window synchronously (buffering
-      // is set before the first await inside the handler)...
+      // Snapshot handling enters buffering synchronously before its first await.
       handlers.get(9)?.(
         decodeTerminalStreamFrame(
           encodeTerminalStreamFrame({
@@ -509,7 +505,7 @@ describe('terminal multiplex RPC', () => {
           })
         )!
       )
-      // ...so a resize arriving now is PARKED, not applied inline.
+      // Resize during that window must park.
       handlers.get(9)?.(
         decodeTerminalStreamFrame(
           encodeTerminalStreamFrame({
@@ -522,8 +518,7 @@ describe('terminal multiplex RPC', () => {
       )
       expect(runtime.updateRemoteDesktopViewer).not.toHaveBeenCalled()
 
-      // Once the snapshot completes and buffering clears, the parked resize is
-      // drained (previously it was silently dropped until the next resize).
+      // Drain parked resize when snapshot buffering ends; otherwise it waits for another resize.
       await vi.waitFor(() =>
         expect(runtime.updateRemoteDesktopViewer).toHaveBeenCalledWith(
           'pty-1',

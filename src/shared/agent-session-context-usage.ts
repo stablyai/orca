@@ -1,6 +1,4 @@
-// What the provider has said about a session's context window, as facts on
-// turn rows. Writes land only on the open or newest turn and each replaces its
-// namesake, so a reader takes the part from the newest row that carries it.
+// Context facts replace their namesake on the open/newest turn; readers use the newest row carrying each part.
 
 /** The API's accounting on one assistant response. */
 export type AgentSessionTokenUsage = {

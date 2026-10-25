@@ -91,8 +91,7 @@ describe('forceRepaintThroughRenderPause', () => {
     const terminal = createTerminal({ renderService })
 
     expect(forceRepaintThroughRenderPause(terminal)).toBe(false)
-    // Latch is still cleared — the observer reasserts authority on its next
-    // callback, and we must not leave a half-serviced full-refresh queued.
+    // Leave the serviced latch cleared; the next observer callback must not queue redundant full repaint.
     expect(renderService._isPaused).toBe(false)
   })
 })
@@ -103,8 +102,7 @@ describe('forceFullViewportPresent', () => {
   })
 
   it('leaves an unpaused, unsynchronized terminal to the normal refresh path', () => {
-    // A forced sync renderRows on first splash paints before cell metrics
-    // settle and shows a 1px black gutter under the TUI composer.
+    // Direct first-splash renderRows paints before cell metrics settle and leaves a 1px composer gutter.
     const refreshRows = vi.fn()
     const renderRows = vi.fn()
     const terminal = createTerminal({

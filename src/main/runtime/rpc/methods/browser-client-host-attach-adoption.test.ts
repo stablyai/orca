@@ -33,10 +33,7 @@ function orphanedPage(
   }
 }
 
-/**
- * Attaches through the real RPC method, answering every command the runtime publishes the way the
- * client host would. Everything adoption does at attach has to survive this path or it ships broken.
- */
+/** Drive the real attach RPC and answer its published client-host commands to verify adoption crosses the wire correctly. */
 function attachHost(
   pageInventory: readonly BrowserClientHostedPageInventory[],
   options: {
@@ -216,8 +213,7 @@ describe('browser.clientHost.attach adoption', () => {
       })
       releaseAdoption({ status: 'resolved', executionHostKey: EXECUTION_HOST_KEY })
       await vi.waitFor(() => expect(rig.markClientHostedPagesReconciled).toHaveBeenCalled())
-      // Attach only settles once recovery has returned, so this is the barrier the assertions need:
-      // draining microtasks would let a regression slip through as a not-yet-issued command.
+      // Attach awaits recovery; draining microtasks alone could miss a command not issued yet.
       await settleAttach()
 
       expect(authority.getPlacement('page-created-after-attach')).toEqual(placement)
@@ -244,8 +240,7 @@ describe('browser.clientHost.attach adoption', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // The adopted page's inventory entry still names the predecessor by construction, so recovery
-    // would call it stale and warn once per adopted page on every restart.
+    // Adopted inventory still names the predecessor; recovery must not warn on every page after restart.
     expect(
       warn.mock.calls.filter(([message]) => String(message).includes('client page recovery failed'))
     ).toEqual([])

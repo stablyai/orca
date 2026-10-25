@@ -19,10 +19,9 @@ const SECTION_LABELS: ReadonlyMap<string, string> = new Map([
   ['onboarding', 'Onboarding progress']
 ])
 
-/** Sections whose loss makes Orca forget projects, which also drops their workspace details. */
+// Losing project lists also loses access to their workspace details.
 const PROJECT_LIST_SECTIONS = new Set(['repos', 'projects', 'folderWorkspaces'])
 
-/** Plain names for damaged sections, deduplicated, for recovery dialogs and messages. */
 export function profileStateSectionLabels(domains: readonly string[]): string[] {
   return [
     ...new Set(domains.map((domain) => SECTION_LABELS.get(domain) ?? 'Other saved app state'))

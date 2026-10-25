@@ -118,7 +118,7 @@ export const createCheckActions = (
       if (!weakerThanRequested) {
         return inflightRequest.promise.catch(recoverChecks)
       }
-      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      // Wait once for weaker requests so upgrades coalesce without starvation from repeated weak callers.
       if (waitedForUpgrade) {
         break
       }
@@ -158,9 +158,7 @@ export const createCheckActions = (
               noCache: Boolean(options?.force || options?.noCache),
               sourceContext: options?.sourceContext
             })
-      // Why: the bounded upgrade wait can leave us running beside a stronger request for this
-      // key. Both bypass gh's cache here, but the later-started one holds the newer run state —
-      // let only the key's current owner write checksCache and the PR status it derives.
+      // Bounded waits can overlap stronger requests; only the current key owner may write caches/derived PR state, preserving newer run evidence.
       if (!ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {
         return checks
       }

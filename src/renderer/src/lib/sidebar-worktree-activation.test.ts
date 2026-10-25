@@ -35,8 +35,7 @@ describe('sidebar worktree activation', () => {
   it('does not defer non-VM slept worktree selection behind terminal wake work', async () => {
     await activateWorktreeFromSidebar('wt-slept')
 
-    // Why: setActiveWorktree already defers terminal prep where needed. The
-    // sidebar click itself must switch app state immediately.
+    // setActiveWorktree owns deferred terminal prep; sidebar navigation itself must update immediately.
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-slept', {
       navigationIntent: 'user-open',

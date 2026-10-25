@@ -10,8 +10,7 @@ export type AgentSessionCreateOperation = {
 }
 
 function isAmbiguousCreateFailure(error: unknown): boolean {
-  // Why: an RPC failure proves the host answered; only transport loss leaves
-  // creation unknown and is safe to replay under the same operation ID.
+  // RPC failure proves the host answered; only transport loss leaves creation unknown and replayable under the same operation ID.
   return (
     !(error instanceof RuntimeRpcCallError) &&
     !(error instanceof Error && error.name === 'AbortError')

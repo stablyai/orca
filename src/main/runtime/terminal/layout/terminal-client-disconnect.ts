@@ -17,7 +17,6 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
     this.revokeTerminalFileGrantsForClient(clientId)
     this.mobileDictation.cancelForClient(clientId)
 
-    // (1) Cancel pending restore-debounce timers owned by this client.
     for (const [ptyId, entry] of this.pendingRestoreTimers) {
       if (entry.clientId === clientId) {
         clearTimeout(entry.timer)
@@ -25,16 +24,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       }
     }
 
-    // (2) Promote any soft-leave grace owned by this client into immediate
-    // finalization. Grace existed to absorb a quick re-subscribe; a real
-    // disconnect kills any chance of re-subscribe.
-    //
-    // Note: this is mode-decoupled (matches docs/mobile-terminal-layout-state-machine.md
-    // sub-case 2). Today's pre-rewrite code only restored when
-    // `mode === 'auto' && wasResizedToPhone`; the new design restores
-    // whenever the layout is currently `phone`. This is an intentional
-    // behavior fix — `mode === 'phone'` with no subscribers is a degenerate
-    // state nothing in product depends on.
+    // A real disconnect ends soft-leave grace immediately; current layout kind, not the old mode flag, decides restoration.
     for (const [ptyId, soft] of this.pendingSoftLeavers) {
       if (soft.clientId !== clientId) {
         continue
@@ -42,7 +32,6 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       clearTimeout(soft.timer)
       this.pendingSoftLeavers.delete(ptyId)
 
-      // Cancel any in-flight 300ms restore timer too — we'll handle it inline.
       const pending = this.pendingRestoreTimers.get(ptyId)
       if (pending) {
         clearTimeout(pending.timer)
@@ -50,10 +39,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       }
 
       const cur = this.layouts.get(ptyId)
-      // Why: Indefinite hold (mobileAutoRestoreFitMs == null) keeps the PTY
-      // at phone dims after the phone disconnects; the desktop banner's
-      // Restore button is the explicit return path. See
-      // docs/mobile-fit-hold.md.
+      // Indefinite hold retains phone dimensions until explicit Restore (docs/mobile-fit-hold.md).
       if (this.remoteDesktopFloor.hasViewers(ptyId)) {
         this.setDriver(ptyId, { kind: 'idle' })
         void this.applyRemoteDesktopLayout(ptyId)
@@ -74,9 +60,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       this.setDriver(ptyId, { kind: 'idle' })
     }
 
-    // (3) Immediate restore for PTYs where this client was the last
-    // mobile subscriber. With multi-mobile, peer subscribers keep the
-    // floor; only when the inner map empties do we transition to desktop.
+    // Restore only after the last mobile subscriber leaves; surviving peers keep the floor.
     const ptysWithSurvivingPeers: string[] = []
     const ptysToRestore: { ptyId: string; baseline: { cols: number; rows: number } | null }[] = []
     for (const [ptyId, inner] of this.mobileSubscribers) {
@@ -84,8 +68,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       if (!subscriber) {
         continue
       }
-      // Snapshot baseline before deleting — needed once mobileSubscribers
-      // entry is gone for the resolveDesktopRestoreTarget chain.
+      // Capture the baseline before deleting its subscriber; restore lookup cannot recover it afterward.
       const baseline =
         subscriber.previousCols != null && subscriber.previousRows != null
           ? { cols: subscriber.previousCols, rows: subscriber.previousRows }
@@ -120,9 +103,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       this.setDriver(ptyId, { kind: 'idle' })
     }
 
-    // (4) Driver re-election where peers survived. If the disconnecting
-    // client was the active driver, the most-recent surviving actor takes
-    // the floor.
+    // If the driver left, elect the most recent surviving actor.
     for (const ptyId of ptysWithSurvivingPeers) {
       const driver = this.getDriver(ptyId)
       if (driver.kind !== 'mobile' || driver.clientId !== clientId) {
@@ -152,11 +133,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       })
     }
 
-    // (5) Legacy-callers fallback. Older mobile builds use resizeForClient
-    // directly and never populate mobileSubscribers. For those PTYs the
-    // override carries the owning clientId; restore the layout when the
-    // owner disconnects. resolveDesktopRestoreTarget reads lastRendererSizes
-    // (which the legacy mobile-fit branch stashes the pre-fit size into).
+    // Older resizeForClient callers have no subscriber record; their override names the owner and lastRendererSizes holds pre-fit dimensions.
     for (const [ptyId, override] of this.terminalFitOverrides) {
       if (override.clientId !== clientId) {
         continue
@@ -168,8 +145,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       if (cur?.kind !== 'phone') {
         continue
       }
-      // Why: Indefinite hold gate — see soft-leaver branch above. Legacy
-      // mobile clients (resizeForClient path) honor the same setting.
+      // Legacy clients honor the same indefinite-hold preference.
       if (this.getAutoRestoreFitMs() == null) {
         continue
       }

@@ -1,17 +1,6 @@
-/**
- * Upgrading from 1.4.224 keeps the terminals its relay still runs, on a real Docker SSH host:
- *
- * A 1.4.224 relay runs detached with a live shell for this desktop's target, and another one for
- * another desktop's target. The upgraded desktop connects: the host converts to orcad (never
- * refused), the old shell answers typing in its old tab through the bridge, a new terminal opens on
- * orcad, the bridge survives a dropped SSH connection, and when the old shell exits its pane and
- * lease retire. The other desktop's relay and its shell are never touched.
- *
- * When another desktop on the same login already moved that terminal's project to the host's
- * server, the host stays unmoved but connected, and the old tab keeps its shell until it exits.
- *
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
- */
+// Upgrade a live detached 1.4.224 relay to managed orcad while preserving its original tab/shell across SSH loss and explicit disconnect.
+// Retire the pane/lease only on exit; never touch another desktop’s relay. If its project already moved, keep connected without moving until the shell exits.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { z } from 'zod'
 import { expect, test } from './helpers/orca-app'
@@ -338,7 +327,6 @@ async function verifyRunningRelayUpgrade(
     await expectTerminalAccessibilityText(page, storeTabId, 'GOT:after-upgrade')
     await page.screenshot({ path: testInfo.outputPath('bridged-terminal.png') })
 
-    // A new terminal opens on orcad.
     const fresh = await createPairedHostTerminal(page, environment.id, seeded.worktreeId, 'bash')
     await openPairedClientTab(page, seeded.worktreeId, fresh.webTabId)
     await callEnvironment(page, environment.id, 'terminal.send', {
@@ -349,8 +337,7 @@ async function verifyRunningRelayUpgrade(
     await expectTerminalAccessibilityText(page, fresh.webTabId, 'QA_ORCAD_NEW')
     expect(await listDockerRelayPtys(host, relay, ours.sockPath)).toEqual([ours.relayPtyId])
 
-    // Clicking back to the old tab shows the old shell, and the managed server never starts a
-    // second, unseen shell of its own for that pane.
+    // Returning to the old tab must retain its shell without a hidden managed replacement.
     await page
       .locator(`[data-testid="sortable-tab"][data-tab-id=${JSON.stringify(storeTabId)}]`)
       .click()
@@ -392,8 +379,7 @@ async function verifyRunningRelayUpgrade(
       )
       .toBe(true)
 
-    // A deliberate disconnect hangs the bridge up without an exit; after reconnecting, the old
-    // tab attaches to the new bridge and shows the shell's output again.
+    // Explicit disconnect replaces only the bridge; reconnect must reattach the same live relay shell.
     await reconnect(page, targetId)
     await expect
       .poll(() => bridgedPanes(page), { timeout: BRIDGE_TIMEOUT_MS, intervals: [2_000] })
@@ -483,7 +469,6 @@ test('a relay terminal in a project another desktop already moved keeps working 
   const desktopB = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
   let app: ElectronApplication | null = null
   try {
-    // 1. Desktop A already runs the host's managed server, holding the same repository.
     const a = await desktopA.launch()
     app = a.app
     await waitForSessionReady(a.page)
@@ -500,7 +485,6 @@ test('a relay terminal in a project another desktop already moved keeps working 
     await desktopA.close(app)
     app = null
 
-    // 2. Desktop B upgrades with that repository and a live relay terminal in it.
     const first = await desktopB.launch()
     app = first.app
     await waitForSessionReady(first.page)
@@ -560,7 +544,6 @@ test('a relay terminal in a project another desktop already moved keeps working 
     await expectTerminalAccessibilityText(page, terminalTabId, 'GOT:still-bridged')
     await page.screenshot({ path: testInfo.outputPath('unmoved-bridged-terminal.png') })
 
-    // 3. Once the old shell exits, the next connect links the project to A's server.
     await typeIntoActiveTerminal(page, 'quit')
     await expect.poll(() => bridgedPanes(page), { timeout: 60_000 }).toEqual([])
     await reconnect(page, targetId)
@@ -644,8 +627,7 @@ test('a bridged tab closed while disconnected stops its shell even after a resta
       .poll(() => bridgedPanes(page), { timeout: BRIDGE_TIMEOUT_MS })
       .toEqual([expect.objectContaining({ ptyId: bridgedPtyId, state: 'live' })])
 
-    // Disconnected, the tab closes through both of its routes: the renderer's PTY kill, which
-    // finds no SSH provider, and then the bridge transport's own close.
+    // Close while disconnected exercises both renderer PTY kill without a provider and the bridge transport close.
     await page.evaluate((id) => window.api.ssh.disconnect({ targetId: id }), targetId)
     await page.evaluate(async (ptyId) => {
       await window.api.pty.kill(ptyId)

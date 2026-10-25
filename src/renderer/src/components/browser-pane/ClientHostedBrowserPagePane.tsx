@@ -1,5 +1,6 @@
 import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
+import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import {
@@ -58,9 +59,7 @@ export function ClientHostedBrowserPagePane({
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
-  // Why: a worktree switch unmounts this pane while main keeps the guest, so the failure has to
-  // be seeded from the stored page — a fresh null here reads as "no failure" and the next sync
-  // writes that back, which also deletes the page's certificate record.
+  // Seed retained failures from the page: a fresh null on remount would clear both the error and its certificate record.
   const activeLoadFailureRef = useRef<BrowserLoadError | null>(browserTab.loadError ?? null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const isActiveRef = useRef(isActive)
@@ -78,8 +77,7 @@ export function ClientHostedBrowserPagePane({
     environmentId: runtimeEnvironmentId,
     placementPending: placement === null
   })
-  // Why: a client-hosted guest is created by main's host runtime, so there is no local guest to
-  // recreate — a lost one is page unavailability, whose panel offers the reopen-on-server escape.
+  // Main owns this guest; guest loss requires reopening on the server rather than local recreation.
   const retryGuestRecoveryRef = useRef<() => void>(() => {})
   useLayoutEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
@@ -97,9 +95,7 @@ export function ClientHostedBrowserPagePane({
     addressBarInputRef,
     guestFocus
   })
-  // Why the order matters: this resumes an interrupted edit in a layout effect, and the attach
-  // effect below syncs the bar to the guest's URL through the setter it hands back. Called after
-  // the attach effect, the resume would land on a bar that has already been overwritten.
+  // Resume the edit before attach sync writes the guest URL, or the saved draft is overwritten first.
   const { addressBarValue, setAddressBarValue, setAddressBarValueFromPage, addressBarEditSession } =
     useBrowserAddressBarEditSession({
       pageId: browserTab.id,
@@ -117,8 +113,7 @@ export function ClientHostedBrowserPagePane({
 
   useBrowserClientHostedPopupNotices(browserTab.id)
   useBrowserClientHostedPermissionNotices(browserTab.id)
-  // Why: the tour points at controls that cannot work yet, and recording the interaction is a
-  // one-way write that would burn the tour on a pane the user has not really seen.
+  // Only consume the one-time tour after placement and attachment make its controls usable.
   useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
   useBrowserPageFindShortcuts({ ...shortcutOwner, setFindOpen })
   useBrowserPageWebviewShortcuts({
@@ -292,8 +287,7 @@ export function ClientHostedBrowserPagePane({
     showFailureOverlay
   })
 
-  // Why the unrecovered case reads not-loading: nothing is coming, and a loading cue nobody
-  // will ever stop is the one state this pane must not sit in.
+  // Unrecovered pages have no pending load that could ever clear a loading indicator.
   const loading = !restoredPageUnrecovered && (placement === null || browserTab.loading)
 
   return (
@@ -360,6 +354,7 @@ export function ClientHostedBrowserPagePane({
           webviewRef={webviewRef}
           guestGeneration={pageHostGeneration}
         />
+        <BrowserLinkStatusBubble browserPageId={browserTab.id} />
         {showFailureOverlay ? (
           <ClientHostedBrowserLoadFailure
             browserTab={browserTab}

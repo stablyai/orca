@@ -3,7 +3,6 @@ import { buildCliWorkspaceProvenance } from './cli-workspace-provenance'
 
 describe('buildCliWorkspaceProvenance', () => {
   it('returns undefined when the caller sent no CLI provenance request', () => {
-    // Why: desktop/mobile/automation creates must stay unmarked.
     expect(buildCliWorkspaceProvenance(undefined, { createdAt: 5 })).toBeUndefined()
   })
 

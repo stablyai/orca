@@ -1,12 +1,5 @@
-// Every subagent the session's rosters have named, by agent id, as this client heard it.
-//
-// Folded from every roster row and revision the client receives — pages, older pages, and
-// live batches, including revisions of roster rows the item window has trimmed or never
-// loaded — and from the entries a page names beside its items for roster rows older than
-// it, so a subagent's section keeps its name and state whatever the window holds.
-// Rebuilt on every page that replaces the window, so nothing outlives an epoch or a
-// reconnect; a removed roster row takes its entries with it, and a newer revision of one
-// replaces it, as it does the window's copy, so an agent it stops naming loses its entry.
+// Retain names/state beyond the loaded window using all roster rows/revisions and page-side entries for older rows.
+// Rebuild on replacement pages across epoch/reconnect; removals and revisions discard names their source row no longer carries.
 
 import type { AgentJournalPosition, AgentJournalRenderItem } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
@@ -33,8 +26,7 @@ export const NO_STRUCTURED_AGENT_SUBAGENT_ROSTER: StructuredAgentSubagentRoster 
 /** Far above any one session's subagents; the oldest-named go first past it. */
 const MAX_ROSTER_AGENTS = 512
 
-/** Folds roster rows into `roster`, returning it unchanged when nothing it holds changed. The
- *  first roster naming an agent wins, as sections read it; that row's newer revisions update it. */
+/** First naming roster wins; newer revisions update it. Preserve map identity when unchanged. */
 export function foldStructuredAgentSubagentRoster(
   roster: StructuredAgentSubagentRoster,
   items: readonly AgentJournalRenderItem[],
@@ -116,7 +108,6 @@ export function foldStructuredAgentSubagentRoster(
   return next
 }
 
-/** The agents a roster row names, or null when the row is not one of the session's rosters. */
 function rosterAgentIds(item: AgentJournalRenderItem): ReadonlySet<string> | null {
   if (!isRootAgentJournalItem(item) || item.body.kind !== 'message') {
     return null
@@ -125,7 +116,6 @@ function rosterAgentIds(item: AgentJournalRenderItem): ReadonlySet<string> | nul
   return named.length === 0 ? null : new Set(named.map((agent) => agent.id))
 }
 
-/** Folds a history page: its rows, its removals, and the entries it names beside them. */
 export function foldStructuredAgentSubagentRosterPage(
   roster: StructuredAgentSubagentRoster | undefined,
   page: AgentSessionHistoryPage

@@ -21,7 +21,6 @@ export type DiffSection = {
   saveConflict?: true
   diffResult: GitDiffResult | null
   largeDiffRenderLimit: LargeDiffRenderLimit | null
-  // Why: combined sections keep Monaco models by path; bump on reload so
-  // refetched git content does not replay through keepCurrent* model reuse.
+  // Bump on refetch so path-owned retained Monaco models cannot replay old content.
   contentGeneration?: number
 }

@@ -39,7 +39,6 @@ vi.mock('react-native', () => ({
 vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: route.client, state: 'connected' })
 }))
-// The server's status is read for real; only the desktop's persisted records are stubbed.
 vi.mock('../transport/host-app-version-store', () => ({ recordHostAppVersion: async () => {} }))
 vi.mock('../transport/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: () => {}
@@ -54,7 +53,6 @@ vi.mock('../mobile-web-shell/MobileWebShellScreen', () => ({
     return createElement(Probe)
   }
 }))
-// Each workspace screen stands in as a probe reporting the server its subtree names.
 vi.mock('../files/MobileFileExplorerPanel', () => ({ MobileFileExplorerPanel: Probe }))
 vi.mock('../files/MobileFilePreviewScreen', () => ({ MobileFilePreviewScreen: Probe }))
 vi.mock('../source-control/MobileSourceControlPanel', () => ({ MobileSourceControlPanel: Probe }))
@@ -85,7 +83,6 @@ import { WorkspaceRoute } from './workspace-route'
 const RELAYS = [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY]
 const VAULT = 'aiVault.v1'
 
-/** What a screen under the route sees: its server, its client and its feature gates. */
 const below: {
   client: RpcClient | null
   state: ConnectionState | null
@@ -118,17 +115,14 @@ function desktopGates(hostCapabilities: string[], statusPending = false): HostSt
 }
 
 type ServerReport = Pick<MobileRelayHost, 'health' | 'relay'>
-// The pairs the desktop's `mobileRelay.hosts.list` actually sends for a server.
 const RUNNING: ServerReport = { health: 'available', relay: 'ready' }
 const STOPPED: ServerReport = { health: 'connecting', relay: 'unavailable' }
 const NO_STATUS_YET: ServerReport = { health: 'available', relay: 'unavailable' }
 const FAILED: ServerReport = { health: 'error', relay: 'unavailable' }
 const TOO_OLD: ServerReport = { health: 'connecting', relay: 'update-needed' }
 
-/** The server as the desktop reports it in `mobileRelay.hosts.list`. */
 const serverReport: { current: ServerReport } = { current: RUNNING }
 
-/** A desktop whose own status is settled as given; a status it is asked for is the server's. */
 function desktop(serverCapabilities: string[] = []): FakeSession {
   const session = new FakeSession('connected')
   session.sendRequest.mockImplementation(async (method: string) => ({
@@ -149,7 +143,6 @@ function desktop(serverCapabilities: string[] = []): FakeSession {
 }
 
 const HOST_ROUTES = fileURLToPath(new URL('../../app/h/[hostId]/', import.meta.url))
-// Every screen keyed by a workspace, native and page, found on disk so a new one is counted.
 const WORKSPACE_ROUTE_FILES = readdirSync(HOST_ROUTES, { recursive: true, encoding: 'utf8' })
   .map((entry) => entry.replaceAll('\\', '/'))
   .filter((entry) => /(^|\/)\[worktreeId\](\.web)?\.tsx$/.test(entry))
@@ -206,7 +199,7 @@ describe('every workspace route', () => {
       hostId: 'host-1',
       worktreeId: 'wt-1',
       relativePath: 'README.md',
-      // Spelled loosely, so a screen reading the raw param instead of its route is caught.
+      // Use loosely spelled executionHost to catch screens reading raw params instead of normalized route context.
       executionHost: ' runtime:vm '
     }
     desktop()
@@ -314,7 +307,7 @@ describe('a server workspace', () => {
   it('says so for a deep link under an app without the envelope, never running on the desktop', async () => {
     route.params = { hostId: 'host-1', executionHost: 'runtime:vm' }
     const shell = desktop()
-    // An app built before `rpcEnvelope` grants everything else, so the page drops just that name.
+    // Older shells lack rpcEnvelope; preserve every other granted capability while dropping that unsupported token.
     const pair = createBridgePortPair({
       rpc: shell,
       rewriteToPage: (json) => json.replace(',"rpcEnvelope"', '')

@@ -1,10 +1,9 @@
 import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
 import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
-import { MAX_BATCHED_WATCHER_EVENTS } from '../../../ipc/filesystem-watcher-event-batch'
+import { MAX_BATCHED_WATCHER_EVENTS } from '../../../ipc/filesystem/watchers/filesystem-watcher-event-batch'
 import type { FileWatchBatchCadence } from '../../../../shared/rpc-contract/files-target-params'
 
-// Why: older clients restart a read per batch and drop superseded results, so a 100 ms
-// cadence starves them on slow links; keep their trailing window unless they opt in.
+// Older clients discard superseded reads; 100ms batches starve slow links, so preserve their trailing window unless opted in.
 const LEGACY_WATCH_BATCH_TRAILING_MS = 150
 const LEGACY_WATCH_BATCH_MAX_WAIT_MS = 500
 
@@ -54,8 +53,7 @@ export function createFileWatchEventBatcher(
           events = [incomingOverflow]
           overflowed = true
         } else if (events.length + nextEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
-          // Why: once precision is too expensive to retain and stream, one
-          // overflow asks clients to refresh safely without a huge payload.
+          // When precise events exceed budget, one overflow requests refresh without a huge payload.
           events = [
             {
               kind: 'overflow',
@@ -81,7 +79,7 @@ export function createFileWatchEventBatcher(
         timer.unref?.()
         return
       }
-      // Why: never push an armed flush back; resetting on each event starved delivery under continuous writes.
+      // Never postpone an armed flush; continuous writes must not starve delivery.
       if (timer) {
         return
       }

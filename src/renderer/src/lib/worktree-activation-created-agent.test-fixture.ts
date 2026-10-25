@@ -81,8 +81,7 @@ export function seedEmptyActivatableWorktree(
     revealWorktreeInSidebar
   })
 
-  // Why: orphan terminals and reconnectable PTYs also feed renderableTabCount, so
-  // assert the premise — drift here would make the regression tests pass blind.
+  // Assert renderableTabCount premise: orphan/reconnectable PTYs count too, so fixture drift could make relaunch regressions pass blind.
   const { renderableTabCount } = useAppStore.getState().reconcileWorktreeTabModel(worktree.id)
   if (renderableTabCount !== 0) {
     throw new Error(

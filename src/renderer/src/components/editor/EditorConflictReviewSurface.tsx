@@ -40,7 +40,7 @@ export function EditorConflictReviewSurface({
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const closeFile = useAppStore((s) => s.closeFile)
-  // Why: re-render when a record gains or loses views, so the overview follows the record.
+  // Follow shared-record view ownership changes even when no other selector updates.
   useAppStore((s) => s.editorBufferViews)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const selectedConflictReviewFile = activeFile.conflictReview?.selectedFileId
@@ -64,7 +64,7 @@ export function EditorConflictReviewSurface({
     entry: GitStatusEntry
   ): { contentFile: OpenFile; recordView: OpenFile | null } => {
     const absolutePath = joinPath(activeFile.filePath, entry.path)
-    // Why: an open view of the file lends its id, so the overview mounts its record's model and draft.
+    // Borrow the open view’s ID to share its model and draft.
     const recordView = conflictOverviewView(
       useAppStore.getState(),
       activeFile.worktreeId,
@@ -148,7 +148,7 @@ export function EditorConflictReviewSurface({
           <EditorFileLoadErrorView
             message={fileContent.loadError}
             code={fileContent.loadErrorCode}
-            // Why: a borrowed view reloads through its own workspace, never re-owned by this one.
+            // Borrowed views reload through their owning workspace.
             onRetry={() => reloadContent(recordView ?? contentFile)}
           />
         </div>
@@ -182,7 +182,7 @@ export function EditorConflictReviewSurface({
     const monacoLanguage = selectedLanguage === 'notebook' ? 'json' : selectedLanguage
     const selectedViewStateKey = `${contentFile.filePath}::${viewStateScopeId}:${viewStateKeySuffix}`
     const selectedContent = editBuffers[contentFile.id] ?? fileContent.content
-    // Why: a read-only overview borrows another tab's id; it must not take that tab's reveal.
+    // Read-only overviews must not consume reveals intended for the borrowed tab.
     const reveal =
       !readOnly && matchesPendingEditorReveal(pendingEditorReveal, contentFile)
         ? pendingEditorReveal

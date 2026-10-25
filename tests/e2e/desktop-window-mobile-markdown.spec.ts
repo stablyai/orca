@@ -1,10 +1,4 @@
-/**
- * A phone reads and saves a Markdown tab on a desktop whose editor holds unsaved text for it.
- *
- * The phone always works on the file on disk, window or not: it sees the disk with the tab marked
- * dirty, and its save lands on disk. The desktop keeps its unsaved text and reports the newer disk
- * content with its usual changed-on-disk banner.
- */
+// Phone reads/saves use disk even when desktop has unsaved text; preserve the desktop edit and show its changed-on-disk banner.
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 import type {
@@ -83,7 +77,7 @@ test('a phone saves a Markdown tab the desktop has unsaved edits in, without tou
       )
       .toBe(true)
 
-    // Why poll: the desktop persists its session (which names the file) on a debounce.
+    // Poll through the debounced desktop session write that makes the tab discoverable.
     let read: RuntimeMarkdownReadTabResult | null = null
     await expect
       .poll(
@@ -170,19 +164,22 @@ test("a phone reads the desktop's unsaved untitled Markdown tab read-only and ne
     const worktree = `id:${context.worktreeId}`
     let tabId = ''
     await expect
-      .poll(async () => {
-        const listed = await phone.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-          worktree
-        })
-        tabId =
-          listed.tabs.find(
+      .poll(
+        async () => {
+          const listed = await phone.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+            worktree
+          })
+          const tab = listed.tabs.find(
             (entry) => entry.type === 'markdown' && entry.sourceFilePath === untitledPath
-          )?.id ?? ''
-        return tabId
-      })
-      .not.toBe('')
+          )
+          tabId = tab?.id ?? ''
+          return tab?.type === 'markdown' && tab.isDirty
+        },
+        { timeout: 30_000, message: 'the desktop never listed its dirty untitled Markdown tab' }
+      )
+      .toBe(true)
 
-    // Why poll: the desktop persists its session (which names the file) on a debounce.
+    // Poll through the debounced desktop session write that makes the tab discoverable.
     let read: RuntimeMarkdownReadTabResult | null = null
     await expect
       .poll(
@@ -218,7 +215,6 @@ test("a phone reads the desktop's unsaved untitled Markdown tab read-only and ne
     expect(save).toMatchObject({ ok: false, error: { message: 'unsupported_untitled' } })
     expect(readFileSync(untitledPath, 'utf8')).toBe(disk)
 
-    // With no file on disk the read fails, and a save still makes none.
     rmSync(untitledPath)
     const missingRead = await phone.request('markdown.readTab', { worktree, tabId })
     testInfo.annotations.push({

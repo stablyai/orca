@@ -223,10 +223,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
   })
 
   it('closes a half-open subscription socket via client liveness so callers can resubscribe', async () => {
-    // Why: dedicated stream sockets (terminal.multiplex, browser.screencast)
-    // must not hang forever when a tunnel goes half-open — no close frame, no
-    // pongs, no data (#7718). Client liveness surfaces onError/onClose so the
-    // renderer's onTransportClose resubscribe path can run.
+    // Half-open dedicated streams get no close/pongs/data; client liveness must trigger onError/onClose so renderer resubscription runs (#7718).
     const server = await createSubscriptionServer({ disableAutoPong: true })
     const onResponse = vi.fn()
     const onError = vi.fn()
@@ -530,8 +527,7 @@ describe('sendRemoteRuntimeRequest', () => {
 async function createSubscriptionServer(
   options: {
     sendMismatchedResponseAfterSubscribe?: boolean
-    // Why: half-open simulation — the socket stays open but never answers
-    // protocol pings, like a wedged tunnel that swallows frames silently.
+    // Simulate half-open tunnels by leaving sockets open without pong replies.
     disableAutoPong?: boolean
   } = {}
 ): Promise<{

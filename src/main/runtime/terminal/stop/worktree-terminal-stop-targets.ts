@@ -9,8 +9,7 @@ import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
 
-// Why: a newer overlapping inventory (e.g. the session republish the exit itself triggers) voids
-// this one; retry within one list budget instead of reporting a confirmed stop as unverifiable.
+// Overlapping inventories can invalidate post-stop checks; retry within a fresh list budget before calling confirmed exits unverifiable.
 const POST_STOP_LIVENESS_RETRY_MS = PTY_CONTROLLER_LIST_TIMEOUT_MS
 const POST_STOP_LIVENESS_RETRY_DELAY_MS = 100
 
@@ -155,8 +154,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
         ptyIds.add(pty.ptyId)
       }
     }
-    // Switch point: a registered terminal main's layout binds may run through a host's listing gap,
-    // as the window kept it connected; only a certified exit, or a fresh inventory, drops it.
+    // Main-bound terminals can survive listing gaps; only certified exits or fresh inventory remove them.
     for (const pty of ORCA_LAYOUT_OWNER_IS_MAIN ? this.ptysById.values() : []) {
       if (
         worktreeIdsEqual(pty.worktreeId, worktreeId) &&

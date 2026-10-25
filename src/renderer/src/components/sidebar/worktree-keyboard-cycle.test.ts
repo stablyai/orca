@@ -66,9 +66,6 @@ describe('resolveCycledWorktreeId', () => {
   })
 
   it('enters from the matching end when the active worktree is not cyclable', () => {
-    // Why: the active worktree stays selected inside a group the user collapsed,
-    // so it is absent from the cyclable list; arrowing should not always jump to
-    // the top.
     expect(
       resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'hidden', direction: 'down' })
     ).toBe('a')
@@ -111,8 +108,6 @@ describe('getCyclableWorktreeIds', () => {
   }
 
   it('keeps a pinned worktree cyclable when only its natural group is collapsed', () => {
-    // Why: `single-location` renders a pinned worktree solely under Pinned, so
-    // rebuilding the cycle list from natural groups alone would drop it.
     const rows: HostSectionRow[] = [worktree('pinned-a', true), worktree('plain-b')]
 
     expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual(['pinned-a', 'plain-b'])
@@ -206,8 +201,6 @@ describe('getCyclableWorktreeIds', () => {
   })
 
   it('drops worktrees the sidebar elided inside a collapsed host section', () => {
-    // Why: addHostSectionRows omits a collapsed host's rows entirely, so anything
-    // it removed must not stay reachable by arrowing.
     const rows: HostSectionRow[] = [
       {
         type: 'host-header',

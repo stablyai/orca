@@ -88,7 +88,8 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
-    allowEmptyPromptLaunch: true
+    allowEmptyPromptLaunch: true,
+    ...(args.promptDelivery === 'submit-after-ready' ? { suppressStartupUpdatePrompt: true } : {})
   })
   if (startupPlan && args.promptDelivery === 'draft') {
     startupPlan.draftPrompt = args.draftContent
@@ -148,7 +149,6 @@ export function notifyDirectWorkItemAgentStartTimeout(agent: TuiAgent, submit: b
       { value0: submit ? 'prompt' : 'work item context' }
     )
   )
-  // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
-  // on the dashboard is the trigger to add one.
+  // Process-startup timeout has no v1 telemetry slot; unknown counts signal when to add one.
   track('agent_error', { error_class: 'unknown', agent_kind: tuiAgentToAgentKind(agent) })
 }

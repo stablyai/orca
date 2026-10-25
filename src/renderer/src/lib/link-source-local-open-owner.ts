@@ -21,8 +21,7 @@ export function getLinkSourceLocalOpenOwner(
     case 'unknown':
       return 'unresolved'
     case 'local':
-      // Why: a runtime workspace without a nested SSH target also reports no connection, so only
-      // the catalog row proves the document is on this computer.
+      // No connection can also mean runtime-owned; require catalog proof before opening the path locally.
       return worktreeId
         ? (getResolvedExecutionHostIdForWorktree(state, worktreeId) ?? 'unresolved')
         : 'local'

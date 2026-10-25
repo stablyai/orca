@@ -89,7 +89,6 @@ describe('planAgentSessionLaunch', () => {
         promptDelivery: 'submit-after-ready',
         resumeFrom,
         onPromptDelivered,
-        // The chat is created on the host the route was decided for.
         executionHostId: 'local'
       },
       hooks
@@ -112,7 +111,6 @@ describe('planAgentSessionLaunch', () => {
     )
   })
 
-  // The route is the one gate: it admits only an agent the host registered as structured.
   it('launches any agent the structured route admitted', async () => {
     const plan = planAgentSessionLaunch(store, {
       requestId: 'request-4',
@@ -211,7 +209,6 @@ describe('structuredAgentSessionLaunchFeasible', () => {
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
     })
-    // The builder's input carries no settings, so seeing them here proves the named copy won.
     expect(mocks.structuredAgentLaunchSupported).toHaveBeenCalledWith(
       expect.objectContaining({ ...ROUTE_INPUT, settings })
     )

@@ -41,13 +41,11 @@ function normalizeInspectionResult(
       typeof result.reason === 'string' ? result.reason : 'transport_loss'
     )
   }
-  // An old host has no evidence member. Its compatibility process name is not
-  // an observation and must never reach remote identity consumers.
+  // Old-host compatibility process names are not observed evidence; exclude them from remote identity.
   if (remote && result.foregroundProcessEvidence === undefined) {
     return clientOnlyUnverifiableInspection('old_host')
   }
-  // Older main/preload pairs may still return the removed boolean. Normalize it
-  // at the boundary while those peers are being upgraded.
+  // Normalize removed booleans from older main/preload pairs during upgrades.
   if (
     result &&
     typeof result === 'object' &&
@@ -89,9 +87,7 @@ export async function inspectRuntimeTerminalProcess(
         ...(options?.expectedIncarnationId
           ? { expectedIncarnationId: options.expectedIncarnationId }
           : {}),
-        // Why forwarded: the close guards pass this so the host pays for a real child-process read.
-        // Dropped here, the host declines to scan and answers `unverifiable`, which the guard reads
-        // as running work -- a confirmation dialog on every idle close of a remote Windows pane.
+        // Close guards request real process scans; dropping this causes unverifiable and confirmation on every idle remote Windows close.
         ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       },
       { timeoutMs: 15_000 }
@@ -138,8 +134,7 @@ export function sendRuntimePtyInput(
     return false
   }
   if (tooLarge !== false) {
-    // Why: this is a fire-and-forget path, so accepted paste-sized input must
-    // yield before validation and then dispatch without blocking the renderer.
+    // Yield before validating/dispatching fire-and-forget paste-sized input to avoid blocking renderer.
     void tooLarge
       .then((resolvedTooLarge) => {
         if (!resolvedTooLarge) {
@@ -152,8 +147,7 @@ export function sendRuntimePtyInput(
   return sendRuntimePtyInputWithinLimit(ptyId, data, inputKind)
 }
 
-// Why the kind reaches only the local write: terminal.send has no launch kind, and its query-reply
-// kind is for mobile clients, so the host classifies a desktop's environment write by its bytes.
+// Only local writes accept launch kind; terminal.send’s query-reply kind is mobile-only, so host classifies desktop remote writes by bytes.
 function sendRuntimePtyInputWithinLimit(
   ptyId: string,
   data: string,
@@ -178,8 +172,7 @@ function sendRuntimePtyInputWithinLimit(
       }
     })
     .catch(() => {
-      // Why: web session snapshots can retire a remote handle while xterm still
-      // flushes a final input event. The next host snapshot will reattach.
+      // Mirror can retire handles while xterm flushes final input; next host snapshot reattaches.
     })
   return true
 }

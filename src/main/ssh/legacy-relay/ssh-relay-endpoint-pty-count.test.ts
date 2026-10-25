@@ -18,7 +18,6 @@ vi.mock('../ssh-channel-multiplexer', () => ({
 import { countRelayEndpointPtys, relayBridgeConnectCommand } from './ssh-relay-endpoint-pty-count'
 
 const exec = vi.fn(async () => ({}))
-// Only exec is read; the bridge transport itself is mocked above.
 const conn: SshConnection = Object.assign(Object.create(null), { exec })
 const SOCK = '/home/dev/.orca-remote/relay-1.4.0/relay-abc.sock'
 

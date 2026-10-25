@@ -5,7 +5,6 @@ import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
 import {
   applyTerminalQuickCommandMutation,
-  MAX_QUICK_COMMANDS,
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
@@ -53,8 +52,7 @@ export class RuntimeClientSettingsController {
       throw new Error('runtime_unavailable')
     }
     const settings = this.store.getSettings()
-    // Why composed: paired clients (the phone's resume, legacy-host chat checks) read the flag in
-    // this text as the permission, as every client before the stored choice did.
+    // Older clients read permission from composed argument text, before a stored choice existed.
     const launchProfile = composeAgentLaunchProfile(settings, process.platform)
     return {
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
@@ -64,8 +62,7 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
-      // Why projected: mobile's terminal Copy honours this, and a host predating
-      // the setting sends no key, which the client reads as on (#19770).
+      // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
@@ -91,15 +88,14 @@ export class RuntimeClientSettingsController {
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
-      // Why projected: a web client's Settings → Chat edits this host's new-chat default.
+      // Paired web Chat settings edit this host's new-chat default.
       ...(settings.nativeChatPermissionMode
         ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
         : {}),
       ...(settings.agentNativeChatPermissionModes
         ? { agentNativeChatPermissionModes: settings.agentNativeChatPermissionModes }
         : {}),
-      // Why projected: a paired client's AI buttons start these actions' agents, and must honour
-      // the agent saved for each one as the desktop does. Absent on older hosts.
+      // Project per-action agent recipes so paired AI buttons honor host choices; older hosts omit them.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
       hostSettingOverrides: Object.fromEntries(
         [
@@ -213,13 +209,6 @@ export class RuntimeClientSettingsController {
       throw new Error('runtime_unavailable')
     }
     const current = this.getTerminalQuickCommands()
-    if (
-      mutation.type === 'upsert' &&
-      !current.some((command) => command.id === mutation.command.id) &&
-      current.length >= MAX_QUICK_COMMANDS
-    ) {
-      throw new Error('Quick command limit reached')
-    }
     const next = applyTerminalQuickCommandMutation(current, mutation)
     this.store.updateSettings({ terminalQuickCommands: next }, { notifyListeners: true })
     return this.getTerminalQuickCommands()

@@ -1,8 +1,6 @@
 import { z } from 'zod'
 
-// Step 5 wire between directors and cells (v1). Directors book a seat on a cell before
-// answering a desktop; the cell admits or refuses each booking itself. Readers ignore
-// unknown fields, so either side may add optional ones.
+// v1 director/cell booking wire: cell decides each seat before desktop assignment; ignore unknown fields for independent upgrades.
 
 export const CELL_RESERVE_PATH = '/internal/reserve'
 export const CELL_DEMOTE_PATH = '/internal/demote'

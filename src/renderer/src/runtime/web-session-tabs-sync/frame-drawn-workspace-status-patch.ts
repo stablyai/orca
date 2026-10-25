@@ -13,11 +13,7 @@ import { writableWebSessionTabsRecord } from './state-equality-core'
 import { buildMirroredTerminalTabs } from './terminal-build'
 import { isMirroredTerminalSurfaceId, isTerminalSurfaceTab } from './terminal-surfaces'
 
-/**
- * A frame-drawn workspace's share of one snapshot: agent status, unread markers, and the handles of
- * client-hosted pages this desktop created. Its tabs, layout, bindings and focus belong to the
- * layout frames, so none of those slices are written.
- */
+/** Apply status/unread and newly created client-page handles only; layout frames own tabs, layout, bindings and focus. */
 export function buildFrameDrawnWorkspaceStatusPatch(
   state: WebSessionTabsSyncState,
   snapshot: RuntimeMobileSessionTabsResult,
@@ -33,7 +29,7 @@ export function buildFrameDrawnWorkspaceStatusPatch(
     terminalSurfaceTabs.map((surface) => toWebTerminalSurfaceTabId(surface.parentTabId))
   )
   const removalFrame = isWebSessionTabsWorktreeRemovalFrame(snapshot)
-  // Why both sources: frames may drop a retracted tab before or after the host's snapshot says so.
+  // Frames may remove retracted tabs before or after the host snapshot; inspect both.
   const retractedTabIds = [
     ...new Set([
       ...previousSnapshotTabIds,
@@ -69,7 +65,7 @@ export function buildFrameDrawnWorkspaceStatusPatch(
     batchContext
   )
   const retiredTabs = new Set(retractedTabIds)
-  // The sweep requires the retired tabs to be absent; frames may still hold them, so hide them here only.
+  // Hide retired tabs only for the sweep, which requires absence; frames may still hold them.
   const sweepTabsByWorktree = {
     ...state.tabsByWorktree,
     [worktreeId]: currentTerminalTabs.filter((tab) => !retiredTabs.has(tab.id))

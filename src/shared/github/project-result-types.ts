@@ -1,6 +1,4 @@
-// Why: the ok/error envelopes returned by Project IPC calls all share one
-// classified error, and they pull in cross-module work-item/comment/user types
-// that the ProjectV2 data model in `./project-types` never needs.
+// Project IPC envelopes share classified failures and cross-module work-item/comment/user types unnecessary in the ProjectV2 domain model.
 import type { PRComment } from './comment-types'
 import type {
   GitHubIssueType,
@@ -11,8 +9,6 @@ import type {
 } from './project-types'
 import type { GitHubAssignableUser } from './pull-request-types'
 import type { GitHubWorkItemDetails } from './work-item-types'
-
-// ─── Classified errors ─────────────────────────────────────────────────
 
 export type GitHubProjectViewErrorType =
   | 'auth_required'
@@ -29,8 +25,7 @@ export type GitHubProjectViewErrorType =
 export type GitHubProjectViewError = {
   type: GitHubProjectViewErrorType
   message: string
-  /** Populated when the error is classifiable from a GraphQL response. Never
-   *  includes tokens or full command stdout. */
+  /** Classified GraphQL details only; never include tokens or full command stdout. */
   details?: { path?: (string | number)[]; code?: string }
 }
 
@@ -48,10 +43,7 @@ export type ListAccessibleProjectsResult =
   | {
       ok: true
       projects: GitHubProjectSummary[]
-      /** Why: per-org discovery can partially fail (a single org 504s while
-       *  the rest succeed). The picker renders a banner listing the affected
-       *  org logins so the user knows their list is incomplete and can paste
-       *  a URL to reach missing projects. Empty when discovery was clean. */
+      /** Org discovery can partially fail; name failed owners so the picker can show incompleteness and accept pasted URLs for missing projects. */
       partialFailures?: { owner: string; message: string }[]
     }
   | { ok: false; error: GitHubProjectViewError }
@@ -64,10 +56,7 @@ export type ResolveProjectRefResult =
       number: number
       title: string
       host?: string
-      // Why: when the input is a /views/{n} URL, surface the parsed view
-      // number so the picker can skip the view-pick step and commit the
-      // selection directly. Absent for owner/number shorthand and project
-      // URLs without a /views/ segment.
+      // Parsed /views/{n} lets the picker commit directly; absent for shorthand and plain project URLs.
       viewNumber?: number
     }
   | { ok: false; error: GitHubProjectViewError }
@@ -79,8 +68,6 @@ export type ListProjectViewsResult =
 export type ProjectWorkItemDetailsBySlugResult =
   | { ok: true; details: GitHubWorkItemDetails }
   | { ok: false; error: GitHubProjectViewError }
-
-// ─── Mutations ─────────────────────────────────────────────────────────
 
 export type GitHubProjectMutationResult =
   | { ok: true }

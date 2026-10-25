@@ -28,14 +28,7 @@ const CANCELLED_MESSAGE: Record<HostAccountSignInProvider, string> = {
   codex: CODEX_LOGIN_CANCELLED_MESSAGE
 }
 
-/**
- * One server's sign-in for one provider, as this client drives it:
- * `checking` (capability) -> `starting` (start sent) -> `following` (the host's flow) -> settled.
- * A Cancel only sets `cancelRequested`; the run loop delivers it as soon as the host has named its
- * flow, and again after any answer until the host has taken it. Registered before the first await,
- * so no Cancel is lost, and pinned to the pairing it started on: a re-paired id names another
- * machine, which must never get this flow's code.
- */
+/** Per-provider host sign-in: checking → starting → following → settled. Register before await so Cancel persists until host names/acknowledges its flow, retrying after answers. Pin original pairing so another machine never receives the code. */
 type Attempt = {
   owner: EnvironmentTarget
   provider: HostAccountSignInProvider
@@ -182,8 +175,7 @@ function runHostAccountSignIn(
   if (running?.done) {
     return running.done
   }
-  // Why one server per provider: Settings shows one Add/Cancel per provider, so Cancel always
-  // has exactly one sign-in it can mean, even after Settings reopens on another server.
+  // One Add/Cancel per provider requires exactly one active server flow, even after Settings switches servers.
   if (runningHostAccountSignInOwner(provider)) {
     return Promise.reject(
       new Error(

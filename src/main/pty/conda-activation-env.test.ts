@@ -3,8 +3,7 @@ import { dropIncoherentCondaActivationEnv } from './conda-activation-env'
 
 describe('dropIncoherentCondaActivationEnv', () => {
   it('drops the activation group when the sentinel outlived CONDA_PREFIX', () => {
-    // Why: this exact shape is what makes `conda activate` raise
-    // "TypeError: expected str, bytes or os.PathLike object, not NoneType" (#14195).
+    // This half-activated shape crashes conda activate with a NoneType path error (#14195).
     const env: Record<string, string> = {
       CONDA_SHLVL: '1',
       CONDA_DEFAULT_ENV: 'base',
@@ -27,8 +26,7 @@ describe('dropIncoherentCondaActivationEnv', () => {
     expect(env.CONDA_PROMPT_MODIFIER).toBeUndefined()
     expect(env.CONDA_PREFIX_1).toBeUndefined()
     expect(env.CONDA_STACKED_2).toBeUndefined()
-    // Discovery vars are installation state, not activation state: keeping them
-    // is what lets the shell's conda hook re-activate from a clean slate.
+    // Keep discovery state so the shell hook can reactivate.
     expect(env.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
     expect(env.CONDA_ROOT).toBe('/opt/miniconda3')
     expect(env.CONDA_PYTHON_EXE).toBe('/opt/miniconda3/bin/python')
@@ -90,7 +88,7 @@ describe('dropIncoherentCondaActivationEnv', () => {
 
     expect(windowsEnv).toEqual({ CONDA_EXE: 'C:\\miniconda3\\Scripts\\conda.exe' })
 
-    // Why the same input is untouched on POSIX: a lowercase name is a different variable there.
+    // POSIX variable names are case-sensitive.
     const posixEnv: Record<string, string> = {
       Conda_Shlvl: '1',
       CONDA_Default_Env: 'base',

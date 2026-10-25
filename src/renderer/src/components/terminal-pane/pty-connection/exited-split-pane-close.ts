@@ -2,11 +2,7 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { expectPaneToClose } from '@/runtime/layout-owner-pane-intents'
 import { useAppStore } from '@/store'
 
-/**
- * A split pane whose terminal ended, in a layout-owner build: main saw the exit and closes the
- * pane by the same rule, so the window only expects main's frame to drop it. False when a paired
- * server owns the workspace; the caller closes as today.
- */
+/** Layout-owner main closes exited panes; wait for its frame. Paired-server ownership returns false for caller-managed close. */
 export function expectExitedSplitPaneClose(pane: {
   worktreeId: string
   tabId: string

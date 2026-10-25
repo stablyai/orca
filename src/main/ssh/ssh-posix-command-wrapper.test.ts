@@ -11,7 +11,6 @@ import {
   wrapRemoteCommandForPosixShell
 } from './ssh-posix-command-wrapper'
 
-/** A PATH directory whose tools shadow the host's. */
 function shimDir(tools: Record<string, string>): string {
   const bin = mkdtempSync(join(tmpdir(), 'orca-wrapper-shims-'))
   for (const [name, script] of Object.entries(tools)) {

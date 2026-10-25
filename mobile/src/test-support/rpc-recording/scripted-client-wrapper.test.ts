@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 
-/**
- * What the seam promises a wrapped transport: one name per physical send, in the order the
- * operation made them. A wrapper that drops a send breaks that promise silently, and the recorder
- * would file the next payload under the dropped call's name.
- */
+// Require one physical send per logical name in call order; dropped sends must fail before mislabelling later payloads.
 describe('a wrapper between the operation and the scripted transport', () => {
   it('is caught when it swallows a send, rather than mislabelling the next payload', () => {
     const transport = new ScriptedRpcTransport(

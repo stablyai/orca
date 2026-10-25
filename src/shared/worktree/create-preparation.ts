@@ -6,7 +6,7 @@ const WORKTREE_CREATE_PREPARATION_ID_PATTERN =
 // Appended last so older builds, which read only the pid field, still parse the reason.
 const WORKTREE_CREATE_PREPARATION_MACHINE_FIELD = ':machine='
 
-/** The machine is what makes the pid meaningful: a repo on a shared disk is seen by other hosts. */
+/** Machine identity scopes a PID when several hosts see the same shared-disk repo. */
 export function createWorktreePreparationLockReason(
   sessionId: string,
   machineIdentity?: string | null
@@ -55,9 +55,6 @@ export function isWorktreeCreatePreparation(worktree: {
   lockReason?: string
   branch?: string
 }): boolean {
-  // The Git lock reason is the durable ownership proof. A path can be chosen
-  // by a user (including for an uncommitted detached worktree), so path shape
-  // alone must never hide or force-remove it. A crash before locking may leave
-  // an unlocked detached entry for manual cleanup, but cannot delete user data.
+  // Only the Git lock reason proves preparation ownership; user-chosen paths must never authorize hiding or force-removal. A pre-lock crash leaves manual cleanup, not deletion authority.
   return parseWorktreePreparationOwnerPid(worktree.lockReason) !== null
 }

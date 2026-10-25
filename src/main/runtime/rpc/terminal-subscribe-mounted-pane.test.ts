@@ -344,8 +344,7 @@ describe('terminal subscribe for a pane the desktop already has mounted', () => 
   })
 
   it('falls back to the mount wait within one serialize when the flag outlives its pane', async () => {
-    // Nothing clears the flag when a tab closes over a live PTY; the IPC then answers null at its
-    // 750 ms deadline while a busy PTY moves output under every attempt.
+    // Closed tabs leave stale mounted flags; null IPC replies wait 750ms while busy output can invalidate every renderer attempt.
     let sequence = 4
     const subscription = subscribeMobile({
       rendererScreen: () => null,

@@ -407,8 +407,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
   })
 
   it('skips a branch-less worktree instead of throwing', () => {
-    // Why: Cmd+J builds this index for every worktree before any query is typed,
-    // so a folder workspace (empty branch) or a partially hydrated row reaches it.
+    // The index includes branch-less folder workspaces and partially hydrated rows before any query.
     const branchless: Worktree = {
       ...worktree,
       id: 'worktree-folder',

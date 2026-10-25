@@ -102,8 +102,7 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
     },
     osc52ClipboardDefaultOnNoticePending: false,
     clearOsc52ClipboardDefaultOnNotice: () => {
-      // Why clear locally first: a failed persist must not re-toast this session. It will
-      // re-arm on the next launch, which is the safe direction for a one-shot notice.
+      // Clear locally before persisting to prevent repeat toasts on failure; next launch may re-arm the notice.
       set({ osc52ClipboardDefaultOnNoticePending: false })
       void window.api.ui.set({ osc52ClipboardDefaultOnNoticePending: false }).catch(console.error)
     },

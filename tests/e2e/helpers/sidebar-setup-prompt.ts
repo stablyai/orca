@@ -3,11 +3,7 @@ import { expect } from '@stablyai/playwright-test'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { getRepoHostIdentityForParts } from '../../../src/shared/repo-host-identity'
 
-/**
- * Dismisses the setup-script prompt for every loaded repo, as its Dismiss button does. The seeded
- * repo's detected setup command shows the card over the sidebar's lower rows, and it re-inspects
- * and reappears whenever the active workspace changes, so a visibility check can miss it.
- */
+// Dismiss every loaded repo’s setup prompt through its action; workspace switches can re-inspect and show it between visibility checks.
 export async function dismissSetupScriptPrompts(page: Page): Promise<void> {
   const repos = await page.evaluate(() =>
     (window.__store?.getState().repos ?? []).map((repo) => ({

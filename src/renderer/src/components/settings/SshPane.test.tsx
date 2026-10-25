@@ -274,7 +274,6 @@ describe('bulk removal from SSH settings', () => {
       host('gamma', { orcadFence: { environmentId: 'env-gamma' } })
     ])
     await act(async () => checkbox(pane, 'alpha').click())
-    // Shift-click selects the range alpha..gamma.
     await act(async () => {
       checkbox(pane, 'gamma').dispatchEvent(
         new MouseEvent('click', { bubbles: true, shiftKey: true })
@@ -310,7 +309,6 @@ describe('bulk removal from SSH settings', () => {
       (button) => button.textContent === 'Test'
     )
     await act(async () => test?.click())
-    // A connected host is skipped, as on its own row.
     expect(mocks.toast).toHaveBeenCalledWith('1 reachable · 1 failed · 1 already connected', {
       description: 'beta: timed out'
     })
@@ -338,7 +336,7 @@ describe('bulk removal from SSH settings', () => {
     expect(mocks.requestRemove).toHaveBeenCalledWith(expect.objectContaining({ id: 'beta' }))
     expect(mocks.requestBulkRemove).not.toHaveBeenCalled()
 
-    // When a filter hides the last selected host, the bar says so instead of just vanishing.
+    // Explain when filtering deselects the last host instead of silently hiding the bulk bar.
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(filter, 'c3')
       filter.dispatchEvent(new Event('input', { bubbles: true }))

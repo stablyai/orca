@@ -28,8 +28,6 @@ type QuotaLimit = {
   nextResetTime?: unknown
 }
 
-// Why readers and not casts: both JSON sources are outside our control — a user-edited
-// config file and a remote response — so their shape is a guess until something checks it.
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

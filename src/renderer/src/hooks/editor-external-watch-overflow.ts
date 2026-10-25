@@ -1,5 +1,4 @@
 import { useAppStore } from '@/store'
-import { openFileOwnerScope } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorExternalWatchBatchPathIndex } from '@/components/editor/editor-external-watch-path-index'
 import { isExternalReloadableEditorTab } from '@/components/editor/editor-autosave'
@@ -76,22 +75,17 @@ type EditTabProbe = {
   notification: EditorExternalWatchNotification
 }
 
-/**
- * An overflow names no paths, so every clean tab of the workspace reloads.
- * A resync (the watch was down) also probes clean edit tabs for deletion; an event-storm overflow
- * skips that so it never fans out per-tab probes.
- */
+/** Overflow reloads clean workspace tabs; reconnect resync also probes deletions, while event-storm overflow avoids per-tab probe fan-out. */
 export function reconcileEditorTabsAfterOverflow(target: OverflowTarget, resync: boolean): void {
   if (resync) {
-    // Why: unmounted combined-diff tabs get no per-path reload, so drop their cached bodies before a remount replays them.
+    // Invalidate bodies for unmounted combined diffs too, before remount can replay stale cached content.
     forgetCombinedDiffViewBodiesForWorktree(target.worktreeId)
   }
   const state = useAppStore.getState()
   const probes: EditTabProbe[] = []
   for (const file of state.openFiles) {
-    const ownerScope = openFileOwnerScope(file, state)
     if (
-      ownerScope.worktreeId !== target.worktreeId ||
+      file.worktreeId !== target.worktreeId ||
       getOpenFileRuntimeOwner(file) !== (target.runtimeEnvironmentId ?? null) ||
       !isExternalReloadableEditorTab(file)
     ) {
@@ -116,7 +110,7 @@ export function reconcileEditorTabsAfterOverflow(target: OverflowTarget, resync:
     const notification: EditorExternalWatchNotification = {
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
-      relativePath: ownerScope.relativePath,
+      relativePath: file.relativePath,
       runtimeEnvironmentId: target.runtimeEnvironmentId ?? null,
       ...getLocalWindowsWslAliasOption(target)
     }
@@ -180,7 +174,7 @@ async function probeEditTabs(
   }
 }
 
-// Why: reloading a file deleted while unwatched would swap the last content for a read error; mark it deleted as a watch event would.
+// Mark confirmed deletions instead of replacing last-known content with read errors.
 async function reloadEditTabsUnlessGone(
   target: OverflowTarget,
   probes: readonly EditTabProbe[]

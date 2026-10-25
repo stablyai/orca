@@ -1,14 +1,4 @@
-/**
- * E2E tests for the workspace Back / Forward titlebar buttons + their
- * Cmd/Ctrl+Alt+Arrow shortcuts.
- *
- * Covers edge cases that unit tests cannot exercise:
- *   - Button DOM disabled/hidden states across view transitions.
- *   - De-dup: re-activating the current worktree does not grow history.
- *   - Forward-stack truncation after a mid-history activation.
- *   - Keyboard shortcuts fire the same back/forward path as clicks.
- *   - Shortcuts no-op in non-terminal views (buttons also hidden there).
- */
+// Drive Back/Forward buttons and Cmd/Ctrl+Alt+Arrow through DOM view guards, history dedupe/truncation and shortcuts.
 
 import { test, expect } from './helpers/orca-app'
 import type { Page } from '@stablyai/playwright-test'
@@ -21,18 +11,10 @@ import {
 } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
 
-/**
- * Record a visit through the same two store calls that
- * `activateAndRevealWorktree` makes for the history slice, without having to
- * expose the activation helper on window. This mirrors production ordering:
- * `setActiveWorktree` first, then `recordWorktreeVisit` (skipped by the real
- * helper when `isNavigatingHistory` is true — not relevant for seeding).
- */
+// Seed in production order: setActiveWorktree then recordWorktreeVisit; actual history navigation skips recording.
 async function seedVisit(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((id) => {
-    // Why: window.__store is typed minimally in runtime-types.ts. At runtime it
-    // is the full Zustand vanilla store (setState/getState/subscribe), so we
-    // widen to call the nav-history slice actions directly.
+    // runtime-types exposes a minimal store type; runtime Zustand also supports navigation slice actions.
     type StoreLike = {
       getState: () => {
         setActiveWorktree: (worktreeId: string) => void
@@ -95,8 +77,7 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await expect(await getBackButton(orcaPage)).toBeVisible()
     await expect(await getForwardButton(orcaPage)).toBeVisible()
 
-    // Why: Settings and other views outside the navigation history stack must
-    // not render the buttons at all, rather than merely disabling them.
+    // Outside-history views must omit navigation buttons entirely.
     await orcaPage.evaluate(() => {
       window.__store!.getState().openSettingsPage()
     })
@@ -111,9 +92,7 @@ test.describe('Workspace Back/Forward Navigation', () => {
   })
 
   test('both buttons disabled at cold start with a single history entry', async ({ orcaPage }) => {
-    // The test fixture already activated a worktree during setup, so one entry
-    // may or may not exist. Reset the slice to a known empty baseline, then
-    // record the current worktree as the single entry.
+    // Reset fixture-dependent history and seed exactly one visit.
     const activeId = await getActiveWorktreeId(orcaPage)
     expect(activeId).not.toBeNull()
 
@@ -140,10 +119,7 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await expect(back).toBeEnabled()
     await expect(forward).toBeDisabled()
 
-    // Why: use the sidebar's option `aria-current` as the DOM signal for "this
-    // worktree is currently active". `aria-selected` is reserved for batch
-    // multi-select state, so a store-only `activeWorktreeId` check would miss
-    // render-layer regressions in the active row.
+    // Assert sidebar aria-current for active worktree; aria-selected tracks batch selection and store-only reads miss render regressions.
     const primaryRow = worktreeRow(orcaPage, primaryId)
     const secondaryRow = worktreeRow(orcaPage, secondaryId)
 
@@ -189,24 +165,16 @@ test.describe('Workspace Back/Forward Navigation', () => {
     test.skip(worktreeIds.length < 2, 'Need at least two worktrees to exercise forward truncation')
     const [primaryId, secondaryId] = worktreeIds
 
-    // Stack: primary -> secondary. Go back to primary, then "activate" primary
-    // again via a fresh visit (simulating a sidebar click on the same entry
-    // from mid-history). The current-entry dedupe should kick in, but if we
-    // instead activate secondary while sitting on primary mid-history, the
-    // forward entry pointing at secondary must be truncated.
+    // From primary→secondary, go back then re-visit primary to test current-entry dedupe before a new secondary activation truncates forward history.
     await resetNavHistory(orcaPage)
     await seedVisit(orcaPage, primaryId)
     await seedVisit(orcaPage, secondaryId)
     await (await getBackButton(orcaPage)).click()
     await expect.poll(() => getActiveWorktreeId(orcaPage)).toBe(primaryId)
 
-    // Forward button is live — a forward entry exists.
     await expect(await getForwardButton(orcaPage)).toBeEnabled()
 
-    // Fresh activation from mid-history. Using secondary again is the simplest
-    // way to prove truncation happened: after this call, the stack must be
-    // [primary, secondary] with index=1, so Forward is disabled even though
-    // there *was* a forward entry moments ago.
+    // Re-activate secondary mid-history; require [primary,secondary] at index 1 and disabled Forward.
     await seedVisit(orcaPage, secondaryId)
     const snapshot = await getNavHistorySnapshot(orcaPage)
     expect(snapshot.history).toEqual([primaryId, secondaryId])
@@ -223,10 +191,7 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await seedVisit(orcaPage, primaryId)
     await seedVisit(orcaPage, secondaryId)
 
-    // Why: focus body so the window-level keydown capture handler runs without
-    // an `isEditableTarget` bail-out. The xterm helper textarea is explicitly
-    // treated as non-editable, but body is the simplest stable target in a
-    // hidden-window Electron run.
+    // Focus body so editable-target checks cannot swallow the window shortcut in hidden Electron.
     await orcaPage.evaluate(() => document.body.focus())
 
     await orcaPage.keyboard.press(`${mod}+Alt+ArrowLeft`)
@@ -253,8 +218,7 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await seedVisit(orcaPage, primaryId)
     await seedVisit(orcaPage, secondaryId)
 
-    // Enter settings. The back shortcut must not change the active worktree,
-    // matching the view-guard in App.tsx and useIpcEvents.ts.
+    // Settings is outside history; its shortcut must preserve active worktree.
     await orcaPage.evaluate(() => {
       window.__store!.getState().openSettingsPage()
     })
@@ -266,8 +230,7 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await orcaPage.evaluate(() => document.body.focus())
     await orcaPage.keyboard.press(`${mod}+Alt+ArrowLeft`)
 
-    // Give any erroneous nav a beat to land, then assert the active worktree
-    // and the slice index both stayed put.
+    // Allow erroneous navigation to land before requiring unchanged worktree/index.
     await orcaPage.waitForTimeout(150)
     expect(await getActiveWorktreeId(orcaPage)).toBe(idBefore)
     const snapshot = await getNavHistorySnapshot(orcaPage)

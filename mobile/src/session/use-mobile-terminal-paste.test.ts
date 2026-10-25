@@ -3,15 +3,11 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 
-// `useMemo` joins `useCallback` because the paste now reads the clipboard through the platform
-// seam, which is a hook. Called rather than cached: this test mounts nothing, so there is no
-// render to hold a value across.
+// Call memo factories directly: this hook-only harness has no mounted render to cache across.
 vi.mock('react', () => ({
   useCallback: (callback: unknown) => callback,
   useMemo: (factory: () => unknown) => factory()
 }))
-// The clipboard seam's native half is what the hook calls, so the pasteboard is what a test stands
-// in for: text, image and the two probes behind `contents`.
 vi.mock('expo-clipboard', () => ({
   getStringAsync: async () => '',
   getImageAsync: async () => ({ data: 'png' })

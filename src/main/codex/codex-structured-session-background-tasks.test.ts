@@ -4,9 +4,9 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session-jou
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from './codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexJournalItems } from './codex-structured-journal-items'

@@ -33,21 +33,7 @@ export type RuntimeClientEventsSync = {
   stop: () => void
 }
 
-/**
- * Manages runtime-client-event subscriptions, one per desired environment.
- *
- * Extracted from useIpcEvents so the async reconciliation — and in particular
- * the overwrite-orphan race below — is unit-testable.
- *
- * The race: a subscribe is async. If an environment id is removed from the
- * desired set while its subscribe promise is in flight (and another live
- * subscription keeps the generation from bumping), then re-added before the
- * original promise resolves, the de-dupe guard sees neither a live subscription
- * nor a pending entry and starts a SECOND subscribe. Both resolve and the second
- * `set()` previously overwrote the first's unsubscribe in the map — leaking the
- * first subscription's preload handle forever. The resolution guard keeps the
- * first winner and unsubscribes any later duplicate.
- */
+/** Reconcile one subscription per desired environment; remove/re-add can race two in-flight subscribes without a generation change. Keep the first winner and unsubscribe duplicates rather than overwriting and leaking its handle. */
 export function createRuntimeClientEventsSync(
   deps: RuntimeClientEventsSyncDeps
 ): RuntimeClientEventsSync {
@@ -76,11 +62,7 @@ export function createRuntimeClientEventsSync(
   }
 
   const nextRetryDelayMs = (environmentId: string, subscriptionKey: string): number => {
-    // Why: a flat retry hammers an unreachable runtime with one socket dial per
-    // tick forever. Exponential-with-cap keeps transient blips fast to recover
-    // while a dead host settles at one attempt per cap window; jitter keeps
-    // multiple envs from dialing in lockstep. External sync() (desired/reachable
-    // transitions) still retries immediately, so recovery is not delayed.
+    // Exponential capped jitter paces dead hosts without synchronized retries; external reachability/desired transitions still retry immediately.
     const failure = consecutiveFailures.get(environmentId)
     const failures = failure?.key === subscriptionKey ? failure.count : 0
     const capped = Math.min(retryDelayMs * 2 ** Math.max(0, failures - 1), retryMaxDelayMs)
@@ -95,8 +77,7 @@ export function createRuntimeClientEventsSync(
     if (retryTimers.has(environmentId)) {
       return
     }
-    // Why: useIpcEvents no longer retries on every store mutation; transient
-    // subscribe failures still need a bounded retry while the env remains desired.
+    // Store writes no longer drive retries; keep a bounded timer while failed environments remain desired.
     const retryTimer = setTimeout(
       () => {
         retryTimers.delete(environmentId)
@@ -207,10 +188,7 @@ export function createRuntimeClientEventsSync(
             subscription.unsubscribe()
             return
           }
-          // Why: a concurrent subscribe for this environment already won the
-          // overwrite-orphan race. Keep the existing subscription and unsubscribe
-          // this duplicate — overwriting would lose the existing unsubscribe and
-          // leak its preload handle forever.
+          // Another subscribe already won; unsubscribe this duplicate instead of overwriting and leaking the winner’s handle.
           if (subscriptions.get(environmentId)?.key === subscriptionKey) {
             subscription.unsubscribe()
             return
@@ -233,10 +211,7 @@ export function createRuntimeClientEventsSync(
             getSubscriptionKey(environmentId) === subscriptionKey
           ) {
             console.warn('[runtime-client-events] failed to subscribe:', error)
-            // Why: only track a failure when we will actually retry this env.
-            // A failure that lands after the env left the desired set must not
-            // leave a stale count that makes its first retry after re-entry skip
-            // the base delay.
+            // Count failures only while retrying this desired environment; late rejection after removal must not penalize re-entry.
             if (deps.getDesiredEnvironmentIds().includes(environmentId)) {
               const failure = consecutiveFailures.get(environmentId)
               consecutiveFailures.set(environmentId, {

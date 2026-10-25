@@ -10,8 +10,7 @@ describe('GPU fallback command-line switches', () => {
     }
   })
 
-  // Why: measured on Windows 11 / Electron 43.1.0 — `--disable-gpu` alone still reports
-  // GPU: 1 in app.getAppMetrics(); adding --in-process-gpu drops it to 0.
+  // Windows 11/Electron 43.1: disable-gpu leaves one GPU child; in-process-gpu removes it.
   it('appends exactly the measured switch set to the Electron command line', () => {
     const appendSwitch = vi.fn()
     const appliedSwitches = applyGpuFallbackCommandLineSwitches({ appendSwitch }, 'win32')

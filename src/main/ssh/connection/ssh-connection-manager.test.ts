@@ -230,7 +230,6 @@ describe('SshConnectionManager after a cancelled sign-in', () => {
   })
 
   it('refuses an automatic dial as an auth failure without opening a connection', async () => {
-    // Every automatic path (managed tunnel, host status, census, deploy) dials through here.
     const manager = new SshConnectionManager({ onStateChange: vi.fn() })
     recordSshCredentialDeclined(target.id)
 
@@ -281,7 +280,6 @@ describe('SshConnectionManager after a user Disconnect', () => {
   })
 
   it('refuses the background dials that revived the host, without opening a connection', async () => {
-    // A managed server's tunnel, its status checks, a census and host-resume recovery dial here.
     const manager = new SshConnectionManager({ onStateChange: vi.fn() })
     await manager.connect(target)
     await manager.disconnect(target.id)

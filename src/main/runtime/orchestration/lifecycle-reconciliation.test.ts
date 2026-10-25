@@ -31,8 +31,7 @@ describe('lifecycle reconciliation', () => {
     expect(logs.some((line) => line.includes('expected handle'))).toBe(true)
   })
 
-  // Real leaf UUIDs: pane keys are `${tabId}:${leafUuid}` and only the leaf
-  // half is identity (the tab half changes on pane break-out).
+  // Leaf UUIDs survive pane break-out; the tab half of paneKey can change.
   const LEAF_A = '11111111-1111-1111-8111-111111111111'
   const LEAF_B = '22222222-2222-4222-9222-222222222222'
 
@@ -210,8 +209,7 @@ describe('lifecycle reconciliation', () => {
   it('completes worker_done from the same leaf after a pane break-out changed the tab half', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    // Dispatch recorded the post-break-out pane key; the worker shell still
-    // holds the spawn-time key with the old tab id.
+    // The Dispatch has the new tab key, but the worker still carries its spawn-time key.
     const dispatch = createRootDispatch(db, task.id, 'term_before_restart', `tab_new:${LEAF_A}`)
     const message = db.insertMessage({
       runId: 'run_legacy_local',
@@ -284,8 +282,7 @@ describe('lifecycle reconciliation', () => {
       action: 'rejected',
       code: 'sender_not_assignee'
     })
-    // Why: the send-path conversion logs nothing (no-op logger), so the
-    // coordinator's re-read must still surface the rejection to its log stream.
+    // Send-path conversion has no logger; coordinator reread must still surface rejection.
     expect(rereadLogs.some((line) => line.includes('worker_done rejected'))).toBe(true)
   })
 
@@ -487,8 +484,7 @@ describe('lifecycle reconciliation', () => {
       type: 'heartbeat',
       subject: 'Rejected heartbeat: alive'
     })
-    // Why: the coordinator's re-read of the already-converted heartbeat must
-    // still log the rejection, since the send-path conversion logged nothing.
+    // Log the rejection on coordinator reread even after send-path conversion.
     const persisted = db.getMessageById(heartbeat.id)
     const rereadLogs: string[] = []
     expect(

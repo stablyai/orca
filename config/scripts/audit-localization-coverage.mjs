@@ -64,8 +64,7 @@ const USER_VISIBLE_OBJECT_METHODS = new Set([
   'warning'
 ])
 const USER_VISIBLE_OBJECT_NAMES = new Set(['toast'])
-// Why: only comparison operands are code, not copy. Bailing on every non-`+`
-// operator hid whole subtrees behind `cond && <JSX/>` guards and `?? 'fallback'`.
+// Only comparison operands are non-copy; rejecting all non-+ operators hides guarded JSX and ?? fallback strings.
 const COPY_PRESERVING_BINARY_OPERATORS = new Set([
   ts.SyntaxKind.PlusToken,
   ts.SyntaxKind.QuestionQuestionToken,

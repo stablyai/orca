@@ -24,16 +24,14 @@ type Confirm =
   | { kind: 'merge'; method: GitHubPRMergeMethod }
   | { kind: 'state'; state: 'open' | 'closed' }
 
-// Merge primary; Close/Reopen + Unlink share one secondary row. No section title —
-// button labels are self-explanatory and a header wasted a full row on mobile.
+// Merge leads; Close/Reopen+Unlink share secondary row. Self-explanatory buttons need no mobile section header.
 export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }: Props) {
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [unlinking, setUnlinking] = useState(false)
   // Local unlink errors — unlink is not routed through the actions engine.
   const [unlinkError, setUnlinkError] = useState<string | null>(null)
 
-  // Mobile keeps merge one-tap: use the repo default instead of surfacing a
-  // desktop-style method picker in the narrow PR action stack.
+  // Use repo’s default merge method to keep mobile one-tap without narrow method picker.
   const effectiveMethod = resolveMobilePrMergeMethod(pr.mergeMethodSettings)
   const state = actions.resolveState(pr.state)
   const autoMerge = actions.resolveAutoMerge(pr.autoMergeEnabled ?? false)

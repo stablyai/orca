@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import { resolveDevCliUserDataPath } from './dev-instance-isolation.mjs'
 
 const scriptPath = realpathSync(import.meta.filename)
 const scriptDir = path.dirname(scriptPath)
@@ -16,7 +17,8 @@ if (!existsSync(cliEntry)) {
   process.exit(1)
 }
 
-process.env.ORCA_USER_DATA_PATH = process.env.ORCA_DEV_USER_DATA_PATH ?? getDefaultDevUserDataPath()
+// Why: target the profile this checkout's `pnpm dev` uses (per-worktree in linked worktrees).
+process.env.ORCA_USER_DATA_PATH = resolveDevCliUserDataPath({ repoRoot })
 // Why: custom dev profiles do not necessarily contain "orca-dev" in their path; carry explicit provenance into the CLI.
 process.env.ORCA_DEV_CLI_INVOCATION = '1'
 
@@ -42,22 +44,6 @@ if (result.signal) {
   process.kill(process.pid, result.signal)
 }
 process.exit(result.status ?? (result.error ? 1 : 0))
-
-function getDefaultDevUserDataPath() {
-  if (process.platform === 'darwin') {
-    return path.join(process.env.HOME ?? '', 'Library', 'Application Support', 'orca-dev')
-  }
-  if (process.platform === 'win32') {
-    return path.join(
-      process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
-      'orca-dev'
-    )
-  }
-  return path.join(
-    process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'),
-    'orca-dev'
-  )
-}
 
 function getElectronExecutable() {
   if (process.platform === 'win32') {

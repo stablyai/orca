@@ -1,23 +1,5 @@
-// Persistence seed for a fresh packaged Orca profile: dismisses onboarding and
-// registers a throwaway git repo as a project so the harness can open a
-// workspace + terminal without the native "Add Project" folder dialog (which
-// Playwright cannot drive).
-//
-// A first-run profile renders a fullscreen onboarding overlay (`fixed inset-0
-// z-[100]`) that intercepts every pointer event; the renderer shows it only
-// while `onboarding.closedAt === null` (src/renderer/src/components/onboarding/
-// should-show-onboarding.ts), so writing this object to `<userDataDir>/
-// orca-data.json` BEFORE launch dismisses it. The app derives the Projects list
-// from the persisted `repos` array (src/main/persistence.ts), so a single repo
-// entry pointing at a real git checkout makes the project selectable.
-//
-// IMPORTANT: seed only BEFORE the first launch. The app rewrites orca-data.json
-// on quit; overwriting it before the post-update relaunch would destroy the
-// persisted session that the cold-restore/survival assertions depend on.
-//
-// Onboarding flow-version / final-step mirror src/shared/onboarding-defaults
-// (ONBOARDING_FLOW_VERSION=4, ONBOARDING_FINAL_STEP=5); refresh if the app bumps
-// the flow version, or a stale version re-arms onboarding.
+// Seed onboarding dismissal and a real throwaway repo before FIRST launch, avoiding the undrivable native Add Project dialog.
+// Never overwrite before relaunch: quit persists the session under test. Mirror onboarding-defaults flow/final step to prevent rearming.
 
 import { writeFileSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
@@ -26,11 +8,7 @@ import { execFileSync } from 'node:child_process'
 const ONBOARDING_FLOW_VERSION = 4
 const ONBOARDING_FINAL_STEP = 5
 
-/**
- * Create a throwaway git repo under `dir` and return a persisted `Repo` entry
- * for it. A real checkout (init + one commit) is required — Orca treats a
- * project as a git repository.
- */
+// Create init+commit checkout and return its persisted Repo record; Orca must recognize a real git project.
 export function createSeededRepo(dir) {
   mkdirSync(dir, { recursive: true })
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' })

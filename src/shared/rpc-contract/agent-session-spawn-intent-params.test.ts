@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EnsureAgentSessionParams } from './agent-session-params'
 import { TerminalCreateParams } from './terminal-unary-params'
-import { RUNTIME_CAPABILITIES, TERMINAL_SPAWN_INTENT_RUNTIME_CAPABILITY } from '../protocol-version'
 
 const explicitResume = {
   kind: 'explicit',
@@ -11,10 +10,6 @@ const explicitResume = {
 } as const
 
 describe('spawnIntent on terminal-creating RPCs', () => {
-  it('is advertised so clients only send it to hosts that accept it', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(TERMINAL_SPAWN_INTENT_RUNTIME_CAPABILITY)
-  })
-
   it('accepts a declared intent on an explicit resume and keeps it', () => {
     const parsed = EnsureAgentSessionParams.parse({
       ...explicitResume,

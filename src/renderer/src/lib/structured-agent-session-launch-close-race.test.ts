@@ -240,8 +240,7 @@ describe('a close that races a structured launch', () => {
     resolveRefresh([])
     await flushLaunchSettlement()
 
-    // Neither sent nor given back to the closed chat's composer; a layout-owner build's only call
-    // retires the chat on this machine's main.
+    // Closed-chat text is neither sent nor returned; layout-owner cancellation only retires it on main.
     expect(mocks.callRuntimeRpc.mock.calls.map(([, method]) => method)).toEqual(
       ORCA_LAYOUT_OWNER_IS_MAIN ? ['session.tabs.close'] : []
     )

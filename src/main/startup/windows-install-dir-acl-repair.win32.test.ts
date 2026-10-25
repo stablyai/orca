@@ -20,12 +20,7 @@ import {
 } from './windows-install-dir-acl-recovery'
 import { resetWindowsInstallDirAclRepairForTest } from './windows-install-dir-package-acl-repair'
 
-/**
- * The other half of the ACL proof: the unit tests fake the grant, and this one runs the real
- * in-process grant against a real poisoned tree on a real Windows box, reading the result back.
- *
- * Runs only on win32; skipped elsewhere.
- */
+/** Read back real in-process grants on a poisoned Windows tree; unit doubles cannot prove native ACL effects. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 /** An unresolvable AppContainer SID, the shape the field hosts carry. */
@@ -78,8 +73,7 @@ describeOnWindows('install-dir package ACL repair against real DACLs', () => {
   })
 
   afterAll(() => {
-    // Why removeTreeSync: the DACL rewrites just touched this tree, so a raw rmSync can race
-    // handles Windows has not released and throw EPERM after the assertions already passed.
+    // Use Windows handle-race retries after DACL rewrites; raw rm can fail EPERM after passing assertions.
     removeTreeSync(installDir)
     removeTreeSync(userDataPath)
   })
@@ -100,7 +94,7 @@ describeOnWindows('install-dir package ACL repair against real DACLs', () => {
 
     resetWindowsInstallDirAclRecoveryForTest()
     resetWindowsInstallDirAclRepairForTest()
-    // The state a launch that died mid-repair leaves behind.
+    // Model a launch that died after recording poison.
     writeInstallDirAclPoisonMarker(userDataPath, installDir, '1.4.196')
 
     const startedAt = performance.now()
@@ -115,20 +109,19 @@ describeOnWindows('install-dir package ACL repair against real DACLs', () => {
     )
     expect(mode).toBe('repaired')
 
-    // A directory grant is not enough: each protected file needs its own explicit, flagless ACE —
-    // the root one, and a NESTED one, the shape app.asar.unpacked and node_modules have.
+    // Protected root/nested modules each need a flagless grant; inheritable directory access cannot reach them.
     const allow = (sid: string, mask: number, flags = 0) =>
       expect.objectContaining({ type: 0, flags, mask, sid })
     for (const file of [moduleFile, nestedFile]) {
       const aces = addon.getDaclAces(file)?.aces
       expect(aces).toContainEqual(allow(RESTRICTED_SID, READ_EXECUTE))
-      // Additive: SYSTEM, Administrators, the user and the orphan all survive.
+      // Preserve SYSTEM/admin/user/orphan ACEs: repair is additive.
       for (const sid of ['S-1-5-18', 'S-1-5-32-544', userSid]) {
         expect(aces).toContainEqual(allow(sid, FULL_CONTROL))
       }
       expect(aces).toContainEqual(allow(ORPHAN_SID, READ_EXECUTE))
     }
-    // And the inheritable root grant exists so files a later update writes inherit it.
+    // Verify future update files inherit the root grant.
     const updateFile = join(installDir, 'resources', 'added-by-update.dll')
     writeFileSync(updateFile, 'binary')
     expect(addon.getDaclAces(updateFile)?.aces).toContainEqual(

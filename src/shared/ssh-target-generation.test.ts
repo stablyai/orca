@@ -21,7 +21,7 @@ describe('sanitizeSshTargetGeneration', () => {
 
 describe('resolveSshTargetGenerationHighWaterMark', () => {
   it('never reissues a generation an automation already captured', () => {
-    // The counter rolled back to 2, but an automation is fenced on 9.
+    // A rolled-back counter cannot reissue an automation’s captured generation.
     const highWaterMark = resolveSshTargetGenerationHighWaterMark({
       persistedCounter: 2,
       targetGenerations: [1, 2],

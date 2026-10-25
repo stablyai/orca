@@ -1,9 +1,4 @@
-/**
- * View-attribute bridge (terminal-query-authority.md §View-attribute bridge):
- * the XParseColor mirrors must match the bundled xterm grammar exactly —
- * main's replies for hidden PTYs must be byte-identical to a visible
- * renderer xterm's.
- */
+/** Main’s hidden-PTY color replies must match the bundled renderer xterm’s XParseColor grammar byte-for-byte. */
 import { describe, expect, it } from 'vitest'
 import {
   formatXColorRgbSpec,
@@ -86,8 +81,7 @@ describe('validateTerminalViewAttributes', () => {
 })
 
 describe('terminalViewAttributesEqual', () => {
-  // The store's idempotence gate: a deep-equal snapshot from a fresh renderer
-  // process must compare equal so the re-push never fans out as a theme apply.
+  // Equal re-pushes from a fresh renderer must not fan out as another theme apply.
   const snapshot = (): TerminalViewAttributes => ({
     foreground: [1, 2, 3],
     background: [4, 5, 6],

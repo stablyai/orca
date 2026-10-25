@@ -17,8 +17,7 @@ import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 type AiVaultViewOptionsUpdate = (current: AiVaultViewOptions) => AiVaultViewOptions
 
-// Why one copy: the sidebar and the /resume dialog can both be mounted, and each writing its own
-// copy would undo the other's change. It is read again once no panel is mounted.
+// Share options between sidebar/resume panels so independent writes cannot undo each other; reread after all unmount.
 let mountedOptions: AiVaultViewOptions | null = null
 const listeners = new Set<() => void>()
 
@@ -43,9 +42,7 @@ function updateOptions(update: AiVaultViewOptionsUpdate): void {
   if (candidate === current) {
     return
   }
-  // Why: setters map valid state to valid state, so persist the candidate directly.
-  // Re-normalizing here would re-allocate disabledAgents on every sort/group change and
-  // needlessly recompute the session filter; writeAiVaultViewOptions still normalizes what it stores.
+  // Setters preserve validity; skip renormalization to retain disabledAgents identity and cached session filtering.
   mountedOptions = candidate
   writeAiVaultViewOptions(candidate)
   for (const listener of listeners) {
@@ -61,7 +58,7 @@ function withAgentEnabled(
   if (enabled === !disabledAgents.includes(agent)) {
     return disabledAgents
   }
-  // Why: allow zero enabled agents so Clear + re-check one agent is a two-step filter.
+  // Allow zero agents so Clear then selecting one remains possible.
   return enabled ? disabledAgents.filter((entry) => entry !== agent) : [...disabledAgents, agent]
 }
 
@@ -96,8 +93,7 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
   setAllAgentsEnabled: (enabled: boolean) => void
   resetViewOptions: () => void
 } {
-  // Why: menu actions may batch before a render, so every write builds on the module copy,
-  // which the preceding action already updated, instead of the last rendered options.
+  // Build batched menu writes on the updated module copy rather than stale rendered options.
   const options = useSyncExternalStore(subscribe, getOptions)
 
   const setSort = useCallback(

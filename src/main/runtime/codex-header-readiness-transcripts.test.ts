@@ -70,7 +70,7 @@ describe('Codex captured header readiness', () => {
       '%s: the line-folded wait text never shows a ready header',
       async (name) => {
         const { waitText } = await finalFrame(name, 120, 40)
-        // Why: the cell-diff repaint folds to `dirctory:` — the STA-8628 timeout.
+        // STA-8628: cell-diff repaint folds to dirctory:.
         expect(waitText.toLowerCase()).toContain('dirctory:')
         expect(isKnownReadyPromptPreview(waitText)).toBe(false)
       }
@@ -88,14 +88,13 @@ describe('Codex captured header readiness', () => {
           }
           last = frame
         }
-        // Presence precondition: a loading frame was actually exercised.
         expect(sawLoadingHeader).toBe(true)
         expect(last).not.toBeNull()
         expect(isQuietReadyScreenBody(last!.waitText, 'codex', () => last!.screenLines)).toBe(true)
       }
     )
 
-    // Why: 0.157 discards input typed during its daemon start, behind the provisional header.
+    // 0.157 discards input while its provisional daemon-start header is displayed.
     it.each(ALL_FIXTURES)(
       '%s: never ready while the screen shows the provisional `model: loading` startup screen',
       async (name) => {
@@ -111,14 +110,13 @@ describe('Codex captured header readiness', () => {
             ).toBe(false)
           }
         }
-        // Presence precondition for the text-copy fixtures: the text rules alone would say ready here.
         if (name === PLAIN || name === FRESH_HOME) {
           expect(sawTextOnlyReadiness).toBe(true)
         }
       }
     )
 
-    // Why these sizes: grids out of step with the 120x40 recording garble the header (review of #23475).
+    // Grids mismatched with the 120x40 recording garble the header (#23475).
     describe.each([
       [120, 40],
       [80, 24],
@@ -138,7 +136,6 @@ describe('Codex captured header readiness', () => {
               )
             }
           }
-          // Presence precondition: the text-copy fixtures reach a settled header.
           if (name === PLAIN || name === FRESH_HOME || name === NO_DAEMON) {
             expect(settledFrames).toBeGreaterThan(0)
           }
@@ -225,7 +222,7 @@ describe('Codex captured header readiness', () => {
         '%s: a tui-idle wait settles from the live screen',
         async (name) => {
           const { runtime, handle } = await codexPane(name, { cols: 120, rows: 40 })
-          // Why 8s: quiescence (3s) plus the 2s poll re-reading the grid.
+          // Allow 3s quiescence plus the 2s grid poll.
           await expect(waitForTranscriptIdle({ runtime, handle }, 8_000)).resolves.toMatchObject({
             condition: 'tui-idle',
             satisfied: true
@@ -237,7 +234,6 @@ describe('Codex captured header readiness', () => {
       it('does not settle while Codex is still installing its daemon behind the provisional screen', async () => {
         const data = readRuntimeFixture(FRESH_HOME)
         const install = data.indexOf('Installing daemon')
-        // Presence precondition: the cut keeps the provisional header and stops before the live chat.
         expect(install).toBeGreaterThan(0)
         const provisional = data.slice(0, data.indexOf('\n', install) + 1)
         expect(provisional).toMatch(/model:.*loading/)
@@ -249,12 +245,11 @@ describe('Codex captured header readiness', () => {
           size: { cols: 120, rows: 40 }
         })
         await runtime.readTerminal(handle, { screen: true })
-        // Why 6s: past the 3s quiescence, so the quiet lane's provisional veto is what holds.
+        // Past 3s quiescence: the provisional-header veto must still hold.
         await expect(waitForTranscriptIdle({ runtime, handle }, 6_000)).rejects.toThrow(/timeout/)
       }, 15_000)
 
-      // Why no bytes: worker-start waits on a pane that has printed nothing yet, which is when the
-      // runtime asks for a visible-screen read instead of its own text copy.
+      // No output forces worker-start to probe the visible screen instead of folded text.
       it('does not settle from a visible-screen read of the provisional screen', async () => {
         const { runtime, handle } = await createTranscriptPane({
           paneTitle: 'Terminal',
@@ -281,11 +276,10 @@ describe('Codex captured header readiness', () => {
           source: 'screen'
         })
         await expect(waitForTranscriptIdle({ runtime, handle }, 2_500)).rejects.toThrow(/timeout/)
-        // Presence precondition: the visible-screen probe actually ran.
         expect(readVisibleScreen).toHaveBeenCalled()
       }, 15_000)
 
-      // Why: restored bytes set no lastOutputAt, so the quiet lane has no clock to wait out.
+      // Restored bytes have no lastOutputAt, so no quiet clock can expire.
       it('settles a restored Codex pane from its header, as main did', async () => {
         const { runtime, handle } = await createTranscriptPane({
           paneTitle: 'Terminal',
@@ -305,7 +299,7 @@ describe('Codex captured header readiness', () => {
             '  gpt-6-sol high · ~/repo/app'
           ].join('\r\n')
         })
-        // Why no screen: the visible-screen probe must not be what settles the wait.
+        // Withhold visible-screen readiness to isolate the intended lane.
         vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
           handle,
           status: 'running',
@@ -329,8 +323,7 @@ describe('Codex captured header readiness', () => {
 })
 
 describe('Codex launched composer readiness', () => {
-  // A source-control button's multi-line prompt reaches Codex only through this wait, so a Codex
-  // release that the launch wait cannot read ready reports "prompt wasn't sent".
+  // Source-control multiline prompts depend on this readiness wait before delivery.
   async function launchedCodexPane(data: string) {
     return createTranscriptPane({
       paneTitle: 'Terminal',
@@ -346,7 +339,6 @@ describe('Codex launched composer readiness', () => {
     timeoutMs: number,
     streamedData?: string
   ) {
-    // Pane creation uses real timers; only the readiness budget advances virtually.
     vi.useFakeTimers({
       toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
     })
@@ -363,9 +355,7 @@ describe('Codex launched composer readiness', () => {
     }
   }
 
-  // Why cut: on an Astra model 0.158 sparkles braille stars in the empty composer, redrawing every
-  // 150 ms, then repaints it clean after 15 s. The capture ends on the first star frame, so replayed
-  // whole it holds a starred composer still, which the live stream never does.
+  // Cut before Astra's 150ms composer star animation; replaying its first frozen frame would misrepresent the live stream.
   function greetingBeforeStarfield(): string {
     const data = readRuntimeFixture('codex-0158-fresh-home-greeting')
     const firstStar = data.search(/38;2;\d+;\d+;\d+;48;2;30;30;30m[⠀-⣿]/)
@@ -373,9 +363,8 @@ describe('Codex launched composer readiness', () => {
   }
 
   describe('launch readiness for a freshly launched Codex', () => {
-    it('codex-0158-fresh-home-greeting: reads the live chat as ready, so the prompt is pasted', async () => {
+    it('codex-0158-fresh-home-greeting: reads the live chat as ready for launch', async () => {
       const data = greetingBeforeStarfield()
-      // Presence precondition: the cut keeps the live status row and drops every star.
       expect(data).toContain('GPT-6-Astra default')
       expect(data).not.toMatch(/48;2;30;30;30m[⠀-⣿]/)
       const pane = await launchedCodexPane(data)
@@ -385,7 +374,7 @@ describe('Codex launched composer readiness', () => {
       })
     }, 15_000)
 
-    it('codex-0157-plain-ready: reads the live chat as ready, so the prompt is pasted', async () => {
+    it('codex-0157-plain-ready: reads the live chat as ready for launch', async () => {
       const pane = await launchedCodexPane(readRuntimeFixture('codex-0157-plain-ready'))
       await expect(waitForCodexComposer(pane, 8_000)).resolves.toMatchObject({
         condition: 'tui-idle',
@@ -410,9 +399,7 @@ describe('Codex launched composer readiness', () => {
       15_000
     )
 
-    // Why streamed: live, the dialog's `›` selector arrives after bracketed paste and fires the
-    // composer signal, so only the screen check keeps it from pasting; it hands the dialog to
-    // `tui-idle` to report, well inside the desktop paste's budget.
+    // Dialog selectors also emit the composer glyph after bracketed paste; only the screen veto prevents pasting.
     it.each([
       ['codex-0157-update-available-dialog', 'agent-update-prompt'],
       ['codex-0158-update-available-dialog', 'agent-update-prompt'],
@@ -423,7 +410,6 @@ describe('Codex launched composer readiness', () => {
       '%s streamed in after the launch: reports the dialog as %s, never as the composer',
       async (fixture, reason) => {
         const data = readRuntimeFixture(fixture)
-        // Presence precondition: the dialog draws Codex's composer glyph after bracketed paste.
         expect(data.slice(data.indexOf('\x1b[?2004h'))).toContain('›')
         const pane = await launchedCodexPane('')
         await expect(waitForCodexComposer(pane, 2_500, data)).resolves.toMatchObject({
@@ -434,11 +420,10 @@ describe('Codex launched composer readiness', () => {
       15_000
     )
 
-    // Why: 0.157 discards input typed behind its provisional `model: loading` screen.
+    // 0.157 discards input behind its provisional header; allow the readiness timeout to prove the veto.
     it('codex-0157-fresh-home-daemon-install: does not read the provisional screen as ready', async () => {
       const full = readRuntimeFixture('codex-0157-fresh-home-daemon-install')
       const install = full.indexOf('Installing daemon')
-      // Presence precondition: the cut keeps the provisional header and stops before the live chat.
       expect(install).toBeGreaterThan(0)
       const provisional = full.slice(0, full.indexOf('\n', install) + 1)
       expect(provisional).toMatch(/model:.*loading/)
@@ -449,8 +434,7 @@ describe('Codex launched composer readiness', () => {
 })
 
 describe('Display title clearing and live agent presence', () => {
-  // Synthetic protocol cases: they test which title readiness, display and presence each read,
-  // not what a particular CLI paints. The 3 s timer is the stale-working-title clear.
+  // Synthetic protocol cases separate title readiness/display/presence; 3s clears only stale display.
   describe('the stale-working title clear is display-only', () => {
     it.each([
       ['claude', '. claude', '* claude'],
@@ -485,7 +469,6 @@ describe('Display title clearing and live agent presence', () => {
           runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, 'still running\r\n', Date.now())
           await vi.advanceTimersByTimeAsync(3_000)
           expect(titleChanges.at(-1)).toBe(clearWorkingIndicators(busy))
-          // A renderer graph publish can carry the display-only cleared title back to main.
           runtime.syncWindowGraph(1, {
             tabs: [
               {
@@ -520,7 +503,6 @@ describe('Display title clearing and live agent presence', () => {
       }
     )
 
-    // A name-shaped title (`⠋ Codex working`) clears to `Codex`, which still names an agent, as on main.
     it.each([['⠋ repo']])(
       'an agent that exited behind %s does not pass for a running agent',
       async (title) => {
@@ -532,7 +514,6 @@ describe('Display title clearing and live agent presence', () => {
             data: ''
           })
           runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, `\x1b]0;${title}\x07`, Date.now())
-          // The agent exits and the shell prints its prompt: output, but no title.
           runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, '\x1b]133;D;0\x07\x1b]133;A\x07% ', Date.now())
           await vi.advanceTimersByTimeAsync(3_000)
           await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({

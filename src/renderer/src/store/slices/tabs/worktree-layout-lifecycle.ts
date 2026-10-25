@@ -9,8 +9,7 @@ import {
   type KeptWorktreeSurfaceRemoval
 } from './kept-worktree-surface-pruning'
 
-// Layout transitions that worktree, repo and SSH lifecycle code folds into its own store update.
-// Pure patches, not actions: each caller's update is one atomic set that also clears non-layout state.
+// Pure lifecycle patches let repo/worktree/SSH callers clear layout and other state in one atomic update.
 
 type WorktreeLayoutPatch = Pick<
   AppState,
@@ -34,10 +33,7 @@ type WorktreeLayoutPatch = Pick<
   | 'activeTabType'
 >
 
-/**
- * Splits a kept workspace's purge emptied, collapsed the way closing their last tab collapses
- * them, so the surviving twin's group takes the space and the selection.
- */
+/** Collapse kept splits emptied by purge, giving their space/selection to the surviving twin’s group. */
 function collapseEmptiedKeptGroups(
   s: Pick<AppState, 'groupsByWorktree' | 'layoutByWorktree' | 'activeGroupIdByWorktree'>,
   groupsByWorktree: AppState['groupsByWorktree'],
@@ -124,7 +120,6 @@ export function removeWorktreeLayout(
     groupsByWorktree: groupLayout?.groups ?? omitByWorktree(s.groupsByWorktree),
     layoutByWorktree: omitByWorktree(groupLayout?.layout ?? s.layoutByWorktree),
     activeGroupIdByWorktree: omitByWorktree(groupLayout?.activeGroups ?? s.activeGroupIdByWorktree),
-    // Why: the tab strip persists visual order per worktree; drop the entry so stale tab IDs aren't retained.
     tabBarOrderByWorktree: keep(omitByWorktree(s.tabBarOrderByWorktree), kept?.tabBarOrder),
     browserTabsByWorktree: keep(omitByWorktree(s.browserTabsByWorktree), kept?.browserTabs),
     // Why guarded: a removed worktree usually has no open file, and an unconditional

@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../shared/repo-types'
+import { pruneGitWorktrees } from '../../../git/worktree-prune-guard'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -9,7 +10,6 @@ import {
   listWorktreesStrict as listGitWorktreesStrict,
   removeWorktree
 } from '../../../git/worktree'
-import { gitExecFileAsync } from '../../../git/runner'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directories'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
 import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-removal-recovery'
@@ -258,10 +258,7 @@ async function finishLocalWorktreeRemoval({
           (path) => runtime.closeFileWatchersForRemoval(path)
         )
         // Failed removal may retain registration and branch locks; prune stale tracking.
-        await gitExecFileAsync(['worktree', 'prune'], {
-          cwd: repo.path,
-          ...localWorktreeGitOptions
-        }).catch(() => {})
+        await pruneGitWorktrees({ cwd: repo.path, ...localWorktreeGitOptions }).catch(() => {})
         await cleanupPushTarget()
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         removeWorktreeMetadataAndTransientState(

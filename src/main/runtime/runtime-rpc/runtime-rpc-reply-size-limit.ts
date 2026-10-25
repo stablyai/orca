@@ -8,10 +8,7 @@ function formatMebibytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-/**
- * Turns a reply the encrypted channel would refuse into an error for that one request.
- * Why: the channel closes the whole socket (1013) on an oversized frame, dropping every other RPC.
- */
+/** Return a per-request oversize error before encrypted-channel 1013 would close the socket and every sibling RPC. */
 export function limitRuntimeRpcReplySize(
   requestId: string,
   reply: (response: string) => void,

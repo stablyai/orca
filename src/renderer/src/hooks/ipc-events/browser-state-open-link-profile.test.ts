@@ -142,7 +142,7 @@ describe('link-opened Orca tabs', () => {
     )
   })
 
-  // Why: #18832 — focus left on the opener made Cmd/Ctrl+W close the opener instead.
+  // Move focus to the opened tab or Cmd/Ctrl+W closes its opener (#18832).
   it('moves keyboard focus into a foreground link tab but not a background one', () => {
     storeState.value = {
       browserPagesByWorkspace: {

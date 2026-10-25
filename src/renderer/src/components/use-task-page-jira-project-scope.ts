@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import type { Repo } from '../../../shared/repo-types'
 import type { JiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { resolveJiraSourceHostId } from '../../../shared/jira-source-host'
+import { resolveJiraSourceHostId } from '../../../shared/jira/jira-source-host'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 
 export function useTaskPageJiraProjectScope(

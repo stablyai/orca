@@ -8,10 +8,6 @@ import { useSourceControlHostedReviewState } from './use-hosted-review-state'
 import { useSourceControlLinkedReviews } from './use-linked-reviews'
 import { resolveSourceControlSuppressedGitHubPRState } from './suppressed-github-pr'
 
-/**
- * Resolves what review the active branch belongs to and which refs it is compared against — the
- * facts every review action later reads, before any of them can run.
- */
 export function useSourceControlReviewContext(panelState: SourceControlPanelState) {
   const {
     activeGitStatusHead,

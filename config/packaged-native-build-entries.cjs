@@ -6,14 +6,7 @@ const {
   nativeBuildEntryName
 } = require('./scripts/native-build-entry.cjs')
 
-/**
- * Ship a dev install's per-ABI native build as build/Release.
- *
- * A package dir shared across worktrees (pnpm's global virtual store) holds Orca's source build
- * in build/<entry> rather than build/Release; see scripts/native-build-entry.cjs. Packaged
- * consumers (daemon relocation, the macOS terminal host, the job-ownership gate) all read
- * build/Release, so the packaged copy gets exactly the layout a CI install produces.
- */
+// Normalize shared-store dev build/<entry> to packaged build/Release, matching CI and daemon/mac terminal/job-ownership consumers (scripts/native-build-entry.cjs).
 function adoptPackagedNativeBuildEntries(resourcesDir, electronPlatformName, architecture) {
   for (const moduleName of Object.keys(NATIVE_BUILD_PACKAGES)) {
     const buildDir = join(resourcesDir, 'node_modules', ...moduleName.split('/'), 'build')

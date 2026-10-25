@@ -55,18 +55,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     ) {
       return
     }
-    // Why: user shell frameworks (bash-preexec/iTerm2) can replace Orca's
-    // OSC 133;C hook, so a manually launched agent produces no command-start
-    // signal at all. Enter at a shell-foreground prompt is the user-side
-    // equivalent; the sample is gated to panes with no live agent identity
-    // and publishes nothing for an idle shell.
+    // Enter at shell foreground backs up OSC 133;C hooks replaced by shell frameworks; confirm only panes without live agent identity.
     if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
       session.sampleVisiblePaneForegroundAgent()
     }
   }
-  // Why: infer only from focused xterm key events. Raw PTY bytes cannot
-  // distinguish plain Escape from Alt/meta sequences, and programmatic writes
-  // should not clear agent status.
+  // Infer from focused key events; raw bytes conflate Escape with Alt/meta and programmatic writes must not clear status.
   session.terminalKeyTarget = session.pane.terminal.element ?? session.pane.container
   session.terminalKeyTargetSupportsEvents =
     typeof session.terminalKeyTarget?.addEventListener === 'function' &&
@@ -103,11 +97,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   // before this PTY bound (newborn race). Null disables the guard (fail-safe).
   session.activePanePtyBindingBoundAt = null
 
-  // Why: with main side-effect authority on, the pane's title/bell/agent
-  // policy callbacks consume pty:sideEffect facts instead of transport byte
-  // parsers (which stay unregistered) — same policy code, single consumer.
-  // restoreTitleOnRegister replaces the eager-replay title restore: main's
-  // title-only snapshot carries the no-attention-replay rule.
+  // Main-authority facts replace byte parsers as the single policy consumer; title snapshots restore metadata without attention replay.
   session.unregisterSideEffectFactConsumer = null
   session.registerSideEffectFactConsumerForPty = (
     ptyId: string,
@@ -135,9 +125,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
               ptyId: session.transport.getPtyId(),
               executionHostId: session.transport.getExecutionHostId?.() ?? undefined
             }),
-        // Why: the Command Code settle policy stays here — the done settle
-        // timer must consult the live store row (which hook events and
-        // renderer seeds also write), so main only emits scrape facts.
+        // Pane policy owns Command Code settling against the live row; main supplies scrape facts only.
         onCommandCodeWorking: session.seedCommandCodeOutputWorkingStatus,
         onCommandCodeDone: session.scheduleCommandCodeOutputDoneStatus,
         ...(session.shouldOwnAgentStatusInRenderer
@@ -161,8 +149,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     session.remoteOutputFactConsumerPtyId = null
   }
   session.clearPanePtyFitBinding = (): void => {
-    // Why: fit bindings live in a module-level map, so pane teardown must
-    // clear them explicitly instead of relying on DOM removal.
+    // Clear module-level fit bindings explicitly; DOM removal cannot release them.
     bindPanePtyId(session.pane.id, null, session.deps.tabId)
     session.visibleRemoteViewportClaimPtyId = null
     session.pendingVisibleRemoteViewportClaim = false

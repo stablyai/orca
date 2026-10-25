@@ -1,6 +1,4 @@
-// The row's catalog entry names the storing authority; the record's own target
-// cannot — a runtime-stored automation reads `local`, meaning local to that
-// server. That target is only the fallback for a legacy row no host answered for.
+// Use the catalog row’s storage host: a record’s local target means local to its server. Fall back to that target only for uncaptured legacy rows.
 
 import type { Automation } from '../../../../shared/automations-types'
 import { getExecutionHostLabel, toSshExecutionHostId } from '../../../../shared/execution-host'

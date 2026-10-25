@@ -6,8 +6,7 @@ import {
 import type { AgentStatusObservationOrigin } from '../../../../shared/agent-status-observation'
 import type { AgentStatusPayload } from './agent-status-contract'
 
-/** Byte- and launch-derived writers never carry a main agent fact; a hook row without one means the
- *  host has none, so keeping ours would diverge from what the host serves mobile and the CLI. */
+/** Byte/launch writers omit mainAgent; hook omission authoritatively clears it for mobile/CLI parity. */
 const MAIN_AGENT_BLIND_ORIGINS: ReadonlySet<AgentStatusObservationOrigin> = new Set([
   'osc',
   'title',
@@ -15,10 +14,7 @@ const MAIN_AGENT_BLIND_ORIGINS: ReadonlySet<AgentStatusObservationOrigin> = new 
   'process'
 ])
 
-/** The main agent fact a live entry carries. A writer with no main agent fact of its own (OSC bytes, launch
- *  seeds) repaints the state the row already holds, and the main agent behind an unchanged state is
- *  unchanged too — the same rule main's OSC ingest applies. The existing object is reused when
- *  nothing changed so subscribers can compare by reference. */
+/** Clockless OSC/launch repaints retain mainAgent within unchanged state, like main ingest. Reuse equal objects for reference subscribers. */
 export function resolveAgentStatusLiveEntryMainAgent(
   existing: AgentStatusEntry | undefined,
   payload: Pick<AgentStatusPayload, 'state' | 'mainAgent' | 'observation'>,

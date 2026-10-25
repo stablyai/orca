@@ -1,11 +1,5 @@
-/**
- * Removing a host is pairing work, and the page cannot do it.
- *
- * `host-store.web.ts` says what this document holds: one profile from `init.host`, no host list and
- * no credential. There is nothing here to remove and no keychain entry to drop, so the page refuses
- * rather than reporting success for nothing. Declared apart from the `.web` sibling that throws it
- * because the catch that reads it is the app's screen, shared by both platforms.
- */
+// Host removal needs the native host list and credential; pages have only init.host and must refuse.
+// Keep the error outside the .web sibling so shared screen catches can import it.
 
 /** The machine token. `message` is user-facing copy, so callers branch on this. */
 export const PAGE_HOST_REMOVAL_UNAVAILABLE_CODE = 'page_host_removal_unavailable'
@@ -16,8 +10,7 @@ export class PageHostRemovalUnavailableError extends Error {
   readonly code = PAGE_HOST_REMOVAL_UNAVAILABLE_CODE
 
   constructor() {
-    // Why plain copy: this reaches the host screen's error banner unchanged, and it has to name
-    // where removal does work rather than ask for a retry that cannot succeed here.
+    // Name the native removal surface because retrying inside this page cannot succeed.
     super('Remove this host from the host list in the Orca app.')
     this.name = PAGE_HOST_REMOVAL_UNAVAILABLE_NAME
   }

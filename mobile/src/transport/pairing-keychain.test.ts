@@ -32,7 +32,7 @@ const GENERATION_KEY = 'orca:pairing-keychain-generation'
 const TOKEN_KEY = 'orca.host-token.host-1782629088232'
 const TOKEN_PRESENCE_KEY = `orca:pairing-keychain-presence:${TOKEN_KEY}`
 
-// Why: the exact Android failure from #6600 — expo maps a null-message GeneralSecurityException to this.
+// Preserve Expo’s null-message Android GeneralSecurityException shape from #6600.
 const ENCRYPT_REJECTION = new Error(
   `Could not encrypt the value for key '${TOKEN_KEY}' under keychain 'key_v1'. Caused by: unknown`
 )
@@ -71,13 +71,13 @@ describe('pairing keychain', () => {
     const [key, value, options] = secureStoreMock.setItemAsync.mock.calls[0]!
     expect(key).toBe(TOKEN_KEY)
     expect(value).toBe('token')
-    // Why: passing any keychainService would change the keystore alias and orphan every already-stored token.
+    // Keep generation zero on the default alias so existing tokens remain readable.
     expect(serviceOf(options as Options)).toBeUndefined()
     expect(generationRecord).toBeNull()
   })
 
   it('recovers when the reported Android encryption failure is alias-local', async () => {
-    // Why: simulate the unverified alias-local case; no affected physical device was available.
+    // Model the alias-local hypothesis; no affected physical device was available.
     secureStoreMock.setItemAsync.mockImplementation(
       async (_k: string, _v: string, options: Options) => {
         if (serviceOf(options) === undefined) {
@@ -138,8 +138,7 @@ describe('pairing keychain', () => {
   })
 
   it('never stores a token under a generation it could not durably record', async () => {
-    // Why: reads only walk back from the recorded generation, so a token written under an
-    // unrecorded one is silently unreachable after a relaunch and the host vanishes.
+    // Persist generation before its token or relaunch cannot discover the new alias.
     asyncStorageMock.setItem.mockImplementation(async (key: string) => {
       if (key === GENERATION_KEY) {
         throw new Error('storage full')
@@ -228,7 +227,6 @@ describe('pairing keychain', () => {
     )
 
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('legacy-token')
-    // Why: probes must walk v2 -> v1 -> default rather than stopping at the current generation.
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(3)
   })
 
@@ -280,12 +278,11 @@ describe('pairing keychain', () => {
       serviceOf(options) === undefined ? 'legacy-token' : null
     )
 
-    // Why: Android cannot distinguish absent from undecryptable, and a throw here left every
-    // caller's orphan cleanup unreachable; absent is the only self-healing answer.
+    // Treat Android’s indistinguishable absent/undecryptable null as absent so callers can clean orphans.
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBeNull()
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(1)
 
-    // Why: clearing the presence record would let the next read walk back to 'legacy-token'.
+    // Keep presence so later reads cannot resurrect superseded legacy secrets.
     expect(presenceRecord).toBe('1')
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBeNull()
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(2)

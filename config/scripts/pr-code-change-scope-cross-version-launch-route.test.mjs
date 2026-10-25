@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
-// cross-version-paired-structured-launch runs a current desktop's launch route against a released
-// server's capabilities, so the route and the client list it sends must start that job.
+// Released-server launch contract must run when current desktop launch route or advertised client list changes.
 describe('cross-version wire routing for the paired launch route', () => {
   it.each([
     'src/shared/structured-native-chat-launch-route.ts',

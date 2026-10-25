@@ -1,11 +1,6 @@
-// One host status stream per runtime target, shared by every session-list projection.
-//
-// The feed is a read-only mirror: the host projects each session's status from its journal and
-// this owner keeps the latest summary per session while anyone is looking. Losing the stream
-// keeps the cached summaries and reconnects; a fresh snapshot merges over them.
-// Which sessions are listed is the tab map's decision, so the feed never retracts a summary.
+// Share one read-only host status stream per target. Retain latest summaries across disconnect and merge fresh snapshots; tab maps own visibility, so this feed never retracts summaries.
 
-import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session-workspace-sleep'
+import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-workspace-sleep'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import {
   foldAgentSessionStatusEvent,
@@ -119,8 +114,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     }, delay)
   }
-  // Losing contact is never exit: the sessions go unverifiable and this client stops
-  // claiming host-owned execution, but nothing here settles them.
+  // Lost contact revokes verified execution, never proves exit or settles sessions.
   const loseConnection = (candidate: number): void => {
     if (candidate !== generation) {
       return
@@ -193,8 +187,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
           sleepResolved = true
           emit()
         }
-        // A host without the method is terminal, not a fault: retrying would relay-probe
-        // forever. A failed probe is not an answer, so that path still reconnects.
+        // Unsupported method is final to avoid endless relay probes; failed capability probes remain retryable.
         if (supported) {
           subscribeToHost(candidate)
           return
@@ -209,8 +202,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     dropHandle()
     revokeSnapshotOwnership()
     reconnectAttempt = 0
-    // Teardown only runs once nothing is activated, so re-confirmation is the next
-    // subscribe's job and there is no mounted reader left to notify.
+    // Teardown has no active readers; next subscription owns re-confirmation.
     namingActiveSessionIds = null
     confirmedSessions.clear()
   }
@@ -258,8 +250,7 @@ export function getStructuredAgentSessionStatusFeed(
 }
 
 export function resetStructuredAgentSessionStatusFeedsForTests(): void {
-  // Dropping the map alone leaves a live subscription and its pending reconnect running
-  // into the next test, where they reopen a stream nothing is holding.
+  // Stop subscriptions/reconnects before clearing map or they reopen unheld streams in the next test.
   for (const owner of owners.values()) {
     owner.stop()
   }

@@ -1,15 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../store'
 
-/**
- * Every store action the TerminalPane controller dispatches, bound once.
- *
- * Why `getState()` and not one selector each: zustand action identities are fixed when the store
- * is built and no slice ever puts one in a `set()` payload, so subscribing to them can never fire.
- * TerminalPane mounts once per retained tab, so 25 action subscriptions cost 25 live listeners and
- * 25 selector runs per store publication *per mounted tab*. Same pattern as
- * `useSourceControlStoreActions`.
- */
+/** Zustand actions never change after store creation; bind once via getState to avoid per-action listeners and selectors on every retained pane. */
 export function useTerminalPaneStoreActions() {
   return useMemo(() => {
     const state = useAppStore.getState()
@@ -43,7 +35,6 @@ export function useTerminalPaneStoreActions() {
 
 export type TerminalPaneStoreActions = ReturnType<typeof useTerminalPaneStoreActions>
 
-/** The action names bound above, for the listener-budget test. */
 export const TERMINAL_PANE_STORE_ACTION_KEYS = [
   'clearCodexRestartNotice',
   'clearRuntimePaneTitle',

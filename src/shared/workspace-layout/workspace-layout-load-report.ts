@@ -1,5 +1,4 @@
-// The Loader's one report: a field-by-field diff of the stored session against what the next save
-// writes, over the records the disk-field tables name.
+// Report stored-to-next-save differences field by field using the disk-field tables.
 
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import type { DiskTable } from './workspace-layout-disk-fields'
@@ -21,12 +20,11 @@ export type LayoutLoadChange = {
 type DiskRecord = Record<string, unknown>
 export type DiskRecords = Record<DiskTable, Map<string, DiskRecord>>
 
-// Why absent reads as empty: the Serializer always writes these maps, so a missing one is no change.
+// Absent maps read as empty because the Serializer always writes them.
 function sortedKeys(map: Record<string, unknown> | undefined): string[] {
   return Object.keys(map ?? {}).sort()
 }
 
-/** Every record on disk, by the table its fields are listed in. */
 export function diskRecords(session: WorkspaceSessionState): DiskRecords {
   const table = () => new Map<string, DiskRecord>()
   const records: DiskRecords = {

@@ -1,7 +1,3 @@
-// The one mutation seam the structured session hook hands its features: builds
-// the envelope, with a fresh operation id per call, and folds refusals into the
-// session's error channel.
-
 import { useCallback } from 'react'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
@@ -23,7 +19,6 @@ export function useMobileStructuredAgentMutate(args: {
   enabled: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
   onSendError: (message: string) => void
-  /** The chat's agent, which a refusal about it names. */
   agentName?: string
 }): MobileStructuredAgentMutate {
   const { agentName, client, enabled, onSendError, sessionId, stateRef } = args

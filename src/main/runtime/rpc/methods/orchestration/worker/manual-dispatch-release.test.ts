@@ -107,7 +107,7 @@ describe('manual Dispatch release', () => {
   it('fences a superseded context without blocking its current replacement', async () => {
     const task = createTask('superseded')
     const superseded = await dispatchTask(task, TARGET)
-    // Why: recovery still needs coverage for contradictory rows persisted before ready resets were guarded.
+    // Recover contradictory rows persisted before guarded ready resets.
     sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task)
     const current = await dispatchTask(task, OTHER)
 

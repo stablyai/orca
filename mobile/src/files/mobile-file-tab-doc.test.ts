@@ -13,7 +13,6 @@ function fail(code: string, message: string): RpcResponse {
   return { id: 'x', ok: false, error: { code, message }, _meta: { runtimeId: 'r' } }
 }
 
-// Fake client that returns a canned response per RPC method.
 function clientOf(byMethod: Record<string, RpcResponse>): {
   sendRequest: (method: string, params?: unknown) => Promise<RpcResponse>
   calls: string[]
@@ -169,8 +168,7 @@ describe('resolveMobileFileTabDoc', () => {
     })
   })
 
-  // Why: the host now caps oversized diffs with an error envelope, and a client that knows nothing
-  // about the code must still surface the message instead of rendering an empty diff.
+  // An older client must still surface the host’s oversized-diff error message rather than render an empty diff.
   it('propagates a host diff_too_large failure instead of rendering an empty diff', async () => {
     const client = clientOf({
       'git.diff': fail('diff_too_large', 'This diff is too large to open over a remote connection.')

@@ -66,8 +66,7 @@ function hasMatchingStablePaneLayout(
   leafId: string,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
 ): boolean {
-  // Why: hibernation intentionally clears the live PTY binding after the pane
-  // exits, but the preserved leaf still owns cold-restore for its session.
+  // Hibernation clears live binding after exit; the preserved leaf still owns session cold restore.
   return layoutContainsLeaf(terminalLayoutsByTabId[tabId]?.root, leafId)
 }
 
@@ -87,12 +86,7 @@ function hasRestorableStablePanePty(
   )
 }
 
-// Why: a pane whose PTY is live *right now* already owns its running session
-// — e.g. a Pi TUI that finished a turn but stays alive in a background tab.
-// Resume must never fork such a pane into a duplicate tab, even when it isn't
-// the pane that reconnects on activation. Liveness comes from the runtime
-// live-PTY map (ptyIdsByTabId), not the layout's ptyIdsByLeafId snapshot, which
-// persists stale across sleep/restart.
+// A current live PTY owns even finished-turn sessions (e.g. background Pi); never fork on activation. Use runtime ptyIdsByTabId, not persisted layout bindings that survive sleep/restart stale.
 export function stablePaneHasLivePty(
   tabId: string,
   leafId: string,
@@ -119,13 +113,7 @@ function paneWillConnectOnActivation(
   if (state.activeWorktreeId !== worktreeId) {
     return false
   }
-  // Why: keep-alive mounts every terminal tab of the active worktree (cold-activation
-  // deferral delays a mount, never cancels it), and a mounted pane cold-restores in
-  // place once shown, so any preserved restorable pane owns its session's resume.
-  // Gating on the visible tab forked a second live surface onto the same
-  // provider session for every non-group-active agent tab. Web-mirror tabs are
-  // the exception: their pane attaches the host PTY instead of cold-restoring
-  // from a note, so they cannot own recovery.
+  // Keep-alive eventually mounts every restorable active-worktree pane, so hidden panes own resume too. Visibility gates fork sessions; web mirrors are excluded because they attach host PTYs instead of cold-restoring notes.
   return !isWebTerminalSurfaceTabId(tabId)
 }
 
@@ -172,13 +160,11 @@ export function recordPaneIsOwnedByPreservedPane(
     if (activationTreatsNoteAsFinished(record)) {
       return true
     }
-    // Why: a deferred pane has no PTY yet still resumes this session when opened; a sweep that
-    // launched it elsewhere too would put two `--resume` on one transcript.
+    // Deferred panes own resume without PTYs; launching elsewhere would put two --resume writers on one transcript.
     if (isPaneSpawnDeferred(record.paneKey)) {
       return true
     }
-    // Why: a pane with a live PTY owns its running session regardless of which
-    // pane reconnects on activation; forking it would duplicate the session.
+    // Current live PTYs own sessions regardless of activation reconnect ownership; never launch a duplicate.
     if (
       stablePaneHasLivePty(
         tabId,
@@ -189,9 +175,7 @@ export function recordPaneIsOwnedByPreservedPane(
     ) {
       return true
     }
-    // Why: disconnect clears ptyIdsByTabId while the remote process keeps running, so a leaf
-    // bound to an unreachable SSH target is `unverifiable`, not dead. A connected target's
-    // live-PTY map is authoritative (sleep kills the PTY but keeps its id).
+    // Disconnect clears the live map while remote processes survive; unreachable SSH is unverifiable. Connected targets’ runtime map is authoritative, including sleep-killed PTYs with preserved IDs.
     const layout = state.terminalLayoutsByTabId[tabId]
     const isSingleLeafLayout = layout?.root?.type === 'leaf' && layout.root.leafId === stable.leafId
     const leafPtyId =
@@ -200,13 +184,11 @@ export function recordPaneIsOwnedByPreservedPane(
     if (sshPty && state.sshConnectionStates.get(sshPty.connectionId)?.status !== 'connected') {
       return true
     }
-    // Switch point: main clears a gone terminal's binding while the pane's own start resumes the
-    // record, so the start, not the binding, says the pane owns it.
+    // Main clears gone bindings during in-place resume; the active start, not the binding, proves ownership.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && isPaneResumingInPlace(record.paneKey)) {
       return true
     }
-    // Why: active sessions rely on pane-level cold restore. A preserved leaf
-    // without a PTY/session id can repaint scrollback but cannot resume.
+    // Scrollback-only leaves without PTY/session IDs can repaint but cannot cold-resume active sessions.
     return (
       hasRestorableStablePanePty(
         tab,
@@ -227,9 +209,7 @@ export function recordPaneIsOwnedByPreservedPane(
     return true
   }
   const providerKeys = getLegacyProviderSessionKeysForTab(state, record.worktreeId, tabId)
-  // Why: legacy numeric pane keys lack leaf identity, so only a preserved
-  // tab-level wake hint plus a single provider session is strong enough to
-  // claim pane recovery without risking the wrong split-pane session.
+  // Legacy numeric keys lack leaf identity; require tab wake evidence plus exactly one provider session to avoid claiming the wrong split.
   return Boolean(
     tab &&
     (tab.ptyId || (state.ptyIdsByTabId[tab.id]?.length ?? 0) > 0) &&

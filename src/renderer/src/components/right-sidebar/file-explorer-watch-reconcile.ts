@@ -129,7 +129,7 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
     }
 
     if (evt.kind === 'delete') {
-      // Why: watcher can't report isDirectory for deletes; a dirCache key means it was an expanded dir (design §4.4).
+      // Deleted events lack isDirectory; cached keys identify tracked directories (design §4.4).
       const cachedDir = resolveCachedDirPath(
         cache,
         normalizedPath,
@@ -162,10 +162,7 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
         dirsToRefresh.add(cachedParent)
       }
     } else if (evt.kind === 'create' || evt.kind === 'rename') {
-      // Why: create and rename both change a parent's listing. Rename was
-      // previously deferred (#10264) so Explorer stayed stale until focus
-      // remounted the tree. Case-insensitive cache lookup covers Windows
-      // drive-letter / path casing drift between watcher and worktree path.
+      // Refresh create/rename parents immediately (#10264); case-insensitive lookup covers Windows watcher casing drift.
       if (cachedParent) {
         dirsToRefresh.add(cachedParent)
       }

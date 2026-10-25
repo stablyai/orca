@@ -15,10 +15,7 @@ export type AgentSessionResumeHold = ResumedAgentSession & {
   claimedAt: number
 }
 
-/**
- * `unsettled`: shares whose create has neither bound a PTY nor released; `ptys`: exit watchers;
- * `ambiguous`: unsettled shares whose spawn may have run, by the request a retry reconciles.
- */
+/** Unsettled creates have no PTY/release; ptys watch exits; ambiguous requests may have spawned and need retry reconciliation. */
 type Hold = AgentSessionResumeHold & {
   unsettled: number
   ptys: Map<string, () => void>
@@ -33,11 +30,7 @@ export type AgentSessionResumeClaim = {
   settleFailure: (dispatched: boolean, error?: unknown) => void
 }
 
-/**
- * Which pane is resuming a conversation, taken before any awaited decision and held through the
- * spawn. Why: the duplicate-holder guard reads hook rows, which an SSH resume (never seeded) or a
- * spawn still in flight has not written yet, so two resumers could both pass it.
- */
+/** Claim before awaiting spawn: SSH/in-flight resumes lack hook rows, so hook-only checks could admit two writers. */
 export class AgentSessionResumeClaims {
   private readonly holds = new Set<Hold>()
   private stopWatchingReports: (() => void) | null = null
@@ -53,11 +46,7 @@ export class AgentSessionResumeClaims {
     }
   ) {}
 
-  /**
-   * Null while another pane's resume of this conversation is unsettled.
-   * `request`: names one create, which every retry of it reconciles rather than spawning anew, so
-   * a retry's bound PTY also accounts for an earlier attempt whose reply was lost.
-   */
+  /** Null while another pane holds this session. Retries share a request identity to reconcile lost replies without another spawn. */
   claim(
     session: ResumedAgentSession,
     paneKey: string,
@@ -81,8 +70,7 @@ export class AgentSessionResumeClaims {
       ambiguous: new Map()
     }
     this.holds.add(hold)
-    // Why eager: an agent that exits to its shell takes its hook row with it, so a check at the
-    // next claim would find nothing and hold the session for as long as the shell lives.
+    // Transfer ownership to hook reports eagerly, before agent exit removes the row and leaves only a live shell.
     this.stopWatchingReports ??=
       this.lifecycle.watchReports?.(() => {
         for (const held of this.holds) {
@@ -102,7 +90,7 @@ export class AgentSessionResumeClaims {
       ) {
         continue
       }
-      // Why here too: a host without report notifications ends holds only at the next claim.
+      // Hosts without report notifications release holds on the next claim.
       if (this.reportCoversHold(hold)) {
         this.end(hold)
         continue
@@ -146,7 +134,7 @@ export class AgentSessionResumeClaims {
         if (request) {
           hold.ambiguous.delete(request)
         }
-        // Why every PTY: overlapping opens of one pane can each spawn, and any may still write.
+        // Watch every overlapping spawn: any PTY may still write.
         if (this.holds.has(hold) && !hold.ptys.has(ptyId)) {
           hold.ptys.set(ptyId, () => {})
           const stopWatching = this.lifecycle.watchExit(ptyId, () => {
@@ -160,7 +148,7 @@ export class AgentSessionResumeClaims {
         }
       },
       settleFailure: (dispatched, error) => {
-        // Why: a dispatched spawn with no identified PTY may still run (a lost SSH reply).
+        // A dispatched spawn without identified PTY may still run after a lost SSH reply.
         const exitedDuringStart =
           error instanceof Error && error.message === 'agent_session_exited_during_start'
         if (!open) {

@@ -1,8 +1,4 @@
-// Why: Electron <webview> guests are destroyed when their DOM parent is removed.
-// BrowserPane chrome unmounts on worktree switch, but the guest must stay in a
-// stable parent inside the overlay slot. Each page gets a flex-column viewport
-// (chrome inset spacer + flex-1 container) that mirrors the in-tree layout
-// without reparenting the webview or using fixed/float-over positioning.
+// Keep guests in stable overlay-slot parents across chrome unmounts; Electron destroys them on DOM removal/reparenting.
 
 const slotViewportRoots = new Map<string, HTMLDivElement>()
 
@@ -23,9 +19,7 @@ export type BrowserPageViewportScrollState = {
 
 const browserPageViewports = new Map<string, BrowserPageViewport>()
 
-// Why: React measures the chrome only on mount, but shells are rebuilt without a
-// re-measure (guest recovery/replacement, profile switch, slot remount). Remembering
-// the inset keeps geometry a property of attaching a guest, not of the first mount.
+// Remember chrome insets across shell recovery/profile/slot rebuilds that do not trigger React remeasurement.
 const browserPageChromeInsetHeights = new Map<string, number>()
 const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
 const MAX_REMEMBERED_BROWSER_PAGE_INSETS = 512
@@ -48,8 +42,7 @@ export function registerBrowserOverlaySlotViewport(
     return
   }
   slotViewportRoots.delete(workspaceTabId)
-  // Why: subscribers outlive the root they watch — dropping them here would leave a
-  // remounted slot with live components that never hear about the new root.
+  // Subscribers outlive the root; notify them on removal so they can observe its replacement.
   notifySlotRootListeners(workspaceTabId)
 }
 
@@ -70,8 +63,7 @@ export function subscribeBrowserOverlaySlotViewport(
   ownedListeners.add(listener)
   return () => {
     ownedListeners.delete(listener)
-    // Why: only drop the map entry this unsubscribe still owns; a replacement Set
-    // may already be registered for the same tab.
+    // Unsubscribe only from the owned Set; a newer one may already occupy the same tab key.
     if (ownedListeners.size === 0 && slotRootListeners.get(workspaceTabId) === ownedListeners) {
       slotRootListeners.delete(workspaceTabId)
     }
@@ -141,9 +133,7 @@ export function ensureBrowserPageViewport(
 /** Divides the preset's window-DIP size by the live UI zoom factor (see `main.css`). */
 export const BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME = 'browser-page-preset-viewport'
 
-// Why the DIP conversion: CDP emulates the guest viewport in window DIP, but UI zoom
-// redefines this renderer's CSS px, so an unconverted `${width}px` host box outgrows the
-// emulated page and leaves an unpainted strip beside it (STA-7568).
+// CDP presets use window DIP while UI zoom changes CSS pixels; divide the host box to avoid unpainted strips.
 function applyViewportPresetSizeStyles(
   viewport: BrowserPageViewport,
   size: { width: number; height: number } | null

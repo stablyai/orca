@@ -34,8 +34,7 @@ describe('terminal multiplex daemon endpoint loss notice', () => {
 
     publishPtyEndpointLoss('pty-1')
 
-    // Why revert-sensitive: without the push the pane only learns of the death when its next
-    // keystroke is refused, which is what left panes frozen and ate that keystroke.
+    // Push endpoint death immediately; waiting for the next refused keystroke leaves the pane frozen and loses input.
     expect(sawWriteUnavailable(harness.binaryFrames)).toBe(true)
   })
 

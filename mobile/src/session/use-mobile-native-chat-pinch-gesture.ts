@@ -3,8 +3,7 @@ import { Gesture } from 'react-native-gesture-handler'
 import type { ComposedGesture } from 'react-native-gesture-handler'
 import { quantizeFontScale } from './mobile-native-chat-message-text'
 
-/** Pinch-to-zoom chat font. `fontScale` is the committed size; `pinchBase`
- *  anchors the live gesture so successive pinches compound rather than reset. */
+// Anchor each pinch on the committed scale so successive gestures compound.
 export function useMobileNativeChatPinchGesture(): {
   fontScale: number
   pinchGesture: ComposedGesture
@@ -13,12 +12,7 @@ export function useMobileNativeChatPinchGesture(): {
   const fontScaleRef = useRef(1)
   fontScaleRef.current = fontScale
   const pinchBase = useRef(1)
-  // Why: run the gesture callbacks on the JS thread (not a reanimated worklet) so
-  // they can touch React refs/state and quantizeFontScale directly — accessing
-  // those from the UI-thread worklet crashes the app.
-  // Compose the pinch with the list's native scroll as Simultaneous so a
-  // two-finger pinch is recognized even while the scroll view is active —
-  // otherwise the scroll grabs the gesture first and the pinch never fires.
+  // Run callbacks on JS to access React state safely; simultaneous native scrolling keeps active lists from stealing pinch recognition.
   const pinchGesture = useMemo(
     () =>
       Gesture.Simultaneous(

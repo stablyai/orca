@@ -114,6 +114,20 @@ it('accepts a hostless browser tab when the worktree ID is unambiguous', () => {
       executionHostId: 'ssh:remote'
     })
   ).toEqual(browserTab)
+
+  useAppStore.setState({
+    unifiedTabsByWorktree: {
+      wt: [browserTab],
+      other: [{ ...browserTab, worktreeId: 'other', contentType: 'terminal', entityId: 'terminal' }]
+    }
+  })
+  expect(
+    getActivatableBrowserWorkspaceTab({
+      worktreeId: 'wt',
+      workspaceId: 'workspace',
+      executionHostId: 'ssh:remote'
+    })
+  ).toBeNull()
 })
 
 it('includes folder workspaces when rejecting ambiguous hostless activation', () => {

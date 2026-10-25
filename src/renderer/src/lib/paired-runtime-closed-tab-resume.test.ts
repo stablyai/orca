@@ -17,9 +17,7 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { makeCreatedAgentWorktree } from './worktree-activation-created-agent.test-fixture'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
-// #21235: a paired client is never the execution host, so no local record can tell "another client
-// closed this tab" from a re-key or a pending handle. Whatever shape the record's pane key has, the
-// sweep must not start a second writer on the host for it.
+// Paired clients cannot distinguish another client’s close from rekey/pending handles; local records must never authorize another host writer (#21235).
 
 const initialState = useAppStore.getState()
 const ENV_ID = 'env-closed-elsewhere'

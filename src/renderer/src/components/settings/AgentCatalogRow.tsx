@@ -192,7 +192,6 @@ export function AgentCatalogRow({
             </div>
           )}
           {permission && permission.mode !== permission.expectedMode && (
-            // Right-aligned against the controls so badges line up without reserving width on every row.
             <div className="mr-3 flex h-7 items-center">
               <AgentPermissionExceptionBadge
                 label={label}

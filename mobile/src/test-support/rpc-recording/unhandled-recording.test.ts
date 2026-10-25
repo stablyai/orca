@@ -4,9 +4,7 @@ import { recordUnhandledRejections } from './unhandled-recording'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import type { RecordingScenario } from './recording-scenario'
 
-// No golden records an unhandled rejection any more, so these are the only things pinning the
-// capture: the helper, and its wiring into a recording, where a dropped hookup would pass every
-// golden.
+// No corpus golden has detached rejections; pin capture and recording integration directly.
 describe('recordUnhandledRejections', () => {
   it('records a detached rejection as an effect and restores the prior listeners', async () => {
     const before = process.rawListeners('unhandledRejection')

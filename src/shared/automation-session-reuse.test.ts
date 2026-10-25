@@ -37,13 +37,19 @@ function find(
   } = {}
 ): string | null {
   const livePtyIds = new Set(options.livePtyIds ?? runs.map((entry) => entry.terminalPtyId))
+  const statusesByPaneKey = new Map(
+    runs.map((entry) => [
+      entry.terminalPaneKey,
+      options.status ?? { state: 'done', agentType: 'claude' }
+    ])
+  )
   return findReusableAutomationRun({
     automationId: 'auto-1',
     agentId: 'claude',
     worktreeId: 'wt-1',
     currentRunId: 'run-current',
     runs,
-    agentStatusForPane: () => options.status ?? { state: 'done', agentType: 'claude' },
+    agentStatusForPane: (paneKey) => statusesByPaneKey.get(paneKey),
     liveSession: (candidate) => (livePtyIds.has(candidate.terminalPtyId) ? candidate.id : null)
   })
 }

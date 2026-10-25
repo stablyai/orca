@@ -1,9 +1,6 @@
-// `agentSession.hold` / `agentSession.release` — kept answering for clients that still send them.
-//
-// A view no longer decides whether an agent runs: a send starts one, and the idle sweep stops it.
-// So both are no-ops. `hold` still builds the host, because shipped mobile builds build it through
-// `hold` before they subscribe. Delete both, and their allowlist entries, once
-// MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION passes every client that still calls them.
+// Keep legacy hold/release no-ops: sends start agents and idle sweep stops them.
+// hold still installs the host for shipped mobile clients before subscribe.
+// Remove both methods/allowlist entries only when MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION excludes all callers.
 
 import { defineMethod } from '../core'
 import {

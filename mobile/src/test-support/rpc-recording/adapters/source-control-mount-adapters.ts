@@ -3,10 +3,6 @@ import { operationModuleLoader } from '../operation-module-loader'
 
 const WORKTREE = 'repo42::/p'
 
-/**
- * Source-control senders mounted as plain functions: each one is an exported async call that
- * takes a client, so no React host is needed and the recorded state is the function's own answer.
- */
 export function sourceControlMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

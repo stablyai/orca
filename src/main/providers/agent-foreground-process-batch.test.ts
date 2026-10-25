@@ -26,8 +26,7 @@ describe('batched foreground process correlation', () => {
   })
 
   it('reports whether the shell itself owns the terminal, named process or not', () => {
-    // The only host-observable "nothing is running here". pid 200's own pgid owns the terminal;
-    // pid 300 has an unrecognized command in the foreground, which nothing else here can see.
+    // Unknown foreground commands are invisible to name recognition; only the shell owning its terminal proves idle.
     const rows = parseStrictProcessTableRows(
       [
         '200 1 200 200 Ss /bin/zsh',

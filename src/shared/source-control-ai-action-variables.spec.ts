@@ -13,8 +13,7 @@ import {
 
 describe('source-control AI variable registry', () => {
   it('documents every registered variable so chip hover cards cannot crash', () => {
-    // Why: the registry type already makes an undocumented chip a compile error;
-    // this keeps the guarantee falsifiable at runtime if that type ever loosens.
+    // Keep runtime coverage if the registry’s compile-time constraint ever loosens.
     const documented = new Set<string>(Object.keys(SOURCE_CONTROL_ACTION_VARIABLE_INFO))
     const undocumented = [...new Set(Object.values(SOURCE_CONTROL_ACTION_VARIABLES).flat())].filter(
       (variable) => !documented.has(variable)
@@ -47,8 +46,7 @@ describe('formatLinkedIssueTemplateValue', () => {
   })
 
   it('renders anything that is not a positive integer as an empty string', () => {
-    // Why: `Fixes #-7` / `Fixes #1e+21` are worse output than `Fixes #`, so corrupt
-    // metadata degrades to the unlinked rendering instead of a nonsense reference.
+    // Corrupt issue numbers must not produce references like Fixes #-7 or Fixes #1e+21.
     for (const value of [
       0,
       -7,

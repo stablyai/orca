@@ -4,15 +4,9 @@ import type {
   ControlRenewalRequest
 } from './control-renewal-statement.js'
 
-// One flush per second turns the fleet's control-lease write rate into a
-// function of the cell count rather than the host count: a cell's ~10 due
-// renewals per second become one write transaction instead of ten. Well inside
-// the 105s lease runway, so a host that misses a window is never at risk.
+// One flush per cell/sec replaces ~10 per-host transactions; missed windows remain within the 105s lease runway.
 export const CONTROL_RENEWAL_BATCH_INTERVAL_MS = 1_000
-// Ceiling on the parameter arrays. Row locks live until the statement commits,
-// so this is what bounds how long one flush holds them: measured at 11.5ms for
-// 200 rows against a 20,000-row table, and 9.4ms with a host wedged in a
-// per-host transaction.
+// Bound row locks/parameters: 200 rows measured ~11.5ms on 20k rows and ~9.4ms with one host wedged.
 export const CONTROL_RENEWAL_BATCH_MAX_ROWS = 200
 // A flush slower than this is the only latency worth a line; the metrics event
 // carries the distribution.
@@ -36,10 +30,7 @@ function pendingKey(request: ControlRenewalRequest): string {
   return [request.identity.userId, request.identity.relayHostId].join('\u0000')
 }
 
-// Collects the control-lease renewals a cell owes and spends one statement on
-// them. Each caller still gets the single-renewal contract: the promise resolves
-// on `renewed` and rejects with the outcome as its message otherwise, so callers
-// keep their per-session error routing unchanged.
+// Preserve per-caller renewal contract: resolve renewed, otherwise reject with its outcome for unchanged session error routing.
 export class ControlRenewalBatch {
   private pending = new Map<string, PendingRenewal>()
   // Renewals a host cannot contribute to the flush being built; they open the

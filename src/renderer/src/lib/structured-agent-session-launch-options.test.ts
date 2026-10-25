@@ -272,7 +272,6 @@ describe('picks made while a chat launches', () => {
     )
     const tierPick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'serviceTier', 'priority')
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-nofast', picker)
-    // Superseded, so the picker never saves it as the next launch's preference.
     await expect(tierPick).resolves.toEqual({ kind: 'superseded' })
     created.resolve({ sessionId: SESSION_ID, fence: 3 })
     await settle()
@@ -359,7 +358,6 @@ describe('picks made while a chat launches', () => {
     expect(mutations()).toEqual([])
 
     expect(retryStructuredAgentSessionLaunch(WORKTREE_ID, SESSION_ID)).toBe(true)
-    // The retried create seeds from the saved selection of now.
     expect(getStructuredAgentSessionLaunchSelection(SESSION_ID)).toEqual({
       seed: { model: 'gpt-saved-since' },
       held: { model: 'gpt-picked' }

@@ -23,8 +23,7 @@ describe('SkillDeleteRequestSchema', () => {
   })
 
   it('rejects an unknown top-level field rather than ignoring it', () => {
-    // Deliberately strict: an old host must refuse a field that would change
-    // what gets deleted, not silently drop it.
+    // Old hosts must reject delete-affecting unknown fields instead of silently dropping them.
     expect(() =>
       SkillDeleteRequestSchema.parse({ operationId: 'op', skills: [SKILL], force: true })
     ).toThrow()

@@ -1,12 +1,5 @@
-/**
- * What a packaged `orcad` directory must contain, declared once: the build, the content hash
- * and the remote install probe must not keep three lists that drift.
- *
- * Order is load-bearing: the hash concatenates these files in sequence.
- *
- * Keep this file erasable-only TypeScript — build-orcad.mjs imports it directly under
- * Node's type stripping, which rejects enums, namespaces and parameter properties.
- */
+/** Build, hash and install probe share this manifest; order determines the hash. Keep erasable-only TypeScript:
+ * Node build scripts import via type stripping, which rejects enums, namespaces and parameter properties. */
 // Bun-era slots only: kept so a client can still launch one for rollback (design D7.1 R5).
 export const ORCAD_BUN_RUNTIME_FILENAME = 'bun-runtime'
 export const ORCAD_WINDOWS_BUN_RUNTIME_FILENAME = 'bun-runtime.exe'
@@ -28,12 +21,8 @@ function isWindowsTarget(target: string): boolean {
 /** A Node slot's server target (e.g. linux-x64-musl); `.build-target` would mark it as Bun. */
 export const ORCAD_SERVER_TARGET_FILENAME = '.server-target'
 
-/**
- * Marks a slot launched by the pinned Node runtime; its content is that runtime's
- * executableSha256 (node-runtime-pin.ts), which is how the runtime enters the version hash.
- * A Node slot must never carry `.build-target`: Bun-era selectors exit 78 on `.build-target`
- * without `bun-runtime` (design D7.1 R5).
- */
+/** The pinned Node executableSha256 enters the version hash here. Never ship .build-target in Node slots:
+ * Bun-era selectors exit 78 without bun-runtime (design D7.1 R5). */
 export const ORCAD_NODE_RUNTIME_MARKER_FILENAME = '.runtime-node'
 /** Beside the slot dirs and shared across Orca versions (design D2): `runtimes/node-<sha256>/bin/node`. */
 export const ORCAD_RUNTIMES_DIRNAME = 'runtimes'
@@ -183,10 +172,7 @@ export const ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS = [
   'native-chat-visuals/skills/orca-chat-visuals/SKILL.md'
 ] as const
 
-/**
- * The page phones load over mobileWeb.bundle.*, at the path getBundledMobileWebBundleRoot probes
- * under the install root. Its assets are content-addressed, so only its manifest names them.
- */
+/** Phones load this page via mobileWeb.bundle.*; its content-addressed assets are listed only in the manifest. */
 export const ORCAD_MOBILE_WEB_DIR = 'out/mobile-web'
 export const ORCAD_MOBILE_WEB_MANIFEST = `${ORCAD_MOBILE_WEB_DIR}/manifest.json`
 
@@ -226,11 +212,7 @@ export function compareCodeUnits(left: string, right: string): number {
 
 export type OrcadArtifact = {
   filename: string
-  /**
-   * Absence is a degradation, not a torn install, so the remote probe must not require it.
-   * The agent-browser binary is the only one: `resolveOrcadBrowserProvider` already answers
-   * "no headless browser" when it is missing, and it is named per platform-arch anyway.
-   */
+  /** Missing optional agent-browser means no headless browser, not a torn install; the remote probe must allow it. */
   optional?: boolean
 }
 
@@ -250,12 +232,12 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },
   // Forked so transcript parsing stays off the server's event loop; session search stays in-process.
   { filename: ORCAD_SESSION_SCANNER_SERVICE_ENTRY },
-  // Worker threads the account services start: CLI probes off the event loop, Claude account setup.
+  // Account worker threads keep CLI probes and Claude setup off the event loop.
   { filename: 'worker-thread-child-process-entry.js' },
   { filename: 'claude-profile-setup-worker-entry.js' },
-  // Dictation's worker thread; it loads the recognizer `orca serve` names (#31174).
+  // Dictation loads the recognizer named by orca serve (#31174).
   { filename: 'stt-worker.js' },
-  // `orca computer` forks it; it finds the platform runtimes below beside itself (#31777).
+  // The forked computer sidecar finds platform runtimes beside itself (#31777).
   { filename: ORCAD_COMPUTER_SIDECAR_ENTRY },
   ...ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS.map((filename) => ({ filename })),
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
@@ -269,7 +251,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   ...ORCAD_NODE_PTY_JS_ARTIFACTS.map((filename) => ({ filename })),
   ...ORCAD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename })),
   ...ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS.map((filename) => ({ filename })),
-  // Without it phones paired to this server get no page (mobileWeb.bundle.v1 is not advertised).
+  // Missing page suppresses mobileWeb.bundle.v1, leaving paired phones without a page.
   { filename: ORCAD_MOBILE_WEB_MANIFEST }
 ]
 
@@ -281,10 +263,7 @@ export const ORCAD_TEMPLATE_TARGETS_DIR = 'targets'
 /** Written last by the installer; its absence means a torn install. */
 export const ORCAD_INSTALL_COMPLETE_FILENAME = '.install-complete'
 
-/**
- * Every file a `target` slot ships, in hash order; `target` is `<os>-<arch>[-<libc>]`.
- * `mobileWebAssets` is orcadMobileWebAssetFilenames of the slot's own page manifest.
- */
+/** Slot files in hash order for <os>-<arch>[-<libc>]; mobileWebAssets comes from the slot’s own page manifest. */
 export function orcadArtifactFilenames(
   target: string,
   mobileWebAssets: readonly string[]
@@ -313,7 +292,6 @@ export function orcadTemplateCommonFilenames(mobileWebAssets: readonly string[])
       artifact.filename !== ORCAD_NODE_RUNTIME_MARKER_FILENAME &&
       artifact.filename !== ORCAD_PARCEL_WATCHER_NATIVE
   ).map((artifact) => artifact.filename)
-  // The page is platform-independent, so the template keeps one copy for every target.
   filenames.push(...mobileWebAssets)
   return filenames
 }

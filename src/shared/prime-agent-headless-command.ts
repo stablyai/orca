@@ -1,8 +1,6 @@
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 
-// Why: Prime Agent's non-interactive runs are `--mode <json|rpc|acp|daemon>` as well as
-// `--print`; only `text` hosts the TUI. Matching upstream, the value must be a separate
-// token — `--mode=json` is not parsed by the CLI, so it still starts the interactive mode.
+// Only text mode hosts the TUI. Prime parses --mode plus a separate json/rpc/acp/daemon token; --mode=json remains interactive.
 const NON_INTERACTIVE_MODES = new Set(['json', 'rpc', 'acp', 'daemon'])
 
 export function isPrimeAgentHeadlessOneShotCommand(tokens: readonly string[]): boolean {

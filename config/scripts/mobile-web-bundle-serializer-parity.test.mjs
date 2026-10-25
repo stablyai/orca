@@ -1,10 +1,5 @@
-/**
- * The canonical serialization that buildId hashes exists three times, because the two packaging
- * scripts run on bare node before any build output exists and so cannot import the TypeScript
- * contract. Three copies drift; this is what stops them. A divergence in any one of them would
- * reject every honest bundle at packaging, or ship a bundle whose id the phone recomputes
- * differently and re-downloads forever.
- */
+// Bare-Node packaging cannot import prebuild TS contract, leaving three serializers that must remain byte-identical.
+// Drift rejects valid bundle or makes phone recompute different ID and download indefinitely.
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
@@ -23,11 +18,7 @@ const { serializeAssets: serializeInGuard } = require('./verify-packaged-mobile-
 
 const digest = (hex) => `${hex}`.padStart(64, '0')
 
-/**
- * Mixed content types, a nested path, and an uppercase segment that sorts before a lowercase one
- * only under code-unit order: `localeCompare` would put `assets/aQ.js` first, so any serializer
- * that reached for it produces a different string here.
- */
+// Mixed types/nested paths and uppercase ordering expose localeCompare drift from canonical code-unit sort.
 const ASSETS = [
   {
     path: 'assets/Za.js',
@@ -111,7 +102,6 @@ describe('the three mobile web bundle serializers', () => {
       entrypoint: 'index.html',
       totalBytes: ASSETS.reduce((total, asset) => total + asset.byteLength, 0),
       assets: [...ASSETS],
-      // Outside the hash on purpose, which the assertion below is what says.
       routes: [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
     }
 

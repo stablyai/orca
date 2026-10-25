@@ -30,7 +30,6 @@ describe('readSpoolFile', () => {
     const result = readSpoolFile(write(`${complete}${record('b')}`))
 
     expect(result.records.map((entry) => entry.paneKey)).toEqual(['café😀'])
-    // The in-flight final record must stay replayable: consumed stops at the last newline.
     expect(result.consumed).toBe(Buffer.byteLength(complete))
   })
 

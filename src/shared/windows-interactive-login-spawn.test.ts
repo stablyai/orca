@@ -46,10 +46,7 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     expect(spawn.command).toBe(getCmdExePath())
     expect(spawn.args.slice(0, 5)).toEqual(['/d', '/c', 'start', '', '/wait'])
     expect(spawn.args[5]).toMatch(/WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
-    // Why: `-ExecutionPolicy Bypass` is a no-op next to `-EncodedCommand` (only `-File` is
-    // policy gated) and is a heavily EDR-flagged token, so it must not come back. The base64
-    // must stay — `start` re-parses this through cmd.exe, whose safe-token guard rejects the
-    // `&` and `"` in the raw relay script.
+    // Omit noisy no-op Bypass: EncodedCommand is not policy-gated. Keep base64 because start reparses via cmd, whose guard rejects raw script metacharacters.
     expect(spawn.args.slice(6, 9)).toEqual(['-NoLogo', '-NoProfile', '-EncodedCommand'])
     expect(spawn.args).not.toContain('-ExecutionPolicy')
     expect(spawn.args).not.toContain('Bypass')

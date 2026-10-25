@@ -85,6 +85,20 @@ function renderItem(item: HostedTerminalQuickCommand = entry): {
 }
 
 describe('TabBarQuickCommandItem', () => {
+  it('preserves native keyboard activation of nested actions', () => {
+    const { onRun } = renderItem()
+    const buttons = container.querySelectorAll('button')
+    expect(buttons.length).toBe(3)
+    for (const button of buttons) {
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      act(() => {
+        button.dispatchEvent(event)
+      })
+      expect(event.defaultPrevented).toBe(false)
+    }
+    expect(onRun).not.toHaveBeenCalled()
+  })
+
   it('copies the command body without running the command', async () => {
     const { onRun, onEdit, onDelete } = renderItem()
 

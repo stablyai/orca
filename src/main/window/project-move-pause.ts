@@ -23,10 +23,7 @@ export class ProjectMovePauseError extends Error {
   }
 }
 
-/**
- * Caller holds its move gate/fence. Check every returned outcome before export; on rejection,
- * journal ProjectMovePauseError.outcomes too. Main owns stops; the window confirms persistence.
- */
+/** Caller holds the move fence; verify every stop outcome before export and journal partial outcomes on rejection. Main stops; renderer confirms persistence. */
 export async function pauseWorkspacesForProjectMove(
   mainWindow: BrowserWindow,
   runtime: SleepRuntime,

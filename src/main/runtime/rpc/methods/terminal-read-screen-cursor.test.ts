@@ -10,9 +10,7 @@ function readParams() {
 }
 
 describe('terminal.read screen and cursor', () => {
-  // Why: the CLI refuses this pair, but terminal.read is an RPC and any other caller can send
-  // both. Honoring them would answer with rendered lines carrying the stream's pagination
-  // metadata — two frames of reference in one payload.
+  // RPC callers can bypass the CLI's screen/cursor exclusion; reject mixed rendered-line and stream-pagination frames.
   it('rejects a cursor combined with a screen read', () => {
     expect(() => readParams().parse({ terminal: 'term_abc', screen: true, cursor: 42 })).toThrow(
       /Cursor cannot be combined with a screen read/
@@ -26,8 +24,7 @@ describe('terminal.read screen and cursor', () => {
     expect(readParams().parse({ terminal: 'term_abc', cursor: 42 })).toMatchObject({ cursor: 42 })
   })
 
-  // Why: cursor 0 is a real cursor, not an absent one — an off-by-one here would let the
-  // combination through on the first page.
+  // Cursor zero is present too; reject the combination on the first page.
   it('rejects cursor zero with a screen read', () => {
     expect(() => readParams().parse({ terminal: 'term_abc', screen: true, cursor: 0 })).toThrow(
       /Cursor cannot be combined with a screen read/

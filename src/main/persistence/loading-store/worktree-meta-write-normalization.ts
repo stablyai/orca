@@ -15,8 +15,7 @@ type WorktreeMetaIdentity = {
   hostId: ExecutionHostId
 }
 
-// Why spread the shared table: it is what the serializer omits and the loader re-fills, so the two
-// must never drift.
+// Use the serializer/loader default table so omitted fields rehydrate identically.
 function createDefaultWorktreeMeta(): WorktreeMeta {
   return {
     ...WORKTREE_META_PERSISTED_DEFAULTS,
@@ -30,7 +29,6 @@ function createDefaultWorktreeMeta(): WorktreeMeta {
   }
 }
 
-/** Merge and normalize the metadata shape shared by legacy and identity-keyed writes. */
 export function mergeWorktreeMetaForWrite(
   existing: WorktreeMeta | undefined,
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,

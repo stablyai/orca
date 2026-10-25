@@ -5,11 +5,7 @@ import type {
 } from '../../../../shared/automation-owner-ref'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
-/**
- * Health of an authority's *stored-automation query path*. Never describes its
- * execution targets: a reachable authority keeps listing and editing records
- * whose SSH target is down (required invariant 6).
- */
+/** Authority storage-query health, independent of execution targets; SSH downtime must not prevent listing/editing stored records. */
 export type AutomationAuthorityHealth =
   | 'loading'
   | 'fresh'
@@ -29,14 +25,7 @@ export type AutomationExecutionHealth =
 /** What list/fencing contract this entry can use. `legacy-unscoped` entries are view-only. */
 export type AutomationHostQuerySupport = 'scoped' | 'legacy-unscoped' | 'incompatible'
 
-/**
- * Why an entry cannot use host-scoped, fenced queries. Absent when it can.
- *
- * Only `authority-unscoped` is positive evidence about the authority's list
- * contract — a probe that actually came back without the capability. The target
- * reasons say nothing about the server's age and none of them are repaired by
- * updating it, so they must never share its badge copy or its recovery verb.
- */
+/** Distinguish actual missing server capability from target registration gaps; only authority-unscoped proves a server update is needed. */
 export type AutomationHostScopeGap =
   /** The owning authority proved the target is gone (tombstone or hydrated absence). */
   | 'target-removed'
@@ -108,10 +97,7 @@ export type AutomationHostCatalogInput = {
   desktop: AutomationDesktopAuthorityInput
   /** Saved runtime environments — projected even while offline. */
   runtimes: readonly AutomationRuntimeAuthorityInput[]
-  /**
-   * The saved runtime that *is* the desktop authority: a paired web client's local
-   * transport is its server's, so projecting both would list every record twice.
-   */
+  /** Fold a saved runtime that aliases desktop storage so a paired web client does not list the same records twice. */
   desktopAliasEnvironmentId?: string
   /** Gates Runtime+Self absence; a failed catalog read settles without hydrating. */
   runtimeCatalogSettled: boolean

@@ -5,8 +5,7 @@ import { NumberField } from './SettingsFormControls'
 
 afterEach(cleanup)
 
-// #10754: an optional setting needs a way back to "unset". Without a clear path the field can pin a
-// value but never restore Orca's automatic behavior, which is the state most users should be in.
+// Optional settings need a clear path back to automatic behavior (#10754).
 describe('NumberField clearable fields', () => {
   it('renders the placeholder and commits nothing while the value is unset', () => {
     render(

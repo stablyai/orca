@@ -1,14 +1,5 @@
-/**
- * Which host runs `orca serve`: orcad on this machine's packaged slot, or Electron `--serve`.
- * App-side on purpose: the CLI runs it through `orcad-local-serve-selection-entry.ts`, so the
- * CLI bundle never carries the materializers.
- *
- * orcad by default; `ORCA_SERVE_RUNTIME=electron` opts out. Anything that stops orcad from
- * serving this machine (no slot for the target, no pinned Node, a native module it cannot load,
- * a host or packaging path it does not cover yet) falls back to Electron with one stderr line
- * saying why. Everything this writes stays inside the desktop's userData (design D7): the slot
- * under `orcad-artifacts/`, assembled from the template inside the app bundle.
- */
+// Run app-side to keep materializers out of the CLI bundle. Prefer a userData orcad slot;
+// unsupported packaging/runtime/native conditions fall back to Electron with a diagnostic.
 import { chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -48,7 +39,7 @@ export type ServeRuntimeSelectionInput = {
   hostTarget?: () => string
   materializeSlot?: typeof materializeOrcadArtifact
   materializeRuntime?: typeof materializeCachedNodeRuntime
-  /** The pinned Node an AppImage carries; the slot uses it before trying a download. */
+  /** Try the AppImage’s pinned Node before downloading. */
   bundledNodeRuntime?: AppImageNodeRuntime | null
   nativePreflight?: (runtime: string, entry: string) => Promise<string>
   profileHasSshTargets?: (userDataPath: string) => boolean
@@ -72,8 +63,7 @@ export async function selectServeRuntime(
   if (requested && requested !== 'orcad') {
     return electron(`${SERVE_RUNTIME_ENV}=${requested} is neither orcad nor electron`)
   }
-  // Why: orcad has no SSH connection stack yet, so a default serve on it would list no targets
-  // and fail every connect (#25886, #8489). An explicit ORCA_SERVE_RUNTIME=orcad keeps orcad.
+  // Default to Electron for SSH targets until orcad supports them; explicit orcad selection overrides.
   const sshReason = requested ? null : profileSshReason(input)
   if (sshReason) {
     return electron(sshReason)
@@ -126,20 +116,17 @@ export async function selectServeRuntime(
   }
 }
 
-/** Why this profile must serve on Electron for SSH, or null when it provably has no targets. */
 function profileSshReason(input: ServeRuntimeSelectionInput): string | null {
   try {
     return (input.profileHasSshTargets ?? serveProfileHasSshTargets)(input.userDataPath)
       ? 'this profile has SSH targets, which orcad cannot serve yet'
       : null
   } catch (error) {
-    // Why: fail closed. The read-only probe rejects profiles the serve host would still migrate
-    // (an older schema), and guessing "no SSH" there leaves saved targets unreachable.
+    // Unknown/old-schema profiles may contain saved SSH targets; preserve Electron reachability.
     return `could not tell whether this profile has SSH targets, which orcad cannot serve yet (${errorMessage(error)})`
   }
 }
 
-/** The slot references its runtime beside it: the AppImage's own copy, else the cached download. */
 async function placeSlotRuntime(
   slotDir: string,
   target: ServerTarget,

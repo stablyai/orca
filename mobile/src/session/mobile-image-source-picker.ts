@@ -7,8 +7,7 @@ import {
   assertClipboardImageByteLengthWithinLimit
 } from '../../../src/shared/clipboard-image'
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
-// The seam's contract, which is where these three now live: a screen that catches the permission
-// error must not import this module for it, or the page bundle gets the native picker chain with it.
+// Import permission errors from the Expo-free contract so page-side catches cannot pull native picker code into the bundle.
 import { ImageLibraryPermissionError } from '../platform/media-picker-contract'
 import type { MobileImageSource, PickedMobileImage } from '../platform/media-picker-contract'
 
@@ -34,7 +33,6 @@ export function defaultMobileImageFileFactory(uri: string): MobileImageFile {
   return new FsFile(uri)
 }
 
-/** Reads a picked uri as base64 in chunks, refusing through `assertBytes` once it passes the cap. */
 export async function readUriAsBase64(
   uri: string,
   declaredSize: number | undefined | null,

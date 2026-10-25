@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { LoaderCircle } from 'lucide-react'
 import { TaskPageGitHubRows } from './Rows'
 import { PaginationBar } from '../PaginationBar'
-import { supersedeGitHubListScrollRestore } from '../../task-page-github-list-scroll-restore'
+import { supersedeGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 export function TaskPageGitHubList({
   model
 }: {
@@ -51,8 +51,7 @@ export function TaskPageGitHubList({
     handleLoadNextPage
   } = model
   return (
-    // Why: bottom of the joined GitHub list card — flush under the filter
-    // chrome (no gap, no top border/radius) so toolbar + table read as one.
+    // Join the table shell to filter chrome without a doubled seam.
     <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <div
         ref={githubListScrollRef}
@@ -67,8 +66,7 @@ export function TaskPageGitHubList({
             return
           }
           const scrollTop = event.currentTarget.scrollTop
-          // Why: a restore's own write must not be saved as the user's position, but a real
-          // user scroll has to supersede a pending restore or saving stays suppressed.
+          // Ignore restore echoes but let real scrolls supersede pending restores so position saving can resume.
           if (
             !supersedeGitHubListScrollRestore({
               scrollTop,
@@ -221,10 +219,7 @@ export function TaskPageGitHubList({
         ))}
 
         {showGitHubTaskSkeletons ? (
-          // Why: render enough shimmer rows to fill a typical viewport
-          // so the table doesn't visibly grow when results land. A
-          // 3-row stub jumps to ~30 real rows; matching the steady-
-          // state height keeps layout stable across the load.
+          // Fill a typical viewport with shimmer rows to avoid a height jump when results arrive.
           <div className="divide-y divide-border/40">
             {Array.from({
               length: 12

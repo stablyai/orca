@@ -25,10 +25,18 @@ export function assertRuntimeStatusCompatible(status: RuntimeStatus): void {
       status.minCompatibleRuntimeClientVersion ?? status.minCompatibleMobileVersion
   })
   if (verdict.kind === 'blocked') {
-    // Preserve the descriptive message; add a `.code` marker so callers can
-    // distinguish a version block from a transport failure.
+    // Keep Error message while tagging code so callers distinguish protocol blocks from transient transport failures.
     const error = new Error(describeRuntimeCompatBlock(verdict))
     ;(error as { code?: string }).code = RUNTIME_COMPAT_BLOCK_CODE
     throw error
+  }
+}
+
+export function isRuntimeStatusCompatible(status: RuntimeStatus): boolean {
+  try {
+    assertRuntimeStatusCompatible(status)
+    return true
+  } catch {
+    return false
   }
 }

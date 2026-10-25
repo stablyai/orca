@@ -1,9 +1,4 @@
-/**
- * The census used to wrap `subscribe` on the bound hook AFTER create() ran. zustand's
- * useStore() reads the inner api.subscribe, so that version counted only imperative
- * subscribers and missed every React hook subscription — the ones that actually scale
- * with agent rows. These tests pin both paths.
- */
+/** Wrapping bound-hook subscribe misses React’s inner-api subscriptions; test both imperative and hook paths. */
 import { describe, expect, it } from 'vitest'
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'

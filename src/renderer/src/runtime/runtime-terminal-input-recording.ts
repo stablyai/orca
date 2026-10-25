@@ -59,11 +59,9 @@ export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Da
     return
   }
   try {
-    // Why: paired/runtime sends can bypass xterm.onData, so hibernation
-    // needs the same user-input marker from the PTY-id route.
+    // PTY-ID remote sends can bypass xterm.onData; still stamp hibernation’s user-input activity.
     state.recordTerminalInput(paneKey, timestamp)
   } catch {
-    // Ignore malformed legacy layout data; the planner will stay
-    // conservative when a live PTY cannot be matched to an eligible pane.
+    // Ignore malformed legacy layout; unmatched live PTYs keep the planner conservative.
   }
 }

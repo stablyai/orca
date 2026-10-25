@@ -1,12 +1,5 @@
-/**
- * Stages a long or multi-line startup command as a self-deleting script so the
- * host types only a short line that sources it.
- *
- * Why: the shell-ready marker fires before the line editor takes the TTY out of
- * canonical mode, so a typed line past MAX_CANON (1024 bytes on macOS) is
- * silently truncated, and macOS bash 3.2 reads each raw newline as Enter. Run
- * by the host that owns the PTY, at the moment it accepts the spawn.
- */
+/** Stage long/multiline launches on the PTY host: ready markers may precede raw mode, so MAX_CANON truncates long lines
+ * (1024 bytes on macOS), and raw newlines submit early in bash 3.2. Self-delete scripts before starting the agent. */
 import { randomBytes } from 'node:crypto'
 import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,7 +16,7 @@ export type StartupLineDelivery = 'typed' | 'staged' | 'typed-after-stage-failed
 export const STAGED_STARTUP_COMMAND_STALE_MS = 60 * 60 * 1000
 
 export type StartupCommandStaging = {
-  /** What the host types: the command itself, or a short line sourcing the staged script. */
+  /** Typed command or short staged-script invocation. */
   command: string
   delivery: StartupLineDelivery
   /** Present while the script exists; the host unlinks it if the PTY exits before sourcing it. */
@@ -32,13 +25,11 @@ export type StartupCommandStaging = {
   failure?: string
 }
 
-// Why only these type any short line as is: Orca's portable quoting is verified literal in these. Any
-// other shell (tcsh, nu, xonsh, pwsh...) runs an agent launch line Orca built through `/bin/sh` when
-// it holds anything but plain characters; a command the user wrote for that shell is typed as it was.
+// Only these shells preserve Orca’s portable quoting directly. Other shells use /bin/sh for nonplain Orca-built lines;
+// user-authored commands retain their target shell’s syntax.
 const STAGING_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash', 'fish', 'ksh', 'mksh'])
 
-// Why not ksh: it runs a sourced file's commands in the shell's own process group, so Ctrl-Z could
-// not stop the agent (mksh untested, kept with it); their long Orca-built lines use `/bin/sh`.
+// ksh sourcing loses the agent’s process group/Ctrl-Z; use /bin/sh for long launches (mksh conservatively follows).
 const SOURCING_SHELLS = new Set(['bash', 'zsh', 'sh', 'dash', 'fish'])
 
 const encoder = new TextEncoder()
@@ -67,8 +58,7 @@ export function shouldStageStartupCommand(args: {
   const needsStaging =
     hasControlByte(body) || encoder.encode(body).byteLength > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
   if (shellName === null) {
-    // Why these characters: tcsh doubles a quoted backslash and expands `!!`, and nu cannot read
-    // `'\''`. A plain line is typed so the agent is the shell's own job, where the paste guard finds it.
+    // tcsh mutates backslashes/!! and nu rejects POSIX apostrophe escapes; type plain lines directly to retain foreground-job detection.
     return args.orcaBuiltLine === true && (needsStaging || /[!\\"`$]/.test(body))
   }
   return needsStaging && (SOURCING_SHELLS.has(shellName) || args.orcaBuiltLine === true)
@@ -76,7 +66,7 @@ export function shouldStageStartupCommand(args: {
 
 function stagedScriptLine(shellName: string | null, quotedPath: string): string {
   if (shellName === 'fish') {
-    // Why eval: fish runs a sourced file without job control; eval runs it as if typed.
+    // fish sourcing loses job control; eval preserves typed-line behavior.
     return `eval (string collect < ${quotedPath})`
   }
   return shellName !== null && SOURCING_SHELLS.has(shellName)
@@ -100,7 +90,7 @@ export function stageStartupCommand(args: {
   const directory = args.directory ?? tmpdir()
   if (!staleSweepStarted) {
     staleSweepStarted = true
-    // Why deferred: the sweep is crash recovery and must never delay this launch.
+    // Crash cleanup must not delay launch.
     setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
   const shellName = stagingShellName(args.shellPath)
@@ -110,8 +100,7 @@ export function stageStartupCommand(args: {
   )
   const quotedPath = quoteStartupArg(scriptPath, 'posix')
   try {
-    // Why rm first: the shell keeps reading the open file, so the prompt-bearing script is gone
-    // before the agent starts, however long it runs.
+    // Unlink before the agent starts; the shell continues reading its open file.
     writeFileSync(
       scriptPath,
       `command rm -f -- ${quotedPath}\n${stripSubmitTerminator(args.command)}\n`,
@@ -131,10 +120,7 @@ export function stageStartupCommand(args: {
   }
 }
 
-/**
- * The line the host prints to the terminal when staging failed: the full line it types instead may
- * leave the shell waiting for more input, and nothing else would tell the user why.
- */
+/** Explain fallback because the full typed line may leave the shell awaiting more input. */
 export function startupStagingFailureNotice(staging: StartupCommandStaging): string | null {
   if (staging.failure === undefined) {
     return null
@@ -145,7 +131,6 @@ export function startupStagingFailureNotice(staging: StartupCommandStaging): str
   return `\r\n[orca] Could not stage the launch command (${reason}); typed it in full. If the shell shows quote> or waits for more input, press Ctrl-C and launch again.\r\n`
 }
 
-/** For a PTY that exited, or was never typed into, before it sourced its script. */
 export function discardStagedStartupCommand(staging: StartupCommandStaging | undefined): void {
   if (!staging?.scriptPath) {
     return
@@ -157,7 +142,7 @@ export function discardStagedStartupCommand(staging: StartupCommandStaging | und
   }
 }
 
-/** Removes scripts a crashed host left behind; age-gated so another instance's fresh launch survives. */
+/** Age-gate crash cleanup so another instance’s fresh launch survives. */
 export function sweepStaleStagedStartupCommands(args: { directory?: string; now?: number }): void {
   const directory = args.directory ?? tmpdir()
   const now = args.now ?? Date.now()

@@ -59,8 +59,7 @@ export function getFeatureWallCompletionProgress(
   const orchestrationDone =
     input.completedAgentSteps?.has('orchestration') === true ||
     (input.visitedAgentSteps.has('orchestration') && input.orchestrationSkillInstalled)
-  // Why: the keep-awake setting surfaced on Visibility is optional; viewing
-  // the step should complete the tour item even when the setting stays off.
+  // Viewing Visibility completes its tour item even when optional keep-awake stays off.
   const statusesDone =
     input.completedAgentSteps?.has('statuses') === true || input.visitedAgentSteps.has('statuses')
 

@@ -1,15 +1,4 @@
-/**
- * After a relaunch, a workspace's sleeping agents resume only when the user can see them.
- *
- * Every agent's PTY dies while Orca is closed (the daemon is killed, as a reboot would), so each
- * agent tab holds a resumable record and no live session. Opening the workspace must resume the
- * agents in the panes on screen; every other tab resumes when the user switches to it, and a
- * phone opening the workspace still wakes them immediately.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/relaunch-sleeping-agents-resume-on-view.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// After relaunch with a killed daemon, resume agents only in visible panes, then on tab selection; phone workspace-open still wakes all immediately.
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -170,11 +159,7 @@ type Scenario = {
   log: string
 }
 
-/**
- * Opens `tabCount` terminal tabs (the first split in two when `splitFirstTab`; the second moved
- * into a side-by-side group when `secondTabInRightGroup`), reports a working agent in every
- * pane, quits with the first tab on screen, kills the daemon, and relaunches.
- */
+// Seed tabs/splits/groups with working agents, quit with the first visible, kill their daemon and relaunch.
 async function relaunchWithSleepingAgents(
   testInfo: Parameters<Parameters<typeof test>[2]>[1],
   options: { tabCount: number; splitFirstTab?: boolean; secondTabInRightGroup?: boolean },

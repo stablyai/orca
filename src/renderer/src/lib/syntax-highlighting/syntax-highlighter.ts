@@ -11,7 +11,6 @@ import { withVueTemplateInjections } from './vue-template-injections'
 
 export type SyntaxToken = {
   content: string
-  /** Position in the highlighted text; unique within a line. */
   offset: number
   /** Undefined where the theme uses its default text color, so the surface's own color shows. */
   light: string | undefined
@@ -21,7 +20,6 @@ export type SyntaxToken = {
   darkFontStyle: number
 }
 
-/** TextMate's font style bits. */
 export const SYNTAX_FONT_STYLE = { italic: 1, bold: 2, underline: 4, strikethrough: 8 } as const
 
 /**
@@ -40,11 +38,7 @@ export type SyntaxHighlightResult = {
   outcome: SyntaxHighlightOutcome
 }
 
-/**
- * Colors `code` (one or more lines) in VS Code's Light+ and Dark+ themes,
- * continuing from `state` when that is what the call for the text just before
- * `code` returned.
- */
+/** Continue code after state’s previous text, producing both VS Code Light+/Dark+ token styles. */
 export type SyntaxHighlighter = (
   code: string,
   state?: SyntaxHighlightState
@@ -110,7 +104,6 @@ function plainLine(line: string, offset: number): SyntaxToken[] {
     : []
 }
 
-/** Lines split like Shiki splits them, each with its offset in `code`. */
 function splitLines(code: string): { line: string; offset: number }[] {
   let offset = 0
   return code.split(/\r?\n/).map((line) => {
@@ -215,7 +208,7 @@ function createSyntaxHighlighter(
     }
     try {
       const grammar = highlighter.core.getLanguage(grammarName)
-      // Why: loading a language another grammar embeds reloads that grammar, which cannot read old states.
+      // Loading embedded languages rebuilds parent grammars, invalidating their old states.
       if (state && state.grammar !== grammar) {
         return plainResult(code, 'degraded')
       }
@@ -292,10 +285,7 @@ function languageKey(language: string): string {
   return language.trim().toLowerCase()
 }
 
-/**
- * Loads `language`'s grammar for `loadedSyntaxHighlighter`. A failed load is
- * retried by a later call, a few times at most.
- */
+/** Load a language for synchronous loadedSyntaxHighlighter access; later calls retry failures up to the cap. */
 export function loadSyntaxLanguage(language: string): Promise<SyntaxLanguageStatus> {
   const key = languageKey(language)
   if (readyLanguages.has(key)) {

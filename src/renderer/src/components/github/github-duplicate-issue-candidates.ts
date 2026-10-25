@@ -2,11 +2,9 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
-// Why a shared constant: the selector runs on every store write while the picker is
-// closed, which is nearly always; a fresh [] there is pure allocation.
+// Reuse the empty result to avoid allocating on every store write while the picker is closed.
 const NO_DUPLICATE_CANDIDATES: readonly GitHubWorkItem[] = []
 
-/** Cached issues of `item`'s repo, newest first, for the close-as-duplicate picker. */
 export function useGitHubDuplicateIssueCandidates(
   item: Pick<GitHubWorkItem, 'repoId' | 'number'>,
   pickerOpen: boolean

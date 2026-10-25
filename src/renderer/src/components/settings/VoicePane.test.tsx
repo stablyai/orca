@@ -304,7 +304,6 @@ describe('VoicePane', () => {
       disconnect.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    // The user turns dictation off while the clear-key IPC is still in flight.
     await act(async () => {
       root.render(<VoicePane settings={settingsWithKey(false)} updateSettings={updateSettings} />)
     })

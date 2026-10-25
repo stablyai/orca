@@ -45,6 +45,7 @@ vi.mock('./skill-cloud-ipc-handlers', () => ({
 vi.mock('../wsl', () => ({
   getDefaultWslDistro: getDefaultWslDistroMock,
   getWslHome: getWslHomeMock,
+  getWslHomeAsync: async (distro: string) => getWslHomeMock(distro),
   parseWslPath: parseWslPathMock,
   toLinuxPath: (pathValue: string) => {
     if (pathValue === '\\\\wsl.localhost\\Ubuntu\\home\\alice') {

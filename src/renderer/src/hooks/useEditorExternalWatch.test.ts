@@ -7,9 +7,7 @@ vi.mock('@/store', () => ({
     getState: vi.fn()
   }
 }))
-// Why: editor-autosave calls window.dispatchEvent at module scope paths; the
-// vitest 'node' environment has no window. Stub the two exports we use so the
-// handler can run headlessly.
+// Stub autosave’s window-event exports so the handler runs in headless Node.
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
   return {
@@ -129,18 +127,14 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
   }
 
   it('does not flash deleted when a create at the same path arrives in the next payload', () => {
-    // Simulates macOS atomic write: two back-to-back payloads, delete then create.
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
     handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]))
 
-    // Advance less than the debounce window; the deleted tombstone must not
-    // have fired yet.
     vi.advanceTimersByTime(10)
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')
 
     handleFsChanged(payload([{ kind: 'create', absolutePath: '/repo/notes.md' }]))
 
-    // Flush anything remaining; the pending tombstone should have been cancelled.
     vi.advanceTimersByTime(500)
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')
 
@@ -167,8 +161,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ])
     )
 
-    // The single-payload rename-correlated path must not defer — the decision
-    // is already correct because both events are visible at once.
+    // Same-payload delete/create already proves recreation; reconcile without deferral.
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'renamed')
 
     dispose()
@@ -552,9 +545,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     recordSelfWrite('/repo/notes.md', 'orca save')
-    // Why: SSH poll + event streams can deliver several payloads for one
-    // write; each verification is a full-file read, so a burst must share
-    // the in-flight read instead of stacking network round-trips.
+    // Burst SSH echo payloads must share full-file reads instead of stacking network round trips.
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
@@ -591,7 +582,6 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     recordSelfWrite('/repo/notes.md', 'orca save')
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     await vi.advanceTimersByTimeAsync(50)
-    // An agent writes while the slow echo read is still in flight.
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     await vi.advanceTimersByTimeAsync(50)
     resolveEchoRead({ content: 'orca save', isBinary: false })

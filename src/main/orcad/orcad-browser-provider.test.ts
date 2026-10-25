@@ -113,8 +113,6 @@ describe('ExternalChromiumBrowserProcess', () => {
       getAgentBrowserBridge: () => null,
       resolveWorktreeSelector: async (selector) => ({ id: selector }),
       resolveBrowserWorkspace: async (selector) => ({ id: selector }),
-      // Unused by the sidecar command paths under test; the daemon's real host is
-      // OrcaRuntimeService, which owns the client-hosted registries.
       resolveBrowserNetworkExecutionHost: () => {
         throw new Error('No browser network execution host')
       },

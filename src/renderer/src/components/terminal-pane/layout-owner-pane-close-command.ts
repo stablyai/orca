@@ -4,11 +4,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { expectPaneToClose } from '@/runtime/layout-owner-pane-intents'
 import { closeAfterLastPaneRefusal } from './layout-owner-last-pane-refusal'
 
-/**
- * The user's pane close in a layout-owner build: main closes the pane first, and the window removes
- * it when main's frame drops it (the frame reconciler runs the user's close). False when a paired
- * server owns the workspace; the caller closes as today.
- */
+/** Main closes first and its frame removes the pane; false delegates paired-server ownership to the caller. */
 function sendPaneCloseToLayoutOwner(
   pane: { worktreeId: string; tabId: string; leafId: string },
   on: {
@@ -16,8 +12,7 @@ function sendPaneCloseToLayoutOwner(
     asToday: () => void
     /** Main refused the pane as its last. */
     lastPane: () => void
-    /** Main closed it but no frame is coming (the stream is down, or main held no such pane):
-     *  close it here. */
+    /** Close locally if main already removed the pane or no frame stream can deliver its removal. */
     closeHere: () => void
   }
 ): boolean {
@@ -52,7 +47,6 @@ function sendPaneCloseToLayoutOwner(
   return sent
 }
 
-/** The user's close of a pane, through main. */
 export function sendUserPaneCloseToLayoutOwner(
   pane: { worktreeId: string; tabId: string; leafId: string; paneId: number },
   tab: {

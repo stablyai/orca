@@ -14,21 +14,17 @@ type DiffLoadingInput = {
   setActiveHunkIndex: (index: number | null) => void
 }
 
-// Owns the diff body for the reviewed item. Split out of the review controller so the loaded diff
-// can survive a transport blip: a drop re-runs this effect, and (F10) a diff already on screen for
-// the same item stays there instead of being replaced by "Waiting for desktop..." or a spinner.
+// Retain loaded same-item diffs through transport blips so reconnect cannot erase the reader’s context.
 export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewDiffState {
   const { client, connState, worktreeId, currentItem, screenState, setActiveHunkIndex } = input
   const [diffState, setDiffState] = useState<ReviewDiffState>({ kind: 'idle' })
   const hunkResetKeyRef = useRef<string | null>(null)
-  // Why: depend on the two fields this effect reads, not the screenState object —
-  // an identity-only change must not restart the git.diff request.
+  // Depend on fields read, not screen-state identity, to avoid duplicate diff requests.
   const screenReady = screenState.kind === 'ready'
   const branchCompare = screenState.kind === 'ready' ? screenState.branchCompare : null
 
   useEffect(() => {
-    // Why (F10): a connection blip re-runs this effect; the reader's hunk position must
-    // survive it and reset only when the reviewed item actually changes.
+    // Only item changes reset hunk position; reconnect also reruns this effect.
     const hunkKey = currentItem?.key ?? null
     if (hunkResetKeyRef.current !== hunkKey) {
       hunkResetKeyRef.current = hunkKey
@@ -60,7 +56,7 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
       })
       .catch((err: unknown) => {
         if (!stale) {
-          // Why (F10): a rejected reconnect refetch must not erase the diff on screen.
+          // Failed reconnect reads must not erase loaded diff content.
           setDiffState(
             keepLoadedDiff({
               kind: 'error',

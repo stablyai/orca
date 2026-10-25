@@ -19,30 +19,22 @@ import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
 
-/** Where the catalog reads each server's rows: main's live set, or a fetch per phone request. */
+/** Sidebar live rows or per-phone-request fetches, always read as the desktop. */
 export type ServerWorktreeRows = {
-  /** Catches up with the configured servers before a read. */
   sync: () => void
-  /** Fetches now, or joins the fetch in flight. */
+  /** Fetch now or join the in-flight fetch. */
   refresh: (environmentId: string) => Promise<void>
-  /** The server's rows as last fetched under this pairing; null when none were. */
+  /** Last-fetched rows under this pairing; null before a successful fetch. */
   rows: (environmentId: string, fence: string) => readonly MobileRelayServerWorktreeRow[] | null
 }
 
-/**
- * The configured servers the desktop shows, for the phone: health from the desktop's own status
- * (the sidebar's mapping), and each server's workspace list as the desktop itself last fetched it,
- * so a server that is offline or too old to relay to still lists. Replies relayed to a phone are
- * never read here.
- */
+/** Desktop-known health and workspace rows remain listable for offline/old servers; never inspect relayed replies. */
 export class MobileRelayHostCatalog {
   constructor(
     private readonly options: {
       hosts: MobileDesktopRelayHosts
-      /** This catalog keeps no copy of the rows. */
       serverRows: ServerWorktreeRows
       hostLabelOverrides: () => ReadonlyMap<ExecutionHostId, string>
-      /** The desktop's saved session for a host, as its sidebar last wrote it. */
       getWorkspaceSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null
     }
   ) {}
@@ -57,7 +49,7 @@ export class MobileRelayHostCatalog {
 
   async worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult> {
     const parsed = parseExecutionHostId(hostId)
-    // Why sync first: a re-pair since the last status publication must fetch under the new pairing.
+    // Re-pairing since status publication must fetch under the new identity.
     this.options.serverRows.sync()
     const host =
       parsed?.kind === 'runtime'
@@ -73,7 +65,7 @@ export class MobileRelayHostCatalog {
     }
     const { environments, statusByEnvironmentId } = this.options.hosts.list()
     const current = environments.find((environment) => environment.id === host.environmentId)
-    // Why the identity read after the fetch: one answered after a re-pair stored the old server's rows.
+    // Re-pairing during fetch can leave old-server rows; recheck identity afterward.
     const rows = current
       ? this.options.serverRows.rows(host.environmentId, relayHostFence(current))
       : null
@@ -88,7 +80,7 @@ export class MobileRelayHostCatalog {
         )
       ].map(worktreeIdentityKey)
     )
-    // Why: the desktop asks with background-removal support; a phone asking itself never sees these rows.
+    // Only desktop reads request background-removal support.
     return {
       worktrees: rows
         .filter((row) => row.removing !== true)
@@ -99,7 +91,7 @@ export class MobileRelayHostCatalog {
   }
 }
 
-/** Settles once the bound passes; the call's own timeout starts only after the desktop's per-server queue. */
+/** Bound waiting even while the call sits in the desktop queue, before its own timeout starts. */
 async function withinFetchBound(refresh: Promise<void>): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const bound = new Promise<void>((resolve) => {
@@ -112,10 +104,7 @@ async function withinFetchBound(refresh: Promise<void>): Promise<void> {
   }
 }
 
-/**
- * What the desktop's own sidebar knows and the server cannot: which rows are another client's
- * (marked, not dropped; the phone applies the shared filter), and its browser and chat tabs as activity.
- */
+/** Stamp desktop-only knowledge: mark other-client rows without dropping them, and include browser/chat activity. */
 function stampDesktopSidebarView(
   row: MobileRelayServerWorktreeRow,
   environmentId: string,

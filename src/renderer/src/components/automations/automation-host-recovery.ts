@@ -1,12 +1,4 @@
-/**
- * Turns a recovery verb into the one action that can actually fix it.
- *
- * The verbs come from `automation-host-status-descriptors.ts` and are never
- * invented here; this module only decides *what* Retry, Reconnect, and Update
- * server mean for a given host. Reconnect dials the thing that is down — the
- * runtime transport or the SSH target — and Update server can only take the user
- * to where the version is managed, because nothing in the app updates a host.
- */
+/** Use descriptor recovery verbs; reconnect the failed runtime or SSH target, and route Update server to version management. */
 
 import type { SettingsNavigationTarget } from '@/lib/settings-navigation-types'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
@@ -29,8 +21,7 @@ function versionSettingsTarget(entry: AutomationHostCatalogEntry): SettingsNavig
       sectionId: entry.stableRef.authority.environmentId
     }
   }
-  // A desktop SSH host with no registration generation is a stale registration,
-  // repaired by re-adding the target rather than by updating anything.
+  // Repair unregistered desktop SSH targets by re-adding them rather than updating the server.
   return { pane: entry.stableRef.selector.kind === 'ssh' ? 'ssh' : 'automations', repoId: null }
 }
 

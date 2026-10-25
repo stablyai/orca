@@ -236,7 +236,6 @@ describe('the first message owned by create', () => {
           ...resume
         })
         await launch.launchResult
-        // The host seeds the remembered model itself.
         expect(createParams().options?.model).toBeUndefined()
       } finally {
         mocks.settings = {}
@@ -286,7 +285,6 @@ describe('the first message owned by create', () => {
     await expect(launch.launchResult).rejects.toBeInstanceOf(
       StructuredAgentSessionCreateRefusalError
     )
-    // The default moves back; the retry carries the user's own Fast.
     recordHostModelCatalogSnapshot(target, 'codex', null, list('m1'))
     expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))

@@ -81,7 +81,7 @@ export function useBrowserPageGrabAnnotations({
   const [pendingAnnotationPayload, setPendingAnnotationPayload] =
     useState<BrowserGrabPayload | null>(null)
   const pendingAnnotationPayloadRef = useRef<BrowserGrabPayload | null>(null)
-  // Inline toast near the grabbed element (below, or above near the viewport bottom) so it doesn't occlude the selection.
+  // Place the toast beside the selected element without covering it.
   const [grabToast, setGrabToast] = useState<BrowserPageGrabToastState | null>(null)
   const grabRef = useRef(grab)
   const grabPayloadRef = useRef(grab.payload)
@@ -131,7 +131,6 @@ export function useBrowserPageGrabAnnotations({
         const elementBottom = offsetY + rect.y + rect.height
         const elementTop = offsetY + rect.y
         const containerHeight = containerRect?.height ?? 0
-        // Show below the element unless it's too close to the bottom edge
         below = elementBottom + 52 < containerHeight
         y = below ? elementBottom : elementTop
       } else if (containerRect) {

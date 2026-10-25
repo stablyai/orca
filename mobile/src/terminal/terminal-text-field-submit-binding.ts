@@ -1,10 +1,7 @@
 import type { TextInput } from 'react-native'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 
-/**
- * Native needs no binding: the editor action behind the return key fires `onSubmitEditing`
- * whatever the IME is doing. This exists to have a `.web.ts` sibling, where it does not.
- */
+// Native editor actions submit during composition; the web platform sibling repairs RN Web’s missing submit signal.
 export function bindTerminalTextFieldSubmit(
   _node: TextInput | null,
   _onSubmit: () => void,

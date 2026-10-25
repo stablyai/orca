@@ -5,22 +5,10 @@ import {
   newWorkspaceUiTrustSchema
 } from './new-workspace-reply-schema'
 
-// The New Workspace drawer's own reads. Its SSH connect, SSH state and agent detection are the
-// workspace-create operations in ../tasks/mobile-workspace-source-operations.ts, asked with the
-// same acceptance by the same flow, so the drawer sends those rather than restating them.
+// Reuse tasks workspace-create operations for SSH connect/state and agent detection; same flow and acceptance policy.
 
-/**
- * repo.hooks read for the drawer, the second of two policies on this method.
- *
- * The tasks create path (`repo.setup-hooks`) throws the host's message because it cannot decide
- * whether to run setup without an answer. The drawer only decorates a form: a refusal leaves the
- * advanced section on its defaults and the message is never shown, so refusal is a skip here.
- *
- * The skip is also what carries an unreadable reply: the reader answers `compatible: false`, this
- * policy raises `RpcIncompatibleReplyError` naming `repo.hooks`, and
- * use-new-workspace-setup-script.ts:61 catches it into the same default details a property-read
- * throw already landed on.
- */
+// Drawer repo.hooks only decorates defaults, so refusal skips; Tasks setup path must throw before deciding whether to run.
+// Incompatible replies raise RpcIncompatibleReplyError, caught into same default details as prior property-read failure.
 export const newWorkspaceSetupHooksRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'repo.drawer-setup-hooks-or-skip',

@@ -44,8 +44,7 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   }
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
-  /** Invoked when the tap cannot open anything (resolve miss, directory, or a
-   *  failed open). Omitted on surfaces that keep the historical silent miss. */
+  // Optional feedback; callers without it retain silent best-effort misses.
   onOpenFailed?: () => void
 }
 

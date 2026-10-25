@@ -1,11 +1,6 @@
 #!/usr/bin/env node
-// Benchmarks four renderer projections that scaled worse than linearly with user data, each on a
-// path that reruns per keystroke or per store write.
-//
-// Scenarios 1, 3 and 4 time the production export against a hand-written reproduction of the
-// pre-change shape and assert both agree first. Scenario 2 is MODELLED on both sides: the
-// projection lives inside the `useTabGroupItemProjections` React hook and cannot be imported
-// without a renderer, so it reproduces the before/after loops rather than driving production.
+// Benchmark four per-keystroke/store-write projections. Scenarios 1/3/4 compare production with pre-change baseline after checking equivalence.
+// Scenario 2 models both loops because its React hook cannot load without a renderer; it does not time production.
 import { spawnSync } from 'node:child_process'
 import { transformSync } from 'esbuild'
 import { performance } from 'node:perf_hooks'
@@ -113,8 +108,6 @@ function compare({ label, scale, drives, before, after }) {
   results.push({ label, scale, drives, beforeMs: timeRounds(before), afterMs: timeRounds(after) })
 }
 
-// ------------------------------------------------- 1. workspace board search index
-
 const { buildWorkspaceBoardPaletteDocuments, matchWorkspaceBoardWorktrees } = await importRenderer(
   'components/sidebar/workspace-kanban-search.ts'
 )
@@ -145,8 +138,6 @@ compare({
   // The hook memoizes the index on [worktrees, repoMap]; only the match reruns per keystroke.
   after: () => matchAll(buildWorkspaceBoardPaletteDocuments({ worktrees: boardWorktrees, repoMap }))
 })
-
-// ------------------------------------------------- 2. tab-group projections (modelled)
 
 const groupTabs = Array.from({ length: TABS }, (_, index) => ({
   id: `tab-${index}`,
@@ -188,8 +179,6 @@ compare({
     )
   )
 })
-
-// ------------------------------------------------- 3. source-control tree build
 
 const { buildSourceControlTree } = await importRenderer(
   'components/right-sidebar/source-control-tree.ts'
@@ -268,8 +257,6 @@ compare({
   before: () => buildSourceControlTreeBefore('unstaged', changedEntries),
   after: () => buildSourceControlTree('unstaged', changedEntries)
 })
-
-// ------------------------------------------------- 4. sidebar header boundaries
 
 const { getRepoHeaderSectionEndByRepoId } = await importRenderer(
   'components/sidebar/worktree-header-section-boundaries.ts'
@@ -351,8 +338,6 @@ compare({
   before: repeat(50, () => [...getRepoHeaderSectionEndByRepoIdBefore(boundaryArgs)]),
   after: repeat(50, () => [...getRepoHeaderSectionEndByRepoId(boundaryArgs)])
 })
-
-// -------------------------------------------------
 
 console.log('Renderer quadratic-scan removals\n')
 console.log('| projection | drives | scale | before | after | |')

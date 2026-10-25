@@ -1,5 +1,4 @@
-// A refused read of a chat's history: the phone keeps the refusal beside its words, so a failure no
-// retry gets past (damage, a newer Orca's chat) shows no composer under it.
+// Preserve typed final read refusals beside their words so unreadable history cannot render a sendable composer.
 
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -50,7 +49,6 @@ function Harness(): null {
   return null
 }
 
-/** The stream's error frame for a refused read, as the RPC client hands it over. */
 function refusedRead(reason: string) {
   const error = {
     code: 'runtime_error',

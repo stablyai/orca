@@ -574,9 +574,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await expect
       .poll(
         async () => {
-          // Why: this full-suite spec shares the physical E2E repo with other
-          // workers. Keep DOM assertions inside the reseeded poll instead of
-          // racing unrelated real git-status refreshes after the poll settles.
+          // Keep DOM assertions inside the reseeded poll because other workers’ real status refreshes share this E2E repo.
           await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
           return orcaPage.evaluate(() => {
             const emptyStateVisible =

@@ -1,8 +1,7 @@
 import { withMirroredEvidenceReceipt } from '../../../src/shared/agent-status-freshness'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
-/** Host stamps are on the host's clock, so a tab's status ages from when this phone first saw its
- *  evidence, by desktop's receipt rule for status mirrored from another machine. */
+// Age host evidence from phone receipt time so clock skew cannot prolong live status.
 export function withSessionTabStatusReceipts(
   tabs: MobileSessionTab[],
   previous: readonly MobileSessionTab[],
@@ -23,8 +22,7 @@ export function withSessionTabStatusReceipts(
   })
 }
 
-/** With contact lost, only a live host vouches for a chat it holds: drop that exemption so the
- *  last state ages, as desktop's revokeAgentSessionStatusLive does. A new snapshot restores it. */
+// Contact loss removes host-owned liveness exemptions so status ages until a fresh snapshot restores ownership.
 export function withoutSessionTabHostOwnership(tabs: MobileSessionTab[]): MobileSessionTab[] {
   if (!tabs.some((tab) => tab.type === 'agent-session' && tab.chatStatus?.structuredHostOwned)) {
     return tabs

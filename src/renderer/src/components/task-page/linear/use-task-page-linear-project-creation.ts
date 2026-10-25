@@ -1,4 +1,4 @@
-import type { TaskPageGitHubIssueCreationModel } from '../../use-task-page-github-issue-creation'
+import type { TaskPageGitHubIssueCreationModel } from '../github/use-task-page-github-issue-creation'
 import { useCallback } from 'react'
 import { linearCreateProject } from '@/runtime/runtime-linear-project-client'
 import { toast } from 'sonner'

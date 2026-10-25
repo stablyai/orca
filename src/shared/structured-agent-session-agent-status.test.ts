@@ -57,8 +57,7 @@ describe('structuredAgentSessionAgentStatus', () => {
     ).toEqual({ state: 'waiting', mainAgent: { state: 'done' } })
   })
 
-  // The spinner and the expandable child list are built from the same summary, so a workflow must
-  // not claim a running agent that `projectAgentChildWorkLegacySubagents` then refuses to render.
+  // Spinner and child list share a summary; workflows must not claim a child the legacy projection refuses to render.
   it('reads a lead whose only live task is a workflow as monitoring, with no children to show', () => {
     const backgroundTasks = [task({ id: 'flow-1', kind: 'workflow' })]
     expect(
@@ -88,8 +87,7 @@ describe('structuredAgentSessionAgentStatus', () => {
     })
   })
 
-  // The verdict is a fact about a finished turn; the fold never reads it, so a cancelled turn with
-  // a watch loop reads monitoring, as it does in the hook lane.
+  // Verdicts describe finished turns, not child folding; a cancelled lead with a watch loop still reads monitoring.
   it('carries the turn verdict on the main agent only while the main agent is done', () => {
     expect(
       structuredAgentSessionAgentStatus({ status: 'idle', turnOutcome: 'cancellation' })

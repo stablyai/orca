@@ -25,7 +25,6 @@ const STALE_PROVENANCE: EditorFileOperationProvenance = {
   }
 }
 
-// The saving view closes mid-write while the record changes shape around it.
 describe('editor save queue: closed saving view, record changes', () => {
   let h: ClosedViewHarness
 
@@ -35,7 +34,7 @@ describe('editor save queue: closed saving view, record changes', () => {
 
   afterEach(() => h.dispose())
 
-  // Wrapped: an async function returning the save would wait for it.
+  // Wrap the save promise so this async function does not await the held write.
   const startHeldSave = async (): Promise<{ saved: Promise<unknown> }> => {
     h.holdNextWrite()
     const saved = h.queue.queueSave(h.view('A'), 'edit')
@@ -47,7 +46,7 @@ describe('editor save queue: closed saving view, record changes', () => {
     h.type('A', 'edit')
     const { saved } = await startHeldSave()
     const before = h.recordOf('A')
-    // Both workspaces move host, so the record's identity key changes; its views carry over.
+    // Changing both workspace hosts rekeys the record while retaining its views.
     h.store.setState({
       worktreesByRepo: {
         'repo-1': [closedViewWorktree('wt-1', 'ssh:box'), closedViewWorktree('wt-2', 'ssh:box')]
@@ -105,7 +104,6 @@ describe('editor save queue: closed saving view, record changes', () => {
     expect(h.view('B').lastKnownDiskSignature).toBe(getDiskBaselineSignature('edit'))
     expect(h.view('B').isDirty).toBe(true)
     expect(h.store.getState().editorDrafts.B).toBe('theirs')
-    // B's next save overwrites as it would had A stayed open, not refused as stale.
     await expect(h.queue.queueSave(h.view('B'), 'theirs')).resolves.toBe('written')
   })
 

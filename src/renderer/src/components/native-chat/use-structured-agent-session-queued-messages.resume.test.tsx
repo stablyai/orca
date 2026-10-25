@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// Resume releases a held queue through its own RPC, over the same fenced write every card action
-// uses. The header row offers it whenever the host holds a card it would send; one press at a
-// time, a refusal or a failure is one toast, and Resume stays the way to try again.
+// Resume uses the shared fenced write path; serialize presses, show one failure toast and keep Resume as the retry.
 
 import { useCallback, useRef } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -171,8 +169,7 @@ describe('Resume on a held queue', () => {
   })
 
   it('every press is its own operation: a failed Resume never pins the next one to its id', async () => {
-    // Resume names no target, so a replayed id would answer `{ resumed: false }` or repeat the
-    // same refusal instead of lifting whatever holds the queue now.
+    // Reusing an operation ID would replay old resumed:false/refusal instead of lifting today’s pause.
     mocks.call.mockRejectedValueOnce(new Error('socket closed'))
     mocks.call.mockResolvedValueOnce({
       ok: false,
@@ -193,7 +190,6 @@ function resumedResult(resumed = true) {
   return { ...RESUMED, value: { resumed } }
 }
 
-/** The queue controller as a pane builds it, over the real mutation. */
 function useQueue(sessionId = 'session-1', fence: number | null = 1) {
   const { mutate, admit, capturePresentation } = useStructuredAgentSessionMutate({
     sessionId,
@@ -318,7 +314,6 @@ describe('Resume transcript navigation through the real mutation and queue contr
     expect(other.result.current.scrollToEnd).not.toHaveBeenCalled()
   })
 
-  // Lifting the pause is slow and the reader can switch away meanwhile; that pane stays put.
   it.each(['hide', 'unmount'] as const)(
     'does not reveal a pane that is %s when Resume succeeds',
     async (action) => {
@@ -337,7 +332,6 @@ describe('Resume transcript navigation through the real mutation and queue contr
         await pending
       })
       if (action === 'hide') {
-        // Shown again, it is where the reader left it.
         origin.rerender({ isVisible: true })
       }
       expect(scrollToEnd).not.toHaveBeenCalled()

@@ -1,7 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { AgentCatalogEntry } from './agent-catalog'
 
-/** The community tail of the catalog; see `primaryAgentCatalogEntries`. */
 export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
   return [
     {
@@ -33,10 +32,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
     {
       id: 'kiro',
       label: translate('auto.lib.agent.catalog.e0247254f2', 'Kiro'),
-      // Why: the Kiro installer (https://cli.kiro.dev/install) ships a binary
-      // named `kiro-cli`, not `kiro`. Match TUI_AGENT_CONFIG.kiro.detectCmd so
-      // the settings pane's "default command" hint aligns with what Orca
-      // actually looks for on PATH.
+      // Kiro installs as kiro-cli; match detection so the settings hint names the actual executable.
       cmd: 'kiro-cli',
       faviconDomain: 'kiro.dev',
       homepageUrl: 'https://kiro.dev/docs/cli/'
@@ -86,10 +82,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
     {
       id: 'command-code',
       label: translate('auto.lib.agent.catalog.6f8056a565', 'Command Code'),
-      // Why: `npm i -g command-code` installs both `command-code` and the
-      // shorter alias `cmd`. Show the full name in the settings hint so it
-      // matches TUI_AGENT_CONFIG['command-code'].detectCmd and avoids any
-      // suggestion that Orca is looking for Windows' built-in `cmd.exe`.
+      // Prefer command-code over its cmd alias to match detection and avoid confusion with Windows cmd.exe.
       cmd: 'command-code',
       faviconDomain: 'commandcode.ai',
       homepageUrl: 'https://commandcode.ai/docs/quickstart'
@@ -97,8 +90,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
     {
       id: 'continue',
       label: translate('auto.lib.agent.catalog.9e2a9bb87b', 'Continue'),
-      // Why: Continue's terminal agent installs as `cn`; `continue` resolves to
-      // a shell builtin in common shells and is not a reliable executable hint.
+      // Continue installs as cn; continue is commonly a shell builtin.
       cmd: 'cn',
       faviconDomain: 'continue.dev',
       homepageUrl: 'https://docs.continue.dev/guides/cli'
@@ -126,8 +118,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
     {
       id: 'mistral-vibe',
       label: translate('auto.lib.agent.catalog.ca73055bd0', 'Mistral Vibe'),
-      // Why: `uv tool install mistral-vibe` exposes the interactive CLI as
-      // `vibe`; the package name is not the executable users put on PATH.
+      // mistral-vibe installs the interactive executable as vibe.
       cmd: 'vibe',
       faviconDomain: 'mistral.ai',
       homepageUrl: 'https://github.com/mistralai/mistral-vibe'
@@ -135,8 +126,7 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
     {
       id: 'qwen-code',
       label: translate('auto.lib.agent.catalog.bee242fe3d', 'Qwen Code'),
-      // Why: QwenLM/qwen-code installs its CLI executable as `qwen`; the package
-      // name is not the binary users put on PATH. Keep `id` for stable identity.
+      // QwenLM/qwen-code installs as qwen; retain the catalog id for stable identity.
       cmd: 'qwen',
       faviconDomain: 'qwenlm.github.io',
       homepageUrl: 'https://github.com/QwenLM/qwen-code'

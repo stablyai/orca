@@ -12,7 +12,6 @@ export function hostSupportsMobileChatFork(
   return hostCapabilities?.includes(SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY) === true
 }
 
-/** A chat fork's create reply: why the host refused it, a partial-success warning, or nothing. */
 export function mobileChatForkCreateReplyMessage(
   agentName: string,
   response: RpcResponse

@@ -52,8 +52,7 @@ export function openLinkedFileInEditor(
       // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
       useAppStore.getState().setMarkdownViewMode(shown.fileId, 'source')
     }
-    // Why: another view of the same document keeps its cursor, and a newer click (even one
-    // without a line) supersedes this reveal until the editor consumes it.
+    // Reveal only in this view; other document views keep their cursors, and later clicks supersede this request.
     scheduleEditorLineReveal(
       useAppStore.getState,
       file.filePath,

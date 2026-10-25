@@ -291,9 +291,7 @@ describe('SourceControl compare summary', () => {
   })
 
   it('keeps the branch compare while upstream status is still loading', () => {
-    // remoteStatus undefined means upstream status has not loaded yet; the
-    // upstream policy can still make compareBaseRef momentarily null when no
-    // fallback base is available.
+    // Unloaded upstream status can temporarily clear the compare base when no fallback exists.
     expect(
       shouldClearBranchCompareForMissingBase({
         isFolder: false,

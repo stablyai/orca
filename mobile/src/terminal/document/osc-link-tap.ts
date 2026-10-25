@@ -8,13 +8,11 @@ import type {
 } from './document-scope'
 import { parsePathLineCol, type TerminalPathCandidate } from './path-tap'
 
-/** What a tapped OSC 8 link resolves to: a URL to open, or a file to reveal. */
 export type TerminalOscLinkTarget =
   | { kind: 'url'; url: string }
   | { kind: 'file'; fileTap: TerminalPathCandidate }
 
-// Why: OSC 8 links can render as labels like "#1234"; the URI lives in
-// xterm's internal link service, so every access is guarded and falls through.
+// OSC 8 labels may hide the URL; probe guarded xterm internals and fall through when unavailable.
 export function oscLinkService(scope: TerminalDocumentScope): TerminalOscLinkService | null {
   try {
     const core = scope.term && scope.term._core

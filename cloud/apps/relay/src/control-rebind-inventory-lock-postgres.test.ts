@@ -50,11 +50,7 @@ function heartbeat(cell: (typeof cells)[number]) {
   }
 }
 
-// Why: every desktop control rebind used to take the fleet-wide relay_cells
-// FOR UPDATE lock, so a rebind on one cell queued behind whatever held any
-// other cell's row, until COMMIT (55P03 at the request bound). A rebind only
-// touches its own cell row, so it must proceed while another cell's row is
-// held elsewhere.
+// Same-cell rebind must proceed while another cell row is held; fleet-wide locking formerly waited to COMMIT and hit request 55P03.
 describePostgres('PostgreSQL control rebind under a held cell row', () => {
   const databases: RelayDatabase[] = []
 
@@ -191,10 +187,7 @@ describePostgres('PostgreSQL control rebind under a held cell row', () => {
     }
   }, 15_000)
 
-  // Why: a phone's activity id is client-chosen and can follow the host across
-  // a migration, so acquireActivity may touch two cell rows. Moving from the
-  // higher cell to the lower one is where an unordered lock cycles with
-  // placement's ascending inventory lock (reproduced live before this fix).
+  // Client activity IDs can migrate across cells; high→low moves expose lock cycles against ascending placement order.
   it('moves an activity from a higher cell to a lower one in cell_id order', async () => {
     await removeTestRows(databases[0]!)
     const [cellA, cellB, cellC] = cells as [(typeof cells)[0], (typeof cells)[0], (typeof cells)[0]]
@@ -219,9 +212,7 @@ describePostgres('PostgreSQL control rebind under a held cell row', () => {
       applicationName: 'orca-relay/cloud3-rebind-move'
     })
     const moveStore = new RelayAssignmentStore(movingDatabase, () => 100)
-    // Hold B elsewhere. An ordered move locks B first and queues here holding
-    // nothing else. Locking C first (the old lease's row, as an unordered move
-    // does) or the whole inventory (which takes A) shows up as a held row.
+    // Hold B: ordered B→C move waits with no other lock; C-first or fleet-wide locking would hold C or A.
     let releaseRow!: () => void
     const rowReleased = new Promise<void>((resolve) => {
       releaseRow = resolve

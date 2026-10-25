@@ -2,8 +2,7 @@ import type { Mock } from 'vitest'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
-// Why: the terminal-create scenario returns spies whose inferred types can't be named
-// across module boundaries, so the harness annotates itself with the shapes below.
+// Annotate scenario spy shapes because inferred types cannot be named across module boundaries.
 
 export type ListenerRef<TListener> = { current: TListener | null }
 
@@ -54,7 +53,6 @@ export type FocusTerminalListenerPayload = {
   scrollToBottomIfOutputSinceLastView?: boolean
 }
 
-/** Store surface useIpcEvents reads while surfacing a terminal create. */
 export type TerminalCreateSurfacingStore = {
   setUpdateStatus: SpyMock
   createTab: Mock<
@@ -111,6 +109,7 @@ export type TerminalCreateSurfacingStore = {
   setSshConnectionState: SpyMock
   setSshTargetLabels: SpyMock
   setPortForwards: SpyMock
+  setUnrestoredPortForwards: SpyMock
   clearPortForwards: SpyMock
   setDetectedPorts: SpyMock
   enqueueSshCredentialRequest: SpyMock

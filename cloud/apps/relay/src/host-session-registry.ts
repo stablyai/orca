@@ -99,8 +99,7 @@ export type HostSession = {
   // Null for a control admitted from memory until a flip back registers it.
   controlActivityId: string | null
   readonly controlResumeSecret: string
-  // Why: reconnect churn is only actionable once it can be pinned to a client build.
-  // Refreshed on rebind so it describes the socket that closed, not the first one.
+  // Refresh on rebind to attribute churn to the closing socket’s build.
   appVersion: string
   state: HostState
   socket: WebSocket | null
@@ -121,8 +120,7 @@ export type HostSession = {
   activeConnIds: Set<string>
   activeSplices: Map<string, (code?: number, reason?: string) => void>
   pendingConns: Map<string, PendingConnection>
-  // Why: relay-initiated teardown drains these maps before closing the control
-  // socket, so the close handler would otherwise always report zero destroyed work.
+  // Capture before teardown drains maps or control-close logs report zero destroyed work.
   closingCounts: { splices: number; pending: number } | null
   regionalDrainAttemptId: string | null
   regionalDrainTimer: ReturnType<typeof setTimeout> | null
@@ -252,19 +250,10 @@ const preAuthEnded =
 // stalled predecessor only accumulates doomed sockets.
 const ACTIVATION_QUEUE_WAIT_MS = 30_000
 
-// A drained host redials the director the moment it is told, and a redial that meets this
-// cell's release still holding its assignment row is refused row_busy. From asia-east2 one
-// release holds the row ~1 s (c34/c35 drains, 2026-10), and a host's releases run one after
-// another, so 3 s covers a control plus one phone. Past that, it is told anyway.
+// Release before telling host to redial or it meets row_busy; 3s covers Asia control+phone serial releases (~1s each, c34/c35), then close anyway.
 export const DRAIN_RELEASE_BEFORE_CLOSE_MS = 3_000
 
-// Why: this lease bounds how long a host lingers on a cell after a missed drain,
-// and rebinding it is the only passive rebalancing we have, so it has to stay
-// finite. 6h keeps both properties while cutting control-activation traffic on
-// the contended cell-inventory lock ~6x; the relay JWT (5 min, refreshed by the
-// desktop) and the 75s silence watchdog are enforced separately, so a longer
-// grant authorizes nothing extra. Symmetric jitter walks same-minute reconnect
-// cohorts apart across cycles without changing the mean rebind rate.
+// Finite 6h grant bounds missed drains/passive rebalance while cutting activation traffic ~6×. JWT and silence checks stay independent; symmetric jitter disperses cohorts without changing mean rebind rate.
 export const CONTROL_LEASE_MS = 6 * 60 * 60 * 1000
 export const CONTROL_LEASE_JITTER_MS = 30 * 60 * 1000
 
@@ -321,9 +310,7 @@ type ReregistrationEntry = { key: string; generation: number; attempts: number; 
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
   private readonly activationQueues = new Map<string, Promise<void>>()
-  // Why it outlives `sessions`: the orphan grace deletes the session within 30s,
-  // but a signed-out desktop never comes back, so the phone that asks minutes
-  // later would otherwise find nothing to explain its rejection with.
+  // Outlive 30s orphan grace so phones can explain a signed-out host’s absence minutes later.
   private readonly hostCloseReasons = new HostCloseReasonMemory(() => this.now())
   private readonly hostCapabilities = new WeakMap<WebSocket, ReadonlySet<string>>()
   private draining = false
@@ -503,9 +490,7 @@ export class HostSessionRegistry {
     return this.reserveMode() && this.reserveAdmission?.phonePath?.() === 'memory' ? 'memory' : 'db'
   }
 
-  // Leaving reserve mode: every control admitted from memory gets the database lease it never
-  // took, while it stays connected. Rescans until none lacks one, so a hello whose proof lands
-  // after the flip is caught too. A control whose row never names this cell is closed (4409).
+  // Flip-back leases every memory control without disconnecting it; rescan catches proofs landing after flip. Close 4409 when its row never names this cell.
   reregisterMemoryControls(): number {
     if (this.config.role !== 'cell') return 0
     if (this.reregistration) clearInterval(this.reregistration.timer)
@@ -659,11 +644,7 @@ export class HostSessionRegistry {
           this.sessions.get(entry.key) === session &&
           session.generation === entry.generation &&
           socket?.readyState === socket?.OPEN
-        // A database that did not answer (a stall, a dropped connection, a busy lock) is retried
-        // for as long as the control is open: a fleet-wide flip back must not close everyone over
-        // a slow database. An answer that refuses (a row naming another seat, which may still be
-        // the ledger's write on its way, or any other refusal) counts toward giving up. A lease
-        // insert that lost a race (23505) is retried too: the next try reads the winner's row.
+        // Retry unanswered DB/transient/23505 races while control stays open; count actual refusals toward give-up, allowing delayed ledger rows without dropping fleet-wide fallback.
         const unanswered =
           isRelayDatabaseTransientError(error) ||
           (error instanceof Error && error.message === 'database_lock_unavailable') ||
@@ -783,8 +764,7 @@ export class HostSessionRegistry {
       session.assignmentEpoch !== request.epoch ||
       seat?.joinedAt !== request.joinedAt
     ) {
-      // The director named exactly the seat this feed lists: if no live session backs it, the
-      // feed is what is wrong, and every director mirrors it, so correct the feed now.
+      // Director named the exact logged seat; if no session backs it, repair the feed every director mirrors.
       const unbacked =
         seat?.epoch === request.epoch && seat.joinedAt === request.joinedAt
           ? unbackedSeatReason(seat, session)
@@ -815,9 +795,7 @@ export class HostSessionRegistry {
     return 'demoted'
   }
 
-  // Renewals leave the heartbeat as an enqueue: one statement per cell per
-  // window replaces one write transaction per host, which is what keeps the
-  // shared PostgreSQL instance out of buffer-header contention.
+  // Batch heartbeat renewals per cell/window to replace per-host write transactions and avoid shared PostgreSQL buffer-header contention.
   private readonly controlRenewals = new ControlRenewalBatch(
     async (rows) => await this.assignments.renewControlActivities(rows),
     () => this.logIdentity(),
@@ -855,18 +833,13 @@ export class HostSessionRegistry {
     credential: string,
     capacityReservation?: PendingHostDataReservation
   ): Promise<void> {
-    // Not `this.draining`: a paced drain tells hosts minutes apart, and the director keeps
-    // pointing phones here until their own host has moved. Refusing them for the whole
-    // window would turn a 2 min drain into a 2 min outage for hosts not yet told.
+    // Paced drains tell hosts minutes apart; reject phones only after their host is told or the entire window becomes an outage.
     if (this.drainSentHosts.has(hostId)) {
       capacityReservation?.release()
       this.rejectClient(socket, RELAY_CLOSE_CODE.DRAINING)
       return
     }
-    // Why: the accept runs several serialized Postgres calls behind the contended
-    // cell-inventory lock, and phones bound their dial. Finishing the work for a
-    // phone that already hung up took an activity lease held for the 10s attach
-    // deadline, then failed at bind with host_data_reservation_already_bound.
+    // Phones may hang up while serialized SQL waits; stop late accepts to avoid 10s leaked leases and host_data_reservation_already_bound.
     const acceptStartedAt = this.now()
     const abandonedByClient = (stage: RelayClientAcceptStage, cleanup?: () => void): boolean => {
       if (socket.readyState === socket.OPEN) return false
@@ -1075,8 +1048,7 @@ export class HostSessionRegistry {
     markStage: (stage: RelayClientAcceptStage) => void
   ): Promise<CredentialReservation | null> {
     if (this.config.role === 'cell') {
-      // Each lookup is its own pooled round trip; stop between them once the phone
-      // has left instead of running the rest of the chain for nobody.
+      // Check abandonment between pooled round trips so departed phones cannot drive the rest of the lookup chain.
       let outerIdentity = deviceMissed ? null : await this.store.resolveResume(hostId, credential)
       if (abandonedByClient('assignment')) return null
       if (!outerIdentity) {
@@ -1105,8 +1077,7 @@ export class HostSessionRegistry {
     return reservation
   }
 
-  // No seat for a memory resume: one assignment read tells "moved" from "offline". A row that
-  // names this cell may be a lost ledger write (stale up to the 10 min reconcile), so it is logged.
+  // One assignment read distinguishes moved/offline for missing seats; rows naming this cell may be lost ledger writes (up to 10min), so log them.
   private async rejectMissedSeat(
     socket: WebSocket,
     reservation: CredentialReservation,
@@ -1348,10 +1319,7 @@ export class HostSessionRegistry {
     }
   }
 
-  // Every desktop build already echoes the ping's `t`, so a pong is only timed when
-  // it answers the outstanding ping: at most one sample per ping this cell sent,
-  // however many a host floods. A pong that lost the race to the next ping is
-  // dropped here but still counts as proof of life for the silence watchdog.
+  // Time only outstanding ping echoes, once per ping; superseded pongs still prove liveness but cannot flood samples/logs.
   private recordControlRtt(session: HostSession, echoedPingAt: unknown): void {
     if (typeof echoedPingAt !== 'number' || echoedPingAt !== session.pendingPingAt) return
     session.pendingPingAt = null
@@ -1449,10 +1417,7 @@ export class HostSessionRegistry {
     }
   }
 
-  // A dependency failure (e.g. a database connect timeout) must cost one
-  // handshake or command, not the process: an unhandled rejection here has
-  // crashed whole cells and wiped their in-memory draining flag. 4429 is the
-  // endpoint-scoped close in the contract, so the client retries this cell.
+  // Dependency failure must cost one handshake/command, not crash the cell and erase draining state. Contract close 4429 retries this endpoint.
   private guardSessionTask(
     task: () => Promise<void>,
     socket: WebSocket | null,
@@ -1508,15 +1473,12 @@ export class HostSessionRegistry {
     this.draining = true
     // A draining cell admits no booking, so the units they hold go back now.
     this.reserveAdmission?.book.clear()
-    // A later drain (an emergency one, or shutdown) owns every session again, so nothing
-    // queued by an earlier paced drain may still fire: it would re-send and, worse, keep
-    // the event loop alive for the rest of a window the operator just cut short.
+    // Later drain supersedes all earlier paced timers; stale sends would repeat closes and hold exit through a shortened window.
     for (const timer of this.drainTimers) clearTimeout(timer)
     this.drainTimers.clear()
     const paceWindowMs = Math.max(0, Math.trunc(options.paceWindowMs ?? 0))
     const targets = [...this.sessions.values()].filter((session) => session.state !== 'closed')
-    // The desktop re-dials the director as soon as it reads `drain`, whatever graceMs says,
-    // so spreading the send is the only thing that spreads the reconnect load.
+    // Desktop redials on drain receipt regardless of grace; pace sends to spread reconnect load.
     const step = paceWindowMs > 0 && targets.length > 1 ? paceWindowMs / (targets.length - 1) : 0
     for (const [index, session] of targets.entries()) {
       const delay = Math.round(step * index)
@@ -1696,9 +1658,7 @@ export class HostSessionRegistry {
       (existing.state === 'orphaned' || existing.state === 'active') &&
       sameHostIdentity(existing.identity, identity)
     )
-    // Above every generation this host has had here, not only the one in the map: a session
-    // dropped from the map while its socket is still closing (drain, regional deadline, idle
-    // rehome) leaves later, and a successor reusing its generation had its seat removed by that leave.
+    // Advance beyond remembered generations after map removal; delayed old socket leaves must never erase successor seats.
     const floor = this.generationFloors.get(key) ?? 0
     const generation = rebind ? existing!.generation : Math.max(existing?.generation ?? 0, floor) + 1
     const ephemeral = nacl.box.keyPair()
@@ -1930,10 +1890,7 @@ export class HostSessionRegistry {
       }
       return
     }
-    // The awaits above can outlive what this hello was proven against: an orphan grace expiring
-    // or a drain removes `existing` from the map, and another activation may take this generation.
-    // Rebinding a removed session revived it outside the map: connected, still in the feed, and
-    // unreachable by phones or demotion for as long as the host stayed up. Redial instead.
+    // Recheck after awaited activation: orphan/drain may remove existing or another activation take its generation. Reviving it creates connected, listed ghosts outside the map; redial instead.
     const key = this.key(identity.sub, identity.relayHostId)
     if (
       (this.sessions.get(key) ?? null) !== existing ||
@@ -1959,8 +1916,7 @@ export class HostSessionRegistry {
       // id today, since a rebind keeps its generation).
       if (controlActivityId) existing.controlActivityId = controlActivityId
       existing.socket = socket
-      // The hello's token was just verified; keeping the predecessor's would let the next
-      // heartbeat expire a control that proved itself, and every resume would repeat it.
+      // Use the newly verified expiry or predecessor’s expired token would close every successful resume at the next heartbeat.
       if (identity.exp > existing.identity.exp) existing.identity = identity
       existing.state = existing.regionalDrainAttemptId ? 'drain-only' : 'active'
       existing.appVersion = appVersion
@@ -2185,9 +2141,7 @@ export class HostSessionRegistry {
     const socket = session.socket!
     const wiredAt = this.now()
     session.controlWiredAt = wiredAt
-    // Why: pin the build to THIS socket. A rebind refreshes session.appVersion and
-    // only then closes the predecessor, whose close event always lands after that
-    // write, so reading it at log time would stamp the successor's build.
+    // Capture build per socket before rebind updates session.appVersion; predecessor’s later close must not log successor’s build.
     const appVersion = session.appVersion
     let socketError: string | null = null
     // Why: an unhandled ws 'error' (e.g. an oversize control frame) would
@@ -2395,10 +2349,7 @@ export class HostSessionRegistry {
             return
           }
           if (error instanceof Error && error.message === 'assignment_lock_unavailable') {
-            // A per-host transaction held the row, so the batch passed over it
-            // rather than making every other host in the flush wait. The next
-            // tick is 15s away against a 105s lease, and the flush line already
-            // reports the count, so this needs no line of its own.
+            // SKIP LOCKED defers this host, not the batch; next tick 15s vs 105s lease is safe, and flush metrics already count it.
             return
           }
           console.warn('[orca-relay] control activity renewal failed')
@@ -2430,9 +2381,7 @@ export class HostSessionRegistry {
 
   private sendHelloAck(session: HostSession): void {
     if (!session.socket) return
-    // Without these a host that missed the conn-open cannot dial the pending
-    // connection: it would have to guess the pairing kind and the device the
-    // relay authorized. Only sent to a host that said it can read them.
+    // Capability-gate pairing/device details: hosts missing conn-open otherwise cannot dial pending connections, while legacy decoders reject new fields.
     const details = this.hostCapabilities
       .get(session.socket)
       ?.has(RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS)
@@ -2526,8 +2475,7 @@ export class HostSessionRegistry {
       close()
       return
     }
-    // The host redials on this close, so its row is released first; a stuck release still closes.
-    // The splice releases above are queued ahead of these, so they have landed too.
+    // Release before close triggers redial; queued splice releases land first too. Bound the wait so stuck releases still close.
     const startedAt = this.now()
     void settledWithin(Promise.all(releases), DRAIN_RELEASE_BEFORE_CLOSE_MS).then((settled) => {
       if (!settled) {
@@ -2736,9 +2684,7 @@ export class HostSessionRegistry {
     if (session.socket) send(session.socket, 'control-error', { ...(reqId ? { reqId } : {}), code })
   }
 
-  // closeReason rides the WebSocket close reason, never relay-hello: every shipped
-  // phone parses relay-hello with a strict schema that rejects an unknown key, and
-  // ignores a close reason it does not know.
+  // Put closeReason only on WebSocket close; shipped strict relay-hello parsers reject unknown keys but tolerate unknown close reasons.
   private rejectClient(
     socket: WebSocket,
     code: number,

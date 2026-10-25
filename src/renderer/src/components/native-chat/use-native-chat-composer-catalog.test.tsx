@@ -59,8 +59,7 @@ describe('composer catalog authority', () => {
       'resume'
     ])
   })
-  // Codex reports no catalog, so the hook's fallback is its entire `/` menu; the
-  // agent has to reach structuredSlashCommands or `/goal` is invisible there.
+  // Codex relies on fallback commands; include structured commands so /goal remains discoverable.
   it('offers Codex the commands its model runs from message text', () => {
     const { result } = renderHook(() => useNativeChatComposerCatalog('codex', transport()))
     expect(result.current.agentCommands).toEqual(
@@ -106,7 +105,6 @@ describe('composer catalog authority', () => {
       sessionSkills: []
     })
   })
-  // Orca's /resume takes an agent command's place, but a skill of that name stays the agent's.
   it("puts Orca's /resume in place of an agent command and beside a namesake skill", () => {
     const reported = [
       { name: 'review', kind: 'command' as const },
@@ -192,7 +190,6 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
         setCaret: vi.fn()
       })
     },
-    // Commands lead: the host's /model and /effort, clear, Orca's /resume, then the skill.
     { initialProps: { activeSuggestion: 4 } }
   )
   const enter = { key: 'Enter', nativeEvent: {}, preventDefault: vi.fn() } as unknown as Parameters<
@@ -225,7 +222,6 @@ describe('OpenCode chat skills', () => {
     }
   }
   const scanned = [skill('release-notes', 'Write release notes')]
-  // What the composer's picker builds: the reported catalog, classified against the scan.
   function items(
     agent: 'opencode' | 'opencode2' | 'claude',
     reported: { name: string; description?: string; kindUnspecified?: true }[],
@@ -237,7 +233,6 @@ describe('OpenCode chat skills', () => {
       reportMayListSkills: agent !== 'claude',
       isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent)
     })
-    // Orca's own rows sit in every structured catalog; these cases are about the agent's.
     const hostRows = new Set(STRUCTURED_AGENT_SESSION_SLASH_COMMANDS.map(({ name }) => name))
     return buildNativeChatPickerItems(
       commands,
@@ -250,14 +245,12 @@ describe('OpenCode chat skills', () => {
   const rows = (...args: Parameters<typeof items>) =>
     items(...args).map((item) => `${item.kind}:${item.name}`)
 
-  // 2.x reports only these commands, so its running chats listed no skills at all.
   it('keeps the scanned skills once an OpenCode 2.x chat reports its commands', () => {
     expect(rows('opencode2', [{ name: 'init' }, { name: 'review' }])).toContain(
       'skill:release-notes'
     )
   })
 
-  // 1.x reports each skill as a command too, under the skill's own description.
   it('shows a skill OpenCode 1.x also reports as a command once, as the skill', () => {
     expect(
       rows('opencode', [
@@ -267,7 +260,6 @@ describe('OpenCode chat skills', () => {
     ).toEqual(['skill:release-notes'])
   })
 
-  // OpenCode runs its own command before a skill of the same name, on either line.
   it.each(['opencode', 'opencode2'] as const)(
     'keeps %s’s own command when a skill shares its name, and marks the collision',
     (agent) => {

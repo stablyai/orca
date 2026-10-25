@@ -34,11 +34,7 @@ type OrgCallResult<T> =
   | { status: 'request-error'; error: OrcaCloudRequestError }
   | { status: 'failed'; error: string }
 
-// Why: only a 401 means the token itself is stale and should drive a session
-// refresh/reconnect. 403/404/409/400 are business or permission outcomes the UI
-// must interpret, so they are surfaced as values rather than thrown — otherwise
-// runWithFreshOrcaCloudSession would treat a 403 as an auth failure and burn a
-// pointless token refresh + retry before giving up.
+// Only 401 should trigger session refresh; return business/permission failures as values.
 async function runOrgMemberCall<T>(
   config: OrcaCloudAuthConfig,
   active: ActiveOrcaProfileState,

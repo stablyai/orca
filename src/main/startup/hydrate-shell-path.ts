@@ -1,38 +1,18 @@
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 
-// Why: GUI-launched Electron can miss PATH entries added by shell profiles.
-// Tools installed into ~/.opencode/bin, ~/.cargo/bin, pyenv/volta/fnm
-// shims, and countless other user-local locations end up invisible to our
-// `which` probe even though they work fine from Terminal (see stablyai/orca#829).
-//
-// Probe the profile-loading shell once instead of hard-coding every tool's install path.
+// GUI launches miss shell-profile PATH entries; probe the login shell instead of hardcoding every tool directory.
 
-// Why 10s: 5s was chosen without measurement and a real profile overruns it —
-// a bash -ilc loading nvm, rvm, conda and gcloud measures ~1s idle but 6-7s on a
-// loaded machine, so a cold start under load silently fell back to the seeded
-// PATH. Mirrors the budget mature GUI editors settled on for the same probe.
-//
-// The tail this lengthens is not uniform. On posix the probe is fire-and-forget
-// (index.ts) and only agent detection awaits it. On packaged Windows it also
-// gates terminal runtime services and every non-WSL git command, so the extra
-// 5s binds there — but only for a profile that already blew the old budget, and
-// those users were otherwise stuck with a wrong PATH for the whole session.
+// Loaded profiles measured 6-7s, exceeding 5s. Ten seconds extends Windows terminal/Git gating only for already-slow profiles; POSIX startup remains fire-and-forget.
 const SPAWN_TIMEOUT_MS = 10_000
 
-// ANSI escape sequences can leak into the captured output when the user's rc
-// files print banners or set colored prompts. Strip them before parsing.
-const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g // eslint-disable-line no-control-regex
-
-// Why: the discriminator lets telemetry classify *why* hydration failed, not
-// just whether it did. Five resolve sites in this file each tag the result
-// with the right reason. The shared alias keeps the enum in lockstep with the
-// telemetry schema (compile-time guard in telemetry-events.ts).
+// Share the telemetry failure taxonomy so resolve sites and schema cannot drift.
 export type HydrationResult =
   | { ok: true; segments: string[]; failureReason: 'none' }
   | {
@@ -43,24 +23,11 @@ export type HydrationResult =
 
 let cached: Promise<HydrationResult> | null = null
 let probeQueue = Promise.resolve()
-// Why: patchPackagedProcessPath seeds a version-manager install dir ahead of
-// PATH. nvm's startup `use` honors whatever node is already on PATH over the
-// user's `default` alias, so a probe inheriting that seed comes back pinned to
-// the seeded version rather than reporting what the user's shell really
-// resolves. The seed now prefers the `default` alias, but still falls back to
-// newest-first when default resolution yields nothing (no alias, `system`,
-// uninstalled target, cycle), so the probe must stay insulated from it.
-// Snapshot PATH here instead: module init runs while the import graph is
-// evaluated, strictly before any statement in main's body, so it cannot observe the
-// seeds — and unlike an explicit hand-off from the seeding site, there is no call
-// ordering left for a later refactor to break. Windows keys it `Path`, and a Git Bash
-// user whose nvm uses the POSIX ~/.nvm/versions/node layout is seeded there too, so
-// capture the key alongside the value.
+// Snapshot before main-body seeding: nvm may prefer seeded node over its default alias. Capture Windows Path casing too, including Git Bash nvm layouts.
 const LAUNCH_PATH_KEY =
   process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
 const LAUNCH_PATH = process.env[LAUNCH_PATH_KEY] ?? null
-// Why: rc files that exec into a multiplexer or start a heavy prompt can outrun the
-// probe budget. This lets them detect the probe and take a fast path.
+// Allow heavy rc files to recognize the probe and skip multiplexers/prompts.
 export const PROBE_MARKER_ENV_VAR = 'ORCA_SHELL_PATH_PROBE'
 let launchPathOverride: { key: string; value: string } | null = null
 let configuredWindowsShell = 'powershell.exe'
@@ -101,7 +68,8 @@ export const resolveProfileLoadingFallbackShell = (): string | null =>
   configuredWindowsFallbackShell
 
 function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): string[] {
-  const cleaned = stdout.replace(ANSI_RE, '')
+  // Why: rc-file banners and colored prompts can leak escapes into the captured output.
+  const cleaned = stripAnsiEscapeSequences(stdout)
   const first = cleaned.indexOf(DELIMITER)
   if (first === -1) {
     return []
@@ -114,8 +82,7 @@ function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): s
   if (!value) {
     return []
   }
-  // Why: Set preserves insertion order, and PATH resolution is first-match-wins,
-  // so de-duping this way keeps the user's rc-file ordering intact.
+  // Preserve first-match-wins shell order while deduplicating.
   return [
     ...new Set(
       value
@@ -139,8 +106,7 @@ function applyLaunchPath(env: NodeJS.ProcessEnv, key: string, value: string | nu
   if (value === null) {
     return
   }
-  // Why: Windows resolves env names case-insensitively even though a spread is
-  // a plain object, so never leave both the captured key and another casing.
+  // Windows env names ignore case; remove alternate spellings from this plain object.
   for (const name of Object.keys(env)) {
     if (name !== key && isLaunchPathKey(name, key)) {
       delete env[name]
@@ -180,10 +146,8 @@ export function runWithLaunchPath<T>(action: () => T): T {
   }
 }
 
-/** Capture the login PATH without profile banners. */
 function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
   return new Promise((resolve) => {
-    // Why: delimiters isolate PATH from profile banners and MOTDs.
     const probe = shellPathProbe(shell)
     let finished = false
     let stdout = ''
@@ -194,16 +158,13 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       child = spawnProcess({
         program: shell,
         args: probe.args,
-        // Why: inherit current env so the shell sees the same baseline, then let
-        // it layer its own rc files on top. Do NOT forward stdio — some shells
-        // (oh-my-zsh setups, powerlevel10k) print a lot to stderr on startup,
-        // and we don't want that in Orca's console.
+        // Preserve environment for rc setup while suppressing noisy shell stderr and ignoring stdin.
         env: shellProbeEnv(),
         stdio: ['ignore', 'pipe', 'ignore'],
         detached: false
       })
     } catch {
-      // Why: a synchronous throw (EPERM from a Store pwsh.exe) must reach the fallback shell.
+      // Synchronous spawn failure (for example Store pwsh EPERM) must reach fallback selection.
       resolve({ segments: [], ok: false, failureReason: 'spawn_error' })
       return
     }
@@ -227,9 +188,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     }
 
     timer = setTimeout(() => {
-      // Why: slow rc files (corporate env setup, nvm eager init) can exceed
-      // our budget. Kill the shell and fall back to process.env rather than
-      // blocking the Agents pane indefinitely.
+      // Bound slow rc setup so agent discovery can fall back rather than wait forever.
       try {
         child.kill('SIGKILL')
       } catch {
@@ -269,12 +228,7 @@ type HydrateOptions = {
   shellOverride?: string | null
 }
 
-/**
- * Spawn the user's profile-loading shell once and return the PATH it would export.
- * Caches the promise for the lifetime of the process — call
- * `_resetHydrateShellPathCache()` in tests or `hydrateShellPath({ force: true })`
- * when the user asks to re-probe (e.g. after installing a new CLI).
- */
+/** Cache the profile-loading shell probe for this process; force re-probe after tool installation. */
 export function hydrateShellPath(options: HydrateOptions = {}): Promise<HydrationResult> {
   if (cached && !options.force) {
     return cached
@@ -299,7 +253,7 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
     }
     return result
   })
-  // Why: one rejected profile must not block later refreshes or shell changes.
+  // Rejected profiles must not block later refreshes or shell changes.
   probeQueue = probe.then(
     () => undefined,
     () => undefined
@@ -315,7 +269,7 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
     return result
   })
   cached = hydration
-  // Why: a cached rejection would fail every later caller without re-probing.
+  // Evict rejected cache promises so later callers can re-probe.
   hydration.catch(() => {
     if (cached === hydration) {
       cached = null
@@ -357,11 +311,7 @@ function uniquePathSegments(segments: string[], pathKey: (segment: string) => st
   })
 }
 
-/**
- * Promote shell-discovered PATH segments to the front of process.env.PATH,
- * preserving shell ordering and avoiding duplicates. Returns the segments that
- * were newly added so callers can log/telemetry on nontrivial hydrations.
- */
+/** Shell order wins over seeded PATH; report newly added segments for diagnostics. */
 export function mergePathSegments(segments: string[]): string[] {
   if (segments.length === 0) {
     return []
@@ -386,9 +336,7 @@ export function mergePathSegments(segments: string[]): string[] {
   if (next === current) {
     return []
   }
-  // Why: shell-provided entries must win over hardcoded packaged-app fallbacks.
-  // A seeded fallback can point at a stale CLI while the user's shell resolves
-  // a healthy one from the same directory list in a different order.
+  // Shell ordering must override seeded fallbacks that may resolve stale CLIs.
   if (process.platform === 'win32') {
     windowsPathOwnership.apply(process.env, next)
   } else {

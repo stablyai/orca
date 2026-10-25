@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// Why: G3 scenarios through the real record middleware and save queue, with two workspaces showing
-// one file: restored drafts, phone saves, delayed rich text and paused autosave.
+// Use real record middleware and save queues for cross-workspace restored drafts, phone writes, rich text and autosave pauses.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -82,17 +81,13 @@ function restore(store: StoreApi<AppState>, drafts: [string, string]): [OpenFile
     terminalLayoutsByTabId: {},
     openFilesByWorktree: { 'wt-1': [entry('wt-1', drafts[0])], 'wt-2': [entry('wt-2', drafts[1])] }
   }
-  // The store write session hydration makes.
   store.setState(buildHydratedEditorSessionState(session, new Set(['wt-1', 'wt-2']), 'wt-1').state)
   const [a, b] = store.getState().openFiles
   expect([a?.worktreeId, b?.worktreeId]).toEqual(['wt-1', 'wt-2'])
   return [a, b]
 }
 
-/**
- * What a mount does with the view's text (its draft, else the panel's cached `text`): create its
- * model, or push into one it may overwrite. Stale cached text never enters a live model.
- */
+/** Match mount reconciliation: prefer drafts and never push stale cached text into an already-live model. */
 function mount(
   store: StoreApi<AppState>,
   viewId: string,
@@ -115,7 +110,6 @@ function mount(
   return model
 }
 
-/** The banner an edit surface shows for a view: only while its record is conflicted. */
 function bannerOf(store: StoreApi<AppState>, id: string): string | null {
   const file = view(store, id)!
   return file.externalMutation === 'changed'
@@ -174,7 +168,7 @@ describe('restored drafts of one file (scenario 2)', () => {
         expect(['abc', 'abcd']).toContain(landed)
         const kept = landed === 'abc' ? 'abcd' : 'abc'
         expect(disk.writeFile).toHaveBeenCalledTimes(2)
-        // Rejoined: the unsaved side won with its old baseline, banner on every view.
+        // Rejoining preserves the unsaved side’s older baseline and marks every view conflicted.
         expect(recordOf(a.id)).toBe(recordOf(b.id))
         for (const id of [a.id, b.id]) {
           expect(store.getState().editorDrafts[id]).toBe(kept)
@@ -228,7 +222,7 @@ describe('two workspaces on one record', () => {
     const { store, a, b } = openShared(BASE)
     const model = mount(store, a.id)
     expect(mount(store, b.id)).toBe(model)
-    // Typing in each workspace edits the one model; each view's editor publishes the draft.
+    // Both workspaces edit one model; each editor still publishes its view’s draft.
     model.setValue('abc')
     store.getState().setEditorDraft(a.id, 'abc')
     store.getState().markFileDirty(a.id, true)
@@ -241,7 +235,6 @@ describe('two workspaces on one record', () => {
       expect(disk.files.get(GUARDED_PATH)).toBe('abcd')
       expect(view(store, a.id)?.isDirty).toBe(false)
       expect(view(store, b.id)?.isDirty).toBe(false)
-      // W1 remounting with its panel's old cached text pushes nothing.
       expect(mount(store, a.id, 'abc')).toBe(model)
       expect(model.getValue()).toBe('abcd')
     } finally {
@@ -273,7 +266,7 @@ describe('two workspaces on one record', () => {
         }
       }
       if (state === 'clean') {
-        // The panel reloads every tab this matches: content and clean baseline from disk.
+        // Match panel reloads that update both content and clean disk baselines.
         const matched = getOpenFilesForExternalFileChange(store.getState().openFiles, {
           worktreeId: 'wt-2',
           worktreePath: '/repo',
@@ -290,7 +283,7 @@ describe('two workspaces on one record', () => {
           getDiskBaselineSignature('from phone')
         )
 
-        // A desktop save after it lands, and the panel moves the other view to the written text.
+        // After a desktop save, the panel must advance the sibling view’s loaded disk text too.
         const saved: EditorFileSavedDetail[] = []
         window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, (event) => {
           if (event instanceof CustomEvent) {
@@ -346,7 +339,6 @@ describe('two workspaces on one record', () => {
     store.getState().setExternalMutation(b.id, 'changed')
     for (const id of [a.id, b.id]) {
       expect(isAutosaveSuspendedForFile(view(store, id)!)).toBe(true)
-      // Both views render the banner, offering to overwrite with the record's edits.
       expect(bannerOf(store, id)).toContain('changed on disk')
       expect(bannerOf(store, id)).toContain('>Overwrite<')
     }

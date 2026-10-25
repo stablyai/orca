@@ -8,7 +8,6 @@ export async function smokeLoadOrcadStructuredProviders(): Promise<void> {
       {},
       undefined,
       () => {
-        // The production connection loads the SDK before calling the query implementation.
         throw loaded
       }
     )

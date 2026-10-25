@@ -15,8 +15,7 @@ export const GitLabRateLimit = z
   .optional()
   .default({})
 
-// nullish, not optional: renderer callers normalise a missing ref to `null`
-// (`item.projectRef ?? null`), which a bare `.optional()` would reject outright.
+// Callers normalize absent refs to null; optional alone would reject those payloads.
 export const GitLabProjectRef = z
   .object({
     host: requiredString('Missing GitLab host'),
@@ -125,8 +124,7 @@ export const ResolveMRDiscussion = RepoSelector.extend({
 export const JobTrace = RepoSelector.extend({
   jobId: z.number().int().positive(),
   projectRef: GitLabProjectRef,
-  // Why: raw CI traces routinely exceed the 1 MB transport frame cap, so callers
-  // that only render an excerpt ask main to bound it before it crosses the wire.
+  // CI traces exceed the 1 MB frame cap; excerpt callers need the host to bound them before transport.
   logExcerpt: z.boolean().optional()
 })
 

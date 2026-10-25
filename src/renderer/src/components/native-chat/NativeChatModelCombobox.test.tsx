@@ -19,7 +19,6 @@ const settle = (): Promise<void> =>
 type ComboboxOptions = { readOnly?: boolean; readOnlyReason?: string | null }
 type OnSelect = ReturnType<typeof vi.fn<(value: string) => void>>
 
-/** Renders the model list and returns its search field. */
 async function renderCombobox(
   props: ComboboxOptions = {}
 ): Promise<{ search: HTMLElement; onSelect: OnSelect }> {

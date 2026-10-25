@@ -2,7 +2,7 @@
 // otherwise settle unverifiable and revise when later proof arrives.
 
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem

@@ -1,12 +1,5 @@
 import { readFileSync } from 'node:fs'
-// Why: Phase 3 slice 1 of terminal-side-effect-authority.md runs a per-PTY
-// title tracker in main alongside the renderer transport's byte parser. Both
-// must derive IDENTICAL ordered title/status facts from the same bytes, or
-// main-side consumers (tui-idle waiters, worktree ps, mobile titles) drift
-// from what the renderer shows. This harness feeds identical byte fixtures
-// through the renderer `createPtyOutputProcessor` and through main's
-// consumption shape (OSC 9999 strip → shared title tracker) and asserts the
-// event sequences match.
+// Feed identical bytes through renderer parsing and main’s OSC-9999-strip/title-tracker path; ordered title/status facts must match for mobile, waiters and desktop consumers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
 import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
@@ -29,8 +22,7 @@ type TitleFactPath = {
   flush: () => void
 }
 
-// Why deferDrain: flushing per chunk hides schedule-vs-drain divergence, because the renderer
-// decides what to queue against a `lastEmittedTitle` that only later chunks advance.
+// Delay drain across chunks to expose queued decisions made before lastEmittedTitle advances.
 function createRendererPath(initialTitle?: string, deferDrain = false): TitleFactPath {
   const events: TitleFactEvent[] = []
   const processor = createPtyOutputProcessor({
@@ -46,9 +38,7 @@ function createRendererPath(initialTitle?: string, deferDrain = false): TitleFac
     events,
     feed(chunk: string): void {
       processor.processData(chunk, callbacks)
-      // Why: the renderer defers side effects behind a setTimeout(0) drain to
-      // protect xterm paint. Flush synchronously so both paths observe each
-      // chunk at the same fake-timer instant.
+      // Flush renderer’s deferred effects so both paths compare each chunk at the same fake time.
       if (!deferDrain) {
         processor.flushPendingSideEffects()
       }
@@ -59,8 +49,7 @@ function createRendererPath(initialTitle?: string, deferDrain = false): TitleFac
 
 function createMainPath(initialTitle?: string): TitleFactPath {
   const events: TitleFactEvent[] = []
-  // Why: mirrors OrcaRuntimeService.onPtyData — the per-PTY OSC 9999
-  // processor strips status payloads before the title tracker sees the chunk.
+  // Match runtime ordering: strip OSC 9999 status before tracking titles.
   const processAgentStatusChunk = createAgentStatusOscProcessor()
   const tracker = createTerminalTitleTracker(
     {
@@ -115,9 +104,7 @@ describe('main title tracker parity with the renderer transport processor', () =
   })
 
   it('derives identical facts from a coalesced spinner+idle chunk (issue #1083)', () => {
-    // One realistic node-pty batch: Pi's 80ms spinner frames plus agent_end's
-    // trailing idle title. A last-title reader sees only the idle title and
-    // never observes the working state.
+    // One PTY batch can contain working spinner and idle title; last-title-only readers miss the turn.
     const chunk =
       `${ESC}]0;⠋ π - cwd${BEL}response text\r\n` +
       `${ESC}]0;⠙ π - cwd${BEL}more text\r\n` +
@@ -130,8 +117,7 @@ describe('main title tracker parity with the renderer transport processor', () =
     expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
   })
 
-  // Why: OMP 17.2.12+ cannot animate under WSL/ConPTY, so it emits static state markers
-  // instead of braille frames (#13890). Both paths must see the same working→idle turn.
+  // WSL/ConPTY OMP uses static markers instead of animation; both paths must still see working → idle (#13890).
   it('derives identical facts from static OMP WSL state titles', () => {
     const chunk = `${ESC}]0;zsh | π : cwd${BEL}response text\r\n` + `${ESC}]0;zsh | π > cwd${BEL}`
     feedBoth(paths, chunk)
@@ -142,8 +128,7 @@ describe('main title tracker parity with the renderer transport processor', () =
     expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
   })
 
-  // Why: an OMP pane that stops emitting titles mid-turn must still leave working, or the
-  // stale native marker keeps the pane — and its synthetic spinner — pinned to working.
+  // Stale OMP markers must leave working even when titles stop mid-turn.
   it('clears a stale static OMP working title in both paths', () => {
     feedBoth(paths, `${ESC}]0;zsh | π : cwd${BEL}`)
     feedBoth(paths, 'title-free output')
@@ -164,8 +149,7 @@ describe('main title tracker parity with the renderer transport processor', () =
     expect(paths.main.events).toContainEqual({ kind: 'became-idle', title: 'Codex done' })
   })
 
-  // Why: #10258 — a hookless Cursor pane's only identity is the bare literal, so both
-  // paths must emit it once (never as an agent state) before the repeats are dropped.
+  // Hookless Cursor’s bare literal supplies identity once without becoming agent state (#10258).
   it('emits the bare cursor-agent native title once in both paths', () => {
     feedBoth(paths, `${ESC}]0;Cursor Agent${BEL}`)
     feedBoth(paths, `${ESC}]0;Cursor Agent${BEL}`)
@@ -230,8 +214,7 @@ describe('main title tracker parity with the renderer transport processor', () =
     expect(titles).toEqual([{ kind: 'title', normalized: '⠋ Cursor Agent', raw: '⠋ Cursor Agent' }])
   })
 
-  // Why: once the shell prompt repaints the title, the literal is again the pane's only Cursor
-  // identity — dropping it there would leave a re-entered cursor-agent with no row (#10258).
+  // After shell title replaces it, Cursor’s bare literal must be emitted again to recover reentry identity (#10258).
   it('re-emits the native literal after a non-Cursor title took the pane', () => {
     feedBoth(paths, `${ESC}]0;Cursor Agent${BEL}`)
     feedBoth(paths, `${ESC}]0;zsh${BEL}${ESC}]0;Cursor Agent${BEL}`)
@@ -244,9 +227,7 @@ describe('main title tracker parity with the renderer transport processor', () =
     ])
   })
 
-  // Why one flush: the renderer prunes titles when the chunk is scheduled but only advances its
-  // emitted-title memory on drain, so chunks that drain together must not decide against a
-  // predecessor that is already stale.
+  // Drain together so queued chunks cannot compare against an already-stale predecessor.
   it('re-emits the native literal across chunks that drain together', () => {
     const deferred = {
       renderer: createRendererPath(undefined, true),
@@ -254,8 +235,7 @@ describe('main title tracker parity with the renderer transport processor', () =
     }
 
     feedBoth(deferred, `${ESC}]0;Cursor Agent${BEL}`)
-    // Why drain here: it leaves the renderer's emitted-title memory on the literal, which is
-    // exactly the stale predecessor the next two chunks must not be judged against.
+    // Seed emitted-title memory with the literal before later chunks expose stale-predecessor decisions.
     deferred.renderer.flush()
     feedBoth(deferred, `${ESC}]0;zsh${BEL}`)
     feedBoth(deferred, `${ESC}]0;Cursor Agent${BEL}`)
@@ -280,8 +260,7 @@ describe('main title tracker parity with the renderer transport processor', () =
     feedBoth(paths, 'plain output arms the timer\r\n')
 
     vi.advanceTimersByTime(2_000)
-    // Why: a chunk that is ONLY an Orca status payload strips to empty
-    // cleanData; neither path may restart (or newly arm) the stale probe.
+    // Status-only chunks strip empty and must neither arm nor restart stale probes.
     feedBoth(paths, `${ESC}]9999;{"state":"working","agentType":"codex"}${BEL}`)
     vi.advanceTimersByTime(1_000)
 

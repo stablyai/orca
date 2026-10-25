@@ -27,7 +27,6 @@ function published(): PublishedWorkspaceLayout {
 const diff = (before: PublishedWorkspaceLayout, after: PublishedWorkspaceLayout) =>
   diffPublishedLayouts(GIT_KEY, indexPublishedLayout(before), indexPublishedLayout(after), after)
 
-/** `before` with one edit: the frame for it carries what changed and applies back to `after`. */
 function edited(edit: (layout: PublishedWorkspaceLayout) => void) {
   const before = published()
   const after = structuredClone(before)

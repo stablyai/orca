@@ -1,8 +1,4 @@
-// Legacy terminal rows the load folds into a tab-bar tab: dropped as a stale copy of it, or with
-// its terminal taken off them (legacy-terminal-row-claims). Stored, they still name that terminal,
-// so once a command closes the claiming tab, moves its terminal, or gives the row a tab-bar entry,
-// the next load resolves the claim another way and the row comes back. Such a command writes the
-// row in the load's form.
+// Persist touched legacy duplicates in their loaded form; otherwise closing/moving the canonical claimant can resurrect stale stored rows on the next load.
 
 import type { TerminalTab } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
@@ -13,11 +9,7 @@ import {
 } from './legacy-terminal-row-claims'
 import { stableJson } from './workspace-layout-load-report'
 
-/**
- * `stored` with each folded row whose claim `patched` changes (its own, or a claiming tab's)
- * replaced by its form in `loaded`: gone when the load dropped it, with a selection naming it
- * following its twin as the load does; its row and pane layout as loaded otherwise.
- */
+/** Replace folded rows when their own/claimant ownership changes: retain loaded layouts/rows or deletion, redirecting removed selections to the canonical twin. */
 export function adoptTouchedFoldedRows(
   stored: WorkspaceSessionState,
   patched: WorkspaceSessionState,
@@ -48,13 +40,11 @@ export function adoptTouchedFoldedRows(
   return adopted
 }
 
-/** The terminals a row names, as the claim rule reads them (the row's own and its panes'). */
 function ptyIdsOf(session: WorkspaceSessionState, row: TerminalTab): string[] {
   const { owned, orphaned } = readPersistedTerminalPtyIds(session, row)
   return [...owned, ...orphaned]
 }
 
-/** What a tab claims with: whether it has a row and a tab-bar entry, and the terminals it names. */
 function claimOf(session: WorkspaceSessionState, key: string, tabId: string): string {
   const row = session.tabsByWorktree?.[key]?.find((candidate) => candidate.id === tabId)
   const entry = session.unifiedTabs?.[key]?.some((candidate) => candidate.entityId === tabId)
@@ -88,7 +78,6 @@ function withLoadedRow(
   return next
 }
 
-/** The pane layouts with the tab's as loaded; nothing when neither side has one. */
 function withLoadedLayout(
   session: WorkspaceSessionState,
   loaded: WorkspaceSessionState,

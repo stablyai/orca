@@ -37,8 +37,6 @@ type GitHistoryCommitActions = {
   handleCommitAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }
 
-// Commit-history panel actions (expand/load files, open diffs, context-menu
-// actions). Extracted from SourceControl to keep that component from growing.
 export function useGitHistoryCommitActions({
   activeWorktreeId,
   worktreePath,
@@ -53,13 +51,10 @@ export function useGitHistoryCommitActions({
   const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
   const openCommitDiff = useAppStore((s) => s.openCommitDiff)
 
-  // Caches each commit's compare result so expanding a commit fetches its files
-  // once, and opening a single file (or the combined diff) reuses that same
-  // compare metadata without a second round-trip.
+  // Share compare results across expansion and diff opening to avoid a second round-trip.
   const commitCompareCacheRef = useRef<Map<string, GitCommitCompareResult>>(new Map())
 
-  // Keyed by commit oid; drop it when the workspace changes so the cache stays
-  // bounded to the commits expanded in the current worktree's history.
+  // Bound cached commit comparisons to the current worktree.
   useEffect(() => {
     commitCompareCacheRef.current = new Map()
   }, [activeWorktreeId])
@@ -76,7 +71,7 @@ export function useGitHistoryCommitActions({
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       const result = await getRuntimeGitCommitCompare(
         {
-          // Why: route the commit compare by the repo OWNER host, not the focused runtime.
+          // Compare on the repo owner, which may differ from the focused host.
           target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: activeWorktreeId,
           worktreePath,
@@ -105,8 +100,6 @@ export function useGitHistoryCommitActions({
         return
       }
       try {
-        // Reuses loadCommitFiles' fetch + cache so expanding a commit and then
-        // opening its combined diff costs a single round-trip.
         await loadCommitFiles(item)
         const cached = commitCompareCacheRef.current.get(item.id)
         if (!cached) {
@@ -143,8 +136,6 @@ export function useGitHistoryCommitActions({
       if (!activeWorktreeId || !worktreePath) {
         return
       }
-      // The cache is populated by loadCommitFiles when the row is expanded, so a
-      // missing entry means the files never loaded — nothing to open.
       const cached = commitCompareCacheRef.current.get(item.id)
       if (!cached) {
         return
@@ -194,8 +185,7 @@ export function useGitHistoryCommitActions({
         if (!activeWorktreeId || !worktreePath) {
           return
         }
-        // Resolve the provider commit URL in the main process, which reads the
-        // real origin remote (the renderer has no reliable origin identity).
+        // Resolve the real origin in main; renderer origin identity is unreliable.
         void getRuntimeGitRemoteCommitUrl(
           {
             target: requireGitOwnerTarget(activeRepoTarget),
@@ -248,8 +238,6 @@ export function useGitHistoryCommitActions({
       if (action !== 'explain') {
         return
       }
-      // Spawn the user's default agent in a new tab seeded with enough context
-      // to fetch and summarize the commit's diff itself.
       if (!activeWorktreeId) {
         return
       }
@@ -267,7 +255,7 @@ async function explainCommitWithDefaultAgent(
 ): Promise<void> {
   const detectionTarget = getDetectionTargetIdentityForWorktree(useAppStore.getState(), worktreeId)
   const agent = await resolveDefaultAgentForWorktreeNewTab(useAppStore.getState, worktreeId)
-  // Why: the agent was picked from that host's list; never launch it on a host the workspace moved to.
+  // The agent belongs to the detected host; abort if the workspace moved.
   if (
     getDetectionTargetIdentityForWorktree(useAppStore.getState(), worktreeId) !== detectionTarget
   ) {
@@ -282,8 +270,7 @@ async function explainCommitWithDefaultAgent(
     )
     return
   }
-  // Why: commit subject and diff text are repository-controlled; keep them
-  // as untrusted data so the agent doesn't follow embedded instructions.
+  // Treat repository-controlled subjects/diffs as untrusted data, never agent instructions.
   const explainPrompt = [
     `Explain the changes introduced by commit ${item.displayId}.`,
     `Subject: ${JSON.stringify(item.subject)}`,

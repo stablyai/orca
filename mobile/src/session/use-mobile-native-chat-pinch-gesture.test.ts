@@ -65,12 +65,7 @@ describe('useMobileNativeChatPinchGesture', () => {
     renderer = null
   })
 
-  // Why this matters: `renderItem` closes over `fontScale`, so each committed
-  // value re-measures every message in the list. Committing raw gesture scales
-  // drives hundreds of whole-list re-measures per pinch, and a stray second
-  // finger during an ordinary scroll starts that storm at scales the user cannot
-  // even see. Those re-measures are what expose the recycled-paragraph repaint
-  // that silently drops the tail of a long message.
+  // Each committed scale remeasures the whole list; raw/inadvertent pinches expose recycled-paragraph clipping, so commits must be quantized.
   it('commits nothing for gesture noise the user cannot see', () => {
     act(() => handlers.start?.())
     for (const scale of [1.001, 0.995, 1.008, 1.02, 0.982]) {

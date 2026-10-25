@@ -26,14 +26,14 @@ const testState = {
   previousUserDataPath: undefined as string | undefined
 }
 
-vi.mock('node:os', async () => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-  const actual = await vi.importActual<typeof import('node:os')>('node:os')
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return { ...actual, homedir: () => testState.fakeHomeDir }
 })
 
 const { CodexAppServerUnsupportedError } = await import('./codex-app-server-client')
-const { codexAppServerCapabilityCache } = await import('./codex-app-server-capability-cache')
+const { codexAppServerCapabilityCache } =
+  await import('./app-server/codex-app-server-capability-cache')
 const { _internals, grantManagedCodexHookTrust } = await import('./codex-hook-trust-grant')
 const { markCodexProjectTrusted } = await import('../agent-trust-presets')
 const { getLocalCodexTrustConfigFiles } = await import('./codex-home-paths')

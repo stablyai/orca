@@ -1,12 +1,4 @@
-/**
- * Adapts the renderer's `automationsChanged` window event to the invalidation
- * model's authority events.
- *
- * The publisher's authority is the environment it arrived from — desktop when
- * none is named. An event that carries no selector still invalidates that one
- * authority, which is what keeps an old host (or an unattributed local write)
- * refreshing rather than being dropped.
- */
+/** Resolve publisher authority from its environment, defaulting to desktop; missing selectors still invalidate that authority for old-host/local-write compatibility. */
 
 import {
   AUTOMATIONS_CHANGED_EVENT,

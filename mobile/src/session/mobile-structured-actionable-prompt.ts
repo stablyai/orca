@@ -13,8 +13,7 @@ type PromptState = Pick<
   'items' | 'currentRequests' | 'actionablePromptIds'
 >
 
-/** The approval a person can answer: pending, and named by the host as waiting when it names them
- *  (`isActionableStructuredAgentSessionPrompt`): one an agent that ended raised is not. */
+// Only pending prompts the host still marks actionable may receive answers; ended-agent prompts must not.
 export function actionableStructuredApproval(state: PromptState): StructuredApprovalItem | null {
   return (
     selectAgentSessionCurrentRequests(state).find(
@@ -25,7 +24,6 @@ export function actionableStructuredApproval(state: PromptState): StructuredAppr
   )
 }
 
-/** The question a person can answer, by the same rule. */
 export function actionableStructuredQuestion(state: PromptState): StructuredQuestionItem | null {
   return (
     selectAgentSessionCurrentRequests(state).find(

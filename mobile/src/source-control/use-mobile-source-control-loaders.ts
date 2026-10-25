@@ -37,7 +37,6 @@ type Params = {
   onStatusLoadSuccess?: () => void
 }
 
-/** The compare is the whole worktree against its base, so its request carries no further parameters. */
 type BranchCompareParameters = Readonly<Record<string, never>>
 const WHOLE_WORKTREE: BranchCompareParameters = {}
 
@@ -53,8 +52,6 @@ export type MobileSourceControlLoaders = {
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
 }
 
-// Owns git.status / git.branchCompare loading, the load-generation guards, and
-// the mount ref so the giant state hook stays under the line limit.
 export function useMobileSourceControlLoaders(params: Params): MobileSourceControlLoaders {
   const { client, connState, statusIdentityKey, worktreeId, setActionError, onStatusLoadSuccess } =
     params
@@ -69,15 +66,11 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   const branchCompare = useRef(
     new GenerationScopedRequestOwner<BranchCompareParameters, BranchCompareOutcome>()
   ).current
-  // Why: the same route can be reused for another worktree/host (identity change);
-  // a kept-on-failure `ready` state would otherwise show the previous worktree's
-  // data until the fresh load resolves. Reset to loading in the render phase (the
-  // React "adjust state on prop change" pattern) before the new load runs.
+  // Reset on identity change during render so retained ready state cannot expose another host/worktree for a frame.
   const lastResetIdentityRef = useRef(statusIdentityKey)
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
-    // Retire here rather than leaving it to the next load's scope: that load only starts once the
-    // fresh status returns, and an in-flight compare would publish the old worktree's commits first.
+    // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
     branchCompare.reset()
     setScreenState({ kind: 'loading' })
     setBranchCompareState({ kind: 'idle' })
@@ -90,8 +83,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         mountedRef.current = true
         return
       }
-      // Why: source-control RPC loads can outlive the route; invalidate pending
-      // writes when the screen detaches without a passive cleanup-only Effect.
+      // Invalidate route-detached RPC writes without waiting for passive cleanup.
       mountedRef.current = false
       loadGenerationRef.current += 1
       branchCompare.reset()
@@ -101,8 +93,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
 
   const loadBranchCompare = useCallback(
     async (options?: { preserveReadyOnFailure?: boolean }) => {
-      // A compare is a refresh, so nothing it holds is reusable and no attempt may share another's
-      // reply: retiring first is what makes the newest attempt the only one that can still publish.
+      // Each compare refresh owns a fresh reply; retire first so only the newest attempt can publish.
       branchCompare.reset()
       if (!worktreeId || !client || connState !== 'connected') {
         if (mountedRef.current) {
@@ -110,18 +101,14 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         }
         return false
       }
-      // What retires a compare: this host and this route identity, which is `${hostId}\0${worktreeId}`
-      // and so carries the workspace already. It is in the scope as well as in the render-phase
-      // retire, so a scope the owner has not seen still retires on its own if a load ever reaches it
-      // before that block does.
+      // Scope by host and route identity as well as render-time retirement to fence loads that reach the owner first.
       const scope: RequestScope = [client, statusIdentityKey]
 
       setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
       const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, (currency) =>
         readBranchCompareOutcome(client, worktreeId, currency)
       )
-      // The mount latch is not the owner's to keep: a detached route has no screen to publish to,
-      // which is a fact about the view, not about which reply is current.
+      // Mount liveness belongs to the view; a current reply still cannot publish after detach.
       if (!loaded || !mountedRef.current) {
         return false
       }
@@ -180,8 +167,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             if (!isCurrentLoad()) {
               return false
             }
-            // Why the raw refusal: the retry and capability routes below are decided by the
-            // refusal's code, which no acceptance policy carries through.
+            // Inspect refusal code before acceptance policy loses capability/retry routing information.
             const refusal = readMobileGitRefusal(reply)
             if (!refusal) {
               const result = gitStatusHostPayloadRead.interpret(reply)
@@ -190,8 +176,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
               if (options?.clearActionErrorOnSuccess !== false) {
                 setActionError(null)
               }
-              // Why: recovery prompts are based on a specific failed commit
-              // snapshot; a fresh status means that snapshot may be stale.
+              // Fresh status can invalidate the failed-commit snapshot used by recovery prompts.
               onStatusLoadSuccess?.()
               return true
             }
@@ -220,9 +205,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
           }
           const message = err instanceof Error ? err.message : 'Unable to load source control'
           setScreenState((prev) => {
-            // Why: git mutations can succeed while the immediate status refresh
-            // races a desktop abort; keep the last good screen instead of flashing
-            // a full-screen error that Retry fixes a moment later.
+            // Mutations can succeed while refresh races an abort; retain the last good screen through transient read failure.
             if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
               return prev
             }

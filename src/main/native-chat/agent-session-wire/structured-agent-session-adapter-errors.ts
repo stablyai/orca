@@ -1,8 +1,6 @@
 import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
 
-// Errors an adapter throws to the host; kept apart so the adapter contract file stays the contract.
-
 export class AgentSessionAcquisitionRefusal extends Error {
   readonly code = 'agent_session_operation_invalid'
 

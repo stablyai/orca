@@ -2,9 +2,6 @@ import { describe, expect, it, beforeAll, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 
-// ---------------------------------------------------------------------------
-// Provide a minimal HTMLElement so `instanceof HTMLElement` passes in Node env
-// ---------------------------------------------------------------------------
 class MockHTMLElement {
   classList: { contains: (cls: string) => boolean }
   dataset: Record<string, string>
@@ -51,9 +48,6 @@ import {
   collectLeafIdsInReplayCreationOrder
 } from './layout-serialization'
 
-// ---------------------------------------------------------------------------
-// Helper to create mock elements
-// ---------------------------------------------------------------------------
 function mockElement(opts: {
   classList?: string[]
   dataset?: Record<string, string>
@@ -69,9 +63,6 @@ const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
 const LEAF_4 = '44444444-4444-4444-8444-444444444444'
 
-// ---------------------------------------------------------------------------
-// serializePaneTree
-// ---------------------------------------------------------------------------
 describe('serializePaneTree', () => {
   it('returns null for null input', () => {
     expect(serializePaneTree(null)).toBeNull()
@@ -215,9 +206,6 @@ describe('serializePaneTree', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// serializeTerminalLayout
-// ---------------------------------------------------------------------------
 describe('serializeTerminalLayout', () => {
   it('returns EMPTY_LAYOUT equivalent when root is null', () => {
     const result = serializeTerminalLayout(null, null, null)
@@ -438,8 +426,7 @@ describe('restoreScrollbackBuffers over a parked live TUI', () => {
     )
   }
 
-  // Why: the reveal used to strip the frame and show the shell's launch line until
-  // the host snapshot repainted the TUI one round trip later (#22087).
+  // Keep the live TUI frame until the host snapshot arrives; otherwise reveal flashes the shell launch line (#22087).
   it('keeps the TUI frame of a remote pane the host still runs', async () => {
     const terminal = await restoreInto(new Set([LEAF_1]))
     try {
@@ -463,11 +450,8 @@ describe('restoreScrollbackBuffers over a parked live TUI', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// collectLeafIdsInReplayCreationOrder
-// ---------------------------------------------------------------------------
 describe('collectLeafIdsInReplayCreationOrder', () => {
-  it('matches replayTerminalLayout pane creation order for nested left splits', () => {
+  it('visits the outer right leaf before the inner left split continuation', () => {
     const layout: TerminalPaneLayoutNode = {
       type: 'split',
       direction: 'vertical',
@@ -484,7 +468,7 @@ describe('collectLeafIdsInReplayCreationOrder', () => {
     expect(collectLeafIdsInReplayCreationOrder(layout)).toEqual(['A', 'C', 'B'])
   })
 
-  it('matches replayTerminalLayout pane creation order for nested right splits', () => {
+  it('visits the inner right split after the outer left leaf', () => {
     const layout: TerminalPaneLayoutNode = {
       type: 'split',
       direction: 'vertical',

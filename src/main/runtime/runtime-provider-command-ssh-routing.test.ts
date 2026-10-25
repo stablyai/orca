@@ -32,7 +32,7 @@ function repoOn(fields: Pick<Repo, 'connectionId' | 'executionHostId'>): Repo {
   }
 }
 
-// Why: these commands used to pass the raw `connectionId`, so an `ssh:`-only row ran gh/glab here.
+// Raw connectionId missed ssh:-only rows and ran gh/glab on this host.
 describe('runtime provider commands route an SSH project to its host', () => {
   beforeEach(() => {
     getIssueMock.mockReset().mockResolvedValue(null)

@@ -7,7 +7,7 @@ import type { StructuredAgentSessionLifetimeContext } from './structured-agent-s
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import { releaseStoredStructuredAgentSessionOwnerAfterExit } from './structured-agent-session-lease-release'
-import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
+import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session/ownership/agent-session-surface-release-transition'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
 
 /** A surviving root after kill remains unverifiable, never exited. */

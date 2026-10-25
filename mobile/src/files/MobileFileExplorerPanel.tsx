@@ -21,7 +21,6 @@ import {
   type DirectoryCache,
   type FileExplorerRow
 } from './file-tree'
-import type { RpcFailure } from '../transport/types'
 import { colors, spacing } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
@@ -77,7 +76,6 @@ export function MobileFileExplorerPanel(props: {
           const hasLoadedRoot =
             (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
           setLoading(false)
-          // Why: transient reconnects should not blank an already browsable tree.
           setError(hasLoadedRoot ? null : message)
         } else {
           setDirectoryCache((prev) => ({
@@ -94,8 +92,7 @@ export function MobileFileExplorerPanel(props: {
       const hadLoadedRoot =
         rootLoad && (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
       if (rootLoad) {
-        // Why: a reconnect refresh must not blank an already browsable tree —
-        // the full-screen spinner unmounts the list and resets scroll.
+        // Keep the cached tree during reconnect; a full-screen spinner unmounts the list and loses scroll.
         if (!hadLoadedRoot) {
           setLoading(true)
         }
@@ -116,11 +113,8 @@ export function MobileFileExplorerPanel(props: {
         })
         const directory = fileDirectoryRead.interpret(response)
         if (!directory.accepted) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
-          const refusal = (response as RpcFailure).error
-          // Why: desktops that predate the files.readDir mobile allowlist
-          // entry still serve the capped files.list; fall back so the Files
-          // tab keeps working until the desktop updates.
+          const refusal = response.ok ? undefined : response.error
+          // Older desktops lack readDir in the mobile allowlist; fall back to capped files.list.
           if (rootLoad && isMobileMethodUnavailableError(refusal?.code, refusal?.message)) {
             const legacyReply = await legacyFileListRead.request(client, {
               worktree: `id:${worktreeId}`
@@ -138,14 +132,12 @@ export function MobileFileExplorerPanel(props: {
               }
               const legacyResult = legacy.value
               setDirectoryCache(directoryCacheFromFileList(legacyResult.files))
-              // Why: the capped list silently omits files past the cap — keep
-              // the legacy explorer's "Showing first 5000" note.
+              // Keep the truncation note because the capped list silently omits later files.
               setLegacyListTruncated(legacyResult.truncated)
               return
             }
             throw new Error(
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
-              (legacyReply as RpcFailure).error?.message ||
+              (legacyReply.ok ? undefined : legacyReply.error)?.message ||
                 refusal?.message ||
                 'Unable to load files'
             )
@@ -174,8 +166,7 @@ export function MobileFileExplorerPanel(props: {
         }
         const message = err instanceof Error ? err.message : 'Unable to load files'
         if (rootLoad) {
-          // Why: a failed background refresh keeps the cached tree browsable;
-          // only a cold load surfaces the full-screen error.
+          // Only cold loads show full-screen errors; failed background refreshes retain the cached tree.
           setError(hadLoadedRoot ? null : message)
         } else {
           setDirectoryCache((prev) => ({
@@ -287,8 +278,7 @@ export function MobileFileExplorerPanel(props: {
   const retryDirectory = useCallback(
     (relativePath: string) => {
       if (connState !== 'connected' && hostId) {
-        // Still worth a tap on the page, where nothing re-dials: the queued read runs when the
-        // shell's client reconnects on its own.
+        // The page cannot re-dial, but its queued read runs when the shell reconnects.
         pendingDirectoryRetriesRef.current.add(relativePath)
         void forceReconnect?.(hostId)
         return
@@ -362,8 +352,7 @@ export function MobileFileExplorerPanel(props: {
     </View>
   )
 
-  // Why: while disconnected, re-sending the request is useless — revive the parked transport
-  // instead (issue #5049); loadDirectory re-runs via its effect once the new client connects.
+  // Revive the parked transport while disconnected (#5049); the connected effect retries loadDirectory.
   const rootRetry = connectionRetryAction({
     hostId,
     needsReconnect: connState !== 'connected',
@@ -390,8 +379,7 @@ export function MobileFileExplorerPanel(props: {
     />
   )
 
-  // Embedded: the dock column owns safe-area/layout, so render a plain View and
-  // a non-inset header. Full-screen: keep the SafeAreaView top inset + chrome.
+  // The embedded dock owns insets and layout; only the full-screen variant needs SafeAreaView and header chrome.
   return (
     <View
       style={styles.container}

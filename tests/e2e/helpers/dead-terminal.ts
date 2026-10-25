@@ -62,11 +62,7 @@ export async function removeWorktreeViaStore(page: TestPage, worktreeId: string)
   }, worktreeId)
 }
 
-/**
- * Poll until every pane in the active tab's PaneManager has non-empty buffer
- * content. A dead terminal has an empty serialize() result because the WebGL
- * canvas never painted the shell prompt.
- */
+// Wait for nonempty buffers in every pane; inspect rendering separately through canvas diagnostics.
 export async function waitForAllPanesToHaveContent(
   page: TestPage,
   label: string,
@@ -121,10 +117,7 @@ export async function waitForAllPanesToHaveContent(
     .toMatchObject({ ok: true })
 }
 
-/**
- * Log WebGL canvas state for diagnostics. In headful mode, visible panes
- * should have WebGL canvases; hidden panes (suspended rendering) should not.
- */
+// Inspect WebGL canvases: visible headful panes should render, while suspended panes should have none.
 export async function checkWebglState(page: TestPage, label: string): Promise<void> {
   const paneStates = await page.evaluate(() => {
     const containers = document.querySelectorAll('.pane[data-pane-id]')

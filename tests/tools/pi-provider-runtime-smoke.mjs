@@ -113,8 +113,7 @@ try {
   assert.equal(results[1].code, 0, results[1].stderr)
   assert.match(results[1].stdout, /fixture-generated-commit/)
   assert.equal(results[1].requests, 1)
-  // The Pi catch-up's contract: entries keep stable ids, and `since` returns what was appended after
-  // one of them, or refuses an id the session doesn't have.
+  // Require Pi catch-up stable ids: since returns entries after that id or refuses an unknown id.
   const sessionFile = join(scratch, 'catch-up.jsonl')
   const rpc = spawn(process.execPath, [piCli, '--mode', 'rpc', '--session', sessionFile], {
     cwd: scratch,

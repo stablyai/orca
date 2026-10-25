@@ -3,7 +3,6 @@ import { useCallback, useState, type RefObject } from 'react'
 import { useAppStore } from '../../store'
 import { dispatchDictationControl } from '../dictation/dictation-control-events'
 
-/** Whether the composer can dictate and is dictating now, and the controls that start and stop it. */
 export function useNativeChatDictation(
   textareaRef: RefObject<NativeChatComposerInput | null>,
   disabled: boolean

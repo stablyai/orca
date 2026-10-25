@@ -37,8 +37,7 @@ export function getTerminalLiveSpecialKeyDecision({
     return { kind: 'ignore' }
   }
 
-  // Why: native field edits fire onChangeText and the mirror diff emits the
-  // matching PTY erase; sending raw DEL here as well would double-erase.
+  // Native edits already emit mirror-diff erase bytes; raw DEL here would erase twice.
   if ((key === 'Backspace' || key === 'Delete') && (heldText.length > 0 || sentText.length > 0)) {
     return { kind: 'local-edit' }
   }
@@ -50,15 +49,8 @@ export function getTerminalLiveSpecialKeyDecision({
   return { kind: 'send-now', bytes }
 }
 
-/**
- * Whether this control ends the line, which is what ends the field's editing session.
- *
- * The field holds a mirror of text the PTY has already echoed, so after a carriage return the
- * terminal owns it and the mirror must restart from empty — the same rule `flushPendingLiveInputText`
- * states for an explicit flush. `endsWith` rather than equality because a custom key may carry a
- * command and its return in one payload; a return in the middle is a line inside that payload, not
- * the end of this one.
- */
+// An ending Return gives echoed text to the terminal and resets the field mirror.
+// Use endsWith because custom keys can contain command plus Return; an internal Return does not end this payload.
 export function terminalLiveAccessoryInputEndsLine(bytes: string): boolean {
   return bytes.endsWith('\r')
 }
@@ -88,8 +80,7 @@ export function getTerminalLiveAccessoryLocalEditText({
   readonly fieldText: string
 }): string {
   if (localEdit === 'delete') {
-    // Why: accessory Delete mirrors forward-delete at the hidden input's end;
-    // it stays local but does not remove the field text.
+    // Accessory Delete forwards deletion beyond the hidden input’s end; preserve its local text.
     return fieldText
   }
 

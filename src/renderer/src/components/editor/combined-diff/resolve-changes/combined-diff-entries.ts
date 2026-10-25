@@ -3,11 +3,7 @@ import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-com
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { CombinedDiffFileTreeMode } from './combined-diff-section-identity'
 
-/**
- * Fallback filtering for combined-diff tabs that were opened before the
- * snapshot field existed. When a snapshot is present the caller should use it
- * directly (after filtering out unresolved conflicts) instead of calling this.
- */
+/** Filter legacy tabs lacking snapshots; snapshot callers use their captured list after excluding unresolved conflicts. */
 export function getCombinedUncommittedEntries(
   liveEntries: GitStatusEntry[],
   areaFilter: OpenFile['combinedAreaFilter']
@@ -73,8 +69,7 @@ export function resolveCombinedUncommittedSnapshotEntries(
       continue
     }
 
-    // Why: a snapshot-backed Changes tab can outlive stage/unstage actions.
-    // Load the area Git now reports so Monaco doesn't diff identical files.
+    // Snapshots outlive staging changes; load the current area so Monaco does not compare identical files.
     pushResolvedEntry({
       ...snapshotEntry,
       area: movedEntry.area,
@@ -112,8 +107,7 @@ export function getCombinedBranchEntries(
   snapshotEntries: readonly GitBranchChangeEntry[] | undefined,
   liveEntries: readonly GitBranchChangeEntry[]
 ): GitBranchChangeEntry[] {
-  // Why: an explicitly empty tab snapshot should stay empty instead of drifting
-  // to later Source Control refreshes.
+  // An explicit empty snapshot must not drift into later source-control results.
   return [...(snapshotEntries ?? liveEntries)]
 }
 
@@ -124,7 +118,6 @@ export function shouldAutoReloadCombinedDiffFromGitStatus({
   mode: CombinedDiffFileTreeMode
   hasUncommittedEntriesSnapshot: boolean
 }): boolean {
-  // Why: snapshot-backed tabs preserve the tab-open file list while
-  // staging/commit status churns; targeted editor-write reloads still refresh.
+  // Keep snapshot file lists stable through status churn; targeted editor writes still reload content.
   return mode === 'uncommitted' && !hasUncommittedEntriesSnapshot
 }

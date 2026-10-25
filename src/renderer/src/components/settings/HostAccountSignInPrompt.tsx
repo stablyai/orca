@@ -90,7 +90,6 @@ function PastedCodeForm(props: {
   )
 }
 
-/** The page and code of an account sign-in a server runs for this client, while it runs. */
 export function HostAccountSignInPrompt(props: {
   owner: RuntimeClientTarget
   provider: HostAccountSignInProvider
@@ -123,7 +122,7 @@ export function HostAccountSignInPrompt(props: {
                   { host: props.hostLabel }
                 )}
         </p>
-        {/* Why here: this prompt is bound to its server and outlives a Settings reopen. */}
+        {/* Keep the prompt bound to its server across Settings reopenings. */}
         <Button
           variant="ghost"
           size="xs"
@@ -163,7 +162,7 @@ export function HostAccountSignInPrompt(props: {
         </div>
       ) : null}
       {url && status && prompt?.needsCode ? (
-        // Why keyed: a code typed for one server's flow must never be sent to another's.
+        // Remount by flow/owner so typed codes cannot cross server sign-ins.
         <PastedCodeForm
           key={`${props.owner.kind === 'environment' ? props.owner.environmentId : ''}:${status.flowId}`}
           owner={props.owner}

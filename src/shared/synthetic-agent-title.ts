@@ -27,8 +27,7 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Codex',
     permissionLabel: 'Codex - action required',
     idleLabel: 'Codex ready',
-    // Why: Codex emits working OSC titles but can miss the final frame.
-    // Only synthesize terminal states so native spinner behavior stays intact.
+    // Keep native Codex working/spinner titles; synthesize terminal states when its final OSC frame is missing.
     synthesizeWorkingTitle: false
   },
   cursor: {
@@ -40,7 +39,7 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'OpenCode',
     permissionLabel: 'OpenCode - action required',
     idleLabel: 'OpenCode ready',
-    // Why: OpenCode owns semantic OSC session titles; hook status must not replace them.
+    // Preserve OpenCode’s own semantic session titles.
     synthesizeTerminalTitle: false
   },
   pi: {
@@ -48,9 +47,8 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     permissionLabel: 'Pi - action required',
     idleLabel: 'Pi ready',
     titleIdentityGroup: 'pi-compatible',
-    // Why: Pi owns its working OSC title (`π ⠋ <session>`) and animates it itself. Synthesizing
-    // over it replaced the session label and fought its frames at 80ms. Terminal states still
-    // synthesize: they carry the pane's agent identity downstream, and Pi is quiet at rest.
+    // Pi animates working titles every 80ms with session labels; synthesis fights those frames.
+    // Synthesize terminal states because Pi is quiet at rest and pane identity still needs a title.
     synthesizeWorkingTitle: false
   },
   omp: {
@@ -58,8 +56,7 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     permissionLabel: 'OMP - action required',
     idleLabel: 'OMP ready',
     titleIdentityGroup: 'pi-compatible',
-    // Why: on an Orca-hosted pane it is Orca's own injected titlebar extension writing the
-    // working title (src/main/pi/titlebar-extension-source.ts). See pi above.
+    // Orca’s injected titlebar extension owns OMP working titles (main/pi/titlebar-extension-source.ts).
     synthesizeWorkingTitle: false
   },
   droid: {
@@ -81,11 +78,8 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'ZCode',
     permissionLabel: 'ZCode - action required',
     idleLabel: 'ZCode ready',
-    // Why every state synthesizes, unlike Codex/Pi: ZCode writes NO OSC title in any state
-    // — the captured transcript (`zcode-composer-ready.txt`) contains no OSC 0/1/2 at all —
-    // so there is no native title to fight with, and without this a `tui-idle` wait has no
-    // signal to settle on: ZCode also repaints its ASCII banner forever, so the quiescence
-    // lane never fires either.
+    // Captured zcode-composer-ready.txt has no OSC 0/1/2; synthesize every state for tui-idle detection.
+    // Its endlessly repainting ASCII banner also prevents quiescence detection.
     synthesizeWorkingTitle: true
   }
 }

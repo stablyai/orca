@@ -252,7 +252,6 @@ export function LinearIssueFilterSectionDetail({
     )
   }
 
-  // Status and labels are the same grouped, cap-bounded picker over a different facet.
   if (section === 'status' || section === 'labels') {
     const isStatus = section === 'status'
     const options = isStatus ? statusOptions : labelOptions

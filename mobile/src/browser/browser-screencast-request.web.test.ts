@@ -30,8 +30,7 @@ function mobileFrameArea(
 }
 
 describe('the mobile-view area budget', () => {
-  // The control, and the reason the budget exists: what the native request asks for on this same
-  // phone does not fit in one bridge message, and the shell would answer it with a dropped frame.
+  // Native density at same phone size exceeds bridge cap; without web budget shell drops frame.
   it('is needed: the native request overflows the frame cap on a phone', () => {
     const native = buildMobileBrowserScreencastRequest(PHONE, 2, 'mobile')
 
@@ -68,8 +67,7 @@ describe('the mobile-view area budget', () => {
   })
 
   it('stops at one device pixel per CSS pixel on a viewport no scale would fit', () => {
-    // Past this the page would be asking for a blurrier frame than its own layout; a frame that
-    // still does not fit is C6 ruling 1's to drop.
+    // Never request fewer device pixels than CSS pixels; shell drops frames still too large at density 1.
     expect(budgetedMobileViewDeviceScaleFactor({ width: 2000, height: 1400 })).toBe(1)
   })
 

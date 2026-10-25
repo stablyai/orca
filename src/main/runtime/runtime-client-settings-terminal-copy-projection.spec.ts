@@ -3,10 +3,7 @@ import { RuntimeClientSettingsController } from './runtime-client-settings'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-// Why: `settings.get` is an explicit allowlist, not the whole settings object.
-// Mobile's terminal Copy reads terminalCopyTrimsGutter from it (#19770), and a
-// field missing here is indistinguishable on the client from an older host —
-// so the opt-out would silently never arrive.
+// Missing terminalCopyTrimsGutter looks like an older host to mobile, silently losing the Copy opt-out (#19770).
 function projectionOf(settings: Partial<GlobalSettings>) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: get() reads nothing but store.getSettings(); every other RuntimeStore member is unreachable from that path.
   return new RuntimeClientSettingsController({ getSettings: () => settings } as never).get()

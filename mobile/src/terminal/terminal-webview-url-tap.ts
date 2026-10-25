@@ -28,12 +28,11 @@ function findTerminalUrlAtColumn(lineText: string, col: number, source: string):
   while ((match = re.exec(lineText)) !== null) {
     const start = match.index
     const end = start + match[0].length
-    // Why: desktop rejects overlong terminal URL candidates before opening;
-    // mobile taps should preserve the same safety bound.
+    // Match desktop’s maximum URL length before opening terminal candidates.
     if (match[0].length <= TERMINAL_HTTP_URL_MAX_LENGTH && col >= start && col < end) {
       return match[0]
     }
-    // Why: protect the injected loop if the regex ever changes to allow empties.
+    // Guard against empty regex matches to prevent a future pattern change from looping forever.
     if (match[0].length === 0) {
       re.lastIndex++
     }

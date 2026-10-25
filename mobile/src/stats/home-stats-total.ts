@@ -5,19 +5,8 @@ export type HomeStatsSummary = {
   firstEventAt: number | null
 }
 
-/**
- * Why: the home header shows one lifetime-usage row for every paired desktop. Each host answers
- * stats.summary for itself, so a single shared slot made the row flip to whichever host replied
- * last — visible churn now that every reconnect re-reads. Sum instead; one host still totals itself.
- *
- * Summing only `hostIds` keeps an unpaired desktop out of the total: replies are cached per host
- * for the life of the process, so an entry outlives the host it describes.
- */
-/**
- * One host's row as the wire carries it: the row itself may be null or absent, and every field may
- * be missing or the wrong type. The loop below guards all three, which is why the reader requires
- * none of them.
- */
+// Sum paired hosts only: process-lifetime cached replies outlive unpairing and a shared slot would show whichever host replied last.
+// Wire rows and fields may be absent or malformed; consumer guards supply all defaults.
 export type HomeStatsRow = Partial<HomeStatsSummary> | null | undefined
 
 export function totalHomeStats(
@@ -35,8 +24,7 @@ export function totalHomeStats(
     firstEventAt: null
   }
   for (const host of hosts) {
-    // The rows come straight off the wire unvalidated; a malformed desktop reply must not
-    // NaN out or crash the header for every other host.
+    // One malformed host reply must not crash or NaN the combined usage header.
     if (!host || typeof host !== 'object') {
       continue
     }

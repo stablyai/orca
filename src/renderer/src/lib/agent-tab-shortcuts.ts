@@ -18,12 +18,7 @@ export type BoundAgentTabAction = {
   actionId: AgentTabActionId
 }
 
-/**
- * Agents whose per-agent "new tab" action has at least one user-assigned
- * chord. Per-agent actions ship with no default bindings, so only user
- * overrides can bind them. Disabled agents are skipped so a leftover binding
- * goes inert when the agent is turned off in Settings → Agents.
- */
+/** Offer user-bound per-agent chords only for enabled agents; these actions have no default bindings, and disabled agents leave old bindings inert. */
 export function listBoundAgentTabActions(
   keybindings: KeybindingOverrides | undefined,
   disabledTuiAgents: readonly TuiAgent[] | null | undefined
@@ -45,13 +40,7 @@ export function listBoundAgentTabActions(
   return bound
 }
 
-/**
- * Resolve which agent the `tab.newAgent` chord launches: the configured
- * default agent when it is detected (or opens as a chat in `chatIn`) and enabled, otherwise the shared
- * auto-pick order. A 'blank' default means "open new workspaces without an
- * agent" — an explicit new-agent-tab chord still wants an agent, so it falls
- * through to auto-pick instead of doing nothing.
- */
+/** Use the enabled/detected or chat-capable default, then auto-pick; blank applies only to workspace creation, so explicit agent chords still launch. */
 export function resolveDefaultAgentForNewTab(args: {
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined
   detectedAgentIds: readonly TuiAgent[] | null | undefined
@@ -68,7 +57,6 @@ export function resolveDefaultAgentForNewTab(args: {
   return pickTuiAgent(preferred, args.detectedAgentIds ?? [], args.disabledTuiAgents, chosenUsable)
 }
 
-/** The new-tab default agent for a workspace, from the agents its own host reports. */
 export async function resolveDefaultAgentForWorktreeNewTab(
   getState: () => AppState,
   worktreeId: string

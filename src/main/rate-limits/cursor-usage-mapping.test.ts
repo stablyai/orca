@@ -103,8 +103,7 @@ describe('mapCursorUsageSummary', () => {
   })
 
   it('publishes no pools for a plan the account does not own', () => {
-    // Why: a team-billed account still reports 0% pools. Publishing them would
-    // paint a healthy 0% meter and skip the request-quota fallback.
+    // Team-owned zero pools must not suppress the legacy request-quota fallback.
     const mapped = mapCursorUsageSummary({
       ...CYCLE,
       individualUsage: {
@@ -136,8 +135,7 @@ describe('mapCursorUsageSummary', () => {
   })
 
   it('keeps the plan when a sibling pool arrives as null', () => {
-    // Why: the route sends `null` for an absent sub-object, and a stricter schema
-    // would drop the whole body — plan pools and billing cycle included.
+    // Null subobjects must not discard valid pools and billing-cycle data.
     const mapped = mapCursorUsageSummary(
       parseCursorUsageSummary({
         ...CYCLE,

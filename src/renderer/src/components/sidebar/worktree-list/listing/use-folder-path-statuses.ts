@@ -10,8 +10,7 @@ import { getFolderPathStatusRouteOptionsForRows } from './folder-path-status-rou
 
 type FolderPathStatusRequest = Parameters<AppState['fetchFolderWorkspacePathStatus']>[0]
 
-// Keeps the sidebar's folder-path probes fresh for every project group and folder workspace
-// it renders, and hands rows a cache reader that ignores expired negative results.
+// Refresh rendered folder paths and ignore expired negative results while reprobes run.
 export function useFolderWorkspacePathStatusRows(args: {
   allRepoIds: string[]
   repoMap: Map<string, Repo>

@@ -73,7 +73,7 @@ describe('RelayedPhoneReplies', () => {
     const relay = replies()
     relay.noteForwarded('s1')
     relay.noteForwarded('s2')
-    // Both hosts allocate from 1; the phone must see distinct ids.
+    // Independent hosts allocate overlapping ids; the phone must see distinct ones.
     expect(JSON.parse(relay.text(subscribed('s1', 1))!).result.streamId).toBe(100)
     expect(JSON.parse(relay.text(subscribed('s2', 2))!).result.streamId).toBe(101)
     const frame = decodeTerminalStreamFrame(relay.binary(output(2))!)

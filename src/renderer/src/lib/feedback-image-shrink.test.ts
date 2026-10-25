@@ -4,8 +4,7 @@ import { shrinkFeedbackImage } from './feedback-image-shrink'
 describe('shrinkFeedbackImage', () => {
   type FakeCanvas = { width: number; height: number; calls: string[] }
 
-  // Why: the node test env has no decoder or canvas, so stub both and record
-  // what the real encode path does with them.
+  // Stub decoding/canvas in node while exercising the actual encode path.
   function stubCanvas(sizeFor: (canvas: FakeCanvas, type: string) => number): {
     canvases: FakeCanvas[]
     bitmap: { width: number; height: number; close: ReturnType<typeof vi.fn> }

@@ -6,20 +6,8 @@ import { describe, expect, it } from 'vitest'
 import { mobileWebAppModuleClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 
-/**
- * The 612 KiB xterm engine string, and where the page must never meet it.
- *
- * `terminal-webview-engine.generated.ts` is one minified IIFE of xterm plus two addons, built to
- * be injected into the WebView's HTML document as text. On the page the same engine arrives as an
- * import, so the string is 610 KiB of dead weight — the largest single module in the session
- * route's closure, and unusable there besides, because the shell's CSP has `script-src 'self'`
- * and no nested frame to load a document into.
- *
- * Nothing stops it entering: the module the document's `<style>` needs exported the engine string
- * beside it, so one import of the CSS would have pulled the whole thing in. The CSS is now its own
- * generated artifact and this is the fence. The document's modules are the entry set, because they
- * are what the page imports; the plant below is what says the walk would notice.
- */
+// Page imports xterm directly; WebView’s ~612KiB engine IIFE is unusable/dead weight under shipped CSP.
+// Separate CSS artifact prevents style import pulling engine string into document closure; planted offender proves fence detects it.
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
@@ -31,14 +19,7 @@ const ENGINE_CSS_MODULE = 'src/terminal/terminal-webview-engine-css.generated.ts
 const bundles = mobileWebAppDependenciesPresent()
 const describeClosure = bundles ? describe : describe.skip
 
-/**
- * Every module the document is made of, as entry points.
- *
- * The document is one script whose modules run in a pinned order and mostly reach each other by
- * side effect, so no single one of them is the root of a graph that holds the rest. Naming all of
- * them is what makes "the engine string is in none of their closures" a claim about the document
- * rather than about whichever module happened to be picked.
- */
+// Use every document module as entry: pinned side-effect startup order means no single module imports all others.
 async function documentEntryPoints() {
   const names = (await readdir(documentDir))
     .filter((name) => name.endsWith('.ts'))
@@ -53,7 +34,7 @@ describeClosure(
     it('is in no closure of the document modules the page imports', async () => {
       const { local } = await mobileWebAppModuleClosure(await documentEntryPoints())
       expect(local).not.toContain(ENGINE_MODULE)
-      // The precondition: a walk that resolved nothing would also contain nothing.
+      // Require resolved modules before interpreting absence; empty walk would also contain no engine.
       expect(local).toContain('src/terminal/document/document-scope.ts')
       expect(local).toContain('src/terminal/document/terminal-init.ts')
     }, 180_000)
@@ -61,29 +42,21 @@ describeClosure(
     it('is in no closure of the page terminal component either', async () => {
       const { local } = await mobileWebAppModuleClosure(['src/terminal/TerminalWebView'])
       expect(local).not.toContain(ENGINE_MODULE)
-      // The extensionless specifier is what the bundle ships, so this is the page's component and
-      // its `.web.ts` half of the HTML — naming the `.tsx` would measure the WebView no browser
-      // loads. Both are asserted, because the assertion above holds vacuously for the native pair.
+      // Use extensionless component/HTML imports and require web siblings; explicit native pair would pass absence vacuously.
       expect(local).toContain('src/terminal/TerminalWebView.web.tsx')
       expect(local).toContain('src/terminal/terminal-webview-html.web.ts')
       expect(local).toContain(ENGINE_CSS_MODULE)
       expect(local).not.toContain('src/terminal/terminal-webview-html.ts')
-      // Ruling 24 put the bridge's two host facts behind seams and ruling 25 made the document
-      // ordinary modules, so the page reaches every one of them, `message-bridge` included: what
-      // keeps the shell's frames out is the transport the page passes, not an absent module.
+      // message-bridge belongs in ordinary page document; transport seams exclude shell frames, not missing module.
       expect(local).toContain('src/terminal/document/message-bridge.ts')
       expect(local).toContain('src/terminal/document/create-terminal-document.ts')
-      // The entry is the bundle's, and the bundle is the phone's: a page that reached it would be
-      // shipping a second copy of the document as a string.
+      // Generated entry/bundle belongs to phone WebView; page must not ship second document as string.
       expect(local).not.toContain('src/terminal/document/native-document-entry.ts')
       expect(local).not.toContain('src/terminal/terminal-webview-document-script.generated.ts')
     }, 180_000)
 
     it('is still what the native document reads its CSS beside', async () => {
-      // The shell rather than `terminal-webview-html`, which now has a `.web.ts` sibling the walk
-      // would resolve instead and so measure the page's half — the opposite of the claim. The
-      // shell is the module that reads both generated ones, so the cases above cannot pass by the
-      // CSS having quietly gone missing.
+      // Native shell, not web-resolved terminal-webview-html, proves both generated CSS/engine still exist for phone.
       const { local } = await mobileWebAppModuleClosure([
         'src/terminal/terminal-webview-html/document-shell'
       ])
@@ -94,8 +67,7 @@ describeClosure(
     it.each(['bare', 'relative', 'absolute'])(
       'would be reported if a document module imported it (%s entry)',
       async (entryKind) => {
-        // Planted in a scratch tree rather than under src/terminal/document, so nothing else in the
-        // repository ever walks the plant and no other census has to know it exists.
+        // Plant offender in scratch tree so other document censuses cannot observe test-only module.
         const scratch = await mkdtemp(join(tmpdir(), 'orca-c75-engine-closure-'))
         try {
           const planted = join(scratch, 'src', 'terminal', 'document')

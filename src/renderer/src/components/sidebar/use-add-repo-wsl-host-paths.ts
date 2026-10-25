@@ -6,10 +6,7 @@ import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { pickWslHostFolder, type DroppedHostPath } from './add-repo-wsl-host-folder-picker'
 
-/**
- * Windows-side ways into a WSL host's distro for Add Project (D5): a `\\wsl.localhost` folder
- * dropped on the sidebar, and Windows' folder picker. Both land on the host-path step, filled in.
- */
+/** Prefill the host-path step from Windows drops or the folder picker for a WSL distro. */
 export function useAddRepoWslHostPaths({
   isOpen,
   droppedHostPath,
@@ -51,8 +48,7 @@ export function useAddRepoWslHostPaths({
   }, [isOpen, selectedHostId])
   const handledDropRef = useRef<DroppedHostPath | null>(null)
 
-  // Why an effect: the drop arrives through modal data, and the dropped host may only become
-  // selectable after the dialog opens (its server still coming up). Runs once per drop.
+  // Wait for a dropped host to become selectable; handle each drop once.
   useEffect(() => {
     if (!isOpen) {
       handledDropRef.current = null

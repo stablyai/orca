@@ -17,7 +17,6 @@ vi.mock('../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 const OTHER_WS = 'repo-1::/Users/dev/other'
 
-/** A create's result: the tab and leaf it made. */
 function createdPane(value: unknown): { tabId: string; leafId: string } {
   if (
     !value ||

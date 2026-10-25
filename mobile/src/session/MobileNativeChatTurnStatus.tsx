@@ -9,8 +9,7 @@ import {
 import type { AgentTurnOutcome } from '../../../src/shared/agent-turn-outcome'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-/** Seconds tick only while a turn is actually counting, so a settled transcript
- *  holds no timers. */
+// Stop ticking settled turns so old transcripts retain no timers.
 function useElapsedSeconds(startedAt: number | null, counting: boolean): number {
   // Preserves the pre-stamp epoch for the frame before the turn's startedAt lands.
   const [mountedAt] = useState(() => Date.now())
@@ -26,10 +25,6 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
   return counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
 }
 
-/** The turn bar under the user's message: "Working for 12s" while the turn runs,
- *  settling in place to a tappable "Worked for 3m 4s" ("Interrupted after" for a Stop,
- *  "Failed after" for a fault) that discloses the turn's tool activity. Desktop parity:
- *  `NativeChatWorkingStatus`. */
 export function MobileNativeChatTurnStatus({
   startedAt,
   workedSeconds,
@@ -39,7 +34,6 @@ export function MobileNativeChatTurnStatus({
 }: {
   startedAt: number | null
   workedSeconds?: number | null
-  /** How a settled turn ended; it picks the settled label. */
   verdict?: AgentTurnOutcome
   expanded?: boolean
   onToggleExpanded?: () => void

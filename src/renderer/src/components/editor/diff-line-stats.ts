@@ -1,13 +1,10 @@
-/**
- * Compute approximate added/removed line counts by matching lines between
- * original and modified content using a multiset approach.
- */
+/** Approximate added/removed counts by matching line multiplicities, without computing an ordered diff. */
 export function computeLineStats(
   original: string,
   modified: string,
   status: string
 ): { added: number; removed: number } | null {
-  // Why: for very large files, splitting in React render would block the UI.
+  // Avoid large render-time split allocations that would block the UI.
   if (original.length + modified.length > 500_000) {
     return null
   }

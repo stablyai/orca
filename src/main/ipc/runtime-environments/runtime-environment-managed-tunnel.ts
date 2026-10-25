@@ -30,6 +30,7 @@ import { connectionManager, getCurrentMainWindow } from '../ssh/ssh-ipc-context'
 import { getWslHostService } from '../../wsl/wsl-host-service-instance'
 import { assertWslHostReachable } from '../../wsl/wsl-host-gate'
 import { broadcastSshState } from '../ssh/ssh-renderer-broadcast'
+import { restoreManagedHostPortForwards } from '../ssh/ssh-managed-port-forward-restore'
 
 export async function resolveManagedRuntimeEnvironment(
   userDataPath: string,
@@ -56,6 +57,7 @@ async function prepareNetworkServerForCall(
   environment: KnownRuntimeEnvironment
 ): Promise<void> {
   await ensureOrcadManagedTunnel(userDataPath, environment.id)
+  restoreForwardsOverTunnel(environment)
   // Calls must restart managed servers stopped by idle timeout, kill or host reboot.
   const serving = await verifyOrcadManagedServing(userDataPath, environment.id)
   const createDeps = () => ({
@@ -89,6 +91,14 @@ async function prepareNetworkServerForCall(
         )
         .catch(() => {})
     }
+  }
+}
+
+// The tunnel proves the host served even when no update check or start publishes its status (#32484).
+function restoreForwardsOverTunnel(environment: KnownRuntimeEnvironment): void {
+  const targetId = getOrcadSshDeployment(environment)?.sshTargetId
+  if (targetId) {
+    void restoreManagedHostPortForwards(targetId, { tunnelUp: true })
   }
 }
 

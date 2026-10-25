@@ -152,9 +152,7 @@ describe('PluginContentPackRegistry', () => {
     let killed = false
     const registry = new PluginContentPackRegistry(new PluginContentVerifier(), () => killed)
 
-    // reconcile() builds its approved-key snapshot synchronously before it
-    // first yields, so flipping the kill list here lands squarely inside the
-    // awaited verification window the final admission gate must re-check.
+    // Flip revocation after the synchronous approval snapshot, during awaited verification.
     const reconciled = registry.reconcile([plugin], () => true)
     killed = true
     await reconciled

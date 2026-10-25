@@ -38,8 +38,7 @@ describe('project host setup projection', () => {
     expect(second.setups[0]?.updatedAt).toBe(first.setups[0]?.updatedAt)
   })
 
-  // Why both orders: repo order comes from disk/host enumeration, so it must not decide the
-  // project's timestamps. The accumulator carries 0 when the *first* sibling is the unknown one.
+  // Unknown timestamps may occur first in host/disk order; neither order may erase known sibling times.
   const timestampedSibling = repo({
     id: 'local-repo',
     path: '/Users/alice/orca',
@@ -471,8 +470,7 @@ describe('project host setup projection', () => {
       })
     ])
 
-    // Why: display names are labels, not identity. A future fix needs a
-    // normalized git remote identity or an explicit user link before merging.
+    // Display names cannot prove identity; merge only with normalized remote identity or explicit user linking.
     expect(projection.projects).toHaveLength(3)
   })
 
@@ -632,8 +630,7 @@ describe('isProjectRemoteIdentityPending', () => {
 describe('derived project identity stability', () => {
   const base = { id: 'r', path: '/r', displayName: 'r' } as const
 
-  // Why pinned: this id is the persisted Project primary key, so folding a host alias here would
-  // silently re-key existing projects on upgrade and drop their runtime preference.
+  // Persisted Project keys cannot fold host aliases on upgrade without dropping runtime preferences.
   it('keeps a www. remote provider-neutral instead of folding it onto github.com', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({

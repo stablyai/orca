@@ -6,7 +6,7 @@ import {
   hiddenRendererPtyDropEpisode,
   isRuntimeOwnedHiddenRendererPty,
   markRuntimeOwnedHiddenRendererPty
-} from '../../pty-hidden-delivery-gate'
+} from '../delivery/pty-hidden-delivery-gate'
 import { attachingRendererViewPtys } from '../delivery/visibility-state'
 import type {
   IPtyProvider,

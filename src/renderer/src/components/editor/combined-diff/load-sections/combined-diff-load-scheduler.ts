@@ -8,8 +8,7 @@ export type CombinedDiffLoadScheduler = {
 export function createCombinedDiffLoadScheduler({
   loadSection,
   schedule = (callback) => queueMicrotask(callback),
-  // Why: a settled section usually mounts a Monaco DiffEditor. Serializing by
-  // default keeps large lockfile-style diffs from stacking render work.
+  // Section completion mounts Monaco; serialize by default to avoid stacking large-diff render work.
   maxConcurrent = 1
 }: {
   loadSection: (index: number) => Promise<void>

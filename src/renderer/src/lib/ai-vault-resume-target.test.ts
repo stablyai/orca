@@ -66,8 +66,7 @@ describe('ai vault session storage compatibility', () => {
     ).toBe(true)
   })
 
-  // #24408: on Windows a WSL workspace and a Windows workspace are both `local`, but the
-  // agent only exists, and only finds the session, inside one of them.
+  // Native Windows and WSL are both local, but only the matching namespace contains the agent/session (#24408).
   it('resumes a local session only in the namespace that stores it', () => {
     const local = { sessionExecutionHostId: 'local', targetExecutionHostId: 'local' } as const
     const resume = (sessionFilePath: string, targetWslDistro: string | null | undefined) =>

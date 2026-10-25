@@ -55,7 +55,7 @@ afterEach(async () => {
   )
 })
 
-/** Stands in for `ssh -L`'s listener: the socket handler plays what the channel open did. */
+/** Model ssh -L: socket behavior represents the remote channel-open result. */
 async function forwardAnswering(
   onSocket: (socket: Socket, log: (line: string) => void) => void
 ): Promise<Parameters<typeof checkForwardChannel>[0]> {

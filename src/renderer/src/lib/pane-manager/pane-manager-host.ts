@@ -6,9 +6,7 @@ import type {
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import type { PaneIdentityRegistry } from './pane-identity-registry'
 
-/** Accessor bundle the extracted PaneManager collaborators call back into.
- *  Why getters for activePaneId/styleOptions: both are reassigned during the
- *  manager's life, so capturing their values here would freeze stale state. */
+/** Collaborator callbacks use getters for mutable activePaneId/styleOptions so they never capture stale manager state. */
 export type PaneManagerHost = {
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement

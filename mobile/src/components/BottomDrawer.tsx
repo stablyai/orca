@@ -8,12 +8,9 @@ type Props = {
   children: ReactNode
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
-  // Why: smart-source (and similar) need a stable outer frame so a docked
-  // TextInput can sit above the keyboard while results reflow in flex space
-  // above it — content-sized sheets make that field ride every list change.
+  // Stable outer frame keeps docked input above keyboard while results reflow; content-sized sheets move it on every list change.
   fillAvailable?: boolean
-  // Why: pin an outer content-sized sheet under an inner fill picker without
-  // letting it take touches, draw a second backdrop, or keyboard-lift.
+  // Pin outer sheet under fill picker without extra touches, backdrop or keyboard lift.
   interactive?: boolean
   zIndex?: number
   scrollResetKey?: string | null
@@ -23,8 +20,7 @@ const SHOWN = 'shown'
 const sheetKey = () => SHOWN
 
 export function BottomDrawer({ visible, onClose, onAfterClose, children, ...drawerProps }: Props) {
-  // Why: hidden drawers are rendered by parent screens even while closed; the keyed drawer
-  // renders nothing until shown, which keeps Reanimated/Gesture setup out of hot paths.
+  // Closed drawers render nothing to avoid Reanimated/Gesture setup in hot paths even when parent mounts them.
   return (
     <KeyedBottomDrawer
       {...drawerProps}

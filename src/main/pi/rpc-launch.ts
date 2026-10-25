@@ -8,7 +8,6 @@ import type { ProviderProcessLaunch } from '../provider-process/provider-process
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 
 export type PiRpcLaunchOptions = {
-  /** Binary and paths are resolved by the execution host before building the launch. */
   command: string
   cwd: string
   fullAccess: boolean
@@ -25,8 +24,7 @@ const CALLER_ENV_TO_DELETE = [
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 ]
 
-/** What a structured Pi session strips from its inheritance; the seal keeps a worker's handle.
- *  Pi gets no scratch folder, so an inherited one can only name another chat's. */
+/** Structured Pi has no scratch folder; an inherited one belongs to another chat. */
 export const PI_RPC_SESSION_ENV_TO_DELETE: readonly string[] = [
   ...STRUCTURED_CHILD_ENV_TO_DELETE,
   'ORCA_TERMINAL_HANDLE',
@@ -34,7 +32,7 @@ export const PI_RPC_SESSION_ENV_TO_DELETE: readonly string[] = [
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
 ]
 
-/** `env` naming no caller: a structured session's seal names its own. */
+/** Remove caller identity before the structured-session seal supplies its own. */
 export function withoutPiCallerEnv(env: Readonly<Record<string, string>>): Record<string, string> {
   const next = { ...env }
   for (const key of CALLER_ENV_TO_DELETE) {
@@ -43,7 +41,7 @@ export function withoutPiCallerEnv(env: Readonly<Record<string, string>>): Recor
   return next
 }
 
-/** A Pi child that is no structured session (a catalog listing) names no caller at all. */
+/** Catalog probes run outside a structured session and inherit no caller identity. */
 export function piRpcSessionlessEnvironment(env: Readonly<Record<string, string>>): {
   env: Record<string, string>
   envToDelete: readonly string[]

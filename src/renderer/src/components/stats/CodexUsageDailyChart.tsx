@@ -14,8 +14,7 @@ function formatTokens(value: number): string {
 
 function getMaxDailyTotal(daily: CodexUsageDailyPoint[]): number {
   let max = 1
-  // Why: all-time usage histories can exceed V8's argument limit if spread
-  // into Math.max, even though the chart only renders the last 10 days.
+  // Avoid spreading unbounded usage history into Math.max, which can exceed V8’s argument limit.
   for (const entry of daily) {
     max = Math.max(max, entry.totalTokens)
   }

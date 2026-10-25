@@ -1,13 +1,9 @@
-/**
- * Who the mail a chat is pointed at is from: every distinct sender, named the
- * way orchestration names a party, and each message's own sender and records. The run, dispatch
- * and message ids join back to orchestration's own rows while those exist.
- */
+/** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
 import type {
   AgentMessageSource,
   AgentMessageSender
-} from '../../../shared/agent-session-message-source'
+} from '../../../shared/agent-session/agent-session-message-source'
 import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
 

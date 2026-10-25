@@ -12,8 +12,7 @@ export function unresolvedNativeChatRowIds(
   )
 }
 
-/** Whether a row belongs to the turn running now. Liveness is the owning turn's, not the newest
- *  prompt's: a running turn's rows stay live while a newer message waits behind it. */
+// Use the owning turn’s liveness: its rows remain live while a newer prompt waits behind it.
 export function isNativeChatRowInLiveWorkingTurn(
   turnKey: string | undefined,
   liveTurnKey: string | undefined,

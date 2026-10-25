@@ -40,7 +40,7 @@ export function CodexTerminalServerIsolationSetting({
           checked={enabled}
           onChange={() => void updateSettings({ codexTerminalServerIsolation: !enabled })}
         />
-        {/* Why only with isolation on: off means sharing the server is what the user chose. */}
+        {/* With isolation off, sharing is intentional and needs no warning control. */}
         {enabled ? (
           <SettingsSwitchRow
             label={getCodexSharedServerWarningTitle()}

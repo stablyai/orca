@@ -185,8 +185,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     polls.startPty(makeWaiter('fast'), makePty('pty-fast', { lastOutputAt: Date.now() - 10_000 }))
 
     vi.advanceTimersByTime(INTERVAL_MS)
-    // Both waiters issued their read in the same sweep — a sequential sweep would
-    // have blocked the second behind the first's unresolved promise.
+    // Same-sweep reads must overlap; unresolved first read cannot block the second.
     expect(gates).toHaveLength(2)
 
     gates[1]('node')
@@ -302,8 +301,7 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
     expect(resolved).toEqual([])
   })
 
-  // Why: a name-only title is the only rest signal these agents emit, but it cannot see a
-  // dialog the tail lost, so it settles only once the screen read comes back clear.
+  // Name-only rest signals can miss dialogs absent from tail; wait for a clear screen read.
   it.each(['grok', 'copilot', 'aider'] as const)(
     "settles %s's name-only title only after its screen read",
     async (agent) => {
@@ -396,8 +394,7 @@ describe('RuntimeTerminalIdlePolls quiet foreground for a launched agent', () =>
     })
   }
 
-  // Why: amp's title never classifies, so this lane is its only rest signal; closing it for
-  // every launched agent failed `worker start` at agent_readiness after 60s (STA-7440).
+  // Amp titles never classify; disabling this lane for launches caused 60s worker readiness failure (STA-7440).
   it('settles an agent with no other rest signal once it has painted and gone quiet', async () => {
     const resolved: string[] = []
     const foregroundReads: string[] = []

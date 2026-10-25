@@ -93,7 +93,6 @@ describe('PluginKillListService', () => {
       generatedAt: '2026-07-12T20:00:00Z'
     })
     expect(service.reason('community.unsafe')).toBe('Malware advisory')
-    // The poisoned snapshot must not have been cached for the next launch.
     const restarted = new PluginKillListService({ pluginsDataDir: root, fetcher })
     await restarted.initialize()
     expect(restarted.snapshot()?.generatedAt).toBe('2026-07-12T20:00:00Z')
@@ -107,8 +106,7 @@ describe('PluginKillListService', () => {
       fetcher: async () => killList(generatedAt)
     })
     await published.refresh()
-    // A dead RTC / restored VM snapshot must not re-judge an already-accepted
-    // cache against the wrong clock and silently un-revoke a killed plugin.
+    // A skewed RTC/restored VM clock must not undo cached revocation.
     vi.useFakeTimers()
     vi.setSystemTime(new Date(Date.parse(generatedAt) - 30 * 24 * 60 * 60 * 1000))
     const restarted = new PluginKillListService({
@@ -120,8 +118,7 @@ describe('PluginKillListService', () => {
 
     expect(restarted.snapshot()?.generatedAt).toBe(generatedAt)
     expect(restarted.reason('community.unsafe')).toBe('Malware advisory')
-    // A refresh the skewed clock cannot vouch for is refused, but refusing it
-    // must never downgrade the revocations already in force.
+    // Refused refreshes must preserve existing revocation.
     await expect(restarted.refresh()).rejects.toThrow()
     expect(restarted.reason('community.unsafe')).toBe('Malware advisory')
   })

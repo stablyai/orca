@@ -30,7 +30,7 @@ export function CommitActionMenu({
   onPrimaryAction: () => void
 }): React.JSX.Element {
   return (
-    // Why: action + chevron form one split button so the edit → commit → push loop stays in a single vertical band.
+    // Keep action and chevron together so edit/commit/push stays in one vertical band.
     <div className={cn('flex items-stretch gap-1', showComposer && 'mt-1')}>
       <div className="flex flex-1 items-stretch">
         <PrimaryActionTooltip action={primaryAction} side="top">
@@ -62,7 +62,7 @@ export function CommitActionMenu({
                   size="xs"
                   className={cn(
                     'rounded-l-none border-l border-border px-1.5 shrink-0',
-                    // Why: mirror the primary's disabled dimming for a unified look, but the chevron stays clickable (its push/fetch/pull stay valid when Commit is disabled).
+                    // Dim with the primary but keep the chevron clickable because remote actions may remain valid.
                     primaryAction.disabled && 'opacity-50'
                   )}
                   aria-label={moreCommitAndRemoteActionsLabel}

@@ -39,7 +39,7 @@ export function getEditorFileDropOperationContext(
   connectionId: string | undefined
 ): RuntimeFileOperationArgs {
   return {
-    // Why: OS drops target the selected worktree's owner, never the focused server.
+    // OS drops follow the selected workspace owner rather than the focused server.
     target: requireRuntimeTargetForFileOwner(store, worktreeId, undefined),
     worktreeId,
     worktreePath,
@@ -152,10 +152,7 @@ function canOpenEditorFileDrop(
   }
 }
 
-/**
- * Captures the destination workspace's host at drop time and returns the open
- * step; a host change before preparation finishes refuses instead of re-routing.
- */
+/** Capture destination ownership at drop time; refuse host changes during preparation instead of rerouting. */
 export function captureEditorFileDropOpen(
   destination: EditorFileDropDestination,
   source?: WorkspaceFileDragSource
@@ -211,8 +208,7 @@ async function openEditorFileDropPaths(
       return
     }
     try {
-      // Why: OS file drops provide client-local paths. Remote runtime and
-      // SSH editors must upload into the server worktree before opening.
+      // OS drops supply client paths; upload before opening them in remote/SSH workspaces.
       const destinationDir = joinPath(worktreePath, '.orca/drops')
       const { results } = await importExternalPathsToRuntime(
         fileContext,
@@ -274,8 +270,7 @@ async function openEditorFileDropPaths(
         continue
       }
       let relativePath = filePath
-      // Why: a project link out of the project keeps its absolute path, so it reads as
-      // user-named instead of being refused as a project file.
+      // Escaping project links retain absolute paths so they are treated as user-named files rather than rejected project resources.
       if (worktreePath && !stat.escapesWorktree && isPathInsideWorktree(filePath, worktreePath)) {
         const maybeRelative = toWorktreeRelativePath(filePath, worktreePath)
         if (maybeRelative !== null && maybeRelative.length > 0) {

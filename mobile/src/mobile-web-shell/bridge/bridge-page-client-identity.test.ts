@@ -23,16 +23,8 @@ function closeResources(): void {
   resources.clear()
 }
 
-/**
- * The swap, and the two doors it has to cover.
- *
- * A page's `client.id` is not an opaque key to the host: `terminal.send` refuses a query reply
- * whose id is not the credential the socket authenticated with, which the host's own
- * "rejects query replies that spoof a different authenticated mobile client" pins. So what leaves
- * the shell must be the device's identity, and the page must never hold it.
- */
+// Resolve device identity on requests and subscriptions: terminal.send compares client.id with the socket’s authenticated credential, which the page must never hold.
 
-/** A `terminal.subscribe` exactly as the page posts one, placeholder included. */
 const identitySubscribe = (id: string) =>
   clientFrame({
     type: 'subscribe',
@@ -63,8 +55,6 @@ describe('the shell substitutes on both doors to the client', () => {
         }
       })
     )
-    // Equal to what the socket authenticated with, which is the whole point: this is the string the
-    // host compares `params.client.id` against before it accepts a query reply.
     expect(bridge.client.requests[0]?.args[1]).toEqual({
       terminal: 'pty-1',
       text: '\u001b[3;4R',
@@ -135,8 +125,6 @@ describe('the shell substitutes on both doors to the client', () => {
       })
     )
     expect(bridge.client.requests).toHaveLength(0)
-    // An ordinary error frame, which is what the page's client rejects its own call with: the
-    // caller sees a failed RPC and not a send that quietly went out under another identity.
     expect(bridge.last()).toMatchObject({
       type: 'error',
       id: ID,
@@ -167,13 +155,11 @@ describe('what the page hears when the shell has no identity', () => {
     )
     await pair.flush()
 
-    // The caller's promise rejects and nothing reached the desktop, so a composer that sent this
-    // shows "not sent" rather than believing a send that went out under a different identity.
+    // Reject locally when identity cannot resolve; the composer must not believe a send made under a different caller.
     expect(await settled).toMatchObject({ code: 'bridge_client_identity_unavailable' })
     expect(pair.rpc.requests).toHaveLength(0)
 
-    // The precondition for that zero: the same call on a shell that has an identity does reach the
-    // desktop, so nothing above is passing because this pair forwards nothing at all.
+    // Prove the same call forwards with valid identity so the zero-send assertion cannot pass on a broken pair.
     const served = createFakeBridgePortPair()
     await served.flush()
     void served.client

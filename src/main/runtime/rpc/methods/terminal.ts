@@ -9,8 +9,7 @@ import {
 } from './terminal/terminal-viewport-methods'
 import { TERMINAL_VIEWER_COLORS_METHODS } from './terminal/terminal-viewer-colors-method'
 
-// The manifest order is part of the released RPC contract. Keep composition here so the
-// public entry point owns registration rather than forwarding an aggregated child export.
+// Preserve released manifest order; keep registration composition owned by this public entry point.
 export const TERMINAL_METHODS = [
   ...TERMINAL_QUERY_METHODS,
   ...TERMINAL_SEND_METHODS,

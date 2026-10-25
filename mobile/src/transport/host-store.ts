@@ -45,7 +45,7 @@ async function commitDeviceToken(hostId: string, token: string): Promise<void> {
   hostListLoads.dropSharedHostListLoad()
 }
 
-// Why: Keychain reads are slow (50-200ms) and loadHosts() runs on every screen mount; cache per-hostId in memory, invalidate on save/remove.
+// Cache slow keychain reads per host; invalidate on save/remove.
 const tokenCache = new Map<string, string>()
 
 export const loadHosts = async (): Promise<HostProfile[]> => (await loadHostListSnapshot()).profiles
@@ -53,9 +53,8 @@ export const loadHostCatalog = async (): Promise<HostCatalogEntry[]> =>
   (await loadHostListSnapshot()).catalog
 
 async function loadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
-  // Why: writers hold the mutation chain across their full RMW; wait so a load doesn't race a half-written list.
+  // Wait for full serialized mutations so loads cannot read half-written state.
   await hostListMutationsSettled()
-  // Why: deduplicate concurrent loadHosts() calls so simultaneously mounting screens share one Keychain read pass.
   return hostListLoads.shareHostListLoad(doLoadHostListSnapshot)
 }
 
@@ -89,7 +88,6 @@ export async function resolvePairingHostIdentity(
   publicKeyB64: string,
   newHostId: string
 ): Promise<{ id: string; name: string }> {
-  // Why: one durable read both preserves an existing identity and names a new host, avoiding duplicate cards.
   await hostListMutationsSettled()
   const hosts = await readStoredHostProfilesForMutation()
   const match = hosts.find((host) => host.publicKeyB64 === publicKeyB64)
@@ -146,15 +144,11 @@ function removeOrphanOverlayIfUnpaired(hostId: string): Promise<void> {
   })
 }
 
-// The page's host-store sibling keeps its own no-op, so only the native store reaches persistence.
 export { updateHostDescriptor } from './host-descriptor-persistence'
 
 export class RelayRoutingHostRemovedError extends Error {}
 
-/**
- * Relay routing learned after pairing (re-resolution, rotation, direct upgrade). Routing only; the
- * row and token belong to pairing and Edit Host.
- */
+// Persist learned relay routing only; pairing/Edit Host retain authority over host rows and tokens.
 export async function setRelayRouting(hostId: string, relay: MobileRelayEndpoint): Promise<void> {
   const wrote = await enqueueHostListMutation(async () => {
     const hosts = await readStoredHostProfilesForMutation()
@@ -188,7 +182,7 @@ export async function savePairedHost(host: HostProfile): Promise<void> {
       let next: StoredHostProfile[]
       if (index !== -1) {
         updatedExistingHost = true
-        // Why: an authoritative save is the safe point to collapse pre-existing duplicate rows to the preserved host id.
+        // Deduplicate same-key rows only during authoritative save while preserving host identity.
         next = hosts
           .filter(({ id }) => !duplicateHostIds.has(id))
           .map((candidate) =>
@@ -199,14 +193,14 @@ export async function savePairedHost(host: HostProfile): Promise<void> {
       }
       if (duplicateHostIds.size > 0) {
         if (index === -1) {
-          // Why: process death between the early token write and metadata publication must leave cleanup discoverable.
+          // Persist cleanup intent before publishing credentials so process death cannot orphan early token writes.
           await recordHostCredentialCleanupIntent(stored.id)
           cleanupIntentRecordedBeforeMetadata = true
         }
         for (const duplicateHostId of duplicateHostIds) {
           await recordHostCredentialCleanupIntent(duplicateHostId)
         }
-        // Why: never remove the only usable same-key row until its replacement credential is durable.
+        // Keep the usable same-key row until replacement credentials are durable.
         await commitDeviceToken(stored.id, validated.deviceToken)
         tokenCommittedBeforeMetadata = true
       }
@@ -224,10 +218,10 @@ export async function savePairedHost(host: HostProfile): Promise<void> {
     throw error
   }
   if (!tokenCommittedBeforeMetadata) {
-    // Why: the catalog can now surface a failed token write for recovery instead of losing the host.
+    // Surface token-write failure in the catalog so recovery can retain the host.
     await commitDeviceToken(stored.id, validated.deviceToken)
   }
-  // Why: a later removal owns its cleanup intent; cancel only while this publication remains authoritative.
+  // Cancel cleanup only while this publication remains authoritative; later removal owns its own intent.
   cancelCleanupForStoredHost(stored.id)
   if (validated.relay) {
     await saveMobileRelayHostRouting(stored.id, validated.relay)
@@ -238,7 +232,7 @@ export async function savePairedHost(host: HostProfile): Promise<void> {
     overlayRemovalIds.push(stored.id)
   }
   if (overlayRemovalIds.length > 0) {
-    // Why: reusing an id for direct-only re-pairing must not retain routing metadata from the previous transport state.
+    // Clear old routing when direct-only re-pairing reuses the host id.
     await removeMobileRelayHostRoutings(overlayRemovalIds)
     hostListLoads.dropSharedHostListLoad()
   }
@@ -276,7 +270,7 @@ export async function removeHost(hostId: string): Promise<void> {
   } catch {
     // Base removal is authoritative; a retained overlay can't resurrect the host and is cleaned on a later retry.
   }
-  // Why: keychain delete can stall/reject; await only the durable cleanup intent so removeHost can't freeze the UI.
+  // Await durable cleanup intent, not a potentially stalled keychain delete, so host removal stays responsive.
   try {
     await scheduleUnpairedHostCredentialCleanup(hostId)
   } catch {
@@ -294,8 +288,7 @@ export async function retryPendingHostCredentialCleanup(): Promise<{
   )
 }
 
-// Why: single mutation pass commits name + endpoint atomically so a mid-save failure can't persist one without the other.
-// `personalName: null` clears the phone's override, returning the row to the desktop-reported name.
+// Commit name/endpoint atomically; personalName:null clears the phone override in favor of the reported name.
 export async function updateHostNameAndEndpoint(
   hostId: string,
   updates: { personalName?: string | null; endpoint?: string }
@@ -330,11 +323,10 @@ export async function updateLastConnected(hostId: string): Promise<void> {
       return next
     })
   } catch {
-    // Why: best-effort timestamp fired with void; swallow so unreadable storage doesn't reject.
+    // Swallow bookkeeping failures because void callers cannot catch them.
   }
 }
 
-/** Test-only: drain module mutation chain between cases. */
 export function resetHostStoreForTests(): void {
   resetHostListMutationQueueForTests()
   tokenCache.clear()

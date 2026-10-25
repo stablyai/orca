@@ -73,7 +73,6 @@ describe('highlightSyntax', () => {
     const tail = python(lines.slice(2).join('\n'), head.state)
 
     expect(colors([...head.lines, ...tail.lines])).toEqual(colors(whole.lines))
-    // After the multi-line f-string, `with` is a keyword again.
     expect(find(whole, 'with')).toMatchObject({ dark: '#C586C0' })
   })
 

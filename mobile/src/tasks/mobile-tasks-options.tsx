@@ -108,12 +108,7 @@ export function taskWorkspaceSuggestedName(item: ActionableTaskItem): string {
   return getLinkedWorkItemSuggestedName(item) || taskWorkspaceFallback(item)
 }
 
-/**
- * Keyed by a vocabulary no provider sends: GitHub's reactions arrive as `'+1'` / `'-1'` and
- * GitLab's carry no content at all, so every real reaction misses this map and the chip renders
- * without a glyph. Left as it is on purpose — the reply reader forwards `content` untouched, so
- * fixing the map is a visible change to what the sheet draws and belongs to its own PR.
- */
+// Keep provider reaction content unchanged; this legacy emoji map does not match GitHub tokens or GitLab’s absent content.
 export const COMMENT_REACTION_EMOJI: Record<string, string> = {
   thumbs_up: '+1',
   thumbs_down: '-1',
@@ -215,12 +210,9 @@ export const GITLAB_PER_PAGE = 50
 
 export const LINEAR_LIMIT = 50
 
-// Why: task detail drawers can launch child sheets; children must layer above
-// the still-mounted parent while its dismissal animation/state remains alive.
+// Child sheets must layer over parents that remain mounted during dismissal.
 export const TASK_SECONDARY_DRAWER_Z_INDEX = 1100
 
-// Why: the mobile detail drawer should support quick triage and core actions.
-// Desktop keeps the broad metadata editing surface for dense issue/PR work.
 export const SHOW_MOBILE_DETAIL_LABEL_CHIPS = false
 
 export const SHOW_MOBILE_DETAIL_METADATA_EDITORS = false

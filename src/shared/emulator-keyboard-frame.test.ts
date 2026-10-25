@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildServeSimKeyboardFramesForKey,
   buildServeSimKeyboardFramesForText,
-  encodeServeSimKeyboardFrame,
-  SERVE_SIM_KEYBOARD_MESSAGE_TAG
+  encodeServeSimKeyboardFrame
 } from './emulator-keyboard-frame'
 
 describe('serve-sim keyboard frames', () => {
@@ -46,7 +45,7 @@ describe('serve-sim keyboard frames', () => {
   it('encodes serve-sim keyboard messages with the binary keyboard tag', () => {
     const frame = encodeServeSimKeyboardFrame({ type: 'down', usage: 4 })
 
-    expect(frame[0]).toBe(SERVE_SIM_KEYBOARD_MESSAGE_TAG)
+    expect(frame[0]).toBe(0x06)
     expect(JSON.parse(new TextDecoder().decode(frame.subarray(1)))).toEqual({
       type: 'down',
       usage: 4

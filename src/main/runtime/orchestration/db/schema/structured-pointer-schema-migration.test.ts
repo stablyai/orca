@@ -6,13 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import { SCHEMA_VERSION } from '../contract-constants'
 
-/**
- * A pre-v39 database: the narrow archive CHECK, stamped at 38 so ONLY v39 runs.
- *
- * Seeding lower would still pass while exercising the whole v13->v39 chain instead, which
- * would mask a broken rebuild. `createTables` supplies every other table before migration, so
- * a 38 stamp survives the completeness check and the migration start resolves to 38.
- */
+/** Stamp the narrow archive schema at v38 to isolate v39; a lower version could hide a broken rebuild. */
 function seedLegacyDatabase(path: string): void {
   const db = new Database(path)
   db.exec(`
@@ -31,9 +25,7 @@ function seedLegacyDatabase(path: string): void {
 }
 
 describe('structured pointer schema migration', () => {
-  // Why a real temp dir and a teardown: `$TMPDIR` is unset on Windows CI, so the interpolated
-  // `/tmp/...` opened as `SQLITE_CANTOPEN`, and nothing removed the file on the platforms where it
-  // did open.
+  // Use and clean a real temp directory: TMPDIR is absent on Windows CI.
   const tempRoots: string[] = []
 
   afterEach(() => {

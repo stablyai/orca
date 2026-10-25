@@ -225,9 +225,7 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'automations'
     mocks.state.appearanceAccordionDeepLink = null
     mocks.state.usagePercentageDisplay = 'used'
-    // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
-    // render the full Interface section, so provide a minimal renderer bridge
-    // without clobbering happy-dom's window.location.
+    // Provide the zoom bridge without replacing happy-dom location when the Interface section expands.
     ;(window as unknown as { api: unknown }).api = {
       platform: {
         get: () => ({ platform: mocks.state.appPlatform })
@@ -343,7 +341,6 @@ describe('AppearancePane', () => {
     })
 
     expect(interfaceToggle?.getAttribute('aria-expanded')).toBe('false')
-    // Summary is only rendered on the collapsed toggle (children stay mounted but hidden).
     expect(interfaceToggle?.textContent).toContain('Dark · 中文（简体） · Inter')
   })
 
@@ -418,8 +415,7 @@ describe('AppearancePane', () => {
     expect(container.textContent).toContain('Interface')
     expect(container.textContent).toContain('Terminal')
     expect(container.textContent).toContain('Window & Sidebar')
-    // Code & Markdown is intentionally omitted — Orca has no Appearance-level
-    // code/markdown settings, so the row would be empty.
+    // No Appearance-level code/Markdown settings exist; that section would be empty.
     expect(container.textContent).not.toContain('Code & Markdown')
   })
 
@@ -452,7 +448,6 @@ describe('AppearancePane', () => {
 
     expect(interfaceRow).toBeDefined()
     expect(appIconImage).not.toBeNull()
-    // The App Icon block sits after the Interface section row in document order.
     expect(
       interfaceRow &&
         appIconImage &&
@@ -461,9 +456,7 @@ describe('AppearancePane', () => {
   })
 
   it('reveals an advanced sidebar control when its search matches, even though it is hidden by default', async () => {
-    // The Show Tasks Button toggle lives behind the Window & Sidebar Advanced
-    // disclosure; with no search it stays collapsed, but a matching query must
-    // force the disclosure open so the control is reachable.
+    // Search must reveal matching controls hidden in the advanced disclosure.
     mocks.state.settingsSearchQuery = ''
     const collapsedContainer = await renderAppearancePane(getDefaultSettings('/tmp'))
     expect(

@@ -122,8 +122,7 @@ describe('resolveKnownHostsFiles', () => {
   it('falls back to the default files when ssh -G reported nothing', async () => {
     pretendHomeIs(join('/pretend', 'home'))
 
-    // Why not an empty list: no ssh, a non-zero exit or a timeout must not turn a host the user
-    // already verified into first contact.
+    // Probe failure must retain default trust sources, not convert verified hosts into first contact.
     expect(await resolveKnownHostsFiles(null)).toEqual([
       join('/pretend', 'home', '.ssh', 'known_hosts'),
       join('/pretend', 'home', '.ssh', 'known_hosts2')
@@ -140,10 +139,7 @@ describe('resolveKnownHostsFiles', () => {
   })
 })
 
-// Verbatim `ssh -F <config> -G probe` output from OpenSSH_10.2p1 for a Host block setting HostName,
-// HostKeyAlias, StrictHostKeyChecking accept-new, two UserKnownHostsFile paths and Port 2222.
-// Hand-written fixtures elsewhere encode what we EXPECT ssh to print; this one is what it does
-// print, which is the only version that catches us guessing the format wrong.
+// Captured OpenSSH10.2p1 ssh -F config -G probe output, retaining the actual multi-file and host-policy format.
 const REAL_SSH_G_OUTPUT = [
   'hostname real.example.com',
   'port 2222',
@@ -159,8 +155,7 @@ const REAL_SSH_G_OUTPUT = [
 describe('parsing real ssh -G output', () => {
   const resolved = parseSshGOutput(REAL_SSH_G_OUTPUT)
 
-  // Every file list arrives space-separated on ONE line, not repeated per line. Reading it as a
-  // single path would silently consult nothing for anyone with more than one file configured.
+  // Multiple trust paths arrive on one space-separated line.
   it('splits both known_hosts lists on one line each', async () => {
     expect(resolved.userKnownHostsFiles).toEqual([
       '/Users/nwparker/.ssh/kh_one',
@@ -172,13 +167,12 @@ describe('parsing real ssh -G output', () => {
     ])
   })
 
-  // Drives the whole strict branch; a miss defaults it to 'ask' and quietly loses the user's policy.
+  // Missing accept-new would silently revert to ask.
   it('reads StrictHostKeyChecking, including accept-new', async () => {
     expect(resolved.strictHostKeyChecking).toBe('accept-new')
   })
 
-  // The one name that outranks the dialed host. A bastion tunnelled through localhost:port depends
-  // on it, and it is the only field allowed to override what we key the lookup on.
+  // HostKeyAlias outranks dialed host for loopback bastions.
   it('reads HostKeyAlias and prefers it for the lookup', async () => {
     expect(resolved.hostKeyAlias).toBe('alias-host')
     expect(resolveKnownHostsLookupHost(resolved, '127.0.0.1').host).toBe('alias-host')
@@ -188,10 +182,7 @@ describe('parsing real ssh -G output', () => {
     expect(resolved.port).toBe(2222)
   })
 
-  // Verified against OpenSSH 10.2p1 on port 2225 with HostKeyAlias=myalias: an entry keyed
-  // `myalias` authenticates, one keyed `[myalias]:2225` gives "No ED25519 host key is known for
-  // myalias". Since the first pass now decides as soon as it finds any entry, a leftover bracketed
-  // line would BLOCK the bare lookup ssh actually performs.
+  // Measured OpenSSH10.2p1 never brackets aliases, even off-port; stale bracketed entries must not block bare lookup.
   it('reports that the lookup came from an alias, so the port is not appended', async () => {
     expect(resolveKnownHostsLookupHost(resolved, '127.0.0.1').isHostKeyAlias).toBe(true)
   })
@@ -231,7 +222,6 @@ describe('the union of known_hosts entries', () => {
 
     expect(verdict(entries, 'shared.example', ED_A)).toBe('match')
     expect(verdict(entries, 'shared.example', ED_B)).toBe('match')
-    // The union still detects a key neither file holds.
     expect(verdict(entries, 'shared.example', ED_C)).toBe('mismatch')
   })
 
@@ -280,12 +270,9 @@ describe('the union of known_hosts entries', () => {
   })
 })
 
-// The caller turns this count into a refusal, so the line between the two cases is the line between
-// "every connection works" and "no connection works".
+// Distinguish normal absence from withheld evidence in an existing unreadable source.
 describe('loadKnownHostsEvidence', () => {
-  // A profile that has never connected has no known_hosts — ssh writes one on its own first
-  // connect. Counting that as a source we failed to read would refuse every first connection every
-  // new user ever makes.
+  // A new profile has no known_hosts yet; absence is not unreadable evidence.
   it('does not count an absent file as unreadable', async () => {
     const root = await createRoot()
 
@@ -308,7 +295,6 @@ describe('loadKnownHostsEvidence', () => {
 
       const evidence = await loadKnownHostsEvidence([unreadable])
 
-      // The entry that would have said "this key changed" could be in here; we cannot tell.
       expect(evidence.unreadableFileCount).toBe(1)
     }
   )
@@ -333,7 +319,6 @@ describe('loadKnownHostsEvidence', () => {
     expect(evidence.entries).toHaveLength(1)
   })
 
-  // An empty file is a file we read successfully. Nothing is withheld, so nothing is suppressed.
   it('does not count an empty file as unreadable', async () => {
     const root = await createRoot()
     const empty = join(root, 'known_hosts')
@@ -353,14 +338,7 @@ describe('resolveKnownHostsLookupHost', () => {
     expect(resolveKnownHostsLookupHost(resolved, '127.0.0.1').host).toBe('bastion')
   })
 
-  // INVERTED from 'uses the resolved hostname, never the Orca label'. That test encoded an
-  // assumption verified false against OpenSSH 10.2p1: `ssh -G` echoes its own argument back as
-  // `hostname` when no Host block matches, so for a manual target `resolved.hostname` IS the Orca
-  // label — the one name the design forbids keying on, and one `ssh` never wrote. Keying on it
-  // consults no entries at all, so an impersonated host reads as first contact.
-  //
-  // The dialed host is correct in both cases: buildConnectConfig has already applied HostName
-  // resolution, so a config alias dials the real host too.
+  // ssh -G can echo a manual label as hostname; use the dialed host so existing trust cannot be missed.
   it('uses the dialed host, because a resolved hostname can just echo the label', async () => {
     const resolved = resolvedConfig({ hostname: 'my-orca-label' })
 
@@ -381,13 +359,7 @@ describe('resolveKnownHostsLookupHost', () => {
   })
 })
 
-/**
- * `ssh -G` prints UserKnownHostsFile unquoted and space-separated, even when the config quoted it —
- * verified against OpenSSH 10.2p1. So one path containing a space is indistinguishable from two
- * paths, and splitting it shreds `C:\\Users\\John Doe\\.ssh\\known_hosts` into fragments that resolve
- * to nothing. Every fragment then misses with ENOENT, which reads as "absent" rather than
- * "unreadable", so the user appears to know no hosts and a CHANGED key is accepted as first contact.
- */
+/** OpenSSH10.2p1 prints spaced trust paths unquoted; splitting can hide existing changed-key evidence as absent files. */
 describe('a known_hosts path containing a space', () => {
   let dir: string
 
@@ -404,7 +376,6 @@ describe('a known_hosts path containing a space', () => {
     expect(spaced).toContain(' ')
     await writeFile(spaced, '', 'utf-8')
 
-    // Exactly what parseKnownHostsFileList hands over for this value.
     const resolved = await resolveKnownHostsFiles({
       userKnownHostsFiles: spaced.split(' '),
       globalKnownHostsFiles: []
@@ -414,8 +385,7 @@ describe('a known_hosts path containing a space', () => {
   })
 
   it('rejoins a spaced path sitting alongside an ordinary one', async () => {
-    // The mixed case a whole-list check cannot handle: it sees the ordinary path exist and leaves
-    // the spaced one in fragments, so the file the user actually verified hosts in is never read.
+    // Rejoin spaced paths even beside an existing ordinary file.
     const spaced = join(dir, 'known_hosts')
     const ordinary = join(dir, 'other')
     await writeFile(spaced, '', 'utf-8')
@@ -452,16 +422,7 @@ describe('a known_hosts path containing a space', () => {
   })
 })
 
-/**
- * Verbatim from a real Windows host — `C:\Windows\System32\OpenSSH\ssh.exe -G github.com`, OpenSSH
- * for Windows. Captured rather than constructed, because the two things that bite here could not be
- * inferred from the POSIX output: the `__PROGRAMDATA__` token arrives UNEXPANDED, and separators are
- * MIXED within one path.
- *
- * Pinning it as a literal is what makes this testable off Windows at all. The parsing and the rejoin
- * are pure string work, so the only thing a Windows runner would add is the platform's `path`
- * arithmetic — which is why this covers the input shape and does not pretend to cover more.
- */
+/** Captured Windows OpenSSH output preserves unexpanded __PROGRAMDATA__ and mixed separators; these tests cover parsing, not Windows filesystem arithmetic. */
 const WINDOWS_SSH_G_OUTPUT = [
   'hostname github.com',
   'port 22',
@@ -473,9 +434,7 @@ const WINDOWS_SSH_G_OUTPUT = [
 
 describe('parsing real ssh -G output from Windows OpenSSH', () => {
   it('expands the __PROGRAMDATA__ token rather than passing it through as a path', () => {
-    // Left literal it misses with ENOENT, and an absent file is indistinguishable from "no host is
-    // known there" — so a site-managed known_hosts is silently invisible, including one holding a
-    // rotated key that should have produced a mismatch rather than a first-contact accept.
+    // Literal __PROGRAMDATA__ hides system trust as absent, potentially missing changed keys.
     const previous = process.env.ProgramData
     process.env.ProgramData = 'C:\\ProgramData'
     try {
@@ -495,9 +454,7 @@ describe('parsing real ssh -G output from Windows OpenSSH', () => {
   })
 
   it('does not rewrite a path that merely BEGINS with the token characters', () => {
-    // `startsWith` alone also matches `__PROGRAMDATA__evil/x`, rewriting a file the user never named
-    // into a directory they did not choose. The token has to be the whole path or be followed by a
-    // separator. Found by probing the expansion rather than by reading it.
+    // Require a token boundary so __PROGRAMDATA__evil is never rewritten.
     const previous = process.env.ProgramData
     process.env.ProgramData = 'C:\\ProgramData'
     try {
@@ -513,8 +470,7 @@ describe('parsing real ssh -G output from Windows OpenSSH', () => {
   })
 
   it('keeps a drive-letter path with mixed separators intact', () => {
-    // `C:\Users\neil/.ssh/known_hosts` is what it really prints. Node's fs accepts both separators
-    // on Windows, so the requirement is that nothing here rewrites or truncates it.
+    // Preserve mixed Windows separators exactly; Node fs accepts them.
     const resolved = parseSshGOutput(WINDOWS_SSH_G_OUTPUT)
     expect(resolved.userKnownHostsFiles).toEqual([
       'C:\\Users\\neil/.ssh/known_hosts',
@@ -523,9 +479,7 @@ describe('parsing real ssh -G output from Windows OpenSSH', () => {
   })
 
   it('splits a spaced Windows home into the fragments the rejoin has to put back', () => {
-    // The security-critical shape, now confirmed against the real format: a spaced home prints
-    // unquoted, so `C:\Users\John Doe/.ssh/known_hosts` arrives as two tokens. This pins what the
-    // parser hands the rejoin; rejoinSpaceSplitPaths is covered against real spaced files above.
+    // Captured unquoted spaced homes arrive split; real-file rejoin coverage above proves recovery.
     const spaced = parseSshGOutput(
       'userknownhostsfile C:\\Users\\John Doe/.ssh/known_hosts C:\\Users\\John Doe/.ssh/known_hosts2'
     )

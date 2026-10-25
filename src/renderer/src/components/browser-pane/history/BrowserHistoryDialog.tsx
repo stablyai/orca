@@ -145,8 +145,7 @@ function BrowserHistoryDialogContent({
         if (!openedRowRef.current) {
           return
         }
-        // Why after teardown: like picking a row in the address bar, the opened page gets the
-        // keyboard, and the dialog's focus trap would pull a request made any earlier back in.
+        // Request page focus after dialog teardown so its focus trap cannot pull it back.
         event.preventDefault()
         requestBrowserFocus({ pageId, target: 'webview' })
       }}
@@ -228,8 +227,7 @@ function BrowserHistoryDialogContent({
       </CommandList>
       <div
         className="flex items-center justify-between border-t border-border/60 px-3.5 py-2 text-2xs text-muted-foreground"
-        // Why: cmdk's root takes Enter and arrows for the highlighted row; footer buttons keep their
-        // own. Tab still bubbles so the dialog's focus loop wraps.
+        // Keep footer keys away from cmdk row navigation; Tab still reaches the dialog focus loop.
         onKeyDown={(event) => event.key !== 'Tab' && event.stopPropagation()}
       >
         {cleared ? (

@@ -15,7 +15,6 @@ type LaunchInput = {
   env: Record<string, string>
   commandSettings: StructuredAgentCommandSettings
 }
-/** The registration's check as create runs it, without the host's shell refresh. */
 async function supportsLaunch({ cwd, env, commandSettings }: LaunchInput): Promise<boolean> {
   const check = PI_RPC_RUNTIME_REGISTRATION.launchCheck
   if (!check) {
@@ -86,7 +85,7 @@ describe('Pi launch support before session creation', () => {
     }
   )
 
-  // A version it cannot read is no verdict: the chat starts and any real failure reports itself.
+  // Unreadable versions are inconclusive; let actual launch errors report themselves.
   it.each([
     { code: 1, timedOut: false, outputTruncated: false },
     { code: 0, timedOut: true, outputTruncated: false },

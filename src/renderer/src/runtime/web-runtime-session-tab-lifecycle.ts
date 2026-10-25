@@ -71,12 +71,7 @@ export async function activateWebRuntimeSessionTab(args: {
   )
 }
 
-/**
- * Why 'unknown-tab' is its own outcome: it is the host's definitive answer that it has no such
- * tab, which is the only evidence that lets a client finish a teardown the host cannot. Every
- * other failure -- a dropped connection, a timeout -- is a "not now", and treating it the same
- * would tear down tabs a reachable host still holds.
- */
+/** Only unknown-tab proves definitive absence and permits teardown; timeouts/disconnects merely mean retry later and may leave a live host tab. */
 export type WebRuntimeSessionTabCloseOutcome = 'applied' | 'unknown-tab' | 'failed'
 
 export async function closeWebRuntimeSessionTab(args: {
@@ -185,8 +180,7 @@ async function callWebRuntimeSessionTabMethod(
   const isClose = method === 'session.tabs.close'
   const isLifecycleClose = isClose && args.reason !== 'user'
   if (isLifecycleClose && (!args.publicationEpoch || !args.terminalHandle)) {
-    // Why: missing host-generation or terminal-incarnation evidence means keep;
-    // a tab id alone can be stale or reused after reconnect.
+    // Keep without host-generation/terminal-incarnation evidence; tab IDs can be stale or reused after reconnect.
     const { acceptReplayedWebSessionTabsSnapshot } =
       await import('./web-session-tabs-sync/tracking-lifecycle')
     acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
@@ -236,8 +230,7 @@ async function callWebRuntimeSessionTabMethod(
     const userCloseParams =
       isClose && !isLifecycleClose ? await userTabCloseParams(environmentId, args) : {}
     const response = await callEnvironment({
-      // Why: old hosts cannot route this additive method, so a generation
-      // cutover fails closed before their destructive legacy close handler.
+      // Generation cutover must fail closed before old hosts’ destructive legacy close handlers; they lack this additive method.
       method: isLifecycleClose ? 'session.tabs.closeLifecycle' : method,
       params: {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
@@ -248,8 +241,7 @@ async function callWebRuntimeSessionTabMethod(
               // Why: the additive navigation target protects new hosts while notifyClients:false protects old hosts.
               notifyClients: false,
               navigation: 'caller' as const,
-              // Why: every caller here is a tab click, shortcut, or palette pick —
-              // the gesture that is supposed to wake a slept pane.
+              // Tab clicks, shortcuts and palette picks must wake slept panes.
               intent: 'user' as const
             }
           : {}),
@@ -273,8 +265,7 @@ async function callWebRuntimeSessionTabMethod(
         redrawServerLayoutWorkspace(environmentId, args.worktreeId)
       }
       if (result?.refused === true && result.snapshotRepublished === true) {
-        // Why: the host kept an authoritative live PTY. Stop hiding its mirror
-        // only when it republished; dead-leaf refusals must stay suppressed.
+        // Restore authoritative live PTYs only on republication; keep dead-leaf refusals hidden.
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, immediateHostTabId)
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
         const { acceptReplayedWebSessionTabsSnapshot } =
@@ -290,12 +281,7 @@ async function callWebRuntimeSessionTabMethod(
     if (activationHostTabId) {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, activationHostTabId)
     }
-    // Why the split: 'tab_not_found' and 'terminal_tab_not_found' prove definitive surface absence.
-    // Restoring the mirror on it hands the user back a pane the host cannot close and whose handle is already gone (#9194, #21189),
-    // so keep the suppression and drop its TTL instead.
-    // 'selector_not_found' is a transient worktree resolver state (e.g. during scans or cache warm-up,
-    // per remote-browser-stream-errors.ts) and must not become a durable close tombstone.
-    // Every other failure is a "not now".
+    // tab_not_found/terminal_tab_not_found prove absence: keep suppression without TTL or stale snapshots resurrect unclosable panes (#9194, #21189). selector_not_found is transient worktree discovery (remote-browser-stream-errors.ts); every other failure remains retryable.
     const hostHasNoSuchTab =
       hasRuntimeRpcErrorCode(error, 'tab_not_found') ||
       hasRuntimeRpcErrorCode(error, 'terminal_tab_not_found')

@@ -3,7 +3,6 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import { formatMobileWebShellDevFacts, isDevelopmentBuild } from './mobile-web-shell-dev-facts'
 
-/** The generation a development build is showing, pinned in a corner of the page. */
 export function ShellDevFacts({
   state,
   droppedBinaryFrames

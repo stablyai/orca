@@ -10,9 +10,7 @@ export function workerTerminalLeaseIsCurrent(
   db: OrchestrationDb,
   dispatchId: string,
   resource: WorkerTerminalResourceRow,
-  // Live (possibly reminted) handle for runtime probes. Durable identity still compares
-  // worker.agent_terminal_handle to resource.terminal_handle; after beginGraphReload the durable
-  // string is absent from the handle table, so authority/pane/incarnation must use the live one.
+  // Probe the live reminted handle; compare durable worker/resource handles only for stored identity.
   liveTerminalHandle: string
 ): boolean {
   const worker = db.getWorkerDispatch(dispatchId)
@@ -20,7 +18,7 @@ export function workerTerminalLeaseIsCurrent(
     return structuredWorkerTerminalLeaseIsCurrent(db, dispatchId, worker, resource)
   }
   const authority = runtime.getOrchestrationDispatchAuthority(liveTerminalHandle)
-  // Exited PTYs retain identity and host evidence but no longer mint launch authority.
+  // Exited PTYs keep identity/host evidence but cannot mint launch authority.
   return Boolean(
     worker?.agent_terminal_handle === resource.terminal_handle &&
     (authority
@@ -35,13 +33,8 @@ export function workerTerminalLeaseIsCurrent(
   )
 }
 
-/**
- * IDENTITY, not liveness. The durable row plus the session-lineage incarnation say whether this is
- * still the same worker; whether its child is alive is what the observation reports, honestly, as
- * live / unverifiable / exited. Asking the record for identity would make a restart — where the
- * host may not be installed yet — read as a different worker, turning a durably requested release
- * into a permanent `retained/identity_unproven`.
- */
+/** Check durable pane/lineage identity independently of child liveness.
+ * Requiring installed session records after restart would falsely retain requested releases as identity_unproven. */
 function structuredWorkerTerminalLeaseIsCurrent(
   db: OrchestrationDb,
   dispatchId: string,

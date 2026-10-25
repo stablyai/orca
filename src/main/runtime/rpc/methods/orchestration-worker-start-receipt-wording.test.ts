@@ -1,17 +1,4 @@
-/**
- * The exact sentences `orchestration.workerStart` puts in its mode receipt.
- *
- * These were never pinned: the existing suites assert `toContain` fragments ('terminal agent',
- * 'cannot create'), and the CLI suite asserts a receipt handed to it by a mock rather than one
- * this code produced. Every one of them stayed green against a deliberately corrupted vocabulary,
- * so nothing was actually holding the wording. A dispatch receipt is the only place a
- * structured→terminal downgrade explains itself, so the whole sentence is the contract, not a
- * fragment of it.
- *
- * Orchestration's module is now a thin adapter over the shared `agent-launch/agent-launch-mode`,
- * so these sentences also pin the adapter's vocabulary: the shared default wording differs for the
- * remote-host and reused-terminal downgrades, and only `WORKER_START_VOCABULARY` restores it.
- */
+/** Pin full fallback sentences and orchestration vocabulary; substring or mocked-CLI assertions missed corrupted wording. */
 
 import { describe, expect, it } from 'vitest'
 import {

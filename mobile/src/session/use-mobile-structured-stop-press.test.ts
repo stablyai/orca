@@ -49,9 +49,12 @@ describe("the phone's Stop press read as Stopping", () => {
       tracked = press.track(() => new Promise<boolean>((_, reject) => (fail = reject)))
     })
 
+    expect(latest?.pressed).toBe(true)
+    const failure = new Error('socket closed')
     await act(async () => {
-      fail(new Error('socket closed'))
-      await tracked.catch(() => undefined)
+      const rejected = expect(tracked).rejects.toBe(failure)
+      fail(failure)
+      await rejected
     })
 
     expect(latest?.pressed).toBe(false)

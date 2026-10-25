@@ -1,11 +1,4 @@
-// A run of tool calls → the facts its collapsed header may state: whether the
-// run succeeded, how many of its calls failed, and how many were cut short.
-//
-// Shared, and separate from the live-activity derivation, because success is a
-// claim the header makes on its own. "Nothing is running" is not that claim:
-// `failed` is neither running nor a success, so a header that reads one off the
-// other marks a failed run done and leaves the failure to be found by expanding
-// it. Success must be stated, which is what `nativeChatToolRunOutcome` does.
+// Derive success independently of live activity: no active call does not prove success, and collapsed headers must expose failures.
 
 import { agentJournalToolCallLifecycle } from './agent-journal-tool-call-lifecycle'
 import { selectActiveToolCall } from './native-chat-tool-activity'
@@ -18,14 +11,8 @@ export type NativeChatToolRunOutcome = {
   succeeded: boolean
 }
 
-/** Whether the run may be marked done: settled, nothing failed or cut short,
- *  nothing still running. The running test is repeated after `selectActiveToolCall` on
- *  purpose — that one reports no active call once the turn is known to be over,
- *  and an item still running cannot inherit completion from its turn.
- *
- *  A call carrying no lifecycle `state` is not a failure and not in flight, so a
- *  legacy transcript still settles; nothing here demands an explicit `completed`
- *  that those lanes never wrote. */
+/** Success requires settled calls without failure/interruption. Recheck running states even after selectActiveToolCall:
+ * that selector hides activity once its turn ends, but calls cannot inherit completion. Legacy absent lifecycle still settles without explicit completed. */
 export function nativeChatToolRunOutcome(
   blocks: readonly NativeChatBlock[],
   { activeTurnIsWorking }: { activeTurnIsWorking?: boolean }

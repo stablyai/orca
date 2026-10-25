@@ -118,7 +118,7 @@ export function decodeClaudeTranscriptLine(
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
   return {
     id: messageId ?? fallbackId,
-    role: claudeMessageRole(role, blocks),
+    role: claudeMessageRole(role, blocks, message?.content),
     // Decode ! command echoes so harness filtering cannot hide them and strand the local echo.
     blocks:
       role === 'user'
@@ -163,13 +163,26 @@ function isImageSourceRecord(blocks: NativeChatBlock[]): boolean {
 
 function claudeMessageRole(
   role: 'user' | 'assistant',
-  blocks: NativeChatBlock[]
+  blocks: NativeChatBlock[],
+  content: unknown
 ): NativeChatMessage['role'] {
   if (role === 'user') {
     const onlyToolResults = blocks.every((block) => block.type === 'tool-result')
     return onlyToolResults && blocks.length > 0 ? 'tool' : 'user'
   }
-  return role
+  return isThinkingOnlyContent(content) ? 'reasoning' : role
+}
+
+// Decoded thinking becomes a text block, so classify from the raw content parts.
+function isThinkingOnlyContent(content: unknown): boolean {
+  return (
+    Array.isArray(content) &&
+    content.length > 0 &&
+    content.every((part) => {
+      const type = asRecord(part)?.type
+      return type === 'thinking' || type === 'redacted_thinking'
+    })
+  )
 }
 
 function parseTimestamp(value: unknown): number | null {

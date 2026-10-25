@@ -1147,6 +1147,11 @@
         "openInChat": "此 {{value0}} 会话已在聊天中打开。请刷新会话历史以打开它。",
         "ownershipUnknown": "Orca 无法确认此 {{value0}} 会话的归属。请刷新会话历史并重试。"
       },
+      "composerCreateHandoff": {
+        "reopen": "重新打开",
+        "preparationTimedOut": "工作树准备超时。",
+        "needsInput": "需要更多输入，因此未创建工作树。"
+      },
       "pendingWorktreeCreation": {
         "checkingOutFiles": "正在检出文件… {{percent}}%",
         "provisioningVm": "正在预配虚拟机…",
@@ -3505,16 +3510,28 @@
             "removeWorkspaceButton": "移除工作区"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
-            "retryingTitle": "正在重新连接到远程运行时",
             "pairingRefusedTitle": "此主机不再接受这台电脑",
             "pairingRefusedBody": "Orca 无法通过 SSH 重新与其配对。主机上没有任何内容被停止。请重新连接以重试。",
             "disconnectedTitle": "远程运行时已断开连接",
-            "retryingBody": "Orca 正在自动重试。如果连接恢复，此终端将恢复。",
             "disconnectedBody": "自动重试已停止。重新连接以恢复此终端会话。",
             "reconnectButton": "重新连接",
             "signInTitle": "正在等待 SSH 登录",
             "signInBody": "登录到主机后，此终端会自动继续。",
-            "signInButton": "登录"
+            "signInButton": "登录",
+            "serverRestartingTitle": "{{server}} 正在重启",
+            "serverRestartingBody": "服务器恢复后，Orca 会自动重新连接，终端也会随之继续运行。",
+            "streamStalledTitle": "终端无响应",
+            "streamStalledBody": "{{server}} 已停止发送此终端的输出。Orca 正在自动重新连接该终端。",
+            "sessionEndedTitle": "正在重新连接终端",
+            "sessionEndedBody": "{{server}} 关闭了此终端的数据流。Orca 正在自动重新连接该终端。",
+            "waitingTitle": "正在等待 {{server}}",
+            "waitingBody": "服务器重新提供此终端或网络连接变化时，Orca 会重新连接它。点击“重新连接”可立即重试。",
+            "downFor": "已断开 {{duration}}",
+            "tailscaleHint": "检查 Tailscale 链路：",
+            "fallbackServerName": "服务器",
+            "connectionLostTitle": "正在重新连接 {{server}}",
+            "connectionLostBody": "与服务器的连接已断开。Orca 正在自动重试，连接恢复后终端会继续运行。",
+            "reattachingBody": "Orca 正在自动将此终端重新连接到 {{server}}。"
           },
           "TerminalLinkActionPopover": {
             "openLink": "打开链接",
@@ -3535,11 +3552,7 @@
             "downloadOpenWithDefaultApp": "下载并使用默认应用程序打开",
             "downloadOpenFailed": "无法下载“{{value0}}”。",
             "openInThisGroup": "在此分组中打开",
-            "openInThisGroupRefused": "无法在此分组中打开 {{value0}}",
-            "fileInOtherWorkspace": "此文件位于 {{value0}}",
-            "fileInAnotherWorkspace": "此文件位于另一个工作区",
-            "openInOwningWorkspace": "在那里打开",
-            "openedHereReadOnly": "已在此处以只读方式打开"
+            "openInThisGroupRefused": "无法在此分组中打开 {{value0}}"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "主机不可用",
@@ -11897,7 +11910,8 @@
           "failed": "更新失败",
           "serviceManagerHelp": "通过启动此服务器的服务管理器更新 Orca。",
           "unpackedHelp": "开发版本必须从其源代码检出进行更新。",
-          "legacyHelp": "此服务器无法远程更新。请在服务器主机上更新 Orca。"
+          "legacyHelp": "此服务器无法远程更新。请在服务器主机上更新 Orca。",
+          "managedOverSshHelp": "此桌面通过 SSH 更新此服务器。请在远程 Orca 服务器中该服务器所在行使用“更新”。"
         },
         "BrowserLinkRoutingSetting": {
           "description": "在 Orca 内置浏览器中打开来自终端、Markdown 和编辑器的 http(s) 链接。{{shortcut}} 始终使用系统浏览器。",
@@ -12685,7 +12699,10 @@
             "forgetDescription": "在此处取消关联此服务器，而不联系其主机。如果主机恢复，服务器可能仍在那里运行。",
             "orcaVersion": "此主机上的 Orca：{{version}}",
             "stopOrcaDescription": "停止 SSH 主机上的 Orca，并将其从此列表中移除。",
-            "updateOrcaOnHost": "更新此主机上的 Orca"
+            "updateOrcaOnHost": "更新此主机上的 Orca",
+            "updateAnyway": "仍然更新",
+            "notNow": "暂不",
+            "forceUpdate": "此主机上有终端正在运行。更新期间它们会继续运行，Orca 服务器重启后其窗格会重新连接。"
           },
           "title": "SSH 主机上的 Orca",
           "description": "Orca 会将自身安装到空的 SSH 主机上，并自动保持最新。",
@@ -14639,6 +14656,17 @@
                 }
               }
             }
+          },
+          "ssh": {
+            "unrestored": {
+              "port": {
+                "row": {
+                  "04adb5f5e7": "无法启动：{{value0}}",
+                  "4c119f5e2a": "尚未启动",
+                  "b817a96fcf": "已停止：{{value0}}"
+                }
+              }
+            }
           }
         }
       },
@@ -15932,7 +15960,6 @@
           "6c4f1a8d2e": "检查详情不可用。"
         },
         "EditorPanelHeader": {
-          "readOnlyBadge": "只读",
           "fb8331694e": "打开侧面预览",
           "4157f3cbf3": "打开 Markdown 预览",
           "269ce4842b": "复制相对路径",
@@ -19365,7 +19392,9 @@
           "switchToChatView": "在聊天界面中继续"
         },
         "BrowserTab": {
-          "closeOthers": "关闭其他"
+          "closeOthers": "关闭其他",
+          "muteTab": "静音标签",
+          "unmuteTab": "取消静音标签"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "关闭其他"

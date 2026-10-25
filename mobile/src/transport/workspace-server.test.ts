@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-contract'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState } from './types'
+import { stubRpcClient } from './rpc-client-test-stub'
 
 const feed = vi.hoisted((): { hosts: readonly MobileRelayHost[] | null } => ({ hosts: null }))
 const gatesConnStates = vi.hoisted((): ConnectionState[] => [])
@@ -30,8 +31,7 @@ function server(relay: MobileRelayHost['relay']): MobileRelayHost {
 
 describe('useWorkspaceServer', () => {
   it("re-reads the server's status when the server reconnects under a connected desktop", async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked route and gates never call the client.
-    const client = {} as RpcClient
+    const client = stubRpcClient()
     function Probe(): null {
       useWorkspaceServer({
         client,

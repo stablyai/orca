@@ -1,12 +1,4 @@
-/**
- * Aggressive stress tests for dead-terminal reproduction.
- *
- * These tests target specific failure vectors beyond the basic manual-split flow:
- * - Forced WebGL context loss (simulating Chromium memory pressure)
- * - Rapid switching during the ~200ms scheduleSplitScrollRestore window
- *
- * All tests require @headful mode for WebGL to be active.
- */
+// Require @headful WebGL for context-loss and split-restore race coverage.
 
 import { test, expect } from './helpers/orca-app'
 import {
@@ -41,12 +33,7 @@ test.describe('Dead Terminal Stress @headful', () => {
     createdWorktreeIds.length = 0
   })
 
-  /**
-   * Force WebGL context loss on visible canvases immediately after a setup
-   * split. In production, Chromium reclaims WebGL contexts under memory
-   * pressure — especially with many worktrees open. The recovery path is:
-   * onContextLoss → dispose WebGL → DOM fallback → rAF → fit + refresh.
-   */
+  // Force context loss like Chromium under memory pressure; recovery must fall back to DOM then fit/refresh.
   test('@headful manual-split with forced WebGL context loss recovers', async ({ orcaPage }) => {
     test.setTimeout(120_000)
     const homeWorktreeId = await waitForActiveWorktree(orcaPage)
@@ -98,11 +85,7 @@ test.describe('Dead Terminal Stress @headful', () => {
     }
   })
 
-  /**
-   * Switch worktrees WITHOUT waiting for the split to settle. This hits the
-   * race between wrapInSplit() reparenting, WebGL context creation during
-   * resumeRendering(), and the scheduleSplitScrollRestore 200ms timer.
-   */
+  // Switch before split settlement to race reparenting, WebGL resume and the 200ms scroll-restore timer.
   test('@headful rapid worktree switching during manual-split lifecycle', async ({ orcaPage }) => {
     test.setTimeout(120_000)
     const homeWorktreeId = await waitForActiveWorktree(orcaPage)
@@ -121,7 +104,6 @@ test.describe('Dead Terminal Stress @headful', () => {
       await switchToWorktree(orcaPage, homeWorktreeId)
       await orcaPage.waitForTimeout(50)
 
-      // Switch back — triggers resumeRendering on partially-initialized panes
       await switchToWorktree(orcaPage, newId)
       await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
       await ensureTerminalVisible(orcaPage)

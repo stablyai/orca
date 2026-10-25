@@ -86,9 +86,7 @@ function connectAuthenticated(): { client: ReturnType<typeof connect>; socket: M
   return { client, socket }
 }
 
-// Callers presenting send failures must be able to tell "the host never got the
-// frame" from "the frame was written and only the response is missing" — the
-// latter must not be reported to the user as a definite failure.
+// Written frames with lost replies must remain delivery-unknown so UI cannot claim a mutation definitely failed.
 describe('mobile rpc-client delivery ambiguity marking', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -182,8 +180,7 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
 
   it('marks timed-out requests as delivery-unknown', async () => {
     const { client, socket } = connectAuthenticated()
-    // Short override so the request times out before the activity probe
-    // declares the whole socket dead (which is the drop case above).
+    // Expire the request before the activity probe so this covers deadline ambiguity independently of socket loss.
     const requestError = client
       .sendRequest('terminal.send', { terminal: 't' }, { timeoutMs: 1_000 })
       .then(

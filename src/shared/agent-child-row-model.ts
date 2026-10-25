@@ -1,16 +1,4 @@
-/**
- * One row model for every surface that lists child work (the sidebar's child rows and the chat
- * strip), with one builder per shape a host may publish. All three name a row with one label rule
- * (`usableAgentChildLabel`) and decide what it says with one detail rule (`agentChildRowDetail`):
- *  - `buildAgentChildRowModels`: the host's child views (`children`), the source of record.
- *  - `buildLegacyAgentChildRowModels`: the `subagents` snapshot.
- *  - `buildLegacyTaskRowModels`: the session feed's `tasks` / `settledTasks` roster.
- *
- * The two legacy builders exist only for hosts that publish no views, and each is deleted, not
- * migrated, when its last publisher is gone: the snapshot builder once CLI panes publish
- * `children` and no supported paired host predates that; the roster builder once no supported
- * paired host predates child views on the session feed.
- */
+/** Share child labels/details across sidebar and chat. Prefer host children views; retain subagents/task-roster builders until no supported publisher/paired host requires each legacy shape. Delete each legacy builder when its last publisher is gone. */
 import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
 import type { AgentChildWorkKind } from './agent-status-child-work'
 import { resolveAgentChildWorkFreshness } from './agent-status-child-work-freshness'
@@ -60,8 +48,7 @@ export type AgentChildRowModel = {
   firstObservedAt: number
   /** Last evidence for THIS child. Absent from a host that reports none. */
   observedAt?: number
-  /** The reader-clock time a "no update" reading measures from: the child's own evidence, else
-   *  its parent's. */
+  /** Reader-clock anchor for no-update age: child evidence, otherwise parent evidence. */
   recencyAt: number
   settledAt?: number
   totalTokens?: number
@@ -75,16 +62,13 @@ export type AgentChildRowContext = {
   /** A stale parent makes every live claim beneath it unverifiable. */
   parentEvidenceFresh: boolean
   transportObservation: 'live' | 'unverifiable'
-  /** The parent's last evidence on the READER's clock (its receipt time when mirrored from another
-   *  host): recency for a child whose host reports no clock of its own. */
+  /** Parent evidence on the reader clock; fallback recency when the child has no clock. */
   parentObservedAt: number
-  /** Reader clock minus the host's, at that evidence; 0 for a parent observed on this machine. Moves
-   *  a child's host-stamped clock onto the reader's, so no age subtracts across two machines. */
+  /** Reader minus host clock, or zero locally; convert child stamps before computing age. */
   hostClockOffsetMs: number
 }
 
-/** The context a parent row gives its children. Every surface that lists one parent's children
- *  builds it here, from the same parent row, so a lost child reads the same everywhere. */
+/** Derive every surface's child context from the same parent evidence. */
 export function agentChildRowContextForParent(
   parent: Pick<
     AgentStatusEntry,
@@ -253,11 +237,7 @@ function rowFromView(
   }
 }
 
-/**
- * Child rows from the host's views: the main agent's children at the top, and everything a child
- * owns nested beneath it. Display state comes from the shared child fold, so a finished subagent
- * whose shell still runs reads `monitoring` exactly as a CLI agent does.
- */
+/** Nest host views by ownership; the shared fold keeps finished agents monitoring their live work. */
 export function buildAgentChildRowModels(
   views: readonly AgentChildWorkView[],
   context: AgentChildRowContext
@@ -276,10 +256,7 @@ export function buildAgentChildRowModels(
     .map((view) => rowFromView(view, views, ownedByOwner, context, new Set()))
 }
 
-/**
- * Child rows from a host that sends only the legacy `subagents` snapshot (an old host, or any CLI
- * pane): live agents with a lifecycle state and a spawn time, and no clock of their own.
- */
+/** Legacy subagents from older hosts/CLI panes have lifecycle/spawn times but no child evidence clock. */
 export function buildLegacyAgentChildRowModels(
   subagents: readonly AgentSubagentSnapshot[],
   context: AgentChildRowContext
@@ -350,10 +327,7 @@ function legacyTaskRow(task: AgentSessionBackgroundTask, settled: boolean): Agen
   }
 }
 
-/**
- * Rows from a host that publishes only the session feed's task roster (a host predating child
- * views): flat, each with the run state the host decided and no clock beyond its start.
- */
+/** Legacy session task rosters are flat, retain host-decided state and have only start times. */
 export function buildLegacyTaskRowModels(
   tasks: readonly AgentSessionBackgroundTask[],
   settledTasks: readonly AgentSessionBackgroundTask[]

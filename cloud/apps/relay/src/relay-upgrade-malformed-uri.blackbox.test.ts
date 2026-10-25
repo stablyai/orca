@@ -96,8 +96,7 @@ describe('relay upgrade with a malformed request target', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    // Vitest installs its own uncaughtException listener; capture ours first so the test reports
-    // the exception as a verdict instead of dying with it.
+    // Capture uncaughtException before Vitest’s listener so crashes become test verdicts.
     const uncaught: unknown[] = []
     const onUncaught = (error: unknown): void => {
       uncaught.push(error)
@@ -116,13 +115,11 @@ describe('relay upgrade with a malformed request target', () => {
     ]) {
       results.push(await rawUpgrade(port, target))
     }
-    // A malformed percent-escape must be a client error, never a process-level throw.
     expect(uncaught).toEqual([])
     for (const result of results) {
       expect(result.status).toMatch(/^HTTP\/1\.1 4\d\d/)
       expect(result.closed).toBe(true)
     }
-    // The server must still serve a well-formed upgrade afterwards.
     const after = await rawUpgrade(port, '/v1/connect/abcdefghijklmnop')
     expect(after.status).toMatch(/^HTTP\/1\.1 101/)
   })

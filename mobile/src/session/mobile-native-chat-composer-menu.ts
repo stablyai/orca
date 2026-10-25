@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import { getNativeChatAgentProfile } from '../../../src/shared/native-chat-agent-profiles'
 import {
@@ -25,11 +25,7 @@ type SlashMenuInput = {
   query: string
 }
 
-/**
- * The `/` menu, built by the same rules as desktop's. A structured chat offers the host's commands,
- * then the session's own commands and skills once it reported them; a terminal-backed chat keeps its
- * curated commands and no skills.
- */
+// Structured chats use reported commands/skills; terminal-backed chats retain curated commands without skills.
 function slashItems(
   { agent, structured, query }: SlashMenuInput,
   limit: number
@@ -51,12 +47,10 @@ function slashItems(
   )
 }
 
-/** The rows the menu draws for a query: each group capped, since typing narrows the rest. */
 export function mobileComposerSlashItems(input: SlashMenuInput): NativeChatPickerItem[] {
   return slashItems(input, MENU_ROWS_PER_GROUP)
 }
 
-/** Every skill the chat can invoke, as typed, by the menu's own rules but uncapped. */
 export function mobileComposerSkillTokens(
   input: Omit<SlashMenuInput, 'query'>
 ): ReadonlySet<string> {
@@ -67,8 +61,7 @@ export function mobileComposerSkillTokens(
   )
 }
 
-/** The menu narrowed to one kind, as the + sheet's Skills and Commands rows open it. A chat at rest
- *  may report its skills as plain commands, so a narrowing that leaves nothing shows everything. */
+// If narrowing leaves no rows, show all: idle chats may report skills as plain commands.
 export function narrowedMenuItems(
   items: NativeChatPickerItem[],
   kind: NativeChatPickerItem['kind'] | null
@@ -77,7 +70,6 @@ export function narrowedMenuItems(
   return narrowed.length > 0 ? narrowed : items
 }
 
-/** The skill a draft leads with: a known skill token and a space. */
 export function leadingSkillToken(draft: string, skillTokens: ReadonlySet<string>): string | null {
   const space = draft.indexOf(' ')
   if (space <= 0) {
@@ -87,8 +79,6 @@ export function leadingSkillToken(draft: string, skillTokens: ReadonlySet<string
   return skillTokens.has(token) ? token : null
 }
 
-/** An edit that cuts into the leading skill removes all of it: it is one unit, as desktop's
- *  skill pill is. Any other edit passes through as typed. */
 export function draftAfterSkillEdit(previous: string, next: string, skillToken: string): string {
   const lead = `${skillToken} `
   if (next.startsWith(lead)) {

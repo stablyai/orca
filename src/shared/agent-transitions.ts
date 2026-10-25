@@ -5,22 +5,15 @@ import {
 } from './agent-main-agent-verdict'
 import { detectAgentStatusFromTitle } from './agent-detection'
 
-/**
- * The one definition of what an agent pane is doing and which changes are news. The host's
- * transition detector and the sidebar's sort stamps both read it.
- */
+/** Share activity/news policy between the host transition detector and sidebar sort stamps. */
 
-/** A hook's done that work resumes from within this is a milestone (goal and mission agents report
- *  them), not a finish: the window and the host both wait it out before announcing one. */
+/** Wait out brief done→working milestones before announcing finishes; goal/mission agents report these. */
 export const AGENT_DONE_QUIET_MS = 1_500
 
 /** One agent pane's phase. A pane at rest has no agent turn to report. */
 export type AgentPhase = 'needs-you' | 'done' | 'working' | 'rest'
 
-/**
- * A change worth telling someone about. `errored` is a turn that failed or was cut off, not one the
- * user stopped. Resuming after an approval is no change: it is the same turn.
- */
+/** Only errored means unsolicited failure/cutoff, never user Stop; approval resumes stay in the same turn and are not news. */
 export type AgentTransition = 'prompt-submitted' | 'turn-finished' | 'errored' | 'needs-input'
 
 /** A hook row's phase. A turn the user stopped is not news, so it rests. */
@@ -55,10 +48,7 @@ export function nextAgentPhase(previous: AgentPhase, observed: AgentPhase): Agen
   return observed === 'done' && previous === 'rest' ? 'rest' : observed
 }
 
-/**
- * The news in a phase change, or null when there is none. Phases alone cannot tell a failed turn
- * from a finish; {@link hookRowTransition} can.
- */
+/** Phase changes alone cannot distinguish failure from finish; hookRowTransition uses verdicts. */
 export function agentPhaseTransition(from: AgentPhase, to: AgentPhase): AgentTransition | null {
   if (from === to) {
     return null
@@ -75,10 +65,7 @@ export function agentPhaseTransition(from: AgentPhase, to: AgentPhase): AgentTra
   }
 }
 
-/**
- * The news in a hook pane's change, given the row it moved to. A session boundary (a clear, a
- * compaction) settles the pane without finishing a turn, so it is no news; its phase still reads done.
- */
+/** Session boundaries settle a pane without completing a turn: phase becomes done with no news. */
 export function hookRowTransition(
   from: AgentPhase,
   to: AgentPhase,

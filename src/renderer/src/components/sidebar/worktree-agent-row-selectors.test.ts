@@ -86,9 +86,7 @@ describe('selectMigrationUnsupportedEntriesForWorktree', () => {
     const first = selectMigrationUnsupportedEntriesForWorktree(state, 'wt-1')
     const second = selectMigrationUnsupportedEntriesForWorktree(state, 'wt-1')
 
-    // Why: the Electron black-screen regression came from creating converted
-    // AgentStatusEntry objects inside the Zustand selector. Returning store
-    // records preserves element identity for useShallow.
+    // Return store records so useShallow preserves element identity and avoids the black-screen regression.
     expect(first).toEqual([unsupported])
     expect(second).toEqual([unsupported])
     expect(first).toBe(second)
@@ -136,8 +134,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     const secondWt1 = selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')
     const secondWt2 = selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-2')
 
-    // Why: WorktreeCard mounts one selector per visible card. A same-state
-    // hook ping for wt-2 must not make wt-1 pay a fresh array/render cost.
+    // Same-state pings must not allocate arrays or rerender unrelated worktree cards.
     expect(secondWt1).toBe(firstWt1)
     expect(secondWt2).not.toBe(firstWt2)
     expect(secondWt2[0]?.prompt).toBe('updated prompt preview')
@@ -223,13 +220,11 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       retainedAgentsByPaneKey: {}
     }
 
-    // Prime the cache (one full rebuild allowed here).
     const primedWt1 = selectLiveAgentStatusEntriesForWorktree(baseState, 'wt-1')
     const primedWt2 = selectLiveAgentStatusEntriesForWorktree(baseState, 'wt-2')
     const rebuildsAfterPrime = getLiveEntriesFullRebuildCountForTests()
 
-    // Simulate a burst of same-state pings: setAgentStatus mints a new map and
-    // a new entry object per ping, with only prompt/tool metadata changing.
+    // Model same-state pings replacing the map and entry while changing only prompt/tool metadata.
     let state = baseState
     let latestWt2 = primedWt2
     for (let ping = 0; ping < 50; ping += 1) {
@@ -248,18 +243,15 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       }
       const wt1 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')
       latestWt2 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-2')
-      // Unaffected worktree keeps identity; owning worktree serves the fresh entry.
       expect(wt1).toBe(primedWt1)
       expect(latestWt2).toHaveLength(1)
       expect(latestWt2[0]?.prompt).toBe(`wt2 prompt ${ping}`)
       expect(latestWt2[0]?.toolInput).toBe(`cmd ${ping}`)
     }
-    // The O(all live agents) rebuild body never ran for within-state pings.
     expect(getLiveEntriesFullRebuildCountForTests()).toBe(rebuildsAfterPrime)
     expect(latestWt2).not.toBe(primedWt2)
 
-    // A real transition that changes bucketing (working -> done with the tab
-    // still present keeps the bucket; removing the entry must drop it).
+    // Removal must change bucketing even when the preceding done transition retains a tab-backed row.
     const doneState = {
       ...state,
       agentStatusByPaneKey: {
@@ -277,7 +269,6 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       worktreeId: 'wt-1'
     })
     const state = {
-      // No tab membership: bucketing comes from entry.worktreeId attribution.
       tabsByWorktree: { 'wt-1': [], 'wt-2': [] },
       agentStatusByPaneKey: { [PANE_KEY_1]: entry },
       migrationUnsupportedByPtyId: {},
@@ -382,8 +373,7 @@ describe('selectTerminalLayoutsForWorktree', () => {
     ptyIdsByLeafId: {}
   } as const
 
-  // Why: every visible card re-runs this selector on every store write; a fresh
-  // record per call is an allocation per card per write.
+  // A fresh record per selector call multiplies allocations by cards and store writes.
   it('returns one identity per store generation', () => {
     const state = {
       tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
@@ -402,8 +392,7 @@ describe('selectTerminalLayoutsForWorktree', () => {
   })
 })
 
-// Why: the inline-agents hook short-circuits on `active`; the off branch has to
-// hand back a shared identity or the gate allocates on every store write.
+// Inactive inline-agent hooks need a shared identity to avoid allocating on every store write.
 describe('inactive-card empty constants', () => {
   it('are frozen and shared', () => {
     for (const empty of [

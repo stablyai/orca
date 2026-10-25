@@ -299,8 +299,7 @@ describe('openHttpLink', () => {
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
 
-  // Why: runtimes bind per workspace, so activeRuntimeEnvironmentId is commonly
-  // null while a pane is remote — ownership must come from the click source.
+  // Per-workspace runtimes commonly leave global activeRuntimeEnvironmentId null; route from the click’s owner.
   it('uses the pane runtime owner when no runtime is globally active', () => {
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: null }
 
@@ -595,8 +594,7 @@ describe('openHttpLink', () => {
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
 
-  // Why: the hover label must describe the click's real destination — a remote pane's
-  // loopback URL opens raw in the system browser, so a local worktree label would lie.
+  // Hover labels must match clicks: remote loopback opens raw in the system browser, never under a local workspace label.
   it.each([
     ['runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' }] as const,
     ['ssh', { kind: 'ssh', connectionId: 'conn-1' }] as const
@@ -637,8 +635,7 @@ describe('openHttpLink', () => {
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
 
-  // Why: a local pane keeps its label from the local scan even while another pane's
-  // runtime is globally active — the same scan the click resolves.
+  // Local labels use the click’s local scan even while another pane’s runtime has global focus.
   it('labels a local-owned localhost link from the local scan', async () => {
     storeState.settings = {
       localhostWorktreeLabelsEnabled: true,
@@ -689,8 +686,7 @@ describe('openHttpLink modifier routing', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
-  // Why: this is the pre-existing dead gesture — Shift already meant "system
-  // browser", which is where the link was going anyway.
+  // Shift historically forced the system browser and did nothing when it was already the default.
   it('stays on the system browser when inverting is off and links open externally', () => {
     storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: false }
 

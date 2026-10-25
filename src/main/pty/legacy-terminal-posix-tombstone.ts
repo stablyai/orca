@@ -3,9 +3,7 @@ import { basename, join } from 'node:path'
 
 const SHELL_DOLLAR = '$'
 
-// Why: the shebang is the one command resolved before any of the script's own PATH hygiene runs.
-// `env` uses execvp, so an empty or relative PATH element means the current directory and an
-// untrusted checkout can supply the interpreter. Bake an absolute one when we can verify it.
+// The shebang runs before PATH hygiene; env lookup could execute checkout-local bash.
 const POSIX_INTERPRETER_CANDIDATES = [
   '/bin/bash',
   '/usr/bin/bash',
@@ -14,12 +12,12 @@ const POSIX_INTERPRETER_CANDIDATES = [
 ] as const
 
 function isExecutable(candidate: string): boolean {
-  // Why: a shebang has no quoting, so a path with whitespace is unusable as an interpreter.
+  // Shebangs cannot quote whitespace in interpreter paths.
   if (/\s/.test(candidate)) {
     return false
   }
   try {
-    // Why: X_OK alone is true for a directory named `bash`, which cannot be exec'd.
+    // X_OK also accepts directories, which cannot serve as interpreters.
     if (!statSync(candidate).isFile()) {
       return false
     }
@@ -30,17 +28,12 @@ function isExecutable(candidate: string): boolean {
   }
 }
 
-// Why: the POSIX tombstone is written on Windows too — Git Bash and WSL panes execute it — but
-// none of the absolute candidates below exist to a Windows Electron process, and PATH there is
-// `;`-separated, so the search cannot succeed either. Both MSYS and WSL map /bin/bash, so name it
-// directly rather than falling through to an ambient lookup.
+// Windows cannot verify guest interpreters; Git Bash and WSL both map /bin/bash.
 const WINDOWS_POSIX_INTERPRETER = '/bin/bash'
 
-/** Returns null when no absolute interpreter can be verified; see the caller for what that means. */
+/** Null when no absolute interpreter verifies; the caller must reuse a verified shebang or delete the wrapper. */
 export function resolvePosixTombstoneInterpreter(
   pathValue: string | undefined = process.env.PATH,
-  // Why: injectable so the PATH-search branch below is reachable in tests on hosts that do have
-  // a well-known bash.
   candidates: readonly string[] = POSIX_INTERPRETER_CANDIDATES,
   platform: NodeJS.Platform = process.platform
 ): string | null {
@@ -52,10 +45,7 @@ export function resolvePosixTombstoneInterpreter(
       return candidate
     }
   }
-  // Why: distributions that put bash outside the well-known locations (NixOS, Guix) would
-  // otherwise fall back to an ambient lookup. Search absolute PATH entries only — a relative or
-  // empty one means the current directory, which is the exposure this whole function exists to
-  // close.
+  // Support NixOS/Guix layouts without allowing empty/relative PATH entries to select checkout-local bash.
   for (const directory of pathValue?.split(':') ?? []) {
     if (!directory.startsWith('/')) {
       continue
@@ -65,19 +55,10 @@ export function resolvePosixTombstoneInterpreter(
       return candidate
     }
   }
-  // Why: no absolute interpreter anywhere. Callers must delete the legacy wrapper rather than
-  // write one with an ambient shebang, which would resolve bash from the cwd.
   return null
 }
 
-/**
- * Returns the absolute interpreter the wrapper being replaced already used, or null.
- *
- * Why: when this process cannot see an absolute bash, deleting the wrapper strands a shell that
- * has the path hashed -- it reports 127 rather than falling through to the next PATH entry. The
- * file about to be overwritten ran on this host, so its own shebang names an interpreter known to
- * work here, and reusing it keeps the compatibility promise without an ambient lookup.
- */
+/** Reuse a verified absolute shebang to preserve shells with a hashed wrapper path; deletion would strand them at 127. */
 export function readVerifiedShebangInterpreter(filePath: string): string | null {
   let firstLine: string
   try {
@@ -90,10 +71,7 @@ export function readVerifiedShebangInterpreter(filePath: string): string | null 
   if (!interpreter?.startsWith('/')) {
     return null
   }
-  // Why exactly bash: the body below uses BASH_SOURCE, [[, and local, so any other shell fails at
-  // runtime -- a #!/bin/zsh wrapper was accepted and then exited 1 on `BASH_SOURCE[0]: parameter
-  // not set`. This also rejects `#!/usr/bin/env bash`, which is absolute but defers the real
-  // lookup to PATH, the current-directory exposure this whole path exists to avoid.
+  // The body requires bash; env bash would reopen cwd-based interpreter lookup.
   if (basename(interpreter) !== 'bash') {
     return null
   }

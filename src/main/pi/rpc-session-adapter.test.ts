@@ -180,7 +180,6 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['first']))
     h.connection.receive({ type: 'agent_start' })
     await send('steer')
-    // The first is accepted; the steer waits behind its running turn.
     expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['steer']))
   })
 

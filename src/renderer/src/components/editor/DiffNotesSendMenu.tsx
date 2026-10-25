@@ -5,8 +5,7 @@ import { formatDiffComments } from '@/lib/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { translate } from '@/i18n/i18n'
 
-// Why: a keyboard open request the menu never got to consume (e.g. the user
-// navigated away before it mounted) must not reopen the menu on a later remount.
+// Expire unconsumed keyboard requests so navigating away cannot reopen the menu on a later mount.
 const OPEN_REQUEST_TTL_MS = 5000
 
 export function DiffNotesSendMenu({
@@ -34,16 +33,13 @@ export function DiffNotesSendMenu({
   actionLabel?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
-  // When set, this menu opens in response to the store's keyboard-shortcut open
-  // request. Enable on exactly one instance per worktree to avoid double-open.
+  // Enable on exactly one instance per worktree to avoid opening multiple menus for one shortcut.
   respondToOpenRequest?: boolean
 }): React.JSX.Element {
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
   const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
-  // Why: the TTL is a deadline, not a label, so it is enforced on the commit
-  // that opens the menu (see NotesSendMenu) where the clock is exact — a render
-  // clock either burns a tick per second or reads stale at the moment it matters.
+  // Enforce TTL when opening commits in NotesSendMenu; render-time clocks are stale or require polling.
   const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
   const openRequestNonce = hasPendingOpenRequest ? (openRequest?.nonce ?? null) : null
   const openRequestExpiresAt = hasPendingOpenRequest
@@ -87,8 +83,7 @@ export function DiffNotesSendMenu({
       groupId={groupId}
       modeIdParts={['diff-notes', worktreeId, groupId, filePath ?? 'all']}
       scopes={scopes}
-      // Why: file-scoped menus should not broaden delivery before the user
-      // intentionally hovers the "All unsent notes" submenu.
+      // File menus must not broaden delivery before the user enters All unsent notes.
       defaultScopeId={canSendFileScope ? 'file' : 'all'}
       triggerClassName={triggerClassName}
       triggerLabel={triggerLabel}

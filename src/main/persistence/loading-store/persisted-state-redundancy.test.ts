@@ -2,17 +2,8 @@ import {
   closeTestStores,
   createSqliteTestStore,
   readPersistedStateJson
-} from '../../persistence-test-harness'
-/**
- * The store file re-serializes in full on a 1s debounce and re-parses in full at launch, so every
- * byte it carries is paid for on both. Two kinds of byte were provably redundant on a 4.2 MB real
- * install: `"linked*":null` slots that `mergeWorktreeMetaForWrite` materializes on every metadata
- * row, and copies of local-owned global session fields inside non-local host partitions.
- *
- * These tests drive the real Store over a fixture sized like that install (10 hosts, 1,200 metadata
- * rows, 200 browser history entries) and pin the only property that makes the omission safe: a file
- * written by the OLD serializer and a file written by the NEW one load to the same in-memory state.
- */
+} from '../persistence-test-harness'
+// Compact serialization must load identically to legacy full defaults and replicated global fields.
 import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -43,13 +34,10 @@ const { Store } = await import('./store')
 const META_ROWS = 1_200
 const IDENTITY_ROWS = 1_191
 const HISTORY_ENTRIES = 200
-/** local + 9 more, matching the reporting install. */
 const REMOTE_HOSTS = Array.from({ length: 9 }, (_, index) => `runtime:env-${index}`)
-/** The measured shape: 3 of the 9 held a byte-identical replica of local's history. */
 const HOSTS_WITH_REPLICA = REMOTE_HOSTS.slice(0, 3)
-/** 1 row in 40 carries a real link, so its slots must stay written. */
 const LINKED_ROW_STRIDE = 40
-/** Recent enough that the 30-day stale-metadata GC leaves the fixture alone. */
+// Keep fixture metadata newer than the 30-day GC cutoff.
 const RECENTLY = Date.now()
 
 const stores: InstanceType<typeof Store>[] = []
@@ -71,7 +59,6 @@ function tempDataFile(): string {
   return join(realpathSync(mkdtempSync(join(tmpdir(), 'orca-redundancy-'))), 'orca-data.json')
 }
 
-/** A row exactly as the OLD write path left it: every default slot materialized. */
 function legacyMeta(index: number): WorktreeMeta {
   return {
     ...WORKTREE_META_PERSISTED_DEFAULTS,
@@ -109,8 +96,7 @@ function session(overrides: Partial<WorkspaceSessionState>): WorkspaceSessionSta
   } as WorkspaceSessionState
 }
 
-/** A file in the pre-change shape: materialized metadata defaults, and local's global session
- *  fields replicated into the host partitions the split used to seed from one shared template. */
+/** Model legacy default slots and replicated local-owned global session fields. */
 function writeLegacyFile(dataFile: string): void {
   const worktreeMeta: Record<string, WorktreeMeta> = {}
   for (let index = 0; index < META_ROWS; index++) {
@@ -142,8 +128,7 @@ function writeLegacyFile(dataFile: string): void {
   writeFileSync(dataFile, JSON.stringify(state), 'utf-8')
 }
 
-/** Inverse of everything this change does, applied to a compact file: what the old serializer
- *  would have written for the same state. */
+/** Recreate legacy serialization to isolate savings from omitted defaults and replicated globals. */
 function reexpandToLegacySerialization(state: PersistedState): PersistedState {
   const expanded = structuredClone(state)
   for (const map of [expanded.worktreeMeta, expanded.worktreeMetaByIdentity]) {
@@ -177,8 +162,7 @@ describe('persisted-state redundancy', () => {
     const dataFile = tempDataFile()
     writeLegacyFile(dataFile)
 
-    // One load+flush first, so the baseline is not comparing against the one-time settings
-    // migrations a synthetic fixture triggers (same reason as state-write-round-trip.test.ts).
+    // Settle one-time fixture migrations before comparing serialization.
     openStore(dataFile).flush()
 
     const loaded = openStore(dataFile)
@@ -189,7 +173,6 @@ describe('persisted-state redundancy', () => {
         REMOTE_HOSTS.map((hostId) => [hostId, structuredClone(loaded.getWorkspaceSession(hostId))])
       )
     }
-    // The refill ran, so absence never reaches a consumer as `undefined`.
     for (const meta of Object.values(before.meta)) {
       for (const field of Object.keys(WORKTREE_META_PERSISTED_DEFAULTS)) {
         expect(meta).toHaveProperty(field)
@@ -199,24 +182,20 @@ describe('persisted-state redundancy', () => {
     loaded.flush()
     const rewritten = readPersistedStateJson(dataFile)
 
-    // Only rows that actually hold a value still carry a slot: linkedPR + isPinned, 1 row in 40.
     expect(defaultedSlotOccurrences(rewritten)).toBe(
       (Math.ceil(META_ROWS / LINKED_ROW_STRIDE) + Math.ceil(IDENTITY_ROWS / LINKED_ROW_STRIDE)) * 2
     )
-    // And no non-local partition carries a global the merge only ever reads off 'local'.
     const onDisk = JSON.parse(rewritten) as PersistedState
     for (const hostId of REMOTE_HOSTS) {
       for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
         expect(onDisk.workspaceSessionsByHostId?.[hostId]).not.toHaveProperty(field)
       }
     }
-    // Apples to apples: re-expand the file we just wrote back into the old shape and compare, so
-    // the number is the redundancy alone and not the settings defaults a synthetic fixture lacks.
+    // Compare equivalent states so missing synthetic-fixture settings do not inflate savings.
     expect(Buffer.byteLength(rewritten)).toBeLessThan(
       Buffer.byteLength(JSON.stringify(reexpandToLegacySerialization(onDisk))) * 0.6
     )
 
-    // load(save(state)) deep-equals the pre-save state for every field touched.
     const reloaded = openStore(dataFile)
     expect(reloaded.getAllWorktreeMeta()).toEqual(before.meta)
     expect(reloaded.getWorkspaceSession()).toEqual(before.local)
@@ -224,7 +203,6 @@ describe('persisted-state redundancy', () => {
       expect(reloaded.getWorkspaceSession(hostId)).toEqual(before.byHost[hostId])
     }
 
-    // A quiet app does not rewrite the file with new content on the next flush.
     reloaded.flush()
     expect(readPersistedStateJson(dataFile)).toBe(rewritten)
   })
@@ -233,7 +211,6 @@ describe('persisted-state redundancy', () => {
     const legacyFile = tempDataFile()
     writeLegacyFile(legacyFile)
     const fromLegacy = openStore(legacyFile)
-    // Writing it back produces the new, compact shape in place.
     fromLegacy.flush()
 
     const compactFile = tempDataFile()

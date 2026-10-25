@@ -142,8 +142,7 @@ export function useManagedRuntimeInstall(
     if (subject && list === 'failed') {
       return { kind: 'active', subject, snapshot: READ_FAILED, removable }
     }
-    // Only an answer a reachable host still owes may hold the slot; an unreachable one leaves the
-    // composer and the host's refusal. Claude and Codex run the program every build ships.
+    // Wait only on reachable hosts’ owed answers; unreachable hosts keep composer/refusal. Claude/Codex use bundled programs.
     return reachable && !isAgentSessionHandleProvider(agent) ? PENDING : INACTIVE
   }, [agent, capable, list, managed, reachable, removable, snapshot, subject])
   const pending = observation.kind === 'pending'

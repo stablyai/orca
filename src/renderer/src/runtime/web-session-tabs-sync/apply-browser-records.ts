@@ -9,7 +9,6 @@ import { markWebSessionBrowserPlacementAdopted } from '../web-session-browser-pl
 
 type BrowserRecordContext = ReturnType<typeof applyTerminalRecordUpdates>
 
-/** Reconcile browser page records, remote handles, and certificate failures. */
 export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
   const {
     state,

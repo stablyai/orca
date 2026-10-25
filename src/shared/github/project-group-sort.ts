@@ -1,6 +1,4 @@
-// Why: grouping and sorting of Project rows is deterministic shared logic
-// driven by `selectedView` — it must not depend on fetch ordering. Keeping it
-// in a pure shared module lets desktop and mobile render Project views the same.
+// Pure selected-view grouping/sorting keeps desktop/mobile order independent of fetch order.
 import type {
   GitHubProjectField,
   GitHubProjectRow,
@@ -9,9 +7,7 @@ import type {
 } from './project-types'
 
 export type ProjectGroup = {
-  /** Stable key used for React reconciliation. */
   key: string
-  /** Human-readable label used in the group header. */
   label: string
   /** Iteration metadata for headers that render a date range + Current pill. */
   iteration: {
@@ -47,9 +43,7 @@ function hasNonEmptyFieldValue(value: ProjectFieldValue | undefined): boolean {
   }
 }
 
-// Why: use a finite sentinel instead of Infinity so subtractions in the sort
-// comparator stay finite. `Infinity - Infinity` is NaN, which makes
-// Array.sort's behavior implementation-defined and skips later tie-breaks.
+// Finite sentinels avoid Infinity - Infinity yielding NaN and skipping sort tie-breaks.
 const UNKNOWN_INDEX_SENTINEL = Number.MAX_SAFE_INTEGER
 
 function createFieldOrderIndex(field: GitHubProjectField): ReadonlyMap<string, number> {
@@ -144,8 +138,7 @@ export function groupRows(
   return groupRowsByField(groupField, rowsInOrder)
 }
 
-/** Buckets rows by an explicit field — the table view's groupBy and the board
- *  view's column field share this so both order and label groups identically. */
+/** Share field grouping between table/board so labels and ordering agree. */
 export function groupRowsByField(
   groupField: GitHubProjectField,
   rowsInOrder: GitHubProjectRow[]
@@ -174,7 +167,6 @@ export function groupRowsByField(
     bucket.rows.push(row)
   }
   const entries = Array.from(buckets.entries())
-  // Ordering rules per design doc §Grouping.
   entries.sort((a, b) => {
     if (a[0] === EMPTY_PROJECT_GROUP_KEY) {
       return 1
@@ -241,8 +233,7 @@ function compareSort(
   } else if (aValue.kind === 'labels' && bValue.kind === 'labels') {
     cmp = (aValue.labels[0]?.name ?? '').localeCompare(bValue.labels[0]?.name ?? '')
   } else {
-    // Why: unknown sort-field kind — ignore this sort field and fall through
-    // to tie-breaks (and eventually row.position).
+    // Ignore unknown sort kinds and continue tie-breaks, ending at row.position.
     return 0
   }
   return sort.direction === 'DESC' ? -cmp : cmp

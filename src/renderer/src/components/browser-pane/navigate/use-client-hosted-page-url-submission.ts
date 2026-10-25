@@ -8,12 +8,7 @@ import { deferBrowserPageNavigation } from './browser-page-deferred-navigation'
 import { getBrowserDisplayTitle, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
-/**
- * Address-bar submission for a client-hosted page: the workspace-document leg first (a typed
- * workspace path converts the page instead of navigating), then URL resolution with file: refused,
- * then loadURL against the live guest — or a deferred navigation parked for the attach effect when
- * the guest has not been minted yet.
- */
+/** Resolve workspace documents before URLs; refuse local file: access and defer navigation until a staged guest attaches. */
 export function useClientHostedPageUrlSubmission(params: {
   browserTabId: string
   worktreeId: string
@@ -48,14 +43,12 @@ export function useClientHostedPageUrlSubmission(params: {
       }
       const webview = webviewRef.current
       if (!webview) {
-        // Why: the page is still an optimistic stage, so park the URL for the attach effect to
-        // replay rather than dropping what the user just typed.
+        // Park staged navigation for attachment rather than dropping typed input.
         deferBrowserPageNavigation(browserTabId, submission.url)
         setAddressBarValue(toDisplayUrl(redactKagiSessionToken(submission.url)))
         return
       }
-      // Why: the store and the address bar must never hold a Kagi session token, and an optimistic
-      // title keeps the tab from reading "New Tab" until the guest reports one — as local does.
+      // Never persist Kagi session tokens; match local panes’ optimistic title until the guest reports one.
       const browserModelUrl = redactKagiSessionToken(submission.url)
       activeLoadFailureRef.current = null
       setAddressBarValue(toDisplayUrl(browserModelUrl))

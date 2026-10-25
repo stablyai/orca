@@ -31,11 +31,7 @@ function suite(file: string): boolean {
   return file.endsWith('.test.ts') && !RECORDING_DRIVERS.some((driver) => file.endsWith(driver))
 }
 
-/**
- * Every module a driver pulls in, transitively, by static import or dynamic `import()`. Type
- * positions come along, which is why the graph is an order larger than the recorder itself: a
- * `typeof import(...)` drags in product modules. Reaching too much only widens what may not appear.
- */
+// Include type-position imports too; over-approximating reachability only strengthens the forbidden mutant boundary.
 function reachable(entries: readonly string[]): Set<string> {
   const seen = new Set<string>()
   const pending = [...entries]
@@ -55,13 +51,7 @@ function reachable(entries: readonly string[]): Set<string> {
   return seen
 }
 
-/**
- * A mutant planted on the recording path would be recorded and replayed alike, so every golden
- * would compare clean while certifying the mutated code rather than the product. Reachability is
- * proved from the recording drivers outward rather than from this directory inward, because the
- * question is what a golden's bytes can depend on. The name scan then covers the paths a module can
- * be read by rather than imported.
- */
+// Walk outward from recording drivers so no recorded byte can depend on mutant code; scan names for non-import reads too.
 describe('the mutant seam', () => {
   const outside = sources(recorder).filter((file) => !file.startsWith(`${mutants}${sep}`))
 
@@ -72,8 +62,7 @@ describe('the mutant seam', () => {
       .map(relative)
       .sort()
     expect(reached).toEqual([])
-    // A walk that resolved nothing would pass by reaching nothing, so name what it missed: every
-    // recording file is reachable today, and one that stops being reachable is an orphan.
+    // Require every recorder module to be reachable so an empty graph cannot pass.
     const missed = outside
       .filter((file) => !suite(file) && !graph.has(file))
       .filter((file) => !OFF_RECORDING_PATH.includes(relative(file)))
@@ -83,8 +72,7 @@ describe('the mutant seam', () => {
     expect(sources(mutants).length).toBeGreaterThan(1)
   })
 
-  // A test that does not record cannot change a recording; the drivers do record, so they are held
-  // to the engine's rule — a driver that read the table would change what it records silently.
+  // Apply the engine boundary to recording drivers; other tests cannot alter recorded bytes.
   it('is named in no recording file', () => {
     const naming = outside
       .filter((file) => !suite(file) && readFileSync(file, 'utf8').includes('mutants'))

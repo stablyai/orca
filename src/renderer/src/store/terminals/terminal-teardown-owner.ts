@@ -8,11 +8,7 @@ export type TerminalTeardownOwner =
   | { kind: 'resolved'; runtimeEnvironmentId: string | null }
   | { kind: 'refused'; reason: 'ambiguous_terminal_owner' }
 
-/**
- * Which runtime host must stop these PTYs (`null`: none). When two hosts publish the worktree, each
- * `remote:<env>@@…` id names its own owner; a PTY that names none (or no PTY at all) can't be
- * attributed, so teardown is refused rather than treated as local.
- */
+/** Resolve the stopping host (null: none); with host twins, each remote:<env>@@… PTY must identify one owner or teardown refuses, including unbound tabs. */
 export function resolveTerminalTeardownOwner(
   worktreeOwner: TerminalPtyOwner,
   ptyIds: readonly string[]
@@ -23,7 +19,7 @@ export function resolveTerminalTeardownOwner(
   if (worktreeOwner.kind === 'non-runtime') {
     return { kind: 'resolved', runtimeEnvironmentId: null }
   }
-  // Why: with no bound PTY there is nothing to attribute, and the server may still run the agent.
+  // No bound PTY proves no owner; the server may still run the agent.
   if (ptyIds.length === 0) {
     return { kind: 'refused', reason: 'ambiguous_terminal_owner' }
   }
@@ -38,7 +34,7 @@ export function resolveTerminalTeardownOwner(
     }
     environmentIds.add(environmentId)
   }
-  // Why: a stop split across runtimes can half-succeed, and no rollback is right for both halves.
+  // A cross-runtime stop can half-succeed with no valid rollback for both halves.
   if (environmentIds.size > 1) {
     return { kind: 'refused', reason: 'ambiguous_terminal_owner' }
   }

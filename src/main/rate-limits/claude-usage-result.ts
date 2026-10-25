@@ -27,7 +27,7 @@ export function makeClaudeUsageResult(
   }
 }
 
-// Why plain: the profile/host reason is shown on the account row, not as raw text in usage.
+// Account rows explain host/profile failures; usage keeps its generic message.
 export function claudeUsageUnavailable(): ProviderRateLimits {
   return makeClaudeUsageResult('error', 'Claude usage is unavailable right now.', {
     failureKind: 'usage-unavailable',

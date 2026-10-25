@@ -50,8 +50,7 @@ describe('new workspace SSH gate', () => {
   })
 
   it('never gates a runtime-owned (per-workspace-env) SSH target', () => {
-    // A stale ephemeral repo keeps a runtime-ssh-* connectionId after its runtime is gone; it must
-    // not surface a dead connect card or block repo-backed sources.
+    // Stale ephemeral runtime-ssh IDs must not show unusable Connect cards or block repo sources.
     expect(
       getSelectedRepoSshGate({ connectionId: 'runtime-ssh-orca-1', status: 'disconnected' })
     ).toEqual({

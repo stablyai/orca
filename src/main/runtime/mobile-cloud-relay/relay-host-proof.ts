@@ -34,7 +34,6 @@ export type RelayHostProofContext = {
   previousGeneration?: number
   resumeRequested: boolean
   now?: () => number
-  /** Reports the failing check by name only; never receives field values. */
   onInvalid?: (reason: string) => void
 }
 
@@ -58,8 +57,7 @@ function validateTranscript(
     context.previousGeneration === undefined
       ? new Uint8Array()
       : encodeUint64(context.previousGeneration)
-  // Main's 30s skew bounds with named-check reporting kept from the incident
-  // instrumentation; deltas are relative offsets only, never absolute values.
+  // Report check names and relative deltas only; retain the 30s skew bound.
   const checks: [string, boolean][] = [
     ['issuedAt-readable', issuedAt !== null],
     [

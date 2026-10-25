@@ -19,8 +19,7 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 const mac = getRemoteHostPlatform('darwin-arm64')
 const linux = getRemoteHostPlatform('linux-x64')
 
-// Table rows are `pid|ppid|comm|lstart|args`; a PID in FAKE_PS_GONE has no process, and any other
-// unlisted PID is the calling shell, whose parent is FAKE_PS_SHELL_PARENT.
+// Fake ps rows are pid|ppid|comm|lstart|args; FAKE_PS_GONE means absent, otherwise unlisted PIDs model the calling shell.
 const FAKE_PS = `#!/bin/sh
 [ -n "$FAKE_PS_BROKEN" ] && exit 1
 field=; pid=
@@ -236,7 +235,7 @@ describe.skipIf(process.platform === 'win32')('orcad launch SSH session', () => 
   it('does not apply before macOS 15 or off macOS', () => {
     writeRecord('77', '77 500 Thu Oct 9 08:00:00 2026')
     expect(probe({ FAKE_MACOS: '14.7', FAKE_PS_GONE: '500' })).toBe('not-applicable')
-    // Stands in for a host without sw_vers, whatever the test machine has on /usr/bin.
+    // Hide system sw_vers so every test host exercises its absence.
     writeFileSync(join(dir, 'bin', 'sw_vers'), '#!/bin/sh\nexit 127\n')
     expect(probe({ FAKE_PS_GONE: '500' })).toBe('not-applicable')
   })

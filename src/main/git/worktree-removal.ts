@@ -1,4 +1,5 @@
 import { lstat } from 'node:fs/promises'
+import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
@@ -111,8 +112,8 @@ export async function finishUnregisteredWorktreeRemoval(
 ): Promise<RemoveWorktreeResult> {
   options = removalWorkerOptions(options)
   await assertCheckoutGone()
-  await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options)).catch(
-    (error: unknown) => console.warn(`[git] worktree prune failed in ${repoPath}`, error)
+  await pruneGitWorktrees(gitExecOptions(repoPath, options)).catch((error: unknown) =>
+    console.warn(`[git] worktree prune failed in ${repoPath}`, error)
   )
   return deleteBranchOfUnregisteredWorktree(repoPath, worktreePath, branch, options)
 }

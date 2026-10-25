@@ -56,11 +56,7 @@ function finishedKey(language: string, source: string): string {
   return `${language}\n${source}`
 }
 
-/**
- * Tokens for as much of `code` as has been colored so far, or null while there
- * is nothing to color it with. The rest, `code.slice(highlightedLength)`, is
- * still plain and arrives over later renders.
- */
+/** Tokens cover the highlighted prefix; code.slice(highlightedLength) stays plain until later renders. */
 export function useHighlightedSyntax(code: string, language: string): SyntaxProgress | null {
   const source =
     code.length > MAX_HIGHLIGHTED_CODE_LENGTH ? code.slice(0, MAX_HIGHLIGHTED_CODE_LENGTH) : code

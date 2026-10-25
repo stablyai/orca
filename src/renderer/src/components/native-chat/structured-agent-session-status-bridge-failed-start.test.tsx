@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A chat whose start the host refused has no host session, so nothing publishes its row. The
-// bridge marks it failed from the launch's own outcome, so the tab and the workspace row show it
-// to a user looking elsewhere, until a retry starts it or the tab closes.
+// Refused creates publish no host session; bridge launch failures into tab/workspace rows until retry or closure.
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -143,7 +141,6 @@ function rows(): AgentStatusEntry[] {
   return Object.values(store().getState().agentStatusByPaneKey)
 }
 
-/** What the chat's own tab shows, resolved as the tab bar resolves a structured tab. */
 function tabStatus(): string {
   const state = store().getState()
   return resolveTerminalTabActivityStatus({
@@ -170,7 +167,7 @@ async function connect(): Promise<(event: AgentSessionStatusEvent) => void> {
   return (event) => act(() => emit(event))
 }
 
-/** A restart keeps the saved launch and the acknowledgements, but no rows and no launch in memory. */
+/** Preserve saved launches/acknowledgments across restart; drop live rows and launch memory. */
 async function restart(): Promise<void> {
   const { acknowledgedAgentsByPaneKey } = store().getState()
   cleanup()
@@ -201,7 +198,6 @@ async function failStart(): Promise<void> {
   mocks.createIntent.mockReturnValueOnce(intent)
   mocks.launch.mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('refused'))
   failedStarts += 1
-  // Each failed start stands for its own user action.
   const launch = startStructuredAgentLaunch(WORKTREE_ID, 'claude', {
     requestId: `request-${failedStarts}`
   })

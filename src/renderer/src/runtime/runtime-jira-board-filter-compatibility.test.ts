@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { JiraIssueListFilters } from '../../../shared/jira/jira-types'
-import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from '../../../shared/jira-quick-filters'
+import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-quick-filters'
 import { JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-detail-capabilities'
 import { jiraListIssues } from './runtime-jira-client'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'

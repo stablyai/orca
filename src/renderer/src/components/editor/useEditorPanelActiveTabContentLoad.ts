@@ -30,9 +30,7 @@ type UseEditorPanelActiveTabContentLoadParams = {
   loadDiffContent: EditorPanelDiffContentLoader
 }
 
-// Why: the newest read for a tab is already on its way, so a re-run of the lazy
-// effect (a worktree flip-flop re-adds `isVisible`) must not fire a second RPC.
-// An invalidation bumps the tab's generation, so a superseded read never counts.
+// Reuse live reads across visibility changes; invalidation generations distinguish superseded reads.
 function hasLiveRead(
   generationsById: Record<string, number>,
   outstandingById: Record<string, number>,

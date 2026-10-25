@@ -62,9 +62,7 @@ function createRawSourceNode({
       }
     },
 
-    // Why: converting embedded HTML tags into placeholder tokens before the
-    // markdown parser runs keeps marked's built-in paragraph tokenization intact
-    // while still letting Orca round-trip the raw markup verbatim.
+    // Placeholder tokens preserve marked’s paragraph boundaries while round-tripping raw HTML verbatim.
     markdownTokenName: name,
     markdownTokenizer: {
       name,

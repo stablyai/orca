@@ -1,7 +1,6 @@
-// The injected-timer seam's real contract: `typeof setTimeout` additionally demands
-// Node's `__promisify__` member, which no injected timer (or safe wrapper) can supply.
+// Injected timers cannot supply the Node-only __promisify__ member required by typeof setTimeout.
 export type ScheduleTimer = (handler: () => void, ms: number) => ReturnType<typeof setTimeout>
 
-// Why: browsers throw Illegal invocation when a global timer is called with a non-global receiver; Hermes does not.
+// Browser global timers require a global receiver or throw Illegal invocation.
 export const defaultScheduleTimer: ScheduleTimer = (handler, ms) => setTimeout(handler, ms)
 export const defaultCancelTimer: typeof clearTimeout = (handle) => clearTimeout(handle)

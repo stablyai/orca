@@ -45,8 +45,7 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
     linearCustomViewContentsError,
     availableTeams
   } = model
-  // Why memoized: the normalized array feeds an effect that sets state, and a
-  // fresh array per render would re-run it every render.
+  // Memoize normalized selection because its state-writing effect would otherwise rerun on every render.
   const rawLinearTeamSelection = settings?.defaultLinearTeamSelection
   const defaultLinearTeamSelection = useMemo(
     () => storedLinearTeamSelection(rawLinearTeamSelection),

@@ -4,16 +4,7 @@ import { hasDeferredPaneMetricOptions } from '@/lib/pane-manager/pane-metric-opt
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { BufferLike } from './terminal-render-desync-frame'
 
-/**
- * Weight-layer forensics for the terminal bold-collapse bug (STA-4042 family):
- * regular text rasterizing at the bold weight while the byte stream is clean.
- * One capture of these fields discriminates the candidate layers:
- *  - live options poisoned  -> optionsFontWeight is bold-tier
- *  - atlas captured a stale config -> atlasConfig* diverges from options
- *  - renderer buffer cells latched bold -> boldTextCells is viewport-wide
- *  - stuck rasterizer font (failed ctx.font assignment) -> fontProbe* set
- *    (fontProbe fields are maintained by the patched @xterm/addon-webgl atlas)
- */
+/** Diagnose bold collapse by comparing live weights, atlas config, cell bold census and patched font-assignment probes; each distinguishes option, atlas, model or rasterizer corruption (STA-4042). */
 export type SentinelWeightProbe = {
   optionsFontWeight: string | null
   optionsFontWeightBold: string | null
@@ -84,19 +75,7 @@ function stringOrNull(value: string | number | undefined): string | null {
   return value === undefined ? null : String(value)
 }
 
-/**
- * Reveal-time audit: any pane whose live weight options diverge from the
- * settings-resolved pair has been poisoned by some writer, known or unknown.
- * Runs on the visibility-resume path so every "come back to a finished agent"
- * reveal — the reported trigger for the bold-collapse bug — checks itself.
- * Always on (not sentinel-gated): it reads two option fields per pane and
- * records nothing when healthy, and the poisoning is rare enough that a field
- * occurrence must never be missed because a flag was unset. Panes with a
- * pending metric deferral are skipped — their live options are legitimately
- * stale until the flush, which records its own weight-change crumb.
- * Settings are passed in (not read from the store) so this stays importable
- * from lean unit-test graphs.
- */
+/** Always compare reveal-time live weights with settings; skip legitimate pending metric deferrals. Read passed settings to keep unit imports lean, and record nothing on healthy panes. */
 export function auditPaneWeightParity(
   panes: Iterable<ManagedPane>,
   settings: { terminalFontWeight?: number; terminalFontWeightBold?: number } | null | undefined
@@ -131,12 +110,7 @@ export function auditPaneWeightParity(
   }
 }
 
-/**
- * Census of bold-attributed cells across the visible viewport, read from the
- * renderer's own buffer. The daemon model is clean in every field occurrence,
- * so a viewport-wide bold census here convicts renderer-side cell corruption;
- * a clean census with bold pixels convicts the rasterization layer instead.
- */
+/** Viewport-wide bold attributes implicate renderer cells; clean cells with bold pixels implicate rasterization. */
 function countBoldTextCells(
   buffer: BufferLike | null,
   rows: number,

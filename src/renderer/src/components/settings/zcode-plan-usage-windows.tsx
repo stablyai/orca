@@ -28,8 +28,7 @@ function formatWindowReset(window: RateLimitWindow, now: number): string | null 
   return remaining > 0 ? formatResetDuration(remaining) : null
 }
 
-// Why: a window only renders when its data survived the fetcher's mapping, so
-// error snapshots and MCP-less plans show exactly the windows they reported.
+// Render only mapped windows; error/MCP-less snapshots must not invent missing windows.
 export function collectZcodeUsageWindows(usage: ProviderRateLimits | null): ZcodeUsageWindowRow[] {
   const rows: ZcodeUsageWindowRow[] = []
   if (usage?.session) {

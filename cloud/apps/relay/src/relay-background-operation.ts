@@ -2,8 +2,7 @@ import { describeRelayFailure } from './relay-error-redaction.js'
 
 type Warn = (message: string) => void
 
-// A swallowed error hides which sweep step is failing (a silently dead
-// cleanup chain stalled production rehoming for hours).
+// Log failed sweep steps; swallowed cleanup failures have stalled production rehoming for hours.
 export async function runRelayBackgroundOperation(
   operation: () => Promise<unknown>,
   failureMessage: string,

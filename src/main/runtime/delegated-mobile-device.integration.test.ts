@@ -23,6 +23,7 @@ import {
   waitForWsClose
 } from './runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -40,8 +41,7 @@ describe('pairing.delegatedMobileDevice.sync', () => {
   })
 
   async function startServer(userDataPath = mkdtempSync(join(tmpdir(), 'orca-delegated-'))) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store carries the surface these RPCs read, as in the sibling WebSocket tests.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,

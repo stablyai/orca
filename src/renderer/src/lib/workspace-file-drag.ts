@@ -206,8 +206,7 @@ function getUniqueWorkspaceFilePathEntries(
 function getTopLevelWorkspaceFilePaths(paths: readonly string[]): string[] {
   const uniquePaths = getUniqueWorkspaceFilePathEntries(paths)
 
-  // Why: moving a selected folder already moves its descendants; issuing
-  // extra moves for selected children races against paths that no longer exist.
+  // Moving a selected folder includes descendants; extra child moves race paths already removed.
   return uniquePaths
     .filter(
       (pathEntry) =>

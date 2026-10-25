@@ -96,7 +96,6 @@ describe('useStructuredAgentSession transcript', () => {
         }
       ]
     })
-    // The list places rows by the same items, so the notice joins the cut turn.
     expect(result.current.journalItems.at(-1)).toMatchObject({ turnScope: SCOPE })
   })
 

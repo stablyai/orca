@@ -1,15 +1,8 @@
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 export type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
-// ─── Canonical agent-session journal: cross-process wire shapes ─────────────
-// The host-owned timeline for a structured agent session. Everything here must
-// be plain JSON: rows are persisted verbatim and later republished to clients,
-// so no class instances, Maps, or Dates.
-//
-// Rows are append-only. `schemaVersion` is upcast at read time and never
-// rewritten in place, so a host that cannot read a row (a newer version, or a
-// newer kind) refuses to write the journal rather than skipping or compacting
-// past it.
+// Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
+// unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
 import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionFailureRowWords } from './agent-session-failure-words'
@@ -20,19 +13,16 @@ import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
-import type { AgentMessageSource } from './agent-session-message-source'
+import type { AgentMessageSource } from './agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
 
 export { type AgentType }
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
-/** v3 introduced the `turn` item. A row without one is still written at v2 so
- *  an older host keeps reading it; the first v3 row stops that host writing the chat
- *  (a released one keeps it read-only, this build fails its load) instead of truncating. */
+/** v3 introduced turn items; other rows stay v2. The first v3 row stops older hosts writing (read-only on released builds, failed load here) rather than allowing truncation. */
 export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 4
 export const AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION = 3
-/** v4 introduced the `queue` row: an older build keeps a chat holding one read-only rather than
- *  meeting a kind it does not know. Every other row keeps its own version. */
+/** v4 queue rows make older builds keep the chat read-only; other rows retain their own version. */
 export const AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION = 4
 const AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION = 2
 
@@ -48,10 +38,7 @@ export type AgentJournalCursor = {
   sequence: number
 }
 
-/** A provider handle as journal rows record it, and (without `opaque`) as
- *  `agentSession.attach` carries it. Persisted and on the wire: never reshape an
- *  arm. Derived from the in-memory handle by `agentSessionJournalProviderHandle`;
- *  `opaque` names any other transport, or `pending` before a handle is proved. */
+/** Persisted/wire handles must retain their shape; attach omits opaque. Derived via agentSessionJournalProviderHandle; opaque covers other transports or pending proof. */
 export type AgentSessionJournalProviderHandle =
   | { kind: 'codex'; threadId: string }
   | { kind: 'claude'; sessionId: string; leafUuid: string | null }
@@ -72,10 +59,7 @@ export type AgentSessionJournalIdentity = {
   providerHandle: AgentSessionProviderHandle | null
 }
 
-// ─── Item identity ──────────────────────────────────────────────────────────
-// Reconciliation keys, settled by the provider spikes. Codex renumbers items
-// positionally on resume, so a persisted item id is never an identity. Claude
-// copies the original uuids on fork, so the uuid is.
+// Codex renumbers items on resume, so persisted item IDs are not identity; Claude preserves UUIDs on fork.
 
 export type AgentJournalItemIdentity =
   | { provider: 'codex'; threadId: string; turnId: string; ordinal: number }
@@ -107,8 +91,7 @@ export type AgentJournalBoundedPayload = {
 export const AGENT_JOURNAL_MESSAGE_SEND_MODES = ['goal'] as const
 export type AgentJournalMessageSendMode = (typeof AGENT_JOURNAL_MESSAGE_SEND_MODES)[number]
 
-/** Whether the provider is still producing a message. Persisted and open for growth: a reader
- *  that cannot place a value reads it as `completed`. */
+/** Unknown persisted message states read as completed. */
 export const AGENT_JOURNAL_MESSAGE_STATES = ['running', 'completed'] as const
 export type AgentJournalMessageState = (typeof AGENT_JOURNAL_MESSAGE_STATES)[number]
 
@@ -130,12 +113,9 @@ export type AgentJournalMessageItem = {
   /** Present on a message another agent sent through Orca; absent, the person's. Host-written,
    *  outside every fingerprint, never sent to the provider. */
   from?: AgentMessageSource
-  /** Written on reasoning rows. ABSENT MEANS UNKNOWN — an older host, or a row from before the
-   *  field — and never reads as live. The row's `observedAt` is when it started. */
+  /** Reasoning rows only: absence means unknown, never live. observedAt marks the start. */
   state?: AgentJournalMessageState
-  /** Host clock when the host saw the message end: its own end, or the end of the turn or
-   *  stream that cut it off. Absent only when no end was seen live — history, a crash sweep — so
-   *  no duration is claimed. */
+  /** Host-observed message/turn/stream end; absent for history or crash recovery without a live end, so no duration is claimed. */
   completedAt?: number
 }
 
@@ -170,9 +150,7 @@ export type AgentJournalDiffItem = {
 export const AGENT_JOURNAL_RESOLUTION_STATES = ['pending', 'resolved', 'cancelled'] as const
 export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATES)[number]
 
-/** Approvals and questions are durable items with explicit resolution state, so
- *  a second client answering one prompt loses the compare-and-set instead of
- *  invoking the provider callback twice. */
+/** Durable resolution uses compare-and-set so competing clients cannot invoke the provider callback twice. */
 export type AgentJournalResolution = {
   state: AgentJournalResolutionState
   /** Option id the winner picked; null while pending or cancelled. For a question, the answer in the
@@ -274,11 +252,7 @@ export { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from './age
 export type AgentJournalTurnLifecycle = {
   turnId: string
   state: AgentJournalTurnLifecycleState
-  /** The provider's own verdict, when it gave one. ABSENT MEANS UNKNOWN and must
-   *  never be read as success: a row from a host that predates the field, an end
-   *  the host inferred rather than heard, and a verdict vocabulary this build
-   *  cannot place all land here. `completed` alone proves nothing — the provider
-   *  reports an API error as a finished turn. */
+  /** Absent/unrecognized verdict means unknown, never success. completed alone proves nothing: provider API errors also finish turns. */
   outcome?: AgentJournalTurnOutcome
   /** Journal key of the user item that opened the turn. A lifecycle row may key
    *  itself when provider output opened a turn with no user item; absent means
@@ -387,28 +361,13 @@ export type AgentJournalItemBody =
  *  the producer, which holds the provider vocabulary, so no reader re-derives it. */
 export type AgentJournalProducerKind = 'agent' | 'background'
 
-/**
- * Which agent produced a row, repeated on every row that agent produced.
- *
- * One journal is the durable record of one agent SESSION, and a session that
- * runs subagents journals their rows into it too. Absence is a positive claim
- * and never "unknown": no `agentId` means the session's own agent wrote the row.
- * Repeated per row rather than held once on a start row, so a row answers for
- * itself: every reader here scans backwards from the tail and stops at the
- * turn, so one that had to find a start row first would have to scan past that
- * stop to attribute anything. Repetition is near-free — absent on the session's
- * own rows, which are most of them — and it is what keeps the field correct
- * without a second lookup.
- */
+/** Repeat producer identity on every row so backwards scans stopping at the turn need no start-row lookup. Absence positively identifies the session root, never unknown; subagents share its journal. */
 export type AgentJournalProducerLinkage = {
   /** The producing subagent's canonical id. Absent ⇒ the session's own agent. */
   agentId?: string
   /** The producing agent's own parent. Absent ⇒ its parent is the session root. */
   parentAgentId?: string
-  /** The provider's own parent reference for this row. Provenance only: it names
-   *  the tool CALL, not the agent, and a resumed agent is re-announced under a new
-   *  call, so no reader joins on it. Only its producer reads it back, to recall
-   *  the ids an earlier run of the session resolved. */
+  /** Provider tool-call parent reference, not agent identity: resumes announce a new call. Provenance only; producers read it to recover earlier resolved IDs, readers never join on it. */
   providerParentRef?: string
   producerKind?: AgentJournalProducerKind
   /** Which run of the agent, when past the first. Identity answers "which agent";
@@ -423,16 +382,12 @@ export type AgentJournalRowAttribution = AgentJournalProducerLinkage & {
   turnScope: AgentJournalTurnScope
 }
 
-/** Where the journal placed an item: the sequence of the row that created it,
- *  then its place among that row's writes. The timeline's only ordering key. */
 export type AgentJournalPosition = {
   sequence: number
   index: number
 }
 
-/** One reduced timeline entry. `sequence` orders the list; `observedAt` is the
- *  provider's own clock and may sort earlier than a later sequence when the row
- *  was recovered after a crash. */
+/** Order by sequence; provider observedAt can precede earlier sequences after crash recovery. */
 export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   itemId: string
   revision: number
@@ -548,8 +503,7 @@ export type AgentJournalSnapshot = {
   submissions: AgentJournalSubmission[]
 }
 
-/** Why a cursor could not be resumed. Every value forces a clean snapshot
- *  reload on the client. */
+/** Every cursor-resume failure forces a clean client snapshot reload. */
 export const AGENT_JOURNAL_RESET_REASONS = [
   'epoch_changed',
   'cursor_ahead',

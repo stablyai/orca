@@ -108,6 +108,7 @@ async function createHarness(
         listRemovedTargetLabels: async () => ({}),
         getState,
         listPortForwards: async () => [],
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: async () => [],
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},

@@ -16,10 +16,7 @@ export type SelectedForegroundProcess = {
   recognized: RecognizedAgentProcess
 }
 
-/**
- * Select a foreground agent without letting a vendor helper steal an outer
- * agent's identity when both names occur in one process lineage.
- */
+/** Prevent vendor helpers from stealing an outer agent’s identity within one process lineage. */
 export function selectForegroundProcessCandidate(
   candidates: readonly ForegroundProcessCandidate[],
   ancestryCandidates: readonly ForegroundProcessCandidate[] = candidates
@@ -62,12 +59,7 @@ function foregroundCandidateScore(candidate: ForegroundProcessCandidate): number
   return (candidate.stat?.includes('+') ? 10_000 : 0) + candidate.depth
 }
 
-/**
- * "Does this candidate's parent chain reach `ancestor`?", memoized per pid. The memo
- * is captured by the returned closure alongside the one ancestor and one process-table
- * snapshot it was computed against, so it cannot be reused across a different ancestor
- * or a later capture — every call site builds a fresh test from a fresh snapshot.
- */
+/** Memoize ancestor reachability for one ancestor and process-table snapshot only; rebuild for every fresh capture. */
 function makeAncestorReachabilityTest(
   ancestor: ForegroundProcessCandidate,
   candidatesByPid: ReadonlyMap<number, ForegroundProcessCandidate>
@@ -75,8 +67,7 @@ function makeAncestorReachabilityTest(
   const reaches = new Map<number, boolean>()
   return (descendant) => {
     let currentPid = descendant.pid
-    // Every pid on the walk shares the walk's verdict, and `visited` also stops a
-    // ppid cycle (a reparented or wrapped table can report one) from spinning forever.
+    // Share the verdict across the walk; visited also terminates reparented/wrapped ppid cycles.
     const visited = new Set<number>()
     let matches = true
     while (currentPid !== ancestor.pid) {

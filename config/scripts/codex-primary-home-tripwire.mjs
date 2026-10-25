@@ -35,8 +35,7 @@ async function readEntry(absolutePath, relativePath, entries) {
     ctimeMs: stat.ctimeMs,
     ino: stat.ino
   })
-  // Why: primary-home symlinks may point at user data outside .codex. The
-  // tripwire observes the link itself without traversing its target.
+  // Observe symlinks themselves; following one could reach user data outside .codex.
   if (type !== 'directory') {
     return
   }
@@ -86,13 +85,8 @@ export function describeCodexHomeChange(before, after) {
   }
 }
 
-// Why: with the real-home flag ON, system-default spawn sites deliberately
-// delete CODEX_HOME so native codex resolves the user's real ~/.codex — and on
-// Windows the binary ignores the USERPROFILE sandbox, so its own volatile
-// runtime churn (root sqlite/WAL/SHM, tmp/, log/) is designed behavior no env
-// sandbox can contain. Everything else — auth.json, config.toml,
-// .credentials.json, hooks.json, sessions/, any unknown path — stays a hard
-// containment violation.
+// Real-home mode deletes CODEX_HOME; Windows Codex ignores USERPROFILE sandbox, so root SQLite/WAL/SHM and tmp/log churn is expected.
+// Auth/config/credentials/hooks/sessions and unknown paths remain hard containment violations.
 const DESIGNED_SYSTEM_DEFAULT_VOLATILE_PATTERN =
   /^(?:[^\\/]+\.sqlite(?:-wal|-shm|-journal)?|tmp(?:[\\/].*)?|log(?:[\\/].*)?)$/i
 
@@ -100,9 +94,7 @@ export function classifyCodexHomeTripwireEvent(event) {
   if (event.scanError || !Array.isArray(event.changedPaths)) {
     return 'violation'
   }
-  // Why: the root directory's own mtime churns whenever codex adds/removes a
-  // direct child (e.g. a WAL file); it carries no information beyond the
-  // substantive paths, so it never decides the classification by itself.
+  // Root mtime changes for any child churn (e.g. WAL) and adds no evidence beyond substantive paths; never classify from it alone.
   const substantive = event.changedPaths.filter((entryPath) => entryPath !== '.')
   if (substantive.length === 0) {
     return 'designed-system-default'

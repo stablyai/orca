@@ -63,8 +63,7 @@ describe('MachineNameField', () => {
   })
 
   it('captions a saved override without asking the runtime, so a stale read cannot show the old name', async () => {
-    // Why: the store only holds a saved value after main has written it, so it already is what
-    // devices see. A runtime that still answers with the previous name must not win.
+    // Saved store names are already persisted; a stale runtime read must not override what peers see.
     mocks.getStatus.mockResolvedValue({ machineName: 'Brennan’s MacBook Pro' })
     renderField('QA Override Desk')
     await act(async () => {})
@@ -78,8 +77,7 @@ describe('MachineNameField', () => {
   })
 
   it('lets Enter submit an enclosing host form like its sibling inputs, and still commits the name', async () => {
-    // Why: the SSH add form mounts this field beside inputs where Enter submits. A name typed just
-    // before that submit is committed when the form closes, so it is never lost.
+    // Enter submits the enclosing SSH form; commit on closure so a just-typed name survives.
     mocks.getStatus.mockResolvedValue({ machineName: 'm4airs-Air' })
     const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault())
     mocks.holder.state = { settings: { machineName: '' }, updateSettings: mocks.updateSettings }

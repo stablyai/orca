@@ -6,8 +6,7 @@ import {
 } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
-// Why these shapes: Codex agents working on Orca print `rg` hits from this very detector and its
-// specs, so quoted prompt wording lands in scrollback while the terminal sits at its input box.
+// Agents print rg hits from this detector into scrollback; quoted source must not masquerade as a live prompt.
 const QUOTED_DETECTOR_SOURCE_LINE =
   "└   if (hooksindex !== -1 && normalized.includes('press enter to confirm', hooksindex)) {"
 const QUOTED_PERMISSION_FIXTURE_LINE =
@@ -200,8 +199,7 @@ describe('detectTerminalWaitBlockedReason live prompts', () => {
   })
 })
 
-// Why: these matchers never inspect the pane's agent, so a Codex-named reason on a non-Codex screen
-// reaches the user verbatim through the CLI and the worker receipt's "Agent startup blocked:" line.
+// Matchers lack agent identity; provider-specific reason text reaches unrelated agents' CLI/worker receipts verbatim.
 describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
   const NON_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = [
     {
@@ -269,8 +267,7 @@ describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
     }
   ]
 
-  // Why: the reason was previously picked by looking for 'codex' in 600 chars of scrollback, so any
-  // agent that merely narrated about Codex handed its user a Codex label.
+  // Mentioning Codex in scrollback must not label another agent's wait Codex.
   it('does not borrow a Codex label from scrollback that only mentions Codex', () => {
     const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
@@ -295,11 +292,7 @@ describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
   }
 })
 
-// Antigravity readiness, and what this file does NOT claim about it.
-//
-// The detector recognizes a ready screen by the Antigravity header and a lone '>' caret. Model
-// names are not part of the signal: the logo can prefix the row, and Antigravity can run models
-// other than Gemini. Dialog selections keep their labels after '>', so they remain distinguishable.
+// Antigravity readiness uses its header and bare caret; models vary and dialog selections retain labels after >.
 describe('Antigravity readiness does not absorb its own startup dialog', () => {
   const TRUST_DIALOG_WITH_CARET = [
     'Antigravity CLI 1.0.3',
@@ -351,8 +344,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     })
   }
 
-  // Discriminating: the Gemini model line and caret satisfy readiness, so only the dialog sitting
-  // *below* them keeps this unready. Drop the ordering rule and this goes green-to-red.
+  // Gemini readiness still matches above the dialog; only ordering can keep the newer dialog blocked.
   it('keeps reporting a dialog that opens after a Gemini ready screen', () => {
     const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
@@ -382,8 +374,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(isKnownReadyPromptPreview(waitText)).toBe(false)
   })
 
-  // Discriminating: a stale dialog above a reprinted Gemini ready screen must stop being reported,
-  // which is the whole point of the dismissed-modal rule.
+  // A reprinted ready screen supersedes an older dialog above it.
   it('clears once a Gemini ready screen replaces the dialog', () => {
     const waitText = waitTextFor([
       ...TRUST_DIALOG_WITH_CARET,
@@ -490,8 +481,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     it(`refuses ${dialog.name} whose wording names no blocked reason, account row and all`, () => {
       const waitText = waitTextFor(dialog.lines)
 
-      // No blocked-signal rule matches, so the ordering defense cannot reach these: readiness has to
-      // refuse them on its own or the orchestrator types into a live dialog.
+      // No blocked-signal rule matches; readiness itself must reject these dialogs to prevent injection.
       expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
       expect(isKnownReadyPromptPreview(waitText)).toBe(false)
     })
@@ -508,9 +498,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
   }
 })
 
-// Real bytes: node-pty capture of `muse --provider echo --trust-workspace` at its ready
-// prompt (banner, skills summary, `❯` composer, provider status line), plus the
-// trust dialog from the same capture with no trust flag.
+// Muse 1.3.0 node-pty capture: echo-provider ready screen with trust flag, plus trust dialog without it.
 const MUSE_READY_SCREEN_ECHO = [
   '  Muse Code 1.3.0',
   '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',

@@ -13,12 +13,7 @@ type ReconcileRoundTripParams = {
   worktreeRoot: string | null
 }
 
-/**
- * Exposes the reconciliation safety serializer as a render-updated ref. It
- * mirrors the live editor's codec/link/image context so the step-6 re-parse
- * matches getMarkdown(), and only runs on commit — so rebuilding the closure
- * each render is cheap and always reflects the latest context.
- */
+/** Refresh the safety serializer’s ref with live codec/link/image context each render; only commits invoke the expensive reparse. */
 export function useRichMarkdownReconcileRoundTrip({
   htmlSuperscriptLinkContext,
   filePath,

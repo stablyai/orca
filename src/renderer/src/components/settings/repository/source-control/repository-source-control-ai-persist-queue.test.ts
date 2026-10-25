@@ -59,7 +59,7 @@ describe('createRepoAiPersistQueue', () => {
     const p2 = h.queue.persistTransform((base) => ({ ...base, customAgentCommand: 'run {prompt}' }))
     await Promise.all([p1, p2])
     expect(h.updateRepo).toHaveBeenCalledTimes(2)
-    // The second write must carry the first write's field -> it ran against the persisted result, not stale base.
+    // Queued writes must use the preceding persisted result so sibling fields survive.
     expect(h.getPersisted()).toMatchObject({ enabled: true, customAgentCommand: 'run {prompt}' })
   })
 
@@ -119,13 +119,11 @@ describe('createRepoAiPersistQueue', () => {
       ...base,
       customAgentCommand: 'should-not-write'
     }))
-    // Switch repos while the first write is in flight and the second is queued.
     h.setRepoId('repo-2')
     releaseFirst()
     const [ok1, ok2] = await Promise.all([p1, p2])
     expect(ok1).toBe(true)
     expect(ok2).toBe(true)
-    // Second must not run against repo-2.
     expect(h.updateRepo).toHaveBeenCalledTimes(1)
     // Completing a stale write must not seed the new repo's local persisted base.
     expect(h.setPersisted).not.toHaveBeenCalled()

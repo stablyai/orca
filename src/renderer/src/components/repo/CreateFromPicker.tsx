@@ -182,8 +182,7 @@ export function CreateFromPicker({
       return
     }
     const trimmedQuery = query.trim()
-    // Why: an empty query lists the repo's branches, as the composer's Branch tab already does;
-    // a minimum length left this picker showing only the default and worktree branches.
+    // List branches on empty queries too; minimum query length would hide nondefault branches without worktrees.
     if (!open || !repoId || !repoHostId) {
       setSearchResults([])
       setIsSearching(false)

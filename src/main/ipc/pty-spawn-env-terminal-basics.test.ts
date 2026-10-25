@@ -405,8 +405,7 @@ describe('registerPtyHandlers', () => {
       const tabId = 'tab-1'
       const paneKey = makePaneKey(tabId, leafId)
       handlers.clear()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite's mock BrowserWindow, widened the same way every other registerPtyHandlers call in this file does; the handler only touches webContents.send.
-      registerPtyHandlers(mainWindow as never)
+      registerPtyHandlers(mainWindow)
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,

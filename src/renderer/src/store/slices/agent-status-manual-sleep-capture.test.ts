@@ -169,8 +169,7 @@ describe('manual sleep agent session capture', () => {
     })
   })
 
-  // Why: a retained row is the pane's last status after its pty died, so it is stale by
-  // construction — capturing it verbatim rebuilt a record wake discards as stale (#11598).
+  // Retained PTY-exit rows are stale; raw capture produces records wake rejects (#11598).
   it('refreshes a stale retained working row so wake cannot discard it', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
@@ -201,8 +200,7 @@ describe('manual sleep agent session capture', () => {
     expect(record.interrupted).toBeUndefined()
   })
 
-  // Why: the promoted checkpoint owns the pane's recovery identity (connection, transcript); the
-  // retained pass must not re-derive over it any more than the live pass may.
+  // Promoted checkpoint owns connection/transcript identity; retained pass must not overwrite it.
   it('keeps a promoted live checkpoint that also has a retained row', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
@@ -291,8 +289,7 @@ describe('manual sleep agent session capture', () => {
     })
   })
 
-  // Why: a slept `done` pane stays passive until its tab is opened, so a second sleep finds no
-  // live row to re-derive its record from — the wipe must leave it alone (#11598).
+  // Slept done panes stay passive until opened; repeated sleep has no live row and must preserve recovery (#11598).
   it('keeps a durable slept record whose pane was never woken across a second sleep', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
@@ -375,8 +372,7 @@ describe('manual sleep agent session capture', () => {
     })
   })
 
-  // Why: runSleepWorktrees deactivates the workspace before terminal shutdown, so capture must
-  // still see the live rows it is about to kill.
+  // Sleep deactivates workspace before killing terminals; capture must still find its live rows.
   it('captures done and interrupted rows after the slept worktree is deactivated', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)

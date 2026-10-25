@@ -91,8 +91,7 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
       browserUse: getSkillInstallStatus(browserUseSkill),
       computerUse: getComputerUseInstallStatus(computerUseSkill, computerUsePermissionStatus),
       orchestration: getSkillInstallStatus(orchestrationSkill),
-      // Why: linearTickets remains in the onboarding selection shape, but the
-      // generic feature wall must not become a Linear skill install surface.
+      // Retain the selection field without offering Linear installation in the generic feature wall.
       linearTickets: getFeatureWallExcludedLinearTicketsStatus()
     }),
     [browserUseSkill, computerUsePermissionStatus, computerUseSkill, orchestrationSkill]
@@ -106,8 +105,7 @@ export function getDefaultAgentCapabilitySetupSelection(
 ): OnboardingFeatureSetupSelection {
   return {
     browserUse: !readiness.browserUseSkillInstalled,
-    // Why: Computer Use has OS permission setup in addition to the skill install.
-    // Keep it selected when permissions still need action, even if the skill exists.
+    // Keep Computer Use selected when OS permission still needs action, even if its skill is installed.
     computerUse:
       !readiness.computerUseSkillInstalled ||
       (!readiness.computerUseReady && !readiness.computerUseUnavailable),

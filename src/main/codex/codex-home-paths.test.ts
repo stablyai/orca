@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   readlinkSync,
   rmSync,
   symlinkSync,
@@ -13,7 +14,7 @@ import {
 import { tmpdir } from 'node:os'
 import type * as NodeFs from 'node:fs'
 import type * as NodeOs from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -238,6 +239,53 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expect(lstatSync(runtimePluginsPath).isSymbolicLink()).toBe(true)
     expectSymbolicLinkTargetIfLinked(runtimePluginsPath, externalPluginsPath)
     expect(readFileSync(join(runtimePluginsPath, 'runtime.md'), 'utf-8')).toBe('runtime\n')
+  })
+
+  it('imports global rules beside account approvals and drops deleted ones (#24431)', () => {
+    const systemRulesPath = join(getSystemCodexHomePath(), 'rules')
+    const perAccountRulesPath = join(userDataDir, 'codex-accounts', 'account-1', 'home', 'rules')
+    mkdirSync(systemRulesPath, { recursive: true })
+    mkdirSync(perAccountRulesPath, { recursive: true })
+    writeFileSync(join(systemRulesPath, 'default.rules'), 'global\n')
+    writeFileSync(join(perAccountRulesPath, 'default.rules'), 'account approval\n')
+
+    syncSystemCodexResourcesIntoManagedHome(dirname(perAccountRulesPath))
+
+    // Codex loads sorted paths and later network/host_executable rules win, so account files must sort last.
+    expect(readdirSync(perAccountRulesPath).sort()).toEqual([
+      '_orca-global-default.rules',
+      'default.rules'
+    ])
+    expect(readFileSync(join(perAccountRulesPath, 'default.rules'), 'utf-8')).toBe(
+      'account approval\n'
+    )
+    expect(readFileSync(join(perAccountRulesPath, '_orca-global-default.rules'), 'utf-8')).toBe(
+      'global\n'
+    )
+
+    rmSync(join(systemRulesPath, 'default.rules'))
+    syncSystemCodexResourcesIntoManagedHome(dirname(perAccountRulesPath))
+
+    expect(existsSync(join(perAccountRulesPath, '_orca-global-default.rules'))).toBe(false)
+    expect(readFileSync(join(perAccountRulesPath, 'default.rules'), 'utf-8')).toBe(
+      'account approval\n'
+    )
+  })
+
+  it('never writes rule copies through a managed rules link into ~/.codex', () => {
+    const systemRulesPath = join(getSystemCodexHomePath(), 'rules')
+    mkdirSync(systemRulesPath, { recursive: true })
+    mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
+    writeFileSync(join(systemRulesPath, 'default.rules'), 'global\n')
+    symlinkSync(
+      systemRulesPath,
+      join(getRuntimeCodexHomePath(), 'rules'),
+      process.platform === 'win32' ? 'junction' : undefined
+    )
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(existsSync(join(systemRulesPath, '_orca-global-default.rules'))).toBe(false)
   })
 
   it('refreshes owned fallback copies when symlinks are unavailable', () => {

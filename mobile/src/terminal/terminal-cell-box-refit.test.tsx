@@ -12,7 +12,6 @@ vi.mock('react-native', () => ({
 
 const HANDLE = 'term-1'
 
-/** The session's refit over one open terminal whose document reported a `cellWidth` box. */
 function refitHarness(cellWidth: number) {
   const terminal: TerminalWebViewHandle = {
     prepareForForegroundRecovery: vi.fn(),
@@ -21,7 +20,6 @@ function refitHarness(cellWidth: number) {
     resize: vi.fn(),
     reflow: vi.fn(),
     clear: vi.fn(),
-    // The reported box, 47 rows high in the 710 px frame.
     fitDimensions: vi.fn((frame: { width: number }) => ({
       cols: Math.floor(frame.width / cellWidth),
       rows: 47
@@ -64,7 +62,6 @@ function refitHarness(cellWidth: number) {
     viewportRef,
     subscribeToTerminal,
     report: (handle: string) => act(() => refit!.notifyTerminalCellBoxChange(handle)),
-    // The session's onLayout: the one frame store, then the width notify.
     layOut: (width: number) =>
       act(() => {
         terminalFrameRef.current = { width, height: 710 }
@@ -84,7 +81,7 @@ afterEach(() => {
 })
 
 describe('a new cell box for the open terminal', () => {
-  it('refits the PTY to the grid the new box fits, as after a renderer swap', async () => {
+  it('updates the viewport grid and requests a resubscribe after a changed cell box', async () => {
     const harness = refitHarness(7.8)
     harness.report(HANDLE)
     await act(async () => {
@@ -105,7 +102,7 @@ describe('a new cell box for the open terminal', () => {
     expect(harness.viewportRef.current).toEqual({ cols: 55, rows: 47 })
   })
 
-  it('leaves the PTY alone when a new frame width holds the same grid, as sub-pixel jitter does', async () => {
+  it('keeps the subscription when frame jitter holds the same grid', async () => {
     const harness = refitHarness(23 / 3)
     harness.layOut(427.3)
     await act(async () => {

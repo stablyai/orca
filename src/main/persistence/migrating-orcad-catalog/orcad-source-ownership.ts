@@ -1,11 +1,4 @@
-/**
- * Which catalog rows a migrating SSH target owns, answered the way the app attributes them.
- *
- * A repo names its host by the legacy `connectionId` or by `executionHostId: 'ssh:<target>'`; a
- * folder workspace by its own or its group's connection, or by the repos inside its folder, which
- * main matches with `isPathInsideOrEqual` (drive letters and case folded on Windows paths). Export
- * and subtraction must use one rule, or a row exported by one is left behind by the other.
- */
+// Export and subtraction must share repo/folder host attribution or migrated rows can remain behind.
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import {
   resolveFolderWorkspaceHost,
@@ -34,7 +27,7 @@ export function projectGroupBelongsToOrcadSource(
   return host?.kind === 'ssh' && host.targetId === targetId
 }
 
-/** Folder workspace ids the target owns in `state`; read before any of its repos are removed. */
+/** Resolve inferred folder ownership before removing repos. */
 export function orcadSourceFolderWorkspaceIds(
   state: FolderWorkspaceHostState,
   targetId: string

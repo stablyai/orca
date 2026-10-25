@@ -63,10 +63,7 @@ function readLinuxCopiedFilePaths(clipboard: ClipboardFormatReader): string[] {
   return filePathsFromUrls(urls)
 }
 
-/**
- * Paths of the files a file manager copied, so a paste can tell the text that
- * labels them from prompt text. A list it cannot read in full comes back empty.
- */
+/** Identify file-copy labels so paste does not type them as prompt text; unreadable/incomplete lists return empty. */
 export function readClipboardCopiedFilePaths(
   clipboard: ClipboardFormatReader,
   platform: NodeJS.Platform = process.platform

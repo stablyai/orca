@@ -1,5 +1,5 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
-import { isCodexAppServerRequestError } from './codex-app-server-request-error'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import {
   CodexAppServerTimeoutError,
   isCodexAppServerUnsupportedError

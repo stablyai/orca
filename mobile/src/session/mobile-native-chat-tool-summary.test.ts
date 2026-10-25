@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  describeToolInput,
-  summarizeToolInput,
-  toolFilePath
-} from '../../../src/shared/native-chat-tool-summary'
+import { summarizeToolInput, toolFilePath } from '../../../src/shared/native-chat-tool-summary'
 
 describe('summarizeToolInput', () => {
   it('passes short strings through, collapsing whitespace', () => {
@@ -15,10 +11,9 @@ describe('summarizeToolInput', () => {
   })
 
   it('truncates long previews with an ellipsis', () => {
-    const long = 'x'.repeat(200)
+    const long = `prefix ${'x'.repeat(200)}`
     const out = summarizeToolInput(long)
-    expect(out.length).toBe(80)
-    expect(out.endsWith('…')).toBe(true)
+    expect(out).toBe(`prefix ${'x'.repeat(72)}…`)
   })
 
   it('returns empty string for null/undefined', () => {
@@ -54,12 +49,5 @@ describe('toolFilePath', () => {
     expect(toolFilePath({ command: 'ls' })).toBeNull()
     expect(toolFilePath('x')).toBeNull()
     expect(toolFilePath(null)).toBeNull()
-  })
-})
-
-describe('describeToolInput', () => {
-  it('labels rows with the path or primary argument', () => {
-    expect(describeToolInput({ file_path: 'src/a.ts', offset: 3 })).toBe('src/a.ts')
-    expect(describeToolInput('{"cmd":"git status"}')).toBe('git status')
   })
 })

@@ -33,7 +33,6 @@ function resolveLinearExampleIcon(example: SkillUsageExample): LucideIcon {
   return LINEAR_EXAMPLE_ICONS[example.id] ?? LinearIcon
 }
 
-// Checklist owns connect + skill + visibility; examples and notes sit below.
 export function LinearAgentSkillPane(): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)

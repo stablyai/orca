@@ -16,7 +16,6 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-// Done and Esc must close the same way: reset the name editor and recount links.
 it('closes through Done like any other dismissal', async () => {
   render(<RuntimeShareComputerButton />)
   fireEvent.click(screen.getByRole('button', { name: 'Share this computer' }))

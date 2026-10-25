@@ -1,7 +1,4 @@
-/**
- * Turning `agent.launch` params into the intent the executor runs: the caller's workspace selector
- * resolved to an id, and a reused terminal checked. Nothing here creates anything.
- */
+/** Resolve selectors and validate terminal reuse without creating a surface. */
 
 import type { AgentLaunchIntent, AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -9,17 +6,8 @@ import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/op
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
-/**
- * A client addresses a workspace by selector, but the result's `worktreeId` is an id and every
- * step below the executor re-prefixes it as `id:<worktreeId>`. Resolving here is what keeps a
- * caller's `id:wt-7` from reaching the runtime as `id:id:wt-7`.
- *
- * The launch *scope* is what is asked for, because the id below is the only thing read off it. The
- * git-worktree record is the narrower answer — it does not exist for the floating workspace, so
- * asking for one refused a launch this method can perfectly well run, on a workspace whose id it
- * had already resolved. A folder workspace survived that only because the resolver fabricates a
- * worktree row for it; the scope is the answer that is real for all three kinds.
- */
+/** Resolve the selector once to avoid id:id: prefixes below the executor.
+ * Use launch scope: floating workspaces have no Git worktree record, and folder rows are synthetic. */
 async function agentLaunchTarget(
   params: AgentLaunchParams,
   runtime: Pick<OrcaRuntimeService, 'showTerminalWorkspaceLaunchScope'>
@@ -82,11 +70,7 @@ async function validateReusedTerminal(
   }
 }
 
-/**
- * The half before anything is created: resolve the caller's selector, then check a reused terminal.
- * A throw from here proves no surface was built, which is what lets the ledger record a launch that
- * failed in it as `failed` rather than `unknown`.
- */
+/** Resolve and validate before creation so a throw proves failed rather than unknown in the ledger. */
 export async function resolveUnlaunchedIntent(
   params: AgentLaunchParams,
   runtime: OrcaRuntimeService,

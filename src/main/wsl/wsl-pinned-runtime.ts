@@ -22,10 +22,7 @@ const DOWNLOAD_TIMEOUT_MS = 180_000
 /** Runs one command in the distro and returns its trimmed stdout; throws on failure. */
 export type WslRuntimeCommand = (spec: WslSpec, timeoutMs?: number) => Promise<string>
 
-/**
- * Orca's pinned Node in the distro's guest store (the one OpenCode's WSL reader uses), installed
- * from the host's archive cache on first use. Never substitutes a user-installed runtime.
- */
+/** Use the shared guest-store pinned Node, installed from host archive cache on first use; never substitute user runtimes. */
 export async function ensureWslPinnedRuntime(
   run: WslRuntimeCommand,
   cacheRoot: string,
@@ -36,7 +33,7 @@ export async function ensureWslPinnedRuntime(
     throw new Error(`Unsupported WSL architecture: ${arch}`)
   }
   const { libc, glibc } = await probeLinuxLibc((script) => run({ script, loginPath: 'none' }))
-  // Why before any download: the pinned Node cannot load on an older glibc, as SSH hosts refuse.
+  // Reject unsupported glibc before downloading a pinned Node that cannot load.
   if (glibc && isGlibcBelow(glibc, PINNED_NODE_GLIBC_FLOOR)) {
     throw new Error(
       `This WSL distro's glibc ${glibc.major}.${glibc.minor} is older than ` +
@@ -61,7 +58,7 @@ export async function ensureWslPinnedRuntime(
   const key = `${cacheRoot}:${target}`
   let download = downloads.get(key)
   if (!download) {
-    // Why its own deadline: a joining caller's abort must not cancel another caller's download.
+    // Use an independent download deadline so one joining caller cannot abort everyone's download.
     download = materializeNodeRuntimeArchive(target, cacheRoot, {
       signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)
     }).finally(() => downloads.delete(key))

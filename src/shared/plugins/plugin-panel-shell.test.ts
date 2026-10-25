@@ -20,8 +20,7 @@ describe('buildPluginPanelShellHtml', () => {
     const html = buildPluginPanelShellHtml('<main>Plugin</main>')
     const script = html.match(/<script>\n([\s\S]*?)<\/script>/)?.[1]
     expect(script).toBeTruthy()
-    // Keep happy-dom's global removable for Vitest teardown; production shell
-    // keeps the override non-configurable inside the disposable iframe.
+    // Keep the happy-dom override removable for teardown; disposable production iframes use non-configurable globals.
     window.eval(script!.replace('configurable: false', 'configurable: true'))
 
     const anchor = document.createElement('a')

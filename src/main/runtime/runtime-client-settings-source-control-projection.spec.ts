@@ -4,8 +4,7 @@ import { createGlobalSettingsFixture } from '../../shared/global-settings-test-f
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getDefaultSourceControlAiSettings } from '../../shared/source-control-ai'
 
-// Why: `settings.get` is an explicit allowlist. A paired client's AI buttons resolve their agent
-// from the saved per-action recipe, and a recipe missing here reads as "none saved" on the client.
+// settings.get is an allowlist: omitted per-action agent recipes look unsaved to paired AI buttons.
 function projectionOf(settings: Partial<GlobalSettings>) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: get() reads nothing but store.getSettings(); every other RuntimeStore member is unreachable from that path.
   return new RuntimeClientSettingsController({ getSettings: () => settings } as never).get()

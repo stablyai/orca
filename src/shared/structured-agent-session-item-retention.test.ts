@@ -21,7 +21,6 @@ function item(sequence: number): AgentJournalRenderItem {
   }
 }
 
-/** A row a subagent wrote. */
 function childItem(sequence: number): AgentJournalRenderItem {
   return { ...item(sequence), agentId: 'task-1', producerKind: 'agent' }
 }
@@ -80,7 +79,7 @@ function streamItems(
   )
 }
 
-/** One live batch per `size` rows, so a burst costs a few merges rather than one per row. */
+/** Batch bursts so tests exercise merges without one per row. */
 function streamBatches(
   state: StructuredAgentSessionState,
   rows: AgentJournalRenderItem[],
@@ -283,8 +282,7 @@ describe('structured agent session item retention', () => {
   })
 
   it('admits a live row below the head when nothing older is left on the host', () => {
-    // Row 1 was tombstoned before this client attached, so the window starts at 2 and
-    // covers the whole journal; a revival of row 1 leaves no hole to skip.
+    // Whole journal starts at 2 after a tombstone; reviving row 1 creates no paging hole.
     const hydrated = hydrate(
       Array.from({ length: 3 }, (_, index) => item(index + 2)),
       false

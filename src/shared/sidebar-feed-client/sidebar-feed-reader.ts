@@ -30,22 +30,16 @@ export type SidebarFeedNotice = Pick<SidebarInputsChangedEvent, 'generation' | '
 export type SidebarFeedReaderRead = {
   snapshot: SidebarFeedSnapshot | null
   unavailable: boolean
-  /** Set when read `settledBy` just settled with nothing more to read: the snapshot reflects every
-   *  write the host had answered before that read was sent. */
+  /** This read settled every host write answered before it was sent, with no remaining pages. */
   settledBy: number | null
 }
 
 export type SidebarFeedReaderOptions = {
-  /** The wait before the next retry after `failures` failed reads in a row; null stops retrying.
-   *  An install or a refresh starts the count over. */
+  /** Retry delay after consecutive failures; null stops. Installs/refresh reset the count. */
   retryDelayMs: (failures: number) => number | null
 }
 
-/**
- * One host's sidebar feed: reads it through the shared installer, one read at a time, pages a
- * batch whole, follows change notices, retries a failed read, and installs each batch as an
- * immutable snapshot that keeps every unchanged entity's object.
- */
+/** Serialize whole-batch reads, follow notices/retry failures, and preserve unchanged entity objects in immutable installs. */
 export class SidebarFeedReader {
   private state = INITIAL_SIDEBAR_INPUTS_FEED_STATE
   private snapshot: SidebarFeedSnapshot | null = null

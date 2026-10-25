@@ -130,8 +130,7 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual([])
   })
 
-  // Peek is unfenced against a stale generation, but a caller on the wrong pane is not this
-  // mailbox's consumer at all, so it must not read the new owner's instructions either.
+  // Peek may ignore stale generation, but a different pane must never read the current consumer's instructions.
   it('refuses the stale worker a --peek at the new owner mail', async () => {
     const dispatchId = attachedDispatchWithMail()
     reattach(dispatchId)

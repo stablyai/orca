@@ -204,10 +204,10 @@ describe.skipIf(process.platform !== 'win32' || !tempIsCmdSafe)('native agent ho
     expect(listener.posts).toHaveLength(0)
   })
 
-  it('drains, but does not report, Claude hooks that Grok or Devin imported', async () => {
+  it('skips, without reading stdin, Claude hooks that Grok or Devin imported', async () => {
     const listener = await listen()
     for (const extra of [{ GROK_HOOK_EVENT: 'PreToolUse' }, { DEVIN_PROJECT_DIR: dir }]) {
-      const result = await run(exePath, ['claude'], paneEnv(listener, extra))
+      const result = await run(exePath, ['claude'], paneEnv(listener, extra), 'abandon')
       expect(result.code).toBe(0)
       expect(result.stdout.trim()).toBe('{}')
     }

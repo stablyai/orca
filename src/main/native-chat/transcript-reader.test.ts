@@ -185,7 +185,10 @@ describe('readNativeChatTranscript (claude)', () => {
     if (!('messages' in result)) {
       throw new Error('expected messages')
     }
-    expect(result.messages[0].blocks[0]).toEqual({ type: 'text', text: 'pondering' })
+    expect(result.messages[0]).toMatchObject({
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'pondering' }]
+    })
   })
 })
 

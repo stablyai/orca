@@ -1,6 +1,4 @@
-// createManagedWorktree used to pick remote-vs-local from the raw `connectionId` field, so a repo
-// stamped only `executionHostId: 'ssh:*'` ran `git worktree add` on the client against a remote
-// path. That is the #11163 shape: read the execution host, never one spelling of it.
+// #11163: executionHostId-only SSH repos must never run local git worktree add on remote paths.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -54,14 +52,11 @@ describe('createManagedWorktree execution-host routing', () => {
     createRuntimeFolderWorktreeMock.mockReset()
     createRuntimeFolderWorktreeMock.mockResolvedValue({ worktree: { id: 'folder-1' } })
     createRuntimeLocalManagedWorktreeMock.mockReset()
-    // Name the defect in the failure output: reaching this mock means a remote repo was routed
-    // into a client-side `git worktree add`.
     createRuntimeLocalManagedWorktreeMock.mockRejectedValue(
       new Error('local_worktree_create_ran_for_remote_repo')
     )
   })
 
-  // The SSH host is not served here: the create refuses rather than running `git worktree add`.
   it.each([
     ['a repo stamped executionHostId only', { executionHostId: `ssh:${TARGET_ID}` }],
     ['a legacy connectionId-only repo', { connectionId: TARGET_ID }]
@@ -72,7 +67,6 @@ describe('createManagedWorktree execution-host routing', () => {
       runtime.createManagedWorktree({ repoSelector: 'repo-remote', name: 'feature' })
     ).rejects.toThrow(SshHostNotServedError)
 
-    // A local `git worktree add` against a remote path is the silent-substitution failure.
     expect(createRuntimeLocalManagedWorktreeMock).not.toHaveBeenCalled()
   })
 })

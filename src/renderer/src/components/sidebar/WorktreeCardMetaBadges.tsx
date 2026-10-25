@@ -82,8 +82,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
     ) ?? []
 
   return (
-    // Why: Radix HoverCardTrigger uses `asChild`, so this group must forward
-    // trigger props/ref to the actual DOM node for attachment-only hover.
+    // Radix asChild needs trigger props/ref forwarded to the DOM node for attachment-only hover.
     <div
       ref={ref}
       {...props}

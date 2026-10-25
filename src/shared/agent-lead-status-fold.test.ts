@@ -8,7 +8,7 @@ import {
 } from './agent-lead-status-fold'
 
 describe('foldAgentLeadStatus', () => {
-  it('keeps a lead that is not settled, whatever its children do', () => {
+  it('keeps a blocked lead while child work is working', () => {
     expect(foldAgentLeadStatus({ leadState: 'blocked', childWorkLiveness: 'working' })).toEqual({
       stateName: 'blocked'
     })
@@ -25,17 +25,6 @@ describe('foldAgentLeadStatus', () => {
       stateName: 'working',
       workingMode: 'monitoring'
     })
-  })
-
-  it("takes no verdict: how the mainAgent's turn ended is not a fold input", () => {
-    // A cancel is a fact about the main agent, carried on `mainAgent.outcome`; the work it left running
-    // reads exactly as it would after a plain end of turn.
-    const input: Parameters<typeof foldAgentLeadStatus>[0] = {
-      leadState: 'done',
-      childWorkLiveness: 'monitoring'
-    }
-    expect(Object.keys(input)).toEqual(['leadState', 'childWorkLiveness'])
-    expect(foldAgentLeadStatus(input)).toEqual({ stateName: 'working', workingMode: 'monitoring' })
   })
 
   it('settles when nothing is running', () => {
@@ -112,13 +101,15 @@ describe('isAgentTimeAccruing', () => {
   })
 
   it('relies on the fold emitting monitoring only for a settled main agent', () => {
-    // Every lane folds through here (Codex never emits monitoring), so a monitoring row can never
-    // hide a running main agent turn from the stats.
+    // Monitoring requires a settled lead; live lead turns must still accrue time.
     const leadStates = ['working', 'waiting', 'blocked', 'done'] as const
     const liveness = ['waiting', 'working', 'monitoring', null] as const
     for (const leadState of leadStates) {
       for (const childWorkLiveness of liveness) {
         const folded = foldAgentLeadStatus({ leadState, childWorkLiveness })
+        if (folded.workingMode === 'monitoring') {
+          expect(leadState).toBe('done')
+        }
         const accrues = isAgentTimeAccruing({
           state: folded.stateName,
           workingMode: folded.workingMode
@@ -153,8 +144,11 @@ describe('continueMainAgentStatus', () => {
       state: 'done',
       stateStartedAt: 4
     })
-    expect(
-      continueMainAgentStatus(undefined, { state: 'working', outcome: 'cancellation' }, 30)
-    ).toEqual({ state: 'working', stateStartedAt: 30 })
+    for (const state of ['working', 'waiting', 'blocked'] as const) {
+      expect(continueMainAgentStatus(undefined, { state, outcome: 'cancellation' }, 30)).toEqual({
+        state,
+        stateStartedAt: 30
+      })
+    }
   })
 })

@@ -62,8 +62,7 @@ export async function checkWorkerMailbox(args: {
   db.requireRun(deliveryRunId)
   const mailboxIdentity = { runId: deliveryRunId, dispatchId: workerMailbox.dispatchId }
   const address = `dispatch:${workerMailbox.dispatchId}`
-  // Why: a federated worker host has no dispatch_contexts row, so its generation lives on the
-  // remote_dispatch_attachments row instead.
+  // Federated hosts keep consumer generations on remote_dispatch_attachments, without a dispatch_contexts row.
   const readCurrentGeneration = (): number | undefined =>
     activeDispatch
       ? db.getDispatchContextById(workerMailbox.dispatchId)?.consumer_generation
@@ -82,7 +81,7 @@ export async function checkWorkerMailbox(args: {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
       if (current?.id === activeDispatch.id) {
-        // Why: a re-attach landing on the awaits above keeps the id but re-points the pane.
+        // Re-attachment during awaits can retain the id while changing the pane.
         if (callerHoldsDispatchPane(current, paneKey)) {
           return
         }

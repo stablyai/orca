@@ -28,7 +28,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
-  // Why: the shared client owns authenticated identity; this host read only supplies connection-hint metadata.
+  // Shared-client authentication owns identity; this host read supplies only connection hints.
   useEffect(() => {
     if (!hostId) {
       return
@@ -111,7 +111,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       for (const terminalRef of terminalRefs.current.values()) {
         terminalRef.prepareForForegroundRecovery()
       }
-      // Why: iOS can resume a WKWebView with a blank xterm store and no web-ready; invalidate the latch so init waits for the pong.
+      // WKWebView can resume blank without ready; clear the latch so init waits for a fresh pong.
       const outcome = recoverActiveTerminalAfterForeground({
         activeHandleRef,
         terminalRefs,
@@ -128,7 +128,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
 
-  // Why: resume lands mid-reconnect (socket dies in bg); re-run recovery once connected or a blanked WKWebView stays stale.
+  // Repeat resume recovery after reconnect or an iOS-blanked WebView can remain stale.
   useEffect(() => {
     if (connState !== 'connected' || !pendingForegroundRecoveryRef.current) {
       return

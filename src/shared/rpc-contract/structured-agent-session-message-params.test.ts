@@ -4,8 +4,7 @@ import {
   structuredAgentSessionBlocksTooLarge
 } from './structured-agent-session-message-params'
 
-// Clients refuse before Send with words, so they must refuse exactly what a host refuses, including
-// older hosts, which measure with Buffer.byteLength.
+// Client refusals must match host UTF-8 bounds, including older Buffer.byteLength-based hosts.
 describe('message size bound', () => {
   const envelope = JSON.stringify([{ type: 'text', text: '' }]).length
 

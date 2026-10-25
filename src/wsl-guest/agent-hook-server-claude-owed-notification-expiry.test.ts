@@ -1,5 +1,4 @@
-// The relay owns a remote pane's Claude records, so it — not the desktop — must restate a pane
-// that was held working by a task notification Claude never sent.
+// The relay owns remote Claude records and must restate status when an owed task notification never arrives.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

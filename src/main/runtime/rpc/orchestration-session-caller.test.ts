@@ -37,7 +37,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-// Fields that can name a party: the caller in ORCHESTRATION_CALLER_PARAM, a target in ORCHESTRATION_TARGET_PARAM.
+// Caller and target params are named by ORCHESTRATION_CALLER_PARAM and ORCHESTRATION_TARGET_PARAM.
 const PARTY_NAMING_FIELDS = [
   'to',
   'from',
@@ -46,7 +46,7 @@ const PARTY_NAMING_FIELDS = [
   'sessionId',
   'address'
 ] as const
-// `method field` pairs with such a field that is neither, so never resolves as a party.
+// These identity-adjacent fields must never resolve as parties.
 const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.run from': 'retired; refused before any handler',
   'orchestration.runShow from': 'reads a Run by id; `from` is unused',
@@ -155,8 +155,7 @@ describe('orchestration session callers at the dispatch entry', () => {
         })
       )
 
-      // Whatever the method answers, it answered as the session: no host-boundary or session refusal,
-      // and terminal evidence on the same request never attested anyone.
+      // Replies must use session identity without host/session refusal; terminal evidence on the same request must never attest.
       if (!response.ok) {
         expect(Object.values(CODES)).not.toContain(response.error.code)
         expect(response.error.message).not.toContain('term_other')

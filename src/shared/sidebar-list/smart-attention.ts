@@ -19,30 +19,13 @@ import {
 } from '../agent-status-types'
 import { parsePaneKey } from '../stable-pane-id'
 
-/**
- * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
- *   1 — Needs you (`blocked` / `waiting`)
- *   2 — Done (`done`, not interrupted, completed within AGENT_STATUS_STALE_AFTER_MS)
- *   3 — Working (`working`)
- *   4 — Unverifiable (stale non-`done` entry on a pane Orca still holds a live PTY for:
- *       the reporting stream stopped, not necessarily the work)
- *   5 — Idle (no live entry, interrupted `done`, an aged-out completion, or a stale entry
- *       with no live PTY behind it)
- *
- * Primary sort key; ties fall back to the attention timestamp. See docs/smart-worktree-order-redesign.md.
- */
+/** Attention priority: 1 Needs you; 2 recent unrequested Done; 3 Working; 4 stale evidence with a live PTY;
+ * 5 Idle (including stopped/aged Done or stale without live PTY). Lower wins; ties use attention timestamps.
+ * See docs/smart-worktree-order-redesign.md. */
 export type SmartClass = 1 | 2 | 3 | 4 | 5
 
-/**
- * Per-worktree resolution computed once before sorting.
- *
- * `attentionTimestamp` by class:
- *   - Class 1: `stateStartedAt` of the current entry. Class 2: the entry's completion time.
- *   - Class 3: `stateStartedAt` of the most recent prior `done`/`blocked`/`waiting` entry,
- *     falling back to the current `working` `stateStartedAt`.
- *   - Class 4: when the evidence was last observed, so the least-silent pane ranks first.
- *   - Class 5: `0` — comparator drops to `effectiveRecentActivity` for idle ordering.
- */
+/** Per-sort resolution. Timestamps: needs-you entry start; Done completion; Working latest prior attention
+ * (or current start); unverifiable last evidence; Idle zero falls through to effectiveRecentActivity. */
 export type WorktreeAttention = {
   cls: SmartClass
   attentionTimestamp: number
@@ -78,10 +61,7 @@ export function hasFreshAttributedAgentStatus(
   )
 }
 
-/**
- * Return the timestamp of the most recent `done`/`blocked`/`waiting` history row, ignoring
- * `done` rows the user stopped (Ctrl+C). Returns `null` when no qualifying row exists.
- */
+/** Latest prior Done/blocked/waiting timestamp, excluding user-stopped turns; null when none qualifies. */
 export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]): number | null {
   let max = 0
   for (const h of history) {
@@ -99,23 +79,15 @@ export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]):
   return max > 0 ? max : null
 }
 
-/**
- * One pane's contribution to a worktree's attention class. Fresh hook entries win; hookless
- * panes fall back to the title heuristic (design doc Edge case 9). Authority is per-pane, not per-worktree.
- */
+/** Fresh hooks outrank title heuristics per pane, never for an entire worktree. */
 export type PaneInput =
-  // Why hasLivePty: a stale entry's decay destination depends on whether Orca still holds the
-  // pane's PTY — losing the reporting stream is not the same as nothing running there.
+  // Retained PTY evidence distinguishes a lost reporting stream from an empty pane.
   | { kind: 'hook'; entry: AgentStatusEntry; hasLivePty: boolean }
   // Why: TerminalTab has no per-tab lastActivityAt; the worktree-level value suffices for cross-worktree ordering.
   | { kind: 'title'; status: AgentStatus | null; worktreeLastActivityAt: number }
 
-/**
- * Resolve a worktree's class + attention timestamp from its panes' inputs.
- * A stale hook entry lands in Class 4 or 5 depending on live-PTY evidence; the worktree falls to
- * Class 5 with no fresh hook and no title heuristic.
- * Across panes: `cls` is the **min** (most demanding pane wins), `attentionTimestamp` the **max** within that class.
- */
+/** Choose the most demanding pane (minimum class), then latest timestamp within it. Stale hooks decay
+ * to unverifiable with live PTY evidence, otherwise Idle; absent fresh hooks/titles also mean Idle. */
 export function resolveAttention(panes: PaneInput[], now: number): WorktreeAttention {
   let bestCls: SmartClass = 5
   let bestTs = 0
@@ -127,9 +99,7 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
     if (pane.kind === 'hook') {
       const entry = pane.entry
       if (!isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-        // Why: a pane Orca still holds a PTY for outranks a genuinely empty one — the user may
-        // know why it went quiet (a long build), which Orca never can. It never outranks a
-        // reporting pane, and it never claims the agent finished.
+        // Retained PTYs outrank empty panes without claiming completion or outranking reporting panes.
         if (resolveDecayedAgentRowState(entry, pane.hasLivePty) === 'unverifiable') {
           const observedAt = agentStatusEvidenceObservedAt(entry)
           if (
@@ -151,21 +121,18 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         cls = 1
         ts = entry.stateStartedAt
       } else if (entry.state === 'done') {
-        // Why: null covers a stopped `done` (not a completion) and idle session boundaries;
-        // neither is attention. A failed `done` ranks here: it is news the user has not seen.
+        // User stops/idle session boundaries are not attention; failed completions remain unseen news.
         const completedAt = agentEntryCompletionAt(entry)
         if (completedAt === null) {
           continue
         }
-        // Why: same-state `done` writes advance updatedAt without moving the completion, so the hook
-        // freshness gate alone can keep a row in Class 2 long after the UI shows it aged out.
+        // updatedAt can advance on same-state Done writes; gate completion age separately to match the UI.
         if (now - completedAt > AGENT_STATUS_STALE_AFTER_MS) {
           continue
         }
         cls = 2
         ts = completedAt
       } else {
-        // working
         cls = 3
         // Why: sort Class 3 by most recent prior attention so a just-started turn outranks one working for an hour.
         const prior = mostRecentAttentionInHistory(entry.stateHistory)
@@ -188,7 +155,6 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         cls = 3
         ts = pane.worktreeLastActivityAt
       } else {
-        // 'idle' or null: nothing to assert; pane stays in Class 4.
         continue
       }
     }
@@ -203,10 +169,7 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
   return { cls: bestCls, attentionTimestamp: bestTs }
 }
 
-/**
- * Build a `tabId → entries[]` index over `agentStatusByPaneKey`, keyed by the paneKey's
- * `tabId` prefix. Built once per sort so each worktree's resolution is O(T), not a full-map scan.
- */
+/** Index entries by parsed tab ID once per sort, avoiding a full agent-map scan for each worktree. */
 export function buildExplicitEntriesByTabId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
@@ -255,9 +218,6 @@ function buildExplicitEntriesByWorktreeId(
   return byWorktree
 }
 
-/**
- * Extract the stable leaf id from a `${tabId}:${leafId}` paneKey.
- */
 function leafIdFromPaneKey(paneKey: string): string | null {
   return parsePaneKey(paneKey)?.leafId ?? null
 }
@@ -270,11 +230,7 @@ export type TabPaneInputSources = {
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 }
 
-/**
- * One terminal tab's contribution to an attention resolution: its hook entries, plus the
- * title heuristic for panes no fresh hook covers. Gated on `tabHasLivePty` so a slept tab's
- * stale working-pattern title can't leak through.
- */
+/** Use hook rows plus uncovered title heuristics; live-PTY gating excludes stale slept-tab titles. */
 export function collectTabPaneInputs(
   tab: SmartAttentionTab,
   worktreeLastActivityAt: number,
@@ -344,11 +300,7 @@ export function collectTabPaneInputs(
   return panes
 }
 
-/**
- * Build the per-worktree attention map consumed by the smart comparator.
- * Hook authority is per-pane; panes without a fresh hook fall back to the title heuristic,
- * gated on `tabHasLivePty` so slept tabs' stale working-pattern titles don't leak through.
- */
+/** Resolve attention once per workspace with per-pane hook authority and live-PTY-gated title fallbacks. */
 export function buildAttentionByWorktree(
   worktrees: readonly Pick<Worktree, 'id' | 'lastActivityAt'>[],
   tabsByWorktree: Record<string, readonly SmartAttentionTab[]> | null,
@@ -383,8 +335,7 @@ export function buildAttentionByWorktree(
         const parsed = parsePaneKey(entry.paneKey)
         return parsed !== null && !mirroredTabIds.has(parsed.tabId)
       })
-      // Why hasLivePty false: these entries were filtered to panes with no tab in this renderer,
-      // so there is no live-PTY evidence here to hold them above idle.
+      // No mirrored tab means no renderer live-PTY evidence to hold these hooks above Idle.
       .map((entry) => ({ kind: 'hook' as const, entry, hasLivePty: false }))
     if (tabs.length === 0) {
       result.set(worktree.id, resolveAttention(panes, now))

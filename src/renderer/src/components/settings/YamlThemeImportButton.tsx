@@ -3,8 +3,7 @@ import { Button } from '../ui/button'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { translate } from '@/i18n/i18n'
 
-/** Imports theme YAML files (Warp format) straight from a native file picker,
- *  without routing through Warp auto-discovery. */
+/** Import Warp-format YAML directly through the file picker, independently of Warp discovery. */
 export function YamlThemeImportButton({
   warpThemes
 }: {

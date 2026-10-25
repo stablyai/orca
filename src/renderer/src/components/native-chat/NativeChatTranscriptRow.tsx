@@ -18,8 +18,7 @@ import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/str
 import { NativeChatNewRowsMarker } from './NativeChatNewRowsMarker'
 import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
 
-/** Everything a row needs that is the same for every row. Held as one memoized
- *  object so a row's props change only when that row's own slot does. */
+/** Memoize shared context so unchanged rows keep their props during transcript updates. */
 export type NativeChatTranscriptRowContext = {
   agentName?: string
   /** The prompts the host says still wait on the person; absent from an older host. */
@@ -39,12 +38,7 @@ export type NativeChatTranscriptRowContext = {
   onRevealDiff: (target: NativeChatDiffTarget) => void
 }
 
-/** One transcript row: the message (or the receipt standing in for it), the turn
- *  status under it, and the turn's diff rollup.
- *
- *  These three were siblings in the transcript column and took their spacing from
- *  it. Windowing needs one element per row to position and measure, so the
- *  wrapper carries that spacing itself — the gap BETWEEN rows is the window's. */
+/** Wrap message, status and rollup for one virtualized measurement; internal spacing is the row’s, inter-row gaps the window’s. */
 export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot,
   context,
@@ -57,7 +51,6 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
-  // A subagent's section is set off from the conversation it sits in.
   const sectionClassName = cn(
     slot.depth > 0 && 'border-l-2 border-border/60 pl-3',
     slot.depth > 1 && 'ml-4'

@@ -21,12 +21,34 @@ describe('provider context after clear', () => {
   })
 
   it('uses the chain head after fresh creation without filtering or replacing proof', () => {
-    const record = { ...agentSessionRecordFixture(), providerContextBoundary: boundary }
+    const original = agentSessionRecordFixture()
+    const first = original.providerHandleChain[0]
+    if (!first) {
+      throw new Error('Missing fixture handle')
+    }
+    const last = {
+      ...first,
+      linkId: 'link-2',
+      origin: 'resumed' as const,
+      observedAt: 2_000,
+      mintedAtFence: original.lease.runtimeFence + 1
+    }
+    const record = {
+      ...original,
+      lease: {
+        ...original.lease,
+        runtimeFence: last.mintedAtFence,
+        provenHandleLinkId: last.linkId
+      },
+      providerHandleChain: [first, last],
+      providerContextBoundary: boundary
+    }
     expect(activeProviderContext(record)).toEqual({
-      head: record.providerHandleChain.at(-1),
+      head: last,
       handleChain: record.providerHandleChain,
       pendingClear: false
     })
+    expect(activeProviderContext(record).handleChain).toBe(record.providerHandleChain)
     expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(record))).toBe(true)
   })
 

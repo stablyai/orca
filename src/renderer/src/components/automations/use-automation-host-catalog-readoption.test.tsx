@@ -1,16 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Same-id SSH re-adoption on the desktop authority.
- *
- * This is the one catalog change that alters nothing the apply policy used to
- * look at: the stable key is incarnation-free, the state stays authoritative,
- * the query support stays scoped, the owner stays present and the host stays up
- * — only the registration generation moves. The desktop's connection generation
- * is a constant and can never reject anything either, so if the apply does not
- * run, rows fetched against the previous registration both render and become the
- * captured owners that fence later mutations.
- */
+/** Same-ID SSH re-adoption changes only registration generation; reapply must discard prior rows/owners despite unchanged stable key, health and scoped support. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -30,8 +20,7 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-// Desktop-only file: every request is a local-target scoped list, so the
-// transport routes straight into the generation-aware fake below.
+// Route desktop scoped lists directly into the generation-aware local fake.
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (_target: unknown, _method: string, params: unknown) =>
     listScoped(params as { selector: AutomationListScopeSelector }),

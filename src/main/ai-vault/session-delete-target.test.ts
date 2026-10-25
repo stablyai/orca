@@ -18,7 +18,7 @@ const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
 const GROK_ROOT = join(HOME, '.grok', 'sessions')
 
 describe('validateAiVaultSessionDeleteTarget', () => {
-  it('allows a canonical Cline manifest and removes its whole session directory', () => {
+  it('plans whole session-directory removal for a canonical Cline manifest', () => {
     const root = join('/tmp', 'cline-sessions')
     const sessionId = '1786466194549_xrzrl'
     const sessionDir = join(root, sessionId)
@@ -312,7 +312,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
 })
 
 describe('directory-shaped agents', () => {
-  it('plans claude companions before the transcript, so a failure keeps the row', () => {
+  it('plans claude companions before the transcript', () => {
     const filePath = join(CLAUDE_ROOT, '-proj', 'sess-1.jsonl')
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'claude',
@@ -403,7 +403,7 @@ describe('directory-shaped agents', () => {
     })
   })
 
-  it("removes rovo's session directory, not just the metadata.json inside it", () => {
+  it("plans removal of rovo's whole session directory", () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'rovo',
       filePath: join(ROVO_ROOT, 'sess-1', 'metadata.json'),
@@ -419,7 +419,7 @@ describe('directory-shaped agents', () => {
     })
   })
 
-  it("removes grok's session directory under its encoded-cwd group", () => {
+  it("plans removal of grok's session directory under its encoded-cwd group", () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'grok',
       filePath: join(GROK_ROOT, '-Users-me-proj', 'sess-1', 'summary.json'),

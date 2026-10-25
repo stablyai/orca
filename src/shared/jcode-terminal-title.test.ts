@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isJcodeIdentityTerminalTitle, stripJcodeTitleStatus } from './jcode-terminal-title'
 
-// Every title below was captured from a real jcode 0.87.1 TUI session; see
-// docs/reference/jcode-hook-events.md.
+// Real jcode 0.87.1 titles; capture provenance: docs/reference/jcode-hook-events.md.
 const CAPTURED_TITLES = [
   'jcode',
   '🐍 jcode Snake',
@@ -31,8 +30,7 @@ describe('jcode terminal titles', () => {
   })
 
   it('keeps a title the user or a wrapper actually named', () => {
-    // Why: a renamed tab or a wrapper-provided label is real information and must
-    // survive — only jcode's own identity+codename shape is rejected.
+    // Keep user/wrapper work labels; suppress only jcode’s identity/codename shape.
     expect(isJcodeIdentityTerminalTitle('Fix the greet helper')).toBe(false)
     expect(isJcodeIdentityTerminalTitle('jcode Snake · deploy the relay')).toBe(false)
     expect(isJcodeIdentityTerminalTitle('release prep · +3 -0')).toBe(false)

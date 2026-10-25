@@ -24,8 +24,7 @@ type HiddenTuiWindow = Window & {
   __terminalPtyDataInjection?: {
     inject: (paneKey: string, data: string, meta?: { seq?: number; rawLength?: number }) => boolean
   }
-  // Why: only the mode-2031 fact-reply counter survives Phase 6 — the
-  // hidden-skip counters were deleted with the renderer skip grammar.
+  // Only mode-2031 fact replies survive Phase 6’s removal of renderer hidden-skip counters.
   __terminalPtyOutputDebug?: {
     reset: () => void
     snapshot: () => {
@@ -77,8 +76,7 @@ function lowRiskRestoreFrame(runId: string, frame: number): string {
 async function resetHiddenDebug(page: Page): Promise<void> {
   await page.evaluate(async () => {
     ;(window as HiddenTuiWindow).__terminalPtyOutputDebug?.reset()
-    // Why: under the Phase-4 hidden-delivery gate the withheld-output signal
-    // lives in main's delivery debug counters, not the renderer skip path.
+    // Phase-4 withheld-output evidence lives in main delivery counters.
     await window.api.pty.resetRendererDeliveryDebug()
   })
 }
@@ -104,10 +102,7 @@ async function writeHiddenFrames(page: Page, ptyId: string, scriptPath: string):
   await sendToTerminal(page, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
 }
 
-// Why: Phase-4 hidden-delivery gate contract — hidden PTY bytes are dropped
-// in main after model ingestion and never reach the renderer, so "hidden
-// output was withheld" is observed via main's dropped-chars counter instead
-// of the old renderer hidden-skip counters.
+// Main drops hidden PTY bytes after model ingestion, before renderer delivery; observe its dropped-chars counter.
 async function readMainHiddenDeliveryDroppedChars(page: Page): Promise<number> {
   return page.evaluate(async () => {
     const snapshot = await window.api.pty.getRendererDeliveryDebugSnapshot()
@@ -251,9 +246,7 @@ test.describe('Hidden terminal TUI visual restore', () => {
       await writeHiddenFrames(orcaPage, hiddenPane.ptyId, scriptPath)
       await resetHiddenDebug(orcaPage)
 
-      // Why: hidden-delivery gate contract — the bulk TUI frames must be
-      // withheld in main (dropped after model ingestion), not delivered and
-      // skipped renderer-side.
+      // Require bulk frames withheld in main after ingestion, before renderer delivery.
       await expect
         .poll(() => readMainHiddenDeliveryDroppedChars(orcaPage), {
           timeout: 10_000,
@@ -348,8 +341,7 @@ test.describe('Hidden terminal TUI visual restore', () => {
     await sendToTerminal(orcaPage, hiddenPane.ptyId, `node ${JSON.stringify(scriptPath)}\r`)
     await resetHiddenDebug(orcaPage)
 
-    // Why: hidden-delivery gate contract — even plain hidden output is
-    // dropped in main, so the withheld signal is main's dropped counter.
+    // Observe main’s dropped counter even for plain hidden output.
     await expect
       .poll(() => readMainHiddenDeliveryDroppedChars(orcaPage), {
         timeout: 10_000,
@@ -436,8 +428,7 @@ test.describe('Hidden terminal TUI visual restore', () => {
       await writeHiddenFrames(orcaPage, hiddenPane.ptyId, scriptPath)
       await resetHiddenDebug(orcaPage)
 
-      // Why: hidden-delivery gate contract — synchronized rich frames are
-      // withheld in main; the headless model snapshot is the restore source.
+      // Rich synchronized frames are withheld in main; restore from the headless model snapshot.
       await expect
         .poll(() => readMainHiddenDeliveryDroppedChars(orcaPage), {
           timeout: 10_000,

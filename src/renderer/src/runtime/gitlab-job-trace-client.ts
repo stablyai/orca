@@ -8,13 +8,7 @@ import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/ch
 import { gitLabApiFor, JOB_TRACE_TIMEOUT_MS } from './gitlab-owner-api'
 import { withGitLabIpcTimeout } from './gitlab-ipc-timeout'
 
-/**
- * Load a GitLab pipeline job log as provider-neutral check details.
- *
- * Returns null for checks that are not GitLab jobs so callers can fall through to
- * their existing provider path. Throws on a GitLab-reported failure so the caller's
- * error handling surfaces the message instead of showing "no details available".
- */
+/** Load GitLab job logs as provider-neutral details; null permits other-provider fallback, while GitLab failures throw for caller error UI. */
 export async function loadGitLabJobLogDetails(args: {
   repoPath: string
   repoId?: string
@@ -51,7 +45,7 @@ export async function loadGitLabJobLogDetails(args: {
   return gitLabJobTraceToCheckRunDetails(args.check, result.trace, emptyTraceStrings())
 }
 
-// Why: the expanded Checks row needs its own message, not the generic GitLab timeout text.
+// Expanded Checks needs its own timeout message, not the generic GitLab text.
 function withJobTraceTimeout<T>(pending: Promise<T>): Promise<T> {
   return withGitLabIpcTimeout(pending, {
     timeoutMs: JOB_TRACE_TIMEOUT_MS,

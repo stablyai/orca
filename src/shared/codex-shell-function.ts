@@ -1,21 +1,11 @@
-// Orca's `codex` shell function for every shell family: runs launch prep and adds
-// --no-daemon. Pure text, so any host that writes a shell script can embed it.
-// Why --no-daemon: Codex 0.156+ otherwise shares one server per CODEX_HOME that runs every tab's
-// hooks with the first tab's Orca env and dies with it (#22873).
-// These args need that server (or exit 2 beside the flag), and Codex counts any `-c` as leaving it.
+// Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
 const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
-// An explicit --no-daemon needs no second one.
 export const CODEX_NO_DAEMON_SKIP_ARGS = [...CODEX_SHARED_SERVER_ARGS, '--no-daemon'] as const
 const argPattern = (args: readonly string[]): string => `^(${args.join('|')}|--remote=.*)$`
 const CODEX_SHARED_SERVER_ARG_PATTERN = argPattern(CODEX_SHARED_SERVER_ARGS)
 const CODEX_NO_DAEMON_SKIP_ARG_PATTERN = argPattern(CODEX_NO_DAEMON_SKIP_ARGS)
 
-/**
- * The caller identity `orca` reads, which a user's `shell_environment_policy` (`inherit = "core"`)
- * strips from every command Codex runs (#25775). Codex applies `set` after `inherit` and `exclude`
- * (so an `exclude = ["ORCA_*"]` is overridden) but before `include_only`, which still wins. Never a
- * token: argv is readable by every local user.
- */
+/** Restore nonsecret Orca caller identity stripped by inherit=core (#25775). set overrides inherit/exclude but include_only still wins; never send tokens through locally readable argv. */
 export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_TERMINAL_HANDLE',
   'ORCA_PANE_KEY',
@@ -24,8 +14,7 @@ export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_USER_DATA_PATH'
 ] as const
 
-// Why values holding `'` are skipped: a TOML literal can't carry one, and Codex's fallback for the
-// failed parse truncates some (`/a'`, `/a' #b`) — a wrong path is worse than none.
+// Skip apostrophes: TOML literals cannot hold them and Codex parse fallback may truncate paths; missing identity is safer than wrong identity.
 const identitySetArg = (key: string, value: string): string =>
   `shell_environment_policy.set.${key}='${value}'`
 
@@ -87,8 +76,7 @@ end
 set -e __orca_codex_type`
 }
 
-// Why the identity loop is one line: this wrapper rides in PowerShell's command-line budget
-// (windows-shell-args.ts), which a long startup command also needs.
+// Keep the identity loop compact to share PowerShell’s command-line budget with startup commands.
 export function getPowerShellCodexShellLaunchPreflight(): string {
   return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($orcaCodexCommand -and

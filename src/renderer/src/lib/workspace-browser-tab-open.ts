@@ -76,8 +76,7 @@ function isExpectedRuntimeBrowserRoute(
   )
 }
 
-// Why: a managed server reached over SSH has no browser of its own, so its links open on this
-// desktop, whose page the SSH-routed browser gate sends through that host (as new tabs do).
+// SSH-deployed managed servers have no browsers; host links on this desktop through that SSH route, as new tabs do.
 function isSshDeploymentClientBrowserRoute(
   state: AppState,
   availability: ClientCreationActionAvailability,
@@ -175,8 +174,7 @@ function createClientBrowserTab(
   request: OpenWorkspaceBrowserTabRequest,
   hostId: ExecutionHostId,
   presentation: { error: string; title: string },
-  // Why: a desktop-hosted page in a runtime workspace stays owned by that runtime, or the
-  // unified tab is disowned from its worktree (palette and activation skip it).
+  // Desktop-rendered pages in runtime workspaces keep runtime ownership or palette/activation disowns their tabs.
   ownerHostId: ExecutionHostId = hostId
 ): string | null {
   try {
@@ -281,9 +279,7 @@ export async function openWorkspaceBrowserTab(
       `host ${route.executionHostId} does not own runtime ${environmentId}`
     )
   }
-  // An asserted runtime owns links opened from remote panes; provider policy may describe the
-  // viewing client's generic browser surface rather than that pane's execution host. The one
-  // exception is an SSH-deployed server, whose links this desktop hosts on the SSH route.
+  // Remote-pane links pin execution-host ownership over client-generic provider policy, except SSH-deployed servers whose pages this desktop hosts on SSH routes.
   if (
     (expectedEnvironmentId === null || sshDeploymentClientRoute) &&
     availability.provider === 'local-client'
@@ -306,8 +302,7 @@ export async function openWorkspaceBrowserTab(
       ...(request.placementPreference !== undefined
         ? { placementPreference: request.placementPreference }
         : {}),
-      // Why: the tab is opened from this workspace's tab bar, so surface that
-      // workspace — otherwise a background worktree looks like nothing happened.
+      // Tab-bar opens must surface their workspace or background creates appear to do nothing.
       ...(request.focusOnCreate !== undefined ? { focusOnCreate: request.focusOnCreate } : {}),
       selectWorktree: request.selectWorktree !== false,
       stagedTitle: presentation.title,

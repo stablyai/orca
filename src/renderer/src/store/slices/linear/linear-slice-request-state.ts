@@ -80,7 +80,6 @@ export const linearRequestState = {
   cacheGeneration: 0
 }
 
-// Named aliases keep action modules focused on behavior while sharing one request registry.
 export const inflightIssueRequests = linearRequestState.issueRequests
 export const inflightSearchRequests = linearRequestState.searchRequests
 export const inflightListRequests = linearRequestState.listRequests

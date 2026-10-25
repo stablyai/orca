@@ -3,10 +3,10 @@ import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
 import { createClaudeChildTreeReaper } from '../claude/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
+import { buildCodexAppServerExitError } from './app-server/codex-app-server-exit-error'
 import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
-import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
-import { CodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
+import { initializeCodexAppServerConnection } from './app-server/codex-app-server-handshake'
+import { CodexAppServerHandshakeExitUnprovenError } from './app-server/codex-app-server-handshake-exit-proof'
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError
@@ -17,18 +17,8 @@ import { withProviderRequestTimeout } from '../provider-process/provider-request
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
-} from './codex-app-server-connection-types'
+} from './app-server/codex-app-server-connection-types'
 
-export type {
-  CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  CodexAppServerServerRequest
-} from './codex-app-server-connection-types'
-export {
-  CodexAppServerRequestError,
-  isCodexAppServerRequestError
-} from './codex-app-server-request-error'
-export { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
 export { ROOT_ONLY_GRACEFUL_EXIT_MS as GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 
 // Structured chat needs a persistent transport for approvals and streamed turns.

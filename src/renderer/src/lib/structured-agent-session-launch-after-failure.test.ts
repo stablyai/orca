@@ -205,7 +205,6 @@ describe('a new launch after a failed one', () => {
         body: expect.objectContaining({ blocks: [{ type: 'text', text: 'review notes' }] })
       })
     )
-    // The failed chat keeps its own prompt, in its own composer.
     expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, failed.sessionId)).toBe('failed')
     expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(failed.sessionId))).toBe(
       'first task'
@@ -231,7 +230,6 @@ describe('a new launch after a failed one', () => {
     ).toBe(fresh.sessionId)
     expect(mocks.createIntent).toHaveBeenCalledTimes(2)
 
-    // Closing the retried chat leaves the new launch registered and starting.
     rejectRetry(new StructuredAgentSessionCreateRefusalError('unsupported'))
     await flushLaunchSettlement()
     expect(cancelStructuredAgentLaunch(WORKTREE_ID, failed.sessionId)).toBe(true)
@@ -245,7 +243,6 @@ describe('a new launch after a failed one', () => {
 
   it('restores a failed chat after reload without unregistering a newer launch', async () => {
     await refuseFirstLaunch()
-    // Reload: the registry is memory; the failed record is what survives.
     resetStructuredAgentLaunchRegistryForTests()
     let resolveFresh!: (receipt: Receipt) => void
     mocks.launch
@@ -301,7 +298,6 @@ describe('a message sent to a chat whose start failed', () => {
 
   async function failThenTakeComposerText(): Promise<void> {
     await refuseFirstLaunch()
-    // The failed start's own prompt waits in the composer; the person sends from there.
     clearNativeChatDraftCacheForTests()
   }
 

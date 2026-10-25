@@ -1,5 +1,4 @@
-// Index math for DragReorderList. Kept worklet-safe (no captures, plain
-// objects) because moveDragReorderKey runs on the UI thread during a drag.
+// Keep index math capture-free/plain-object worklet-safe; moveDragReorderKey runs on UI thread.
 
 export type DragReorderPositions = Record<string, number>
 

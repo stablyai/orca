@@ -80,7 +80,6 @@ async function flush(): Promise<void> {
   }
 }
 
-/** Sends one message in SESSION; fails the test if the sender refuses it. */
 function send(
   text: string,
   extra: Partial<Parameters<typeof sendStructuredAgentSessionMessage>[0]> = {}
@@ -195,7 +194,6 @@ describe('structured agent session message sender', () => {
     expect(sendCalls()).toBe(0)
   })
 
-  // The host refuses an oversized message without a reason; sending it again would fail the same way.
   it('gives back a message over the size limit, saying so, without sending it', async () => {
     const a = send('x'.repeat(256 * 1024))
     expect(await a.outcome).toBe('returned')
@@ -205,7 +203,6 @@ describe('structured agent session message sender', () => {
     expect(sendCalls()).toBe(0)
   })
 
-  // A failure before any request went out that trying again won't clear: not sent, at once.
   it('gives back at once, with its own words, a send this client and the server cannot talk on', async () => {
     const blocked = Object.assign(
       new Error('The selected Orca server is too old for this client. Update Orca on the server.'),
@@ -245,7 +242,6 @@ describe('structured agent session message sender', () => {
     expect(getStructuredAgentSessionSendNotice(SESSION)).not.toContain("couldn't reach")
   })
 
-  // Nothing resends, so even a refusal that may clear comes back at once, in the host's words.
   it('gives back at once a history refusal the host says may clear, and never reads again', async () => {
     resetStructuredAgentSessionSendsForTests()
     mocks.call.mockRejectedValue(
@@ -329,7 +325,6 @@ describe('structured agent session message sender', () => {
     expect(phases()).toEqual([])
   })
 
-  // The host's row draws it, with its stop row; the composer is left alone.
   it('leaves a message the host recorded and a Stop then withdrew in the chat', async () => {
     const calls = deferredCalls()
     const a = send('a')
@@ -345,7 +340,6 @@ describe('structured agent session message sender', () => {
     expect(phases()).toEqual([])
   })
 
-  // Its sender cleared the notes at `recorded`; the chat still shows the message, so nothing is lost.
   it('keeps a note a Stop withdrew visible in the chat, never in a draft', async () => {
     const calls = deferredCalls()
     const note = send('notes', { callerKeepsText: true })
@@ -360,8 +354,7 @@ describe('structured agent session message sender', () => {
     expect(mocks.handBack).not.toHaveBeenCalled()
   })
 
-  // A paired server checks every stored file a message names; one it no longer holds can never be
-  // sent again as is, so the message comes back, with or without a view, to remove and reattach it.
+  // Expired paired-server attachments require removal/reattachment, so return the whole message even without a mounted view.
   it('gives back a message refused for an expired attachment, with its file and why', async () => {
     const STORED = '/srv/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01/shot.png'
     mocks.call.mockResolvedValue({
@@ -458,7 +451,6 @@ describe('structured agent session message sender', () => {
     expect(getStructuredAgentSessionSendNotice(SESSION)).toBeNull()
   })
 
-  // The line explains text in the composer; notes sent from outside the chat keep their own text.
   it("keeps the chat's line when notes are sent from outside it", async () => {
     mocks.call.mockRejectedValueOnce(new Error('connection closed'))
     expect(await send('a').outcome).toBe('unconfirmed')
@@ -503,7 +495,6 @@ describe('structured agent session message sender', () => {
     expect(JSON.stringify(mocks.call.mock.calls[0][2])).not.toContain('ssh-1')
   })
 
-  // A send makes one request: a dropped or unanswered one comes back at once, never sent again.
   it('gives back at once, as unconfirmed, a send whose request threw, and never sends it again', async () => {
     mocks.call.mockRejectedValue(new Error('connection closed'))
     const a = send('a')
@@ -517,7 +508,7 @@ describe('structured agent session message sender', () => {
     expect(sendCalls()).toBe(1)
   })
 
-  // This window answers a re-paired server's call itself, before forwarding it: nothing went out.
+  // Re-pairing refusals occur locally before forwarding, proving nothing was sent.
   it('gives back as not sent a send this window turned away because the server was re-paired', async () => {
     mocks.call.mockRejectedValueOnce(
       new RuntimeRpcCallError({
@@ -557,7 +548,6 @@ describe('structured agent session message sender', () => {
     }
   )
 
-  // Bookkeeping never gates a send: a hand-back that throws still frees the chat, and says so.
   it('frees the chat and answers the caller when putting the text back throws', async () => {
     const report = vi.spyOn(console, 'error').mockImplementation(() => {})
     mocks.handBack.mockImplementationOnce(() => {
@@ -604,7 +594,6 @@ describe('structured agent session message sender', () => {
     expect(mocks.call.mock.calls.some((call) => call[1] === 'agentSession.send')).toBe(false)
   })
 
-  // A Stop, or the chat's tab closing, which stops its sends the same way.
   it('gives back silently, and never sends, one a Stop finds still being readied', async () => {
     deferredCalls()
     mocks.compatible.mockImplementationOnce(() => new Promise<void>(() => {}))
@@ -618,7 +607,6 @@ describe('structured agent session message sender', () => {
     expect(sendCalls()).toBe(0)
   })
 
-  // Nothing resends, so a Stop is never followed by a send of that id, whatever its answer.
   it('lets a send on its way when Stop was pressed settle from its answer, never a resend', async () => {
     const calls = deferredCalls()
     const a = send('a')
@@ -639,7 +627,6 @@ describe('structured agent session message sender', () => {
     const a = send('a')
     await flush()
     stopStructuredAgentSessionSends(SESSION)
-    // The journal shows its row, whatever the Stop did.
     settleStructuredAgentSessionSendsFromJournal(
       SESSION,
       [submission(a.clientMessageId, 'accepted')],
@@ -799,8 +786,7 @@ describe('structured agent session message sender', () => {
   })
 })
 
-// An earlier build kept a message whose fate was unknown and sent nothing behind it until someone
-// decided it, which froze the chat. Nothing here waits on one past its own deadline.
+// Unknown sends must release the chat at their deadline rather than waiting indefinitely for a decision.
 describe('a send whose fate is unknown never freezes the chat', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -824,7 +810,6 @@ describe('a send whose fate is unknown never freezes the chat', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(await a.outcome).toBe('unconfirmed')
     expect(structuredAgentSessionSendOut(SESSION)).toBe(false)
-    // The next message goes out at once, and the first is never sent again.
     send('b')
     await flush()
     expect(phases()).toEqual(['b:sending'])

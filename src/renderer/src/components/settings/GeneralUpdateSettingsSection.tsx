@@ -15,7 +15,7 @@ import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
-  // Why: older hosts omit `version` from errors, so retain the last target for correct copy.
+  // Older hosts omit error versions; retain the target for accurate failure copy.
   const updateVersionRef = useRef<string | null>(null)
   if ('version' in updateStatus && updateStatus.version) {
     updateVersionRef.current = updateStatus.version
@@ -24,17 +24,13 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
     updateStatus.state === 'idle' ||
     updateStatus.state === 'not-available'
   ) {
-    // Why: a new check cycle has started or completed cleanly. Clear the
-    // cached version so a subsequent check failure cannot be mis-classified
-    // as a download failure based on a stale version from a prior cycle.
+    // Clear old targets on clean/new cycles so later check failures cannot look like stale download failures.
     updateVersionRef.current = null
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const updateCheckHint = getUpdateCheckHint()
-  // Why: channel switching is a power-user escape hatch that can downgrade the app
-  // onto an unvetted build. Option/Alt-clicking the header reveals it rather than
-  // shipping it on the default surface.
+  // Hide channel switching behind Option/Alt-click because it can downgrade to unvetted builds.
   const [channelSwitcherRevealed, setChannelSwitcherRevealed] = useState(false)
 
   useEffect(() => {
@@ -50,10 +46,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   }, [])
 
   const handleRestartToUpdate = (): void => {
-    // Why: quitAndInstall resolves immediately (the actual quit happens in a
-    // deferred timer in the main process), so rejection here is only possible
-    // if the IPC channel itself breaks. Log defensively; the user will notice
-    // the app didn't restart and can retry.
+    // quitAndInstall schedules quitting and resolves early; only broken IPC can reject here.
     void window.api.updater.quitAndInstall().catch(console.error)
   }
 
@@ -95,8 +88,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
           <Button
             variant="outline"
             size="sm"
-            // Why: modifier-click channels are power-user update affordances, not
-            // persistent settings toggles.
+            // Modifier clicks are one-off update actions, not saved toggles.
             onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
             title={updateCheckHint}
             disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}

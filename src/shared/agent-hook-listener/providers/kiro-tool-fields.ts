@@ -11,10 +11,7 @@ export const KIRO_CLAUDE_EVENT_NAMES: Readonly<Record<string, string>> = Object.
   stop: 'Stop'
 })
 
-/**
- * Kiro CLI sends Claude's `tool_name`/`tool_input`/`tool_response` verbatim; only the event
- * names differ, and `stop` carries the final reply as `assistant_response`.
- */
+/** Kiro keeps Claude tool fields, maps camelCase events and sends final text in assistant_response. */
 export function extractKiroToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>

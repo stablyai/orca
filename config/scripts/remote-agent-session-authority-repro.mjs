@@ -27,8 +27,7 @@ const writableShellScript = path.join(
   import.meta.dirname,
   'remote-agent-session-repro-writable-shell.mjs'
 )
-// Why: macOS limits Unix-domain socket paths to 104 bytes; the server profile
-// creates nested daemon/runtime sockets below this disposable directory.
+// Keep disposable root short: nested runtime sockets must fit macOS’s 104-byte Unix-domain path limit.
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'oa-'))
 const profilePath = path.join(scratch, 'profile')
 const projectPath = path.join(scratch, 'repo')

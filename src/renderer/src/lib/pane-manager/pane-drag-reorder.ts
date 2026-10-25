@@ -10,10 +10,6 @@ import type {
 } from './pane-manager-types'
 import { detachPaneFromTree, findPaneChildren, insertPaneNextTo } from './pane-tree-ops'
 
-// ---------------------------------------------------------------------------
-// Drag-to-reorder panes
-// ---------------------------------------------------------------------------
-
 export type DragReorderState = {
   dragSourcePaneId: number | null
   dropOverlay: HTMLElement | null
@@ -61,7 +57,6 @@ export function cancelActivePaneDrag(state: DragReorderState): void {
   state.currentExternalDropTarget = null
 }
 
-/** True when dropping source onto target in zone would leave pane order unchanged. */
 export function isPaneDropNoOp(
   sourcePaneId: number,
   targetPaneId: number,
@@ -102,7 +97,6 @@ export function isPaneDropNoOp(
     : sourceIndex === targetIndex - 1
 }
 
-/** Move a pane from its current position to a new position relative to a target pane. */
 export function handlePaneDrop(
   sourcePaneId: number,
   targetPaneId: number,
@@ -140,13 +134,10 @@ function movePaneNextTo(
     return
   }
 
-  // 1. Detach source pane from the tree (without disposing its terminal)
   detachPaneFromTree(source, callbacks)
 
-  // 2. Insert source next to target in the requested zone
   insertPaneNextTo(source, target, zone, callbacks)
 
-  // 3. Refit all panes and persist
   for (const p of panes.values()) {
     callbacks.safeFit(p)
   }
@@ -173,7 +164,6 @@ export function hideDropOverlay(state: DragReorderState): void {
   }
 }
 
-/** Add/remove .has-multiple-panes on root to control drag handle visibility. */
 export function updateMultiPaneState(callbacks: DragReorderCallbacks): void {
   if (callbacks.getPanes().size >= 2) {
     callbacks.getRoot().classList.add('has-multiple-panes')

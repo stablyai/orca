@@ -33,8 +33,7 @@ type CreditExtraUsageBalance = ExtraUsageBalanceBase & {
   unlimited: boolean
 }
 
-// Why: currency and unitless credits have different metadata; the discriminator
-// prevents consumers from inventing dummy currency or spend-limit values.
+// Discriminate currency/credit balances so consumers cannot invent inappropriate currency or spend-limit fields.
 export type ExtraUsageBalance = CurrencyExtraUsageBalance | CreditExtraUsageBalance
 
 export type RateLimitBucket = RateLimitWindow & {
@@ -182,40 +181,17 @@ export type RateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
-  /**
-   * True when a MiniMax session cookie is persisted on disk. The cookie lives
-   * outside GlobalSettings, so this flag is the durable signal that the
-   * status bar uses to keep the MiniMax provider visible across reloads and
-   * between snapshot refreshes.
-   */
+  /** Cookie is stored outside GlobalSettings; this durable flag keeps MiniMax visible across reloads/snapshot refreshes. */
   minimaxCookieConfigured: boolean
-  /**
-   * True when a MiniMax API key is persisted on disk. The key value itself
-   * never leaves main, so the renderer only sees this boolean. The status bar
-   * ORs it with the cookie flag to decide whether to keep the MiniMax bar
-   * visible across reloads.
-   */
+  /** Expose API-key presence only; main retains the secret. Combined with cookie presence, keeps MiniMax visible across reloads. */
   minimaxApiKeyConfigured: boolean
-  /**
-   * True when main resolved an OpenCode Go API key (Orca settings,
-   * OPENCODE_API_KEY, or what OpenCode stored on /connect). The key itself
-   * never leaves main; the status bar ORs this with the session cookie to
-   * decide whether the OpenCode Go bar stays visible.
-   */
+  /** Main resolves settings/env/OpenCode-connect keys but exposes only presence; combine with session cookie for persistent bar visibility. */
   opencodeGoApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
-  /**
-   * True when main finds a Cursor session on this machine: the macOS Keychain
-   * item cursor-agent writes, its legacy auth.json, or the Cursor IDE's own
-   * stored login. The token itself never leaves main.
-   */
+  /** Presence of Cursor Keychain/legacy auth/IDE login only; tokens never leave main. */
   cursorAuthConfigured: boolean
-  /**
-   * True when a GLM Coding Plan API key is saved in Orca's AI Provider
-   * Accounts. The key itself never leaves main; the status bar uses this to
-   * keep the ZCode bar visible across reloads between snapshot refreshes.
-   */
+  /** Expose GLM Coding Plan key presence only; retain secret in main and keep ZCode visible across reloads/refreshes. */
   zcodePlanApiKeyConfigured?: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget

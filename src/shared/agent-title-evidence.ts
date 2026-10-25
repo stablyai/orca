@@ -24,23 +24,7 @@ import {
 import type { TerminalAgent } from './terminal-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
-/**
- * Order-independent identity evidence from a terminal title.
- *
- * The chain this replaces is a first-match-wins scan of substring predicates, so its answer is
- * decided by list position rather than by how strong the evidence is. That is why a Grok pane
- * whose task text mentions Codex reads as Codex, and why fixing one collision by hoisting a
- * branch breaks another. Here every signal is collected first and ranked afterwards, by class:
- *
- *   vendor marker  — a control sequence or sigil the agent itself emits. Task text cannot forge it.
- *   anchored name  — a name in a position some grammar reserves for identity (Orca's `- <agent>`
- *                    owner suffix, or the whole undecorated remainder).
- *   free-text name — a name anywhere else. Anyone can type it.
- *
- * A free-text name never becomes identity on its own, even when it is the only name present: an
- * absent icon is recoverable, a confidently wrong one is not. Callers that only need "is this pane
- * busy" want activity parsing, which lives elsewhere and does not go through here.
- */
+/** Collect before ranking: anchored identity names outrank vendor glyphs, which outrank free-text mentions. Free text alone never identifies a pane; prefer no icon to a wrong one. Activity parsing handles generic busy signals separately. */
 export type AgentTitleEvidenceReason =
   | 'anchored'
   | 'vendor-marker'
@@ -103,11 +87,7 @@ const DISPLAY_LABELS = [
 const GEMINI_GLYPHS = [GEMINI_WORKING, GEMINI_SILENT_WORKING, GEMINI_IDLE, GEMINI_PERMISSION]
 const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[\u00B7\u2014:-]\s*|\s+)gemini\s+\d/i
 
-/**
- * Orca renders `<task text>… - <agent>` and owns the suffix; task text cannot reach past it.
- * Why leading whitespace is required: without it this also matches the tail of a hyphenated
- * worktree name (`review-14600-codex`), which is a directory, not an owner declaration.
- */
+/** Orca owns the final - <agent> suffix. Require leading whitespace to avoid treating hyphenated cwd names as ownership. */
 const OWNER_SUFFIX_RE = /\s-\s+([A-Za-z][\w-]*)\s*$/
 const WINDOWS_LAUNCHER_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const WRAPPER_SEPARATOR = ' | '
@@ -164,8 +144,7 @@ function agentForBareName(text: string): TerminalAgent | null {
     return null
   }
   const stripped = stripBareNameDecoration(trimmed)
-  // Why labels too: an agent may write its own display name as the entire title (`⠐ Claude Code`).
-  // That is the same claim as a bare token, just spelled the way the vendor spells it.
+  // The entire vendor display label makes the same identity claim as a bare agent token.
   const normalized = stripped.toLowerCase()
   const label = DISPLAY_LABELS.find(([text]) => text === normalized)
   if (label) {
@@ -173,8 +152,7 @@ function agentForBareName(text: string): TerminalAgent | null {
   }
   const bareToken = stripped.replace(WINDOWS_LAUNCHER_SUFFIX_RE, '')
   const names = namesIn(bareToken)
-  // Why the length check: the remainder must BE the name, not merely contain it. "agy" anchors;
-  // "fix the agy hook" does not, and neither does a hyphenated worktree name like "codex-split".
+  // Require the whole remainder to be the name; task phrases and hyphenated directories cannot anchor identity.
   return names.length === 1 && /^[\p{L}\p{N}]+$/u.test(bareToken) ? names[0] : null
 }
 
@@ -232,8 +210,7 @@ function agentForSyntheticTitle(text: string): TerminalAgent | null {
 function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
   const markers = new Set<TerminalAgent>()
   for (const segment of segments) {
-    // Why prefix-only: a sigil marks the pane's own status line only in the identity position.
-    // The same character inside task text is decoration, not a vendor emission.
+    // Only a leading identity-position sigil counts; the same glyph inside task text is decoration.
     if (GEMINI_GLYPHS.some((glyph) => segment.startsWith(glyph))) {
       markers.add('gemini')
     }
@@ -278,8 +255,7 @@ function collectAnchoredNames(
   const allowDsbTitle = vendorMarkers.length === 0 && !segments.some(isOpenCodeNativeTitle)
 
   for (const segment of segments) {
-    // Why anchored and not a bare marker: the native envelope owns the whole wrapped pane title.
-    // Its session text may name other agents without changing the OpenCode owner.
+    // Native wrapped titles own their envelope even when session text names other agents.
     if (isOpenCodeNativeTitle(segment)) {
       anchored.add('opencode')
     }
@@ -295,8 +271,7 @@ function collectAnchoredNames(
       }
     }
 
-    // Why strip a leading vendor sigil first: `✳ agy` is a Claude-glyphed pane whose entire
-    // remainder is another agent's name — the strongest name evidence a title can carry.
+    // Strip the leading sigil to expose anchored names: in ✳ agy, the name outranks the inherited Claude glyph.
     const withoutSigil = segment.startsWith(`${CLAUDE_IDLE} `)
       ? segment.slice(CLAUDE_IDLE.length)
       : segment
@@ -312,9 +287,7 @@ function collectAnchoredNames(
       anchored.add('claude')
     }
 
-    // Why Antigravity gets a grammar: its models are named `Gemini <n.n> <Name>`, so an agy pane's
-    // own title carries a whole `gemini` token. Read as identity-plus-model, the gemini token is
-    // metadata — which is the general rule, not an exception inside the Gemini detector.
+    // Parse agy identity plus Gemini model metadata structurally instead of giving Gemini a competitor-specific exception.
     const undecorated = stripLeadingAgentTitleDecorationOrEmpty(segment).trim()
     if (ANTIGRAVITY_MODEL_TITLE_RE.test(undecorated)) {
       anchored.add('antigravity')
@@ -360,10 +333,7 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
     return { ...evidence, agent: null, reason: 'conflicting-vendor-markers' }
   }
   if (vendorMarkers.length === 1) {
-    // Why free text does not veto here: `✳ Fix Codex false attention notifications` is a Claude
-    // pane describing Codex work. The sigil is emitted by the agent; the name was typed by a
-    // human. A conflicting ANCHORED name already outranks this branch above, which is what makes
-    // `✳ agy` resolve to Antigravity without also blinding the 13 recorded titles of this shape.
+    // Free-text names cannot veto a vendor glyph (✳ Fix Codex… is Claude); a conflicting anchored name already outranks it.
     return { ...evidence, agent: vendorMarkers[0], reason: 'vendor-marker' }
   }
   return {

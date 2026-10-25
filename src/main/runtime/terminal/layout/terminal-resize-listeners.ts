@@ -49,10 +49,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     notifyRuntimeListeners(listeners, (listener) => listener(event), 'pty-resize')
   }
 
-  // Why: Section 7.2 — the runtime detects agent exit directly and updates
-  // dispatch contexts immediately, rather than waiting for the coordinator's
-  // next poll cycle. This catches agent crashes and unexpected exits within
-  // milliseconds. The task is set back to 'pending' so it can be re-dispatched.
+  // Section 7.2: observe exits directly so dispatch recovery need not wait for coordinator polling.
   protected failActiveDispatchOnExit(
     handle: string,
     paneKey: string | null,
@@ -64,16 +61,12 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       return
     }
 
-    // Why the pane key too: a reminted handle no longer matches the row, but the
-    // pane identity behind it outlives the remint.
+    // Pane identity survives handle reminting.
     const dispatch = db.getActiveDispatchForTerminal(handle, paneKey ?? undefined)
     if (!dispatch) {
       return
     }
-    // A process that dies while we are stopping it is that stop succeeding, not a failure:
-    // settling it as `failed` here made the in-flight worker-stop report its own success as an error.
-    // Only a stop begun in THIS runtime can claim the exit; a `stopping` row left durable by a
-    // killed process would otherwise absorb a much later crash as a clean stop.
+    // Only this runtime's in-flight stop claims a clean exit; durable stopping rows from a crashed runtime cannot absorb later crashes.
     const stopping = db.getWorkerDispatch?.(dispatch.id)
     if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
       db.settleWorkerStop(dispatch.id)
@@ -89,8 +82,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       return
     }
 
-    // Why: the coordinator hears about the unexpected exit on its next check cycle, even if the
-    // circuit breaker hasn't tripped yet.
+    // Escalate unexpected exits on the next coordinator check even before its circuit breaker trips.
     escalateWorkerFailure(
       db,
       dispatch,
@@ -131,12 +123,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
   ): Promise<'live' | 'exited' | 'unverifiable'> {
     const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
     if (structuredSessionId) {
-      // A structured session has no PTY, so the process table can only ever fail to find it —
-      // answering `exited` from that absence would release a running provider child. The durable
-      // agent-session records, walked forward to any `/clear` successor, are asked directly rather
-      // than the in-memory identity registry: settlement forgets the registry entry, so gating on
-      // one made a stopped worker's resource answer `unverifiable` forever and stay in
-      // `worker-list --terminalState retained` for the life of the DB.
+      // Structured sessions have no PTY; consult durable records through /clear successors. The in-memory registry vanishes at settlement, so absence there proves no exit.
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)

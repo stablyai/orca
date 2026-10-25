@@ -1,9 +1,4 @@
-// Best-effort classifier from a thrown value to the closed `error_class`
-// enum on `agent_error`. The wire never carries a raw error message or stack
-// — every transmitted error is bucketed into one of the two enum members
-// (`binary_not_found` for ENOENT-shaped failures, `unknown` for everything
-// else). A non-zero `unknown` slice on the dashboard is the trigger to add a
-// new enum value alongside the call site that would emit it.
+// Send closed error_class enums only, never raw messages/stacks; add new buckets when unknown volume warrants call-site review.
 
 import type { ErrorClass } from '../../shared/telemetry-events'
 

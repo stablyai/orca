@@ -5,14 +5,7 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const TERMINAL = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
 
-/**
- * The three writes native chat makes to a terminal — the message body, the standalone input clear
- * and the paced command typing — plus the host-side record of a session-option pick.
- *
- * Each is an exported async function taking a client. The send's delivery-unknown arm is the reason
- * these are recorded rather than reasoned about: a cutover and an ack loss must both answer
- * `unknown`, and only a recording shows which of the three outcomes a given failure produced.
- */
+// Record lost-ack and cutover outcomes explicitly; both must remain unknown rather than failed.
 export function nativeChatWriteMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -79,7 +72,6 @@ export function nativeChatWriteMountAdapters(
             mountFixture<Parameters<typeof persist>[0]>({
               client,
               agent: 'claude',
-              // An empty pick list returns before the wire; the write is best-effort either way.
               picks: name === 'empty' ? [] : [{ modelId: 'opus', optionId: 'model', value: 'opus' }]
             })
           ).then((value: unknown) => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { codexPrimaryCommandTaskId } from '../../shared/structured-session-foreground-commands'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
   acquireReadyCodexForTest,

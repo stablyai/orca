@@ -11,8 +11,6 @@ describe('isLongSkillDescription', () => {
     expect(isLongSkillDescription('a'.repeat(SKILL_DESCRIPTION_CLAMP_CHARS + 1))).toBe(true)
   })
 
-  // Why: trigger-word lists pad descriptions with whitespace; padding alone is
-  // not a reason to hide the text behind a toggle.
   it('ignores surrounding whitespace and missing values', () => {
     expect(isLongSkillDescription(`  ${'a'.repeat(20)}  `)).toBe(false)
     expect(isLongSkillDescription(null)).toBe(false)

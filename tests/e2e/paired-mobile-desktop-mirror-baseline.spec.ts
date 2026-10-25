@@ -1,10 +1,4 @@
-/**
- * Phone paired with a desktop that is itself a client of an `orca serve` host.
- *
- * BASELINE, not the goal: today the phone sees only the desktop's own workspaces, because the
- * desktop main process never holds its paired servers' workspaces. The mirror slice (S2) flips the
- * second assertion; update it there instead of deleting it.
- */
+// Baseline: a phone paired to a desktop client sees only desktop workspaces until mirror slice S2; update the server-row assertion when that slice lands.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'

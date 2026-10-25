@@ -5,34 +5,21 @@ import { stripMarkdownExtension } from './markdown-doc-links'
 
 export type DocLinkMenuState = {
   query: string
-  // Why: `from` points at the first `[` of the `[[` trigger (not after the brackets)
-  // so the commit path's deleteRange({ from, to }) removes `[[query` entirely before
-  // inserting the atom node.
+  // Start at the first bracket so committing replaces the complete trigger text.
   from: number
   to: number
   left: number
   top: number
 }
 
-// Why: discriminated union so v2 can add non-document rows (e.g., "Create <query>")
-// without refactoring the commit path. v1 only emits `document` rows.
 export type DocLinkMenuRow =
   | { kind: 'document'; document: MarkdownDocument }
   | { kind: 'action'; id: string; label: string; run: (editor: Editor) => void }
 
-// Why: the leading alternation `(^|[\s(])` is a mid-word guard so typing `foo[[`
-// inside a word does not fire the popover — `[[` only triggers at start-of-block,
-// after whitespace, or after `(`. `[^[\]|\r\n]*` bans characters that would break
-// the trigger contract (nested brackets) or belong to a deferred v1 feature (`|`
-// display-text override).
+// Require block start, whitespace or an opening parenthesis before triggers; exclude nested brackets, label separators and newlines.
 const DOC_LINK_TRIGGER_REGEX = /(^|[\s(])\[\[([^[\]|\r\n]*)$/
 
-/**
- * Inserts an atom doc-link node at the trigger range. Directly creating the
- * markdownDocLink node (instead of typing `[[target]]` and relying on the
- * auto-convert plugin) keeps undo to a single step and avoids a one-tick
- * flicker where the inline preview decoration would also run.
- */
+/** Insert the atom directly for one undo step without a transient preview-decoration flicker. */
 export function runDocLinkCommand(
   editor: Editor,
   menu: { from: number; to: number },
@@ -47,33 +34,21 @@ export function runDocLinkCommand(
     .run()
 }
 
-/**
- * Single commit entrypoint shared by click and keyboard paths. Dispatches on
- * the row kind so v2 action rows plug in without refactoring either caller.
- */
 export function commitRow(editor: Editor, menu: DocLinkMenuState, row: DocLinkMenuRow): void {
   if (row.kind === 'document') {
     runDocLinkCommand(editor, menu, row.document)
     return
   }
-  // Why: action rows (v2 "Create <query>") delete the trigger text and hand
-  // off to their own run(). v1 never emits action rows so this branch is dead
-  // today, but the shape is in place so the hook point costs nothing later.
   editor.chain().focus().deleteRange({ from: menu.from, to: menu.to }).run()
   row.run(editor)
 }
 
-/**
- * Mirror of `syncSlashMenu` for the `[[...]]` doc-link trigger. Every bail
- * path MUST call setDocLinkMenu(null) so a previously-open popover closes
- * when the cursor leaves the trigger region.
- */
+/** Clear the menu on every rejected trigger so leaving its region closes the old popover. */
 export function syncDocLinkMenu(
   editor: Editor,
   root: HTMLDivElement | null,
   setDocLinkMenu: React.Dispatch<React.SetStateAction<DocLinkMenuState | null>>
 ): void {
-  // Guard 1: not editable, IME composing, or non-empty selection.
   if (!root || editor.view.composing || !editor.isEditable) {
     setDocLinkMenu(null)
     return
@@ -86,15 +61,13 @@ export function syncDocLinkMenu(
     return
   }
 
-  // Guard 2: must be inside a textblock.
   const { $from } = selection
   if (!$from.parent.isTextblock) {
     setDocLinkMenu(null)
     return
   }
 
-  // Guard 3: skip code contexts (fenced code, inline code mark). Inside code,
-  // `[[` is literal text and must not open the popover.
+  // Code contexts treat wiki-link syntax as literal text.
   if ($from.parent.type.spec.code) {
     setDocLinkMenu(null)
     return
@@ -105,7 +78,6 @@ export function syncDocLinkMenu(
     return
   }
 
-  // Guard 4/5: extract block text and match the trigger regex.
   const blockTextBeforeCursor = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0')
   const match = blockTextBeforeCursor.match(DOC_LINK_TRIGGER_REGEX)
   if (!match) {
@@ -113,11 +85,7 @@ export function syncDocLinkMenu(
     return
   }
 
-  // Why: use lastIndexOf('[[') for the `from` position because match.index points
-  // at the boundary char captured by group 1 (whitespace/`(`), not at the first
-  // `[`. Using match.index directly would make deleteRange({ from, to }) also
-  // eat the preceding whitespace/paren. `[[` cannot appear inside capture group 2
-  // (the negated class excludes `[`), so lastIndexOf is unambiguous.
+  // match.index includes the preceding boundary; lastIndexOf finds the unique opener without deleting that whitespace or parenthesis.
   const bracketOffset = blockTextBeforeCursor.lastIndexOf('[[')
   const from = selection.from - ($from.parentOffset - bracketOffset)
 

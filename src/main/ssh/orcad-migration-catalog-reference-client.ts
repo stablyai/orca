@@ -12,11 +12,11 @@ import {
   type CatalogRequestOptions
 } from './orcad-migration-catalog-client'
 
-/** Not the release evidence `ORCAD_MIGRATION_DESTINATION_UNSUPPORTED` is: the host may hold a stage. */
+/** Unlike migration-unsupported, this refusal cannot prove no earlier stage exists. */
 export const ORCAD_MIGRATION_DESTINATION_ABORT_BY_REFERENCE_UNSUPPORTED =
   'orcad_migration_destination_abort_by_reference_unsupported:Update Orca on this host to cancel this move.'
 
-/** Sends only the manifest's identity, for a manifest whose whole request would overflow the frame. */
+/** Abort by manifest identity when the full request cannot fit the sealed frame. */
 export async function abortRemoteOrcadMigrationCatalogByReference(
   pairingCode: string,
   manifest: OrcadMigrationManifest,

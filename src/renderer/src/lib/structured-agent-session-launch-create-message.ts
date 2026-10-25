@@ -52,8 +52,7 @@ export function prepareStructuredLaunchCreateMessage(state: StructuredLaunchStat
   notifyStructuredLaunchListeners()
 }
 
-/** Picks held so far, and the chat's own model and effort: a first message starts its turn on
- *  them, as a later send does. */
+// Apply held picks and chat model/effort to the opening turn, matching ordinary sends.
 function structuredLaunchCreateOptions(
   state: StructuredLaunchState
 ): Readonly<Record<string, string>> | undefined {

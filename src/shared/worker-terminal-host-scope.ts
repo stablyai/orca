@@ -1,10 +1,4 @@
-// ─── The one reader of a durable `host_scope` string ─────────────────────────
-// The column was parsed in three places with three different answers: the strict
-// scope parser on the process-liveness path, an inline `JSON.parse` in the fleet
-// host projection, and a second inline parse in the fleet status index that
-// derives the remote connection fence. A WSL-on-local row could read `local` in
-// one and remote in another, so the same worker was local for its host label and
-// remote for the connection its evidence had to carry.
+// Share durable host_scope parsing across liveness, fleet labels and connection fences; independent reads disagreed on WSL-local authority.
 
 /** The scopes a current writer emits. Anything else is legacy or malformed. */
 export type WorkerTerminalHostScope =
@@ -56,8 +50,7 @@ export function readWorkerTerminalHostScope(
       scope: hostId === 'local' ? { kind: 'local', hostId: 'local' } : null
     }
   }
-  // A WSL pane runs on this machine; the distro names the guest, not another host, so a
-  // stray target id on the row does not make it remote.
+  // Local WSL names a guest on this machine; stray target IDs must not make it a remote host.
   if (scope.kind === 'wsl' && hostId === 'local') {
     const distro = typeof scope.distro === 'string' && scope.distro.length > 0 ? scope.distro : null
     return {

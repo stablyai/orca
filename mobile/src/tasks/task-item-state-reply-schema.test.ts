@@ -6,7 +6,6 @@ import {
   hostedIssueCreatedSchema,
   linearIssueCreatedSchema,
   linearIssueUpdatedSchema,
-  taskItemMutationSchema,
   taskMutationConfirmationSchema
 } from './task-item-state-reply-schema'
 
@@ -23,7 +22,7 @@ function refuses(schema: z.ZodType<unknown, unknown>, value: unknown): boolean {
 }
 
 describe('creating an item', () => {
-  it('reads the recorded GitHub and GitLab create replies unchanged', () => {
+  it('reads a GitHub issue create reply', () => {
     const created = reads(hostedIssueCreatedSchema, {
       ok: true,
       number: 11,
@@ -45,15 +44,8 @@ describe('creating an item', () => {
   })
 })
 
-describe('the nine writes that share one reader', () => {
-  it('is the mutation envelope, not a second copy of it', () => {
-    expect(reads(taskItemMutationSchema, { ok: true })).toMatchObject({ ok: true })
-    expect(refuses(taskItemMutationSchema, null)).toBe(true)
-  })
-})
-
 describe('the checks read', () => {
-  it('reads the recorded reply and refuses a payload that is not a list', () => {
+  it('reads the representative reply and refuses a payload that is not a list', () => {
     expect(
       reads(githubPullRequestChecksSchema, [
         { name: 'build', status: 'COMPLETED', conclusion: 'SUCCESS', url: '' }
@@ -65,7 +57,7 @@ describe('the checks read', () => {
 })
 
 describe('the file-contents read', () => {
-  it('reads the recorded reply, which is now the shape getPRFileContents returns', () => {
+  it('reads the representative reply, which is now the shape getPRFileContents returns', () => {
     const recorded = {
       original: 'a',
       modified: 'b',

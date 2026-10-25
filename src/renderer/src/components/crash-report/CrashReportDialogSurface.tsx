@@ -87,13 +87,11 @@ export function CrashReportDialogSurface({
   const [includeDiagnosticLogs, setIncludeDiagnosticLogs] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
-  // Why: account lookup can resolve after the dialog closes or reopens.
-  // Sequence the request so a stale viewer is never used for submission.
+  // Sequence viewer lookups so late close/reopen results cannot supply a stale submission identity.
   const viewerRequestIdRef = useRef(0)
   const deferredNotes = useDeferredValue(notes)
   const diagnosticText = useMemo(
-    // Why: formatting applies redaction and truncation over the full crash
-    // payload. Keep that preview update out of the textarea keystroke path.
+    // Defer full-payload redaction/truncation so notes typing stays responsive.
     () => (report ? formatCrashReportText(report, deferredNotes) : ''),
     [deferredNotes, report]
   )
@@ -175,8 +173,7 @@ export function CrashReportDialogSurface({
         ...(report ? { reportId: report.id } : {}),
         notes,
         includeDiagnosticLogs,
-        // Why: crash reporting must degrade to anonymous if gh is unavailable;
-        // identity lookup is best-effort and never blocks report creation.
+        // Identity lookup is best-effort; allow anonymous reports when gh is unavailable.
         submitAnonymously: !viewer,
         githubLogin: viewer?.login ?? null,
         githubEmail: null

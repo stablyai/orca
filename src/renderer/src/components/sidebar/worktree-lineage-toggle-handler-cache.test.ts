@@ -15,7 +15,6 @@ describe('createLineageToggleHandlerCache', () => {
     const first = getHandler('lineage:alpha')
     const second = getHandler('lineage:alpha')
 
-    // Why: stable identity is what lets React.memo'd WorktreeCard bail out.
     expect(second).toBe(first)
   })
 

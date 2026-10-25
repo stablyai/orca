@@ -1,7 +1,3 @@
-/**
- * Drives the real push seam end to end on the renderer side: the real useIpcEvents subscription,
- * the real hydration round trip, the real row store, and the real strip placement rule.
- */
 import { describe, expect, it } from 'vitest'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 import {
@@ -31,11 +27,7 @@ function pushEvent(): ClientHostedBrowserRowsEvent {
   }
 }
 
-/**
- * The harness resets the module registry, so the hook subscribes against a fresh copy of the row
- * store. Importing it here — after the reset — is what makes this an integration test rather than
- * two unrelated module instances agreeing about nothing.
- */
+/** Import after harness module reset so hook and assertions share the same real row store. */
 async function mountHook(options: IpcEventsHarnessOptions = {}): Promise<{
   harness: IpcEventsHarness
   readRows: (worktreeId: string) => readonly { browserPageId: string }[]
@@ -71,8 +63,7 @@ describe('useIpcEvents client-hosted browser rows', () => {
     expect(readRows(WT).map((row) => row.browserPageId)).toEqual(['page-a'])
   })
 
-  // Why: the subscription is installed before the snapshot round trip, so a page created during
-  // that trip must survive the older snapshot landing on top of it.
+  // Subscribe before hydration so older snapshots cannot erase pages pushed during the round trip.
   it('keeps a push that raced the hydration snapshot', async () => {
     const { harness, readRows } = await mountHook({
       clientHostedBrowserRowsSnapshot: [{ worktreeId: WT, rows: [] }]
@@ -88,7 +79,6 @@ describe('useIpcEvents client-hosted browser rows', () => {
     const { harness, readRows } = await mountHook()
     await harness.settleClientHostedBrowserRowsSnapshot()
     harness.clientHostedBrowserRowsChanged(pushEvent())
-    // Presence precondition: the retraction below is only meaningful against a live row.
     expect(readRows(WT)).toHaveLength(1)
 
     harness.clientHostedBrowserRowsChanged({ worktreeId: WT, rows: [] })
@@ -96,16 +86,13 @@ describe('useIpcEvents client-hosted browser rows', () => {
     expect(readRows(WT)).toEqual([])
   })
 
-  // Why the failed round trip still has to settle: until it does, every push is buffered instead
-  // of applied. A hydration that rejects and never settles means the host strip stays empty for
-  // the window's whole life, and nothing on screen says why.
+  // Failed hydration must settle and drain buffered pushes or the host strip stays empty forever.
   it('applies pushes after the hydration round trip fails', async () => {
     const { harness, readRows } = await mountHook({
       clientHostedBrowserRowsSnapshotError: new Error('runtime unreachable')
     })
 
     harness.clientHostedBrowserRowsChanged(pushEvent())
-    // Presence precondition: buffered, not applied, while hydration is still outstanding.
     expect(readRows(WT)).toEqual([])
     await harness.settleClientHostedBrowserRowsSnapshot()
 

@@ -1,6 +1,4 @@
-// Per-locale renderings that are machine-translation errors for a brand or product name, and get
-// reverted to the Latin original. Ordinary vocabulary that merely looks like a brand lives in
-// locale-generic-ui-terms.mjs and stays translated.
+// Revert mistranslated brand names to Latin; ordinary vocabulary remains translated via locale-generic-ui-terms.mjs.
 export const BRAND_MISTRANSLATIONS = {
   ko: {
     Codex: ['사본', '코덱스'],
@@ -57,8 +55,7 @@ export const BRAND_MISTRANSLATIONS = {
     Pi: ['圆周率'],
     Droid: ['机器人'],
     Kimi: ['基米'],
-    // Why: zh-only — 登月计划 is the literal "moon landing programme", not Kimi's vendor. ja and
-    // ko render this keyword their own way, so it must not go in the cross-locale preserve set.
+    // zh-only: 登月计划 means moon-landing programme, not Kimi vendor; ja/ko have valid local forms.
     moonshot: ['登月计划'],
     'GitHub Copilot': ['GitHub 副驾驶', '副驾驶'],
     Bitbucket: ['位桶'],
@@ -130,8 +127,7 @@ export const BRAND_MISTRANSLATIONS = {
     Repos: ['リポジトリ', 'リポ'],
     repo: ['リポジトリ', 'リポ'],
     repos: ['リポジトリ', 'リポ'],
-    // 端子 is the zh mistranslation and never appears in ja; the ja one is 端末, which the phrase
-    // fixes rewrite to ターミナル rather than back to Latin.
+    // Only zh 端子 reverts; ja 端末 normalizes to ターミナル through phrase fixes.
     Terminal: ['ターミナル'],
     Terminals: ['ターミナル'],
     terminal: ['ターミナル'],

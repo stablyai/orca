@@ -1,8 +1,7 @@
 const { chmodSync, existsSync } = require('node:fs')
 const { join } = require('node:path')
 
-// Why every relay platform in every artifact: SSH deploys upload the remote host's rg from the
-// local bundle, and WSL runs the Linux build from the Windows install directory.
+// Ship every relay platform: SSH uploads remote-host rg from local bundle; WSL uses Linux rg from Windows installs.
 const BUNDLED_RIPGREP_PLATFORMS = [
   'linux-x64',
   'linux-arm64',
@@ -24,8 +23,7 @@ const bundledRipgrepExtraResources = [
     to: RIPGREP_RESOURCE_DIR,
     filter: BUNDLED_RIPGREP_PLATFORMS.map((platform) => `${platform}/**`)
   },
-  // Why: the binaries statically link PCRE2, and on Linux musl, jemalloc and LLVM libunwind --
-  // all of which require their notice on binary redistribution. Whole dir, so notices can be added.
+  // Static PCRE2/musl/jemalloc/LLVM libunwind require redistribution notices; copy the whole directory to include future notices.
   { from: 'resources/licenses/ripgrep', to: `${RIPGREP_RESOURCE_DIR}/licenses` }
 ]
 

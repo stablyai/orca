@@ -134,11 +134,7 @@ describe('client-hosted page position driver', () => {
     expect(pane.host().style.top).toBe('48px')
   })
 
-  // Why this is pinned: a `hidden` document is not proof the overlay is unobservable. Chromium's
-  // macOS occlusion tracker can wedge `visibilityState` at 'hidden' with no further
-  // visibilitychange while the window still paints, and Chromium already stops rAF itself in the
-  // states where the window really is unobservable. A visibility gate here would freeze every
-  // overlay on a window the user is looking at and save nothing.
+  // macOS can wedge visibilityState at hidden while painting; Chromium already throttles truly hidden rAF, so visibility gating only risks frozen overlays.
   it('keeps tracking pane moves while the document reports hidden', async () => {
     const first = await attachHost('page-one', 10)
     const second = await attachHost('page-two', 20)
@@ -173,9 +169,7 @@ describe('client-hosted page position driver', () => {
     expect(frames.cancelled()).toHaveLength(1)
   })
 
-  // Why this is pinned: one loop now serves every overlay, so a host that throws must not take
-  // the others down with it — nothing would restart the loop, and a pane that merely moves fires
-  // no resize/scroll event to recover from.
+  // One throwing host must not stop the shared loop; later pane moves may have no event to restart it.
   it('keeps syncing the other hosts and reschedules when one host throws', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const broken = await attachHost('page-one', 10)

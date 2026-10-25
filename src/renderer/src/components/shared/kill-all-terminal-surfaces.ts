@@ -161,8 +161,7 @@ export async function runKillAllTerminalSurfaces(
     daemon = { status: 'rejected' }
   }
   try {
-    // Why: the management sweep ends sessions without per-PTY pty:exit events,
-    // so cached inventories (status-bar badge) must be told to re-read.
+    // Management sweeps omit per-PTY exit events; invalidate cached inventories explicitly.
     deps.notifyInventoryInvalidated()
   } catch {
     // A stale badge must not abort the destructive action already in progress.
@@ -182,8 +181,7 @@ export async function runKillAllTerminalSurfaces(
       }
     }
     const activeWorktreeId = state.activeWorktreeId
-    // Why: keeping the active worktree until its targets close lets the existing
-    // tab action choose editor/browser/deactivation without spawning a replacement.
+    // Close the active worktree last so existing tab actions can select another surface without spawning one.
     const closeOrder = [
       ...presentTargetIds.filter((targetId) => ownerByTargetId.get(targetId) !== activeWorktreeId),
       ...presentTargetIds.filter((targetId) => ownerByTargetId.get(targetId) === activeWorktreeId)
@@ -243,8 +241,7 @@ export async function runKillAllTerminalSurfaces(
       const failedTargetSurvived =
         closeFailed && snapshotKillAllTerminalSurfaceIds(deps.getState()).includes(targetId)
       if (failedTargetSurvived) {
-        // Why: a pre-mutation failure leaves the tab as a live non-target owner.
-        // Replan before touching siblings so it still protects counts and PTYs.
+        // A failed pre-mutation tab remains an owner; replan before siblings can lose protected PTYs.
         for (const owner of newlyScheduledPtyOwners) {
           scheduledPtyOwners.delete(owner)
         }
@@ -265,8 +262,7 @@ export async function runKillAllTerminalSurfaces(
     }
     maxCloseBatchDurationMs = Math.max(maxCloseBatchDurationMs, deps.now() - closeBatchStartedAt)
     if (remainingTargetIds.size > 0) {
-      // Why: closeTab cascades clone several store maps, so large confirmed
-      // snapshots yield between bounded batches instead of monopolizing a frame.
+      // closeTab clones store maps; yield between bounded batches to avoid monopolizing a frame.
       const stateAfterBatch = deps.getState()
       try {
         await deps.yieldToRenderer()
@@ -277,16 +273,14 @@ export async function runKillAllTerminalSurfaces(
       closeBatchStartedAt = deps.now()
       const stateAfterYield = deps.getState()
       if (mustReplanAfterYield || stateAfterYield !== stateAfterBatch) {
-        // Why: a yield lets tabs move, detach, or appear. Replanning the
-        // remaining snapshot prevents stale ownership from killing a survivor.
+        // Tabs may move/detach/appear during yields; replan remaining targets to protect survivors.
         closeWave = createCloseWave(stateAfterYield)
       }
     }
   }
   const closeDurationMs = Math.max(0, deps.now() - closeStartedAt)
 
-  // Why: the management sweep already settled daemon-owned IDs; awaiting only
-  // reserved exact kills keeps each provider at one request per ownership identity.
+  // The sweep already settled daemon IDs; await reserved exact kills once per provider identity.
   const exactKillResults = await Promise.allSettled(exactKillTasks)
   const exactKillAcceptedCount = exactKillResults.filter(
     (result) => result.status === 'fulfilled'

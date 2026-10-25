@@ -111,10 +111,7 @@ beforeEach(() => {
   setLeaveDrafts.mockClear()
 })
 
-/**
- * Inside the shell's page an unclaimed Back is the shell's own pop, so an unsaved Markdown draft
- * has to hold the key or it is dropped without the prompt.
- */
+// Dirty page drafts must claim Back before the shell’s own pop can discard them without a prompt.
 describe("the session's Back on the page", () => {
   it('claims the key while a draft is dirty, and a press opens the unsaved-drafts prompt', () => {
     render(new Map([['tab-1', readyDoc('saved', 'edited')]]))

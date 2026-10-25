@@ -1,8 +1,5 @@
-/**
- * A Docker SSH host left exactly as a 1.4.224 desktop leaves it on quit: that release's relay
- * running detached with a live shell, under `~/.orca-remote/relay-<version>/`.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
- */
+// Leave the v1.4.224 relay detached with a live shell under its versioned remote directory, matching app quit.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
@@ -20,10 +17,7 @@ export type DockerReleasedRelay = { dir: string; version: string }
 
 export type DockerRelayInstance = { sockPath: string; relayPtyId: string }
 
-/**
- * Bundles the release's relay on the runner and lays it out on the host. Its `node-pty` is the
- * glibc-floor prebuild the orcad template carries: node-pty is N-API, so it loads on the host's Node.
- */
+// Bundle release sources using the orcad template’s glibc-floor N-API node-pty, which loads on the host Node.
 export async function installReleasedRelayOnDockerHost(
   target: DockerSshHostTarget,
   orcadTemplateDir: string
@@ -100,10 +94,7 @@ export function openDockerRelayTransport(
   )
 }
 
-/**
- * Starts the detached daemon the way a 1.4.224 desktop launched it for `targetId`, with the
- * "keep terminals forever" grace, and leaves one echoing shell in it as that desktop's quit does.
- */
+// Use the old client’s keep-terminals-forever grace and leave an echoing shell behind.
 export async function startDockerRelayWithShell(
   target: DockerSshHostTarget,
   relay: DockerReleasedRelay,
@@ -153,7 +144,6 @@ async function claimOwnerWaitingOutGrace(mux: SshChannelMultiplexer): Promise<vo
   }
 }
 
-/** Types a line into a relay shell over its own bridge and returns what it printed back. */
 export async function echoThroughDockerRelay(
   target: DockerSshHostTarget,
   relay: DockerReleasedRelay,
@@ -183,7 +173,6 @@ export async function echoThroughDockerRelay(
   }
 }
 
-/** The PTY ids a relay still runs, asked through its own bridge. */
 export async function listDockerRelayPtys(
   target: DockerSshHostTarget,
   relay: DockerReleasedRelay,

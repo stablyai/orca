@@ -87,8 +87,8 @@ export function pullArgsSpecifyReconciliation(pullArgs: string[]): boolean {
   return pullArgs.some((arg) => RECONCILIATION_PULL_ARG_PATTERN.test(arg))
 }
 
-// Why: on hosts with no pull.rebase/pull.ff policy, Git 2.27+ refuses divergent pulls; retry as merge (Git's historical default).
-// Not GitCapabilityCache-routed: this is per-repo config/branch state, not a stable host capability.
+// Git 2.27+ divergent-pull refusal without repo policy can retry historical merge behavior.
+// This depends on repo config/branch state, not a stable host capability.
 export async function runPullWithDivergenceFallback(
   pullArgs: string[],
   runPull: (effectiveArgs: string[]) => Promise<void>
@@ -104,8 +104,7 @@ export async function runPullWithDivergenceFallback(
   }
 }
 
-// Why: an exec-level timeout kills the child (SIGTERM) with no git stderr line,
-// so message inspection can't distinguish it from a real git failure.
+// Exec timeouts kill via SIGTERM without Git stderr, so message text cannot distinguish them from Git failures.
 export function isExecKilledError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false
@@ -181,7 +180,6 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     return 'Pull would overwrite untracked files. Move, remove, or add them before pulling.'
   }
 
-  // Fallthrough: raw was already credential-scrubbed at top, so just extract the tail stderr line.
   return extractTailLine(raw)
 }
 

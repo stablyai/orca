@@ -36,6 +36,7 @@ import {
   getCachedWslAvailability,
   getCachedWslDistros,
   getWslHome,
+  getWslHomeAsync,
   hasCachedWslAvailability,
   hasCachedWslDistros,
   isWslAvailableAsync,
@@ -305,6 +306,34 @@ describe('WSL home cache', () => {
       expect(runProcessSyncMock).toHaveBeenCalledTimes(68)
       expect(getWslHome('Distro-0')).toContain('Distro-0')
       expect(runProcessSyncMock).toHaveBeenCalledTimes(69)
+    })
+  })
+})
+
+describe('WSL home probe on a booting distro', () => {
+  afterEach(() => {
+    runProcessMock.mockReset()
+    runProcessSyncMock.mockReset()
+    _resetWslCachesForTests()
+  })
+
+  // Real host (win-lowspec): a 5 s kill mid-boot left the distro failing every wsl.exe call.
+  it('gives the async home probe time for a cold boot instead of killing it at 5 s', async () => {
+    runProcessMock.mockResolvedValueOnce(exited('/home/alice\n'))
+    await withPlatformAsync('win32', () => getWslHomeAsync('Ubuntu'))
+    expect(runProcessMock.mock.calls[0]?.[0]).toMatchObject({ program: 'wsl.exe' })
+    expect(runProcessMock.mock.calls[0]?.[0]?.timeoutMs).toBeGreaterThanOrEqual(30_000)
+  })
+
+  it('never starts a 5 s synchronous probe while the async one waits out a boot', async () => {
+    let finish!: (result: ProcessResult) => void
+    runProcessMock.mockReturnValueOnce(new Promise<ProcessResult>((resolve) => (finish = resolve)))
+    await withPlatformAsync('win32', async () => {
+      const pending = getWslHomeAsync('Ubuntu')
+      expect(getWslHome('Ubuntu')).toBeNull()
+      expect(runProcessSyncMock).not.toHaveBeenCalled()
+      finish(exited('/home/alice\n'))
+      expect(await pending).toContain('alice')
     })
   })
 })

@@ -1,5 +1,4 @@
-// Main's pane starts and their resume outcomes, as the window's store shows them: a status-only
-// frame changes these maps and no pane tree, so the pane's view stays mounted.
+// Status-only start/resume frames update maps without pane trees, preserving mounted views.
 
 import type { AppState } from '@/store/types'
 import type { TerminalPaneResumeOutcome, TerminalPaneStart } from '@/store/terminals/terminal-state'
@@ -89,11 +88,7 @@ function paneFactsWithFrames<T>(
   return next
 }
 
-/**
- * `current` with each of `keys`' panes showing what its workspace's frame says, the same object
- * when nothing changed. `shownByKey` holds the pane keys each workspace last showed, so a start
- * that ended (the pane bound, or left) drops from the map; it is updated in place.
- */
+/** Return current on no-op; update shownByKey in place so ended/bound/removed starts leave the map. */
 export function paneStartsWithFrames(
   current: PaneStarts,
   keys: Iterable<string>,

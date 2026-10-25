@@ -70,7 +70,7 @@ export function SettingsHostScopePicker({
             </SelectItem>
           ))}
           {scopeEnvironmentId && !scope.available ? (
-            // Why: a removed server stays selected and says so; it never turns into another host.
+            // Keep removed servers selected/unavailable instead of silently retargeting another host.
             <SelectItem value={value} disabled>
               {translate(
                 'auto.components.settings.SettingsHostScopePicker.unavailable',

@@ -6,7 +6,7 @@ import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatche
 
 /** Headless serve has no renderer to run the normal cli:install flow, so it registers here. */
 export async function registerCliForHeadlessServe(): Promise<void> {
-  // Windows-excluded: install() only mutates registry PATH, not child terminals.
+  // Windows registry PATH installation cannot fix this server's existing child environments.
   if (process.platform !== 'darwin' && process.platform !== 'linux') {
     return
   }
@@ -14,8 +14,7 @@ export async function registerCliForHeadlessServe(): Promise<void> {
     process.platform === 'linux' ? (resolveAppImageRuntimeIdentity()?.appImagePath ?? null) : null
   let appImageDeadlineAt: number | undefined
   if (appImagePath) {
-    // Why first: CLI install and the bare dispatcher would otherwise each wait out their own
-    // extraction timeout; this gives the whole AppImage wait one deadline and visible progress.
+    // Share one bounded AppImage extraction across CLI install/dispatcher and report progress.
     const preparation = await prepareAppImageCopyForServe({ appImagePath })
     if (preparation.status === 'unavailable') {
       console.warn(`[serve] orca CLI install skipped: ${preparation.reason}`)
@@ -24,7 +23,7 @@ export async function registerCliForHeadlessServe(): Promise<void> {
     appImageDeadlineAt = preparation.deadlineAt
   }
   try {
-    // Why: serve is headless — a fallback osascript admin prompt would hang it; skip elevation since ~/.local/bin needs none.
+    // Headless serve cannot answer osascript elevation; user-local CLI installation needs none.
     const cliStatus = await new CliInstaller({
       privilegedRunner: async () => {
         throw new Error('serve CLI auto-install must not request administrator privileges')
@@ -40,7 +39,7 @@ export async function registerCliForHeadlessServe(): Promise<void> {
       error instanceof Error ? error.message : String(error)
     )
   }
-  // Why: Linux CLI installs as `orca-ide`, but the Claude Team launcher invokes bare `orca`; drop a ~/.local/bin dispatcher (ahead of /usr/bin) so it resolves. Best-effort.
+  // Linux installs orca-ide; Claude Team invokes bare orca, requiring a best-effort user-local dispatcher.
   if (process.platform === 'linux' && app.isPackaged && process.resourcesPath) {
     try {
       const dispatcher = await installLinuxBareOrcaDispatcher({

@@ -15,7 +15,6 @@ import {
 } from 'lucide-react-native'
 import type { NativeChatToolIconName } from '../../../src/shared/native-chat-tool-icon'
 
-/** Desktop parity: `NativeChatToolIcon`'s glyph table. */
 const GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   eye: Eye,
   search: Search,
@@ -31,7 +30,6 @@ const GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   brain: Brain
 }
 
-/** A tool category's glyph. Decorative: the word beside it names the row. */
 export function MobileNativeChatToolGlyph({
   name,
   size,

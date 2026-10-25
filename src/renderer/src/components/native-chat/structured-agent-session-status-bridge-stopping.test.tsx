@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-// The sidebar row follows the host's Stopping both ways, even when nothing else on the summary
-// moved: a Stop that settles, then binds no turn, changes only that field.
+// A settled Stop can change only stopping; sidebar status must follow both edges.
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'

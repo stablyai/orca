@@ -32,6 +32,10 @@ export type WslPathInfo = {
 }
 
 const WSL_PROBE_TIMEOUT_MS = 5000
+// Measured on a slow PC: a cold systemd distro takes 4-11 s to answer its first exec, and killing
+// wsl.exe mid-boot leaves the distro failing every call with Wsl/Service/E_UNEXPECTED for 14+ s.
+// An async probe blocks nothing, so it waits out the boot.
+const WSL_HOME_PROBE_ASYNC_TIMEOUT_MS = 60_000
 
 function wslHomeProbeArgs(distro: string): string[] {
   return buildWslExecArgs(distro, ['bash', '-c', 'echo $HOME'])
@@ -214,6 +218,10 @@ export function getWslHome(distro: string): string | null {
   if (cachedHome !== undefined) {
     return cachedHome
   }
+  // A second, 5 s-bounded probe would kill a boot the in-flight one is waiting out.
+  if (wslHomeProbeCache.has(distro)) {
+    return null
+  }
 
   try {
     const home = wslExeStdout(
@@ -242,7 +250,7 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
     return inflight
   }
 
-  const probe = runWslExe(wslHomeProbeArgs(distro))
+  const probe = runWslExe(wslHomeProbeArgs(distro), undefined, WSL_HOME_PROBE_ASYNC_TIMEOUT_MS)
     .then((output) => {
       const home = output.trim()
       if (!home || !home.startsWith('/')) {
@@ -301,6 +309,10 @@ export function _setWslCachesForTests(args: {
   }
 }
 
-async function runWslExe(args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
-  return wslExeStdout(await runProcess(wslExeProcessSpec(args, WSL_PROBE_TIMEOUT_MS, env)))
+async function runWslExe(
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  timeoutMs = WSL_PROBE_TIMEOUT_MS
+): Promise<string> {
+  return wslExeStdout(await runProcess(wslExeProcessSpec(args, timeoutMs, env)))
 }

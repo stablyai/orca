@@ -13,8 +13,7 @@ export type MobileStructuredAskSession = Pick<
   'permission' | 'question' | 'sendWithOutcome'
 >
 
-/** A structured chat's question the agent asked without waiting (Codex's async one), pending
- *  until the next user message and answered by an ordinary send that leaves the draft alone. */
+// Keep nonblocking structured questions pending until the next user message; answer by ordinary send without touching the draft.
 export function useMobileStructuredAsyncQuestion(args: {
   structured: MobileStructuredAskSession | null
   messages: readonly NativeChatMessage[]

@@ -8,7 +8,7 @@ import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.
 
 describe('terminal side-effect fact channel', () => {
   it('emits 2031-subscribe facts across chunk splits', () => {
-    // Why: hidden-delivery-gated views never get the bytes, so this fact is their only cue to send the DECSET 2031 color-scheme reply.
+    // Hidden views need this fact to answer DECSET 2031 because they never receive its bytes.
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
 
@@ -36,7 +36,7 @@ describe('terminal side-effect fact channel', () => {
       data: 'visible content',
       cols: 80,
       rows: 24,
-      // Renderer xterm never saw the synthetic frame (no longer rides pty:data), so its serializer reports a stale title.
+      // Renderer serialization still has the stale title because synthetic frames bypass pty:data.
       lastTitle: 'stale shell title'
     })
     runtime.setPtyController({
@@ -496,7 +496,6 @@ describe('terminal side-effect fact channel', () => {
     syncSinglePty(runtime)
 
     runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07real output\r\n', 100)
-    // Hook-driven idle frame lands only in main's tracker; the emulator never sees fabricated bytes (invariant 5).
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
 
     const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 10 })
@@ -523,7 +522,6 @@ describe('terminal side-effect fact channel', () => {
     syncSinglePty(runtime)
 
     runtime.onPtyData('pty-1', 'plain output\n', 100)
-    // Simulate a record title restored by a path that bypassed the tracker.
     const records = (
       runtime as unknown as {
         ptysById: Map<string, { lastOscTitle: string | null }>
@@ -536,7 +534,6 @@ describe('terminal side-effect fact channel', () => {
       facts: [{ kind: 'title', normalizedTitle: 'Cursor Agent', rawTitle: 'Cursor Agent' }]
     })
 
-    // A synthesized Cursor title owns the pane; the bare literal must not replay over it.
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Cursor Agent\x07')
 
     expect(runtime.getTerminalSideEffectSnapshot('pty-1')).toMatchObject({
@@ -545,7 +542,6 @@ describe('terminal side-effect fact channel', () => {
   })
 
   it('emits the chunk agentStatus events before its side-effect batch', () => {
-    // Cross-channel contract order per chunk: status → titles → bell.
     const order: string[] = []
     const runtime = new OrcaRuntimeService(store, undefined, {
       onTerminalAgentStatus: () => order.push('agentStatus:set'),
@@ -581,7 +577,7 @@ describe('terminal side-effect fact channel', () => {
     expect(batches[0].facts).toEqual([
       { kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' }
     ])
-    // Next chunk's batch carries only its own facts: the throw aborted the first chunk's tracker pass, so no working state kept.
+    // A throw aborted the prior tracker pass; its facts must not leak into the next chunk.
     expect(batches[1].seq).toBeGreaterThan(batches[0].seq)
     expect(batches[1].facts).toEqual([
       { kind: 'title', normalizedTitle: 'Codex done', rawTitle: 'Codex done' }
@@ -595,9 +591,9 @@ describe('terminal side-effect fact channel', () => {
     runtime.onPtyData('pty-1', '\x1b]0;split ti', 100)
     // An 80ms spinner tick lands between the two halves of the real OSC.
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Cursor Agent\x07')
-    // Continuation: this BEL terminates the real OSC — it is NOT a bell.
+    // This BEL terminates the real partial OSC; it is not a bell.
     runtime.onPtyData('pty-1', 'tle\x07', 101)
-    // A later standalone BEL is a real bell and must not be swallowed.
+    // A later standalone BEL must still produce a bell fact.
     runtime.onPtyData('pty-1', 'ready\x07', 102)
 
     expect(batches.flatMap((batch) => batch.facts)).toEqual([
@@ -619,12 +615,10 @@ describe('terminal side-effect fact channel', () => {
     for (const frame of ['⠋', '⠙', '⠹', '⠸', '⠼']) {
       runtime.ingestSyntheticTitleFrame('pty-1', `\x1b]0;${frame} Cursor Agent\x07`)
     }
-    // Five ticks with the same de-spinnered title: one snapshot fan-out.
     expect(touchSpy).toHaveBeenCalledTimes(1)
 
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Cursor ready\x07')
     expect(touchSpy).toHaveBeenCalledTimes(2)
-    // Raw record titles still track every frame for worktree ps/mobile tabs.
     expect(
       (
         runtime as unknown as {
@@ -652,14 +646,14 @@ describe('terminal side-effect fact channel', () => {
     })
     syncSinglePty(runtime)
 
-    // First live chunk creates the tracker cold and kicks off hydration; the snapshot seed must land in that tracker.
+    // Cold tracker hydration must seed status before processing later transitions.
     runtime.onPtyData('pty-1', 'plain output without a title\n', 100)
     await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 10 })
     batches.length = 0
 
     runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
 
-    // Without the seed the tracker never saw 'working', so this idle title could not produce a completion fact.
+    // Without a working seed, the idle title cannot produce a completion fact.
     expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
       kind: 'agent-idle',
       title: 'Codex done',

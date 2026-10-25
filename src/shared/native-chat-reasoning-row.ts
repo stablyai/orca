@@ -1,6 +1,4 @@
-// The reasoning row, as desktop and mobile both draw it: which open block the live activity line
-// discloses, and what a row's collapsed headline says. Read from host facts only — the row's start
-// (`timestamp`) and the end the host saw — so every client tells the same story about one row.
+// Derive reasoning disclosure/headlines from host start/end facts so desktop/mobile show the same lifecycle.
 
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { deriveNativeChatRowContent, nativeChatRowRendersContent } from './native-chat-row-content'
@@ -10,11 +8,8 @@ import type { NativeChatMessage } from './native-chat-types'
 /** An open reasoning block and the text it has so far. */
 export type NativeChatLiveReasoning = { message: NativeChatMessage; markdown: string }
 
-/**
- * The agent's open reasoning block, with its text, when it is the newest thing its live working
- * turn produced; else null. Only `nativeChatLiveLine` asks, so a block is disclosed (and its row
- * hidden) only while the line that discloses it draws.
- */
+/** Newest content of the live working turn must be an open reasoning block. Only nativeChatLiveLine consumes it,
+ * so the block row hides exactly while the disclosing line draws. */
 export function selectNativeChatLiveReasoning(
   messages: readonly NativeChatMessage[],
   inLiveWorkingTurn: (index: number) => boolean

@@ -22,6 +22,7 @@ export function useSmartWorkspaceFieldAvailability({
   refreshPreflightStatus,
   linearStatus,
   linearStatusChecked,
+  linearStatusPending,
   checkLinearConnection,
   jiraSourceConnected
 }: {
@@ -37,6 +38,8 @@ export function useSmartWorkspaceFieldAvailability({
   refreshPreflightStatus: () => Promise<void>
   linearStatus: { connected?: boolean }
   linearStatusChecked: boolean
+  /** The searched host's Linear status is still loading. */
+  linearStatusPending: boolean
   checkLinearConnection: () => Promise<void>
   jiraSourceConnected: boolean
 }) {
@@ -81,9 +84,12 @@ export function useSmartWorkspaceFieldAvailability({
     }
     return item.id !== 'text' || props.typedTextEnabled === true
   })
-  const mode = availableModes.some((item) => item.id === storedMode)
-    ? storedMode
-    : (availableModes[0]?.id ?? 'text')
+  // Why: an unknown status is not a disconnect; keep a chosen Linear tab until it settles.
+  const mode =
+    availableModes.some((item) => item.id === storedMode) ||
+    (storedMode === 'linear' && linearStatusPending && !textOnly)
+      ? storedMode
+      : (availableModes[0]?.id ?? 'text')
   useEffect(() => {
     if (storedMode !== mode) {
       setMode(mode)

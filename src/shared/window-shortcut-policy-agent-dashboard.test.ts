@@ -22,8 +22,7 @@ describe('agent dashboard toggle shortcut', () => {
   })
 
   it('still resolves while a terminal owns focus under terminal-first', () => {
-    // Why: the action sets allowInTerminal, and the premise of the feature is that
-    // the chord reaches the dashboard even when a PTY would otherwise claim keys.
+    // allowInTerminal must deliver the dashboard chord even while the PTY owns input.
     expect(
       resolveWindowShortcutAction(
         input,

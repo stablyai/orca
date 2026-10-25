@@ -36,9 +36,7 @@ const PROJECT_GROUP: ProjectGroup = {
 
 describe('host-qualified reveal lookup finds folder workspaces', () => {
   it('returns the folder row index instead of -1', () => {
-    // Reveal requests for the current workspace carry executionHostId, which
-    // routes here. A walker that only knows item rows returned -1 and the
-    // reveal silently never completed (#15362).
+    // Current-workspace reveals carry a host; folder rows must be reachable by that qualified lookup.
     const rows: RenderRow[] = [
       {
         type: 'folder-workspace',

@@ -560,8 +560,7 @@ describe('install-electron-package-binary', () => {
       expect(result.status, result.stderr).toBe(0)
       expect(readFileSync(join(distDir, 'version'), 'utf8')).toBe('v41.5.0')
       expect(readFileSync(join(entryPath, 'version'), 'utf8')).toBe('v41.5.0')
-      // Why read-only: these are the same inodes, so an extract over dist would otherwise rewrite
-      // the cache and every sibling worktree at once.
+      // Shared inodes require read-only protection or extraction rewrites sibling worktrees and cache.
       expect(statSync(join(entryPath, 'electron')).mode & 0o222).toBe(0)
       expect(statSync(join(entryPath, 'electron')).ino).toBe(
         statSync(join(distDir, 'electron')).ino

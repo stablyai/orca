@@ -1,5 +1,4 @@
-// Why: every save-path scenario with two tabs (two workspaces) showing one Monaco model. Shared
-// text, baseline and conflict state must stay in step across both tabs.
+// Keep text, disk baseline and conflict state synchronized across workspaces sharing one Monaco model.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
@@ -70,7 +69,6 @@ function openSharedTabs(disk: string) {
   return { store, a, b, edit, tab }
 }
 
-/** The toast's Undo action, as the test calls it. */
 type ClickAction = { onClick: () => void }
 
 function isClickAction(value: unknown): value is ClickAction {
@@ -265,14 +263,12 @@ describe('two tabs sharing one model', () => {
       })
     }
     const [code, rich] = store.getState().openFiles
-    // The first tab shows Monaco source; the second keeps the default rich view.
     store.getState().setMarkdownViewMode(code.id, 'source')
     for (const tab of [code, rich]) {
       store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature('A'))
     }
     store.getState().setEditorDraft(code.id, 'source edit')
     store.getState().markFileDirty(code.id, true)
-    // Both views show one record, so the rich view holds the same draft.
     expect(store.getState().editorDrafts[rich.id]).toBe('source edit')
 
     const cleanup = attachEditorAutosaveController(store)
@@ -344,7 +340,7 @@ describe('two tabs sharing one model', () => {
     toastMock.mockClear()
     reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
     if (changesView) {
-      // A Changes view shows the same record; switching to it neither joins nor leaves anything.
+      // Changes uses the same record, so switching views must not change sharing.
       store.getState().setEditorViewMode(b.id, 'changes')
     }
     edit(b.id, 'typed after reload')

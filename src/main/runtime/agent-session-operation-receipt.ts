@@ -4,7 +4,7 @@ import {
   insertAcceptedAgentSessionOperationInto,
   settleAgentSessionOperationInto,
   type AgentSessionOperationAcceptance
-} from './agent-session-operation-admission'
+} from './agent-session/ownership/agent-session-operation-admission'
 import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 
 export type AgentSessionOperationReceiptInput =

@@ -35,7 +35,6 @@ type ChatLinkMouseEvent = Pick<
   preventDefault: () => void
 }
 
-/** Opens a chat link at a chosen destination, or the routed one when none is chosen. */
 export function openNativeChatWebLink(
   url: string,
   deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner'>,

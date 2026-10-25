@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentHookServer } from '../agent-hooks/server'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { TEST_REPO_ID, TEST_WORKTREE_ID, store } = await import('./orca-runtime-test-fixtures.spec')
@@ -17,7 +17,7 @@ function spyOnRecord() {
   return spy
 }
 
-// Why a copy of the shared store: main's layout binds panes in the runtime store's session.
+// Layout binds panes in the runtime store's session, so isolate the shared fixture.
 function makeRuntime(
   runtimeStore: ConstructorParameters<typeof OrcaRuntimeService>[0] = { ...store },
   sshTargetId?: string
@@ -25,7 +25,6 @@ function makeRuntime(
   const spawn = vi.fn().mockResolvedValue({ id: 'pty-resume' })
   const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
-    // An SSH pane's binding lives in its execution host's session.
     spawn: sshTargetId
       ? async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
           const result = await spawn(args)
@@ -52,8 +51,7 @@ function makeRuntime(
   return { runtime, spawn }
 }
 
-// #10923: the phone's Session History types the resume into a fresh shell pane, so the host
-// spawns no agent and cannot learn the conversation from the launch.
+// #10923: phone history types resume into a plain shell; host launch cannot infer the conversation.
 describe('a phone resume from Session History', () => {
   afterEach(() => {
     restoreRecord?.()
@@ -77,14 +75,12 @@ describe('a phone resume from Session History', () => {
         worktreeId: TEST_WORKTREE_ID,
         agentType: 'codex',
         providerSession: SESSION,
-        // Every row on this pane is the agent's own, so the seed never replaces one.
         launchedAt: 0
       })
     )
-    // The shell is spawned plainly: the phone's typed command owns the Codex home.
+    // Typed resume owns Codex home; spawn receives no provider session.
     expect(spawn.mock.calls[0]?.[0]?.resumeProviderSession).toBeUndefined()
 
-    // A retried create gets the same pane and must not re-seed over the agent's own report.
     await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
       launchAgent: 'codex',
       resumeProviderSession: SESSION,

@@ -6,10 +6,7 @@ import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import { TERMINAL_LIFECYCLE_METHODS } from './rpc/methods/terminal/terminal-lifecycle-methods'
 
-// #6011 end-to-end: a REAL pty running a REAL process that emits a REAL name-only
-// OSC title while streaming must not satisfy `orca terminal wait --for tui-idle`.
-// Everything below is live — real bytes, real `ps` foreground reads, real timers —
-// because the bug was a wait that returned satisfied in ~0s, so timing IS the proof.
+// #6011: real bytes, foreground reads and elapsed time prove name-only OSC titles cannot settle a streaming agent immediately.
 
 const FIXTURE = fileURLToPath(new URL('./tui-idle-agent-fixture.mjs', import.meta.url))
 const WORKTREE_ID = 'repo-1::/tmp/tui-idle-real-pty'
@@ -86,11 +83,7 @@ async function terminalWait(
 ): Promise<{ satisfied: boolean; elapsedMs: number }> {
   const startedAt = Date.now()
   try {
-    const result = await waitMethod.handler(
-      { terminal, for: 'tui-idle', timeoutMs },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: terminal.wait reads only `runtime` off its context; the rest is request plumbing this fixture has no use for.
-      { runtime } as Parameters<typeof waitMethod.handler>[1]
-    )
+    const result = await waitMethod.handler({ terminal, for: 'tui-idle', timeoutMs }, { runtime })
     return { satisfied: result.wait.satisfied === true, elapsedMs: Date.now() - startedAt }
   } catch (error) {
     // Why only `timeout`: an unsatisfied wait is the outcome under test, but any other

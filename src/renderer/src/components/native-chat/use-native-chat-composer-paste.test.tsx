@@ -140,7 +140,6 @@ describe('useNativeChatComposerPaste', () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
     expect(setNotice).toHaveBeenCalledWith('Disk full.')
-    // The optimistic chip must not outlive a failed save.
     expect(store.chips).toHaveLength(0)
   })
 

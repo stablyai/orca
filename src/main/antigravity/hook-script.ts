@@ -1,3 +1,4 @@
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   POSIX_HOOK_JSON_STDIN,
@@ -56,7 +57,7 @@ export function getManagedScript(
     '  exit 0',
     'fi',
     // Keep large payloads off command lines to avoid EDR false positives.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/antigravity" \\',
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/antigravity" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',

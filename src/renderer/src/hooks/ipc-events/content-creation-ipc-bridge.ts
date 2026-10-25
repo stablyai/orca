@@ -70,7 +70,7 @@ export function registerContentCreationIpcBridge(
     })
   )
 
-  // Why: emulator IPC is additive; guard so older clients or partial preload mocks don't crash the hook when it's absent.
+  // Emulator IPC is additive; older preload/partial mocks may lack it.
   const unsubscribeNewSimulatorTab = window.api.ui.onNewSimulatorTab?.(() => {
     if (isRuntimeEnvironmentActive()) {
       return
@@ -102,7 +102,7 @@ export function registerContentCreationIpcBridge(
         surfacePane: false,
         executionHostId: LOCAL_EXECUTION_HOST_ID
       })
-      // Why: watcher may detect a helper while a simulator tab is already mounted; push stream info so the pane updates without re-attach.
+      // A watcher can find an already-mounted simulator; publish stream info without reattaching it.
       window.setTimeout(() => {
         window.dispatchEvent(
           new CustomEvent('orca:emulator-auto-attach', {

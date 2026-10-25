@@ -14,11 +14,7 @@ export type WorkerFailureEscalation = {
   id?: string
 }
 
-/**
- * Tell the coordinator that owns a Dispatch its worker failed. One path for every kind of worker,
- * so a terminal that exited and a chat whose turn failed reach the coordinator in the same shape.
- * Throws nothing: the worker's own failure handling must never depend on this mail.
- */
+/** Escalate terminal/chat failures through one coordinator-mail path; mail failure must never break worker failure handling. */
 export function escalateWorkerFailure(
   db: OrchestrationDb,
   dispatch: Pick<DispatchContextRow, 'id' | 'run_id' | 'task_id'>,
@@ -39,8 +35,7 @@ export function escalateWorkerFailure(
       return null
     }
     const task = db.getTask?.(dispatch.task_id, dispatch.run_id)
-    // Why: prefer the explicit task title and keep the derived one single-line and bounded;
-    // a raw multi-paragraph spec inlined here breaks the coordinator's escalation banner.
+    // Prefer explicit titles; bound derived titles to one line so raw specs cannot break escalation banners.
     const title =
       typeof task?.spec === 'string'
         ? buildOrchestrationTaskDisplayMetadata({

@@ -141,7 +141,6 @@ describe('landing on a launched tab', () => {
     expect(state.unsubscribeTerminal).toHaveBeenCalledWith('term_old')
     expect(state.subscribeToTerminal).toHaveBeenLastCalledWith('term_new')
 
-    // Landed once: a later snapshot that still shows the old tab active does not re-send.
     apply(snapshot([old, terminalTab('tab-new', 'term_new')]))
     expect(activations(sendRequest)).toHaveLength(1)
   })

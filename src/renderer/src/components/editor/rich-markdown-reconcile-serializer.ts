@@ -17,23 +17,14 @@ export type RichMarkdownReconcileSerializerContext = {
   imageResolverContext: RichMarkdownImageResolverContext
 }
 
-/**
- * Re-serializes markdown through a throwaway editor that REPLICATES the mounted
- * editor's post-load state: same extension set, the file's own superscript-link
- * classification context, its image resolver context, and normalizeEmptyListItems.
- * Reconciliation's safety re-parse must match the live getMarkdown() output, or
- * docs with empty list items / local images / superscript links would spuriously
- * mismatch and silently fall back to canonical. Returns null if serialization throws.
- */
+/** Match live extensions, normalization and link/image context in the safety reparse; mismatches would unnecessarily canonicalize source. Return null on failure. */
 export function serializeRichMarkdownForReconcile(
   content: string,
   { htmlSuperscriptLinkContext, imageResolverContext }: RichMarkdownReconcileSerializerContext
 ): string | null {
   try {
     const codec = createRichMarkdownEditorCodec()
-    // Why: mirror the live editor's link classification (sourceOwner/paths drive
-    // whether a link serializes as a superscript link) via a fresh context built
-    // from the live snapshot, without subscribing to the live editor's context.
+    // Snapshot live link-classification context without subscribing the throwaway editor to it.
     const { version: _version, ...snapshot } = htmlSuperscriptLinkContext.getSnapshot()
     const context = createRichMarkdownHtmlSuperscriptLinkContext(snapshot)
     const editor = new Editor({

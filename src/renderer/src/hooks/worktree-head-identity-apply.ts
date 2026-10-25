@@ -14,17 +14,14 @@ function findWorktreeByPath(worktrees: Worktree[], worktreePath: string): Worktr
   if (exact) {
     return exact
   }
-  // Both paths are Git-derived, but separator/casing normalization can differ
-  // between `git worktree list` output and gitdir-file contents on Windows.
+  // Windows separators/casing can differ between worktree-list output and gitdir contents.
   const normalized = normalizeRuntimePathForComparison(worktreePath)
   return worktrees.find(
     (worktree) => normalizeRuntimePathForComparison(worktree.path) === normalized
   )
 }
 
-/** Applies head/branch snapshots from the status-only watcher path to store
- *  rows. Unknown paths are skipped: row creation/removal is structural and
- *  stays owned by the full worktree listing. */
+/** Apply status-only head/branch updates to known rows; structural creation/removal belongs to the full listing. */
 export function applyWorktreeHeadIdentities(
   data: { repoId: string; identities: WorktreeHeadIdentity[] },
   deps: WorktreeHeadIdentityApplyDeps

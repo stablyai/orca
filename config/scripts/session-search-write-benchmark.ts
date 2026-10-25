@@ -18,13 +18,7 @@ import SyncDatabase from '../../src/main/sqlite/sync-database'
 // Measures the real transcript reader and search store over a synthetic corpus.
 // Never point this at a real transcript tree.
 
-/**
- * How long the longest single transaction held the process.
- *
- * With one transaction per file that is the whole stall a file costs, so it is
- * the number the commit ceiling exists to bound. Measured by wrapping `exec`,
- * because the writer's transactions are the only ones this benchmark runs.
- */
+// Wrap writer’s exec to measure longest synchronous transaction stall, the bound commit ceiling protects.
 function recordTransactionDurations(durations: number[]): () => void {
   const exec = SyncDatabase.prototype.exec
   let started = 0
@@ -86,8 +80,7 @@ async function checkpointedFileBytes(db: SyncDatabase, path: string): Promise<nu
   return (await stat(path)).size
 }
 
-// The default corpus puts tool output at about half the message text; set this
-// far higher to price the tool-row cap against the real 80-97 % band.
+// Raise tool share beyond default half to price tool-row cap against real 80–97% band.
 const toolResultWords = Number(process.env.ORCA_SEARCH_BENCH_TOOL_WORDS ?? 200)
 const corpus = await writeSyntheticTranscriptCorpus({ toolResultWords })
 const indexPath = join(corpus.root, 'index.sqlite')
@@ -178,8 +171,7 @@ try {
   await rm(corpus.root, { recursive: true, force: true })
 }
 
-// Phase two: one transcript far larger than any real one, to price the ceiling
-// that decides whether a file commits once or in chunks.
+// Use oversized synthetic transcript to expose threshold between single/chunked commits.
 const largeTurns = Number(process.env.ORCA_SEARCH_BENCH_LARGE_TURNS ?? 23_000)
 const large = await writeSyntheticTranscriptCorpus({
   sessions: 1,
@@ -207,11 +199,7 @@ try {
     assertIndexedMessages(store.connection, large.messageCount)
     transactions.sort((a, b) => a - b)
 
-    // The same file again, over a generation the index already holds. That is
-    // the pass a growing transcript really costs, and the one whose transaction
-    // used to be sized by the old session rather than by the chunk being
-    // written. The drain that reclaims the cut-loose generation runs after the
-    // commit, so its bounded batches are in `replaceTransactions` too.
+    // Replace already-indexed generation: bound by written chunk, not old session size; include post-commit reclamation batches in replaceTransactions.
     const replaceTransactions: number[] = []
     const restoreReplaceExec = recordTransactionDurations(replaceTransactions)
     requestWholeTranscriptRead(large.files[0]!)
@@ -222,8 +210,7 @@ try {
       stats
     )
     const replaceMs = performance.now() - replaceStarted
-    // Finishes whatever the scheduled drain has not reached, so the reclaim is
-    // priced rather than left half done under the next measurement.
+    // Finish scheduled drain before next measurement so reclamation cost is fully charged.
     const reclaimStarted = performance.now()
     await store.purgeOlderThan(null)
     const reclaimMs = performance.now() - reclaimStarted

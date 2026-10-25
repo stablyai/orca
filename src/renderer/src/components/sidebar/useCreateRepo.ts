@@ -1,5 +1,3 @@
-// Create-project flow hook for AddRepoDialog (orca#763), split from
-// AddRepoCreateStep so the create-state machine stays scoped and testable.
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -40,9 +38,7 @@ export function useCreateRepo(
   const hostTokenRef = useRef(hostToken)
   hostTokenRef.current = hostToken
 
-  // Why: monotonic ID so stale create callbacks can detect they were superseded
-  // when the user clicks Back or closes the dialog mid-create. Mirrors the
-  // cloneGenRef pattern in AddRepoDialog.
+  // Invalidate callbacks when Back or close supersedes the create flow.
   const createGenRef = useRef(0)
 
   const resetCreateState = useCallback(() => {
@@ -55,8 +51,7 @@ export function useCreateRepo(
 
   const handlePickParent = useCallback(async (): Promise<string | null> => {
     if (options.runtimeEnvironmentId?.trim()) {
-      // Why: the native folder picker returns a client-local path. Runtime
-      // project creation needs an explicit host parent path.
+      // Native pickers return client-local paths; remote creation requires an explicit host parent path.
       toast.error(
         translate(
           'auto.components.sidebar.AddRepoCreateStep.875dda0995',
@@ -78,8 +73,7 @@ export function useCreateRepo(
   const handleCreate = useCallback(async () => {
     const name = createName.trim()
     const parentPath = createParent.trim()
-    // Why: null means the chosen host is unresolved (e.g. its server is coming up); without a
-    // host id the request below would run on this computer.
+    // Block unresolved hosts so creation cannot silently fall back to this computer.
     if (!name || !parentPath || options.hostId === null) {
       return
     }
@@ -93,8 +87,6 @@ export function useCreateRepo(
     setCreateError(null)
     try {
       const target = resolveAddRepoRuntimeTarget(options.runtimeEnvironmentId)
-      // Why: Create Project is intentionally Git-only; non-Git folders use the
-      // existing add-folder flows instead of this path.
       const createKind = 'git' as const
       const result =
         target.kind === 'environment'
@@ -113,8 +105,6 @@ export function useCreateRepo(
               name,
               kind: createKind
             })
-      // Why: if the user closed the dialog or clicked Back mid-create,
-      // createGenRef was bumped by resetCreateState. Ignore stale results.
       if (!isCurrent()) {
         return
       }
@@ -128,10 +118,7 @@ export function useCreateRepo(
           runtimeEnvironmentId: options.runtimeEnvironmentId
         }
       )
-      // Why: the IPC handler dedupes by path (see repos:create) and returns
-      // the existing repo unchanged. If its host identity is already in our store, the
-      // handler took the dedup path — no new project was created, so don't
-      // claim one was.
+      // Existing host-qualified store identity indicates path deduplication; do not claim a new project was created.
       if (wasDeduped) {
         toast.info(
           translate(
@@ -152,17 +139,14 @@ export function useCreateRepo(
       }
       const ownerOptions = worktreeRefreshOptions(options.runtimeEnvironmentId)
       if (isGitRepoKind(repo)) {
-        // Why: Git repos use the shared default-checkout completion path.
-        // Why: if refresh is temporarily non-authoritative, the shared opener
-        // still reveals the project so the user is not left in a completed add flow.
+        // Reveal persisted projects even after transient non-authoritative refreshes.
         await fetchWorktrees(repo.id, ownerOptions)
         if (!isCurrent()) {
           return
         }
         await onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
       } else {
-        // Why: folder repos skip the Git default-checkout handoff, so activate the synthetic
-        // root workspace before closing. Matches addNonGitFolder's behavior.
+        // Folder projects activate their synthetic root before close, matching the add-folder path.
         await (ownerOptions.executionHostId
           ? fetchWorktrees(repo.id, {
               executionHostId: ownerOptions.executionHostId
@@ -193,8 +177,7 @@ export function useCreateRepo(
       }
       setCreateError(extractIpcErrorMessage(err, String(err)))
     } finally {
-      // Why: only clear the loading state if this invocation is still current;
-      // a superseded create must not flip the flag back off for a new flow.
+      // Only the current invocation may clear loading; stale results must not hide a newer create flow.
       if (isCurrent()) {
         setIsCreating(false)
       }

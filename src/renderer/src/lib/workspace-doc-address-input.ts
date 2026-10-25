@@ -49,8 +49,7 @@ function ownedWorktreeRoots(
       roots.push({ worktreeId, root: folder.folderPath })
     }
   }
-  // Most-specific root first (after the current worktree), so a file inside a nested workspace is
-  // attributed to that workspace and not to the outer one that lexically contains it too.
+  // After current workspace, prefer the most-specific root so nested files are not attributed to their containing workspace.
   roots.sort((a, b) => b.root.length - a.root.length)
   return roots
 }
@@ -74,14 +73,7 @@ function planToTarget(
   return { status: 'not-a-workspace-doc' }
 }
 
-/**
- * Decides whether typed address-bar input names a previewable workspace document, BEFORE the URL
- * pipeline turns paths into file:// (which a client-hosted guest refuses and which would resolve
- * on the wrong machine for a remote worktree). An absolute path is resolved against the current
- * tab's worktree first, then every other known workspace root; a ./-relative path resolves against
- * the current worktree only. Anything else — including bare relative text, which is
- * indistinguishable from a hostname — falls through to the URL pipeline untouched.
- */
+/** Resolve previewable documents before URL handling turns paths into local file:// that client guests refuse or remote hosts misresolve. Absolute paths try current then known roots; ./ paths use current only. Bare relative text is hostname-ambiguous and stays a URL. */
 export function resolveWorkspaceDocAddressTarget(
   state: AppState,
   currentWorktreeId: string,
@@ -107,8 +99,7 @@ export function resolveWorkspaceDocAddressTarget(
     }
   }
   if (isAbsoluteFilesystemPathInput(input)) {
-    // Same refusal as the relative branch: the containment check is lexical, so an absolute path
-    // routed through dot segments could claim a workspace it then escapes.
+    // Refuse absolute dot segments too; lexical containment cannot prove the resolved file stays inside.
     if (input.split(/[\\/]+/).some((segment) => segment === '..' || segment === '.')) {
       return { status: 'not-a-workspace-doc' }
     }
@@ -131,8 +122,7 @@ export function resolveWorkspaceDocAddressTarget(
     if (!root || relative.length === 0) {
       return { status: 'not-a-workspace-doc' }
     }
-    // Why refused outright: joinPath does not resolve dot segments and the containment check is
-    // lexical, so "./a/../../x.html" would pass while naming a file outside the worktree.
+    // joinPath does not resolve dot segments; lexical checks would accept ./a/../../x.html escaping the workspace.
     if (relative.split(/[\\/]+/).some((segment) => segment === '..' || segment === '.')) {
       return { status: 'not-a-workspace-doc' }
     }

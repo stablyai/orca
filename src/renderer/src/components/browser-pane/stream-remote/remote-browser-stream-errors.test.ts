@@ -9,9 +9,6 @@ function rpcError(code: string, message = 'boom'): Error {
   return Object.assign(new Error(message), { code })
 }
 
-// Why this file exists: the permanent set decides whether the pane ever retries on its own, and it
-// was enforced by nothing — re-adding `selector_not_found` (the exact code 08260a54bf had to walk
-// back out) left the whole suite green, as did deleting two of the three members.
 describe('remote browser stream failure classification', () => {
   it.each(['opening', 'restart'] as const)(
     'distinguishes browser setup from transport during %s',
@@ -46,10 +43,7 @@ describe('remote browser stream failure classification', () => {
     expect(isPermanentRemoteBrowserStreamFailure(remoteBrowserStreamUnsupportedError())).toBe(true)
   })
 
-  // The regression guard. `selector_not_found` means "I could not resolve this right now" — its
-  // producer is a live worktree scan behind a 1s TTL cache, and the connectionId-gated fallback that
-  // shields SSH repos from scan lag does not cover purely local ones. Treating it as permanent
-  // stopped retries on a blip and stranded the pane, which is the bug this area exists to prevent.
+  // selector_not_found can reflect scan-cache lag, including local worktrees; it cannot prove permanent loss.
   it('does not treat an unresolved selector as proof the target is gone', () => {
     expect(isPermanentRemoteBrowserStreamFailure(rpcError('selector_not_found'))).toBe(false)
     expect(resolveRemoteBrowserStreamFailure(rpcError('selector_not_found')).shouldRetry).toBe(true)

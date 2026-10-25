@@ -16,7 +16,6 @@ import {
   type NotificationDispatchMockState
 } from './notification-dispatch-test-harness'
 
-// The user is present unless a test says otherwise.
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
 
@@ -83,8 +82,7 @@ describe('dispatchTerminalNotification', () => {
 
   it('builds the notification id from a completion snapshot, not the pinned working row', () => {
     const pinnedWorkingStartedAt = Date.now() - 60_000
-    // Why: the stored row must name the event's agent, or it is dropped for identity mismatch
-    // and the assertion would hold whichever side of the `??` wins.
+    // Match row agent identity to the event or rejection makes both fallback outcomes pass vacuously.
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
       state: 'working',
       stateStartedAt: pinnedWorkingStartedAt,
@@ -281,8 +279,7 @@ describe('dispatchTerminalNotification', () => {
   })
 
   it('writes unread with the completion reason while the agent-complete banner toggle is off', () => {
-    // Why: the renderer never reads the desktop banner gate — main applies it after unread
-    // and mobile delivery, so a disabled banner must still leave unread + tray attention.
+    // Main applies desktop-banner settings after unread/mobile delivery; disabling banners must preserve tray/unread attention.
     mockState.settings.notifications = {
       ...mockState.settings.notifications,
       enabled: true,

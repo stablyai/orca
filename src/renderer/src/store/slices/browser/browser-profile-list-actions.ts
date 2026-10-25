@@ -43,9 +43,7 @@ export function createBrowserProfileListActions(
             undefined,
             { timeoutMs: 15_000 }
           )
-          // Why: client-hosted imports never touch the server, so the server's
-          // records can't carry the "imported from Chrome" badge — this desktop
-          // remembers what it imported into each environment's jar and overlays it.
+          // Server never observes client imports; overlay desktop-tracked import badges onto each environment’s jar.
           const clientImportSources = await window.api.browser
             .sessionClientRouteImportSources?.({ environmentId: runtimeEnvironmentId })
             .catch(() => ({}))

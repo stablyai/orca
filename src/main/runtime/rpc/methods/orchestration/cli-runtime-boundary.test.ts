@@ -37,7 +37,6 @@ describe('orchestration CLI/runtime boundary', () => {
     return method.handler(parsed, ctx)
   }
 
-  /** Builds the fake RuntimeClient used by the real CLI handlers in this boundary test. */
   function client(): CliRuntimeClient {
     return {
       isRemote: false,
@@ -91,7 +90,6 @@ describe('orchestration CLI/runtime boundary', () => {
     expect(db.getDispatchContext(child.id)?.assignee_handle).toBe('term_worker')
   })
 
-  /** Looks up real DB-created tasks by unique fixture spec after the CLI allocates their IDs. */
   function taskBySpec(spec: string) {
     const task = db.listTasks().find((candidate) => candidate.spec === spec)
     if (!task) {
@@ -111,7 +109,6 @@ async function loadOrchestrationHandlers(): Promise<Record<string, CliHandler>> 
   return module.ORCHESTRATION_HANDLERS
 }
 
-/** Executes one CLI handler with argv-like flags against the supplied runtime client. */
 async function runCli(
   handler: CliHandler,
   client: CliRuntimeClient,

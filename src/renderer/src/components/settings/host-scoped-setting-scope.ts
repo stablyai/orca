@@ -11,9 +11,7 @@ export type HostScopeChoice = {
   label: string
 }
 
-/** Builds the "Apply to:" choices: the client default first, then every known
- *  non-local host. Local is excluded because its override and the client
- *  default address the same machine. */
+/** List client default before non-local hosts; local overrides would address the same machine twice. */
 export function buildHostScopeChoices(
   hosts: readonly SidebarHostOption[],
   clientDefaultLabel: string
@@ -27,7 +25,6 @@ export function buildHostScopeChoices(
   return choices
 }
 
-/** A scope is host-specific when it targets a real host rather than the shared default. */
 export function isHostScope(scope: HostSettingScope): scope is ExecutionHostId {
   return scope !== CLIENT_DEFAULT_SCOPE
 }

@@ -66,8 +66,7 @@ describe('refreshRuntimeProjectWorktrees', () => {
   })
 
   it('gives interactive connect a wider lane than the coalesced event lane', async () => {
-    // Connect is one-shot and the user is waiting on it, so it runs wider than
-    // the background event lane, which can repeat and coalesce many repos.
+    // Interactive connect is one-shot and user-awaited, unlike recurring coalesced event refresh.
     let active = 0
     let peak = 0
     const fetchWorktrees = vi.fn(async (): Promise<void> => {

@@ -58,8 +58,7 @@ export type MobileGitStatusEntryView = MobileGitStatusEntry & {
   unstageActionId: string
 }
 
-// Decorate raw status entries with the row-level capability/action-id fields the
-// file list needs. Opener guards must use the same canOpen rule.
+// File openers must use the same row canOpen rule as the list.
 export function buildMobileGitStatusEntryViews(
   entries: readonly MobileGitStatusEntry[]
 ): MobileGitStatusEntryView[] {

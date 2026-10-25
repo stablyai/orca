@@ -1,6 +1,3 @@
-// Why: cover the bug fixes from the recent review — particularly the NaN
-// sort produced when two rows reference unknown single-select option IDs or
-// unknown iteration IDs, and the empty-group ordering invariant.
 import { describe, expect, it } from 'vitest'
 import type {
   GitHubProjectField,
@@ -143,9 +140,7 @@ describe('sortRows', () => {
   })
 
   it('does not produce NaN when both rows reference unknown single-select options', () => {
-    // Why: this was the bug — `Infinity - Infinity = NaN` made sort()'s
-    // behavior implementation-defined and skipped the row.position
-    // tie-break. Two orphaned rows must still fall through to position.
+    // Avoid Infinity - Infinity producing NaN and bypassing the position tie-break for orphaned options.
     const view = makeView(singleSelectField, {
       direction: 'ASC',
       field: singleSelectField
@@ -171,7 +166,6 @@ describe('sortRows', () => {
       })
     ]
     const sorted = sortRows(makeTable(view, rows), rows)
-    // After tie-break by position, rA (position=1) precedes rB (position=5).
     expect(sorted.map((r) => r.id)).toEqual(['rA', 'rB'])
   })
 
@@ -228,7 +222,6 @@ describe('sortRows', () => {
   })
 
   it('sorts an empty user list last in both directions, like a missing value', () => {
-    // Why: the DESC flip negated the empty branch, sending unassigned rows to the top.
     const rows = [
       makeRow('empty-list', 0, {
         F_assignees: { kind: 'users', fieldId: 'F_assignees', users: [] }
@@ -302,7 +295,6 @@ describe('sortRows', () => {
 
 describe('groupRows', () => {
   it('groups a present-but-empty user list with the missing-value rows', () => {
-    // Why: an empty list fell through to a blank-label group, which renders as "All".
     const view = { ...makeView(assigneesField), groupByFields: [assigneesField] }
     const rows = [
       makeRow('empty-list', 0, {

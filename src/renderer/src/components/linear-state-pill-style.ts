@@ -9,8 +9,7 @@ type LinearStatePillStyle = CSSProperties & {
   '--linear-state-pill-hover-foreground': string
 }
 
-// Why: Linear workspace colors can be very light in light mode. Mixing the
-// visible parts toward foreground preserves hue while keeping labels readable.
+// Mix toward foreground to keep very light workspace colors readable without losing their hue.
 export function getLinearStatePillStyle(color: string): LinearStatePillStyle {
   return {
     '--linear-state-pill-background': `color-mix(in srgb, ${color} 12%, transparent)`,

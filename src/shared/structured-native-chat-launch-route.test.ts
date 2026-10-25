@@ -1,7 +1,4 @@
-/**
- * The shared half of the launch route: the renderer's `resolveAgentLaunchRoute` and orchestration's
- * worker-mode decision both answer from these, so a change here moves both surfaces at once.
- */
+/** Renderer and orchestration share launch feasibility/defaults; changes here must move both surfaces together. */
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -90,8 +87,7 @@ describe('per-launch structured feasibility', () => {
     ).toEqual({ supported: false, blocker: 'project-runtime' })
   })
 
-  // Why floating is supported: its configured directory resolves like any other workspace, so a
-  // session can be filed under it. Workspace kind no longer refuses anything on its own.
+  // Floating workspaces have resolvable configured directories; kind alone must not refuse structured launches.
   it.each(['folder', 'floating', 'git-worktree'] as const)(
     'supports a local %s workspace',
     (workspaceKind) => {

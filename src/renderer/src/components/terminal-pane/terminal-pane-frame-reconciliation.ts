@@ -8,13 +8,7 @@ import {
 import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
 import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 
-/**
- * A layout-owner build's mounted tab drawn from main's tree (the store's layout, which frames set).
- * Every pane main added is mounted, whoever split it: main starts its terminal, and the pane
- * attaches to it. The window's own close shows here with the close it asked for; a pane main
- * dropped without one is left to main's notice. Then the panes take main's shape (by moving,
- * never recreating) and ratios. True when panes were added or closed.
- */
+/** Draw main’s tree by mounting added panes, attaching main-started terminals and moving existing panes/ratios. Apply requested local closes; other removals wait for main’s notice. Return whether panes changed. */
 export function reconcileMountedPanesToLayout(args: {
   tabId: string
   manager: PaneManager
@@ -34,8 +28,7 @@ export function reconcileMountedPanesToLayout(args: {
 
   for (const pane of manager.getPanes()) {
     const kind = target.has(pane.leafId) ? null : takePaneCloseIntent(tabId, pane.leafId)
-    // The window's last pane stays: main's tree then holds a pane the window lacks (a split whose
-    // source went), which main's notice brings; never a tab with no pane.
+    // Keep the last pane until main’s notice brings its missing replacement; never leave an empty tab.
     if (kind && manager.getPanes().length > 1) {
       args.closePane(pane.id, pane.leafId, kind)
       changed = true

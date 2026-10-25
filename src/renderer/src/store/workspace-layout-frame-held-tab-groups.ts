@@ -1,6 +1,4 @@
-// A held tab that shows only in main's groups: drawn in a group main's frame lacks (opened to the
-// side, or main closed its group), it moves into the nearest group main has, so the workspace's
-// group tree stays exactly main's.
+// Held tabs outside main’s group tree move into its nearest group, preserving main’s tree after side opens or group closes.
 
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import { collectTabGroupLayoutGroupIds } from '../../../shared/workspace-layout/tab-group-moves'
@@ -73,8 +71,7 @@ export function heldTabsInMainGroups(
   }
   const into = (groupId: string): string[] =>
     [...strays].filter(([, to]) => to === groupId).map(([id]) => id)
-  // The tab the user is on moves with them: shown in its new group, which becomes theirs. A tab
-  // shown in another group moves unshown, so it never replaces what the user is looking at.
+  // Move the user’s shown tab and activate its new group; other moved tabs must not replace the current view.
   const activeGroup = drawn.groups.find((group) => group.id === drawn.activeGroupId)
   const shownId =
     activeGroup?.activeTabId && strays.has(activeGroup.activeTabId)

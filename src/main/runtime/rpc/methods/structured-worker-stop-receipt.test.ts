@@ -1,10 +1,4 @@
-/**
- * What `worker-stop` may claim it did to a structured worker.
- *
- * A runtime generation with no structured host installed cannot reach the session at all. Saying
- * `closed_agent_terminal` there credits this runtime with an action it never took, and a
- * coordinator reading the receipt treats the worker's chat tab as gone.
- */
+/** An absent structured host cannot issue a close; receipts must not claim closed_agent_terminal and falsely tell coordinators its tab is gone. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'

@@ -1,21 +1,6 @@
 #!/usr/bin/env node
-// Benchmark: per-chunk cost of the GitHub PR-link carry scan on the PTY output path.
-//
-// createTerminalGitHubPRLinkDetector() runs on every PTY chunk (renderer
-// pty-connection + parked-terminal-byte-watcher). Before the fix,
-// getPotentialGitHubPRCarry() ran `lastIndexOf` for BOTH http scheme prefixes
-// across the entire combined chunk — even on the early-out path where the chunk
-// provably has no `/pull/`. The carry it returns is always a suffix of at most
-// MAX_CARRY_LENGTH (512) bytes, so every byte scanned before
-// `length - 512` was guaranteed-wasted work.
-//
-// The fix bounds the scan to that trailing window. This script measures the
-// scan itself across chunk sizes so the saved work is quantified.
-//
-// carryBefore/carryAfter are mirrors: node cannot import the .ts source, which is
-// why the sibling benchmarks in this directory inline their subject too. The
-// constants below are re-read from the real module at startup so a drifted cap or
-// scheme list fails loudly here instead of quietly benchmarking dead code.
+// Measure full-chunk scheme scans against bounded 512-byte carry suffix on each PTY chunk, including early-out without /pull/.
+// Arms mirror production; re-read source constants at startup so changed cap/schemes fail rather than benchmarking stale assumptions.
 import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
@@ -123,19 +108,14 @@ function carryAfter(value) {
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
 
-// Agent TUI output: no scheme anywhere, which is the overwhelmingly common case
-// and the one where the old code scanned the full chunk to return ''. `tail`
-// forces the chunk to end mid-scheme so the fallback branch is measured too.
+// Model ordinary scheme-free TUI output; tail variant ends mid-scheme to exercise fallback.
 function makeChunk(bytes, tail = '') {
   const line = 'build output line with some text and punctuation, id=12345\n'
   const filled = line.repeat(Math.ceil(bytes / line.length)).slice(0, bytes)
   return tail ? filled.slice(0, bytes - tail.length) + tail : filled
 }
 
-// Why measure this too: the detector runs includes() over the whole chunk before
-// the carry scan and the fix does not touch that cost, so timing the carry alone
-// reports a win the hot path cannot actually realize. These fixtures never hold
-// the marker, so this mirrors the early-out branch ordinary output takes.
+// Include unchanged whole-chunk includes scan so carry-only speedup does not overstate real hot-path improvement.
 function detectorEarlyOut(carry, value) {
   if (value.includes(GITHUB_PR_PATH_MARKER)) {
     throw new Error('benchmark fixture unexpectedly contains the PR marker')
@@ -159,8 +139,7 @@ function measure(fn, chunk) {
   return samples[2]
 }
 
-// Why non-empty fixtures: a chunk of ordinary text yields '' from both versions,
-// so an equality check over it would pass even for a carry that always returns ''.
+// Check nonempty carries too or implementation returning empty always would pass equivalence.
 const EQUIVALENCE_FIXTURES = [
   `noise ${'x'.repeat(400)}https://github.com/acme/orca/pull/7`,
   `https://github.com/acme/orca/pull/1${'x'.repeat(600)}`,
@@ -184,8 +163,7 @@ const SIZES = [4 * 1024, 16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024]
 const rows = []
 for (const bytes of SIZES) {
   const chunk = makeChunk(bytes)
-  // 'with' ends in 'h', so the chunk terminates on a partial scheme fragment and
-  // the new code pays the extra bounded probe behind the window.
+  // Final h forces partial-scheme fallback probe behind bounded window.
   const fragmentChunk = makeChunk(bytes, 'with')
   for (const sample of [chunk, fragmentChunk]) {
     if (carryBefore(sample) !== carryAfter(sample)) {

@@ -49,15 +49,13 @@ function render(
 }
 
 describe('SourceControlBranchSection heading', () => {
-  // The heading counts files that differ from the compare base, not every file
-  // the branch ever touched — a rebased branch makes those read alike.
+  // Count current differences from the base, not every historically touched file on a rebased branch.
   it('names the compare base on the count, leaving the heading text alone', () => {
     const markup = render(readySummary)
 
     expect(markup).toContain('Committed on Branch')
     expect(markup).toContain('title="4 files changed vs origin/main"')
-    // No aria-label: inside the section toggle button it would rewrite the
-    // button's accessible name ("Committed on Branch 4 files changed vs …").
+    // An aria-label inside the toggle would replace its accessible name; use the count title only.
     expect(markup).not.toContain('aria-label="4 files changed vs origin/main"')
   })
 
@@ -65,8 +63,7 @@ describe('SourceControlBranchSection heading', () => {
     expect(render(readySummary, 1)).toContain('title="1 file changed vs origin/main"')
   })
 
-  // A narrowing filter changes what the number means: 2 matching files are not
-  // "2 files changed vs origin/main", so the label must go silent.
+  // Filtered counts describe matches, not all files changed against the base.
   it('leaves the count unlabelled while a filter narrows the list', () => {
     expect(render(readySummary, 2, 4)).not.toContain('files changed vs')
   })

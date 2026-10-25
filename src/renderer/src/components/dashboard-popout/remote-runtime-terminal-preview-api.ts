@@ -277,11 +277,7 @@ async function refreshSession(
   return UNAVAILABLE
 }
 
-/**
- * Dashboard preview of a paired host's terminal over the same multiplexed stream panes use:
- * the owning host serializes the snapshot and holds the live boundary, so any host that serves
- * panes also serves previews.
- */
+/** Reuse pane multiplexing: the owning paired host serializes snapshots and holds the live-output boundary. */
 export const remoteRuntimeTerminalPreviewApi: TerminalPreviewApi = {
   connect: (ptyId, opts) => {
     const parts = parseRemoteRuntimePtyId(ptyId)

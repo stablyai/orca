@@ -20,7 +20,6 @@ import { ProvisioningRuntime } from '../orca-runtime-layout-owner-start-fixture'
 const WORKTREE_PATH = '/tmp/workspaces/runtime-setup-all'
 const RUNNER = '/tmp/repo/.git/orca/setup-runner.sh'
 
-/** An activated create with a live window, navigating the window and paired clients. */
 async function createActivated(options: {
   startup?: WorktreeStartupLaunch
   failAgentSpawn?: boolean
@@ -31,7 +30,6 @@ async function createActivated(options: {
   runtime: ProvisioningRuntime
   session: () => WorkspaceSessionState
 }> {
-  // Main's own layout, where a layout-owner build keeps an agent pane that failed to start.
   const mainLayout = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
   const runtime = new ProvisioningRuntime(
     ORCA_LAYOUT_OWNER_IS_MAIN ? mainLayout.runtimeStore : store
@@ -63,7 +61,7 @@ async function createActivated(options: {
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })
-  // A live window, so main hands work to it instead of provisioning in the background.
+  // Keep a live window to exercise foreground provisioning.
   const liveWindow = { isDestroyed: () => false, webContents: { isDestroyed: () => false } }
   setRuntimeDesktopSurface({
     showNotification: () => false,
@@ -140,7 +138,6 @@ describe('OrcaRuntimeService setup creator', () => {
     })
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main keeps the agent's pane to show the failure and still runs setup; the window is handed nothing.
       expect(spawnedCommands).toEqual(['claude', expect.stringContaining(RUNNER)])
       expect(activateWorktree.mock.calls).toEqual([
         ['repo-1', expect.any(String), undefined, undefined, undefined]
@@ -156,7 +153,6 @@ describe('OrcaRuntimeService setup creator', () => {
       ).toEqual([])
       return
     }
-    // Main provisions nothing, so the window seeds the agent's tab and lays setup out around it.
     expect(spawnedCommands).toEqual(['claude'])
     expect(activateWorktree).toHaveBeenCalledOnce()
     expect(activateWorktree).toHaveBeenCalledWith(

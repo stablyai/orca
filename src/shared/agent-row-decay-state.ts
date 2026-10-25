@@ -9,18 +9,7 @@ export type AgentRowState = AgentStatusState | 'idle' | 'unverifiable'
 
 type DecayInput = Pick<AgentStatusEntry, 'state' | 'restoredUnconfirmed'>
 
-/**
- * Where a stale non-`done` entry decays to.
- *
- * Silence is not evidence (docs/reference/ssh-execution-boundary.md), so the destination
- * splits on the liveness Orca actually holds: a pane whose PTY is still in the live-PTY map
- * only lost its reporting stream (`unverifiable`), while a pane with no PTY has nothing
- * running behind it (`idle`). Neither ever claims the agent finished.
- *
- * `restoredUnconfirmed` rows are excluded: they are stale by construction rather than by
- * elapsed silence, and their last evidence predates a process boundary — so there is no
- * "how long since we last heard" for `unverifiable` to report.
- */
+/** Silence proves no completion: live-PTY rows become unverifiable, absent-PTY rows idle. Restored seeds predate this process and have no silence duration to report (ssh-execution-boundary.md). */
 export function resolveDecayedAgentRowState(
   entry: DecayInput,
   hasLivePty: boolean
@@ -43,11 +32,7 @@ export function formatCompactDuration(deltaMs: number): string {
   return `${Math.floor(hours / 24)}d`
 }
 
-/**
- * The observer's report for an `unverifiable` row. Deliberately says what Orca last heard
- * rather than what the agent is doing: the elapsed time is what lets a user apply knowledge
- * Orca does not have (a 40-minute build, a long download).
- */
+/** Report last-observed age rather than claiming current activity; the user may know a long-running task Orca cannot verify. */
 export function agentNoUpdateLabel(
   entry: Pick<AgentStatusEntry, 'updatedAt' | 'evidenceObservedAt'>,
   now: number

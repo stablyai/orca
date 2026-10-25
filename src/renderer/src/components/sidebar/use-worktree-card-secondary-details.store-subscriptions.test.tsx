@@ -132,8 +132,7 @@ describe('useWorktreeCardSecondaryDetails store subscriptions', () => {
     }
     mount(<Probe />)
 
-    // Why: promptCacheTtlMs comes from the settings the card already subscribes to,
-    // so this hook must not open a third subscription for the same field.
+    // Reuse settings passed by the card rather than adding a per-card subscription for the same field.
     expect(listenerCount() - baseline).toBe(composedListeners)
 
     unmount()

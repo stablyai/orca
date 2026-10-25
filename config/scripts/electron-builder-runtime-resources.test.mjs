@@ -22,9 +22,7 @@ const {
   verifyPackagedMainRuntimeDeps
 } = require('../packaged-runtime-node-modules.cjs')
 
-// Why this and not process.platform: @vscode/windows-process-tree is the only os: win32 npm
-// addon left, so its presence is what decides whether the win32 plan resolves.
-// @orca/windows-registry is a workspace link present on every host, so it proves nothing.
+// Only os:win32 process-tree presence selects Windows plan; universal registry workspace link proves no binary exists.
 const windowsAddonsInstalled = existsSync(
   join(projectRoot, 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
 )
@@ -57,8 +55,7 @@ describe('packaged runtime resources', () => {
     try {
       await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
 
-      // The first is the exact shape oxc emits for the memoized SDK import in a
-      // shipped build; the second is the spaced variant the pattern also accepts.
+      // Cover shipped oxc memoized-import spelling and spaced equivalent.
       const sources = new Map([
         [
           'out/main/index.js',
@@ -116,8 +113,7 @@ describe('packaged runtime resources', () => {
         ['out/main/agent-hooks/managed-agent-hook-controls.js', ''],
         ['out/main/chunks/managed-agent-hook-controls-CWf8D-KR.js', 'require(`jsonc-parser`)']
       ])
-      // Real listPackage emits directory nodes too, and extractFile throws on them,
-      // so the `.js` anchor is load-bearing -- keep the mock able to catch that.
+      // listPackage includes directories that extractFile rejects; mock them to enforce the .js anchor.
       const directories = ['/out', '/out/main', '/out/main/chunks']
       const asar = {
         listPackage: () => [...directories, ...[...sources.keys()].map((entry) => `/${entry}`)],
@@ -164,8 +160,7 @@ describe('packaged runtime resources', () => {
     try {
       await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
 
-      // electron-sidecar-tab-registry and browser-execution-host-grant-registry both
-      // expose require(key); a literal key must never read as a packaged specifier.
+      // Registry require(key) members are not packaged bare-module imports, even with literal keys.
       const sources = new Map([
         ['out/main/index.js', 'registry.require("public-a");grants.require(`host-key`)'],
         ['out/main/agent-hooks/managed-agent-hook-controls.js', 'state.import("android-sdk")']
@@ -257,9 +252,7 @@ describe('packaged runtime resources', () => {
   })
 
   it('includes external main dependencies in the packaged runtime closure', () => {
-    // Why: the main process imports '@parcel/watcher' for filesystem change
-    // events; if it is absent from the packaged closure the serve host silently
-    // stops propagating file changes to clients (regression guard for #4851).
+    // Without packaged @parcel/watcher, serve silently stops propagating file changes (#4851).
     const packaged = createPackagedRuntimeNodeModuleResources()
     const packagedTargets = packaged.map((resource) => resource.to)
     expect(packagedTargets).toContain(join('node_modules', '@parcel', 'watcher'))
@@ -487,8 +480,7 @@ describe('packaged runtime resources', () => {
         await seedClipboardPublisher(resourcesDir, target.machine)
         await stubObjdump(root)
         await mkdir(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true })
-        // Why: afterPack now fails hard when the unpacked daemon entry is
-        // missing, so the fixture must carry one like a real package layout.
+        // afterPack rejects missing unpacked daemon entry; model real package layout.
         const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
         await mkdir(unpackedMainDir, { recursive: true })
         await writeFile(
@@ -581,9 +573,7 @@ async function seedBundledRipgrep(resourcesDir) {
   }
 }
 
-// Why source-anchored: the bundler renames a createRequire()'d require, so
-// verifyPackagedMainRuntimeDeps' `require("x")` scan cannot see these specifiers — packaging
-// stays green while the packaged app throws MODULE_NOT_FOUND the first time the path runs.
+// Bundler renames createRequire result, hiding these from bare-require scans; source-anchor or packaging passes before runtime MODULE_NOT_FOUND.
 function collectLazyRequireSpecifiers(directory, found = new Map()) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const entryPath = join(directory, entry.name)

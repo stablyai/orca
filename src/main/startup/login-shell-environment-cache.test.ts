@@ -147,7 +147,6 @@ it('answers a lookup only with a run that started no earlier, so a run predating
     expect(spawner).toHaveBeenCalledTimes(2)
     vi.advanceTimersByTime(1)
     const askedAt = Date.now()
-    // Lookups that started together share one run.
     const lookups = [
       resolveLoginShellEnvironment({ ...options, startedAfter: askedAt }),
       resolveLoginShellEnvironment({ ...options, startedAfter: askedAt })
@@ -157,7 +156,6 @@ it('answers a lookup only with a run that started no earlier, so a run predating
       { PATH: '/installed' },
       { PATH: '/installed' }
     ])
-    // The older run finishing last never replaces the newer result.
     predatesInstall.resolve({ PATH: '/old' })
     await new Promise((resolve) => setImmediate(resolve))
     await expect(resolveLoginShellEnvironment(options)).resolves.toEqual({ PATH: '/installed' })

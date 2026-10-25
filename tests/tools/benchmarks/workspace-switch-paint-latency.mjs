@@ -1,22 +1,9 @@
 #!/usr/bin/env node
-/**
- * Measures how long a workspace-card click takes to become VISIBLE.
- *
- * The existing e2e spec (tests/e2e/worktree-switch-responsiveness.spec.ts) only
- * measures the synchronous click task. That stays fast even when the symptom is
- * present: `markSidebarWorktreeActiveImmediately` mutates the DOM in the click
- * handler, so the attribute flips in ~1ms. What the user sees is the next
- * painted FRAME, and that frame is blocked when the async activation path jams
- * the main thread. So the number that matters is first-paint-after-click.
- *
- * Attaches over CDP to an already-running dev app:
- *
- *   ORCA_DEV_USER_DATA_PATH=... REMOTE_DEBUGGING_PORT=9455 pn dev
- *   node tests/tools/benchmarks/workspace-switch-paint-latency.mjs --port 9455
- *
- * Exits non-zero when the median first-paint exceeds --budget (default 200ms),
- * which makes it usable directly as a `git bisect run` predicate.
- */
+// Measure click→first animation frame plus frame gaps: the synchronous active-card attribute can flip in ~1ms while activation blocks later frames.
+// This frame proxy is distinct from pixel proof. Attach to an isolated dev app via CDP:
+// ORCA_BACKGROUND_LAUNCH=1 ORCA_DEV_USER_DATA_PATH=... REMOTE_DEBUGGING_PORT=9455 pn dev
+// node tests/tools/benchmarks/workspace-switch-paint-latency.mjs --port 9455
+// Exceeding median --budget (default 200ms) exits nonzero for git bisect run.
 
 import { writeFileSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
@@ -106,11 +93,7 @@ function summarize(values) {
   }
 }
 
-/**
- * Installed in the renderer before each click. Records, from the real
- * pointerdown, every animation frame plus long tasks, so we can tell a jammed
- * main thread (no frames for ~1s) apart from slow-but-smooth work.
- */
+// Record frames/long tasks from real pointerdown to distinguish blocked frames from slow-but-smooth work.
 const PROBE_SOURCE = `(targetId) => {
   const probe = {
     t0: null,
@@ -225,9 +208,7 @@ async function main() {
     )
   }
 
-  // Normalize sidebar state so the same cards are reachable across commits.
-  // Why pin the sort: 'recent' reorders the list after every switch, which
-  // would move the card out from under the cursor mid-run.
+  // Pin sidebar sort: Recent reorders after activation and can move the target under the cursor.
   const worktreeIds = await page.evaluate(() => {
     const state = window.__store.getState()
     state.setActiveView('terminal')
@@ -237,8 +218,7 @@ async function main() {
     state.setShowActiveOnly?.(false)
     state.setFilterRepoIds?.([])
     const viewportH = window.innerHeight
-    // Only cards fully inside the viewport are clickable: the list is
-    // virtualized, so off-screen rows are unmounted or positioned outside.
+    // Use fully in-viewport virtualized cards; other rows may be unmounted or positioned outside.
     return [...document.querySelectorAll('[data-worktree-id]')]
       .filter((el) => {
         const surface = el.querySelector('[data-worktree-card-surface]')
@@ -258,8 +238,7 @@ async function main() {
     )
   }
 
-  // Alternate between two cards, neither of which is the one already active at
-  // start — clicking the active card short-circuits and measures nothing.
+  // Alternate two initially inactive cards; clicking active short-circuits without measuring activation.
   const activeAtStart = await page.evaluate(() => window.__store.getState().activeWorktreeId)
   const pair = worktreeIds.filter((id) => id !== activeAtStart).slice(0, 2)
   if (pair.length < 2) {
@@ -271,22 +250,17 @@ async function main() {
   for (let i = 0; i < args.switches; i += 1) {
     const targetId = pair[i % 2]
 
-    // Why: page.evaluate() treats a string as an expression to evaluate and
-    // drops the argument, so the probe has to be applied inline.
+    // Inline the probe because page.evaluate treats a string as an expression and drops its argument.
     const surface = page
       .locator(`[data-worktree-id="${targetId}"] [data-worktree-card-surface]`)
       .first()
 
-    // Why: a transient popover (`fixed inset-0 z-50`) swallows the click, and
-    // the run would then measure a click that never reached the card.
+    // Dismiss transient full-screen popovers so the measured click reaches its card.
     await dismissOverlays(page)
 
     await page.evaluate(`(${PROBE_SOURCE})(${JSON.stringify(targetId)})`)
 
-    // Real CDP input events, not element.click(): the click path has
-    // pointer-drag suppression that a synthetic click would bypass. Going
-    // through the locator also re-resolves position at click time, which
-    // matters because the virtualized list reorders between switches.
+    // Use locator CDP input to exercise drag suppression and re-resolve virtualized position at click time.
     try {
       await surface.click({ timeout: 10_000 })
     } catch (error) {
@@ -319,8 +293,7 @@ async function main() {
       }
     })
     sample.targetId = targetId
-    // Why: a click that never activated would report a fast "first paint" and
-    // silently make every commit look good during a bisect.
+    // Require activation so a missed click cannot falsely report a fast first frame.
     if (sample.attrFlipMs === null && sample.renderedCommitMs === null) {
       throw new Error(
         `switch ${i + 1} clicked card ${targetId} but it never became active — the measurement is not valid`
@@ -334,9 +307,7 @@ async function main() {
     )
   }
 
-  // Why: the first switch after attach pays one-off lazy work (chunk loads,
-  // cold caches) that a warm app never pays again. Keep it in the raw samples
-  // but exclude it from the verdict so bisect steps compare like with like.
+  // Keep the first cold/lazy switch in raw samples but exclude it from warm bisect verdicts.
   const scored = samples.length > 1 ? samples.slice(1) : samples
 
   const report = {
@@ -354,8 +325,7 @@ async function main() {
 
   const medianFirstPaint = report.firstPaintMs?.p50 ?? Infinity
   const medianFrameGap = report.maxFrameGapMs?.p50 ?? Infinity
-  // The visible symptom is a stall, which shows up either as a late first frame
-  // or as a long gap between frames right after the click.
+  // Treat late first frame or long post-click frame gaps as the stall signal.
   const verdictMs = Math.max(medianFirstPaint, medianFrameGap)
   report.verdictMs = +verdictMs.toFixed(1)
   report.pass = verdictMs <= args.budgetMs

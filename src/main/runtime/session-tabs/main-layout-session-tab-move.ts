@@ -1,5 +1,4 @@
-// Layout-owner builds: a phone's or paired client's tab move in a workspace main owns is main's own
-// layout command, window or not; every view draws it from main's frames, so the window is not asked.
+// Move main-owned tabs through layout commands so every view follows main without a window relay.
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
@@ -48,10 +47,7 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
     return workspace && rowId ? resolveSessionTabRow(workspace, rowId)?.tab.id : undefined
   }
 
-  /**
-   * The move in main's layout, checked against the rows the client was shown and refused with
-   * today's codes. Null for a workspace main does not own: today's path moves it.
-   */
+  /** Validate moves against rows the client saw; retain refusal codes. Null leaves unowned workspaces on the legacy path. */
   protected async moveTabInMainLayout(
     worktreeId: string,
     shown: RuntimeMobileSessionTabsSnapshot,

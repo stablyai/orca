@@ -81,7 +81,6 @@ async function setup(directorRegion: Region | undefined) {
       })
     }
   }
-  // Homes the host in `home` with a conclusive measurement preferring the other region.
   const placeHost = async (identity: { userId: string; relayHostId: string }, home: Region) => {
     const assignment = await store.assign(identity, undefined, home)
     const homeCell = cells.find(({ id }) => id === assignment.cellId)!
@@ -151,7 +150,6 @@ describe('rehome source-region filter', () => {
   it('keeps US to Asia moves and drops Asia to US moves', async () => {
     const context = await setup('us-central1')
     const candidates = await context.store.selectIdleRegionalRehomeCandidates(context.safety())
-    // Asia is filtered as a source yet is still every US host's target.
     expect(new Set(moves(candidates).map((move) => JSON.stringify(move)))).toEqual(
       new Set([JSON.stringify({ userId: usHost.userId, from: 'us-central1', to: 'asia-east2' })])
     )

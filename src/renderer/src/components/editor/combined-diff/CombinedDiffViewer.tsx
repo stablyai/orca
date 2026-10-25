@@ -126,8 +126,7 @@ export default function CombinedDiffViewer({
     setSections
   })
 
-  // Why: one incremental scan of `sections` feeds the virtualizer keys, the restore signal and the
-  // toolbar collapse state, instead of three independent full passes per loaded section.
+  // Share one incremental scan across virtualizer keys, restore signals and toolbar collapse state.
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({
     entrySignature: entrySet.entrySignature,

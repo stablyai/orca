@@ -44,7 +44,6 @@ function useFileLinkHostEpoch(
   return { sshUp, runtime: `${runtimeStatus}|${pairing ?? ''}` }
 }
 
-/** Asks again about watched paths when the workspace's host comes back. */
 function useRecheckWhenHostReturns(
   existence: NativeChatFileLinkExistence | null,
   { sshUp, runtime }: FileLinkHostEpoch
@@ -57,11 +56,11 @@ function useRecheckWhenHostReturns(
   useEffect(() => {
     const previous = seen.current
     seen.current = { existence, sshUp, runtime }
-    // Why: a fresh checker has nothing to recheck; its messages are asking right now.
+    // Fresh checkers are already checking their messages; only retained watchers need a host-return retry.
     if (!existence || previous?.existence !== existence) {
       return
     }
-    // Why: only a host coming back (or a new connection) can change answers; going down cannot.
+    // Only returning/replaced connections can change file answers; disconnects cannot prove deletion.
     const sshReturned = sshUp !== null && sshUp !== previous.sshUp
     if (sshReturned || runtime !== previous.runtime) {
       existence.recheck()
@@ -69,7 +68,6 @@ function useRecheckWhenHostReturns(
   }, [existence, sshUp, runtime])
 }
 
-/** For the chat view that knows its turn state: a finished turn may have changed the files. */
 export function useRecheckNativeChatFileLinksWhenTurnEnds(isWorking: boolean): void {
   const existence = useContext(NativeChatFileLinkExistenceContext)
   const seen = useRef<{ existence: NativeChatFileLinkExistence | null; isWorking: boolean } | null>(

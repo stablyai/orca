@@ -45,8 +45,7 @@ describe('getRepoDisplayLabelsByPath', () => {
   })
 
   it('scopes labels by execution host so same-path repos on different hosts do not collide', () => {
-    // Real SSH folder-repo shape: connectionId set, executionHostId unset — so
-    // it must fall back to the connection host, not look identical to a local repo.
+    // SSH folder repos omit executionHostId; connectionId must still separate them from local same-path repos.
     const localRepo = { path: '/Users/alice', displayName: 'alice' }
     const sshRepo = { path: '/Users/alice', displayName: 'alice-prod', connectionId: 'prod-ssh' }
     const labels = getRepoDisplayLabelsByPath([localRepo, sshRepo])

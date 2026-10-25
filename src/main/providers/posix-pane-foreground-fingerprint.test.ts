@@ -55,9 +55,8 @@ describe('buildPaneProcessFingerprint', () => {
   it('is stable across captures that differ only in scheduler state, row order, and foreign panes', async () => {
     const a = await fp(baseline)
     expect(a).not.toBeNull()
-    // R vs S: a working agent flips this every tick and it says nothing about the pane.
+    // Scheduler R/S changes do not transfer pane ownership.
     expect(await fp([agent({ stat: 'R+' }), shell({ stat: 'Ss' }), foreign()])).toBe(a)
-    // The shell going idle-vs-runnable, or a foreign pane starting/exiting, is not our business.
     expect(await fp([shell({ stat: 'Rs' }), agent()])).toBe(a)
     // lstart padding differs between column sets; both must stamp identically.
     expect(await fp([shell({ startTime: 'Thu Sep  3 16:02:01 2026' }), agent()])).toBe(a)
@@ -95,7 +94,6 @@ describe('buildPaneProcessFingerprint', () => {
       expect(await fp([shell(), agent(), child(4310, AGENT), child(4311, 4310)])).not.toBe(
         withChild
       )
-      // A child exec'ing away from the group (setsid / disown) is also a change.
       expect(await fp([shell(), agent(), child(4310, AGENT, { pgid: 4310 })])).not.toBe(withChild)
     })
 
@@ -134,7 +132,6 @@ describe('buildPaneProcessFingerprint', () => {
       expect(a).toContain(`${SHELL}@1000`)
       expect(a).toContain(`${AGENT}@2000`)
       expect(asked.sort()).toEqual([SHELL, AGENT].sort())
-      // An exit-and-replace changes only the /proc start ticks.
       const replaced = await buildPaneProcessFingerprint(rows, SHELL, {
         platform: 'linux',
         readLinuxStartTime: async (pid) => (pid === AGENT ? '2500' : read(pid))
@@ -151,10 +148,7 @@ describe('buildPaneProcessFingerprint', () => {
       ).toBeNull()
     })
     it('refuses when a DESCENDANT start marker cannot be read', async () => {
-      // Why: the start marker is what makes a pid comparison recycle-safe. Stamping a missing
-      // one as a placeholder let two captures that both failed to read it compare equal across
-      // a recycled pid, so a vanished agent looked unchanged and the cheap tier kept serving
-      // its name. Refusing sends the caller to the full capture.
+      // Missing descendant start markers could compare equal across PID reuse and preserve a dead agent identity.
       const rows = [shell(), agent()]
 
       expect(
@@ -166,8 +160,7 @@ describe('buildPaneProcessFingerprint', () => {
     })
 
     it('does not let a recycled descendant pid reuse a fingerprint', async () => {
-      // Both captures fail to read the descendant marker; the pid is reused by a different
-      // process in between. Equal fingerprints here would mask the agent's exit.
+      // Recycled descendant PIDs with unreadable markers must force a full capture.
       const readNoDescendant = async (pid: number): Promise<string | null> =>
         pid === SHELL ? '2400' : null
       const before = await buildPaneProcessFingerprint([shell(), agent()], SHELL, {

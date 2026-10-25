@@ -1,6 +1,4 @@
-// One rendering per English string. 215 sources carried two or more Japanese forms; picks follow
-// the catalog majority — action labels drop する, completion notices use 〜しました, status labels
-// are 体言, and デフォルト / フィルター / スコープ / ディストリビューション / 並べ替え win their pairs.
+// Unify Japanese by catalog majority: actions omit する, completion uses 〜しました, statuses use 体言; standardize terminology pairs.
 export const JA_UNIFIED_VALUES = {
   "Can't reach {{value0}}": '{{value0}} に接続できません',
   'Copy Address': 'アドレスをコピー',

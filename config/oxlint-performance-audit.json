@@ -18,10 +18,6 @@
     {
       "name": "quadratic-buffer-concat",
       "specifier": "../config/oxlint-plugins/quadratic-buffer-concat.mjs"
-    },
-    {
-      "name": "sort-comparator-performance",
-      "specifier": "../config/oxlint-plugins/sort-comparator-performance.mjs"
     }
   ],
   "rules": {
@@ -29,8 +25,7 @@
     "app-store-performance/no-identity-selector": "warn",
     "app-store-performance/no-fresh-selector-result": "warn",
     "app-store-performance/no-nested-fresh-under-shallow": "warn",
-    "quadratic-buffer-concat/no-loop-carried-concat": "warn",
-    "sort-comparator-performance/no-repeated-collator": "warn"
+    "quadratic-buffer-concat/no-loop-carried-concat": "warn"
   },
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out", "**/*.test.*", "**/*.spec.*"]
 }

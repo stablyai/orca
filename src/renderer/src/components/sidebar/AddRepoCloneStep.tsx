@@ -185,8 +185,7 @@ export function CloneStep({
             : translate('auto.components.sidebar.AddRepoSteps.32a7256d85', 'Clone')}
         </Button>
 
-        {/* Why: progress bar lives below the button so it doesn't push the
-           button down when it appears mid-clone. */}
+        {/* Place progress below the button so its appearance cannot shift the target. */}
         {isCloning && cloneProgress && (
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">

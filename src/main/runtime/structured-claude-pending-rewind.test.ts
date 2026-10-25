@@ -1,5 +1,4 @@
-// A pending Claude rewind never strands the chat: one cut short still launches its fork, and an older
-// build's (it saved no fork) is settled refused while the chat resumes by session id.
+// Interrupted rewinds must launch their saved fork; legacy records without one refuse the rewind and resume by session id.
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

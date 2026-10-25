@@ -54,27 +54,19 @@ function reportOsc52ClipboardWriteFailure(notify?: () => void): void {
   }
 }
 
-/** Resolves whether an incoming OSC 52 write may touch the clipboard, and whether a
- *  refusal is worth telling the user about. */
 export function resolveOsc52ClipboardGate(input: {
   /** Null/undefined until settings hydrate. */
   settingEnabled: boolean | null | undefined
   /** True while recorded PTY bytes are being written back into this pane. */
   replaying: boolean
 }): { allowClipboardWrite: boolean; shouldSurfaceBlockedWrite: boolean } {
-  // Why drop during replay: reattach and cold-restore re-write recorded PTY bytes through the same
-  // parser, so a stale `\e]52;c;…` would overwrite whatever the user has copied since. No fresh intent.
-  //
-  // Known over-suppression: the flag is read when xterm parses, not when the bytes were queued, and
-  // the replay path drains queued live bytes before engaging the guard (pty-connection.ts, "drain any
-  // queued background bytes BEFORE the replay paint"). A copy issued in the same tick as a reattach
-  // is therefore dropped silently. Fixing it means tagging chunks at queue time; a lost copy the user
-  // can repeat is the cheaper side of that trade.
+  // Restore parses old PTY bytes, so replayed copies must not overwrite newer clipboard contents.
+  // The guard is read at parse time: queued live bytes drained during reattach may also lose a copy in that tick
+  // (pty-connection.ts). Fixing this requires queue-time tags; repeatable lost copy is preferable to stale overwrite.
   const allowClipboardWrite = !input.replaying && input.settingEnabled === true
   return {
     allowClipboardWrite,
-    // Why not toast on replay or pre-hydration: the toast latches once per renderer session, and neither
-    // case is a real opt-out — unhydrated settings read as blocked even though the default is on.
+    // Replay and pre-hydration are not opt-outs; consuming the once-per-session toast would hide a later real block.
     shouldSurfaceBlockedWrite:
       !allowClipboardWrite &&
       !input.replaying &&
@@ -83,8 +75,7 @@ export function resolveOsc52ClipboardGate(input: {
   }
 }
 
-/** Composes the gate with the request handler into an xterm OSC handler.
- *  Extracted so the wiring is covered too, not just the gate in isolation. */
+/** Compose gate and xterm handler so tests cover their wiring too. */
 export function createOsc52OscHandler(deps: {
   getSettingEnabled: () => boolean | null | undefined
   getReplaying: () => boolean
@@ -92,10 +83,7 @@ export function createOsc52OscHandler(deps: {
   showBlockedWriteToast?: () => void
   showWriteFailedToast?: () => void
 }): (data: string) => boolean {
-  // Why coalesce: each sequence is only ~15 bytes, so one hostile chunk can fire a
-  // million parser callbacks — each a main-process clipboard write. Only the last of
-  // a microtask's worth is observable, so keep that and drop the rest. This bounds a
-  // flood to roughly one write per xterm parse yield, not to one write overall.
+  // Hostile chunks can issue millions of writes. Coalesce to the last per microtask, roughly one native write per xterm parse yield.
   let pendingText: string | null = null
   let flushScheduled = false
   const writeCoalesced = (text: string): Promise<void> => {
@@ -107,10 +95,7 @@ export function createOsc52OscHandler(deps: {
         const next = pendingText
         pendingText = null
         if (next !== null) {
-          // Why try/catch and not just .catch(): the write moved out of the guarded
-          // parser handler into a microtask, where a sync throw (or a preload that
-          // never installed writeClipboardText) would surface as an uncaught error.
-          // Report the otherwise invisible host failure.
+          // Microtasks run outside the parser guard; catch synchronous missing/broken bridges as well as rejected writes and surface failures.
           try {
             void deps.writeClipboardText(next)?.catch(() => {
               reportOsc52ClipboardWriteFailure(deps.showWriteFailedToast)
@@ -121,8 +106,7 @@ export function createOsc52OscHandler(deps: {
         }
       })
     }
-    // Always resolve here: failure toast is raised in the microtask above.
-    // Passing onWriteFailure to handleOsc52ClipboardRequest would be dead.
+    // Resolve here; the microtask reports failures, so handleOsc52ClipboardRequest’s failure callback would be dead.
     return Promise.resolve()
   }
 
@@ -164,9 +148,7 @@ export function parseOsc52(data: string): Osc52ParseResult {
   if (semi === -1) {
     return { kind: 'invalid', reason: 'missing selection/data separator' }
   }
-  // Why accept empty Pc: tmux copies via `\e]52;;<base64>` (window-copy.c passes an
-  // empty clip through the `Ms` capability). XTerm would read that as `s0`; we merge
-  // every kind into the clipboard regardless (see header). Zellij always sends `c`/`p`.
+  // tmux’s Ms emits empty Pc; treat it as clipboard since all selections route there. Zellij sends explicit c/p.
   const selections = data.slice(0, semi) || 'c'
   const payload = data.slice(semi + 1)
 
@@ -178,9 +160,7 @@ export function parseOsc52(data: string): Osc52ParseResult {
     return { kind: 'query' }
   }
 
-  // Why guard size: xterm's own parser caps OSC payloads at ~10 MB; we cap
-  // tighter because a legitimate clipboard write is rarely more than a
-  // screenful and any multi-MB payload is almost certainly a bug or abuse.
+  // Cap below xterm’s ~10 MB: legitimate clipboard text is small; multi-MB payloads imply abuse or a bug.
   if (payload.length > MAX_OSC52_BASE64_CHARS) {
     return { kind: 'invalid', reason: 'payload exceeds size limit' }
   }
@@ -189,9 +169,7 @@ export function parseOsc52(data: string): Osc52ParseResult {
   if (decoded === null) {
     return { kind: 'invalid', reason: 'payload is not valid base64' }
   }
-  // Why reject empty: this is XTerm's "clear the selection", which we decline to
-  // honor — with the gate default-on, any PTY could blank the clipboard for free.
-  // (A truncated sequence never lands here; xterm only calls us on parse success.)
+  // Refuse XTerm clear-selection requests so default-on PTYs cannot blank the clipboard; xterm already excludes truncated sequences.
   if (decoded === '') {
     return { kind: 'invalid', reason: 'empty payload' }
   }
@@ -199,10 +177,7 @@ export function parseOsc52(data: string): Osc52ParseResult {
 }
 
 function decodeBase64Utf8(b64: string): string | null {
-  // Why tolerate whitespace: some TUIs line-wrap the base64 payload. The
-  // WHATWG `atob` rejects whitespace, so strip it first. Reject anything
-  // else that doesn't match the base64 alphabet so we don't silently
-  // accept garbage.
+  // Permit line-wrapped base64 from TUIs, but reject other nonalphabet bytes instead of silently accepting garbage.
   const stripped = normalizeBase64Payload(b64)
   if (stripped === null) {
     return null

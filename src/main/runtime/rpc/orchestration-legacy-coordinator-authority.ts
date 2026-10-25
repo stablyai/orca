@@ -24,7 +24,7 @@ export class LegacyCoordinatorAuthority {
     if (!adoption) {
       return undefined
     }
-    // Why: an unnamed Run means the caller's own binding; only an unbound caller can still mean the adopted Run.
+    // Omitted Run means caller binding first; only unbound callers may fall back to the adopted Run.
     const requestedRun = requestedRunId ?? boundRunId(db, request) ?? adoption.adopted_run_id
     if (requestedRun !== adoption.adopted_run_id) {
       return undefined
@@ -41,17 +41,16 @@ export class LegacyCoordinatorAuthority {
       }
       const run = db.getRun(adoption.adopted_run_id)
       const principal = db.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
-      // Why: an unclaimed adopted Run has no coordinator to fence, and a revoked principal is exactly that.
+      // An unclaimed adopted Run has no coordinator to fence, including a revoked principal.
       if (!run?.coordinator_pane_key && principal?.status !== 'committed') {
         return undefined
       }
       const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
-      // Why: the binding is trusted DB state, so the owner keeps its Run on hosts where attestation is unavailable.
+      // Trusted DB binding admits its owner even where attestation is unavailable.
       if (run && (ownsRunBinding(run, caller) || ownsRunBinding(run, evidence))) {
         return undefined
       }
-      // Why: only a caller already known as the legacy coordinator is in this fence's jurisdiction;
-      // fencing anyone else hides the honest downstream error behind unusable takeover guidance.
+      // Fence only known legacy coordinators; other callers need the honest downstream error, not unusable takeover guidance.
       if (
         !evidence.terminalHandle ||
         !db.isLegacyCoordinatorHandle(adoption.adopted_run_id, evidence.terminalHandle)

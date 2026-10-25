@@ -1,5 +1,4 @@
-// A windowless server (orca serve, orcad): a change main makes to its own layout reaches a
-// subscribed phone, with no window to republish rows.
+// Main-owned layout changes must reach subscribed phones without a window to republish rows.
 import { describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
@@ -172,8 +171,7 @@ describe('session.tabs on a windowless server (switch on)', () => {
         seen.push(snapshot)
       })
 
-      // What an editor change does: rebuild the rows from the saved session, then push. Each
-      // rebuild mints a new publication stamp from the clock, so time moves between them.
+      // Each editor-triggered rebuild mints a clock-based stamp, so advance time between rebuilds.
       for (let rebuild = 0; rebuild < 3; rebuild += 1) {
         vi.advanceTimersByTime(1_000)
         runtime.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(TEST_WORKTREE_ID, {

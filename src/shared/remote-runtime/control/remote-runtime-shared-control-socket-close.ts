@@ -6,10 +6,15 @@ import type {
   SharedControlConnectionState,
   SharedControlLogicalSubscription,
   SharedControlPendingRequest,
-  SharedControlReadyWaiter
+  SharedControlReadyWaiter,
+  SharedControlSocketClose
 } from './remote-runtime-shared-control-types'
 
+export const LOCAL_CLOSE: SharedControlSocketClose = { cause: 'local', errorCode: null }
+
 export function closeSharedControlSocket(args: {
+  /** Records the close cause; runs only when a socket existed, like the log below. */
+  reportClose: () => void
   environmentId?: string
   state: SharedControlConnectionState
   ws: WebSocket | null
@@ -23,6 +28,7 @@ export function closeSharedControlSocket(args: {
   clearReadyStableTimer: () => void
 }): void {
   if (args.ws || args.socketCleanup) {
+    args.reportClose()
     logSharedControlSocketClose({
       environmentId: args.environmentId ?? 'unknown',
       state: args.state,

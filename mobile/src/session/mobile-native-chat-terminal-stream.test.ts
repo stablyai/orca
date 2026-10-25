@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   isTerminalCoveredByNativeChat,
   mobileNativeChatSubscribeViewport,
-  mobileNativeChatTerminalCapabilities,
   resolveMobileNativeChatTerminalStreamAction
 } from './mobile-native-chat-terminal-stream'
 
@@ -29,16 +28,13 @@ describe('mobile native-chat terminal stream lifecycle', () => {
       })
     ).toBe('pause')
     expect(isTerminalCoveredByNativeChat(true, 'pty-1', 'pty-1')).toBe(true)
-    expect(mobileNativeChatTerminalCapabilities(true)).toEqual({
-      terminalBinaryStream: 1,
-      mobileInputLeaseOnly: 1
-    })
-    expect(mobileNativeChatTerminalCapabilities(false)).toEqual({ terminalBinaryStream: 1 })
+    expect(isTerminalCoveredByNativeChat(true, 'pty-1', 'pty-2')).toBe(false)
+    expect(isTerminalCoveredByNativeChat(false, 'pty-1', 'pty-1')).toBe(false)
+    expect(isTerminalCoveredByNativeChat(true, null, 'pty-1')).toBe(false)
   })
 
   it('omits the viewport from a covered lease subscribe so the host keeps desktop dims', () => {
-    // Why: handleMobileSubscribe phone-fits the PTY whenever a viewport is present,
-    // even for a lease-only subscribe — entering chat must not resize the terminal.
+    // Even a lease-only subscribe phone-fits the PTY if it carries a viewport.
     expect(mobileNativeChatSubscribeViewport(true, { cols: 40, rows: 60 })).toBeUndefined()
     expect(mobileNativeChatSubscribeViewport(false, { cols: 40, rows: 60 })).toEqual({
       cols: 40,
@@ -82,8 +78,7 @@ describe('mobile native-chat terminal stream lifecycle', () => {
   })
 
   it('rearms a covered stream that lost its subscription', () => {
-    // The covered stream IS the input lease, and nothing else re-subscribes it —
-    // losing it while chat is open must not leave the composer locked (#10681).
+    // The covered stream owns the composer’s input lease; no other path re-subscribes it.
     expect(
       resolveMobileNativeChatTerminalStreamAction({
         ...base,
@@ -95,12 +90,10 @@ describe('mobile native-chat terminal stream lifecycle', () => {
   })
 
   it('resumes an uncovered handle still holding a lease-only stream', () => {
-    // Leaving a chat tab for a terminal tab subscribes the incoming handle before the
-    // route learns chat is gone, so the terminal streams nothing but its input lease.
+    // Tab switching may subscribe before the route uncovers the terminal, leaving a lease without output.
     expect(resolveMobileNativeChatTerminalStreamAction({ ...base, streamIsLeaseOnly: true })).toBe(
       'resume'
     )
-    // Same wait the other resume paths take — never init a WebView that cannot receive it.
     expect(
       resolveMobileNativeChatTerminalStreamAction({
         ...base,
@@ -111,8 +104,6 @@ describe('mobile native-chat terminal stream lifecycle', () => {
   })
 
   it('leaves a lease-only stream alone while chat still covers it (#10681)', () => {
-    // Lease-only is the correct shape under chat; trading it for output here would
-    // drop the input floor the composer depends on.
     expect(
       resolveMobileNativeChatTerminalStreamAction({
         ...base,
@@ -124,7 +115,6 @@ describe('mobile native-chat terminal stream lifecycle', () => {
   })
 
   it('does nothing for non-terminal tabs, missing handles, or settled states', () => {
-    // A full stream on an uncovered handle is the one genuinely settled shape.
     expect(resolveMobileNativeChatTerminalStreamAction({ ...base, streamIsLeaseOnly: false })).toBe(
       'none'
     )
@@ -142,7 +132,6 @@ describe('mobile native-chat terminal stream lifecycle', () => {
     expect(resolveMobileNativeChatTerminalStreamAction({ ...base, activeHandle: null })).toBe(
       'none'
     )
-    // Leaving chat with the WebView not yet ready must wait, not resume blind.
     expect(
       resolveMobileNativeChatTerminalStreamAction({
         ...base,

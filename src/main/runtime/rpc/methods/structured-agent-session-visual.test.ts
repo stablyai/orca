@@ -9,7 +9,10 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { nativeChatScratchFolderFor } from '../../../native-chat/native-chat-scratch-folder'
 import { nativeChatVisualRevision } from '../../../native-chat/native-chat-visual-file-read'
 import { Store } from '../../../persistence/loading-store/store'
-import { closeTestStores, createSqliteTestStore } from '../../../persistence-test-harness'
+import {
+  closeTestStores,
+  createSqliteTestStore
+} from '../../../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { FILE_METHODS } from './files'

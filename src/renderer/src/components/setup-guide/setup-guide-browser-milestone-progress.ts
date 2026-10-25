@@ -52,8 +52,7 @@ export function shouldMarkBrowserMilestoneLegacyComplete(input: {
   if (input.setupGuideSidebarDismissed) {
     return true
   }
-  // Why: browser migration preserves the old pre-browser checklist, which
-  // included the now-removed split-terminal milestone.
+  // The historical pre-browser checklist included the removed split-terminal milestone.
   return (
     input.historicalSplitTerminalDone &&
     FEATURE_WALL_SETUP_STEPS.every((step) => step.id === 'browser' || input.stepDone[step.id])
@@ -70,8 +69,7 @@ export function getSetupGuideBrowserMilestoneAwareProgress(
   const stepDone = Object.fromEntries(
     FEATURE_WALL_SETUP_STEPS.map((step) => [step.id, true])
   ) as Record<FeatureWallSetupStepId, boolean>
-  // Why: profiles that finished or dismissed the pre-browser checklist keep
-  // that prior checklist contract after the browser milestone is introduced.
+  // Preserve the checklist contract for profiles that completed or dismissed it before the browser milestone.
   return {
     ...progress,
     stepDone,

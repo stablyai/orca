@@ -82,8 +82,7 @@ describe('terminalOutputPrefersRenderRefresh', () => {
   })
 
   it('keeps the shared SGR scan stateless across calls', () => {
-    // Why: the module-level pattern is global and the background hit returns
-    // mid-loop, so a dropped lastIndex reset would resume past the next match.
+    // The global pattern can return mid-loop; reset lastIndex or the next call skips matches.
     expect(terminalOutputPrefersRenderRefresh('\x1b[41m selected \x1b[0m')).toBe(true)
     expect(terminalOutputPrefersRenderRefresh('\x1b[44m x\x1b[0m')).toBe(true)
   })
@@ -339,12 +338,7 @@ describe('terminalRewriteOutputRenderRefreshDecision', () => {
 })
 
 describe('nativeWindowsRewriteNeedsFollowupRenderRefresh', () => {
-  // Why: Claude Code (issue #5656/#5653) echoes prompt keystrokes by redrawing
-  // the input line in place with CR + CHA + reprint + erase-line, split across
-  // ConPTY chunks, and WITHOUT DEC 2026 synchronized output. Replay that exact
-  // pattern through the rewrite decision and assert that on native Windows it
-  // requests a follow-up next-frame repaint, which is what stops the phantom /
-  // overwritten characters without the user resizing the window.
+  // Replay Claude’s split CR/CHA/reprint/erase prompt without DEC 2026; native ConPTY requires a next-frame repaint to fix phantom/overwritten chars (#5656/#5653).
   function rewriteIsInPlace(chunks: string[]): boolean[] {
     const state: TerminalRewriteOutputRenderRefreshState = {
       previousChunkEndsWithCarriageReturn: false,
@@ -371,7 +365,6 @@ describe('nativeWindowsRewriteNeedsFollowupRenderRefresh', () => {
       'zzzx\x1b[K'
     ]
     const inPlace = rewriteIsInPlace(claudeRedrawChunks)
-    // Every redraw chunk is an in-place rewrite (CR continuation or erase-line).
     expect(inPlace.every(Boolean)).toBe(true)
     for (const isInPlaceRewrite of inPlace) {
       expect(

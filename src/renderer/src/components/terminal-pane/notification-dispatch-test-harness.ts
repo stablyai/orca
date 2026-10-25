@@ -4,8 +4,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
-// Why: the mocked store state lives here so each split suite's hoisted `vi.mock` factory can
-// reach it through a lazy dynamic import (hoisted factories cannot close over imports).
+// Hoisted mock factories reach this state through lazy imports because they cannot capture imports.
 
 export const LIVE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 export const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -114,7 +113,6 @@ function buildNotificationDispatchMockState(): NotificationDispatchMockState {
   }
 }
 
-/** Rebuilds the mocked store and stubs the notification bridge; returns the fresh state. */
 export function resetNotificationDispatchMockState(): NotificationDispatchMockState {
   vi.clearAllMocks()
   mockState = buildNotificationDispatchMockState()

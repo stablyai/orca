@@ -122,7 +122,7 @@ export function useChecksPanelReviewLinkActions(
     const openedScopeKey = reviewLinkScopeKey
     openModal('edit-meta', {
       worktreeId: activeWorktreeId,
-      // Why: the same workspace ID can exist under two hosts, so pin the dialog to its owner.
+      // Pin the dialog owner because workspace IDs can repeat across hosts.
       repoId: activeWorktree.repoId,
       executionHostId: activeWorktree.hostId,
       currentDisplayName: activeWorktree.displayName,

@@ -28,8 +28,7 @@ function navigationHarness(initialState: HostStackNavigationState | undefined) {
   }
 }
 
-// A notification tap is handled by app/_layout.tsx, which Expo Router mounts as a screen of its
-// own internal navigator — hence the extra `__root` level around the app's root stack.
+// Include Expo’s internal __root navigator because app/_layout handles taps one level below it.
 function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNavigationState {
   return { key: 'internal', index: 0, routes: [{ key: '__root', name: '__root', state: inner }] }
 }
@@ -40,7 +39,6 @@ describe('notification route coordination', () => {
       hostId: 'host/one',
       worktreeId: 'repo::/Users/me/orca/workspaces/feature'
     })
-    // Cold start: the tap is handled before the root navigator has committed any state.
     const harness = navigationHarness(undefined)
     const push = vi.fn()
 
@@ -94,7 +92,7 @@ describe('notification route coordination', () => {
     })
   })
 
-  it('leaves a host-only notification as a shallow push with nothing to coordinate', () => {
+  it('returns no session target for a host-only notification', () => {
     expect(getNotificationNavigationTarget({ hostId: 'host-1' })?.sessionTarget).toBeNull()
   })
 })

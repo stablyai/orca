@@ -148,8 +148,7 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
             [selected.id]: [selectedWt],
             [filteredOut.id]: [hiddenWt]
           },
-          // Why: simulate Hide sleeping removing every card while the project
-          // filter still intentionally excludes `filteredOut`.
+          // Hide sleeping removes all cards while the project filter still excludes filteredOut.
           visibleWorktrees: [],
           filterRepoIds: [selected.id]
         })

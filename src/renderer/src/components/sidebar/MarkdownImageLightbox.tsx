@@ -24,10 +24,7 @@ type ExpandableMarkdownImageProps = {
   >
 }
 
-/**
- * Inline markdown image that opens a viewport-centered lightbox on click.
- * The shared pan and zoom dialog owns modal focus, Escape, and focus restoration.
- */
+/** Delegate lightbox focus, Escape and focus restoration to the shared pan/zoom dialog. */
 export function ExpandableMarkdownImage({
   src,
   alt,

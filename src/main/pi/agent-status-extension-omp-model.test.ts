@@ -2,14 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 
-/** The `payload` of every hook POST the extension made, in order. */
 function postedPayloads(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown>[] {
   return fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)).payload)
 }
 
-/** Waits until `count` posts have been delivered.
- *  Why: delivery is latest-only behind one in-flight post, so back-to-back hooks
- *  must drain before the next one or the pending slot swallows the earlier post. */
+/** Drain latest-only delivery before another hook can overwrite the pending slot. */
 async function settled(fetchMock: ReturnType<typeof vi.fn>, count: number): Promise<void> {
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(count))
 }
@@ -127,7 +124,7 @@ describe('OMP model reporting', () => {
     await harness.callHook(
       'model_select',
       { model: MINIMAX, previousModel: DEEPSEEK, source: 'set' },
-      // Why: the event names the switch; the context may still read the old model.
+      // Switch events may arrive before context reflects the new model.
       { model: DEEPSEEK }
     )
 

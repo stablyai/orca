@@ -30,8 +30,7 @@ export function ClientHostedBrowserLoadFailure({
       externalUrl={getOpenableExternalUrl(failedNavigationUrl)}
       certificateFailure={certificateFailure}
       expectedBrowserPageId={browserTab.id}
-      // Why: the guest is a local Electron webview on this desktop, so its certificate
-      // decision is a local session decision — the same IPC the local pane proceeds through.
+      // This desktop owns the guest session, so certificate decisions use the same local IPC as local browser panes.
       onProceedCertificate={(challengeId) =>
         window.api.browser.proceedCertificate({
           browserPageId: browserTab.id,

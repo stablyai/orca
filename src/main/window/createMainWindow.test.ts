@@ -94,8 +94,7 @@ describe('createMainWindow', () => {
   })
 
   it('enables renderer sandboxing and opens external links safely', () => {
-    // Why every handler and not the last one: two modules register `will-navigate` on this
-    // webContents, and keeping one slot per event let whichever registered last stand in for both.
+    // Retain all will-navigate listeners; one slot per event lets registration order hide a missing guard.
     const windowHandlers: Record<string, ((...args: any[]) => void)[]> = {}
     const fire = (event: string, ...args: any[]): void => {
       for (const handler of windowHandlers[event] ?? []) {
@@ -152,8 +151,7 @@ describe('createMainWindow', () => {
       })
     )
     const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
-    // Why: macOS swallows the app-activating click unless the window accepts
-    // first mouse, forcing a second click to focus the floating workspace.
+    // acceptFirstMouse lets the app-activating click focus the floating workspace without a second click.
     expect(browserWindowOptions.acceptFirstMouse).toBe(true)
     if (process.platform === 'darwin') {
       expect(browserWindowOptions).toMatchObject({
@@ -164,8 +162,7 @@ describe('createMainWindow', () => {
         titleBarStyle: 'hidden'
       })
     } else {
-      // Linux: native frame is dropped so the renderer titlebar isn't stacked
-      // under the WM title bar (double title bar). titleBarStyle stays unset.
+      // Linux frame:false avoids stacking native and renderer titlebars.
       expect(browserWindowOptions.titleBarStyle).toBeUndefined()
       expect(browserWindowOptions.frame).toBe(false)
     }
@@ -282,9 +279,7 @@ describe('createMainWindow', () => {
     expect(attachRouteGuestMock).toHaveBeenLastCalledWith(secondGuest)
   })
 
-  // Why the renderer is told this at birth rather than asked for it: it needs to know whether a
-  // client-placed page is its own guest before it interprets the first session snapshot, and
-  // Electron never answers a sendSync that lands before its listener exists.
+  // Stamp host identity before the first session snapshot; sendSync cannot answer before listener registration.
   it('stamps the browser host id into the renderer that owns the guests, and strips it from a guest that carries one', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -328,9 +323,7 @@ describe('createMainWindow', () => {
     expect(stamped).toEqual([formatBrowserClientHostIdArgument(getBrowserClientHostId())])
     expect(readBrowserClientHostIdArgument(stamped ?? [])).toBe(getBrowserClientHostId())
 
-    // Electron 43 does not hand a guest the embedder's additionalArguments, so this stamp is one
-    // Electron would not have put there: what is pinned is that a guest cannot come out of the
-    // handler holding the id, not that it arrives holding it.
+    // Electron 43 does not inherit embedder arguments; inject a hostile stamp to prove the handler strips it.
     const guestPreferences = {
       partition: 'persist:orca-browser',
       additionalArguments: [...(stamped ?? [])]
@@ -495,7 +488,7 @@ describe('createMainWindow', () => {
     windowHandlers.get('restore')?.[0]?.()
 
     expect(webContents.invalidate).toHaveBeenCalledTimes(2)
-    // Why: the size nudge must never run inside the show/restore dispatch itself.
+    // Defer size nudges outside show/restore dispatch.
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(0)
@@ -511,8 +504,7 @@ describe('createMainWindow', () => {
     vi.advanceTimersByTime(1)
     expect(webContents.invalidate).toHaveBeenCalledTimes(3)
 
-    // Why: focus covers occlusion-uncover with invalidate only — no setSize
-    // jiggle that would resize terminals on every window focus.
+    // Focus only invalidates; size jiggles would resize terminals on every focus.
     const setSizeCalls = browserWindowInstance.setSize.mock.calls.length
     windowHandlers.get('focus')?.[0]?.()
     expect(webContents.invalidate).toHaveBeenCalledTimes(4)
@@ -565,22 +557,22 @@ describe('createMainWindow', () => {
       .mock.calls.find(([channel]) => channel === 'ui:window-revealed')?.[1]
     expect(revealHandler).toBeTypeOf('function')
 
-    // Why: a reveal relayed by another window's webContents must not repaint this one.
+    // A reveal from another WebContents must not repaint this window.
     revealHandler?.({ sender: {} } as never)
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
     expect(webContents.invalidate).not.toHaveBeenCalled()
 
-    // The genuine reveal runs the pre-Tahoe compositor jiggle that bare focus avoids.
+    // Genuine reveal uses the pre-Tahoe jiggle that bare focus avoids.
     revealHandler?.({ sender: webContents } as never)
     expect(webContents.invalidate).toHaveBeenCalledTimes(1)
-    // Why: the nudge is deferred off the event dispatch turn.
+    // Defer compositor nudge outside event dispatch.
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
     vi.advanceTimersByTime(0)
     expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(1, 1201, 800)
     vi.advanceTimersByTime(32)
     expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(2, 1200, 800)
 
-    // Repeated reveal signals while a jiggle is active repaint but do not multiply terminal resizes.
+    // Coalesce reveal jiggles so repeated signals do not multiply terminal resizes.
     revealHandler?.({ sender: webContents } as never)
     revealHandler?.({ sender: webContents } as never)
     expect(webContents.invalidate).toHaveBeenCalledTimes(3)
@@ -588,7 +580,7 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(3, 1201, 800)
     expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(3)
 
-    // A user resize that lands during the jiggle must not be rolled back to stale bounds.
+    // Never restore stale bounds over a concurrent user resize.
     windowSize = [1400, 900]
     vi.advanceTimersByTime(32)
     expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(3)
@@ -639,7 +631,7 @@ describe('createMainWindow', () => {
     windowHandlers.get('show')?.[0]?.()
     expect(webContents.invalidate).toHaveBeenCalledTimes(1)
 
-    // Why: the delayed second repaint must also stay setSize-free on Tahoe.
+    // Tahoe's delayed repaint must also avoid setSize.
     vi.advanceTimersByTime(300)
     expect(webContents.invalidate).toHaveBeenCalledTimes(2)
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()

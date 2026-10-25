@@ -68,7 +68,6 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      // Local connection: no connectionId
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
@@ -82,10 +81,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       connectPanePty(pane as never, manager as never, deps as never)
       expect(capturedDataCallback.current).not.toBeNull()
 
-      // Simulate PTY output (shell prompt arriving)
       capturedDataCallback.current?.('(base) user@host $ ')
 
-      // Even after the debounce, the renderer must not inject the command (main already wrote it via writeStartupCommandWhenShellReady).
       expect(transport.sendInput).not.toHaveBeenCalledWith(
         expect.stringContaining("claude 'say test'")
       )
@@ -422,9 +419,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
 
         const pane = createPane(1)
-        pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
-          callback?.()
-        })
+        pane.terminal.write.mockImplementation(
+          (_data: string | Uint8Array, callback?: () => void) => {
+            callback?.()
+          }
+        )
         const manager = createManager(1)
         const command = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
         const deps = createDeps({ startup: { command, delivery: 'terminal-paste' } })
@@ -484,9 +483,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
 
         const pane = createPane(1)
-        pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
-          callback?.()
-        })
+        pane.terminal.write.mockImplementation(
+          (_data: string | Uint8Array, callback?: () => void) => {
+            callback?.()
+          }
+        )
         const manager = createManager(1)
         const command = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
         const deps = createDeps({ startup: { command, delivery: 'terminal-paste' } })

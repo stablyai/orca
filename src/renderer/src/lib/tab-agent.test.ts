@@ -12,8 +12,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/termin
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 
-// Composed exactly the way useTabAgent layers the resolvers: focused pane
-// first, then any sibling agent pane in the tab.
+// Compose focused then sibling resolution exactly as useTabAgent does.
 function resolveTabAgent(
   map: Record<string, AgentStatusEntry>,
   layout: TerminalLayoutSnapshot | undefined,
@@ -90,7 +89,6 @@ describe('resolveTabAgent', () => {
   })
 
   it('falls back to any agent pane when the focused pane is a plain terminal', () => {
-    // Focused leaf A has no entry (it's a shell); the split sibling runs Codex.
     const map = { [`tab-1:${LEAF_B}`]: entry(`tab-1:${LEAF_B}`, 'codex') }
     expect(resolveTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('codex')
   })

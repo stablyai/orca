@@ -12,18 +12,10 @@ export type PaneMetricOptions = {
 
 type PaneTerminal = ManagedPane['terminal']
 
-// Why keyed on the terminal, not the pane: getPanes() hands out a fresh
-// toPublicPane() wrapper per call, so a pane-keyed entry could never be found
-// again. `terminal` is carried by reference and dies with the pane.
+// Key by terminal: fresh getPanes wrappers cannot retrieve pane-identity entries; the terminal survives every view.
 const deferredMetricOptions = new WeakMap<PaneTerminal, PaneMetricOptions>()
 
-/**
- * Why deferred: writing one of these makes xterm clear the renderer, re-resize
- * to the current grid and full-refresh. On a pane with no usable box that
- * repaint is wasted — it lands in the DOM-renderer fallback while WebGL is
- * suspended — and the cols/rows re-fit that has to follow the write cannot run.
- * So the values park here and land once the pane can actually be fitted.
- */
+/** Metric writes clear/resize/refresh xterm. Defer while unmeasurable: repaint would be wasted on DOM fallback and its required refit cannot run until a usable box returns. */
 export function applyOrDeferPaneMetricOptions(
   pane: ManagedPane,
   options: PaneMetricOptions,
@@ -31,7 +23,6 @@ export function applyOrDeferPaneMetricOptions(
   reason = 'appearance'
 ): 'applied' | 'deferred' {
   if (!measurable) {
-    // Latest wins: a newer settings change while hidden supersedes the pending one.
     deferredMetricOptions.set(pane.terminal, options)
     return 'deferred'
   }
@@ -56,12 +47,7 @@ export function hasDeferredPaneMetricOptions(pane: ManagedPane): boolean {
   return deferredMetricOptions.has(pane.terminal)
 }
 
-/**
- * True when every value is already live and nothing is parked, so the caller can
- * skip the apply. Why it matters: any settings write re-runs the appearance pass
- * over every mounted pane, and arming a no-op deferral would make the next
- * reveal refit for nothing.
- */
+/** Skip only when values are live and nothing is parked; every settings change visits all panes, so no-op deferrals would trigger needless reveal fits. */
 export function paneMetricOptionsAlreadySettled(
   pane: ManagedPane,
   options: PaneMetricOptions
@@ -79,10 +65,7 @@ export function paneMetricOptionsAlreadySettled(
   )
 }
 
-/**
- * Folds a directly-applied metric write into any pending deferral so a later
- * flush cannot clobber it with the parked value. No-op when nothing is parked.
- */
+/** Fold direct metric writes into parked values so a later flush cannot overwrite them; no-op without deferral. */
 export function overridePendingPaneMetricOptions(
   pane: ManagedPane,
   options: PaneMetricOptions
@@ -125,11 +108,7 @@ function writePaneMetricOptions(
   }
 }
 
-/**
- * Field forensics for the terminal bold-collapse bug (STA-4042 family): weights
- * never change in normal operation, so any real transition is the poisoning or
- * healing write. Recorded before the write so `prev` is the pre-write value.
- */
+/** Record actual weight transitions before writing so prev identifies bold-collapse poisoning/healing (STA-4042). */
 function recordMetricWeightChange(
   pane: ManagedPane,
   key: 'fontWeight' | 'fontWeightBold',

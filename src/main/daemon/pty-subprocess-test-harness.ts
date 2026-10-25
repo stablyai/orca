@@ -47,9 +47,28 @@ export type MockPtyProcess = {
   _simulateExit: (code: number) => void
 }
 
+const CONPTY_MOCK_PRELUDE = '\x1b[c'
+
+/** Windows spawns wait for the DA1 query bundled ConPTY writes once it reads input. */
+export function createConptyPreludeSender(): (cb: (data: string) => void) => void {
+  let sent = false
+  return (cb) => {
+    if (process.platform === 'win32' && !sent) {
+      sent = true
+      queueMicrotask(() => cb(CONPTY_MOCK_PRELUDE))
+    }
+  }
+}
+
+/** What a mocked pane printed before the test's own output; the replayed prelude on Windows. */
+export function mockConptyStartupOutput(): string[] {
+  return process.platform === 'win32' ? [CONPTY_MOCK_PRELUDE] : []
+}
+
 export function mockPtyProcess(pid = 12345): MockPtyProcess {
   const onDataListeners: ((data: string) => void)[] = []
   const onExitListeners: ((e: { exitCode: number }) => void)[] = []
+  const sendConptyPrelude = createConptyPreludeSender()
   return {
     pid,
     write: vi.fn(),
@@ -58,6 +77,7 @@ export function mockPtyProcess(pid = 12345): MockPtyProcess {
     process: 'zsh',
     onData: vi.fn((cb: (data: string) => void) => {
       onDataListeners.push(cb)
+      sendConptyPrelude(cb)
       return { dispose: vi.fn() }
     }),
     onExit: vi.fn((cb: (e: { exitCode: number }) => void) => {

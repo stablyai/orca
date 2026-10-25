@@ -58,8 +58,7 @@
   color: inherit;
 }
 
-/* A reply being written: each new word, and each block that is not made of words,
-   fades in as it is drawn. Opacity only, so the line it joins never shifts. */
+/* Fade new words/blocks with opacity only, preserving line geometry. */
 @media (prefers-reduced-motion: no-preference) {
   .native-chat-markdown[data-word-fade] :is([data-word], a, :not(pre) > code),
   .native-chat-markdown[data-block-fade] > :is(pre, div, table, hr) {

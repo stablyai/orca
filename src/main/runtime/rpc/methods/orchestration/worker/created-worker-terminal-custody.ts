@@ -2,16 +2,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { requireWorkerAuthority } from './worker-topology'
 
-/**
- * Custody for an agent terminal this start created, recorded when the terminal exists rather than
- * after the agent boot wait: a keystroke into the booting pane has to find an `owned` row to flip,
- * or the takeover is dropped and a later `worker-release` closes the pane under the user.
- *
- * Ownership of a pane only. The Dispatch capability still waits for the agent to come up.
- *
- * `created` is false for an explicit `--terminal` reuse, which is the caller's own pane, and for a
- * structured session, which reaches its authority in this same turn and so has no gap to close.
- */
+/** Record created PTY custody before boot so user input can revoke ownership before worker-release cleanup.
+ * Dispatch authority still waits for readiness; reused caller panes and structured sessions have no custody gap. */
 export function recordCreatedWorkerTerminalCustody(
   runtime: OrcaRuntimeService,
   stage: { db: OrchestrationDb; dispatchId: string; worktreeId: string; terminalHandle: string },

@@ -84,8 +84,7 @@ describe('FirstPromptCard', () => {
   })
 
   it('resolves loading under StrictMode double-invoke instead of stranding the card', async () => {
-    // StrictMode mounts, cleans up, then re-mounts. The cleanup marks the first
-    // request stale, so only a fresh second request can clear `loading`.
+    // StrictMode cleanup stales the first request; only a fresh second request can clear loading.
     stubApi(vi.fn().mockResolvedValue({ prompt: 'Ship the copy button' }))
 
     render(
@@ -100,7 +99,6 @@ describe('FirstPromptCard', () => {
 
   it('stops loading when the read never settles', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    // A main process that never answers must not pin the card in `loading`.
     stubApi(vi.fn().mockReturnValue(new Promise(() => {})))
 
     render(<FirstPromptCard session={session} preview={null} />)

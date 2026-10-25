@@ -48,18 +48,12 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     }
   }
 
-  /** Registered by terminal-RPC subscribe/multiplex streams: while a remote
-   *  view subscriber is attached its xterm answers queries with view
-   *  authority and the model responder must stay silent. Returns an
-   *  idempotent release. */
-  registerRemoteTerminalViewSubscriber(ptyId: string): () => void {
-    return this.terminalViewSubscribers.registerRemote(ptyId)
+  /** Remote views own delivered query replies; pause readers return dropped output to main. Release is idempotent. */
+  registerRemoteTerminalViewSubscriber(ptyId: string, isOutputPaused?: () => boolean): () => void {
+    return this.terminalViewSubscribers.registerRemote(ptyId, isOutputPaused)
   }
 
-  /** A local daemon session main knows is live but has never ingested a byte
-   *  from — i.e. no pane ever attached it, so the daemon is not emitting.
-   *  Headless state exists only after the first ingested byte; a snapshot
-   *  reconcile in flight implies a spawn-path attach already happened. */
+  /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */
   protected isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
     return this.terminalViewSubscribers.isKnownUnattachedLocal(ptyId)
   }
@@ -78,8 +72,9 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     return this.terminalViewSubscribers.hasRaw(ptyId)
   }
 
+  /** Whether a remote view will receive this PTY's output now, and so answers its queries. */
   hasRemoteTerminalViewSubscriber(ptyId: string): boolean {
-    return this.terminalViewSubscribers.hasRemote(ptyId)
+    return this.terminalViewSubscribers.hasRemoteReceivingOutput(ptyId)
   }
 
   isMobileTerminalQueryReplyAuthority(ptyId: string, clientId: string): boolean {

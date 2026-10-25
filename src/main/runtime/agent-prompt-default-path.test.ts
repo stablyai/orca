@@ -1,5 +1,4 @@
-/** The writer's default path (no opt-in option) must stay main's: same queue, same completion
- *  timing, same per-run re-read of a leaf's PTY. Only opted-in calls take the submit layer. */
+/** Default writes preserve queue, completion timing and per-send PTY lookup; only opted-in sends use submission settlement. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -26,7 +25,6 @@ function dispatchRuntime(): OrcaRuntimeService {
   return runtime
 }
 
-/** Microtasks between the inner write settling and the caller observing the receipt. */
 async function completionTicks(): Promise<number> {
   const target = dispatchRuntime()
   let release!: (value: { submits: number }) => void
@@ -71,7 +69,7 @@ describe('agent prompt writer: default path', () => {
   })
 
   it("settles its receipt on main's microtask schedule", async () => {
-    // Pinned against main's writer; one more async layer in between makes it 6.
+    // Pin completion timing: adding an async layer increases this count.
     expect(await completionTicks()).toBe(5)
   })
 
@@ -87,7 +85,7 @@ describe('agent prompt writer: default path', () => {
       getLivePtyForHandle: { value: () => null },
       getLiveLeafForHandle: { value: () => ({ leaf }) },
       isLeafPtyProvenAbsent: { value: async () => false },
-      // Both PTYs share a generation here, as main's re-read assumes when it writes the new one.
+      // Default-path relookup assumes the replacement PTY shares this generation.
       assertAgentPromptGeneration: { value: () => {} },
       writeTerminalAgentPrompt: {
         value: async (_handle: string, ptyId: string) => {
@@ -106,7 +104,6 @@ describe('agent prompt writer: default path', () => {
     }
     const second = target.sendTerminalAgentPrompt(HANDLE, 'second', { inputKind: 'driving' })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    // The pane's leaf now names a respawned PTY while `second` waits behind `first`.
     leaf.ptyId = 'pty-default-path-respawned'
     releaseFirst()
 

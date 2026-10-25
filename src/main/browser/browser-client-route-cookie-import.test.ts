@@ -26,7 +26,7 @@ const {
   selectBrowserProfileMock: vi.fn()
 }))
 
-vi.mock('./browser-cookie-import', () => ({
+vi.mock('./cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: detectInstalledBrowsersMock,
   importCookiesFromBrowser: importCookiesFromBrowserMock,
   selectBrowserProfile: selectBrowserProfileMock

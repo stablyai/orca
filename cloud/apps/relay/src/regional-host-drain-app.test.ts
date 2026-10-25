@@ -371,9 +371,7 @@ describe('regional rehome director controls', () => {
   })
 
   it('accepts the exact safety payload the cell heartbeat composes', async () => {
-    // Why: index.ts spreads the FULL pool-pressure counts into safety; a
-    // strict schema missing any produced field 400s every heartbeat (the
-    // 2026-08-15..26 outage that left all cells at rehome protocol 0).
+    // index.ts sends full pool-pressure safety counts; missing strict-schema fields once rejected every heartbeat and left rehome protocol at 0 (2026-08-15..26).
     const recordCellRegionalRehomeStatus = vi.fn().mockResolvedValue(undefined)
     const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
       store: {} as never,

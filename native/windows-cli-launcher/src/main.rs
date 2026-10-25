@@ -71,10 +71,7 @@ fn main() {
         ));
     }
 
-    // Why mutate this process rather than hand the child an environment map:
-    // an explicit map collapses a block carrying both PATH and Path into one
-    // entry, which is what killed the CLI in #12046. Leaving the map untouched
-    // makes the child inherit our block verbatim.
+    // Preserve duplicate PATH/Path entries by inheriting this process’s environment verbatim; an explicit map broke #12046.
     move_environment_variable("NODE_OPTIONS", "ORCA_NODE_OPTIONS");
     move_environment_variable(
         "NODE_REPL_EXTERNAL_MODULE",

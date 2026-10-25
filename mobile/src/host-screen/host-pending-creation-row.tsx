@@ -2,7 +2,6 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import type { SectionPendingCreation } from '../worktree/workspace-list-types'
 
-/** A workspace the host is creating, where the desktop's sidebar shows its pending row. */
 export function HostPendingCreationRow({ creation }: { creation: SectionPendingCreation }) {
   return (
     <View style={styles.row} accessibilityRole="progressbar">
@@ -24,7 +23,7 @@ export function HostPendingCreationRow({ creation }: { creation: SectionPendingC
 }
 
 const styles = StyleSheet.create({
-  // The workspace row's padding and indicator column, so the finished row lands in place.
+  // Match the workspace row’s padding and indicator column so completion does not shift the row.
   row: {
     flexDirection: 'row',
     alignItems: 'center',

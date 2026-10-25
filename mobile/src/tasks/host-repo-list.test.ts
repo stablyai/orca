@@ -50,8 +50,7 @@ describe('hostRepoListReducer', () => {
 })
 
 describe('host repo list readiness', () => {
-  // Regression (#12966): an empty list read as "this host has no repos", so the
-  // Project board filtered every row against [] and rendered "No project items".
+  // Unfetched repos must not look like an empty host and hide every Project row.
   it('does not treat an unfetched or in-flight list as settled', () => {
     expect(hasSettledHostRepoList(idle)).toBe(false)
     expect(hasSettledHostRepoList(reduce(idle, { type: 'requested' }))).toBe(false)
@@ -65,7 +64,6 @@ describe('host repo list readiness', () => {
   it('re-fetches after a failure but not after an empty success', () => {
     expect(needsHostRepoListFetch(idle)).toBe(true)
     expect(needsHostRepoListFetch(reduce(idle, { type: 'failed', error: 'nope' }))).toBe(true)
-    // A host with no repos is a real answer; asking again on every load is waste.
     expect(needsHostRepoListFetch(reduce(idle, { type: 'resolved', repos: [] }))).toBe(false)
   })
 })

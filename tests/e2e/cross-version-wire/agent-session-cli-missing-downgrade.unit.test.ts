@@ -3,8 +3,7 @@ import { agentSessionFailureWords } from '../../../src/shared/agent-session-fail
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-// A release that predates the `cliMissing` failure kind. Pinned, not the newest tag: what it must
-// do is show the host's own sentence for a kind it cannot place, which no later release contradicts.
+// Pin a release predating cliMissing so unknown failure kinds must fall back to the host’s own sentence.
 const BASELINE_REF = 'v1.4.218'
 
 type OldStatusBlock = (body: Record<string, unknown>) => { text: string; failure?: unknown }

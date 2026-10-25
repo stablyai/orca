@@ -1,8 +1,5 @@
-// Claude-family harnesses record a local command's reply as a
-// `<local-command-stdout>` user turn linked to the command's envelope row. The
-// noise filter hides those rows, which is right for commands whose effect is the
-// feedback (`/model`, `/compact`). For a command that exists to report
-// something, the reply is the answer, so the chat surfaces it.
+// Claude-family local-command-stdout user turns link to command envelopes. Hide effect-only feedback (/model, /compact);
+// surface reporting-command replies as their answer.
 
 import type { AgentType } from './agent-status-types'
 import { stripAnsiEscapeSequences } from './ansi-escape-sequences'
@@ -25,12 +22,7 @@ function envelopeCommand(message: NativeChatMessage): string | null {
   return envelope ? envelope.name.replace(/^\//, '') : null
 }
 
-/**
- * Replace the stdout row answering a command whose catalog row declares a
- * transcript reply with its plain text as command output. A reply answers the
- * row it is linked to; without that link (an older host, or the command row
- * outside the loaded window) it stays hidden.
- */
+/** Surface catalog-declared transcript replies as command output, matched by explicit row link. Older unlinked replies or unloaded command rows stay hidden. */
 export function surfaceNativeChatCommandOutputs(
   messages: NativeChatMessage[],
   agent: AgentType

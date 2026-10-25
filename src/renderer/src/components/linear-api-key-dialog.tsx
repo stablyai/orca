@@ -64,8 +64,7 @@ export function LinearApiKeyDialog({
   const submitLabel = connectLabel ?? (workspace ? 'Update access' : 'Connect')
   const resolvedDialogState = resolveLinearApiKeyDialogState(dialogState, open)
   if (resolvedDialogState !== dialogState) {
-    // Why: parent-controlled close can race an in-flight connect request; keep
-    // hidden draft/error state reset before the next open paints.
+    // Reset hidden drafts/errors before paint because parent closure can race a connect request.
     setDialogState(resolvedDialogState)
   }
   const { apiKeyDraft, connectState, connectError } = resolvedDialogState

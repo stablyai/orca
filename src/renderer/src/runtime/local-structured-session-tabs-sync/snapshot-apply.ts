@@ -46,12 +46,7 @@ function isWorktreeRetraction(
 }
 
 export type StructuredSessionSnapshotApplyOptions = {
-  /**
-   * Marks these snapshots as an authoritative `session.tabs.listAll` response, which exempts them
-   * from the retired-epoch fence. A census is the synchronous answer to a request we just issued,
-   * so it cannot be the delayed frame from a dead generation that the fence exists to reject —
-   * whereas a subscription frame can be, and stays fenced.
-   */
+  /** Authority census replies answer a just-issued listAll, so exempt them from retired-epoch fencing of delayed dead-generation stream frames. */
   authoritative?: boolean
   /** Re-applies a publication at the version already applied: the window removed a chat early. */
   reacceptCurrentVersion?: boolean
@@ -124,14 +119,11 @@ export function applyLocalStructuredSessionTabSnapshots<
 ): State {
   let next = state
   for (const snapshot of snapshots) {
-    // Why: the execution host owns its tabs; local inventory must not rewrite paired or SSH panes.
+    // Local inventory must not rewrite paired/SSH panes; execution hosts own their tabs.
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {
       continue
     }
-    // "Ask me later", not an answer: a worktree the host holds no entry for still answers a forced
-    // inventory, with the `none` placeholder epoch. Absence there proves nothing, so it neither applies nor
-    // records — recording it would retire the epoch below. Its cursor is left alone, so a genuinely
-    // stale frame arriving late is still fenced.
+    // Forced none-epoch placeholders prove no absence: neither apply nor record, which would retire the renderer epoch. Retain cursor to fence genuinely stale frames.
     if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {
       continue
     }
@@ -140,11 +132,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       prior && sameSessionTabsPublicationLineage(prior.publicationEpoch, snapshot.publicationEpoch)
     )
     const epochHistory = localStructuredSessionEpochHistoryByWorktree.get(snapshot.worktree)
-    // Why not just drop: an epoch is retired whenever another publisher takes over the worktree,
-    // but a live publisher can return after transient interlopers (a `removed:` retraction, then a
-    // headless rebuild), and the structured publish inherits the worktree's existing epoch rather
-    // than minting its own. So a retired epoch is not proof of a dead generation — only authority
-    // can settle it, and the repair lane goes and asks.
+    // Retired epochs can belong to live returning publishers after retraction/headless takeover. They inherit current worktree epoch, so rejection needs authoritative repair rather than assuming death.
     if (
       !sharesLineage &&
       !admitRetiredValueUnderAuthority(
@@ -195,22 +183,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       next = patch === next ? next : ({ ...next, ...patch } as State)
     }
     if (isWorktreeRetraction(effectiveSnapshot)) {
-      // A retraction was applied above — the mirrored rows must go — but it is not a publication
-      // to fence later frames against. Recording it would retire the renderer's own epoch, which
-      // is one string for the whole process lifetime, and every republication afterwards would be
-      // dropped until a reload minted a new one. That is what left a revealed chat invisible.
-      //
-      // The cursor stays: the host mints a fresh epoch when it rebuilds a pruned entry, so a
-      // republication is never gated by it, while dropping it would leave a frame issued before
-      // the close free to land afterwards and strand a row nothing republishes.
-      //
-      // The history keeps its tombstones but forgets what is current. Unlike the mainstream path —
-      // where the epochs belong to a remote publisher — here the consumer IS the publisher, and
-      // `current` is the renderer's own lifetime epoch: leave it set and the next frame under any
-      // other epoch retires it for good, which is this bug again one cycle later. Clearing the
-      // whole record would instead let a delayed frame from an already-superseded epoch back in,
-      // because the version cursor only fences within a lineage. Dropping `current` alone does
-      // neither: `noteRetiredValue` retires nothing when there is nothing current.
+      // Retraction removes rows but is not a publication: recording it would retire this consumer/publisher renderer’s lifetime epoch. Retain version cursor against pre-close replies; rebuilt entries mint fresh epochs. Preserve retired tombstones but clear current so the next lineage cannot retire our lifetime epoch one cycle later. Clearing all history would admit dead-epoch stragglers across lineages.
       const history = localStructuredSessionEpochHistoryByWorktree.get(snapshot.worktree)
       if (history) {
         localStructuredSessionEpochHistoryByWorktree.set(snapshot.worktree, {
@@ -229,8 +202,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       noteRetiredValue(epochHistory, snapshot.publicationEpoch, 8)
     )
   }
-  // Drop publisher cursors for worktrees that no longer exist. Without this,
-  // every deleted worktree leaves an entry for the lifetime of the renderer.
+  // Deleted worktrees must release publisher cursors instead of retaining them for renderer lifetime.
   const knownWorktreeIds = knownStructuredSessionWorktreeIds(next)
   for (const worktreeId of localStructuredSessionVersionByWorktree.keys()) {
     if (!knownWorktreeIds.has(worktreeId)) {

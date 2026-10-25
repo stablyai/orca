@@ -128,9 +128,7 @@ export function seedStore(
   store: ReturnType<typeof createTestStore>,
   state: Partial<AppState>
 ): void {
-  // The cascade tests intentionally centralize the default repo fixture here
-  // so the test files can stay under the enforced max-lines limit without
-  // disabling the lint rule and hiding further growth.
+  // Centralize fixture to keep cascade suites within max-lines limits without suppressing growth checks.
   store.setState({
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state

@@ -64,8 +64,7 @@ test('seeded project terminal runs a typed shell command @golden', async ({ orca
     let expandedPath = ''
     await expect
       .poll(async () => {
-        // Why: the echoed command can wrap or be clipped by the buffer tail, so only a
-        // line that is exactly the marker — bracketed by both markers — is real output.
+        // Require an exact bracketed marker line; wrapped/clipped input echo cannot prove execution.
         const lines = stripAnsiEscapeSequences(await getTerminalContent(orcaPage, 8_000))
           .split(/\r?\n/)
           .map((line) => line.trim())

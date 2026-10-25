@@ -51,8 +51,7 @@ export function beginPaneDragFromPointerDown(
           handle.releasePointerCapture(pointerId)
         }
       } catch {
-        // Best effort: Electron/Chromium can drop capture before our cleanup
-        // runs, but the terminal must never stay pointer-inert.
+        // Capture may already be lost; cleanup must still restore terminal pointer input.
       }
     }
     if (!dragging) {
@@ -76,8 +75,7 @@ export function beginPaneDragFromPointerDown(
         }
       }
     } finally {
-      // Why: pointer capture can be lost crossing Electron webviews; always
-      // clear the drag overlay/input state so terminals do not stay inert.
+      // Clear drag overlays/input state even when Electron webview crossings lose capture.
       callbacks.onDragActiveChange?.(false)
       hideDropOverlay(state)
       state.dragSourcePaneId = null
@@ -130,8 +128,7 @@ export function beginPaneDragFromPointerDown(
   handle.addEventListener('pointerup', onPointerUpOuter)
   handle.addEventListener('pointercancel', onPointerCancelOuter)
   handle.addEventListener('lostpointercapture', onLostPointerCaptureOuter)
-  // Why: title bars live outside the pane subtree; keep tracking if Chromium
-  // routes captured pointer moves through the window rather than the handle.
+  // Titles lie outside pane subtrees; retain window tracking when captured moves bypass the handle.
   window.addEventListener('pointermove', onPointerMoveOuter, true)
   window.addEventListener('pointerup', onPointerUpOuter, true)
   window.addEventListener('pointercancel', onPointerCancelOuter, true)

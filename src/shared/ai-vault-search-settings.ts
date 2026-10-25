@@ -1,15 +1,6 @@
 import { z } from 'zod'
 
-/**
- * Consent and retention for the agent-session transcript index.
- *
- * Off until the user turns it on: building the index reads every transcript on
- * the machine, so nothing constructs an indexer, opens the database or reads a
- * transcript for it before that choice is recorded.
- *
- * There is no `paused`. The indexer is immutable after construction, so every
- * change here is close-and-construct (see session-search-instance.ts).
- */
+/** Recorded opt-in precedes indexer construction, database open or transcript reads. Immutable indexers have no paused state; policy changes close/reconstruct them (session-search-instance.ts). */
 export type AiVaultSearchSettings = {
   enabled: boolean
   /** null = all history; otherwise only transcripts modified within this many days. */
@@ -32,18 +23,12 @@ export function normalizeAiVaultSearchHistoryDays(value: unknown): number | null
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return null
   }
-  // A fractional day floors to 0, which reads as "all history" on one side and
-  // "now" on the other; make the two agree.
+  // Normalize fractional days consistently: floor-to-zero cannot mean all history on one side and now on another.
   const days = Math.floor(value)
   return days <= 0 ? null : Math.min(HISTORY_DAYS_MAX, days)
 }
 
-/**
- * The persisted shape, from whatever a settings write or an old profile left behind.
- *
- * The input is `unknown` on purpose: this is the sanitizer, and what it reads is a
- * JSON profile that may predate either field or hold a value no version wrote.
- */
+/** Sanitize unknown stored profiles, including missing fields and values no supported version wrote. */
 export function resolveAiVaultSearchSettings(
   settings: { aiVaultSearch?: unknown } | null | undefined
 ): AiVaultSearchSettings {
@@ -64,12 +49,7 @@ export function sameAiVaultSearchSettings(
   return a.enabled === b.enabled && a.historyDays === b.historyDays
 }
 
-/**
- * The policy a settings write moves to, or null when nothing about it changed.
- *
- * Every host that owns an index closes and reconstructs on apply, so an unchanged
- * value has to be filtered here rather than at the indexer.
- */
+/** Filter unchanged policies here; every owning host otherwise closes/reconstructs its index on apply. */
 export function changedAiVaultSearchSettings(
   before: { aiVaultSearch?: unknown } | null | undefined,
   after: { aiVaultSearch?: unknown } | null | undefined

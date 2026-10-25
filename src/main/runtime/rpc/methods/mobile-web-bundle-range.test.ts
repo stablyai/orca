@@ -92,8 +92,7 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
     expect(result.rangeBytes).toBe(RANGE_BYTES)
   })
 
-  // The manifest field is the phone's only discovery, and a mobile-scoped call to a method this
-  // build does not allowlist answers `forbidden`: the promise is honest only if both hold.
+  // Manifest discovery must name a method the mobile allowlist actually permits.
   it('names the grid only for a method a paired phone can actually call', async () => {
     const response = await call('mobileWeb.bundle.manifest')
     expect(
@@ -146,7 +145,6 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
     expect(result.eof).toBe(false)
   })
 
-  // Gzip framing adds bytes to data that does not compress; identity keeps the frame bound.
   it('sends identity for a range gzip would not shrink', async () => {
     const result = body(
       await range({ buildId: bundle.buildId, path: INCOMPRESSIBLE.path, offset: 0 })

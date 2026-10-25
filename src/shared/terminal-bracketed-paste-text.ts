@@ -1,16 +1,10 @@
-/**
- * The bracketed-paste frame Orca writes for pasted text: the renderer's terminal paste and draft
- * paste, and the host's launch prompt, which replaced the desktop's draft paste and must send the
- * same bytes.
- */
+/** Keep renderer pastes and host launch prompts framed identically. */
 
 const ESCAPE = '\u001b'
 export const BRACKETED_PASTE_START = `${ESCAPE}[200~`
 export const BRACKETED_PASTE_END = `${ESCAPE}[201~`
 
-// Why: an embedded ESC (e.g. a pasted `\x1b[201~` from scrollback) would close
-// the bracketed-paste frame early and run the tail as keystrokes. Replacing ESC
-// with its printable substitute (␛, U+241B) neutralizes every framing escape.
+// Replace embedded ESC with printable ␛ (U+241B) so pasted framing bytes cannot close the frame and execute its tail.
 export function sanitizeBracketedPasteText(text: string): string {
   let escapeIndex = text.indexOf(ESCAPE)
   if (escapeIndex === -1) {

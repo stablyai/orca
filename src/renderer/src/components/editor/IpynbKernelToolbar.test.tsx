@@ -63,9 +63,9 @@ describe('kernel picker trust', () => {
       rootPath: '/repo',
       runWorkspaceInterpreters: false
     })
-    // A version read from nowhere shows the bare env name.
+    // Unknown versions show only the environment name.
     expect(screen.getByText('.venv')).toBeTruthy()
-    // Creating a .venv would reuse, and so run, one the repo shipped; the item says why it is off.
+    // Reusing a repository-supplied .venv executes its Python, so creation requires trust.
     expect(screen.getByRole('menuitem', { name: CREATE_VENV }).dataset.disabled).toBe('')
     expect(screen.getByText(TRUST_FIRST)).toBeTruthy()
 
@@ -86,7 +86,7 @@ describe('kernel picker trust', () => {
     setEnvironment(file, { path: '/repo/.venv/bin/python', name: '.venv', version: '3.12.1' })
     renderToolbar(file)
     expect(screen.getByRole('button', { name: 'Restart kernel' })).toHaveProperty('disabled', true)
-    // The focusable wrapper is what lets the disabled button's tooltip open.
+    // Disabled buttons need a focusable wrapper for their explanatory tooltip.
     expect(screen.getByLabelText(TRUST_FIRST).getAttribute('tabindex')).toBe('0')
 
     act(() => trustNotebook(file))

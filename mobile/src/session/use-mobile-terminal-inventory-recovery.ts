@@ -13,7 +13,6 @@ type MobileTerminalInventoryRecoveryAction = {
   scope: string
 }
 
-/** Bridges terminal stream callbacks to the committed route's recovery action. */
 export function useMobileTerminalInventoryRecoveryBridge(scopeKey: string) {
   const committedScopeRef = useRef<string | null>(null)
   const actionRef = useRef<MobileTerminalInventoryRecoveryAction | null>(null)

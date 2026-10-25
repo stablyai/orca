@@ -1,9 +1,7 @@
 import { z } from 'zod'
 import type { OnboardingChecklistState } from './onboarding-state-types'
 
-// ── Onboarding ──────────────────────────────────────────────────────────
-// Closed enums only — no raw paths/repo names/URLs/error strings (measures activation, not repo debugging).
-// Why: event names still carry legacy seven-step payloads; keep validation backward-compatible for old rows.
+// Activation telemetry excludes raw paths, repo names, URLs and errors; retain legacy seven-step payload compatibility.
 export const ONBOARDING_TELEMETRY_LEGACY_MAX_STEP = 7
 export const onboardingStepSchema = z
   .number()
@@ -106,7 +104,6 @@ export function hasMatchingOnboardingFeatureSetupSelectedCount(
   return props.selected_count === selectedCount
 }
 
-// Compile-time guard: enum must match OnboardingChecklistState activation keys (minus UI-only `dismissed`); drift breaks the build.
 export type _OnboardingChecklistItemSync =
   z.infer<typeof onboardingChecklistItemSchema> extends Exclude<
     keyof OnboardingChecklistState,
@@ -121,5 +118,5 @@ export type _OnboardingChecklistItemSync =
 export const _onboardingChecklistItemSyncCheck: _OnboardingChecklistItemSync = true
 void _onboardingChecklistItemSyncCheck
 
-// Cohort discriminator for onboarding events; `.optional()` is load-bearing so `.strict()` accepts the `undefined` fallback.
+// Optional so strict schemas accept the undefined cohort fallback.
 export const cohortSchema = z.enum(['fresh_install', 'upgrade_backfill']).optional()

@@ -1,4 +1,3 @@
-// L80 (P2): a spawn commit binding a reused local terminal id leaves no other pane naming it.
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -16,7 +15,6 @@ const WORKTREE = 'repo-1::/fixture/worktree'
 const SAVED_LEAF = '11111111-1111-4111-8111-111111111111'
 const NEW_LEAF = '22222222-2222-4222-8222-222222222222'
 
-/** A pane saved before a restart, bound to local id `pty-3`, stamped (or not) with its process. */
 function savedSession(stamp: string | null): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),
@@ -46,7 +44,6 @@ function savedSession(stamp: string | null): WorkspaceSessionState {
   }
 }
 
-/** The new terminal's spawn commit: id `pty-3` again, under a new incarnation, in a new tab. */
 function bindNewTerminal(session: WorkspaceSessionState): void {
   applyPtyBinding(
     {
@@ -79,7 +76,6 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
 
     expect(panesBinding(session, 'pty-3')).toEqual([`new-tab:${NEW_LEAF}`])
     expect(session.terminalPtyIncarnationsByPaneKey).toEqual({ [`new-tab:${NEW_LEAF}`]: 'inc-now' })
-    // The saved pane stays, bound to nothing, and its tab row no longer names the id.
     expect(session.terminalLayoutsByTabId['saved-tab']?.root).toEqual({
       type: 'leaf',
       leafId: SAVED_LEAF
@@ -163,7 +159,7 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
     )
   })
 
-  // Known limit: a legacy save has no stamp, so nothing proves it names another process.
+  // Legacy saves lack incarnation proof, so they cannot establish an ID was reused.
   it('leaves an unstamped saved binding alone', () => {
     switchState.on = true
     const session = savedSession(null)

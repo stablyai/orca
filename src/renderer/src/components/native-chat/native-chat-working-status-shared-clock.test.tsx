@@ -70,7 +70,6 @@ describe('native chat working status elapsed clock', () => {
   it('collapses every in-flight turn onto one shared visibility-gated timer', () => {
     renderTurns(3, 1_000_000)
 
-    // One shared 1s clock for all three turns, not one interval per turn.
     expect(vi.getTimerCount()).toBe(1)
     act(() => vi.advanceTimersByTime(3_000))
     expect(elapsedLabels()).toEqual(['Working for 3s', 'Working for 3s', 'Working for 3s'])

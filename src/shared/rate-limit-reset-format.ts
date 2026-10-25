@@ -1,12 +1,6 @@
-// Why: shared by the desktop status-bar tooltip and the mobile accounts screen
-// so rate-limit reset/expiry countdown copy stays identical across surfaces.
-// Pure (no platform imports) — safe to bundle in both the renderer and mobile.
+// Share renderer/mobile countdown copy without platform imports.
 
-/**
- * Compact human duration for a rate-limit window, flooring to whole units:
- * "47m", "3h 54m", "6d 7h". Returns "now" for a non-positive delta so callers
- * can special-case the "already reset" copy.
- */
+/** Floor durations to whole units (47m, 3h 54m, 6d 7h); nonpositive values return now for reset-specific copy. */
 export function formatResetDuration(ms: number): string {
   if (ms <= 0) {
     return 'now'
@@ -35,13 +29,7 @@ const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
 
-/**
- * Delay (ms) until the soonest reset countdown label would change, or null when
- * no future reset needs a tick. Because labels are floored to minutes (or hours
- * past a day), a countdown clock only needs to wake just after the next unit
- * boundary — not every second — so callers schedule one short-lived timeout
- * instead of polling. Returns the minimum delay across all reset times.
- */
+/** Schedule just past the next floored minute/hour label boundary, not every second; choose the earliest delay across future resets. */
 export function getResetCountdownNextTickDelay(
   now: number,
   resetTimes: readonly number[]

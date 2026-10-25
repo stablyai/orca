@@ -92,9 +92,7 @@ function getFloatingWorkspaceVisibleTabs(
   )
 }
 
-// Live count of visible floating tabs from store state — lets close handlers re-derive "did this
-// actually empty the panel?" at the moment the close resolves, instead of trusting a frozen
-// pre-close render snapshot that a concurrent create/no-op close can invalidate.
+/** Recount when async close resolves; concurrent creates/no-op closes can invalidate render-time empty-panel predictions. */
 export function countVisibleFloatingWorkspaceItems(
   store: Parameters<typeof selectFloatingVisibleTabCount>[0]
 ): number {
@@ -139,11 +137,7 @@ function getFloatingWorkspaceBrowserTab(
   )
 }
 
-// The guest IPC receiver maps a forwarded close's source id back to the live floating browser
-// workspace that owns it, so a stale/reordered/closed id is an idempotent no-op. Main forwards the
-// guest's *page* id (BrowserManager keys guests by browserPageId), while the panel closes by
-// workspace id, so resolve pages → workspace here; a workspace id is accepted too for callers that
-// already speak that id space.
+/** Resolve guest page IDs to live floating workspaces; stale/reordered closes are no-ops. Accept workspace IDs for callers already using that namespace. */
 export function resolveFloatingWorkspaceBrowserWorkspaceId(
   store: Pick<AppState, 'browserTabsByWorktree' | 'browserPagesByWorkspace'>,
   sourceId: string
@@ -203,8 +197,7 @@ export function isFloatingWorkspacePanelFocused(
   return active instanceof HTMLElement && active.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
 }
 
-// Event-target-aware panel membership (vs isFloatingWorkspacePanelFocused which reads only activeElement).
-// Used for routing ownership when activeElement is transiently body/null during blur/IME churn (F6/F7).
+// Use event-target membership when blur/IME churn leaves activeElement transiently body/null (F6/F7).
 export function isEventTargetInsideFloatingWorkspacePanel(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
 }

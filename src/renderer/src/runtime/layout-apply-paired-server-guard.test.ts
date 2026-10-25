@@ -1,5 +1,4 @@
-// Pins that a workspace a paired server owns never reaches main's `layout.apply`: its layout stays
-// the server's, mirrored by the window, in a layout-owner build too.
+// Paired-owned workspace layouts stay on their server; even layout-owner builds must never send them to local main.
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

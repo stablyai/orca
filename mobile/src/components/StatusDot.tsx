@@ -22,11 +22,7 @@ export function statusDotColor(state: ConnectionState, verdict?: ConnectionVerdi
   return stateColors[state] ?? colors.textMuted
 }
 
-// Why: when caller passes a verdict, the dot color reflects the verdict's
-// severity instead of the raw transport state. This avoids the "amber dot
-// next to red 'Can't reach desktop' label" mismatch — the underlying
-// transport is still 'reconnecting' (amber) but the user-visible meaning
-// has escalated to error (red).
+// Prefer verdict severity over transport color: reconnecting can already mean user-visible error, so dot must match label.
 export function StatusDot({
   state,
   verdict

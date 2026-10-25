@@ -18,10 +18,7 @@ const REMOVAL = {
   launch: 'stop'
 } as const
 
-/**
- * What each entry point does to each kind. A new kind or entry point is a compile error here
- * until someone decides. Disconnect is loss of contact, never evidence of exit, so it stops nothing.
- */
+/** Require an explicit policy for every entry point and session kind; disconnect stops nothing because lost contact proves no exit. */
 export const OWNED_SESSION_TEARDOWN = {
   'worktree-removal': REMOVAL,
   'folder-removal': REMOVAL,

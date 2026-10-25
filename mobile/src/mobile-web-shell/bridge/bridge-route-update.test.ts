@@ -4,7 +4,6 @@ import type { BridgeInitRoute } from './bridge-envelope'
 
 const SESSION = '/h/host-a/session/wt-1'
 
-/** The route the session switch hands the shell, with the tap's pane key on it or without. */
 function sessionRoute(paneKey?: string): BridgeInitRoute {
   return {
     pathname: SESSION,
@@ -21,7 +20,6 @@ async function openedOnTheSession(): Promise<ReturnType<typeof createFakeBridgeP
   return pair
 }
 
-/** Every pane key the page was told about, in order, including the clears. */
 function recordRouteUpdates(pair: ReturnType<typeof createFakeBridgePortPair>): string[] {
   const seen: string[] = []
   pair.client.onRouteUpdate((route) => {
@@ -30,22 +28,13 @@ function recordRouteUpdates(pair: ReturnType<typeof createFakeBridgePortPair>): 
   return seen
 }
 
-/**
- * A notification tap for a pane of the session already on screen (ruling 33.1).
- *
- * The tap rewrites one param of a route the page is already mounted on, and neither half of what
- * the shell had could carry it: keying the screen on the whole route made a pane change a remount
- * and a repeat tap nothing at all. The pane request travels as a re-sent `init` instead, which is
- * a frame both sides already have, and the page reads a second `init` for its own session as a
- * route update rather than as a replacement.
- */
+// Deliver pane taps through same-session init updates so the mounted page keeps its state; remount keys exclude pane params (ruling 33.1).
 describe('a route update over a re-sent init', () => {
   it('reaches the page twice for a repeat tap on the same pane', async () => {
     const pair = await openedOnTheSession()
     const seen = recordRouteUpdates(pair)
     pair.host.publishRoute(sessionRoute('pane-1'))
     await pair.flush()
-    // What the native switch does after posting, so a later `init` cannot replay a spent tap.
     pair.host.publishRoute(sessionRoute())
     await pair.flush()
     pair.host.publishRoute(sessionRoute('pane-1'))
@@ -62,26 +51,17 @@ describe('a route update over a re-sent init', () => {
     pair.host.publishRoute(sessionRoute('pane-2'))
     await pair.flush()
     expect(seen).toEqual(['pane-1', 'pane-2'])
-    // The page never re-handshook, so nothing it holds was torn down and rebuilt.
     expect(pair.pageReadyCount()).toBe(1)
     expect(pair.client.getShellSession()?.sessionId).toBe(before?.sessionId)
   })
 
-  /**
-   * A re-asked `ready` is not a route update (round 2).
-   *
-   * The page re-asks on its backoff and again after a refused `state` frame, and the shell answers
-   * every ask with the route it holds. Publishing those as updates made the pane hook see the
-   * route it was already on — `['', 'pane-1']` for one tap — so the listener fires only when the
-   * params have actually moved.
-   */
+  // Repeated ready repairs state but is not another pane request; notify listeners only when route params move.
   it('publishes nothing for a re-asked ready that carries the route the page holds', async () => {
     const pair = await openedOnTheSession()
     const seen = recordRouteUpdates(pair)
     pair.host.receive(JSON.stringify({ v: 1, type: 'ready' }))
     await pair.flush()
     expect(seen).toEqual([])
-    // And the same ask after a real update still leaves exactly the one delivery behind it.
     pair.host.publishRoute(sessionRoute('pane-1'))
     await pair.flush()
     pair.host.receive(JSON.stringify({ v: 1, type: 'ready' }))

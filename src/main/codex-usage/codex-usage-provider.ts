@@ -2,8 +2,9 @@ import type { UsageProvider } from '../usage/usage-provider-contract'
 import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 import type { CodexUsageDailyAggregate, CodexUsageSession } from './types'
 
-// Rescan older caches: v5 deduplicates forks across sessions; v6 adds per-request long-context counts.
-export const CODEX_USAGE_SCHEMA_VERSION = 6
+// Rescan older caches: v5 deduplicates forks across sessions; v6 adds per-request long-context counts;
+// v7 keys fork copies on turn id because forks rewrite copied timestamps.
+export const CODEX_USAGE_SCHEMA_VERSION = 7
 
 export const codexUsageProvider = {
   id: 'codex',

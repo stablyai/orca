@@ -11,8 +11,7 @@ import {
 } from './database.js'
 import { HeapWindowReaper } from './heap-window-reaper.js'
 
-// Released reservations were never deleted: 13.7M rows and 9 GB in production, every one of them
-// still locked by each placement of its host. These pin what the prune may take and how it walks.
+// Unpruned released rows reached 13.7M/9GB and were locked on every host placement.
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 const schema = 'relay_released_reservation_prune_test'
@@ -106,7 +105,7 @@ describe.each(dialects)('released reservation prune (%s)', (_dialect, open) => {
 
 describePostgres('heap window reaper against PostgreSQL', () => {
   let database: RelayDatabase
-  // 200 rows of this shape fill about two pages; 6,000 spread the table over ~60 pages.
+  // 6,000 rows span ~60 pages; 200 would exercise only ~2.
   const ROWS = 6_000
 
   afterEach(async () => {

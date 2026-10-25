@@ -361,6 +361,8 @@ it.each(['x64', 'arm64'])(
       report.samples.every((sample) => sample.fullCommandMs >= sample.buildIncludingReuseProbesMs)
     ).toBe(true)
     const phases = report.phases.map((phase) => phase.label)
+    expect(phases).toContain('verify-prepared-node')
+    expect(phases).toContain('warm-compiler-before-measurement')
     expect(phases.indexOf('verify-prepared-node')).toBeLessThan(
       phases.indexOf('control-full-build-and-probe')
     )

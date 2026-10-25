@@ -5,8 +5,7 @@ import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
-// Why: a connected SSH state makes the target a live remote, which is what the
-// palette badge now requires before disambiguating rows with a host label.
+// Only verified live remotes enable host disambiguation without a filter.
 const connectedSshStates = (targetId: string) =>
   new Map([
     [targetId, { targetId, status: 'connected' as const, error: null, reconnectAttempt: 0 }]
@@ -30,8 +29,7 @@ describe('getPaletteHostBadge', () => {
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    // No connection state -> the SSH host is 'disconnected', so there's nothing
-    // live to disambiguate from and rows stay badge-free.
+    // Absent connection state is disconnected; no live remote needs disambiguation.
     expect(getPaletteHostBadge('local', hosts)).toBeNull()
   })
 
@@ -42,8 +40,7 @@ describe('getPaletteHostBadge', () => {
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    // Why: with a host filter on, the badge is the only thing explaining which
-    // rows survived, so liveness must not suppress it.
+    // Active filters need host labels even when remotes are disconnected.
     expect(getPaletteHostBadge('ssh:ssh-1', hosts, true)).toEqual({
       hostId: 'ssh:ssh-1',
       label: 'Builder'

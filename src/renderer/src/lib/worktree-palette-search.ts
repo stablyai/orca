@@ -83,8 +83,7 @@ export function getWorktreePaletteSearchScope(args: {
     return [...args.emptyQueryWorktrees]
   }
 
-  // Why: sidebar filters keep the default list quiet, but explicit search is
-  // a recovery path for sleeping/default-branch workspaces hidden by filters.
+  // Explicit search recovers sleeping/default-branch workspaces hidden by sidebar filters.
   return args.allWorktrees.filter((worktree) => !worktree.isArchived)
 }
 

@@ -71,6 +71,8 @@ export type PtySpawnCommitState = {
   codexSelectionTarget: CodexAccountSelectionTarget
   codexHomeLaunchStartedAt: Date | undefined
   codexHomeLaunchStartedSequence: number | undefined
+  /** Before the provider started anything, so no output of this spawn's process predates it. */
+  spawnRequestedAt?: number
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   launchCommand: string | undefined
   preSpawnHiddenMarkId: string | null

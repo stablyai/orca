@@ -1,6 +1,4 @@
-// The `agentSession.*` dispatcher harness, shared by the suites that exercise the wire
-// boundary. `hostCalls` and `runtimeCalls` keep one identity for the process and are
-// repopulated per test, so a suite can read `hostCalls.close` without re-importing it.
+// Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
 import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
@@ -203,8 +201,7 @@ export function hostStub(): StructuredAgentSessionHost {
       submissions: []
     })),
     subscribe: vi.fn(() => () => undefined),
-    // A real feed, so the snapshot this method hands back is a genuine projection rather
-    // than a shape the stub restated.
+    // Use a real projected feed rather than restating its shape in the stub.
     subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
       statusFeed().subscribe(subscriber)
     ),
@@ -264,8 +261,7 @@ export function dispatcher(
   })
 }
 
-/** The reply path is the only one that carries a client's negotiated identity,
- *  which is exactly what the capability gate reads. */
+/** Reply transport carries the negotiated client identity the capability gate reads. */
 export async function call(
   method: string,
   params: unknown,

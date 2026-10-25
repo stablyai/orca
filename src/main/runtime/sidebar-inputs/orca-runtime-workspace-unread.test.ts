@@ -5,7 +5,6 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-cont
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { OrcaRuntimeService } from '../orca-runtime'
-import type { RuntimeStore } from '../runtime-store-contract'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { RpcDispatchStreamingOptions } from '../rpc/dispatcher-stream-options'
 import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs'
@@ -20,6 +19,16 @@ import {
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import {
+  partialRuntimeStore,
+  storeFolderWorkspace,
+  storeProjectGroup,
+  storeRepo,
+  storeWorktreeMeta,
+  type PartialRuntimeStore
+} from '../runtime-store-partial-fixture'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -32,10 +41,7 @@ const LEAF = '22222222-2222-4222-8222-222222222222'
 const PANE = `tab-1:${LEAF}`
 const PHONE: RpcDispatchStreamingOptions = { clientKind: 'mobile', connectionId: 'phone-1' }
 
-type Flag = { lastActivityAt: number; isUnread: boolean }
-
-/** What each kind of desktop socket sends: the request and subscription sockets, the browser host
- *  lease and network tunnel (which add only browser capabilities to the shared base), and the CLI. */
+/** Desktop request, subscription, browser-host lease, network-tunnel and CLI capability sets. */
 function currentDesktopSockets() {
   return {
     request: remoteRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES),
@@ -52,28 +58,37 @@ function currentDesktopSockets() {
 }
 
 function createHeadlessHost() {
-  const meta: Record<string, Flag> = { [WT]: { lastActivityAt: 0, isUnread: false } }
-  const sshMeta: Record<string, Flag> = { [SSH_WT]: { lastActivityAt: 0, isUnread: false } }
+  const meta: Record<string, WorktreeMeta> = { [WT]: storeWorktreeMeta() }
+  const sshMeta: Record<string, WorktreeMeta> = { [SSH_WT]: storeWorktreeMeta() }
   // A same-id project this host registered under a server's id and locally.
-  const hubMeta: Record<string, Flag> = { [HUB_WT]: { lastActivityAt: 0, isUnread: false } }
-  meta[HUB_WT] = { lastActivityAt: 0, isUnread: false }
-  const folders: Record<string, Flag & { projectGroupId: string }> = {
-    [FOLDER_ID]: { lastActivityAt: 0, isUnread: false, projectGroupId: 'group-1' }
+  const hubMeta: Record<string, WorktreeMeta> = { [HUB_WT]: storeWorktreeMeta() }
+  meta[HUB_WT] = storeWorktreeMeta()
+  const folders: Record<string, FolderWorkspace> = {
+    [FOLDER_ID]: storeFolderWorkspace({
+      id: FOLDER_ID,
+      projectGroupId: 'group-1',
+      folderPath: '/tmp/folder'
+    })
   }
   const repos = [
-    { id: 'repo-1', connectionId: null },
-    { id: 'repo-ssh', connectionId: 'build-box' },
-    { id: 'repo-hub', connectionId: null, executionHostId: 'runtime:hub' },
-    { id: 'repo-hub', connectionId: null }
+    storeRepo({ id: 'repo-1', path: '/tmp/repo-1', connectionId: null }),
+    storeRepo({ id: 'repo-ssh', path: '/home/user/repo-ssh', connectionId: 'build-box' }),
+    storeRepo({
+      id: 'repo-hub',
+      path: '/srv/repo-hub',
+      connectionId: null,
+      executionHostId: 'runtime:hub'
+    }),
+    storeRepo({ id: 'repo-hub', path: '/tmp/repo-hub', connectionId: null })
   ]
-  const store = {
+  const store: PartialRuntimeStore = {
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
-    getProjectGroups: () => [{ id: 'group-1', connectionId: null }],
+    getProjectGroups: () => [storeProjectGroup({ id: 'group-1', connectionId: null })],
     getSettings: () => ({}),
     getWorktreeMeta: (id: string) => meta[id],
     getAllWorktreeMeta: () => meta,
-    setWorktreeMeta: ({ id, hostId }: HostWorktreeTarget, updates: Partial<Flag>) =>
+    setWorktreeMeta: ({ id, hostId }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) =>
       Object.assign(
         hostId === 'ssh:build-box'
           ? sshMeta[id]
@@ -85,11 +100,10 @@ function createHeadlessHost() {
     getWorktreeMetaForHost: (id: string, hostId: string) =>
       hostId === 'ssh:build-box' ? sshMeta[id] : hostId === 'runtime:hub' ? hubMeta[id] : meta[id],
     getFolderWorkspace: (id: string) => folders[id],
-    updateFolderWorkspace: (id: string, updates: Partial<Flag>) =>
+    updateFolderWorkspace: (id: string, updates: Partial<FolderWorkspace>) =>
       Object.assign(folders[id], updates)
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the unread path reads only these members.
-  const runtime = new OrcaRuntimeService(store as unknown as RuntimeStore)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
     tabs: [{ tabId: 'tab-1', worktreeId: WT, title: 'Agent', activeLeafId: LEAF, layout: null }],
     leaves: [

@@ -4,8 +4,7 @@ import { expandWindowsEnvironmentVariables } from '../../shared/windows-environm
 import { loadWindowsNativeRegistry } from '../windows-native-registry'
 import { stripTrailingComment } from './shell-startup-env'
 
-// Why both editions: a pane may run Windows PowerShell 5.1 or PowerShell 7, and
-// each loads its own profiles. Within one, $PSHOME's load before the user's.
+// Windows PowerShell and PowerShell 7 have separate profiles; all-users profiles precede user profiles.
 const POWERSHELL_EDITIONS = [
   {
     documentsSubdir: 'WindowsPowerShell',
@@ -20,29 +19,16 @@ const POWERSHELL_EDITIONS = [
 const PROFILE_FILES = ['profile.ps1', 'Microsoft.PowerShell_profile.ps1']
 const USER_SHELL_FOLDERS_KEY =
   'Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders'
-// Why `<>`: no Windows path holds them, so this never resolves to ~/.codex.
+// Invalid Windows path characters prevent unevaluable values from selecting ~/.codex.
 export const UNEVALUABLE_PROFILE_VALUE = '<unevaluable>'
 const HOME_VARIABLES = /\$(?:HOME|env:USERPROFILE)(?!\w)|\$\{(?:HOME|env:USERPROFILE)\}/gi
 
 const cache = new Map<string, string[]>()
 
-/**
- * The value each PowerShell edition's profiles leave in `$env:<name>`, read as
- * text: the last assignment in load order wins, and an edition that never sets
- * it (or clears it) contributes nothing. Spawning PowerShell to evaluate the
- * profiles would run user code and reads as suspicious to EDR
- * (docs/reference/windows-edr-posture.md).
- *
- * Same fidelity as the POSIX rc-file probe: `$env:NAME = value`, `Set-Item` /
- * `New-Item env:NAME value` and `[Environment]::SetEnvironmentVariable('NAME',
- * value[, target])` lines; no conditionals or dot-sourced files. `$HOME` and
- * `$env:USERPROFILE` expand in double-quoted and bare values; any other
- * expression reads as UNEVALUABLE_PROFILE_VALUE. Preview and side-by-side
- * PowerShell 7 installs keep their all-users profile elsewhere and are not read.
- *
- * Memoized: profiles don't change under a running Orca often enough to pay a
- * re-read on every routing check.
- */
+/** Read static assignments in profile order without executing user code or triggering EDR.
+ * Supports env assignments, Set/New-Item and SetEnvironmentVariable; only HOME/USERPROFILE expand.
+ * Dynamic expressions yield UNEVALUABLE_PROFILE_VALUE; conditionals, dot-sourcing and side-by-side/preview profiles are not evaluated.
+ * Cache per process to keep routing checks cheap. */
 export function readPowerShellProfileEnvValues(name: string, userProfile: string): string[] {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     return []
@@ -52,16 +38,14 @@ export function readPowerShellProfileEnvValues(name: string, userProfile: string
   if (cached) {
     return cached
   }
-  // Why every form, matched by its left side: a missed assignment fails open
-  // onto ~/.codex, the #9788 bug, while an unparsable value still counts.
+  // Recognize assignment LHS even when the value cannot parse; missing it would fail open to ~/.codex (#9788).
   const assignments = [
     `^(?:\\$env:${name}|\\$\\{env:${name}\\})\\s*=(?!=)(.*)$`,
     `^(?:Set|New)-Item\\s+(?:-Path\\s+)?['"]?env:\\\\?${name}['"]?(?=\\s|$)\\s*(?:-Value\\s+)?(.*)$`,
-    // Why any target: 'User' and 'Machine' persist too, so counting them is the conservative read.
+    // User/Machine targets also persist values; count them conservatively.
     `^\\[(?:System\\.)?Environment\\]::SetEnvironmentVariable\\(\\s*['"]${name}['"]\\s*,(.*?)(?:,\\s*(?:'[^']*'|"[^"]*"|[\\w.:[\\]]+)\\s*)?\\)$`
   ].map((source) => new RegExp(source, 'i'))
-  // Why the registry: it names the folder PowerShell loads from, which OneDrive
-  // or folder redirection may have moved; the default is only a fallback.
+  // Registry Documents follows OneDrive/policy redirection, matching $PROFILE.
   const documentsDir = readRegistryDocumentsDir() ?? join(userProfile, 'Documents')
   const values = POWERSHELL_EDITIONS.map((edition) => {
     let last = ''
@@ -84,8 +68,6 @@ export function readPowerShellProfileEnvValues(name: string, userProfile: string
   return values
 }
 
-// Why the registry: $PROFILE hangs off the Documents known folder, which
-// OneDrive or a policy can move anywhere; this is the same value it resolves.
 function readRegistryDocumentsDir(): string | null {
   try {
     const registry = loadWindowsNativeRegistry()
@@ -101,7 +83,7 @@ function readRegistryDocumentsDir(): string | null {
 function readProfile(path: string): string | null {
   try {
     const bytes = readFileSync(path)
-    // Why: Windows PowerShell 5.1's `>` and Out-File write UTF-16LE with a BOM.
+    // Windows PowerShell 5.1 redirection writes BOM-prefixed UTF-16LE.
     if (bytes[0] === 0xff && bytes[1] === 0xfe) {
       return bytes.subarray(2).toString('utf16le')
     }
@@ -122,14 +104,13 @@ function parsePowerShellValue(raw: string, userProfile: string): string {
   }
   const doubleQuoted = /^"([^"]*)"$/.exec(value)
   const text = doubleQuoted?.[1] ?? value
-  // Why: other variables, subexpressions and calls can't be evaluated as text.
+  // Other variables and expressions require execution; retain them as unevaluable.
   const dynamic = doubleQuoted ? /[$`]/ : /[\s'"$`(){}@;,|&]/
   return dynamic.test(text.replace(HOME_VARIABLES, ''))
     ? UNEVALUABLE_PROFILE_VALUE
     : text.replace(HOME_VARIABLES, () => userProfile)
 }
 
-/** Test-only: profiles never change within a test process otherwise. */
 export function __resetPowerShellProfileEnvCache(): void {
   cache.clear()
 }

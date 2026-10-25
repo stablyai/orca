@@ -39,8 +39,7 @@ export const bottomDrawerStyles = StyleSheet.create({
     })
   },
   drawerFill: {
-    // Why: flex children (results + dock) need a column height budget; without
-    // this, fill height alone still leaves staticContent height content-sized.
+    // Give flex results/dock a height budget; fill height alone leaves staticContent content-sized.
     overflow: 'hidden',
     flexDirection: 'column'
   },

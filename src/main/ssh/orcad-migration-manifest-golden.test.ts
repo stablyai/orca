@@ -105,7 +105,7 @@ function goldenManifest() {
   )
 }
 
-// Pinned before the source abstraction landed: any drift breaks older destinations' digests.
+// Preserve pre-abstraction wire digests for older destinations.
 const GOLDEN_SSH_MANIFEST_SHA256 =
   'fe6defc1b987c39948d5d89e310690dda7b8c21e1dfa1cf6c253bdce7abf4d68'
 
@@ -122,7 +122,6 @@ describe('SSH migration manifest wire shape', () => {
       'targetLabel'
     ])
     expect(wire.source).not.toHaveProperty('kind')
-    // What a destination does with a received manifest, older and newer alike.
     expect(() => assertOrcadMigrationManifestDigest(wire)).not.toThrow()
     expect(parseOrcadMigrationManifest(wire)).toEqual(goldenManifest())
   })

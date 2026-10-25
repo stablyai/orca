@@ -109,8 +109,7 @@ describe('useMobileNativeChatSession', () => {
       await Promise.resolve()
     })
 
-    // The retained window keeps rendering while the source is gone; what must
-    // never land is the page that resolved after it disappeared.
+    // Retain visible history after source loss, but reject late pages from the retired source.
     expect(state?.messages.map((entry) => entry.id)).not.toContain('stale-page')
     expect(state?.messages).toHaveLength(40)
     expect(state?.status).toBe('idle')
@@ -142,6 +141,15 @@ describe('useMobileNativeChatSession', () => {
         })
       }
       const requestsAtCap = sendRequest.mock.calls.length
+      expect(requestsAtCap).toBe(33)
+      expect(state?.hasMore).toBe(false)
+      expect(sendRequest).toHaveBeenLastCalledWith(
+        'nativeChat.readSession',
+        { agent: 'claude', sessionId: 'session', limit: 40, beforeOffset: 50 },
+        expect.objectContaining({ budgetSpansConnect: true })
+      )
+      await act(async () => state?.loadEarlier())
+      expect(sendRequest).toHaveBeenCalledTimes(33)
 
       await act(async () =>
         emit({
@@ -166,9 +174,7 @@ describe('useMobileNativeChatSession', () => {
   )
 
   it('keeps paged-in history across an auto-reconnect replay snapshot', async () => {
-    // The transport replays the subscription with its original params after an
-    // in-place reconnect, so the replayed snapshot is the newest initial window
-    // again. It must merge into the grown history, not truncate it back to 40.
+    // Reconnect replays the original small window; merge it into paged history instead of truncating.
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: {
@@ -190,15 +196,12 @@ describe('useMobileNativeChatSession', () => {
     })
     expect(state?.messages).toHaveLength(100)
 
-    // Reconnect replay: the same newest-40 window. History survives untouched.
     await act(async () =>
       emit({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
     )
     expect(state?.messages).toHaveLength(100)
     expect(state?.messages[0]?.id).toBe('paged-0')
 
-    // A replay carrying one message that arrived while away merges it in, and
-    // nothing the phone already shows is dropped to make room.
     await act(async () =>
       emit({
         type: 'snapshot',
@@ -222,7 +225,6 @@ describe('useMobileNativeChatSession', () => {
     })
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
 
-    // The host's newest window now starts one row later; its `hasMore` is about that window.
     await act(async () =>
       emit({
         type: 'snapshot',
@@ -270,7 +272,6 @@ describe('useMobileNativeChatSession', () => {
   })
 
   it('clears a stale cursor when a replacement omits paging metadata', async () => {
-    // Never settles: this asserts the request the cleared cursor produces.
     const sendRequest = vi.fn(() => new Promise<never>(() => {}))
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
@@ -300,8 +301,6 @@ describe('useMobileNativeChatSession', () => {
   })
 
   it('clears hasMore when a replaced window is shorter than the initial page', async () => {
-    // A replaced window without paging metadata is judged by its own length:
-    // shorter than a full page means the whole transcript is on screen.
     const sendRequest = vi.fn()
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
@@ -335,9 +334,7 @@ describe('useMobileNativeChatSession', () => {
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     act(() => state?.loadEarlier())
 
-    // The replay merges (same rows, no trim), but the host re-cut the file, so
-    // it carries a new cursor. The page already in flight was addressed with the
-    // old offset and would write that stale cursor back over the fresh one.
+    // Even an untrimmed replay can recut the cursor; an old in-flight page must not overwrite the new offset.
     await act(async () =>
       emit({ type: 'snapshot', messages: retained, hasMore: true, beforeOffset: 250 })
     )
@@ -370,7 +367,6 @@ describe('useMobileNativeChatSession', () => {
         await Promise.resolve()
       })
 
-    // A reconnect re-subscribes and replays the same newest window while the page is out.
     act(() => state?.loadEarlier())
     await act(async () => emit(snapshot))
     await answer({
@@ -398,8 +394,7 @@ describe('useMobileNativeChatSession', () => {
       return () => {}
     })
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
-    // Only a snapshot marks the base as delivered, so an append landing first
-    // must not demote the real base snapshot to a reconnect replay.
+    // Only snapshots establish the base; early appends cannot turn the first real snapshot into replay.
     await act(async () =>
       emit({ type: 'appended', messages: [message('early-a'), message('early-b')] })
     )
@@ -430,12 +425,10 @@ describe('useMobileNativeChatSession', () => {
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     const shown = window.map((entry) => entry.id)
 
-    // A reader scrolled up is looking at these rows; a busy turn must not push them out.
     act(() => state?.loadEarlier())
     await act(async () => emit({ type: 'appended', messages: [message('live-1')] }))
     expect(state?.messages.map((entry) => entry.id)).toEqual([...shown, 'live-1'])
 
-    // The page asked for before that output still lands ahead of the rows it was read behind.
     await act(async () => {
       resolvePage({
         ok: true,
@@ -447,7 +440,6 @@ describe('useMobileNativeChatSession', () => {
   })
 
   it('pages a growing tail from what the phone holds, not from the first window', async () => {
-    // Never settles: this asserts the request an older runtime, which has no cursor, is sent.
     const sendRequest = vi.fn(() => new Promise<never>(() => {}))
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
@@ -468,7 +460,6 @@ describe('useMobileNativeChatSession', () => {
 
     act(() => state?.loadEarlier())
 
-    // 70 rows held plus one page: a read of 100 would come back shorter than the list it replaces.
     expect(sendRequest).toHaveBeenLastCalledWith(
       'nativeChat.readSession',
       { agent: 'claude', sessionId: 'session', limit: 130 },
@@ -529,8 +520,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   }
 
   it('reports loading on the very first render, before the subscription effect runs', async () => {
-    // `status` starts at 'idle', so on its own it would tell the launch-draft
-    // seed that an empty transcript is this session's real history.
+    // Idle alone cannot make an empty pre-read transcript trustworthy for launch seeding.
     const subscribe: RpcClient['subscribe'] = vi.fn(() => () => {})
     await mountAt({ subscribe } as unknown as RpcClient, 'session-a')
 
@@ -538,10 +528,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   })
 
   it('re-reads instead of resurfacing a settled read when the same identity returns', async () => {
-    // Leaving chat view nulls the agent, then returning restores the identity a
-    // settled read already matched — but its list was cleared, so trusting it
-    // would report 'ready' over an empty transcript. The last settled list for
-    // this identity keeps rendering while the re-read is in flight.
+    // View toggles clear subscription state; retain settled history without claiming the reread is ready.
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
       return () => {}
@@ -550,7 +537,6 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     await mountAt(client, 'session-a')
     expect(renders.at(-1)).toMatchObject({ status: 'ready', transcriptLoading: false })
 
-    // Toggle out to the terminal view, then back.
     await act(async () =>
       renderer?.update(createElement(Harness, { client, sessionId: 'session-a', agent: null }))
     )
@@ -567,9 +553,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   })
 
   it('keeps the last settled list rendered while a swapped client re-reads', async () => {
-    // A manual-retry reconnect swaps the client without moving the identity; the
-    // old outcome must not stand ('loading', not 'ready'), but the cached
-    // transcript keeps rendering instead of collapsing to a full-screen spinner.
+    // A new client invalidates the old ready verdict but must keep the cached conversation visible.
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
       return () => {}
@@ -595,12 +579,9 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       transcriptLoading: true,
       ids: ['a-1']
     })
-    // Every commit of the window, not just the first: the re-subscribe lands a
-    // commit after it, so clearing the cache there blanks the transcript the
-    // user actually sees while leaving a first-frame assertion green.
+    // Check every commit: passive resubscribe reset could blank history after a first-frame assertion passed.
     expect([...new Set(renders.map((entry) => entry.ids.join(',')))]).toEqual(['a-1'])
 
-    // The fresh client's snapshot supersedes the held list.
     await act(async () =>
       emitFresh({ type: 'snapshot', messages: [message('a-1'), message('a-2')], hasMore: false })
     )
@@ -612,8 +593,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   })
 
   it('keeps the retained transcript rendered when the stream reports an error', async () => {
-    // A transient read failure must not blank a conversation the user is looking
-    // at; the last settled list for this identity stays until a read supersedes it.
+    // Failed rereads must retain the last settled history until newer history replaces it.
     let emitFrame: (frame: unknown) => void = () => {}
     const client = {
       subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
@@ -672,9 +652,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       renderer?.update(createElement(Harness, { client, sessionId: 'session-b' }))
     )
 
-    // The effect that resets the list lands a commit later, so `messages` still
-    // holds session-a's transcript here — it must never surface under b, and b
-    // must read as loading until its own read settles.
+    // The passive reset lags one commit; session-a rows must never surface under session-b.
     const leaked = renders.find(
       (entry) => entry.sessionId === 'session-b' && entry.ids.includes('a-1')
     )
@@ -686,10 +664,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   })
 
   it('settles the view but not the read on a pending snapshot', async () => {
-    // The host answers with an empty pending window while the transcript file
-    // does not exist yet. Calling that 'ready' would let the launch-draft seed
-    // adopt a prefill the agent may already have been sent; leaving it
-    // 'loading' is the bare forever-spinner this frame exists to end.
+    // Pending means no file yet: render without a spinner, but do not call empty history ready for launch seeding.
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
       return () => {}
@@ -720,13 +695,21 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     await mountAt(client, 'session-a')
 
     await act(async () =>
-      emitFrame({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+      emitFrame({ type: 'appended', messages: [message('early-a'), message('early-b')] })
+    )
+    await act(async () =>
+      emitFrame({
+        type: 'snapshot',
+        messages: [message('early-b'), message('base-c')],
+        hasMore: true,
+        beforeOffset: 100
+      })
     )
 
     expect(renders.at(-1)).toMatchObject({
       status: 'ready',
       transcriptLoading: false,
-      ids: ['a-1']
+      ids: ['early-b', 'base-c']
     })
   })
 
@@ -739,8 +722,6 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     } as unknown as RpcClient
     await mountAt(client, 'session-a')
 
-    // Same identity, fresh client: this read finds no transcript file behind the
-    // session and answers pending.
     const reconnected = {
       subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
         onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
@@ -751,8 +732,6 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       renderer?.update(createElement(Harness, { client: reconnected, sessionId: 'session-a' }))
     )
 
-    // One more rebind reads retention back: it still holds the real history,
-    // which it could not had the empty pending window captured over it.
     const rebound = { subscribe: vi.fn(() => () => {}) } as unknown as RpcClient
     renders.length = 0
     await act(async () =>

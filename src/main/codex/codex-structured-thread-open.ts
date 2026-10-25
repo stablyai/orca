@@ -1,8 +1,6 @@
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
-import {
-  isCodexAppServerRequestError,
-  type CodexAppServerConnection
-} from './codex-app-server-connection'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { readCodexThreadId } from './codex-structured-thread-facts'
 

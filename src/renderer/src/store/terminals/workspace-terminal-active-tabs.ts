@@ -26,8 +26,7 @@ export function restoreActiveTabIdByWorktree({
       if (!validWorktreeIds.has(wId) || !tabId) {
         continue
       }
-      // Why: a subsumed row's canonical twin holds the same PTY, so follow the pointer there
-      // instead of forgetting which terminal the workspace last focused.
+      // Follow subsumed rows to the canonical twin holding their PTY so workspace focus survives.
       const restored = validTabIds.has(tabId) ? tabId : canonicalTabIdBySubsumedTabId.get(tabId)
       if (restored && validTabIds.has(restored)) {
         activeTabIdByWorktree[wId] = restored

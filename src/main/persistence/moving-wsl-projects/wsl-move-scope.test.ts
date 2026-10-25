@@ -45,7 +45,6 @@ describe('collectWslMoveScope', () => {
             worktreeBasePath: unc('/home/dev/worktrees')
           }),
           repo('relative-base', unc('/home/dev/c'), { worktreeBasePath: '..\\worktrees' }),
-          // A Linux base path resolves inside the repo's distro.
           repo('linux-base', unc('/home/dev/d'), { worktreeBasePath: '/home/dev/trees' })
         ],
         folderWorkspaces: [folder('notes', unc('/srv/notes'))],
@@ -213,7 +212,7 @@ describe('createUncToLinuxPathRewriter', () => {
     }
     const rewritten = rewriteOrcadMigrationPayloadPaths(payload, rewriter)
     expect(rewritten.repositories[0].path).toBe('/home/dev/app')
-    // The source key stays in its source form: subtraction matches source rows by it.
+    // Preserve source keys for matching rows during subtraction.
     expect(rewritten.dormantState?.worktreeMeta[0]).toMatchObject({
       sourceKey: worktreeId,
       worktreeId: 'repo-a::/home/dev/app'

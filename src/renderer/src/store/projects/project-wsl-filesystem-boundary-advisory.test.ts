@@ -58,8 +58,7 @@ describe('warnIfProjectCrossesWslFilesystemBoundary', () => {
     expect(warningMock.mock.calls[0]?.[1]?.description).toContain('Debian')
   })
 
-  // Why: the Windows runtime preference governs local projects only; an SSH path that happens to
-  // look Windows-shaped is a different host's filesystem.
+  // Windows runtime preference is local-only; Windows-shaped SSH paths still belong to another filesystem.
   it('stays silent for a repo on a remote execution host', () => {
     warnIfProjectCrossesWslFilesystemBoundary(
       makeRepo({ connectionId: 'ssh-1' }),

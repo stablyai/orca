@@ -153,11 +153,7 @@ export type AttachedJournal = {
   unconfirmedClientMessageIds: string[]
 }
 
-/**
- * The conversation's journal, opened — and its crash boundary settled — by the conversation's own
- * open. A send the boundary could only doubt stays `unknown`: whether the provider took it is never
- * inferred from provider history, since absence from a log Orca does not own proves nothing.
- */
+/** Open settles the crash boundary; missing provider history cannot turn unknown delivery into proven refusal. */
 export async function attachJournal(input: {
   record: AgentSessionRecord
   /** The host's open conversation, whose journal the attach adopts. */
@@ -173,14 +169,7 @@ export async function attachJournal(input: {
   }
 }
 
-/**
- * The first link of an adopting session's chain.
- *
- * `adopted` is the only origin besides `created` a chain will accept at its head, and it is the
- * honest one here: this session did not create the conversation. The adapter appends its own
- * `resumed` link once the provider proves the same identity root — or, when it proves the identical
- * handle at the same fence, the validator elides that as a retry and this link stays the head.
- */
+/** Adopted conversations start with adopted, never created; provider proof appends resumed unless identical handle/fence makes it a retry. */
 const ADOPTED_HANDLE_FENCE = 1
 
 function adoptedProviderHandleLink(

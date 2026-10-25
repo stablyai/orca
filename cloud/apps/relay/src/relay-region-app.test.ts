@@ -230,7 +230,6 @@ describe('Relay region API', () => {
     expect(fromAssign.status).toBe(503)
     expect(fromAssign.headers.get('Retry-After')).toBe('2')
     expect(causes).toEqual(['reserve-paced-drained', 'reserve-paced-drained'])
-    // Any other host's pace keeps today's cause.
     plan.mockRejectedValue(new ReservePaceError(1))
     await app.request('/v1/assign', assignmentRequest('abcdefghijklmnop', {}))
     expect(causes.at(-1)).toBe('reserve-paced')

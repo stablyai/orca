@@ -21,15 +21,10 @@ export async function runRecording(
   scenario: RecordingScenario,
   mount: MountAdapter,
   scheduler: RecordingScheduler,
-  /** A transport to record through instead of straight at the scripted one; see its type. */
   wrapClient?: ScriptedClientWrapper
 ): Promise<Recording> {
   await scheduler.start()
-  // One counter per recording, shared by requests, payloads and effects. Each list is append-only
-  // and independent of the other two, so without a shared ordinal a send reordered ahead of a
-  // device write, or ahead of a subscribe, moves no list and no golden notices. The request count
-  // this replaced ordered payloads and effects against sends only, never against each other, so in
-  // a family that sends no requests every stamp was `0` and subscribe-vs-effect order was unpinned.
+  // Share ordinals across requests, payloads and effects so cross-list reordering remains visible even without requests.
   const nextWriteOrdinal = createWriteOrdinal()
   const transport = new ScriptedRpcTransport(scheduler.elapsed, nextWriteOrdinal, wrapClient)
   const effects: { name: string; ordinal: number; value: RecordedValue }[] = []
@@ -46,24 +41,15 @@ export async function runRecording(
   const teardown = async (): Promise<void> => {
     cleaned = true
     await mounted?.dispose()
-    // Drained before the set is read, not after: a cleanup that closes its stream on a due 0ms
-    // timer has not run yet when `dispose()` returns, and reading here would record it as an
-    // uncancelled registration — the one shape this observation reserves for a cleanup that never
-    // ran. With the drain first, a deferred close and a never-closed stream stop being
-    // byte-identical.
+    // Drain due cleanup timers before reading registries so deferred closes cannot look like unclosed subscriptions.
     await scheduler.flush()
-    // A stream the product forgot to close is only visible on the wire when its method has an
-    // unsubscribe builder; closing a builder-less one writes nothing and the leak stays a live
-    // registry record until some later cutover replays it. Observed here, after
-    // the product's own cleanup and before the transport tears the registries down, so a
-    // builder-less subscription is pinned without a scenario that cuts over to expose it.
+    // Read registries before transport teardown: builder-less leaks emit no unsubscribe payload to observe.
     const registered = transport.registeredStreams()
     if (registered.length) {
       effect('streams-registered-at-teardown', registered)
     }
     transport.dispose()
-    // Again after disposal: tearing the registries down rejects what the product still awaited, and
-    // an unhandled rejection is an effect the cleanup checkpoint has to see.
+    // Flush teardown rejections into the cleanup checkpoint.
     await scheduler.flush()
   }
   try {
@@ -94,9 +80,7 @@ export async function runRecording(
       } else if ('frame' in step) {
         const crash = transport.frame(step.frame, step.params, step.reply)
         if (crash) {
-          // The listener died on this frame. Recorded rather than raised, the way a screen crash and
-          // a detached rejection are: what a malformed frame does to a subscription is an
-          // observation, and the transport still raises a scenario that stopped matching.
+          // Record listener crashes as product outcomes; mismatched scenarios still throw.
           effect('stream-listener-crash', {
             frame: step.frame,
             error: captureError(crash.error)
@@ -112,8 +96,7 @@ export async function runRecording(
       }
       await scheduler.flush()
       if ('checkpoint' in step) {
-        // A checkpoint's own clock is the sum of the scripted advances, so recording it would add
-        // bytes and no signal. Asserted rather than recorded, so a future drift fails loudly.
+        // Assert checkpoint time against scripted advances instead of storing a redundant clock value.
         if (scheduler.elapsed() !== advanced) {
           throw new Error(
             `Checkpoint clock drifted: ${scenario.id} ${step.checkpoint} at ${scheduler.elapsed()}, scripted ${advanced}`
@@ -136,12 +119,7 @@ export async function runRecording(
     if (!recording.checkpoints.length) {
       throw new Error(`No checkpoints: ${scenario.id}`)
     }
-    // Why cleanup runs here and not only in `finally`: each checkpoint clones `effects`, so a
-    // rejection or state write produced by dispose, transport teardown or the final flush landed
-    // after the recording was built and never reached a golden. Unmount leaks are exactly what
-    // this oracle exists to catch, so teardown happens on the recorded path and anything it
-    // observes becomes its own checkpoint. `state` is captured before dispose because the
-    // operation is gone afterwards.
+    // Clean up before building the recording so teardown effects reach a checkpoint; capture state before unmount destroys it.
     const beforeCleanup = effects.length
     const stateAtCleanup = captureValue(mounted.state())
     await teardown()

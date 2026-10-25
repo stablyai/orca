@@ -4,6 +4,7 @@ import {
   MIN_REFETCH_MS,
   normalizeClaudeConfigDir,
   type ClaudeRuntimeAuthPreparation,
+  type ActiveRateLimitProvider,
   type ClaudeStatusLineRateLimits,
   type NormalizedClaudeAccountSelectionTarget,
   type ProviderRateLimits
@@ -43,13 +44,12 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     }
   }
 
-  // Why: hitting a usage endpoint before its Retry-After expires burns the budget for nothing and keeps the 429 window alive.
-  // A live post flips the snapshot back to ok, but the endpoint's Retry-After is still binding.
+  // Retry-After remains binding even when live posts restore ok display; early polls waste budget and prolong 429s.
   protected isRetryAfterActive(limits: ProviderRateLimits | null): boolean {
     return Boolean(limits?.usageMetadata?.retryAtMs && limits.usageMetadata.retryAtMs > Date.now())
   }
 
-  // Why: a recent live receipt preserves display through a failed check, without proving account freshness.
+  // A live receipt preserves display, not proof of selected-account freshness.
   protected isLiveClaudeUsageFresh(limits: ProviderRateLimits | null): boolean {
     return Boolean(
       limits?.status === 'ok' &&
@@ -58,8 +58,12 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     )
   }
 
-  protected shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
-    return this.isRetryAfterActive(limits)
+  // Why: Claude's Retry-After and agy's browser sign-in cooldown bind automated checks; user refreshes may pass.
+  protected shouldSkipAutomatedFetch(
+    provider: ActiveRateLimitProvider,
+    limits: ProviderRateLimits | null
+  ): boolean {
+    return (provider === 'claude' || provider === 'antigravity') && this.isRetryAfterActive(limits)
   }
 
   protected resolveClaudeFetchApply(
@@ -67,9 +71,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     previous: ProviderRateLimits | null
   ): ProviderRateLimits {
     this.lastClaudeCheckCompletedAt = fresh.updatedAt
-    // Why: a live statusline post can land while an OAuth cycle is in flight; a failed fetch must not
-    // roll the bar back to the pre-cycle snapshot or flip the just-refreshed live data to error.
-    // The 429's Retry-After still has to reach the poll gate, or every cycle re-hits the throttle.
+    // Failed OAuth must preserve newer live display while forwarding Retry-After to the poll gate.
     const current = this.state.claude
     if (fresh.status !== 'ok' && current && this.isLiveClaudeUsageFresh(current)) {
       const retryAtMs = fresh.usageMetadata?.retryAtMs
@@ -85,7 +87,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     claudeGeneration: number,
     claudeTarget: NormalizedClaudeAccountSelectionTarget
   ): void {
-    // Why: an account switch during the resolver await already cleared the snapshot; restoring the outgoing account's configDir here would cross-attribute its live posts to the new bar.
+    // A switch during resolver await invalidates attribution; never restore the outgoing configDir.
     if (
       claudeGeneration !== this.claudeFetchGeneration ||
       !this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
@@ -93,7 +95,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       return
     }
     this.lastClaudeAuthSnapshot = {
-      // Why the user's own folder: System default passes it through rather than injecting it.
+      // System Default uses the user config folder without injecting a managed one.
       configDir: normalizeClaudeConfigDir(
         authPreparation?.envPatch.CLAUDE_CONFIG_DIR ??
           getClaudeProfileRouter()?.userConfigDir() ??
@@ -103,18 +105,16 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     }
   }
 
-  /** Live usage windows forwarded from a Claude session's statusLine command. */
   ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
-    // Why: attribution needs the selected account's config dir; until a fetch cycle captures it, drop posts rather than guess the account.
+    // Wait for a selected-account snapshot rather than guessing live-post attribution.
     const snapshot = this.lastClaudeAuthSnapshot
     if (!snapshot) {
-      // Why: breadcrumbs make a silently dark live feed diagnosable — dropped posts are otherwise invisible.
       console.debug('[rate-limits] dropped live Claude usage: no auth snapshot yet', {
         eventConfigDir: event.configDir
       })
       return
     }
-    // Why: sessions of other accounts (or other runtimes) report their own quota; mixing them into the active account's bar would lie.
+    // Different accounts/runtimes report their own quota; never merge them into this bar.
     if (normalizeClaudeConfigDir(event.configDir) !== snapshot.configDir) {
       console.debug('[rate-limits] dropped live Claude usage: configDir mismatch', {
         eventConfigDir: event.configDir,
@@ -124,7 +124,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     }
     const previous = this.state.claude
     const now = Date.now()
-    // Why: every session of the account posts its own last snapshot; an idle one must not roll a newer value back.
+    // An idle session's older snapshot must not roll back newer account usage.
     const keepIfNewer = (
       incoming: RateLimitWindow | null,
       current: RateLimitWindow | null | undefined
@@ -141,10 +141,10 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     if (!freshSession && !freshWeekly) {
       return
     }
-    // Why: statusline payloads can carry a single window; an absent one means "no update", not "cleared" — keep the other bar populated.
+    // Partial statusline payloads leave unreported windows unchanged.
     const session = freshSession ?? previous?.session ?? null
     const weekly = freshWeekly ?? previous?.weekly ?? null
-    // Why: a stale post whose other window merely repeats the current value is no progress and must not refresh the live-feed age.
+    // Stale posts that repeat the surviving window must not refresh live-feed age.
     const droppedStale = (incomingSession && !freshSession) || (incomingWeekly && !freshWeekly)
     if (
       droppedStale &&
@@ -169,7 +169,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         provider: 'claude',
         session,
         weekly,
-        // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible.
+        // Statusline lacks Fable scope; retain the latest OAuth value.
         fableWeekly: previous?.fableWeekly ?? null,
         updatedAt: Date.now(),
         error: null,

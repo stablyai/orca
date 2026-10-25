@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentList } from './WorktreeAgentList'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -82,7 +83,7 @@ describe('WorktreeAgentList', () => {
       )
     })
 
-    const summary = renderer!.root.findByType('Pressable')
+    const summary = findByHostType(renderer!.root, 'Pressable')
     expect(summary.props.accessibilityLabel).toBe('Expand 3 agents')
     expect(summary.props.accessibilityState).toEqual({ expanded: false })
     expect(renderer!.root.findAll((node) => node.props.agent !== undefined)).toHaveLength(0)
@@ -100,10 +101,10 @@ describe('WorktreeAgentList', () => {
       name: 'Review tests',
       displayState: 'working'
     })
-    await act(async () => rows[1].findByType('Pressable').props.onPress({ stopPropagation }))
+    await act(async () => findByHostType(rows[1], 'Pressable').props.onPress({ stopPropagation }))
     expect(onAgentPress).toHaveBeenCalledWith('agent-1')
-    expect(rows[0].findAllByType('Text').at(-1)?.props.children).toBe('1m')
-    expect(rows[1].findAllByType('Text').at(-1)?.props.children).toBe(age)
+    expect(findAllByHostType(rows[0], 'Text').at(-1)?.props.children).toBe('1m')
+    expect(findAllByHostType(rows[1], 'Text').at(-1)?.props.children).toBe(age)
   })
 
   it("shows every agent row with no summary under the desktop's Full list layout", async () => {
@@ -131,7 +132,7 @@ describe('WorktreeAgentList', () => {
     const rows = renderer!.root.findAll((node) => node.props.agent !== undefined)
     expect(rows).toHaveLength(4)
     expect(rows[1].props.childRow.id).toBe('child')
-    const childPress = renderer!.root.findByType('Pressable')
+    const childPress = findByHostType(renderer!.root, 'Pressable')
     await act(async () => childPress.props.onPress({ stopPropagation: vi.fn() }))
     expect(onAgentPress).toHaveBeenCalledWith('agent-1')
   })
@@ -147,7 +148,7 @@ describe('WorktreeAgentList', () => {
       )
     })
 
-    expect(renderer!.root.findAllByType('Pressable')).toHaveLength(0)
+    expect(findAllByHostType(renderer!.root, 'Pressable')).toHaveLength(0)
     expect(renderer!.root.findAll((node) => node.props.agent !== undefined)).toHaveLength(1)
   })
 
@@ -162,6 +163,8 @@ describe('WorktreeAgentList', () => {
       )
     })
 
-    expect(renderer!.root.findByType('Pressable').props.accessibilityLabel).toBe('Expand 2 agents')
+    expect(findByHostType(renderer!.root, 'Pressable').props.accessibilityLabel).toBe(
+      'Expand 2 agents'
+    )
   })
 })

@@ -105,10 +105,7 @@ export const FileSearch = WorktreeSelector.extend({
   maxResults: z.number().int().positive().optional()
 })
 
-// Why: `maxResults` is a new optional field (wire rule 1) — an older host strips it and keeps its
-// own default. It existed only on the Electron IPC hop, so "the client names its cap and a full page
-// means there is more" was true for desktop and merely incidental for web and mobile, which were
-// saved by `remoteFileContentBudget` defaulting the cap inside `listRuntimeFiles`.
+// Optional maxResults aligns remote callers with desktop caps; older hosts strip it and retain their defaults.
 export const FileListAll = WorktreeSelector.extend({
   candidatePaths: z
     .array(z.string().max(64 * 1024))

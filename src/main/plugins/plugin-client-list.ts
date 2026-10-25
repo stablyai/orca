@@ -3,11 +3,7 @@ import { readPluginLockfile } from './plugin-install'
 import { buildPluginList, type PluginListEntry } from './plugin-list-projection'
 import type { PluginService } from './plugin-service'
 
-/**
- * The plugin list paired clients see. Split out of `ipc/plugins.ts` so the runtime's
- * `plugins.list` RPC can reach it without dragging `ipcMain` into its module graph —
- * the same reason preflight and the SSH registry moved.
- */
+/** Keep client listing independent of ipcMain so headless RPC can import it. */
 export async function listPluginsForClients(
   pluginService: PluginService
 ): Promise<PluginListEntry[]> {

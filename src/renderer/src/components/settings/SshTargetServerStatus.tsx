@@ -25,7 +25,6 @@ export type SshTargetServerDialog =
   | 'recover'
   | 'move-anyway'
 
-/** Whether Orca on this SSH host serves it, and why not when it doesn't. */
 export function SshTargetServerStatusLine({
   target,
   state,
@@ -52,7 +51,7 @@ export function SshTargetServerStatusLine({
         {line.text}
       </p>
       {line.hint ? <p className="px-1 text-xs text-muted-foreground">{line.hint}</p> : null}
-      {/* Why inline, not in the menu: it is the way out of this failure. */}
+      {/* Keep failure recovery inline rather than buried in the menu. */}
       <SshHostNodeMirrorAction targetId={target.id} status={state?.managedServer} />
       <OpenPlainSshTerminalButton
         targetId={target.id}
@@ -68,7 +67,6 @@ export function SshTargetServerStatusLine({
   )
 }
 
-/** The managed-server actions this host offers right now, as row-menu entries. */
 export function SshTargetServerMenuItems({
   target,
   state,

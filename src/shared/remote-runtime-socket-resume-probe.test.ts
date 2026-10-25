@@ -5,8 +5,7 @@ import {
 } from './remote-runtime-socket-liveness'
 import { SharedControlReconnectScheduler } from './remote-runtime/control/remote-runtime-shared-control-reconnect'
 
-// Regression for #9092: after sleep a socket can still read OPEN while its path is gone, and the
-// normal cadence took ~30-40 s to notice; resume now probes every socket with a short deadline.
+// After sleep, probe every socket immediately; 8s misses only re-ping and the normal 25s keepalive decides death so relayed paths have time to recover (#9092).
 describe('remote runtime resume probe', () => {
   const monitors: { stop: () => void }[] = []
 
@@ -21,24 +20,81 @@ describe('remote runtime resume probe', () => {
   })
 
   function start(onDead = vi.fn(), ping = vi.fn(() => true)) {
-    const monitor = startRemoteRuntimeSocketLiveness({
-      ping,
-      onDead,
-      options: { pingIntervalMs: 10_000, livenessTimeoutMs: 25_000 }
-    })
+    const monitor = startRemoteRuntimeSocketLiveness({ ping, onDead })
     monitors.push(monitor)
     return { monitor, onDead, ping }
   }
 
-  it('declares a silent socket dead within the resume deadline', async () => {
-    const { onDead, ping } = start()
+  it('keeps a socket that answers the wake probe 12 s late', async () => {
+    const { monitor, onDead, ping } = start()
 
-    expect(probeAllRemoteRuntimeSocketsNow(2_000)).toBe(1)
-    expect(ping).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1_999)
+    probeAllRemoteRuntimeSocketsNow()
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(ping).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(4_000)
+    monitor.noteActivity()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(onDead).not.toHaveBeenCalled()
+  })
+
+  it('declares a silent socket dead when the normal keepalive window ends', async () => {
+    const { onDead } = start()
+
+    expect(probeAllRemoteRuntimeSocketsNow()).toBe(1)
+    await vi.advanceTimersByTimeAsync(24_999)
     expect(onDead).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
-    expect(onDead).toHaveBeenCalledTimes(1)
+    expect(onDead).toHaveBeenCalledExactlyOnceWith('wake_probe_timeout')
+  })
+
+  it('measures round trips from the oldest unanswered ping', async () => {
+    const onRoundTrip = vi.fn()
+    const monitor = startRemoteRuntimeSocketLiveness({
+      ping: () => true,
+      onDead: vi.fn(),
+      onRoundTrip
+    })
+    monitors.push(monitor)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(350)
+    monitor.notePong()
+    monitor.notePong()
+    expect(onRoundTrip).toHaveBeenCalledExactlyOnceWith(350)
+
+    // A ping left unanswered through a network change is not timed against the probe's pong.
+    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    probeAllRemoteRuntimeSocketsNow()
+    await vi.advanceTimersByTimeAsync(200)
+    monitor.notePong()
+    expect(onRoundTrip).toHaveBeenLastCalledWith(200)
+  })
+
+  it('gives a network-change probe a full window even with an older keepalive unanswered', async () => {
+    const { monitor, onDead } = start()
+
+    await vi.advanceTimersByTimeAsync(29_000)
+    probeAllRemoteRuntimeSocketsNow()
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(onDead).not.toHaveBeenCalled()
+    monitor.noteActivity()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(onDead).not.toHaveBeenCalled()
+  })
+
+  it('skips the probe when data arrived in the last few seconds', async () => {
+    const { monitor, onDead, ping } = start()
+
+    monitor.noteActivity()
+    await vi.advanceTimersByTimeAsync(2_000)
+    probeAllRemoteRuntimeSocketsNow()
+    expect(ping).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(7_000)
+    expect(onDead).not.toHaveBeenCalled()
+
+    probeAllRemoteRuntimeSocketsNow()
+    expect(ping).toHaveBeenCalledTimes(1)
   })
 
   it('probes afresh instead of failing a socket when the process stalled through the deadline', async () => {
@@ -60,19 +116,12 @@ describe('remote runtime resume probe', () => {
     expect(onDead).not.toHaveBeenCalled()
     expect(ping).toHaveBeenCalledTimes(2)
 
-    clock += 2_000
-    await vi.advanceTimersByTimeAsync(2_000)
+    // The fresh probe still ends a socket that stays silent.
+    for (let elapsed = 0; elapsed < 120_000; elapsed += 1_000) {
+      clock += 1_000
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
     expect(onDead).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps a socket that answers the probe', async () => {
-    const { monitor, onDead } = start()
-
-    probeAllRemoteRuntimeSocketsNow(2_000)
-    await vi.advanceTimersByTimeAsync(500)
-    monitor.noteActivity()
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(onDead).not.toHaveBeenCalled()
   })
 
   it('skips stopped monitors and coalesces a repeated resume into one probe', async () => {
@@ -84,7 +133,7 @@ describe('remote runtime resume probe', () => {
     probeAllRemoteRuntimeSocketsNow(2_000)
     expect(stopped.ping).not.toHaveBeenCalled()
     expect(live.ping).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(25_000)
     expect(live.onDead).toHaveBeenCalledTimes(1)
     expect(stopped.onDead).not.toHaveBeenCalled()
   })
@@ -95,13 +144,13 @@ describe('remote runtime resume probe', () => {
     const { onDead } = start(vi.fn(), ping)
 
     probeAllRemoteRuntimeSocketsNow(2_000)
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(9_000)
     expect(onDead).not.toHaveBeenCalled()
 
     // Once open, the next resume probes it normally.
     open = true
     probeAllRemoteRuntimeSocketsNow(2_000)
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(25_000)
     expect(onDead).toHaveBeenCalledTimes(1)
   })
 })

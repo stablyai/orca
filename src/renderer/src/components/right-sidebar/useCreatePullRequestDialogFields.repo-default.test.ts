@@ -88,7 +88,6 @@ function renderFields(initialRepoId: string): {
 
 beforeEach(() => {
   getRuntimeRepoBaseRefDefault.mockReset()
-  // Why: refs are read on the repo row's own host.
   const repo = { path: '/repo', displayName: 'Repo', badgeColor: '#000', addedAt: 0 }
   useAppStore.setState({
     repos: [
@@ -109,8 +108,7 @@ describe('useCreatePullRequestDialogFields repo default base ref', () => {
       await harness.switchRepo('repo-1', 'refs/remotes/origin/feature/parent')
 
       expect(harness.current().repoDefaultBaseRef).toBe('main')
-      // Eligibility still drives the field itself; only the "is this the repo
-      // default?" answer comes from the repo lookup.
+      // Eligibility still seeds the field; repo lookup only identifies the default branch.
       expect(harness.current().base).toBe('feature/parent')
     } finally {
       harness.unmount()

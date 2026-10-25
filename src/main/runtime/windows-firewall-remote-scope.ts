@@ -57,9 +57,7 @@ function addressScopeIsSufficient(scope: string, localSubnet: IpRange | null): b
     return false
   }
 
-  // Why: without a phone IP we can only prove coverage when the rule spans the
-  // whole selected subnet; a single-host subnet (/32, /128 VPN/Tailscale) is just
-  // the desktop, so start !== end blocks a desktop-only rule from a false-allow.
+  // Without a phone IP, require whole-subnet coverage; single-host /32 or /128 ranges prove only desktop access.
   const explicitRange = parseIpRange(scope)
   return (
     localSubnet.start !== localSubnet.end &&
@@ -87,8 +85,7 @@ function subnetFromParsed(parsed: ParsedIpAddress, prefixLength: number): IpRang
   return { version: parsed.version, start, end: start | hostMask }
 }
 
-// Why: Windows also accepts dotted-netmask CIDR (192.168.0.0/255.255.255.0);
-// convert a contiguous mask to a prefix length and fail closed on holey masks.
+// Accept Windows dotted-netmask CIDR only for contiguous masks; refuse holey masks.
 function maskPrefixLength(maskText: string, version: IpVersion): number | null {
   const mask = parseIpAddress(maskText)
   if (!mask || mask.version !== version) {

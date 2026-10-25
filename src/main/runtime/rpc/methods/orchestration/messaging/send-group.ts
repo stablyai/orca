@@ -21,7 +21,6 @@ type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipi
 
 type GroupAgentSnapshot = OrchestrationAddressableAgent & { tabId?: string; leafId?: string }
 
-/** Run candidates already identify a durable mailbox. */
 type GroupCandidate = OrchestrationAddressableAgent & { mailbox?: { to: string; runId: string } }
 
 function listRunGroupCandidates(args: {

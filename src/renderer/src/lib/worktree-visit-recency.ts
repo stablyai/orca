@@ -10,13 +10,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 /** The persisted focus-recency map is host-qualified for new writes. */
 export type WorktreeVisitOwner = Pick<Worktree, 'id' | 'hostId'>
 
-/**
- * Read recency for one visible row.
- *
- * The bare lookup is deliberately second: it keeps sessions written before
- * host-qualified recency useful without letting a legacy value override a
- * newer host-specific visit.
- */
+/** Prefer host-qualified recency; bare keys preserve older sessions without overriding newer host-specific visits. */
 export function getWorktreeVisitTimestamp(
   timestamps: Readonly<Record<string, number>> | undefined,
   worktree: WorktreeVisitOwner
@@ -46,8 +40,7 @@ export function getWorktreeIdFromVisitKey(key: string): string {
   if (separator === -1) {
     return key
   }
-  // Empty host is the canonical unknown-host bucket. Known host ids are the
-  // other valid prefixes; a legacy worktree id may itself contain `|`.
+  // Empty/known host prefixes identify qualified keys; legacy raw IDs can themselves contain |.
   if (isWorktreeHostIdentity(key)) {
     return getWorktreeIdFromHostIdentity(key)
   }

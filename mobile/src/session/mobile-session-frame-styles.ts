@@ -10,8 +10,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   kavInner: {
     flex: 1
   },
-  // Master-detail content row below the header chrome (KTD2): the existing content is
-  // the flex-1 left child; the dock column (when present on wide) is the right child.
   sessionContentRow: {
     flex: 1,
     flexDirection: 'row'
@@ -44,7 +42,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   headerButtonPressed: {
     backgroundColor: colors.bgRaised
   },
-  // Selected state for the active docked-panel icon on wide layouts (R2).
   headerButtonActive: {
     backgroundColor: colors.bgRaised
   },
@@ -57,8 +54,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   },
   // Landscape phone: the tab strip takes the row's spare width instead of the title.
   sessionTitleBlockBesideTabs: {
-    // -1, not 0: web reads flex 0 as a zero basis and collapses the title; -1 is natural width,
-    // shrinking only when the row overflows, on both web and native.
+    // Use natural-width flex -1: web’s zero basis for flex 0 collapses the title.
     flex: -1,
     maxWidth: 160
   },
@@ -92,13 +88,10 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'stretch',
     marginVertical: -spacing.xs,
-    // Room between the title's last letter and the strip's edge.
     marginLeft: spacing.md,
-    // Fixed edge so tabs scrolled past it read as clipped, not as part of the title.
     borderLeftWidth: 1,
     borderLeftColor: colors.borderSubtle
   },
-  // Hosts the edge hints over the strip's ends; stretches so the strip keeps its old sizing.
   tabScrollFrame: {
     flex: 1,
     minWidth: 0,
@@ -106,7 +99,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'stretch'
   },
-  // Marks a working or blocked tab scrolled out of view on that side.
   tabEdgeHint: {
     position: 'absolute',
     top: 0,
@@ -140,7 +132,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   tabContentInTopBar: {
     paddingLeft: 0
   },
-  // Sized to the title (capped), so short titles don't waste width.
   tab: {
     minWidth: 44,
     maxWidth: 128,
@@ -151,7 +142,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
-    // Side borders between tabs, as the desktop tab strip draws them.
     borderRightWidth: 1,
     borderRightColor: colors.borderSubtle
   },
@@ -160,8 +150,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     borderLeftColor: colors.borderSubtle
   },
   tabActive: {
-    // Neutral grey underline, matching the desktop terminal tab's active
-    // indicator (a muted foreground/card mix), not a blue accent.
     borderBottomColor: colors.textSecondary,
     backgroundColor: colors.bgRaised
   },
@@ -171,7 +159,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs
   },
-  // The page shrinks a bare svg in a row before the title's ellipsis kicks in.
+  // Prevent web SVG shrink before the title ellipsizes.
   tabIcon: {
     flexShrink: 0
   },
@@ -186,14 +174,11 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   newTerminalButtonPressed: {
     backgroundColor: colors.bgRaised
   },
-  // Divider between the + new-terminal button and the Quick Commands launcher,
-  // matching the tab strip's borderSubtle separators.
   tabActionDivider: {
     width: StyleSheet.hairlineWidth,
     height: 18,
     backgroundColor: colors.borderSubtle
   },
-  // The content slot every branch renders in, measured as the terminal's frame; clips nothing.
   contentFrame: {
     flex: 1,
     minHeight: 0

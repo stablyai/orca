@@ -38,13 +38,33 @@ export function waitsForCodexTurnOptions(
   if (turn?.state !== 'running') {
     return false
   }
-  const active = journal.submissions().find((submission) => {
-    if (submission.handedOverAt === undefined) {
-      return false
-    }
-    return agentJournalSubmissionKey(submission.clientMessageId) === turn.userItemId
-  })
-  return active
-    ? !sameOptions(active.options, next.options, structuredAgentSessionChildRan(child))
-    : true
+  const handed = journal.submissions().filter((submission) => submission.handedOverAt !== undefined)
+  const opener = handed.find(
+    (submission) => agentJournalSubmissionKey(submission.clientMessageId) === turn.userItemId
+  )
+  const onChild = handed.filter((submission) => submission.fence === child.fence)
+  // An unechoed send may own this turn; joining it first would reorder the thread.
+  if (!opener && onChild.some((submission) => submission.dispatchState === 'pending')) {
+    return true
+  }
+  const active =
+    opener ??
+    // Goal continuations have no opener and run on this child's last turn/start choices.
+    onChild
+      // A send rejected after its turn opened still set the thread's choices.
+      .filter((submission) => submission.dispatchState !== 'rejected' || submission.answeredInTurn)
+      .reduce<AgentJournalSubmission | undefined>(
+        (newest, submission) =>
+          newest && (newest.handedOverAt ?? 0) > (submission.handedOverAt ?? 0)
+            ? newest
+            : submission,
+        undefined
+      )
+  const ran = structuredAgentSessionChildRan(child)
+  if (active) {
+    return !sameOptions(active.options, next.options, ran)
+  }
+  return OPTION_ORDER.some(
+    (key) => next.options?.[key] !== undefined && next.options[key] !== ran?.[key]
+  )
 }

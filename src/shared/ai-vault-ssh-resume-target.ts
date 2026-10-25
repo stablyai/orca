@@ -6,10 +6,7 @@ import {
 import { isWslUncPath } from './wsl-paths'
 import { antigravitySessionOrigin } from './antigravity-session-origin'
 
-/**
- * Whether a history session can resume in an SSH workspace on `targetExecutionHostId`.
- * Shared by desktop and mobile so both apply the same host rule.
- */
+/** Share host eligibility for SSH history resume across desktop/mobile. */
 export function canResumeAiVaultSessionOnSshHost(args: {
   sessionFilePath: string | null | undefined
   sessionExecutionHostId?: ExecutionHostId | null
@@ -19,8 +16,7 @@ export function canResumeAiVaultSessionOnSshHost(args: {
   const targetHost = normalizeExecutionHostId(args.targetExecutionHostId)
   const origin = args.sessionFilePath ? antigravitySessionOrigin(args.sessionFilePath) : null
   if (origin && origin !== 'antigravity-cli') {
-    // Why: these resumes reference the transcript file itself, so only its own host can open it;
-    // the WSL exception below holds only for ID-based resumes.
+    // File-based resumes require the transcript's host; the WSL exception applies only to ID resumes.
     return (
       (sessionHost ?? LOCAL_EXECUTION_HOST_ID) === targetHost &&
       !isWslUncPath(args.sessionFilePath ?? '')
@@ -29,9 +25,7 @@ export function canResumeAiVaultSessionOnSshHost(args: {
   if (sessionHost && targetHost && sessionHost === targetHost) {
     return true
   }
-  // Why: SSH-to-local-WSL setups (#6270) scan the WSL home from this machine, so the row is
-  // stamped local, but its WSL UNC transcript is what the SSH shell into that distro reads.
-  // Any other host-local transcript does not exist on the remote filesystem.
+  // Locally scanned WSL UNC transcripts may resume through SSH into that distro (#6270); other local paths do not exist remotely.
   return (
     (sessionHost ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
     Boolean(args.sessionFilePath && isWslUncPath(args.sessionFilePath))

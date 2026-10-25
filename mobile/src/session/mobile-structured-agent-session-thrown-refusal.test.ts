@@ -6,9 +6,10 @@ import {
   callAgentSession,
   requestStructuredAgentSessionMutation
 } from './mobile-structured-agent-session-rpc'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import type { RpcResponse } from '../transport/types'
 
-// As `mapRuntimeError` sends a thrown refusal (pinned in `src/main/runtime/rpc/errors.test.ts`):
-// its message is the bare code, and its reason rides in data.
+// Model mapRuntimeError: bare-code message with refusal reason in data.
 const THROWN_JOURNAL_REFUSAL = {
   code: 'runtime_error',
   message: 'agent_session_journal_unreadable',
@@ -21,15 +22,17 @@ const THROWN_JOURNAL_REFUSAL = {
 }
 
 function refusingClient(): RpcClient {
-  const sendRequest = async () => ({ id: 'req-1', ok: false, error: THROWN_JOURNAL_REFUSAL })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paths under test reach only `sendRequest`.
-  return { sendRequest } as unknown as RpcClient
+  const sendRequest = async (): Promise<RpcResponse> => ({
+    id: 'req-1',
+    ok: false,
+    error: THROWN_JOURNAL_REFUSAL
+  })
+  return stubRpcClient({ sendRequest })
 }
 
 describe('a refusal the host threw', () => {
   it("reads a chat's history failure in the refusal's words, from a stream or a request", async () => {
     const words = 'Unable to load this chat.'
-    // The stream's error frame, as the RPC client hands it over.
     expect(
       agentSessionReadFailureText({
         type: 'error',
@@ -44,7 +47,6 @@ describe('a refusal the host threw', () => {
     expect(agentSessionReadFailureText({ type: 'error', message: 'Connection interrupted' })).toBe(
       'Connection interrupted'
     )
-    // The refusal itself rides beside the words, so the view can tell a failure no retry gets past.
     expect(
       agentSessionReadFailureRefusal({
         type: 'error',
@@ -77,9 +79,8 @@ describe('a refusal the host threw', () => {
 })
 
 describe('a write refused on a journal a newer Orca wrote', () => {
-  // As the host answers it (pinned in `journal-open-failure.test.ts`).
   const newerOrcaClient = (): RpcClient => {
-    const sendRequest = async () => ({
+    const sendRequest = async (): Promise<RpcResponse> => ({
       id: 'req-1',
       ok: true,
       result: {
@@ -91,8 +92,7 @@ describe('a write refused on a journal a newer Orca wrote', () => {
         }
       }
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paths under test reach only `sendRequest`.
-    return { sendRequest } as unknown as RpcClient
+    return stubRpcClient({ sendRequest })
   }
 
   it.each([

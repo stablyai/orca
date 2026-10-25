@@ -102,8 +102,7 @@ async function renderCard(): Promise<HTMLDivElement> {
 
 describe('LinearIntegrationCard account scope', () => {
   beforeEach(() => {
-    // Why: the embedded agent-skill CTA scans installed skills through
-    // window.api; without a stub it renders a scan error instead of a state.
+    // Stub the skill scan so the CTA renders setup state rather than a bridge error.
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {

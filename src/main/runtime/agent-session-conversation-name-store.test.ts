@@ -1,4 +1,3 @@
-// The name is durable state on the record: the store is the only thing that writes it.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -18,7 +17,6 @@ const NATIVE: AgentSessionExecutionLocation = {
 }
 
 let counter = 0
-/** Same shape the store's own suite uses: `<now>-<32 hex>`. */
 function operationId(): string {
   counter += 1
   return `${NOW}-${String(counter)
@@ -73,7 +71,7 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     const name = store.getRecord(SESSION)?.conversationName ?? ''
     expect(name).toHaveLength(200)
     expect(name.startsWith('Fix the ')).toBe(true)
-    // A reload validates every record; an over-long name would be dropped as unreadable.
+    // Reload validates rows; oversized names must not make the record unreadable.
     const reloaded = await openTestAgentSessionRecordStore(directory)
     expect(reloaded.getRecord(SESSION)?.conversationName).toBe(name)
   })

@@ -36,7 +36,7 @@ export abstract class UpdaterMacInstallPreflight extends UpdaterPackageRecovery 
       recordUpdaterLifecycle('macos_running_instances_check_failed')
       return false
     }
-    // Why: registered `orca serve --supervise` services can pause their server for us; anything else is refused as before.
+    // Registered serve supervisors can park their servers; other blockers remain refused.
     const park =
       blockers.length > 0
         ? await parkServeSupervisorsForInstall(process.execPath, blockers, {

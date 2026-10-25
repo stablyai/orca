@@ -61,7 +61,7 @@ export function useStructuredAgentSession(args: {
   providerRunning?: boolean
   /** This view started the session; only then does the stored selection name what it runs. */
   launch?: StructuredAgentSessionLaunchView
-  /** The composer Edit copies a card's text into. */
+  /** Composer destination for preserved text from queued-card edits. */
   composerScopeKey?: string
   /** The chat-wide "queue follow-ups" setting; off keeps mid-turn sends immediate. */
   queueFollowUps?: boolean
@@ -144,9 +144,7 @@ export function useStructuredAgentSession(args: {
   const stopControl = useStructuredAgentSessionStop(stopControlInput)
   const prompts = pendingStructuredSessionPrompts(transportState)
   const promptsUnanswerableHere = pendingPromptsAllUnanswerableHere(prompts)
-  // A send after a command the queue will run goes behind it, even with follow-ups off.
-  // A host's queue waits on any pending prompt, and nothing here can settle one this build cannot
-  // answer: the send must start a turn, after which the card's cancel works.
+  // Queue after waiting commands even with follow-ups off, unless unanswerable prompts would strand the queue; immediate sends enable prompt cancellation.
   const commandWaiting = commandCardWaiting(transportState.queuedMessages)
   const queueEnabled = (queueFollowUps || commandWaiting) && !promptsUnanswerableHere
   const queue = useMemo(
@@ -198,9 +196,7 @@ export function useStructuredAgentSession(args: {
     write,
     capturePresentation
   })
-  // A queued send is a card, never a transcript bubble.
   const isWorking = transportState.isWorking || transportState.queueSendsNext
-  // A message typed during a command queues behind it on the host.
   const send = (...input: Parameters<typeof sends.send>) =>
     // Legacy: an older host refuses sends while a command runs; removable once those hosts age out.
     (!commandPending.current || hostStatesTurnScopes(journalItems)) &&
@@ -219,8 +215,7 @@ export function useStructuredAgentSession(args: {
     [isWorking, pending, queuedMessageIds]
   )
   const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
-  // What the transcript reads: the journal since the latest /clear, plus the one notice a cut turn
-  // with no row gets.
+  // Project since the latest /clear and add a notice only for cut turns without an explaining row.
   const transcriptItems = useMemo(
     () => withNativeChatCutTurnNotices(contextClear.rows, { agentName }),
     [agentName, contextClear.rows]
@@ -237,7 +232,6 @@ export function useStructuredAgentSession(args: {
     [editCapable, imagesCapable, sessionId, target, write]
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
-    // Its published list, pause and submissions; the rest is named below.
     ...transportState,
     enabled: queueCapability === 'supported' && transportState.fence !== null,
     hasPendingPrompt: prompts.length > 0,
@@ -279,8 +273,7 @@ export function useStructuredAgentSession(args: {
     subagentRoster: transportState.subagentRoster,
     messages,
     status: transportEnabled ? state.status : 'ready',
-    /** Why the last message came back to the composer; a failed read is worded from
-     *  `readRefusal`, never its text. */
+    /** Last send-return reason; failed reads use readRefusal, never raw read error text. */
     error: sends.error,
     /** The refusal the failed read met, while `status` is `error`. */
     readRefusal: transportEnabled ? state.readRefusal : undefined,
@@ -313,8 +306,7 @@ export function useStructuredAgentSession(args: {
     stopPressed: stopControl.pressed,
     queuedMessages: queuedController,
     capturePresentation,
-    /** A send made now while the agent works is held as a queued card: the host queues, and this
-     *  send asks it to (the setting is on and no pending prompt blocks the queue). */
+    /** Host and send both permit queueing: follow-ups/commands request it and no unanswerable prompt blocks it. */
     sendsQueue: structuredAgentSessionNewSendsQueue(queue),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),

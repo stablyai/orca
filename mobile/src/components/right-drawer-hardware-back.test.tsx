@@ -89,11 +89,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/**
- * The drawer claims the device Back key through one seam on both platforms. Here that seam is the
- * hardware key; inside the shell's page it is a claim the shell hands one press over on, which is
- * `use-back-claim.web.ts` and is tested there.
- */
+// Drive native Back seam here; use-back-claim.web.ts tests page’s shell-handed Back claim.
 describe('the right drawer and the phone hardware back button', () => {
   it('consumes an iOS hardware back press and closes the open drawer', () => {
     const onClose = vi.fn()
@@ -115,8 +111,7 @@ describe('the right drawer and the phone hardware back button', () => {
     act(() => renderer.unmount())
   })
 
-  // Which module answers is the bundler's and not this component's: inside the page
-  // `use-back-claim.web.ts` claims the key from the shell instead of registering here.
+  // Page bundler selects web Back-claim sibling; component itself must not register native key there.
   it('releases it on unmount, so a drawer taken off screen leaves the key alone', () => {
     const renderer = render(true)
     act(() => renderer.unmount())

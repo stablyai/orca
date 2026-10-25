@@ -21,9 +21,7 @@ export const RUNTIME_REQUIRED_RELATIVE_PATH = path.join(
   'en-runtime-required.json'
 )
 
-// CLDR categories i18next appends to a key when `count` is supplied. i18next
-// never derives a plural form from `defaultValue`, so a suffixed entry is only
-// ever served from the catalog.
+// i18next resolves CLDR plural suffixes only from catalog, never defaultValue.
 const PLURAL_SUFFIX_RE = /_(zero|one|two|few|many|other)$/
 
 function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
@@ -40,19 +38,8 @@ function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
   return entries
 }
 
-/**
- * English entries i18next cannot reproduce from the call site's `defaultValue`.
- *
- * `translate(key, fallback)` always passes a default, and for the default
- * locale i18next prefers the catalog entry and only then the default — so an
- * entry whose every call site already spells the identical string is dead
- * weight in the boot bundle. An entry is kept when any of these hold:
- *   - it carries a CLDR plural suffix (resolved from the catalog, never a default),
- *   - no call site with a literal default references it (dynamic key or
- *     dynamic default: the runtime default is unknown and the catalog wins today),
- *   - some call site's literal default differs from the catalog value (the
- *     catalog value is what ships today).
- */
+// Retain catalog entries when plural-suffixed, lacking literal defaults or differing from any call-site default.
+// Catalog wins over defaults; only entries identical at every literal-default call site are redundant in the boot bundle.
 export function collectRuntimeRequiredKeys(catalogEntries, references) {
   const literalFallbacksByKey = new Map()
   const dynamicFallbackKeys = new Set()
@@ -99,13 +86,8 @@ export function buildRuntimeRequiredCatalog(catalogEntries, requiredKeys) {
   return catalog
 }
 
-/**
- * Why not a byte-for-byte comparison: the shipped subset only has to be *safe*,
- * and safety is "every required entry is present, and nothing it ships
- * contradicts en.json". An entry that stopped being required is dead weight,
- * never a wrong string — so an unrelated PR adding an ordinary key never
- * invalidates every other open branch's copy of this file.
- */
+// Require all needed entries and agreement with en.json, not exact subset equality.
+// Formerly required extras only cost bytes; allowing them avoids unrelated key additions invalidating open branches.
 export function collectRuntimeRequiredCatalogProblems(catalogEntries, requiredKeys, shipped) {
   const missing = [...requiredKeys].filter((key) => !shipped.has(key)).sort()
   const contradicting = [...shipped.keys()]

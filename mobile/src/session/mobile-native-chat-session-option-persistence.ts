@@ -3,9 +3,7 @@ import type { StructuredSessionOptionPick } from '../../../src/shared/structured
 import type { RpcClient } from '../transport/rpc-client'
 import { nativeChatSessionOptionsWrite } from './mobile-session-launch-operations'
 
-/** The host owns the record a later launch seeds from, so a phone-side pick writes there
- *  rather than to any client-local store. Best-effort: a failed write only costs the
- *  next session its remembered start. */
+// Persist picks on the host that seeds future sessions; best-effort failure only loses that next-session default.
 export function persistMobileStructuredOptionPicks(args: {
   client: RpcClient | null
   agent: AgentType

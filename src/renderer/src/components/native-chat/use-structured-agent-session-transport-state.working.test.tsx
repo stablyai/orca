@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// Whether the chat's own agent is working is the host's answer when it gives one: it counts only
-// the agent running now, so a turn an ended agent left running reads as stopped.
-// An older host gives none, and the chat derives it from its rows as before.
+// Prefer host evidence for the current agent so ended agents’ stale turns read stopped; derive from rows for older hosts.
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'

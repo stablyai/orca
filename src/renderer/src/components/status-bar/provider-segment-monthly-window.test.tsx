@@ -114,8 +114,7 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).not.toContain('>25%')
   })
 
-  // Why: #8378 — status-bar chip showed fixed window size ("5h") while the
-  // usage popup showed remaining time for the same resetsAt.
+  // Keep the chip’s countdown consistent with the popup for the same resetsAt.
   it('shows remaining session time on the chip when resetsAt is known (repro-8378)', async () => {
     const { ProviderSegment } = await import('./StatusBar')
     const now = 1_700_000_000_000

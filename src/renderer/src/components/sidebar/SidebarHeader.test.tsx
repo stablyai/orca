@@ -78,7 +78,7 @@ vi.mock('../contextual-tours/workspace-creation-tour-handoff', () => ({
 
 vi.mock('sonner', () => ({ toast: mocks.toast }))
 
-// Deterministic popover: expose the open flag instead of relying on radix portals.
+// Expose open state directly to isolate this header test from Radix portals.
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
     <div data-intro-open={open ? '' : undefined}>{children}</div>

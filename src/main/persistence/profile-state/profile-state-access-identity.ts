@@ -35,7 +35,7 @@ export function profileStateAccessMachineIdentity(): string | null {
           ? `win32-machine-guid:${value}`
           : null
     } else if (process.platform === 'darwin') {
-      // Why not `sysctl kern.hostuuid`: that OID does not exist on macOS (#29259).
+      // kern.hostuuid does not exist on macOS (#29259).
       const result = runProcessSync({
         program: '/usr/sbin/ioreg',
         args: ['-rd1', '-c', 'IOPlatformExpertDevice'],
@@ -45,15 +45,12 @@ export function profileStateAccessMachineIdentity(): string | null {
       machineIdentity = result.code === 0 ? parseDarwinPlatformUuid(result.stdout) : null
     }
   } catch {
-    // Missing machine identity cannot establish ownership across a reboot.
+    // Missing identity cannot prove ownership across reboot.
   }
   return machineIdentity
 }
 
-/**
- * Lowercased so this matches what the SSH machine-home probe reads from the same source
- * (`orcad-machine-home.ts`); the two compare owner records against each other.
- */
+/** Match the lowercase UUID read by the SSH machine-home probe. */
 export function parseDarwinPlatformUuid(ioregOutput: string): string | null {
   const value = /"IOPlatformUUID"\s*=\s*"([^"]*)"/u.exec(ioregOutput)?.[1]?.toLowerCase()
   return value &&
@@ -63,7 +60,7 @@ export function parseDarwinPlatformUuid(ioregOutput: string): string | null {
     : null
 }
 
-/** A kernel boot UUID survives hostname changes without conflating machines sharing a profile. */
+/** Boot identity survives hostname changes without conflating machines sharing a profile. */
 export function profileStateAccessBootIdentity(): string | null {
   if (bootIdentity !== undefined) {
     return bootIdentity
@@ -82,7 +79,7 @@ export function profileStateAccessBootIdentity(): string | null {
       bootIdentity = result.code === 0 ? result.stdout.trim() || null : null
     }
   } catch {
-    // Unavailable identity leaves the conservative hostname and PID checks in force.
+    // Fall back conservatively to hostname/PID checks.
   }
   return bootIdentity
 }

@@ -1,8 +1,4 @@
-/**
- * The connect step of a first WSL host Add. Until the Add persists a record, nothing else (Remove,
- * disabling the experiment, startup adoption) can find this distro's connection or detached
- * holder, so every way the Add can end without a host must release them here.
- */
+/** Before Add persists its record, removal/disable/startup cannot find the connection or detached holder. Every unsuccessful Add must release both here. */
 import { errorMessage } from '../../shared/error-message'
 import type { WslHostAddResult } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'

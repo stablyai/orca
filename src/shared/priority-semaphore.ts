@@ -52,8 +52,7 @@ export class PrioritySemaphore {
       return
     }
 
-    // Find the highest-priority (lowest number) waiter.
-    // Among equal priorities, take the first (FIFO).
+    // Lower numeric priority wins; equal priorities stay FIFO.
     let bestIdx = 0
     for (let i = 1; i < this.waiters.length; i++) {
       if (this.waiters[i].priority < this.waiters[bestIdx].priority) {

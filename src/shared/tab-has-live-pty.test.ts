@@ -11,9 +11,7 @@ describe('tabHasLivePty', () => {
   })
 
   it('returns false for a tab whose live-pty array is empty (sleep / pre-spawn)', () => {
-    // Why: sleep clears ptyIdsByTabId[tab.id] to [] while keeping tab.ptyId as
-    // a wake-hint sessionId — that shape is the central regression this helper
-    // exists to catch.
+    // Sleep empties ptyIdsByTabId but retains tab.ptyId solely as a wake/history hint.
     expect(tabHasLivePty({ 'tab-1': [] }, 'tab-1')).toBe(false)
   })
 

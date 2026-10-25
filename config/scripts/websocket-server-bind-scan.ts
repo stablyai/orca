@@ -2,19 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { readCallOptionKeys } from './call-site-option-keys'
 
-/**
- * Locate every `new WebSocketServer(...)` in the tree and say, for each, whether
- * it pins a bind address.
- *
- * `ws` accepts `{ port }` alone and silently binds the wildcard address, so a
- * server the caller then dials on 127.0.0.1 sits at a port a foreign loopback
- * listener can also hold -- and the more specific listener wins the connection,
- * answering in that server's place.
- *
- * Anything unreadable is reported as `opaque` rather than skipped. A matcher
- * that silently exempts the shapes it fails to parse is worse than no matcher,
- * because it reads as coverage.
- */
+// Find WebSocketServer constructors without explicit bind host: wildcard server can lose loopback connections to a more-specific listener.
+// Report unreadable construction as opaque, never safe, so parser limitations cannot silently become exemptions.
 
 export type BindSite = { path: string; line: number }
 export type OpaqueSite = BindSite & { reason: string }
@@ -73,8 +62,7 @@ function collectSourceFiles(root: string, found: string[] = []): string[] {
 function webSocketServerNames(text: string): { direct: Set<string>; namespaces: Set<string> } {
   const direct = new Set<string>()
   const namespaces = new Set<string>()
-  // One statement at a time: a pattern reaching for `from 'ws'` would swallow
-  // every import above it and lose the specifier names in the blob.
+  // Parse one import statement at a time; broad from-ws regex can swallow preceding imports and lose bindings.
   for (const match of text.matchAll(/\bimport\b([\s\S]*?)\bfrom\s*(['"])([^'"]+)\2/g)) {
     if (match[3] !== 'ws') {
       continue
@@ -140,8 +128,7 @@ export function scanWebSocketServerBinds(repoRoot: string): WebSocketServerBindS
   }
   for (const file of files) {
     const text = readFileSync(file, 'utf8')
-    // Filter on the import, not on the class name: `Server as Wss` never spells
-    // WebSocketServer, and keying on that name silently skipped the whole alias.
+    // Follow ws import bindings/aliases rather than class spelling or Server as Wss escapes scan.
     if (!WS_IMPORT_HINT.test(text)) {
       continue
     }

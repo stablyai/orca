@@ -30,8 +30,7 @@ export function useMobilePagePairedDevices({
   revokeDevice: (deviceId: string) => Promise<void>
   showPairedDevices: (deviceCount: number) => void
 } {
-  // Why: stage starts unresolved so we don't flash the intro before we know
-  // whether any devices are already paired.
+  // Wait for paired-device status before choosing a stage to avoid flashing the intro for returning users.
   const [stage, setStage] = useState<FlowStage | null>(null)
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
   const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
@@ -62,8 +61,7 @@ export function useMobilePagePairedDevices({
 
   const showPairedDevices = useCallback(
     (deviceCount: number): void => {
-      // Why: paired-view polling uses this baseline; setting it with the
-      // transition avoids the render-plus-Effect gap where polling stops.
+      // Set the polling baseline with the transition so a render/effect gap cannot stop polling.
       setPairingDeviceBaseline(deviceCount)
       showStage('paired')
     },
@@ -91,8 +89,6 @@ export function useMobilePagePairedDevices({
         }
         return nextDevices
       } catch (err) {
-        // Log so a transient IPC failure (which routes the user to 'intro') is
-        // observable; keep returning [] so callers' behavior is unchanged.
         console.error('mobile.listDevices failed', err)
         return []
       }
@@ -100,8 +96,6 @@ export function useMobilePagePairedDevices({
     [mountedRef, refreshDevices, showPairedDevices]
   )
 
-  // Why: pick the initial stage based on whether any devices are already
-  // paired so returning users don't see the marketing intro every time.
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -122,8 +116,6 @@ export function useMobilePagePairedDevices({
 
   const revokeDevice = useCallback(
     async (deviceId: string) => {
-      // Dedupe rapid double-clicks: if a revoke for this id is already in
-      // flight, bail before issuing a second IPC call.
       let alreadyRevoking = false
       setRevokingDeviceIds((prev) => {
         if (prev.includes(deviceId)) {
@@ -137,17 +129,11 @@ export function useMobilePagePairedDevices({
       }
       try {
         const { revoked } = await window.api.mobile.revokeDevice({ deviceId })
-        // Why: the backend can resolve revoked=false without removing anything;
-        // treat it as a failure BEFORE refreshing or routing, so a revoke that
-        // didn't happen can't flash a success toast or drop the user to intro.
+        // revoked=false is failure; do not refresh, announce success or route away.
         if (!revoked) {
           throw new Error('mobile.revokeDevice returned revoked=false')
         }
-        // Why: revoke already succeeded server-side, so a failed post-revoke
-        // reload must not flash "Failed to revoke". Optimistically drop the
-        // revoked device from the last-known list (not loadDevices' bogus [] from
-        // a failed reload), keeping success + intro-routing correct. Mirrors
-        // MobilePane's revoke fallback.
+        // Once revoked, reload failure must still report success; remove from last-known devices rather than treating failed loading as an empty list.
         let remaining: readonly PairedDevice[]
         try {
           remaining = await refreshDevices({ force: true })
@@ -181,9 +167,7 @@ export function useMobilePagePairedDevices({
     await loadDevices()
   }, [loadDevices])
 
-  // Why: poll for new pairings on Step 2 (waiting for the first pair) and
-  // also on the paired view (so additional phones that finish pairing while
-  // the user is reading the list show up without a manual refresh).
+  // Watch for completed pairings both while waiting for a QR scan and on the paired-device summary.
   useMobilePairingDevicePolling({
     deviceCountAtQr:
       (stage === 'flow' && stepIdx === 1) || stage === 'paired' ? deviceCountAtPairStart : null,
@@ -207,8 +191,7 @@ export function useMobilePagePairedDevices({
     if (stepIdx === 1) {
       setStepIdx(0)
     } else if (devices.length > 0) {
-      // Why: "Pair another device" can start from the paired summary; Back on
-      // step 0 should return there rather than the intro while devices exist.
+      // Back from pairing another device returns to the existing paired summary.
       showPairedDevices(devices.length)
     } else {
       showStage('intro')

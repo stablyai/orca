@@ -50,7 +50,6 @@ describe('repository GitHub avatar resolution', () => {
     })
 
     expect(apiMocks.repoUpstream).not.toHaveBeenCalled()
-    // Only the origin slug is consulted (for the renamed-fork check).
     expect(apiMocks.repoSlug).toHaveBeenCalledExactlyOnceWith({
       repoPath: '/workspace/orca',
       repoId: 'repo-1'
@@ -75,7 +74,6 @@ describe('repository GitHub avatar resolution', () => {
       },
       upstream: { owner: 'upstream-org', repo: 'rocket' }
     })
-    // The fork metadata is untouched; only the avatar moves to the fork's own owner.
     expect(buildRepositoryGitHubAvatarUpdate(repo, resolution)).toEqual({
       repoIcon: {
         type: 'image',
@@ -87,8 +85,7 @@ describe('repository GitHub avatar resolution', () => {
   })
 
   it('force-resolves the live origin owner when a non-fork repo was transferred', async () => {
-    // Non-fork repo (upstream resolved to null) transferred stablyai -> parkerrex.
-    // The cached avatar is stale; forceLive must consult the live origin slug.
+    // Force live origin lookup after a non-fork transfer so cached owner avatars can advance.
     const repo = makeRepo({
       upstream: null,
       repoIcon: {
@@ -122,7 +119,6 @@ describe('repository GitHub avatar resolution', () => {
       repoPath: '/workspace/orca',
       repoId: 'repo-1'
     })
-    // upstream stays null (unchanged); only the avatar advances to the new owner.
     expect(buildRepositoryGitHubAvatarUpdate(repo, resolution)).toEqual({
       repoIcon: {
         type: 'image',
@@ -161,8 +157,7 @@ describe('repository GitHub avatar resolution', () => {
   })
 
   it('preserves a known fork identity when the live upstream lookup fails', async () => {
-    // A fork whose avatar tracks its parent org. The live upstream probe fails
-    // (offline/unauthed → null), which must NOT downgrade to the origin slug.
+    // Failed live upstream probes must preserve known fork parents instead of falling back to origin.
     const repo = makeRepo({
       upstream: { owner: 'stablyai', repo: 'orca' },
       repoIcon: {
@@ -173,7 +168,6 @@ describe('repository GitHub avatar resolution', () => {
       }
     })
     apiMocks.repoUpstream.mockResolvedValueOnce(null)
-    // The fork's own origin owner — same repo name, so it must NOT replace the parent.
     apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
 
     const resolution = await resolveRepositoryGitHubAvatar({ kind: 'local' }, repo, {
@@ -189,14 +183,11 @@ describe('repository GitHub avatar resolution', () => {
       },
       upstream: { owner: 'stablyai', repo: 'orca' }
     })
-    // Nothing changed, so no repo write is produced (no sticky null clobber).
     expect(buildRepositoryGitHubAvatarUpdate(repo, resolution)).toBeNull()
   })
 
   it('propagates an ambiguous origin probe failure instead of flipping to the parent avatar', async () => {
-    // A renamed fork already showing its own owner. A rejected origin probe cannot
-    // tell renamed from same-name, so it must surface rather than resolve to the
-    // parent avatar — callers keep the stored icon.
+    // Ambiguous origin failures cannot distinguish renamed forks; propagate so callers retain the stored icon.
     const repo = makeRepo({
       upstream: { owner: 'upstream-org', repo: 'rocket' },
       repoIcon: githubAvatarIcon({ owner: 'acme', repo: 'rocket-pro' })

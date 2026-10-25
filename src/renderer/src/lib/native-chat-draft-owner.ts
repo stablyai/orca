@@ -20,8 +20,7 @@ function workspaceOfDraftScope(
     : chatWorkspaceByTabId(state.tabsByWorktree, nativeChatDraftScopeTabId(scopeKey))
 }
 
-/** The workspace, and the host it runs on, whose open chat a new draft is written in; the same
- *  route a removal of that workspace resolves, so the removal finds the draft. */
+/** Resolve the same workspace/host route for draft creation and removal so teardown finds the draft. */
 export function resolveNativeChatDraftOwner(
   state: AppState,
   scopeKey: string

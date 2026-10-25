@@ -17,9 +17,7 @@ type Props = {
   fullList?: boolean
 }
 
-// Inline agent list for one worktree row: flattens the spawn lineage and renders
-// a depth-indented WorktreeAgentRow per agent, mirroring the desktop sidebar's
-// WorktreeCardAgents.
+// Flatten spawn lineage into indented agent rows, matching desktop WorktreeCardAgents.
 export function WorktreeAgentList({
   agents,
   now,

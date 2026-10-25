@@ -109,7 +109,7 @@ function QuickCommandRow({
       <div className="w-12 shrink-0 text-right text-[11px] text-muted-foreground">
         {getRunModeLabel(command)}
       </div>
-      {/* Why can-hover: touch devices never hover, so the actions must stay visible there. */}
+      {/* Touch devices cannot hover, so keep actions visible there. */}
       <div className="flex shrink-0 items-center gap-0.5 transition-opacity can-hover:opacity-0 group-hover/qc:opacity-100 group-focus-within/qc:opacity-100">
         <Button
           type="button"
@@ -177,7 +177,7 @@ function QuickCommandsEmptyState({
       </div>
     )
   }
-  // Why no action here: the toolbar's Add Command sits directly above.
+  // The toolbar already provides Add Command.
   return (
     <div className="flex flex-col items-center gap-3 px-2 py-10 text-center">
       <TerminalSquare className="size-7 text-muted-foreground/50" />

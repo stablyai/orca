@@ -31,13 +31,7 @@ import openclawUrl from '../../../shared/agent-icons/openclaw.png?url'
 import dshUrl from '../../../shared/agent-icons/dsh.png?url'
 import jcodeUrl from '../../../shared/agent-icons/jcode.png?url'
 
-// Why: these agents have no hand-authored SVG glyph, so previously their icons
-// loaded live from Google's favicon service. That service is unreachable in some
-// regions (e.g. mainland China) and offline, leaving broken images across the
-// agent settings page, tab title bar, and status bar (#8451). Bundle the favicon
-// PNGs at build time so the icons render without any network dependency.
-// The PNGs live in src/shared/agent-icons so mobile (Metro) can bundle the same
-// files; see mobile/src/components/mobile-agent-icon-assets.ts.
+// Bundle favicons for offline/Google-blocked regions (#8451); shared/agent-icons also supplies mobile-agent-icon-assets.ts.
 export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   grok: grokUrl,
   'mimo-code': mimoCodeUrl,

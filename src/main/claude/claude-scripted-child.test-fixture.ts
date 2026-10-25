@@ -1,5 +1,4 @@
-// Claude's scripted child for the registration matrix: the real Claude adapter over a scripted
-// stream-json connection. Its handshake is the CLI's initialize answer.
+// Registration fixture uses the real Claude adapter over scripted stream-json, including initialize handshake.
 
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'

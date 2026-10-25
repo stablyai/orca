@@ -10,11 +10,7 @@ export type FreshnessSchedulerDeps = {
   bumpEpochs: () => void
 }
 
-/**
- * One accepted live-map replacement, described well enough to move the cached freshness minimum
- * without rescanning the map. `previousEntries` is the map the change was derived from, so a
- * writer that never reports its change simply invalidates the cache instead of corrupting it.
- */
+/** Report live-map changes against previousEntries for incremental minima; unreported replacements invalidate cache rather than corrupt it. */
 export type FreshnessLiveEntryDelta = {
   previousEntries: Record<string, AgentStatusEntry>
   nextEntries: Record<string, AgentStatusEntry>
@@ -25,18 +21,10 @@ export type FreshnessLiveEntryDelta = {
 
 export type FreshnessScheduler = {
   schedule: () => void
-  /**
-   * Defer a freshness scan until the microtask queue drains. Multiple pending
-   * requests still retain their queue slots for ordering, but only the newest
-   * request performs the scan.
-   */
+  /** Keep microtask slots for ordering but scan only the newest deferred request. */
   scheduleDeferred: () => void
   noteLiveEntryDelta: (delta: FreshnessLiveEntryDelta) => void
-  /**
-   * Cancel any pending freshness timer. Intended for tests that create a
-   * fresh store per case — production callers do not need this because the
-   * zustand store is a module-level singleton that lives until process exit.
-   */
+  /** Test stores dispose timers per case; production singleton lives until process exit. */
   dispose: () => void
 }
 
@@ -63,11 +51,7 @@ function entryExpiries(entry: AgentStatusEntry): EntryExpiries {
   }
 }
 
-/**
- * Summary of the last full scan. `minExpiryAt` / `minCompletionExpiryAt` are the minima over the
- * candidates that were still in the future at `scannedAt`; candidates already past then can never
- * re-enter either answer, because time only moves forward and an entry's candidates are fixed.
- */
+/** Minima include only candidates future at scannedAt; fixed expired candidates never reenter because time advances. */
 type FreshnessScanCache = {
   entries: Record<string, AgentStatusEntry>
   scannedAt: number
@@ -77,9 +61,7 @@ type FreshnessScanCache = {
 }
 
 export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): FreshnessScheduler {
-  // Why: tests that trigger scheduling must use vi.useFakeTimers() or call
-  // `dispose()` in teardown — otherwise a real 30-minute setTimeout leaks
-  // into the test process.
+  // Use fake timers or dispose in tests to avoid leaking real 30-minute timers.
   let timer: ReturnType<typeof setTimeout> | null = null
   let lastCheckedAt: number | null = null
   let deferredScheduleGeneration = 0
@@ -141,10 +123,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     if (!Number.isFinite(nextExpiryAt)) {
       return
     }
-    // Why: +1 ms ensures the timer fires strictly after the stale boundary,
-    // so isExplicitAgentStatusFresh (which uses `<=`) flips to stale when the
-    // timer runs. Without the +1, float/rounding could leave the entry "just
-    // fresh enough" at the tick, delaying the epoch bump by one tick.
+    // Fire +1ms past <= freshness boundary so rounding cannot leave status fresh until another tick.
     timer = setTimeout(
       () => {
         timer = null
@@ -173,14 +152,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     let nextExpiryAt = Number.POSITIVE_INFINITY
     let nextCompletionExpiryAt = Number.POSITIVE_INFINITY
     let crossedCompletionDeadline = false
-    // Why: skip entries already past the stale boundary — they each contribute
-    // exactly one epoch bump at crossing, and rescheduling on them would spin
-    // the timer forever because the bump doesn't clear them from the map
-    // (retention is intentional so freshness-aware selectors can decay).
-    //
-    // Snapshot hydration can insert already-stale entries. Those need no
-    // future timer: the setAgentStatus write already bumped the epoch, so
-    // freshness-aware selectors can decay them immediately on that render.
+    // Skip expired retained rows or rescheduling spins forever. Already-stale hydration needs no timer: setAgentStatus already bumped epoch for consumers to decay it.
     for (const entry of entries) {
       agentStatusFreshnessScanCounters.entryVisits += 1
       const { hookExpiryAt, completionExpiryAt } = entryExpiries(entry)
@@ -221,8 +193,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     clear()
     const statusEntries = deps.getStatusEntries()
     const now = Date.now()
-    // The cached minima answer only while they are still in the future: a minimum that has gone
-    // past is exactly the case where the surviving candidates — and any crossing — need a rescan.
+    // Past minima cannot answer cached freshness; rescan surviving candidates and crossings.
     if (
       cache !== null &&
       cache.entries === statusEntries &&

@@ -1,8 +1,4 @@
-/**
- * The desktop rewrite stage of a committed WSL move: `destination-committed` → `client-rewritten`.
- * Each registered store is rewritten, made durable, then recorded in the journal's ledger; a
- * crash or failure redoes only the stores not recorded yet, on the next pass.
- */
+// Persist each store before its ledger entry; restart retries only unrecorded rewrites.
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import type {
@@ -20,12 +16,12 @@ import {
 } from './wsl-move-desktop-rewrite-stores'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 
-// Passes are serialized, so one hung store would otherwise stall every later pass in the process.
+// One hung store would stall every serialized pass.
 export const WSL_MOVE_REWRITE_STORE_TIMEOUT_MS = 30_000
 
 export type WslMoveDesktopRewritePassOptions = {
   userDataPath: string
-  /** Per `run` and per `flush`; defaults to WSL_MOVE_REWRITE_STORE_TIMEOUT_MS. */
+  /** Applied separately to run and flush; defaults to WSL_MOVE_REWRITE_STORE_TIMEOUT_MS. */
   storeTimeoutMs?: number
   warn?: (message: string) => void
 }
@@ -38,7 +34,7 @@ function rewriteContext(cutover: Readonly<WslMoveCutover>): WslMoveDesktopRewrit
   }
 }
 
-/** Fresh from disk: the ledger write must extend what is there now, not what a pass started with. */
+/** Read the current ledger so concurrent acknowledgements cannot be overwritten. */
 function readCommittedCutover(userDataPath: string, migrationId: string): WslMoveCutover | null {
   const cutover = listWslMoveCutovers(userDataPath).find(
     (entry) => entry.migrationId === migrationId
@@ -54,9 +50,8 @@ function appendLedgerEntry(userDataPath: string, cutover: WslMoveCutover, storeI
   })
 }
 
-/** Advances once every registered store, main and renderer, is in the ledger. */
 function advanceWhenRewritten(userDataPath: string, migrationId: string): void {
-  // Stores not registered yet would never run on a move that already left the rewrite phase.
+  // Advancing early would permanently skip stores not yet registered.
   if (!isWslMoveDesktopRewriteRegistryComplete()) {
     return
   }
@@ -71,7 +66,7 @@ function advanceWhenRewritten(userDataPath: string, migrationId: string): void {
   })
 }
 
-/** A timed-out step fails like a thrown one; its late result is ignored, never recorded. */
+/** Ignore late results after timeout; never record them. */
 async function withStoreTimeout(
   step: () => Promise<void> | void,
   timeoutMs: number,
@@ -134,7 +129,7 @@ async function runPass(options: WslMoveDesktopRewritePassOptions): Promise<void>
     try {
       await rewriteMainStores(options, migrationId)
     } catch (error) {
-      // No ledger entry for the failed store: the next pass retries it, and nothing else changes.
+      // Missing ledger entries make failed stores retry next pass.
       warn(`[wsl-move] Desktop rewrite of move ${migrationId} paused: ${describe(error)}`)
     }
   }
@@ -142,7 +137,7 @@ async function runPass(options: WslMoveDesktopRewritePassOptions): Promise<void>
 
 let passQueue: Promise<void> = Promise.resolve()
 
-/** Never throws; passes are serialized so two cannot rewrite the same store at once. */
+/** Serialize passes to prevent concurrent rewrites; failures are logged rather than thrown. */
 export function runWslMoveDesktopRewritePass(
   options: WslMoveDesktopRewritePassOptions
 ): Promise<void> {
@@ -151,14 +146,12 @@ export function runWslMoveDesktopRewritePass(
   return next
 }
 
-/** Startup, and after a move commits: a no-op unless the internal WSL hosts gate is open. */
 export function runGatedWslMoveDesktopRewritePass(
   options: WslMoveDesktopRewritePassOptions
 ): Promise<void> {
   return wslHostsGateOpen() ? runWslMoveDesktopRewritePass(options) : Promise.resolve()
 }
 
-/** Committed moves still waiting on renderer-side stores; empty with the gate closed. */
 export function listPendingWslMoveRendererRewrites(
   userDataPath: string
 ): WslMovePendingRendererRewrite[] {
@@ -195,10 +188,7 @@ export function listPendingWslMoveRendererRewrites(
   }
 }
 
-/**
- * The renderer finished (and persisted) one of its stores for a committed move. Independent of
- * main-store order: it may land before, between or after the main pass's entries.
- */
+/** Record a durable renderer rewrite independently of main-store order. */
 export function recordWslMoveRendererStoreRewritten(
   userDataPath: string,
   request: WslMoveRecordStoreRewrittenRequest

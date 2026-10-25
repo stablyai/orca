@@ -107,7 +107,7 @@ describe('OrcaRuntimeService', () => {
         identity: result.worktree.identity
       })
     )
-    // Why: setup is provisioned fire-and-forget; the wait-for-setup guarantee comes from the shell nonce/marker, not JS spawn ordering.
+    // Fire-and-forget setup is ordered by shell nonce/marker, not JavaScript spawn order.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
     const startup = spawn.mock.calls[0]![0] as {
       command: string
@@ -188,7 +188,7 @@ describe('OrcaRuntimeService', () => {
       awaitTerminalProvisioning: true
     })
 
-    // Why: setup now spawns fire-and-forget on a later tick; wait for both PTYs.
+    // Setup spawns on a later tick; wait for both PTYs.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
     expect(spawn).toHaveBeenNthCalledWith(1, expect.objectContaining({ command: 'claude' }))
     expect(spawn).toHaveBeenNthCalledWith(
@@ -328,8 +328,7 @@ describe('OrcaRuntimeService', () => {
     const initialLeafId = initialSpawnEnv.ORCA_PANE_KEY.slice(
       `${initialSpawnEnv.ORCA_TAB_ID}:`.length
     )
-    // Why: the renderer treats a missing surfaceOwner as "reveal the owner", which
-    // scrolled the sidebar to background CLI creates.
+    // Missing surfaceOwner reveals the owner and can scroll the sidebar during background creates.
     expect(revealTerminalSession).toHaveBeenCalledWith(result.worktree.id, {
       ptyId: 'pty-created-worktree',
       title: null,
@@ -386,8 +385,6 @@ describe('OrcaRuntimeService', () => {
       startup: { command: 'claude' }
     })
 
-    // `orca worktree create --agent claude` without --activate: the agent tab is
-    // adopted, but the sidebar must stay on whatever the user was reading.
     expect(activateWorktree).not.toHaveBeenCalled()
     expect(revealTerminalSession).toHaveBeenCalledWith(
       result.worktree.id,
@@ -445,8 +442,6 @@ describe('OrcaRuntimeService', () => {
       startup: { command: 'claude' }
     })
 
-    // No-regression guard: an explicit --activate still reveals the workspace, so
-    // surfaceOwner must stay absent.
     const revealPayload = revealTerminalSession.mock.calls[0]?.[1] as
       | { surfaceOwner?: boolean }
       | undefined

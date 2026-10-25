@@ -5,7 +5,7 @@ import {
   getMatchingJiraSites,
   JIRA_ISSUE_KEY_PATTERN,
   parseJiraIssueUrl
-} from '../shared/jira-issue-url'
+} from '../shared/jira/jira-issue-url'
 import type { HandlerContext } from './dispatch'
 import { getOptionalStringFlag } from './flags'
 import { RuntimeClientError } from './runtime-client'

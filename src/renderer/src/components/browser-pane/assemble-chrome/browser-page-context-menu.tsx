@@ -60,8 +60,7 @@ export function BrowserPageContextMenu({
     })
   }, [browserPageId])
 
-  // Why: the guest owns focus while the menu is open, so hand it back on close —
-  // otherwise dismissing leaves the page unable to receive keystrokes.
+  // Return focus to the guest on dismissal so the page can receive keystrokes.
   const closeMenu = useCallback((): void => {
     setContextMenu(null)
     try {

@@ -61,7 +61,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
     sshConnectedGeneration
   } = input
 
-  // Why: warm the Start-from picker's PR cache so opening it paints instantly from cache.
+  // Warm PR cache before Start-from opens to avoid its initial loading frame.
   const canPrefetchSelectedRepoWorkItems = canUseRepoBackedComposerSources({
     connectionId: selectedRepoConnectionId,
     status: selectedRepoSshStatus
@@ -98,7 +98,6 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
     selectedRepoIsGit
   ])
 
-  // Reset setup decision when config / policy changes.
   useEffect(() => {
     if (shouldWaitForSetupCheck) {
       setSetupDecision(null)
@@ -115,7 +114,6 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
     setSetupDecision(setupPolicy === 'run-by-default' ? 'run' : 'skip')
   }, [setupConfig, setupPolicy, shouldWaitForSetupCheck, setSetupDecision])
 
-  // Link popover: debounce + load recent items + resolve direct number.
   useEffect(() => {
     const timeout = window.setTimeout(() => setLinkDebouncedQuery(linkQuery), 250)
     return () => window.clearTimeout(timeout)
@@ -180,7 +178,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
 
     let cancelled = false
     setLinkDirectLoading(true)
-    // Why: a full URL carries issue-vs-PR intent, so preserve the URL route instead of probing by number only.
+    // Preserve a full URL’s issue/PR route instead of ambiguously probing its number.
     const lookupRepoId = selectedRepo.id
     const lookup =
       normalizedLinkQuery.directLink !== undefined

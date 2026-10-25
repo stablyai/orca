@@ -54,7 +54,7 @@ describe('buildMobilePrChipSummary', () => {
     expect(summary.stateLabel).toBe('Draft')
   })
 
-  // Why: a skipped job is a deliberate "not applicable" — desktop and the tasks grid call this 3/3.
+  // Skipped checks count as satisfied, matching desktop and the tasks grid.
   it('rolls up passed checks as passed/total, counting skipped as passed', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr(), [check('success'), check('success'), check('skipped')])

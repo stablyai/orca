@@ -2,8 +2,6 @@ import type { RelayReconnectController } from './mobile-relay-reconnect-controll
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './types'
 
-// Routes attention/network nudges: focus and app-resume probe a healthy relay,
-// a network change replaces it make-before-break, everything else re-enters recovery.
 export class MobileEndpointNudgeRouter {
   constructor(
     private readonly args: {
@@ -23,8 +21,7 @@ export class MobileEndpointNudgeRouter {
       return
     }
     if (!args.isForeground()) {
-      // Why: a background network flap must not re-open a billed relay splice;
-      // focus/app-resume imply the app is visible even if AppState lags.
+      // Background handoffs must not reopen billed relay splices; focus/resume imply visibility even before AppState catches up.
       if (reason === 'network-change') {
         return
       }

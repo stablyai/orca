@@ -28,12 +28,12 @@ createRoot(root).render(
           messages: transcript.messages,
           hasMore: false,
           loadingEarlier: false,
+          olderHistoryGeneration: 0,
           loadEarlier: () => Promise.resolve('exhausted' as const),
           readPhase: 'ready'
         }}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     </div>
   </main>

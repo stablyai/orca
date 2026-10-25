@@ -1,10 +1,6 @@
 import { stripCredentialsFromMessage } from './git-remote-error'
 
-// Why: clones run under nonInteractiveGitEnv (GIT_TERMINAL_PROMPT=0, empty SSH_ASKPASS,
-// `ssh -o BatchMode=yes`) so a background clone cannot hang on a prompt nobody sees. The cost is
-// that git's own SSH errors read identically to an ordinary permission problem, and on a remote
-// or paired-runtime clone the user is looking at their own working local `git clone` while Orca
-// fails — with nothing in the message saying the clone ran somewhere else, without their agent.
+// Noninteractive clones cannot prompt and use keys on the destination host; users may otherwise compare failures to successful client-local clones.
 const CLONE_HOST_NOTE =
   'The clone runs non-interactively (BatchMode=yes) on the machine that will hold the repository, using the SSH keys and agent on that machine rather than the ones on this computer.'
 const CLONE_KEY_HINT = `${CLONE_HOST_NOTE} A passphrase-protected key cannot prompt there, so load it into an agent on that machine (ssh-add) and retry.`
@@ -26,7 +22,6 @@ export function getGitCloneFailureMessage(
 
 /** Guidance the raw git error omits: where the clone ran, and why nothing could prompt there. */
 function appendCloneTransportGuidance(message: string, scrubbedStderr: string): string {
-  // Re-entrant: a message that already carries the note is returned unchanged.
   if (message.includes(CLONE_HOST_NOTE)) {
     return message
   }
@@ -36,9 +31,7 @@ function appendCloneTransportGuidance(message: string, scrubbedStderr: string): 
   if (/permission denied \(([^)]*publickey[^)]*)\)/i.test(scrubbedStderr)) {
     return `${message} ${CLONE_KEY_HINT}`
   }
-  // Every other SSH-transport failure still needs the one fact the reporter was missing — but only
-  // once something proves the transport was SSH: git prints this same line for the HTTP remote
-  // helper, where a note about keys and agents is simply wrong.
+  // Git’s HTTP helper shares this diagnostic; append key/agent guidance only with independent SSH evidence.
   return /could not read from remote repository/i.test(scrubbedStderr) &&
     SSH_TRANSPORT_DIAGNOSTIC.test(scrubbedStderr)
     ? `${message} ${CLONE_HOST_NOTE}`
@@ -51,10 +44,7 @@ function getGitCloneFailureLine(
 ): string {
   let fallbackLine: string | null = null
 
-  // Why: clone errors echo the URL the user typed, which is the most likely
-  // git error to embed a live token (`https://user:ghp_…@host/repo.git`).
-  // Scrub up-front so every return branch operates on already-redacted text,
-  // matching normalizeGitErrorMessage.
+  // Clone errors commonly echo credential-bearing URLs; redact before every return path, matching normalizeGitErrorMessage.
   const scrubbedStderr = stripCredentialsFromMessage(stderr)
 
   for (const rawLine of iterateLinesFromEnd(scrubbedStderr)) {

@@ -1,10 +1,4 @@
-/**
- * Finding the real entrypoint inside an interpreter command line.
- *
- * Split out of `agent-process-recognition.ts`: recognizing WHICH agent a process is is a
- * separate concern from parsing a `node …/cli.js` / `python -m pkg` argv down to the token
- * that names it. Only the latter lives here.
- */
+/** Resolve the entrypoint within interpreter argv separately from recognizing which agent it names. */
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 
@@ -84,10 +78,7 @@ function tokenLooksExecutable(token: string, index: number, firstNormalized: str
   if (!isInterpreterProcessName(firstNormalized)) {
     return false
   }
-  // Why: only inspect interpreter script paths. Prompt text can mention other
-  // agents ("compare opencode vs orca"), and treating every argv token as an
-  // executable would reintroduce the substring-style false identity class that
-  // foreground-process detection is meant to avoid.
+  // Inspect script paths only; prompt text mentioning another agent must not confer process identity.
   return token.includes('/') || token.includes('\\') || PROCESS_EXTENSION_RE.test(token)
 }
 
@@ -124,9 +115,23 @@ export function findInterpreterEntrypointToken(
 }
 
 export function comparablePath(token: string): string {
-  return token
+  const path = token
     .trim()
     .replace(/^["']|["']$/g, '')
     .replace(/\\/g, '/')
     .toLowerCase()
+  // Why: npm's local `.bin` shims and Qwen's standalone launcher run `<dir>/../<script>` paths.
+  const prefix = /^\/*/.exec(path)?.[0] ?? ''
+  const segments: string[] = []
+  for (const segment of path.slice(prefix.length).split('/')) {
+    if (segment === '' || segment === '.') {
+      continue
+    }
+    if (segment === '..' && segments.length > 0 && segments.at(-1) !== '..') {
+      segments.pop()
+      continue
+    }
+    segments.push(segment)
+  }
+  return prefix + segments.join('/')
 }

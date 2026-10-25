@@ -22,9 +22,6 @@ export function shouldSeedCacheTimerOnInitialTitle(args: {
     return false
   }
 
-  // Why: the initial idle-title seed exists only for PTYs reattached during
-  // session restore. Fresh Claude launches also start idle before the first
-  // prompt, but no server-side prompt cache exists yet, so showing a TTL
-  // countdown there is incorrect.
+  // Seed countdowns only on restored PTYs; fresh idle launches have no server prompt cache yet.
   return promptCacheTimerEnabled !== false
 }

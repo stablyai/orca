@@ -19,7 +19,7 @@ import {
   shouldKeepClaudePermissionVisible,
   withHeldChildWaitMainAgent
 } from './server-claude-status-rules'
-import { isStaleGrokTurnEnd } from './server-grok-status-rules'
+import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
@@ -93,8 +93,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         : undefined)
     const terminalOwnedPayload =
       terminalHandle === payload.terminalHandle ? payload : { ...payload, terminalHandle }
-    if (previous && isStaleGrokTurnEnd(previous, terminalOwnedPayload)) {
-      // Grok end hooks can lag the next prompt, even across relay restart.
+    if (previous && isForeignTurnHook(previous, terminalOwnedPayload)) {
+      // A lagging Grok end or a relayed Codex side thread keeps the row, even across relay restart.
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }

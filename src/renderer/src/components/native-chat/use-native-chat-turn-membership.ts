@@ -9,7 +9,6 @@ import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-me
 import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat-turn-grouping'
 
 export type NativeChatTurnRows = {
-  /** The rows in the order the transcript draws them. */
   messages: readonly NativeChatMessage[]
   /** Each drawn row's turn, by index into `messages`. */
   turnKeys: readonly (string | undefined)[]
@@ -19,8 +18,7 @@ export type NativeChatTurnRows = {
   unresolvedRowIds?: ReadonlySet<string>
 }
 
-/** Each row's turn, which turn is live, and the order the rows draw in, resolved once: from the
- *  turn record when the host states scopes, else by journal order. */
+/** Resolve row order/live turn/membership once from host scopes or journal order. */
 export function useNativeChatTurnMembership(
   messages: readonly NativeChatMessage[],
   journalItems: readonly AgentJournalRenderItem[] | undefined,

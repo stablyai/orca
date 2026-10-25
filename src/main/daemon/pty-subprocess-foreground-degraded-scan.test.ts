@@ -44,17 +44,22 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
+import { createConptyPreludeSender } from './pty-subprocess-test-harness'
 
 const BASE_TIME_MS = 1_000_000
 
 function mockPtyProcess(processName: string, pid = 12345) {
+  const sendConptyPrelude = createConptyPreludeSender()
   return {
     pid,
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
     process: processName,
-    onData: vi.fn(() => ({ dispose: vi.fn() })),
+    onData: vi.fn((cb: (data: string) => void) => {
+      sendConptyPrelude(cb)
+      return { dispose: vi.fn() }
+    }),
     onExit: vi.fn(() => ({ dispose: vi.fn() }))
   }
 }

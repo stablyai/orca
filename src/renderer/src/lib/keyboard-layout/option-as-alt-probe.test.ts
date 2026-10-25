@@ -75,6 +75,11 @@ function makeMockWindow(initial: LayoutMapLike | null, userAgent = 'Linux'): Moc
   }
 }
 
+function asWindow(mock: MockWindow): Window {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the probe reads only navigator and the focus listeners, which MockWindow supplies.
+  return mock as unknown as Window
+}
+
 describe('createOptionAsAltProbe', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -96,8 +101,7 @@ describe('createOptionAsAltProbe', () => {
       vi.stubGlobal('window', {
         api: { app: { getKeyboardLayoutSnapshot, getKeyboardInputSourceId } }
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock supplies every Window member the probe reads.
-      const probe = createOptionAsAltProbe(makeMockWindow(US_MAP, 'Macintosh') as unknown as Window)
+      const probe = createOptionAsAltProbe(asWindow(makeMockWindow(US_MAP, 'Macintosh')))
 
       await probe.refresh()
 
@@ -110,7 +114,7 @@ describe('createOptionAsAltProbe', () => {
 
   it('starts as unknown, upgrades after first probe resolves', async () => {
     const win = makeMockWindow(US_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     expect(probe.getCurrent()).toBe('unknown')
     await probe.refresh()
     expect(probe.getCurrent()).toBe('us')
@@ -119,7 +123,7 @@ describe('createOptionAsAltProbe', () => {
 
   it('detects non-US layout (Turkish)', async () => {
     const win = makeMockWindow(TURKISH_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     await probe.refresh()
     expect(probe.getCurrent()).toBe('non-us')
     probe.dispose()
@@ -127,7 +131,7 @@ describe('createOptionAsAltProbe', () => {
 
   it('notifies subscribers when category changes', async () => {
     const win = makeMockWindow(US_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     const listener = vi.fn()
     probe.subscribe(listener)
     await probe.refresh()
@@ -137,7 +141,7 @@ describe('createOptionAsAltProbe', () => {
 
   it('does not notify when category is unchanged', async () => {
     const win = makeMockWindow(US_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     await probe.refresh()
     const listener = vi.fn()
     probe.subscribe(listener)
@@ -152,13 +156,12 @@ describe('createOptionAsAltProbe', () => {
     const win = makeMockWindow(US_MAP)
     win.navigator.keyboard = { getLayoutMap: async () => active }
 
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     await probe.refresh()
     expect(probe.getCurrent()).toBe('us')
 
     active = TURKISH_MAP
     win.fireFocus()
-    // Let the focus-triggered probe resolve.
     await Promise.resolve()
     await Promise.resolve()
     expect(probe.getCurrent()).toBe('non-us')
@@ -169,7 +172,7 @@ describe('createOptionAsAltProbe', () => {
     let activeInputSourceId = 'com.apple.keylayout.ABC'
     let notifyLayoutChanged: (() => void) | undefined
     const unsubscribe = vi.fn()
-    const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
+    const probe = createOptionAsAltProbe(asWindow(makeMockWindow(US_MAP)), {
       readInputSourceId: async () => activeInputSourceId,
       subscribeKeyboardLayoutChanged: (callback) => {
         notifyLayoutChanged = callback
@@ -214,7 +217,7 @@ describe('createOptionAsAltProbe', () => {
       .fn<() => Promise<string>>()
       .mockReturnValueOnce(oldRead)
       .mockResolvedValue('com.apple.keylayout.PolishPro')
-    const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
+    const probe = createOptionAsAltProbe(asWindow(makeMockWindow(US_MAP)), {
       readInputSourceId,
       subscribeKeyboardLayoutChanged: (callback) => {
         notifyLayoutChanged = callback
@@ -239,7 +242,7 @@ describe('createOptionAsAltProbe', () => {
     let notifyLayoutChanged: ((event: KeyboardLayoutChangeEvent) => void) | undefined
     const readInputSourceId = vi.fn(async () => 'com.apple.keylayout.US')
     const win = makeMockWindow(US_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window, {
+    const probe = createOptionAsAltProbe(asWindow(win), {
       readInputSourceId,
       subscribeKeyboardLayoutChanged: (callback) => {
         notifyLayoutChanged = callback
@@ -266,7 +269,7 @@ describe('createOptionAsAltProbe', () => {
 
   it('stays unknown if navigator.keyboard is unavailable', async () => {
     const win = makeMockWindow(null)
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     await probe.refresh()
     expect(probe.getCurrent()).toBe('unknown')
     probe.dispose()
@@ -274,7 +277,7 @@ describe('createOptionAsAltProbe', () => {
 
   it('survives a rejected getLayoutMap without clobbering last-known value', async () => {
     const win = makeMockWindow(US_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     await probe.refresh()
     expect(probe.getCurrent()).toBe('us')
 
@@ -284,20 +287,18 @@ describe('createOptionAsAltProbe', () => {
       })
     }
     await probe.refresh()
-    // Still 'us'; we refuse to flip back to 'unknown' on transient failure.
     expect(probe.getCurrent()).toBe('us')
     probe.dispose()
   })
 
   it('dispose removes focus listener', async () => {
     const win = makeMockWindow(US_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     await probe.refresh()
     const listener = vi.fn()
     probe.subscribe(listener)
     probe.dispose()
     win.fireFocus()
-    // No further calls after dispose.
     expect(listener).not.toHaveBeenCalled()
   })
 
@@ -310,7 +311,7 @@ describe('createOptionAsAltProbe', () => {
       'com.apple.keylayout.PolishPro'
     ]) {
       const win = makeMockWindow(US_MAP)
-      const probe = createOptionAsAltProbe(win as unknown as Window, {
+      const probe = createOptionAsAltProbe(asWindow(win), {
         readInputSourceId: async () => id
       })
       await probe.refresh()
@@ -323,8 +324,7 @@ describe('createOptionAsAltProbe', () => {
     'resolves to us for standard %s without a browser layout map',
     async (id) => {
       const win = makeMockWindow(null, 'Macintosh')
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock supplies every Window member the probe reads.
-      const probe = createOptionAsAltProbe(win as unknown as Window, {
+      const probe = createOptionAsAltProbe(asWindow(win), {
         readInputSourceId: async () => `com.apple.keylayout.${id}`
       })
       await probe.refresh()
@@ -337,8 +337,7 @@ describe('createOptionAsAltProbe', () => {
     'uses the fingerprint without native identity on %s',
     async (userAgent) => {
       const win = makeMockWindow(US_MAP, userAgent)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock supplies every Window member the probe reads.
-      const probe = createOptionAsAltProbe(win as unknown as Window, {
+      const probe = createOptionAsAltProbe(asWindow(win), {
         readInputSourceId: async () => null
       })
       await probe.refresh()
@@ -357,8 +356,7 @@ describe('createOptionAsAltProbe', () => {
         }
         return null
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock supplies every Window member the probe reads.
-      const probe = createOptionAsAltProbe(win as unknown as Window, { readInputSourceId })
+      const probe = createOptionAsAltProbe(asWindow(win), { readInputSourceId })
       await probe.refresh()
       expect(probe.getCurrent()).toBe('unknown')
       expect(effectiveMacOptionAsAlt('auto', probe.getCurrent())).toBe('false')
@@ -373,8 +371,7 @@ describe('createOptionAsAltProbe', () => {
   it('stays conservative on macOS without either native identity API', async () => {
     vi.stubGlobal('window', { api: { app: {} } })
     const win = makeMockWindow(US_MAP, 'Macintosh')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock supplies every Window member the probe reads.
-    const probe = createOptionAsAltProbe(win as unknown as Window)
+    const probe = createOptionAsAltProbe(asWindow(win))
     await probe.refresh()
     expect(probe.getCurrent()).toBe('unknown')
     expect(win.navigator.keyboard?.getLayoutMap).not.toHaveBeenCalled()
@@ -384,8 +381,7 @@ describe('createOptionAsAltProbe', () => {
   it('recovers macOS source identity after losing it without trusting the backing map', async () => {
     let activeInputSourceId: string | null = 'com.apple.keylayout.ABC'
     const win = makeMockWindow(US_MAP, 'Macintosh')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock supplies every Window member the probe reads.
-    const probe = createOptionAsAltProbe(win as unknown as Window, {
+    const probe = createOptionAsAltProbe(asWindow(win), {
       readInputSourceId: async () => activeInputSourceId
     })
     const listener = vi.fn()
@@ -412,7 +408,7 @@ describe('createOptionAsAltProbe', () => {
 
   it('falls back to the fingerprint off macOS when the input-source reader throws', async () => {
     const win = makeMockWindow(TURKISH_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window, {
+    const probe = createOptionAsAltProbe(asWindow(win), {
       readInputSourceId: async () => {
         throw new Error('ipc unavailable')
       }
@@ -426,7 +422,7 @@ describe('createOptionAsAltProbe', () => {
     // The browser fingerprint stays US while the native identity changes.
     let activeInputSourceId: string | null = 'com.apple.keylayout.ABC'
     const win = makeMockWindow(US_MAP)
-    const probe = createOptionAsAltProbe(win as unknown as Window, {
+    const probe = createOptionAsAltProbe(asWindow(win), {
       readInputSourceId: async () => activeInputSourceId
     })
     await probe.refresh()
@@ -434,7 +430,6 @@ describe('createOptionAsAltProbe', () => {
 
     activeInputSourceId = 'com.apple.keylayout.USInternational-PC'
     win.fireFocus()
-    // Let the focus-triggered probe resolve.
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
@@ -455,7 +450,7 @@ describe('createOptionAsAltProbe', () => {
       .fn<() => Promise<string | null>>()
       .mockReturnValueOnce(oldRead)
       .mockReturnValueOnce(newRead)
-    const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
+    const probe = createOptionAsAltProbe(asWindow(makeMockWindow(US_MAP)), {
       readInputSourceId
     })
     const newestProbe = probe.refresh()
@@ -476,8 +471,7 @@ describe('createOptionAsAltProbe', () => {
       let activeRead: Promise<string | null> = Promise.resolve('com.apple.keylayout.ABC')
       let notifyLayoutChanged: ((event: KeyboardLayoutChangeEvent) => void) | undefined
       const readInputSourceId = vi.fn(() => activeRead)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mock supplies every Window member the probe reads.
-      const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
+      const probe = createOptionAsAltProbe(asWindow(makeMockWindow(US_MAP)), {
         readInputSourceId,
         subscribeKeyboardLayoutChanged: (callback) => {
           notifyLayoutChanged = callback

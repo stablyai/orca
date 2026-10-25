@@ -3,9 +3,7 @@ import { pathToFileURL } from 'node:url'
 import { parse } from 'jsonc-parser'
 import { listTrackedFiles, readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on `src/...` path literals in CI config, workflows and e2e code that name nothing. A
-// moved or deleted file silently orphans these hand-kept references (routes, gate manifests,
-// workflow `paths:`), so the check runs ahead of folder moves. Known-stale entries may only shrink.
+// Ratchet stale src/... references in CI/workflows/e2e downward before folder moves can orphan routes, gate manifests or workflow paths.
 
 const BASELINE_PATH = 'config/path-literal-baseline.txt'
 const SCAN_ROOTS = ['config', '.github', 'tests']
@@ -19,8 +17,7 @@ const UNQUOTED_ALLOWED = /\.(?:jsonc?|ya?ml|sh|ps1)$/
 // Comments are prose, not references.
 const SLASH_COMMENTED = /\.(?:m?js|cjs|ts|jsonc)$/
 const HASH_COMMENT = /^\s*#.*$/gm
-// Group 1 is a relative `./` or `../` chain and group 3 a following glob character: a relative
-// non-glob, non-folder reference is an import and must resolve exactly, not as a prefix.
+// Relative non-glob/non-folder imports must resolve exactly, not as file prefixes (groups 1 and 3).
 const QUOTED_LITERAL = new RegExp(
   `(?:['"\`]|:\\(glob\\))((?:\\.\\.?\\/)*)(src\\/(?:${SOURCE_ROOTS})\\/[\\w@\\-./]*)([*{]?)`,
   'g'
@@ -39,10 +36,7 @@ export function isScannedPath(rel) {
   )
 }
 
-/**
- * Drops line and block comments outside string literals, so a quoted glob such as
- * `'src/**\/*.ts'` never opens a comment. Regex literals are read as code; at worst one hides a path.
- */
+// Strip comments outside strings so quoted globs survive; regexes remain code and can hide a path.
 export function stripSlashComments(text) {
   let out = ''
   let quote = null
@@ -72,10 +66,7 @@ export function stripSlashComments(text) {
   return out
 }
 
-/**
- * Every `src/...` literal in one file's code, with a trailing glob or sentence period cut off.
- * Relative imports are marked so they resolve exactly.
- */
+// Mark relative imports for exact resolution; trim trailing glob/sentence punctuation from other src/... literals.
 export function extractPathLiterals(rel, text) {
   const pattern = UNQUOTED_ALLOWED.test(rel) ? ANY_LITERAL : QUOTED_LITERAL
   const code = SLASH_COMMENTED.test(rel)
@@ -93,11 +84,7 @@ export function extractPathLiterals(rel, text) {
   return [...literals].map(([literal, isImport]) => ({ literal, isImport }))
 }
 
-/**
- * A literal resolves when it names a tracked file or a module (without extension, or a folder
- * with `index.ts`). A non-import may also name a folder or a prefix of a tracked file. Only
- * tracked files count, so local leftovers can't change the verdict.
- */
+// Use only tracked paths so leftovers cannot change verdicts; imports require files/modules, other literals may name folders or file prefixes.
 export function createPathResolver(trackedFiles) {
   const tracked = new Set(trackedFiles)
   const sorted = [...tracked].sort()

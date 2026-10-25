@@ -36,8 +36,7 @@ function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boole
   if ('button' in event && event.button !== undefined && event.button !== 0) {
     return false
   }
-  // Why: desktop xterm links must not open while the user is just placing the
-  // cursor or selecting text. Mobile URL taps use a separate WebView path.
+  // Desktop links require an intentional gesture; ordinary clicks/selecting must not open them. Mobile taps use WebView routing.
   return isTerminalLinkDirectActivation(event) || isTerminalLinkActionActivation(event)
 }
 
@@ -95,8 +94,7 @@ export function handleOscLink(
     isWindowsAbsolutePathLike(deps.startupCwd || deps.worktreePath) &&
     openDetectedPathLink()
   ) {
-    // Why: `new URL("C:\\path\\file.ts")` succeeds with protocol `c:`;
-    // Windows OSC links need file-path routing before generic URL parsing.
+    // Parse Windows file paths before URL: URL accepts drive letters as schemes.
     return true
   }
 
@@ -125,11 +123,7 @@ export function handleOscLink(
   }
 
   if (parsed.protocol === 'file:') {
-    // Why: file:// URIs should open inside Orca, not via the OS default editor
-    // (shell.openPath). We extract the path from the URI and route it through
-    // the same openDetectedFilePath logic used for detected file-path links.
-    // Remote file hosts stay rejected; Windows LAN shares are the
-    // exception because their standard URI form is file://server/share/path.
+    // Route file URIs through Orca’s file opener; reject foreign hosts except standard Windows UNC file://server/share paths.
     const allowUncHost =
       navigator.userAgent.includes('Windows') &&
       isWindowsAbsolutePathLike(deps.worktreePath) &&

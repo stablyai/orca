@@ -11,7 +11,6 @@ import { SessionOptionCaption } from './MobileNativeChatSessionOptionRows'
 // Five fit across a phone's sheet; more read better as a list on their own page.
 const MAX_SEGMENTS = 5
 
-/** An effort-like choice the model page can show in place, as one segmented control. */
 export function showsSessionOptionAsSegments(descriptor: SessionOptionDescriptor): boolean {
   return (
     descriptor.category === 'thought_level' &&

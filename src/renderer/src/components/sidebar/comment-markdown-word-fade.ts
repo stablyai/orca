@@ -1,6 +1,4 @@
-// Wraps each word of rendered markdown in its own element, so a word can fade in
-// as it is appended. Words already rendered keep their element, so appending
-// text mounts only the new ones.
+// Keep existing word elements stable while streams append so only newly mounted words fade.
 
 import type { Element, Root } from 'hast'
 import { SPACELESS_SCRIPT_RANGES } from '../../../../shared/native-chat-text-reveal'
@@ -22,7 +20,6 @@ export function markdownWordTokens(value: string): { value: string; offset: numb
 }
 
 function splitWords(node: Root | Element): void {
-  // Only text is replaced, so an element's children stay element content.
   for (let index = node.children.length - 1; index >= 0; index -= 1) {
     const child = node.children[index]
     if (child.type === 'text') {

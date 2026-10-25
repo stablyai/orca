@@ -168,7 +168,7 @@ async function seedFixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<
   await killRecoveryAt(bundle, options, 'seed', oldJson)
   expect(existsSync(`${databasePath}-wal`)).toBe(true)
   expect(existsSync(`${databasePath}-shm`)).toBe(true)
-  // An empty abandoned rollback journal is harmless, but must be removed before publication.
+  // Remove even empty abandoned rollback journals before publication.
   writeFileSync(`${databasePath}-journal`, '')
   if (accepted) {
     writeFileSync(dataFile, selectedJson)
@@ -218,7 +218,7 @@ async function fixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<Fixt
   const key = `${kind}/${accepted}`
   let seed = seededFixtures.get(key)
   if (!seed) {
-    // The seed child's close event has fired before its WAL family is copied.
+    // Wait for child exit before copying the WAL family.
     seed = await seedFixture(kind, accepted)
     seededFixtures.set(key, seed)
   }
@@ -250,7 +250,7 @@ function assertQuarantine(profile: Fixture, hasMarker = true): void {
   if (hasMarker) {
     expect(readFileSync(archivedMarker, 'utf8')).toBe('sqlite\n')
   }
-  // Check exact family bytes before opening the copied WAL snapshot.
+  // Verify exact bytes before SQLite can change the copied WAL family.
   for (const [suffix, bytes] of profile.originalFamily) {
     expect(readFileSync(join(directory, `profile-state.db${suffix}`)).equals(bytes)).toBe(true)
   }
@@ -281,7 +281,7 @@ function assertRestart(profile: Fixture, expected: 'old' | 'selected' | 'refused
       storage === 'sqlite'
         ? readSqlite(profile.databasePath)
         : JSON.parse(readFileSync(profile.dataFile, 'utf8'))
-    // Full raw-state equality is checked before Store normalization can hide a lost domain.
+    // Check raw state before normalization can hide a lost domain.
     expect(raw).toEqual(expectedState)
     const reopened = open()
     try {

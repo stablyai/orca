@@ -168,7 +168,6 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
         kind: 'ssh',
         connectionId: 'build-host'
       })
-      // Rival rows and no worktree host name no single owner: refuse rather than guess.
       expect(() => resolveFor(s, 'r1::/srv/r1')).toThrow('worktree_execution_host_unresolved')
     }
   })
@@ -181,7 +180,6 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
     })
   })
 
-  // A `\\wsl$` path proves its distro exists, and the cached list can be stale.
   it("trusts a WSL-share workspace's distro over a stale cached list", () => {
     _setWslCachesForTests({ available: true, distros: ['Debian'] })
     const s = store({ repos: [repo({ id: 'r1', path: WSL_REPO_PATH })] })
@@ -247,7 +245,6 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
     })
   })
-  // The agent list reads the folder's own host, as main does; only launches also read its group's.
   it("keeps a folder's repo runtime when only its group names another host", () => {
     _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
     const s = store({

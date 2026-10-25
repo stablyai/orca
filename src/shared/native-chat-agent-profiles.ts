@@ -14,8 +14,7 @@ export type NativeChatAgentProfile = {
   skillNamePrefix?: string
   /** Another agent whose own skill folders, though not its plugins, this agent also reads. */
   readsSkillFoldersOf?: AgentType
-  /** The agent's command report may list some skills among its commands (OpenCode 1.x) or none
-   *  (2.x), so a running chat keeps the skill folders' list. */
+  /** OpenCode 1.x reports some skills as commands; 2.x reports none. Keep folder scans for running chats. */
   keepsScannedSkills?: true
   /** The agent's own harness expands a slash command out of the message text, so
    *  the chat host claims only the commands it implements itself. */
@@ -38,8 +37,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
   codex: {
     skillPrefix: '$',
     skillSourceOwner: 'codex',
-    // The app-server has no slash parser, but the model owns goal tools and
-    // calls create_goal itself when `/goal <objective>` reaches it as prose.
+    // App-server has no slash parser; the model owns goal tools and receives /goal objectives as prose.
     textDrivenCommands: ['goal']
   },
   claude: {
@@ -85,9 +83,7 @@ export function getNativeChatAgentProfile(
   return agent ? (NATIVE_CHAT_AGENT_PROFILES[agent] ?? null) : null
 }
 
-/** The catalog that send classification, collision detection, and transcript
- *  envelope surfacing key off. Grok has no verified catalog yet, so its slash
- *  surface stays skills-only — this is the single place that policy lives. */
+/** Shared catalog for send/collision/envelope classification; Grok remains skills-only until its command catalog is verified. */
 export function getVerifiedNativeChatCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return agent === 'grok' ? [] : getAgentSlashCommands(agent)
 }
@@ -104,18 +100,14 @@ export function getNativeChatCommandReply(
   )
 }
 
-/** The verified catalog minus commands only the desktop chat answers: a surface
- *  without the composer's answers or the transcript's reply rows (mobile) would
- *  offer a command that appears to do nothing. */
+/** Exclude desktop-only answers: mobile lacks composer answers/transcript reply rows and would offer commands with no visible result. */
 export function getAgentAnsweredNativeChatCommands(
   agent: AgentType
 ): readonly SlashCommandSuggestion[] {
   return getVerifiedNativeChatCommands(agent).filter((command) => command.reply === undefined)
 }
 
-/** The mirror of the claimed set: catalog commands this agent acts on when they
- *  arrive as message text. The picker offers these too, so a command the agent
- *  implements is discoverable and not merely typable. */
+/** Offer catalog commands handled by agent message text in the picker as well as accepting typed input. */
 export function getTextDrivenNativeChatCommands(
   agent: AgentType | null | undefined
 ): readonly SlashCommandSuggestion[] {
@@ -128,11 +120,7 @@ export function getTextDrivenNativeChatCommands(
     : getVerifiedNativeChatCommands(agent).filter((command) => names.has(command.name))
 }
 
-/** Catalog commands the chat host answers itself. Whatever is left over reaches
- *  the agent as ordinary text, which is only correct where the agent implements
- *  the command — so an agent unclaims a command only via the profile above.
- *  Claiming stays the default: it is what stops a hand-typed `/clear` from being
- *  sent to the model as literal prompt text. */
+/** Claim catalog commands by default so /clear never becomes literal model input; profiles unclaim only commands the agent handles as text. */
 export function getHostClaimedNativeChatCommands(
   agent: AgentType
 ): readonly SlashCommandSuggestion[] {

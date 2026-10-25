@@ -123,7 +123,7 @@ export function createOpenConflictReview(
       if (!openedConflictFile) {
         return
       }
-      // Why: the conflict file needs a normal editor backing tab for save/close, but selecting from Conflict Review must keep the review tab visible; restore focus after.
+      // Conflict files need backing editor tabs for save/close; restore review focus after opening them.
       void openWorkspaceEditorItem(
         get(),
         conflictFileId,
@@ -138,7 +138,7 @@ export function createOpenConflictReview(
       }
     },
 
-    // Why: renders from a stored snapshot (entries + timestamp), not live status, so the list stays stable across polls while reviewing.
+    // Snapshot entries/time keeps conflict review stable across status polls.
     openConflictReview: (worktreeId, worktreePath, entries, source) => {
       const id = `${worktreeId}::conflict-review`
       set((s) => {

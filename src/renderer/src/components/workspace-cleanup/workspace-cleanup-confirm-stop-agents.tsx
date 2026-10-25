@@ -13,7 +13,6 @@ import {
 } from './workspace-cleanup-host-label'
 import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
 
-/** Names the workspaces whose running agents a delete would stop, before anything is queued. */
 export function WorkspaceCleanupConfirmStopAgents({
   candidates,
   onBack,

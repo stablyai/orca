@@ -4,8 +4,6 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 
-// Typed store rows for the workspace-scoped native chat suites.
-
 export function terminalTabFixture(
   id: string,
   worktreeId: string,
@@ -84,7 +82,6 @@ export function worktreeFixture(
   }
 }
 
-/** A repo listing that holds only detected (not visible) worktrees. */
 export function detectedListingFixture(
   worktrees: readonly Worktree[]
 ): AppState['detectedWorktreesByRepo'][string] {

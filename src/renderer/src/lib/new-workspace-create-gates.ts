@@ -21,8 +21,6 @@ function hasBlockingCreateState(input: ComposerCreateGateInput): boolean {
 }
 
 export function getQuickComposerCreateDisabled(input: ComposerCreateGateInput): boolean {
-  // Why: quick create resolves setup hooks and optional issue automation inside submit. Keeping those
-  // background probes out of the disabled gate makes the primary action usable
-  // as soon as the form has enough local state to submit.
+  // Setup/automation probes run during submit; keep them out of disabled gates so valid local form state remains actionable.
   return hasBlockingCreateState(input)
 }

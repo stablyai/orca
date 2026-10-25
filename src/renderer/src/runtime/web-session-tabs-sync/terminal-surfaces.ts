@@ -4,7 +4,7 @@ import type {
   RuntimeMobileSessionAgentTab
 } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import { defaultAgentChatLabel } from '../../../../shared/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
@@ -26,6 +26,10 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 import { withPendingPaneTitleRenames } from '../pending-pane-title-renames'
+import {
+  isMirroredTerminalOfAnotherEnvironment,
+  type MirrorRowOwnershipState
+} from './mirror-row-ownership'
 
 export function isReadyTerminalTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
@@ -128,8 +132,7 @@ export function buildMirroredAgentTabs(
       unifiedTab: {
         id: localId,
         entityId: tab.sessionId,
-        // Keep the local group while a provisional tab is promoted; host placement can lag the
-        // user's split choice and must not move the mounted pane during adoption.
+        // Preserve provisional groups on promotion; lagging host placement must not move mounted panes after user splits.
         groupId:
           existing?.groupId ??
           address?.targetGroupId ??
@@ -139,11 +142,9 @@ export function buildMirroredAgentTabs(
         executionHostId,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,
-        // Why: `title` is wire data typed `string`; a host that violates that must
-        // degrade to the placeholder, not throw inside the snapshot patch.
+        // Wire title can violate its string type; fall back instead of throwing inside store patches.
         label: tab.title?.trim() || defaultAgentChatLabel(tab.agent),
-        // Why: a manual rename lives only on the client; re-nulling it here made
-        // every host snapshot silently discard the user's title.
+        // Manual rename is client-owned; host snapshots must not null it.
         customLabel: existing?.customLabel ?? null,
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
@@ -212,12 +213,7 @@ export function chooseRemoteTerminalLayout(
       : existingLayout?.chatLeafId && knownLeafIds.has(existingLayout.chatLeafId)
         ? existingLayout.chatLeafId
         : undefined
-  // Why retained: this rebuilds the layout from the host's picture, and the host publishes no
-  // scrollback of its own — a parked remote pane's bytes live only in the client's copy. Without
-  // this, ANY inventory frame landing between park and reveal drops the only copy: the rebuild is
-  // bufferless, terminalLayoutEqual compares buffers so the write is not bailed out, and
-  // apply-terminal-records assigns it wholesale. Structure still comes from the host; only bytes
-  // for leaves the host itself names are carried over.
+  // Host owns structure but publishes no scrollback. Carry client bytes only for surviving host-named leaves or inventory between park/reveal drops the only copy.
   const titlesByLeafId = withPendingPaneTitleRenames(parentLayout?.titlesByLeafId, leafIds)
   return retainLocalScrollbackInRemoteLayout(existingLayout, {
     // Why: host parentLayout is authoritative for split direction; else keep the prior client tree — a leaf-set mismatch prunes/grafts it, never re-guesses the directions it already carries.
@@ -240,6 +236,7 @@ export function chooseRemoteTerminalLayout(
 }
 
 export function shouldReplaceTerminalTab(
+  state: MirrorRowOwnershipState,
   tab: TerminalTab,
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
@@ -248,17 +245,18 @@ export function shouldReplaceTerminalTab(
   persistedLeafPtyIds: Readonly<Record<string, string>> | undefined
 ): boolean {
   if (exactProvisionalHandoffs.has(tab.id)) {
-    // Why: agent kind is not session identity; retire only the provisional tab
-    // whose request or structured response identifies this exact host surface.
+    // Agent kind is not identity; retire only provisional requests/responses matching this exact host surface.
     return true
   }
   if (isMirroredTerminalSurfaceId(tab.id)) {
-    // Why: host snapshots are authoritative for mirrored tabs; replace old mirrors even when the next surface still awaits a stream handle, else parity drifts.
-    return true
+    // Why: host snapshots are authoritative for their own mirrored tabs; replace them even when the next surface still awaits a stream handle, else parity drifts.
+    return (
+      nextMirroredTerminalIds.has(tab.id) ||
+      !isMirroredTerminalOfAnotherEnvironment(state, tab, environmentId)
+    )
   }
   if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
-    // Why: a fresh placeholder has no identity, so the host's first terminal takes it over. A
-    // restored row names its own PTYs, and only those may retire it (#25339).
+    // Fresh placeholders lack identity; restored rows may retire only when their own PTYs arrive (#25339).
     return (
       !tab.restoredFromSession ||
       nextMirroredTerminalIds.has(toWebTerminalSurfaceTabId(tab.id)) ||

@@ -1,10 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Windows half of the tab-strip worktree-write gate. `isWindows` is read once at module
- * load, so the two client platforms cannot share a file; see
- * TabBar.worktree-write-gate.test.tsx for the non-Windows half and the full rationale.
- */
+/** Separate Windows/non-Windows files because client platform is captured at module load. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 import {

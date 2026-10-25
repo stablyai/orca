@@ -1,12 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Coalescing folds consecutive identical refusals into one row, which is a large
- * improvement over the hundred rows it replaced — but the surviving row carries
- * the *first* occurrence's timestamp. Without the fold count and the latest
- * occurrence, a failure that is still happening every hour reads as one thing
- * that happened once, days ago.
- */
+/** Folded rows retain the first occurrence’s timestamp; show both count and latest occurrence so ongoing failures cannot appear resolved. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -86,9 +80,14 @@ describe('AutomationRunHistory occurrences', () => {
     const container = await render({ occurrenceCount: 12, lastOccurrenceAt: LATEST })
 
     expect(occurrences(container)).toContain('12 times')
-    // The recency is the part that answers "is this over?" — the row's own date
-    // is the first occurrence and cannot.
-    expect(occurrences(container)).toContain('most recently')
+    // The row date is the first occurrence; only recurrence recency can say whether failure continues.
+    const latestLabel = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    }).format(LATEST)
+    expect(occurrences(container)).toBe(`12 times, most recently ${latestLabel}`)
     expect(occurrences(container)).not.toContain(String(LATEST))
   })
 
@@ -171,7 +170,7 @@ describe('AutomationRunHistory virtualization', () => {
     )
   }
 
-  it('keeps a long history to a bounded number of mounted rows', async () => {
+  it('renders only the supplied virtualizer window from a long history', async () => {
     const container = await renderRuns(makeRuns(5_000))
 
     expect(container.querySelectorAll('button[data-automation-run-id]').length).toBeLessThan(50)
@@ -179,14 +178,13 @@ describe('AutomationRunHistory virtualization', () => {
     expect(container.textContent).toContain('5000 runs')
   })
 
-  it('scrolls a selected row below the fold into the window and then focuses it', async () => {
+  it('asks the virtualizer stub to reveal a later selection and then focuses it', async () => {
     const container = await renderRuns(makeRuns(VIRTUALIZER_STUB_WINDOW_SIZE * 2))
 
     const belowFold = `run-${VIRTUALIZER_STUB_WINDOW_SIZE}`
     expect(container.querySelector(`[data-automation-run-id="${belowFold}"]`)).toBeNull()
 
-    // Selection starts on the first row, so this many moves lands one row past the
-    // window — the case where focus has to wait for the scroll to mount the row.
+    // Move beyond the mounted window so focus must wait for scrolling to mount the target.
     await pressArrow('ArrowDown', VIRTUALIZER_STUB_WINDOW_SIZE)
 
     const selected = container.querySelector<HTMLButtonElement>(
@@ -198,7 +196,7 @@ describe('AutomationRunHistory virtualization', () => {
     expect(container.querySelector('[data-automation-run-id="run-0"]')).toBeNull()
   })
 
-  it('scrolls a selected row above the fold back into the window and then focuses it', async () => {
+  it('asks the virtualizer stub to reveal an earlier selection and then focuses it', async () => {
     const container = await renderRuns(makeRuns(VIRTUALIZER_STUB_WINDOW_SIZE * 2))
 
     await pressArrow('ArrowDown', VIRTUALIZER_STUB_WINDOW_SIZE)
@@ -239,7 +237,6 @@ describe('AutomationRunHistory keyboard navigation', () => {
     expect(buttons[0].getAttribute('data-current')).toBe('true')
     expect(buttons[1].getAttribute('data-current')).toBe('false')
 
-    // Press ArrowDown
     await act(async () => {
       window.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })
@@ -249,7 +246,6 @@ describe('AutomationRunHistory keyboard navigation', () => {
     expect(buttons[0].getAttribute('data-current')).toBe('false')
     expect(buttons[1].getAttribute('data-current')).toBe('true')
 
-    // Press Enter to open selected run
     await act(async () => {
       window.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
@@ -258,7 +254,6 @@ describe('AutomationRunHistory keyboard navigation', () => {
 
     expect(onOpenRun).toHaveBeenCalledWith(run2)
 
-    // Press ArrowUp
     await act(async () => {
       window.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })
@@ -268,7 +263,6 @@ describe('AutomationRunHistory keyboard navigation', () => {
     expect(buttons[0].getAttribute('data-current')).toBe('true')
     expect(buttons[1].getAttribute('data-current')).toBe('false')
 
-    // Press Enter to open first run
     await act(async () => {
       window.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
@@ -278,7 +272,7 @@ describe('AutomationRunHistory keyboard navigation', () => {
     expect(onOpenRun).toHaveBeenCalledWith(run1)
   })
 
-  it('moves focus with the selection so Enter reaches the selected row, not the old one', async () => {
+  it('moves focus to the selected row and opens it when that focused row is clicked', async () => {
     const onOpenRun = vi.fn()
     const run1 = makeRun({ id: 'run-1', scheduledFor: FIRST })
     const run2 = makeRun({ id: 'run-2', scheduledFor: LATEST })
@@ -430,8 +424,7 @@ describe('AutomationRunHistory row content', () => {
 
     expect(rows()[1].getAttribute('data-current')).toBe('true')
 
-    // Same row IDs, different automation: carrying the old selection over would
-    // highlight a row the user never picked.
+    // Reset selection for a different automation even when run IDs collide.
     renderHistory({ runs, automationId: 'a-2' })
 
     expect(rows()[0].getAttribute('data-current')).toBe('true')
@@ -479,8 +472,7 @@ describe('AutomationRunHistory keyboard navigation guards', () => {
 
     await pressEnter()
 
-    // The notice says these rows are not the host's answer, so Enter must not act
-    // on them however many of them are still painted.
+    // Painted stale rows are not a host answer; Enter must refuse them while history is unavailable.
     expect(onOpenRun).not.toHaveBeenCalled()
   })
 
@@ -497,8 +489,7 @@ describe('AutomationRunHistory keyboard navigation guards', () => {
         />
       )
     })
-    // The listener subscribes once and reads the current runs through a ref; a
-    // refreshed history has to reach it without a resubscribe.
+    // The single listener reads refs; refreshed runs must reach it without resubscribing.
     await act(async () => {
       root.render(
         <AutomationRunHistory

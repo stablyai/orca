@@ -3,14 +3,7 @@ import type { operationModuleLoader } from '../operation-module-loader'
 
 const WORKSPACE = 'workspace-1'
 
-/**
- * Opening a structured agent chat: the support probe, its bounded selector retry, and the durable
- * create the phone replays exactly once when the transport drops.
- *
- * Recorded rather than reasoned about because every failure here has to stay `unknown` rather than
- * `failed` unless the host names the refusal definitive — a create that may have committed must not
- * grow a sibling terminal. The replay makes that visible as two sends for one action.
- */
+// Record probe/replay outcomes: a create that may have committed must remain unknown unless the host definitively refuses it.
 export function structuredAgentLaunchMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

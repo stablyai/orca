@@ -4,7 +4,7 @@ import {
 } from '@/lib/agent-launch-routing'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG } from '../../../shared/protocol-version'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { isNativeChatProviderDisplayedOn } from '../../../shared/native-chat-providers'
+import { isNativeChatProviderDisplayedOn } from '../../../shared/native-chat/native-chat-providers'
 import {
   isNativeChatEnabled,
   type NativeChatDefaultSettings
@@ -71,9 +71,7 @@ export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
 
 export function buildNewTabAgentMenuRows(args: {
   settings: NewTabAgentMenuSettings | null | undefined
-  /** The agents detected on the workspace's machine. */
   detectedOnHost: readonly TuiAgent[] | null
-  /** The agents Orca can open as a chat. */
   chatAgents: readonly TuiAgent[]
   hostChatAnswer: (agent: TuiAgent) => HostChatAnswer
   /** Whether the chat's own program runs there, which for some agents is not their CLI. */

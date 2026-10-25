@@ -45,16 +45,13 @@ export type DropHibernatedAgentPaneOptions = {
 }
 
 export type DropAgentStatusOptions = {
-  /** The pane itself is gone (pane close, stale-row teardown). Row-only dismissals leave the
-   *  cleared-at cutoff and manual-unread stamp in place so a still-live pane's next hook event
-   *  cannot resurrect activity the user already cleared. */
+  /** Pane death permits cutoff/manual-unread cleanup; row dismissal preserves them so later hooks cannot resurrect cleared history. */
   paneRemoved?: boolean
 }
 
 export type DropAgentStatusByTabPrefixOptions = {
   worktreeId?: string
-  /** Keep cleared-at cutoffs and manual-unread stamps: a mirrored-tab retraction is loss of
-   *  contact, not pane death, and the host republishes the same panes on reconnect. */
+  /** Retraction may be contact loss; preserve cutoff/manual-unread for same-pane reconnect republication. */
   preserveActivityClearedState?: boolean
 }
 
@@ -80,8 +77,7 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   orchestration?: AgentStatusOrchestrationContext
   promptInteractionKey?: string
   restoredUnconfirmed?: boolean
-  /** Ingress provenance for this write (STA-4293). Read by nothing yet; a caller that omits
-   *  it produces exactly the entry it produces today. See agent-status-observation.ts. */
+  /** Optional ingress provenance, currently unread; omission preserves existing output (STA-4293, agent-status-observation.ts). */
   observation?: AgentStatusObservation
   /** `null` clears the facet; absent keeps it (the writer has no facet channel, e.g. renderer OSC). */
   programStatus?: ProgramStatusFacet | null

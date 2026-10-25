@@ -1,5 +1,4 @@
-// Test-only harness shared by the renderer launch-parity suites: per-client module loading and a
-// real store seeded with one workspace. Each suite still declares its own vi.mock calls.
+// Load each renderer client OS against a real one-workspace store; suites own their vi.mock declarations.
 import { vi } from 'vitest'
 import type * as StoreHelpersNamespace from '@/store/slices/store-test-helpers'
 import type * as CapabilitiesNamespace from '@/runtime/local-runtime-capabilities'
@@ -39,10 +38,7 @@ export function launchStoreModuleMock(holder: LaunchStoreHolder): Record<string,
   }
 }
 
-/**
- * Imports `load` once per client OS. Why: CLIENT_PLATFORM reads the user agent at import and
- * the renderer app platform caches its first answer, so each client needs its own module graph.
- */
+/** Load a fresh graph per OS because CLIENT_PLATFORM and renderer platform cache import-time user-agent answers. */
 export function perClientLoader<T>(
   load: () => Promise<T>
 ): (client: LaunchClient) => Promise<T & { createStore: StoreHelpers['createTestStore'] }> {
@@ -57,7 +53,6 @@ export function perClientLoader<T>(
     const helpers: StoreHelpers = await import('@/store/slices/store-test-helpers')
     const capabilities: typeof CapabilitiesNamespace =
       await import('@/runtime/local-runtime-capabilities')
-    // The local runtime has answered (without structured support), so no launch waits on it.
     capabilities.setLocalRuntimeCapabilitiesForTests([])
     const loaded = { ...(await load()), createStore: helpers.createTestStore }
     cache.set(client, loaded)
@@ -65,7 +60,6 @@ export function perClientLoader<T>(
   }
 }
 
-/** The store state one workspace needs; `settings` is the full settings object the case runs with. */
 export function launchWorkspaceState(
   workspace: LaunchWorkspace,
   settings: Record<string, unknown>

@@ -1,6 +1,4 @@
-// A client that predates accepted-send replies (every phone build) has its send reply held until
-// handover. A message queued behind `/compact` is handed over only when the compaction ends, so
-// that reply answers once the message waits behind the running command instead.
+// Clients without accepted-send support wait for handover; sends queued behind compact must answer when queued to avoid the phone timeout.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
@@ -90,7 +88,6 @@ it('answers a send queued behind /compact at once, and delivers it once after th
   expect(
     journal.submissions.filter((entry) => entry.clientMessageId === submission.clientMessageId)
   ).toEqual([expect.objectContaining({ handedOverAt: expect.any(Number) })])
-  // Nothing re-sent it: the host delivered the one message once.
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(calls('turn/start')).toHaveLength(1)
 })
@@ -98,7 +95,6 @@ it('answers a send queued behind /compact at once, and delivers it once after th
 it('still holds the reply of a send that no command is holding until it is handed over', async () => {
   await harness.ok('agentSession.create', harness.createIntentParams())
 
-  // The first send starts the child; the reply waits out that start and the handover.
   const { submission } = await promptly(send('first message'))
 
   expect(submission.handedOverAt).toEqual(expect.any(Number))

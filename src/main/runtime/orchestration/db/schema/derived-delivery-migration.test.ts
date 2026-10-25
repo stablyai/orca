@@ -250,7 +250,7 @@ describe('derived delivery migration', () => {
       .get() as { sql: string }
     expect(index.sql).not.toContain('UNIQUE')
     expect(index.sql).toContain("status = 'outstanding' AND mailbox_handle != ''")
-    // Why: a v40 binary probes exactly these objects before trusting the stamp; nothing it needs is gone.
+    // A downgraded v40 binary must still find every object its schema probe requires.
     expect(resolveOrchestrationMigrationStartVersion(db.db, SCHEMA_VERSION, 40)).toBe(
       SCHEMA_VERSION
     )

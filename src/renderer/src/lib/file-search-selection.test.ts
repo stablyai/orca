@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  FILE_SEARCH_SELECTED_TEXT_MAX_CHARS,
   getSelectedTextForFileSearch,
   normalizeSelectedTextForFileSearch,
   registerFileSearchSelectedTextProvider
@@ -41,7 +40,7 @@ describe('normalizeSelectedTextForFileSearch', () => {
     const normalized = normalizeSelectedTextForFileSearch(selectedText)
 
     expect(normalized?.startsWith('term-1 term-2 term-3')).toBe(true)
-    expect(normalized?.length).toBeLessThanOrEqual(FILE_SEARCH_SELECTED_TEXT_MAX_CHARS)
+    expect(normalized?.length).toBe(2048)
     expect(split).not.toHaveBeenCalled()
   })
 })
@@ -62,10 +61,11 @@ describe('getSelectedTextForFileSearch', () => {
   })
 
   it('unregisters providers so closed editors do not accumulate stale selection readers', () => {
-    const unregister = registerFileSearchSelectedTextProvider(() => 'stale')
-    unregister()
-
     registerForTest(() => 'active')
+    const unregister = registerFileSearchSelectedTextProvider(() => 'stale')
+    unregisterCallbacks.push(unregister)
+    expect(getSelectedTextForFileSearch()).toBe('stale')
+    unregister()
 
     expect(getSelectedTextForFileSearch()).toBe('active')
   })

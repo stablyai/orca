@@ -105,7 +105,7 @@ function hasModelAttachmentPort(
 }
 
 export function attachModelLifetimeView(model: monaco.editor.ITextModel): () => void {
-  // Exercise the installed model's real attachment event without constructing an editor widget.
+  // Exercise real model attachment events without creating an editor widget.
   if (!hasModelAttachmentPort(model)) {
     throw new Error('Installed Monaco does not expose the expected attachment port')
   }

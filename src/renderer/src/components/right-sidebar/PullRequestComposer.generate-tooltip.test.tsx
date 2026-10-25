@@ -212,7 +212,6 @@ describe('CreateHostedReviewComposer generate tooltip', () => {
       })
     )
 
-    // Unchecked, the helper explains the effect rather than repeating the base ref.
     expect(container.innerHTML).toContain(
       "Creates a GitHub Stack or extends the parent's existing stack."
     )
@@ -238,7 +237,7 @@ describe('CreateHostedReviewComposer generate tooltip', () => {
     )
 
     expect(container.querySelectorAll('[data-slot="checkbox"]')).toHaveLength(2)
-    // Radix keeps a hidden native input for form participation; nothing browser-native renders.
+    // Radix retains a hidden native input for form participation.
     for (const native of container.querySelectorAll('input[type="checkbox"]')) {
       expect(native.getAttribute('aria-hidden')).toBe('true')
     }
@@ -360,8 +359,6 @@ describe('CreateHostedReviewComposer generate tooltip', () => {
   })
 
   it('drops a stack choice when the base moves off the parent it was made for', () => {
-    // The choice is keyed to base+parent, so a base change can never submit a stacked
-    // create for a parent the composer is no longer showing.
     const onPrimaryAction = vi.fn()
     renderDom(
       <InteractiveBaseComposer

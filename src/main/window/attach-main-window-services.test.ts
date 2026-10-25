@@ -186,8 +186,7 @@ function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
     .map(([, handler]) => handler as () => void)
 }
 
-// Updater setup is deferred to first paint; fire the captured ready-to-show
-// handler and flush its setImmediate hop.
+// Fire first paint and its deferred hop before asserting updater setup.
 async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
   const handler = mainWindow.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1] as
     | (() => void)
@@ -301,7 +300,7 @@ describe('attachMainWindowServices', () => {
       }
     )
 
-    // Deferred to first paint — must not be configured at attach time.
+    // Attachment must leave updater setup until first paint.
     expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
     await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)

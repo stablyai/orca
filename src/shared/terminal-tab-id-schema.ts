@@ -2,8 +2,7 @@ import { z } from 'zod'
 
 import { isValidTerminalTabId } from './terminal-tab-id'
 
-/** Shared so the session schema and the tombstone value schemas validate tab ids identically.
- *  Extracted from workspace-session-schema.ts, which is at its max-lines limit. */
+/** Share tab-ID validation between session and tombstone schemas. */
 export const terminalTabIdSchema = z
   .string()
   .min(1)

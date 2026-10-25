@@ -23,14 +23,12 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       restoreSkippedForLiveSession
     } = context
     let { sessionId, wslDistro, restoreInfo, effectiveCwd, effectiveCols, effectiveRows } = context
-    const createOrAttach = (historySeedSegments: readonly string[] | null) => {
-      Object.assign(context, {
-        sessionId,
-        effectiveCwd,
-        effectiveCols,
-        effectiveRows
-      })
-      return this.createOrAttachSpawn(context, historySeedSegments)
+    const createOrAttach = async (historySeedSegments: readonly string[] | null) => {
+      Object.assign(context, { sessionId, restoreInfo, effectiveCwd, effectiveCols, effectiveRows })
+      const created = await this.createOrAttachSpawn(context, historySeedSegments)
+      // Why: a spawn whose restored folder was gone retried in the asked one; keep that, not the gone one.
+      ;({ effectiveCwd, restoreInfo } = context)
+      return created
     }
     let result = initialResult
     const finalizeSpawnResult = (spawnResult: PtySpawnResult): PtySpawnResult =>
@@ -84,6 +82,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     if (result.incarnationId) {
       this.sessionIncarnations.set(sessionId, result.incarnationId)
     }
+    this.inputClosedIncarnations.sync(sessionId, result)
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
     // Null overrides caller WSL preference; undefined preserves compatibility with older daemons.
     wslDistro = providerWslDistro ?? undefined
@@ -92,6 +91,9 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       this.wslDistrosBySessionId.set(sessionId, wslDistro)
     } else if (providerWslDistro === null || result.isNew) {
       this.wslDistrosBySessionId.delete(sessionId)
+    }
+    if (wslDistro && opts.env?.ORCA_PANE_KEY) {
+      this.wslPaneKeysBySessionId.set(sessionId, opts.env.ORCA_PANE_KEY)
     }
 
     if (effectiveCwd) {
@@ -146,6 +148,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         if (result.incarnationId) {
           this.sessionIncarnations.set(sessionId, result.incarnationId)
         }
+        this.inputClosedIncarnations.sync(sessionId, result)
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
         wslDistro = providerWslDistro ?? undefined
         context.wslDistro = wslDistro

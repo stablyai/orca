@@ -20,7 +20,7 @@ it.each(REASONS)('describes %s as a sentence, not an enum', (reason) => {
 it('falls back for a missing reason and for a reason only a newer host knows', () => {
   const fallback = 'The host declined to close this terminal tab, so the tab was kept open.'
   expect(describeMobileSessionTabCloseRefusal(undefined)).toBe(fallback)
-  // Why: remote wire skew — a newer host may answer with a reason this build has no text for.
+  // Newer hosts may return refusal reasons this client cannot name.
   const fromNewerHost: RuntimeMobileSessionTabCloseResult = JSON.parse(
     '{"closed":true,"refused":true,"refusalReason":"reason-from-the-future"}'
   )

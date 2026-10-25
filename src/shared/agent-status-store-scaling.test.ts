@@ -1,5 +1,4 @@
-// A status write costs what it touches: a parent publish or a child update must not grow with
-// every other session's children. Ratios of interleaved medians, so a loaded machine slows both.
+// Check parent/child write cost against unrelated session growth using interleaved median ratios to share machine load.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkInput } from './agent-status-child-work'
@@ -68,16 +67,18 @@ function median(values: number[]): number {
 /** Median cost of `write` on each store, measured alternately so load lands on both. */
 function interleavedMedians(
   stores: AgentStatusStore[],
-  write: (store: AgentStatusStore, rep: number) => void
+  write: (store: AgentStatusStore, rep: number) => unknown
 ): number[] {
   const samples = stores.map((): number[] => [])
   for (let rep = 0; rep < 400; rep += 1) {
     for (const [index, store] of stores.entries()) {
       const started = performance.now()
-      write(store, rep)
+      const committed = write(store, rep)
+      const elapsed = performance.now() - started
+      expect(committed).not.toBeNull()
       // The first reps warm the JIT for both stores alike.
       if (rep >= 50) {
-        samples[index]!.push(performance.now() - started)
+        samples[index]!.push(elapsed)
       }
     }
   }
@@ -91,7 +92,7 @@ describe('AgentStatusStore write cost', () => {
 
   it('publishes a parent at 4,000 children for under 4x its cost at 40', () => {
     const [atSmall, atLarge] = interleavedMedians([small, large], (store, rep) => {
-      store.applyMutation({
+      return store.applyMutation({
         parent: {
           subject: parent,
           status: {
@@ -113,7 +114,7 @@ describe('AgentStatusStore write cost', () => {
 
   it('updates one child at 4,000 children for under 4x its cost at 40', () => {
     const [atSmall, atLarge] = interleavedMedians([small, large], (store, rep) => {
-      store.applyMutation({ children: [childOf(parent, 'child-0-1', 2 + rep)] })
+      return store.applyMutation({ children: [childOf(parent, 'child-0-1', 2 + rep)] })
     })
     expect(atLarge! / atSmall!).toBeLessThan(4)
   })

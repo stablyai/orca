@@ -1,4 +1,3 @@
-// Override resolution and the conflict detector behind Settings → Shortcuts.
 import { describe, expect, it } from 'vitest'
 import {
   agentTabActionId,
@@ -48,8 +47,7 @@ describe('keybindings', () => {
   })
 
   it('keeps zoom reset on Mod+0 and focuses worktree list on a distinct chord', () => {
-    // Why: both actions previously defaulted to Mod+0, so main-process zoom
-    // reset always won and Focus worktree list was unreachable (#8584).
+    // Mod+0 previously collided with main’s zoom reset, making worktree focus unreachable (#8584).
     for (const platform of ['darwin', 'linux', 'win32'] as const) {
       expect(getEffectiveKeybindingsForAction('zoom.reset', platform)).toEqual(['Mod+0'])
       expect(getEffectiveKeybindingsForAction('sidebar.focusWorktreeList', platform)).toEqual([
@@ -92,6 +90,8 @@ describe('keybindings', () => {
       })
     ).toContain('view.tasks')
     expect(findKeybindingActionsForBinding('Mod+F', 'darwin')).not.toContain('editor.find')
+    // A German '+' key types Mod+Plus without Shift, the same chord as zoom.in's Mod+Shift+Plus.
+    expect(findKeybindingActionsForBinding('Mod+Plus', 'linux')).toContain('zoom.in')
   })
 
   it('reports quick-command menu conflicts with global shortcuts and digit ranges', () => {
@@ -160,8 +160,7 @@ describe('keybindings', () => {
   })
 
   it('flags the global send-review-notes command against editor chords it can shadow', () => {
-    // Why: it fires from the global capture handler even while the editor is
-    // focused, so Settings must warn when a user binds it over Add Review Note.
+    // Global capture runs inside editors too; warn when it shadows Add Review Note.
     expect(
       findKeybindingConflicts('darwin', { 'sourceControl.sendReviewNotes': ['Mod+Shift+A'] })
     ).toContainEqual(

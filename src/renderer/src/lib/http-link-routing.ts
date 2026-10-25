@@ -84,11 +84,7 @@ type LocalhostLinkWorktree = {
   projectId?: string
 }
 
-// Why: store access is injected via registerHttpLinkStoreAccessor rather than
-// a direct `import '@/store'` to avoid a circular import — store/slices/editor.ts
-// imports this module, and '@/store' transitively imports editor.ts. Without
-// the break, several renderer test files that load this module first see
-// `createEditorSlice` as undefined at store/index.ts initialization.
+// Inject store access to break editor-slice → HTTP routing → store initialization cycles.
 let storeAccessor: StoreAccessor | null = null
 let workspaceHttpLinkBrowserOpener: WorkspaceHttpLinkBrowserOpener | null = null
 
@@ -102,18 +98,8 @@ export function registerWorkspaceHttpLinkBrowserOpener(
   workspaceHttpLinkBrowserOpener = fn
 }
 
-// Scope: http(s) URLs only. file: URIs and in-worktree markdown targets are
-// owned by resolveMarkdownLinkTarget and must stay on that path — this helper
-// is only invoked on target.kind === 'external' (and for the terminal's http
-// branch). Shift+Cmd/Ctrl is the escape hatch: click handlers pass modifierHeld
-// so resolveModifierRouting applies it; forceSystemBrowser stays reserved for
-// callers that must bypass the setting unconditionally.
-/**
- * Resolves what the Shift modifier means for one click. Historically it always
- * forced the system browser, which is a no-op when that is already the default;
- * openLinksInAppModifierInverts makes it flip whichever way Link Routing points
- * so the other destination is always one click away.
- */
+// Route only external http(s); file/markdown targets stay with resolveMarkdownLinkTarget. Modifier-held resolves the user’s Shift choice; forceSystemBrowser is unconditional.
+/** Shift traditionally forces system browser; the inversion setting instead chooses the other destination when system is already default. */
 function resolveModifierRouting(
   modifierHeld: boolean,
   openLinksInApp: boolean,
@@ -193,13 +179,9 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
   }
 
   if (wantsOrca && sourceIsLocal && worktreeId && state) {
-    // Why: http clicks from inside a worktree should not push a worktree-switch
-    // history entry — the user isn't changing worktrees, they're opening a tab
-    // in the one they're already in. activateAndRevealWorktree is reserved for
-    // file-link jumps that genuinely switch worktrees.
+    // Opening a tab in the same worktree must not add switch history; reserve activateAndRevealWorktree for real file-link jumps.
     if (!isHttpLinkBackgroundOpen(state) && !isFloatingWorkspaceId(worktreeId)) {
-      // Why: the floating workspace uses a synthetic worktree id. Promoting it
-      // to the global activeWorktreeId deselects the real repo workspace.
+      // Floating workspace IDs are synthetic; global activation would deselect the real repo workspace.
       reselectWorkspaceKeepingHost(state, worktreeId)
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
@@ -251,8 +233,7 @@ export async function resolveLocalhostHttpLinkDisplayUrl(
   if (!state) {
     return null
   }
-  // Why: the hover label must resolve the same route the click will take, or a
-  // remote pane's loopback URL gets shown with a local worktree's label.
+  // Resolve hover and click through the same route so remote loopback cannot borrow a local workspace label.
   const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
   if (!localhostRoute) {
     return null
@@ -290,8 +271,7 @@ function localhostLabelRouteForTerminalLink(
   ) {
     return null
   }
-  // Why: only loopback links we can attribute to a scanned workspace port
-  // should get a worktree label; everything else must stay as-is.
+  // Label only scanned workspace loopback ports; leave unattributed URLs unchanged.
   const parsed = parseLoopbackUrlWithPort(rawUrl)
   if (!parsed) {
     return null

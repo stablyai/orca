@@ -7,15 +7,7 @@ import {
 } from '../../../../shared/terminal-restore-parity-fixture'
 import { buildMainModelSnapshotReplayWrites } from './terminal-snapshot-replay-paint'
 
-/**
- * What a LIVE application sees after its pane is restored from a main-model
- * snapshot. The sibling suite proves the restored frame is correct; this one
- * proves the replay does not confiscate state the application still owns and
- * will not re-declare.
- *
- * Grounded in real capability strings (`infocmp`), because the one regression
- * that reached review here was a terminfo family nobody had enumerated.
- */
+/** Replay must preserve live application state that snapshots do not redeclare; use real terminfo families so one-time charset initialization stays covered. */
 
 async function replayInto(
   terminal: Terminal,
@@ -52,9 +44,7 @@ function rowWithAttributes(terminal: Terminal, index: number): string {
 }
 
 describe('line-drawing survives a replay for every real terminfo strategy', () => {
-  // Verbatim from `infocmp`. The two families differ in who owns the
-  // designation: xterm/alacritty re-designate G0 on every smacs, so they
-  // self-heal; the SO/SI family designates G1 once via enacs and never again.
+  // xterm/alacritty smacs redeclares G0; SO/SI families designate G1 once with enacs and cannot self-heal.
   const acsStrategies = [
     { term: 'xterm-256color', enacs: '', smacs: '\x1b(0', rmacs: '\x1b(B' },
     { term: 'alacritty', enacs: '', smacs: '\x1b(0', rmacs: '\x1b(B' },
@@ -101,8 +91,7 @@ describe('line-drawing survives a replay for every real terminfo strategy', () =
     })
   }
 
-  // The gap can also strand a shift-out mid-run. GL is the one piece of charset
-  // state the replay does ground, because the payload renders through it.
+  // Ground GL because replay renders through it, while preserving app-owned G-set designations.
   it('renders the restored frame as ASCII even if the gap stranded a shift-out', async () => {
     const model = createRendererParityTerminal({ cols: 20, rows: 4 })
     const pane = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
@@ -121,9 +110,7 @@ describe('line-drawing survives a replay for every real terminfo strategy', () =
 })
 
 describe('real TUI shapes survive a replay', () => {
-  // A vim-like editor: alt screen, a scroll region reserving the status line,
-  // and its own saved cursor. All of it is re-declared by the model snapshot,
-  // so the pane must end up matching the model rather than the gap.
+  // Alt snapshot redeclares region/cursor state; restored model must replace the gap’s state.
   it('keeps an editor scroll region and status line after a replay', async () => {
     const model = createRendererParityTerminal({ cols: 20, rows: 6 })
     const pane = new Terminal({ cols: 20, rows: 6, allowProposedApi: true })
@@ -134,8 +121,7 @@ describe('real TUI shapes survive a replay', () => {
       await writeToTerminal(pane, '\x1b[?1049h\x1b[2;3r\x1b[?6h')
 
       await replayInto(pane, model, true)
-      // Scroll INSIDE the restored region: reading the painted rows alone would
-      // pass even if `1;5r` never came back, so make the region do work.
+      // Exercise restored margins by scrolling; painted rows alone cannot prove the region returned.
       await writeToTerminal(pane, '\x1b[5;1H\n\nscrolled')
 
       // Row 6 is outside the model's 1;5 region and must not have moved.
@@ -147,10 +133,7 @@ describe('real TUI shapes survive a replay', () => {
     }
   })
 
-  // A pager filling the viewport. Deliberately a NORMAL-buffer snapshot with the
-  // pane already on normal, so no `?1049` is emitted at all: on the alt path the
-  // split branch's `?1049l` restores saved modes and would grant autowrap back
-  // for free, and the test would pass without the baseline doing anything.
+  // Stay on normal buffer so ?1049l cannot restore autowrap incidentally; only the baseline may fix it.
   it('keeps every column of a pager frame when the gap stranded autowrap off', async () => {
     const model = createRendererParityTerminal({ cols: 10, rows: 4 })
     const pane = new Terminal({ cols: 10, rows: 4, allowProposedApi: true })
@@ -167,8 +150,7 @@ describe('real TUI shapes survive a replay', () => {
     }
   })
 
-  // Same reasoning for insert mode: a later in-place repaint by the app must
-  // overwrite, not shift. No buffer switch, so the baseline is the only source.
+  // No buffer switch: only the baseline restores overwrite semantics instead of stranded insert mode.
   it('keeps a live repaint overwriting when the gap stranded insert mode', async () => {
     const model = createRendererParityTerminal({ cols: 12, rows: 3 })
     const pane = new Terminal({ cols: 12, rows: 3, allowProposedApi: true })
@@ -204,8 +186,7 @@ describe('real TUI shapes survive a replay', () => {
     }
   })
 
-  // An agent that negotiated the kitty keyboard protocol keeps it: the pane is
-  // already on the buffer the snapshot describes, so nothing should switch.
+  // Same-buffer replay must not switch and confiscate the live agent’s negotiated Kitty flags.
   it('keeps a live agent kitty negotiation when no buffer switch is needed', async () => {
     const options = {
       cols: 20,
@@ -239,14 +220,12 @@ describe('real TUI shapes survive a replay', () => {
 })
 
 describe('repeated gap and restore cycles', () => {
-  // Each restore must be idempotent: three gaps in a row should leave the pane
-  // exactly where one does, with no state accumulating across the prologues.
+  // Repeated gaps/restores must be idempotent without accumulating prologue state.
   it('converges on the same frame after three successive restores', async () => {
     const model = createRendererParityTerminal({ cols: 20, rows: 4 })
     const once = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
     const thrice = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
-    // Attributes and a mode-sensitive operation, not just text: stranded bold,
-    // margins and autowrap are all invisible to a text-only comparison.
+    // Check attributes and mode-dependent operations because text-only parity misses bold/margin/autowrap corruption.
     const describeFrame = async (terminal: Terminal): Promise<string> => {
       await writeToTerminal(terminal, '\x1b[3;1Hzz\bY')
       return JSON.stringify({
@@ -276,8 +255,7 @@ describe('repeated gap and restore cycles', () => {
 })
 
 describe('content fidelity through a replay', () => {
-  // Wide glyphs, combining sequences and an exact-width wrap are where a
-  // mis-grounded autowrap or insert mode shows up as lost or shifted cells.
+  // Wide, combining and exact-width text expose incorrect insert/autowrap baselines as cell loss or shifts.
   const payloads = [
     { label: 'CJK wide glyphs', body: '日本語テキスト' },
     { label: 'emoji with ZWJ', body: 'a👩‍💻b' },

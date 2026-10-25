@@ -10,7 +10,7 @@ import {
 import { ptyBindingGenerationOf } from './pty-binding-generations'
 import type { PartitionEditorViews } from './layout-editor-views'
 
-/** Gets the domains a write changed; undefined when it may have changed any of them. */
+/** Undefined means any domain may have changed. */
 export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
 
 const SAVE_DEBOUNCE_MS = 1_000
@@ -54,7 +54,7 @@ export class WriteSchedulingOperations {
     await Promise.all([runtime.pendingWrite, runtime.activeViewPreference.waitForPendingWrite()])
   }
 
-  /** Called after each in-memory workspace-session write; listeners must not throw or block. */
+  /** Observe in-memory session writes; callbacks must not throw or block. */
   onWorkspaceSessionWritten(listener: WorkspaceSessionWriteListener): () => void {
     const { runtime } = this[writeSchedulingOperationsContext]
     runtime.workspaceSessionWriteListeners.add(listener)
@@ -63,10 +63,7 @@ export class WriteSchedulingOperations {
     }
   }
 
-  /**
-   * Layout-owner builds: called once per durable mutation, after its partitions' write notices,
-   * with those partitions; listeners must not throw or block.
-   */
+  /** Main-owned layouts notify once after all declared partitions; callbacks must not throw or block. */
   onWorkspaceSessionOperationEnded(listener: WorkspaceSessionOperationListener): () => void {
     const { runtime } = this[writeSchedulingOperationsContext]
     runtime.workspaceSessionOperationListeners.add(listener)
@@ -75,17 +72,15 @@ export class WriteSchedulingOperations {
     }
   }
 
-  /** A pane's binding generation in this process, for readers of its writes; see pty-binding-generations. */
   getPtyBindingGeneration(hostId: ExecutionHostId, leafId: string): number | undefined {
     return ptyBindingGenerationOf(this[writeSchedulingOperationsContext].runtime, hostId, leafId)
   }
 
-  /** A partition's in-memory editor tab views, for the layout projection; see layout-editor-views. */
   getLayoutEditorViews(hostId: ExecutionHostId): PartitionEditorViews | undefined {
     return this[writeSchedulingOperationsContext].runtime.layoutEditorViews.get(hostId)
   }
 
-  /** Called after each in-memory write that schedules a save; listeners must not throw or block. */
+  /** Observe save-scheduling writes; callbacks must not throw or block. */
   onStateWritten(listener: StateWriteListener): () => void {
     const { runtime } = this[writeSchedulingOperationsContext]
     runtime.stateWriteListeners.add(listener)
@@ -95,7 +90,6 @@ export class WriteSchedulingOperations {
   }
 }
 
-/** `writtenHostId` names the one session partition this save changed, if it changed only one. */
 export function scheduleSave(
   owner: WriteSchedulingOperations,
   dirtyDomains?: readonly string[],

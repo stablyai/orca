@@ -65,7 +65,6 @@ describe('InlineUsageBars', () => {
       <InlineUsageBars limits={claudeLimits()} isFetching={false} />
     )
 
-    // Why: bars show % used with explicit "used" so compact labels are not ambiguous.
     expect(markup).toContain('32% used 5h')
     expect(markup).toContain('16% used wk')
     expect(markup).toContain('42% used Fable')
@@ -91,15 +90,13 @@ describe('InlineUsageBars', () => {
     const { InlineUsageBars } = await import('./StatusBar')
 
     const limits = claudeLimits()
-    // ~1h 20m away; +5s buffer keeps the floor-based formatter at '1h 20m'
-    // across the few ms between snapshot and render.
+    // Buffer the floor-based countdown so snapshot-to-render delay cannot lose a minute.
     limits.session!.resetsAt = Date.now() + 80 * 60_000 + 5_000
 
     const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
 
     expect(markup).toContain('32% used 1h 20m')
     expect(markup).not.toContain('32% used 5h')
-    // Non-session bars keep their fixed labels.
     expect(markup).toContain('16% used wk')
     expect(markup).toContain('42% used Fable')
   })

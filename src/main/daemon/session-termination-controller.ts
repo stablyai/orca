@@ -1,7 +1,5 @@
-import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import type { TuiAgent } from '../../shared/tui-agent'
 import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
   SESSION_FORCE_KILL_RETRY_MS
@@ -14,7 +12,6 @@ const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
 export type SessionTerminationControllerDeps = {
   sessionId: string
   subprocess: SubprocessHandle
-  launchAgent: TuiAgent | null
   isExited(): boolean
   releaseProducerPause(opts: { resume: boolean }): void
 }
@@ -49,36 +46,6 @@ export class SessionTerminationController {
     // Resume a child blocked on write before snapshotting so it can process termination.
     this.deps.releaseProducerPause({ resume: true })
     return true
-  }
-
-  kill(): void {
-    if (!this.beginTermination()) {
-      return
-    }
-    if (!this.deps.launchAgent) {
-      this.signalTerminationRoot()
-    } else {
-      // Detached agent tool groups can survive the shell’s SIGHUP.
-      void Promise.resolve(
-        killWithDescendantSweep(
-          this.deps.subprocess.pid,
-          () => {
-            this.signalTerminationRoot()
-          },
-          {
-            // A root that exited during inspection may already have a recycled PID.
-            ownsRoot: () => !this.deps.isExited(),
-            terminateOwnedTree: () => this.deps.subprocess.terminateOwnedTree()
-          }
-        )
-      ).catch((error) => {
-        if (!this.deps.isExited()) {
-          this.resetTerminationAfterSignalFailure()
-        }
-        console.warn('[Session] descendant-aware graceful kill failed:', error)
-      })
-    }
-    this.scheduleForceDisposeFallback()
   }
 
   signalTerminationRoot(): void {

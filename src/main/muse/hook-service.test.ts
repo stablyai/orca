@@ -76,7 +76,9 @@ describe('MuseHookService', () => {
     expect(script).toContain('/hook/muse')
     // Stdin payloads avoid oversized command-line EDR signals.
     expect(script).toContain(
-      process.platform === 'win32' ? 'payload@-' : 'printf \'%s\' "$payload" | curl'
+      process.platform === 'win32'
+        ? 'payload@-'
+        : 'printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl'
     )
   })
 

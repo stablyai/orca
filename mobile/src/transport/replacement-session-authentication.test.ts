@@ -66,9 +66,7 @@ describe('waitForAuthenticated', () => {
     expect(outcome.error?.message).toBe('replacement session authentication timed out')
   })
 
-  // The 2026-09-03 incident: the cell accepted relay-auth and spent 14–16s in its
-  // lock-contended assignment transactions. The flat 12s bound hung up 2–4s before
-  // the cell finished, five dials in a row, while the desktop was live the whole time.
+  // Allow lock-contended cell assignment past the opening deadline through per-stage budgets.
   it('re-arms the bound per stage once the cell holds the dial', async () => {
     const session = new FakeRelaySession()
     const waiting = waitForAuthenticated(session, 12_000)

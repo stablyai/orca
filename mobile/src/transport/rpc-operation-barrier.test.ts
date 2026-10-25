@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from './types'
 import { FakeSession } from './mobile-endpoint-supervisor-test-fakes'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
@@ -40,7 +40,9 @@ describe('the post-barrier combinator', () => {
     startRpcOperation(second, terminalListAtBarrier, {})
 
     expect(first.sendRequest).toHaveBeenCalledTimes(1)
+    expect(first.sendRequest).toHaveBeenCalledWith('worktree.ps', {}, undefined)
     expect(second.sendRequest).toHaveBeenCalledTimes(1)
+    expect(second.sendRequest).toHaveBeenCalledWith('terminal.list', {}, undefined)
   })
 
   it('yields one verdict per operation, in declared order', async () => {
@@ -53,9 +55,7 @@ describe('the post-barrier combinator', () => {
     expect(verdicts).toEqual([rows, { terminals: [] }, false])
   })
 
-  // The bug class this exists to remove: whichever peer lost the race used to decide which
-  // error the user saw. Here the second request fails first in time and the first one refuses
-  // afterwards, and the declaration still decides.
+  // Make the second request fail first to prove declaration order controls the surfaced refusal.
   it('interprets in declared order rather than completion order', async () => {
     const lateRefusal = deferred<RpcResponse>()
     const refusing = new FakeSession('connected')
@@ -91,26 +91,32 @@ describe('the post-barrier combinator', () => {
   })
 
   it('does not interpret until every raw request has settled', async () => {
-    const refusing = replying(rpcRefusal('runtime_error', 'boom'))
-    const pending = deferred<RpcResponse>()
-    const stalled = new FakeSession('connected')
-    stalled.sendRequest.mockReturnValue(pending.promise)
+    vi.useFakeTimers()
+    try {
+      const refusing = replying(rpcRefusal('runtime_error', 'boom'))
+      const pending = deferred<RpcResponse>()
+      const stalled = new FakeSession('connected')
+      stalled.sendRequest.mockReturnValue(pending.promise)
 
-    const barrier = interpretAtRpcBarrier([
-      startRpcOperation(refusing, workspaceListAtBarrier, {}),
-      startRpcOperation(stalled, terminalListAtBarrier, {})
-    ])
-    const raced = await Promise.race([
-      barrier.then(
-        () => 'resolved' as const,
-        () => 'rejected' as const
-      ),
-      settleAfter(50)
-    ])
-    expect(raced).toBe('still waiting')
+      const barrier = interpretAtRpcBarrier([
+        startRpcOperation(refusing, workspaceListAtBarrier, {}),
+        startRpcOperation(stalled, terminalListAtBarrier, {})
+      ])
+      const raced = Promise.race([
+        barrier.then(
+          () => 'resolved' as const,
+          () => 'rejected' as const
+        ),
+        settleAfter(50)
+      ])
+      await vi.advanceTimersByTimeAsync(50)
+      expect(await raced).toBe('still waiting')
 
-    pending.resolve(rpcSuccess({ terminals: [] }))
-    await expect(barrier).rejects.toThrow('runtime_error: boom')
+      pending.resolve(rpcSuccess({ terminals: [] }))
+      await expect(barrier).rejects.toThrow('runtime_error: boom')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('rethrows a captured transport rejection as the original error object', async () => {

@@ -68,6 +68,14 @@ export type TransientFactEvent = {
   payload: DaemonTransientFact
 }
 
+/** The child may still run, but its PTY master no longer takes input; older mains ignore this. */
+export type InputClosedEvent = {
+  type: 'event'
+  event: 'inputClosed'
+  sessionId: string
+  payload: { incarnationId: PtyIncarnationId }
+}
+
 export type DaemonEvent =
   | DataEvent
   | ExitEvent
@@ -75,3 +83,4 @@ export type DaemonEvent =
   | SessionBackgroundMarkerEvent
   | DataGapEvent
   | TransientFactEvent
+  | InputClosedEvent

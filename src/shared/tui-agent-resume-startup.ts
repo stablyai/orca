@@ -37,8 +37,7 @@ export function buildAgentResumeStartupPlan(args: {
   if (!resumeArgv) {
     return null
   }
-  // Why: Codex otherwise prompts for the folder, defaulting to the recorded one even once it was
-  // deleted (#17745). Kept before `resume` so dropAgentResumeArgvFromCommand strips only that.
+  // Codex otherwise asks for its old folder, even if deleted (#17745). Keep before resume so argv removal preserves the folder choice.
   const argv =
     args.agent === 'codex' && args.resumeInLaunchCwd
       ? [resumeArgv[0], '-c', 'tui.resume_cwd=current', ...resumeArgv.slice(1)]

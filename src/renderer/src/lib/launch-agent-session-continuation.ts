@@ -101,9 +101,7 @@ export async function launchAgentSessionContinuation({
   signal
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
   const label = getAgentLabel(agent)
-  // Why: the paste helper writes blind when the agent's composer was never observed, so a
-  // written prompt is not a delivered one. Claiming success there is how the whole handoff
-  // could vanish silently (#22479).
+  // Blind PTY writes do not prove prompt delivery; claiming success can hide a lost handoff (#22479).
   let deliveryUnconfirmed = false
   const delivery = {
     agent,

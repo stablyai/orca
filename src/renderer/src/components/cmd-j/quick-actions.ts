@@ -68,9 +68,7 @@ export async function runBrowserWorkspaceAction(
   return runWorkspaceAction(ctx, run)
 }
 
-// Why: Cmd+J actions are for high-frequency, safe, context-light verbs.
-// Context-heavy setup flows such as Ghostty import and browser cookie import
-// stay inside their Settings panes where explanatory UI and failure states fit.
+// Keep context-heavy imports in Settings, where explanatory UI and failure states fit.
 export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] => [
   {
     id: 'new-browser-tab',

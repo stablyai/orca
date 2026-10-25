@@ -37,7 +37,7 @@ describe('resolveOrcadLegacyKeyringReader', () => {
       args: ['find-generic-password', '-s', 'orca-headless-secret-store', '-w', '-a', 'acct'],
       timeoutMs: 5_000
     })
-    // errSecInteractionNotAllowed: locked, with no UI allowed.
+    // errSecInteractionNotAllowed: keychain locked with UI disallowed.
     runner.mockResolvedValueOnce(result({ code: 36, stderr: 'User interaction is not allowed.' }))
     expect(await read('acct')).toEqual({ failure: 'exited 36' })
     runner.mockResolvedValueOnce(result({ code: null, timedOut: true }))

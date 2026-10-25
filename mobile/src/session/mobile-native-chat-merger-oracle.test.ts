@@ -19,18 +19,16 @@ function msg(id: string, overrides: Partial<NativeChatMessage> = {}): NativeChat
   }
 }
 
-// ORACLE: the stateful merger (cached index, applyAppend) must deep-equal the
-// pure mergeNativeChatMessages for every prefix of an adversarial subscribe
-// sequence — the cache must never diverge from a full rebuild (#18).
+// Compare each adversarial prefix with the pure merger so cached indexes cannot diverge from a full rebuild.
 describe('mobile stateful merger — oracle vs pure merge', () => {
   const base = [msg('a'), msg('b', { source: 'hook' })]
   const batches: NativeChatMessage[][] = [
-    [msg('c')], // pure tail
-    [], // empty frame
-    [msg('b', { source: 'transcript', blocks: [{ type: 'text', text: 'final' }] })], // supersede
-    [msg('b', { source: 'scrape' })], // lower priority — ignored
-    [msg('a')], // re-emit, no change
-    [msg('d'), msg('e')] // multi tail
+    [msg('c')],
+    [],
+    [msg('b', { source: 'transcript', blocks: [{ type: 'text', text: 'final' }] })],
+    [msg('b', { source: 'scrape' })],
+    [msg('a')],
+    [msg('d'), msg('e')]
   ]
 
   it('matches the pure merge for every prefix', () => {

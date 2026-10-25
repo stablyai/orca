@@ -13,9 +13,7 @@ export function isWindowVisible(): boolean {
 
 export function installWindowVisibilityInterval(args: {
   run: () => void
-  // Why: callers that drop refresh signals while hidden can treat the
-  // becoming-visible run as evidence-bearing (something may have been missed)
-  // instead of a bare interval tick. Defaults to `run`.
+  // Visibility transition is evidence-bearing for hidden signal-dropping callers; default it to run.
   runOnVisible?: () => void
   intervalMs: number
   setIntervalFn?: (callback: () => void, intervalMs: number) => WindowVisibilityIntervalTimer
@@ -66,9 +64,7 @@ export function installWindowVisibilityInterval(args: {
     } else {
       visibleRun()
     }
-    // Why: many callers shell out or cross IPC. Keep their interval alive only
-    // while Orca can present the refreshed data, but still refresh a visible
-    // unfocused window so status UI does not go stale on a second display.
+    /** Pause expensive IPC/process intervals only while unpresentable; visible unfocused windows still need fresh status on other displays. */
     intervalId = setIntervalFn(args.run, args.intervalMs)
   }
   const reconcile = (): void => {

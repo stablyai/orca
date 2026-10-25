@@ -6,6 +6,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { MobileNativeChatItemSourceContext } from './mobile-native-chat-item-read'
 import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
@@ -23,10 +24,8 @@ const message: NativeChatMessage = {
   shortened: true,
   blocks: [{ type: 'text', text: 'head' }]
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only client identity is used; this fixture performs no RPC.
-const first = {} as RpcClient
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only client identity is used; this fixture performs no RPC.
-const second = {} as RpcClient
+const first = stubRpcClient()
+const second = stubRpcClient()
 let renderer: ReactTestRenderer | undefined
 afterEach(() => {
   act(() => renderer?.unmount())

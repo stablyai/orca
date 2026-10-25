@@ -1,23 +1,12 @@
 #!/usr/bin/env node
-// Benchmark: the renderer-side scans that run over a whole reattach payload.
-//
-//  1. hasCursorAgentReattachPayloadScreenSignal — compares the old hand-rolled char-by-char
-//     CSI strip against the shipped shape (256KB tail + shared CSI_SEQUENCE_PATTERN). Every
-//     variant is asserted to agree with the baseline before it is timed.
-//  2. TerminalKittyKeyboardModeTracker.scanReplay — measured to justify leaving it alone, and
-//     to record that an includes() introducer pre-filter makes it slower.
-//
-// Payloads are generated deterministically (LCG, no Math.random) so runs compare.
-//
-// Run with:  node config/scripts/terminal-reattach-payload-scan-benchmark.mjs
+// Compare replay signal’s old CSI scan with shipped 256KB-tail/shared-regex path; assert equivalence before timing deterministic seeded payloads.
+// Also measure Kitty-mode scan unchanged and with slower includes prefilter; run node config/scripts/terminal-reattach-payload-scan-benchmark.mjs.
 import { performance } from 'node:perf_hooks'
 import { CSI_SEQUENCE_PATTERN } from '../../src/shared/ansi-escape-sequences.ts'
 import { TerminalKittyKeyboardModeTracker } from '../../src/shared/terminal-kitty-keyboard-mode-tracker.ts'
 
 const ROUNDS = Number(process.env.ORCA_REATTACH_SCAN_BENCH_ROUNDS ?? '7')
 const MIN_ITERATION_MS = 120
-
-// --- payload generation -----------------------------------------------------
 
 function makeRng(seed) {
   let state = seed >>> 0
@@ -47,8 +36,7 @@ const WORDS = [
   'ok'
 ]
 
-// Heavily SGR-colored scrollback, ~120 cols/line — what a serialized daemon snapshot
-// of a colorized TUI/build log looks like.
+// Model SGR-heavy ~120-column serialized TUI/build-log scrollback.
 function buildColoredScrollback(targetBytes, seed) {
   const rng = makeRng(seed)
   const lines = []
@@ -98,8 +86,6 @@ function buildPayloads() {
   ]
 }
 
-// --- strip variants ---------------------------------------------------------
-
 // Baseline: verbatim copy of pty-connection.ts:448 (not exported).
 function stripBaseline(data) {
   let normalized = ''
@@ -131,7 +117,6 @@ const SUFFIX_RAW_CHARS = 256 * 1024
 
 const signalBaseline = (data) => hasSignal(stripBaseline(data))
 const signalRegex = (data) => hasSignal(stripRegex(data))
-// The shipped shape.
 const signalSuffixRegex = (data) =>
   hasSignal(stripRegex(data.length > SUFFIX_RAW_CHARS ? data.slice(-SUFFIX_RAW_CHARS) : data))
 
@@ -142,8 +127,6 @@ function hasSignal(normalized) {
   }
   return normalized.slice(headerIndex + HEADER.length, headerIndex + TAIL_CHARS).includes(`${'→'} `)
 }
-
-// --- timing -----------------------------------------------------------------
 
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
@@ -167,7 +150,7 @@ function timeMsPerCall(fn, arg) {
 }
 
 function measure(fn, arg) {
-  timeMsPerCall(fn, arg) // warmup / JIT
+  timeMsPerCall(fn, arg)
   const samples = []
   for (let round = 0; round < ROUNDS; round++) {
     samples.push(timeMsPerCall(fn, arg))
@@ -177,8 +160,6 @@ function measure(fn, arg) {
 
 const pad = (value, width) => String(value).padStart(width)
 const kb = (data) => `${(data.length / 1024).toFixed(0)}KB`
-
-// --- run --------------------------------------------------------------------
 
 const payloads = buildPayloads()
 
@@ -227,8 +208,7 @@ for (const { name, data } of payloads) {
   )
 }
 
-// The gate can only pay off where no introducer exists: live plain-output chunks, not
-// snapshots (which carry ?1049h/?25l by construction).
+// Prefilter only helps live plain output; snapshots already contain introducers by construction.
 const liveChunk = buildColoredScrollback(4 * 1024, 5).replaceAll('\x1b', '')
 const introducerRows = [
   ['4KB live chunk, no escapes', liveChunk],
@@ -247,8 +227,7 @@ console.log(
   '\nSnapshot/replay payloads always contain \\x1b[?, so the includes() gate never fires on\nthe reattach path — it only helps the live per-chunk path.'
 )
 
-// Reference point: xterm parses the same bytes right after these scans run, so its cost
-// is the yardstick for whether the scans are worth cutting.
+// Time xterm on identical bytes as reference cost for deciding whether scan optimization matters.
 const xtermHeadless = await import('@xterm/headless')
 const Terminal = xtermHeadless.Terminal ?? xtermHeadless.default.Terminal
 const writeToXterm = (data) =>

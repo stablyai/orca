@@ -8,10 +8,10 @@ import { adoptStablePane } from './ipc/pty/pane/adopt-stable'
 import { PtyHostNotDispatchableError } from './ipc/pty/provider/registry'
 import {
   testState,
-  createStoreWithSshRemotePtyLeases,
-  makeTerminalTab
-} from './persistence-test-harness'
-import { TEST_LEAF_1 } from './persistence-session-fixtures'
+  createStoreWithSshRemotePtyLeases
+} from './persistence/persistence-test-harness'
+import { makeTerminalTab, TEST_LEAF_1 } from './persistence/persistence-session-fixtures'
+
 import { PtyExitProof } from './pty-exit-proof'
 
 vi.mock('electron', () => ({

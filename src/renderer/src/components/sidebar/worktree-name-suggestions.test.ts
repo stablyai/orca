@@ -7,9 +7,7 @@ import {
   shouldApplySuggestedName
 } from './worktree-name-suggestions'
 
-// Always selects the first element of the unused pool, so assertions are exact.
 const pickFirst = () => 0
-// Suggestions are lowercased (branch-name convention), so expectations are too.
 const lower = (index: number) => MARINE_CREATURES[index].toLowerCase()
 const retiring = (...names: string[]) => ({ exhaustedTiers: 0, names })
 
@@ -31,8 +29,6 @@ describe('getSuggestedCreatureName', () => {
   })
 
   it('never reuses a name already used in another repo', () => {
-    // Regression guard: the old per-repo scoping would have returned Nautilus
-    // here because the active repo had no worktrees of its own.
     expect(
       getSuggestedCreatureName(
         {
@@ -58,8 +54,7 @@ describe('getSuggestedCreatureName', () => {
   })
 
   it('never reissues a retired name whose workspace is already deleted', () => {
-    // The bug this guards: the deleted workspace's path still holds agent conversation
-    // history, so handing the name out again gives the next occupant someone else's chat.
+    // Reusing a deleted workspace’s name reuses its path and can expose the previous agent conversation.
     expect(getSuggestedCreatureName({}, pickFirst, retiring(MARINE_CREATURES[0]))).toBe(lower(1))
   })
 
@@ -80,7 +75,6 @@ describe('getSuggestedCreatureName', () => {
   })
 
   it('skips a retired suffixed variant when falling back past an exhausted pool', () => {
-    // Tier numbering must not rewind onto a spent variant after its workspace is deleted.
     const allUsed = MARINE_CREATURES.map((name) => ({ path: `/tmp/worktrees/${name}` }))
     expect(
       getSuggestedCreatureName({ 'repo-1': allUsed }, pickFirst, retiring(`${lower(0)}-2`))
@@ -150,8 +144,7 @@ describe('MARINE_CREATURES', () => {
       'Hogsucker',
       'Mudsucker',
       'Hardhead',
-      // Real marine organisms, but the bare word reads as a fruit, flower, or
-      // land insect rather than something from the sea.
+      // These sea-organism names read as fruit, flowers or land insects without context.
       'Olive',
       'Tulip',
       'Cone',

@@ -23,6 +23,20 @@ describe('terminal quick commands', () => {
     expect(normalizeTerminalQuickCommands([])).toEqual([])
   })
 
+  it('preserves lists larger than forty commands across loading and protocol parsing', () => {
+    const commands = Array.from({ length: 100 }, (_, index) => ({
+      id: `command-${index}`,
+      label: `Command ${index}`,
+      action: 'terminal-command' as const,
+      command: 'echo saved',
+      appendEnter: true,
+      scope: { type: 'repo' as const, repoId: `project-${index}` }
+    }))
+
+    expect(normalizeTerminalQuickCommands(commands)).toEqual(commands)
+    expect(parseNormalizedTerminalQuickCommands(commands)).toEqual(commands)
+  })
+
   it('removes quick commands from the abandoned preset rollout', () => {
     expect(
       normalizeTerminalQuickCommands([

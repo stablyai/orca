@@ -85,7 +85,6 @@ describe('OrcaRuntimeService', () => {
         title: 'claude agents'
       })
     )
-    // Stale "working" suppressed; agent identity retained for native chat.
     const suppressed = result.tabs[0]
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.state).toBe('done')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.agentType).toBe('claude')
@@ -141,8 +140,7 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Switch point: the desktop's tab name is main's own layout, renamed by main's command
-      // (#31571), not the window's published row; generated names: orca-runtime-desktop-tab-names.
+      // #31571: rename through main-owned layout, not window publication; generated names have separate coverage.
       const [{ handle }] = (await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals
       await runtime.renameTerminal(handle, 'Build fixer')
       runtime.onPtyData('renamed-pty', '\x1b]0;⠂ Claude Code\x07', 124)
@@ -159,7 +157,6 @@ describe('OrcaRuntimeService', () => {
     const renamed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(renamed.tabs[0]).toEqual(expect.objectContaining({ title: 'Build fixer' }))
 
-    // #30538: a generated name the desktop shows outranks every OSC frame, as it does there.
     publish(2, { customTitle: null, generatedTitle: 'Fix tab titles' })
     const generated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(generated.tabs[0]).toEqual(expect.objectContaining({ title: 'Fix tab titles' }))
@@ -237,7 +234,6 @@ describe('OrcaRuntimeService', () => {
         title: 'zsh'
       })
     )
-    // Stale "working" suppressed; agent identity retained for native chat.
     const suppressed = result.tabs[0]
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.state).toBe('done')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.agentType).toBe('claude')
@@ -356,7 +352,6 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const pending = runtime.closeTerminalTab(terminal.handle)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main closes the tab in its own layout, so there is no renderer close to await.
       await expect(pending).resolves.toEqual({
         handle: terminal.handle,
         tabId: 'host-tab',
@@ -458,7 +453,6 @@ describe('OrcaRuntimeService', () => {
       clientNavigationId: 'device-a'
     })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main commits the close itself, so no renderer close holds a publication lease.
       await expect(pending).resolves.toEqual({ closed: true })
       expect(closeTerminalTab).not.toHaveBeenCalled()
       expect(setBackgroundThrottling).not.toHaveBeenCalled()
@@ -470,7 +464,7 @@ describe('OrcaRuntimeService', () => {
 
     acknowledged.resolve()
     await expect(pending).resolves.toEqual({ closed: true })
-    // The final release restores throttling on the next task, after any native destruction.
+    // Release restores throttling next task, after native destruction.
     await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
   })
 
@@ -550,7 +544,6 @@ describe('OrcaRuntimeService', () => {
       clientNavigationId: 'device-a'
     })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // #31571: main's own close commits before any renderer could persist a removal.
       await expect(pending).resolves.toEqual({ closed: true })
       expect(kill).toHaveBeenCalledWith('persisted-pty')
       expect(closeTerminalTab).not.toHaveBeenCalled()
@@ -628,7 +621,6 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({ id: 'headless-right' })
     const kill = vi.fn(() => true)
     const durableStore = withDurableRuntimeStore({ ...runtimeStore, flushOrThrow })
-    // As the Store runs main's `layout.apply`: one durable write.
     const runtime = new OrcaRuntimeService(
       Object.assign(durableStore, {
         applyLayoutCommand: durableSessionLayoutApply(durableStore, {

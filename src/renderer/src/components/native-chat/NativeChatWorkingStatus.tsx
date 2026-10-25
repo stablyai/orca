@@ -44,8 +44,7 @@ function turnStatusLabel(
   }
 }
 
-/** The turn bar under the user's message: a running clock while the turn works,
- *  then the settled duration, which toggles the turn's folded detail. */
+/** Run the clock beneath the prompt; after settlement its duration toggles turn details. */
 export function NativeChatWorkingStatus({
   startedAt,
   workedSeconds,

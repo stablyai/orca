@@ -5,10 +5,6 @@ import {
 import { buildResolvePullRequestConflictsPrompt } from '../../../src/shared/source-control-conflict-prompts'
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 
-// Pure prompt builders for the mobile PR sidebar's "Fix checks with AI" /
-// "Resolve conflicts with AI" triage actions. Kept free of React/native imports
-// so they unit-test under the node Vitest config.
-
 export { getBrokenChecks }
 
 export function hasBrokenChecks(checks: PRCheckDetail[]): boolean {

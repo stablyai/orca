@@ -63,12 +63,7 @@ export function captureError(error: unknown, depth = 0): RecordedValue {
   }
 }
 
-/**
- * `startedAt` and `settledAt` are virtual milliseconds on the pinned fake clock. They give the
- * observation a temporal dimension: a transition the product schedules for itself, such as a
- * request deadline or a debounce, is recorded at the time it actually happens, so any change to
- * that duration moves a recorded number rather than needing a scenario placed across it.
- */
+// Virtual settlement timestamps make deadline/debounce changes observable without scenarios straddling each duration.
 export type Settlement =
   | { status: 'pending'; startedAt: number }
   | { status: 'fulfilled'; startedAt: number; settledAt: number; value: RecordedValue }

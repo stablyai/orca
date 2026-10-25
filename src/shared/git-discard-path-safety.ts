@@ -58,8 +58,7 @@ function assertTargetIsWorktreeChild(
   originalFilePath: string
 ): void {
   const relativeTarget = path.relative(resolvedWorktreePath, resolvedTarget)
-  // Why: force-removing the worktree root is never a valid untracked discard,
-  // even when callers accidentally pass an empty or self-referential path.
+  // Never force-remove the worktree root, including empty/self-referential discard paths.
   if (
     relativeTarget === '' ||
     relativeTarget === '.' ||
@@ -83,8 +82,7 @@ async function validateUntrackedDiscardTarget(
 
   try {
     const targetStats = await lstat(resolvedTarget)
-    // Why: discard should remove a symlink leaf itself, but symlinked parents
-    // must not redirect recursive removal outside the real worktree.
+    // Remove symlink leaves themselves; symlink parents must not redirect recursive deletion outside the worktree.
     const pathToValidate = targetStats.isSymbolicLink()
       ? path.dirname(resolvedTarget)
       : resolvedTarget
@@ -118,8 +116,7 @@ export async function removeSafeUntrackedDiscardTargets(
     await validateUntrackedDiscardTarget(worktreePath, filePath)
   })
 
-  // Why: bulk discard must validate every untracked path before mutating
-  // tracked files, then recheck before the caller's Git-bounded cleanup runs.
+  // Validate all untracked paths before tracked mutations, then recheck before Git-bounded cleanup.
   await beforeRemove?.()
 
   await forEachWithConcurrency(filePaths, DISCARD_PATH_VALIDATION_CONCURRENCY, async (filePath) => {

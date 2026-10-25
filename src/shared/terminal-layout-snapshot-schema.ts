@@ -1,16 +1,10 @@
-// The stored terminal pane layout of one tab: its pane tree and per-pane records.
-
 import { z } from 'zod'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import { salvagedOptional, salvagingRecord } from './zod-salvage'
 
-// ─── Terminal pane layout (recursive) ───────────────────────────────
-
 const terminalPaneSplitDirectionSchema = z.enum(['vertical', 'horizontal'])
 
-// Why: z.lazy + type annotation keeps the recursive inference working without
-// forcing zod to resolve the whole tree at definition time. Discriminated on `type` because a
-// plain union re-tries the leaf branch for every split node of every restored terminal layout.
+// Lazy annotated recursion avoids eager inference; discriminated dispatch avoids retrying leaf parsing at every split.
 export const terminalPaneLayoutNodeSchema: z.ZodType<TerminalPaneLayoutNode> = z.lazy(() =>
   z.discriminatedUnion('type', [
     z.object({

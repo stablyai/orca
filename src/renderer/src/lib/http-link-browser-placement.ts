@@ -27,17 +27,12 @@ export type HttpLinkBrowserTabState = Partial<
   ) => Pick<BrowserWorkspace, 'activePageId'> | undefined
 }
 
-/** How the remote opener places and focuses a link's tab; same rule as a local link. */
 export type HttpLinkBrowserRequestFields = Pick<
   OpenWorkspaceBrowserTabRequest,
   'targetGroupId' | 'split' | 'focusOnCreate' | 'selectWorktree'
 >
 
-/**
- * Where a link opened from an Orca surface lands: the browser already on screen, else a split
- * beside the clicked pane so the terminal or agent stays visible. Clicking a pane focuses its
- * group, so the worktree's active group is the link's source.
- */
+/** Use the visible browser or split beside the clicked pane so its terminal/agent stays visible; click focus identifies the source group. */
 export function resolveHttpLinkBrowserPlacement(
   state: Omit<HttpLinkBrowserTabState, 'createBrowserTab'>,
   worktreeId: string

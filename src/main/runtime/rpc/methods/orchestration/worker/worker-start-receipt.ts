@@ -20,9 +20,7 @@ export function failWorkerStartWithReceipt(args: {
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
-  // Only name cleanup this start actually left behind: a terminal it created and still owns. A
-  // structured session is discarded by the teardown, a pane the user typed into is theirs, and an
-  // unknown outcome is not settled — none of the three has anything for `worker-release` to close.
+  // Offer cleanup only for this start's created, still-owned terminal; structured teardown, user takeover and unsettled unknown outcomes need none here.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
   const releasable =
     residual?.ownership_state === 'owned' && !isStructuredWorkerHandle(residual.terminal_handle)

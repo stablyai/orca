@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-// Checks a profile's saved workspace layout against the structural layout rules
-// (src/shared/workspace-layout/workspace-layout-rules.ts). Works on a running dev app's
-// profile too. Usage: node config/scripts/check-workspace-layout-rules.mjs <userDataDir>
-// Exits 1 when any rule is broken, printing one line per breach.
+// Validate saved layout against shared structural rules, including live dev profiles; print breaches and exit 1.
+// Usage: node config/scripts/check-workspace-layout-rules.mjs <userDataDir>
 
 import { build } from 'esbuild'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'

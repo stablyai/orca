@@ -34,8 +34,7 @@ function formatSize(bytes: number | null | undefined): string {
   return `${Math.round(bytes / 1_000_000)} MB`
 }
 
-// Lets the user enable dictation and download or pick a speech model on the paired
-// computer, from the phone. Polls while a download is in flight.
+// Configure paired computer’s dictation/model from phone; poll while download is in flight.
 export function MobileDictationSetupSheet({ visible, client, onClose, onReady }: Props) {
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -128,8 +127,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
-      {/* Why: BottomDrawer already scrolls its children in a keyboard-aware container;
-          a nested capped ScrollView cut off the lower controls. */}
+      {/* BottomDrawer already scrolls above keyboard; nested capped ScrollView clipped lower controls. */}
       <View>
         <Text style={styles.heading}>Set up voice dictation</Text>
         <Text style={styles.subtitle}>

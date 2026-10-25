@@ -31,7 +31,6 @@ const hostStore = vi.hoisted(() => {
   ]
   const pending: (() => void)[] = []
   return {
-    /** When set, each read waits for `resolveAll` instead of answering at once. */
     deferred: false,
     pending,
     loadHosts(): Promise<typeof hosts> {
@@ -99,13 +98,12 @@ describe('Tasks header desktop subtitle', () => {
   it('reserves the line before the read and never shows the previous desktop after a switch', async () => {
     hostStore.deferred = true
     const tree = await renderStatusBar('studio')
-    // Reserved and blank while the first read is in flight, so the title does not move later.
     expect(subtitleOf(tree).props.children).toBe('')
     await act(async () => {
       tree.update(createElement(StatusBar, { hostId: 'buildbox' }))
     })
     expect(subtitleOf(tree).props.children).toBe('')
-    // Studio Mac's read answers after the switch; only Build Box's may land.
+    // A delayed reply from the previous host must not replace the current subtitle.
     await act(async () => {
       hostStore.pending.shift()!()
     })

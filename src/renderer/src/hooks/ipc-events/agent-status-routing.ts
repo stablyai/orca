@@ -28,8 +28,7 @@ export function isAgentStatusForRecentlyClosedTab(
   return tabId ? store.recentlyClosedAgentStatusTabIds[tabId] === true : false
 }
 
-/** A host replay the renderer has already seen; a replayed `done` that differs from the current row
- *  ended while the host was unreachable, so it is not a replay of anything this renderer saw. */
+/** Seed only previously seen host replays; a changed done row may represent completion while unreachable. */
 export function isSeenHostReplay(
   data: Pick<
     AgentStatusIpcPayload,
@@ -95,15 +94,7 @@ export function applyResolvedAgentTerminalTitleToTab(
   store.updateTabTitle(parsed.tabId, nextTitle)
 }
 
-/**
- * `currentTabTitle` must be the TAB record's title, not the pane's layout slot. This path writes
- * `tab.title` and nothing else, so comparing against `titlesByLeafId` — which only a mounted pane
- * updates — skipped the write whenever the two slots had diverged, stranding a self-authored
- * "<Agent> - action required" label on the tab after the agent had already reported done.
- *
- * Inside a batch, pass the staged `tabTitlesByTabId` value when one exists: the batch flushes tab
- * titles at the end, so an earlier event's staged write is what a later event actually overwrites.
- */
+/** Compare the tab title this path writes, never the independently updated pane slot. Batched events compare against staged titles so later events overwrite the latest pending value. */
 export function shouldApplyResolvedAgentTerminalTitleToTab(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string,
@@ -135,7 +126,7 @@ export function resolveHookPayloadAgentType(
   ) {
     return payload
   }
-  // Why: OpenClaude emits Claude-compatible hooks; the title is the last renderer signal to keep it out of Claude-only status paths.
+  // OpenClaude uses Claude-compatible hooks; title evidence keeps it out of Claude-only handling.
   return { ...payload, agentType: 'openclaude' }
 }
 

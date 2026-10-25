@@ -24,7 +24,6 @@ type RemoteFileBrowserEntryListProps = {
   handleRowDoubleClick: (entry: DirEntry) => void
 }
 
-/** File listing */
 export function RemoteFileBrowserEntryList({
   loading,
   error,
@@ -42,7 +41,6 @@ export function RemoteFileBrowserEntryList({
     [preview]
   )
 
-  // Render the preview listing (own filter/error) during path mode, the committed listing otherwise.
   const displayEntries = isPreviewActive ? previewFilteredEntries : filteredEntries
   const displayEmptyDirCopy = isPreviewActive
     ? `${preview!.resolvedPath} is empty`
@@ -84,7 +82,7 @@ export function RemoteFileBrowserEntryList({
             </p>
           </div>
         ) : displayEntries.length === 0 && !preview?.error ? (
-          // Directory has contents but the filter hides them all — distinct from an empty directory so copy stays accurate.
+          // Filtered-out entries need different copy from a directory that is genuinely empty.
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
             <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>

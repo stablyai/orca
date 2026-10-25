@@ -58,9 +58,7 @@ export function resolveEditorOpenTargetGroupId(
     groups.find((group) => group.id === state.activeGroupIdByWorktree?.[worktreeId]) ??
     fallbackGroup
   const activeTab = getGroupActiveTab(activeGroup, tabsById)
-  // Why: only a focused agent *terminal* should defer to an existing editor pane
-  // (#6891). Editor, browser, and simulator panes open the file in the focused
-  // group so it lands where the user is looking instead of a stale editor pane.
+  // Only focused agent terminals defer to existing editors; other pane kinds open where the user looks (#6891).
   if (!activeTab || activeTab.contentType !== 'terminal') {
     return activeGroup.id
   }
@@ -162,10 +160,7 @@ export type EditorLinkOpenPlacement =
   | { kind: 'default' }
   | { kind: 'refused' }
 
-/**
- * Link-intent extension of resolveEditorOpenTargetGroupId: an explicit target is honored
- * or refused as captured; an automatic open ranks groups around the source's current group.
- */
+/** Honor/refuse explicit captured targets; automatic links rank around source’s current group. */
 export function resolveEditorLinkOpenPlacement(
   state: LinkPlacementState,
   worktreeId: string,

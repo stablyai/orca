@@ -38,7 +38,6 @@ export type GlobalSessionEventArgs = {
   coordinator: VisibilityResumeCoordinator
 }
 
-/** Apply one event from the all-worktrees stream, including visibility inventory fencing. */
 export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
   const {
     environmentId,

@@ -41,7 +41,6 @@ describe('selectNativeChatViewState', () => {
     expect(state).toEqual({ kind: 'error', message: 'boom' })
   })
 
-  // The pane's own translated line fills in, which for the structured chat says the read retries.
   it('maps an error with no text to no message', () => {
     expect(selectNativeChatViewState(session({ messages: [], status: 'error' }))).toEqual({
       kind: 'error'
@@ -55,8 +54,7 @@ describe('selectNativeChatViewState', () => {
     expect(state).toEqual({ kind: 'ready', isWorking: false })
   })
 
-  // The terminal-backed read does not retry; its only messages on error are local echoes (a launch
-  // prompt, a pending send), which must not hide the error and its way back to the terminal.
+  // Terminal reads do not retry; local echoes must not hide errors or the route back to the terminal.
   it('shows a terminal-backed read error over local echoes', () => {
     const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }))
     expect(state).toEqual({ kind: 'error', message: 'boom' })
@@ -72,16 +70,14 @@ describe('selectNativeChatViewState', () => {
     ).toBe('empty')
   })
 
-  // A known session working with nothing to show is a transcript that has not
-  // flushed yet (#11032), so hold loading rather than flash the empty state.
+  // Unflushed known sessions stay loading instead of flashing empty (#11032).
   it('holds loading for a known session working before its transcript flushes', () => {
     expect(selectNativeChatViewState(session({ messages: [], status: 'working' })).kind).toBe(
       'loading'
     )
   })
 
-  // Why status, not view state: the composer reads session.status, so the pane
-  // must offer Stop the moment a bubble lands mid-turn.
+  // The composer reads session.status, which must retain working for Stop while the view loads.
   it('keeps working status for a known session so the composer can offer Stop', () => {
     expect(selectNativeChatViewState(session({ status: 'working' }))).toEqual({
       kind: 'ready',

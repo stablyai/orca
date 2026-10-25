@@ -42,10 +42,7 @@ export type SourceControlAgentActionDialogProps = {
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
   onOpenSettings?: () => void
-  /**
-   * Fires when the agent tab is created, before deferred prompt delivery finishes.
-   * Reversible bookkeeping only; irreversible host writes belong in onLaunched.
-   */
+  /** Tab creation precedes prompt delivery: use reversible bookkeeping here; host writes belong in onLaunched. */
   onLaunchAccepted?: () => void
   /** Fires when an accepted launch later failed to deliver its prompt. */
   onLaunchAborted?: () => void
@@ -103,8 +100,7 @@ export function SourceControlAgentActionDialog(
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      {/* Why: saved receipts auto-start in the background, so the fallback content
-          stays unmounted to avoid flashing a dialog the user already skipped. */}
+      {/* Saved receipts auto-start; leave fallback content unmounted to prevent a dialog flash. */}
       {shouldRenderDialog ? (
         <DialogContent className="flex max-h-[min(82vh,42rem)] min-w-0 flex-col overflow-hidden sm:max-w-2xl">
           <DialogHeader className="shrink-0">

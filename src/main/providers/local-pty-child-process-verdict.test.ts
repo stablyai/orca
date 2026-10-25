@@ -26,7 +26,7 @@ import { LocalPtyProvider } from './local-pty-provider'
 import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from './pty-process-inspection'
 
-// Bare, so the retired pane's spawn file equals the recorded name (the path's basename).
+// Match the recorded basename so only the retired descriptor distinguishes the pane from idle.
 const POSIX_SHELL = 'sh'
 
 function registerPane(id: string, foreground: string | (() => string), shell?: string): void {
@@ -54,11 +54,7 @@ function registerPane(id: string, foreground: string | (() => string), shell?: s
   }
 }
 
-/**
- * A real node-pty whose master has been given up. The getter does not throw here -- it answers
- * `POSIX_SHELL`, which is exactly the recorded shell name, so only the descriptor distinguishes
- * this pane from an idle one.
- */
+/** Retired node-pty getters still report the spawn name; only descriptor state distinguishes this from idle. */
 async function registerRetiredPane(id: string): Promise<pty.IPty> {
   const term = pty.spawn(POSIX_SHELL, ['-c', 'exit 0'], {
     name: 'xterm-256color',
@@ -156,9 +152,8 @@ describeOnPosix('inspectLocalPtyChildProcesses on a retired master', () => {
   it('reports unverifiable rather than reading the spawn file as an idle shell', async () => {
     const term = await registerRetiredPane('pty-retired')
 
-    // The mechanism is silent: this is the same string an idle pane reports.
     expect(term.process).toBe(POSIX_SHELL)
-    // Not `no-children`: the close guard reads that as "nothing is running here" and kills the pane.
+    // False idle would authorize pane termination despite the unreadable descriptor.
     expect(await inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
   }, 15000)
 })

@@ -1,8 +1,7 @@
 export type TerminalKeyboardPlatform = 'android' | 'ios' | 'web' | 'windows' | 'macos'
 export type TerminalKeyboardType = 'default'
 
-// Why: default keyboards keep non-Latin IMEs selectable; ASCII-only keyboards hide them.
-// Parameters stay for call-site stability while autocomplete no longer changes the keyboard.
+// Keep default keyboards for non-Latin IMEs; ASCII-only modes hide them. Autocomplete no longer changes this choice.
 export function getTerminalLiveInputKeyboardType(
   _platform: TerminalKeyboardPlatform
 ): TerminalKeyboardType {

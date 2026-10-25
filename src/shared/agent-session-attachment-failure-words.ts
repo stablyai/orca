@@ -1,5 +1,3 @@
-// The words for an attachment a message could not carry: which check it failed, and the limit.
-
 import type {
   AgentSessionAttachmentProblem,
   AgentSessionAttachmentProblemReason

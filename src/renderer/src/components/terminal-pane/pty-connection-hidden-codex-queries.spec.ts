@@ -24,6 +24,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionHiddenCodexQueriesTests(): void {
   let mockStoreState: StoreState
@@ -74,12 +75,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          })
+        )
       )
       await flushAsyncTicks(6)
 
@@ -115,13 +118,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
         const pane = createPane(1)
         const manager = createManager(1)
         const binding = connectPanePty(
-          pane as never,
-          manager as never,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The connection fixture supplies the hidden pane APIs with this explicit startup command.
-          createDeps({
-            isVisibleRef: { current: false },
-            startup: { command }
-          }) as never
+          ...mockPanePtyArgs(
+            pane,
+            manager,
+            createDeps({
+              isVisibleRef: { current: false },
+              startup: { command }
+            })
+          )
         )
         await flushAsyncTicks(6)
 
@@ -148,12 +152,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          })
+        )
       )
       await flushAsyncTicks(6)
 
@@ -181,12 +187,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          })
+        )
       )
       await flushAsyncTicks(6)
 
@@ -219,12 +227,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          })
+        )
       )
       await flushAsyncTicks(6)
 
@@ -257,12 +267,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          })
+        )
       )
       await flushAsyncTicks(6)
 
@@ -293,12 +305,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef: { current: false },
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef: { current: false },
+            startup: { command: 'codex' }
+          })
+        )
       )
       await flushAsyncTicks(6)
 
@@ -330,12 +344,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef,
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef,
+            startup: { command: 'codex' }
+          })
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -374,12 +390,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef,
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef,
+            startup: { command: 'codex' }
+          })
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -436,12 +454,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef,
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef,
+            startup: { command: 'codex' }
+          })
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -506,9 +526,11 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const isVisibleRef = { current: false }
       const pane = createPane(1)
       const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef, startup: { command: 'codex' } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          createDeps({ isVisibleRef, startup: { command: 'codex' } })
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -555,12 +577,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef,
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef,
+            startup: { command: 'codex' }
+          })
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -612,12 +636,14 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       pane.terminal.buffer.active.type = 'alternate'
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({
-          isVisibleRef,
-          startup: { command: 'codex' }
-        }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({
+            isVisibleRef,
+            startup: { command: 'codex' }
+          })
+        )
       )
       try {
         await flushAsyncTicks(6)
@@ -667,9 +693,11 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       pane.terminal.buffer.active.type = 'alternate'
       const manager = createManager(1)
       const binding = connectPanePty(
-        pane as never,
-        manager as never,
-        createDeps({ isVisibleRef, startup: { command: 'codex' } }) as never
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          createDeps({ isVisibleRef, startup: { command: 'codex' } })
+        )
       )
       try {
         await flushAsyncTicks(6)

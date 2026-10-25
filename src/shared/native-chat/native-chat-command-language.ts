@@ -30,11 +30,7 @@ function shellProgram(command: string): string | null {
   return name?.replace(/\.exe$/, '') ?? null
 }
 
-/**
- * The grammar for a command row, from the shell the command actually ran in: a
- * tool named after its shell, or the shell program the agent wrapped the
- * command in. Null when neither says, so the command stays plain.
- */
+/** Choose syntax from the named tool shell or wrapped shell program, never host defaults. Unknown shell keeps plain text. */
 export function nativeChatCommandLanguage(toolName: string, input: unknown): string | null {
   const byName = LANGUAGE_BY_TOOL_NAME.get(toolName.trim().toLowerCase())
   if (byName) {

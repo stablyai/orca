@@ -11,8 +11,8 @@ import {
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
 import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
-import { isHiddenPtyDeliveryGateEnabled } from '../../pty-hidden-delivery-gate'
-import type { PendingPtyData } from '../../pty-pending-data-drain-contract'
+import { isHiddenPtyDeliveryGateEnabled } from './pty-hidden-delivery-gate'
+import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import type { PtyIpcSession } from '../session'
 

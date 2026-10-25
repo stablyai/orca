@@ -41,8 +41,7 @@ export default function FeatureWallModal(): JSX.Element | null {
               'Get to know Orca'
             )}
           </DialogTitle>
-          {/* Why: Radix requires a description for the dialog to be a11y-compliant,
-              but we don't want it visible - the rail and step copy already orient users. */}
+          {/* Provide Radix’s accessible description without duplicating visible tour copy. */}
           <DialogDescription className="sr-only">
             {translate(
               'auto.components.feature.wall.FeatureWallModal.33dca8bbbe',

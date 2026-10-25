@@ -60,8 +60,7 @@ function launchCliNameFor(repo: Repo): string {
 }
 
 describe('buildWorktreeStartupForAgent host resolution', () => {
-  // Why two hosts: one SSH fixture passes even when the launch shape is resolved off another
-  // host's row, which is the shape of the `ssh:m4air` -> openclaw leak.
+  // Two hosts catch launch shapes resolved from another host's row (ssh:m4air to openclaw leak).
   it('drops the Linux-only rename for both spellings of SSH ownership on two hosts', () => {
     expect(launchCliNameFor(makeRepo({ connectionId: 'm4air' }))).toBe('orca')
     expect(launchCliNameFor(makeRepo({ executionHostId: 'ssh:openclaw' }))).toBe('orca')
@@ -119,7 +118,7 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
   })
 })
 
-// Relied on by C2/C4: a host-built startup is typed into the shell it was quoted for.
+// Host-built startup must use the same shell fact for quoting and spawn.
 it('quotes a worktree startup for its fact, not the Settings shell, and hands the fact on', () => {
   const pty = { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
   const launchRuntime: AgentLaunchRuntime = { platform: 'win32', pty }
@@ -176,8 +175,7 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
   })
 })
 
-// `worktree.create` through the launch executor passes no prompt for a blank one; the create must
-// launch the agent exactly as it did when handed the blank text itself.
+// A blank create prompt must launch like an omitted prompt.
 describe('buildWorktreeStartupForAgent blank prompt', () => {
   it.each(['claude', 'aider'] as const)(
     'launches %s bare for an absent or blank prompt',
@@ -228,8 +226,7 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
     expect(result?.agent).toBe('claude')
   })
 
-  // The host picks and launches this agent itself, so it is attributed like any other it builds,
-  // whether the draft rides the launch command or is pasted once the agent is up.
+  // Attribute every host-built launch whether its draft rides argv or arrives after startup.
   it.each([
     ['claude', 'cli', 'cli', false],
     ['claude', undefined, 'unknown', false],
@@ -362,8 +359,7 @@ describe('resolveWorktreeStartupDraftAgent', () => {
     expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
   })
 
-  // The requested agent replaces the default rather than preceding it, so a disabled request goes
-  // straight to detection — the order the create has always used.
+  // A disabled explicit request falls through to detection, not the default agent.
   it('detects instead of using the default when the requested agent is disabled', async () => {
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex', 'gemini'])
 
@@ -384,7 +380,7 @@ describe('resolveWorktreeStartupDraftAgent', () => {
     await expect(resolve({ disabledTuiAgents: ['codex'] })).resolves.toBe('claude')
   })
 
-  // Why: the SSH host runs the agent; an unserved host must never be answered by this client.
+  // An unserved SSH host cannot be answered by local detection.
   it('starts no agent on an unserved SSH host rather than detecting locally', async () => {
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex'])
 

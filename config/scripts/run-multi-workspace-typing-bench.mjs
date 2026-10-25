@@ -1,16 +1,5 @@
-/**
- * Entry point for the multi-workspace typing-latency bench
- * (tests/e2e/terminal-multi-workspace-typing-latency.spec.ts).
- *
- * Usage:
- *   pnpm bench:multi-workspace-typing [-- --panes 8 --rate-kbps 512 \
- *     --keys 48 --cadence-ms 250 --cpu-workers 4 --worktrees 870 \
- *     --repositories 27 --terminal-tabs 1410 --unified-tabs 2000 --label before-fix]
- *
- * Results land in tests/tools/benchmarks/results/multi-workspace-typing-*.json.
- * Run once per build/config with distinct --label values, then diff the
- * totalMs/inputHalfMs/echoHalfMs percentiles.
- */
+// Run pnpm bench:multi-workspace-typing -- --panes 8 --rate-kbps 512 --keys 48 --label before-fix (see terminal-multi-workspace-typing-latency.spec.ts).
+// Save distinct labels per build/config in tests/tools/benchmarks/results/multi-workspace-typing-*.json; compare totalMs/inputHalfMs/echoHalfMs percentiles.
 import { spawn } from 'node:child_process'
 
 const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'

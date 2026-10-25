@@ -168,8 +168,7 @@ describe('createRuntimeEnvironmentStoreSyncSubscriber', () => {
           sshStateByEnvironment,
           activeEnvironmentId: 'runtime-a'
         })
-        // Zustand publishes this nested write synchronously. The outer pass must
-        // absorb its generation instead of enumerating/syncing it a second time.
+        // The outer pass must absorb synchronous nested generation changes without syncing twice.
         subscriber(currentState, previousState)
       },
       sync: () => {

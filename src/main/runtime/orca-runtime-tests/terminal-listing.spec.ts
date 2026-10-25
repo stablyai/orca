@@ -29,7 +29,7 @@ describe('OrcaRuntimeService', () => {
         tabs: { type: string; terminal?: string | null }[]
       }
     }
-    // Two unclaimed live PTYs on the worktree; the worktree-only fallback binds either to a leafless tab that references it.
+    // Unclaimed PTYs can bind through the worktree-only fallback.
     internals.recordPtyWorktree('pty-shared', TEST_WORKTREE_ID, { connected: true })
     internals.recordPtyWorktree('pty-other', TEST_WORKTREE_ID, { connected: true })
 
@@ -43,7 +43,7 @@ describe('OrcaRuntimeService', () => {
       isActive: leafId === 'leaf-new'
     })
 
-    // Two records (stale headless leaf + live leaf) both resolve to the SAME live PTY — the renderer-graph origin the leaf fix can't reach.
+    // A stale headless leaf and live renderer leaf can resolve to the same PTY.
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
       worktree: TEST_WORKTREE_ID,
       publicationEpoch: 'renderer:test:1',
@@ -58,7 +58,6 @@ describe('OrcaRuntimeService', () => {
     expect(dedupedTerminals).toHaveLength(1)
     expect(dedupedTerminals[0].terminal).toBeTruthy()
 
-    // Split siblings own DISTINCT PTYs, so they must never be collapsed.
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
       worktree: TEST_WORKTREE_ID,
       publicationEpoch: 'renderer:test:2',

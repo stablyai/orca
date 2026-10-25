@@ -8,13 +8,7 @@ import {
   type MobileNativeChatSession
 } from './use-mobile-native-chat-session'
 
-/**
- * The older-history page is fire-and-forget, so anything that escapes its async body reaches the
- * document instead of a caller. `matrix-session.native-chat-page-nativechat.readsession-1` certified
- * five such effects at this one site: a rejected request (`transport failure`, and the empty-message
- * shape), a request the client abandons at teardown (`Connection closed`), and a `'error' in result`
- * read of a success whose result was absent or null, which throws a TypeError before any of that.
- */
+// Catch fire-and-forget history failures, including absent/null success payloads, before they become document-level rejections.
 
 function message(id: string): NativeChatMessage {
   return {
@@ -33,7 +27,7 @@ async function settleRejections(): Promise<void> {
   }
 }
 
-/** Owns the handler for the run: vitest's own would red the file before an assertion reads it. */
+// Temporarily own rejection listeners so assertions can inspect failures before Vitest handles them.
 async function unhandledRejectionsWhile(run: () => Promise<void>): Promise<unknown[]> {
   const captured: unknown[] = []
   const previous = process.rawListeners('unhandledRejection')
@@ -73,7 +67,6 @@ describe('the native chat older-history page', () => {
     return null
   }
 
-  /** A full first window with a cursor, which is what arms `hasMore` and lets a page go out. */
   function clientAnswering(page: () => Promise<unknown>): RpcClient {
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({
@@ -96,6 +89,12 @@ describe('the native chat older-history page', () => {
       state?.loadEarlier()
       await Promise.resolve()
     })
+    expect(client.sendRequest).toHaveBeenCalledExactlyOnceWith(
+      'nativeChat.readSession',
+      { agent: 'claude', sessionId: 'session', limit: 60, beforeOffset: 100 },
+      { timeoutMs: expect.any(Number), budgetSpansConnect: true }
+    )
+    expect(state?.olderPages).toBe('failed')
   }
 
   it('contains a rejected page request instead of raising unhandledrejection', async () => {
@@ -119,7 +118,6 @@ describe('the native chat older-history page', () => {
       })
 
       expect(captured).toEqual([])
-      // The delivered window is left exactly as it was, which is this operation's skip policy.
       expect(state?.loadingEarlier).toBe(false)
       expect(state?.messages).toHaveLength(40)
     })

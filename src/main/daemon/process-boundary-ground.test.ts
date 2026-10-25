@@ -103,13 +103,23 @@ describe('process boundary ground at a cold restore', () => {
     expect(checkpoint.snapshotAnsi).not.toContain('\x1b[?66h')
   })
 
-  it('keeps the cursor where the recovered history left it', () => {
+  it('grounds without moving the cursor', () => {
+    const live = emulator(DAEMON_SESSION_SCROLLBACK_ROWS)
+    write(live, 'OLD_OUTPUT_1\r\n$ ')
+    write(live, PROCESS_BOUNDARY_GROUND)
+    write(live, 'X')
+    expect(live.getBufferTailLines(24)[1]).toBe('$ X')
+  })
+
+  // awin verify-11: a reattach after Wake showed the new prompt beside the dead shell's (`$ $`).
+  it("starts the new shell's prompt on its own line, keeping the recovered history", () => {
     const live = seededLive(checkpointOfDeadProcess(''))
     write(live, 'NEW_SHELL_PROMPT')
 
-    const rows = live.getBufferTailLines(24)
-    expect(rows[0]).toBe('OLD_OUTPUT_1')
-    expect(rows[2]).toBe('$ NEW_SHELL_PROMPT')
+    const rows = live.getBufferTailLines(60).filter((row) => row.length > 0)
+    expect(rows.slice(0, 2)).toEqual(['OLD_OUTPUT_1', 'OLD_OUTPUT_2'])
+    expect(rows.some((row) => row.trim() === '$')).toBe(true)
+    expect(rows.at(-1)).toBe('NEW_SHELL_PROMPT')
   })
 
   it('never lets the new shell complete a torn escape from the dead process', () => {

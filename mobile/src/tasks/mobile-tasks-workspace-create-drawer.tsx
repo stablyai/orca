@@ -247,8 +247,6 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                 creatingKey === workspaceCreateDraft.item.key
               }
               onPress={() => {
-                // Why: this compact issue-to-workspace flow should match the
-                // basic create workspace path; sparse checkout can return later.
                 void createWorkspace(
                   workspaceCreateDraft.item,
                   workspaceCreateDraft.repoIdOverride,

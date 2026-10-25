@@ -17,7 +17,6 @@ vi.mock('./orcad-remote-node-runtime', () => ({
   ensureRemoteOrcadNodeRuntime: vi.fn().mockResolvedValue(undefined)
 }))
 
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import { installOrcadBundle } from './orcad-remote-install'
@@ -31,9 +30,9 @@ import {
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: All connection operations are mocked.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const mockExec = vi.mocked(execCommand)
 const mockUpload = vi.mocked(uploadRemoteInstallDirectory)
 const mockWrite = vi.mocked(writeRemoteInstallFile)

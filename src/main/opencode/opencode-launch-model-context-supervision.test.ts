@@ -9,8 +9,7 @@ import {
 } from '../codex/supervised-probe-owner.test-fixture'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 
-// Like `opencode serve`, it never exits on stdin end. It starts listening only after the session
-// stdin-end grace, so a supervisor that treated the probe's stdin end as a stop would kill it first.
+// Delay beyond stdin grace like a slow opencode serve startup; stdin EOF must not stop it.
 const SERVE = String.raw`
 setTimeout(() => {
   const server = require('node:http').createServer((request, response) => {
@@ -69,11 +68,9 @@ describe.runIf(process.platform !== 'win32')('supervised OpenCode launch-context
     })
     expect(existsSync(rig.signalFile) && readFileSync(rig.signalFile, 'utf8')).toBe('SIGTERM')
     expect(alive(pids.provider)).toBe(false)
-    // A descendant that ignores SIGTERM holds none of the probe's pipes, so a closed pipe never
-    // proved it gone; only the supervisor's group SIGKILL ends it.
+    // Closed pipes cannot prove this SIGTERM-ignoring descendant died; group SIGKILL must reap it.
     expect(alive(pids.grandchild)).toBe(false)
-    // Once the server exits on its SIGTERM, the rest of its group is killed at once, not after the
-    // SIGTERM grace; every launch waits on this preflight.
+    // Reap descendants immediately after server exit so every launch avoids the remaining grace.
     expect(stoppedAt - (rig.readEvents().SIGTERM ?? 0)).toBeLessThan(1_000)
   })
 

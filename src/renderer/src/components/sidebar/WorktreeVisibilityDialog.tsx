@@ -114,13 +114,12 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     setListState
   })
 
-  // Why: recovery must not trust a stale or fallback snapshot — an empty one
-  // would read as "nothing hidden" for a worktree that is sitting on disk (#10324).
+  // Require authoritative recovery scans; stale empty snapshots can hide worktrees that still exist on disk.
   useEffect(() => {
     if (!isOpen || !repoId) {
       return
     }
-    // Why: reopening mid-write must not start a scan that can absorb the mutation's confirmation refresh.
+    // Reopening mid-write must not start scans that absorb mutation confirmation refreshes.
     if (getActiveVisibilityMutation(mutationScope)) {
       return
     }
@@ -168,8 +167,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
               return
             }
             setActionState(state)
-            // Why: a null state is only reachable after a successful authoritative
-            // refetch, which supersedes an earlier failed open-time scan.
+            // Null action state proves an authoritative refetch succeeded, superseding the earlier failed scan.
             if (state === null) {
               setListState('ready')
             }

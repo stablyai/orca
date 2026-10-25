@@ -3,17 +3,14 @@ import { FileText, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../src/shared/native-chat-picker-items'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-/** One row of the composer menu: a `/` command or skill, or a worktree file for `@`. */
 export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }
 
-/** The text a row puts in place of the typed trigger. */
 export function composerMenuInsertText(row: ComposerMenuRow): string {
   return row.kind === 'file' ? `@${row.path}` : row.token
 }
 
 const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as const
 
-/** The floating card above the composer, grouped and labelled as desktop's `/` menu is. */
 export function MobileNativeChatComposerMenu({
   rows,
   onPick

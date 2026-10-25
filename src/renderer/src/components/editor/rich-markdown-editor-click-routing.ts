@@ -238,8 +238,7 @@ function openShiftModifiedMarkdownLink({
         : getLinkSourceLocalOpenOwner(useAppStore.getState(), sourceOwner, worktreeId)
     )
   ) {
-    // Why: Shift-click opens through the client OS, which cannot safely resolve
-    // server-local paths from SSH or remote runtime worktrees.
+    // Client-OS Shift-click cannot resolve server-local SSH/runtime paths safely.
     showLocalPathOpenBlockedToast()
     return
   }

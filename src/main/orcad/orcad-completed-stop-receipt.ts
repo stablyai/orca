@@ -1,4 +1,3 @@
-/** Durable outcomes of a managed stop, in the data root beside the instance lock. */
 import { lstatSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { z } from 'zod'
@@ -30,7 +29,7 @@ export function orcadStopReceiptPath(request: OrcadManagedStopRequest, kind: Rec
   )
 }
 
-/** `null` when absent; a receipt for a different request throws rather than reading as absent. */
+/** Absent returns null; mismatched request receipts throw. */
 export function readOrcadStopReceipt<T extends { request: OrcadManagedStopRequest }>(
   request: OrcadManagedStopRequest,
   kind: ReceiptKind,
@@ -68,10 +67,8 @@ export function readOrcadCompletedStopReceipt(
   return readOrcadStopReceipt(request, 'completed', OrcadCompletedStopReceiptSchema)
 }
 
-/**
- * Called only after exit is proven; rewriting an existing receipt re-runs its fsync. A retiring
- * request whose orcad left no retirement record reports `unverifiable`, never `retired`.
- */
+/** Persist only after proven exit and fsync even existing receipts.
+ * Missing retirement records remain unverifiable. */
 export function persistOrcadCompletedStopReceipt(
   request: OrcadManagedStopRequest,
   exitedAt: Date
@@ -105,7 +102,7 @@ export function persistOrcadDaemonRetirementRecord(
     schemaVersion: 1,
     kind: 'orcad_managed_stop_retirement',
     request: OrcadManagedStopRequestSchema.parse(request),
-    // Named, not spread: an in-process outcome may carry fields the strict record rejects.
+    // Name fields explicitly; extra in-process fields would fail the strict schema.
     retirement: outcome.retirement,
     liveSessions: outcome.liveSessions,
     reason: outcome.reason

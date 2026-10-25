@@ -27,8 +27,7 @@ export function getAiVaultResumeRepoTargetStatus(
   if (!repo) {
     return 'unknown'
   }
-  // Why: SSH and WSL targets use the normal PTY startup path. Runtime-owned
-  // repos intentionally keep connectionId null, so check the execution host.
+  // SSH/WSL use normal PTY startup; runtime ownership requires executionHost because its connectionId stays null.
   return getAiVaultResumeExecutionHostTargetStatus(getRepoExecutionHostId(repo))
 }
 
@@ -76,8 +75,7 @@ export function canResumeAiVaultSessionOnTarget(args: {
     return args.targetStatus !== 'local' || !args.targetWslDistro
   }
   if (args.targetStatus === 'runtime') {
-    // Runtime session stores live on one paired server; only queue resumes back
-    // onto that exact server host.
+    // Runtime session stores belong to one server; allow resumes only back onto that exact host.
     return Boolean(
       sessionExecutionHostId &&
       targetExecutionHostId &&
@@ -103,11 +101,7 @@ export function canResumeAiVaultSessionOnTarget(args: {
   return !sessionExecutionHostId || sessionExecutionHostId === LOCAL_EXECUTION_HOST_ID
 }
 
-/**
- * On Windows a WSL workspace and a Windows workspace are both `local`, but the agent runs
- * in only one of them and finds only that namespace's sessions (#24408). `undefined` is an
- * unknown namespace and refuses nothing; `null` is native.
- */
+/** Separate native/WSL local namespaces (#24408); undefined proves nothing and refuses nothing, while null means native. */
 function isAiVaultSessionInWslNamespace(
   sessionFilePath: string | null | undefined,
   targetWslDistro: string | null | undefined

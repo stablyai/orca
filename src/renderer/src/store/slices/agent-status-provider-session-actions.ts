@@ -84,8 +84,7 @@ export function createAgentStatusProviderSessionActions(
           const existingRecordMatchesProviderSession =
             existingRecord?.agent === agent &&
             agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
-          // Why: provider-session heartbeats can arrive after the turn is complete; preserve the
-          // completed checkpoint so a late heartbeat cannot make it eligible for ghost resume.
+          // Post-completion heartbeats must preserve completed checkpoints or they become ghost-resume candidates.
           const preservesCompletedRecoveryRecord =
             existingRecordMatchesProviderSession && existingRecord?.state === 'done'
           // Why: an explicit quit capture must remain the resume handle until a new provider session replaces it.
@@ -134,8 +133,7 @@ export function createAgentStatusProviderSessionActions(
             delete nextRetained[paneKey]
           }
           const retiredPaneKeys = new Set([paneKey])
-          // Why: on identity mismatch the sleeping record drops its launch config, so clear the stale
-          // registry entry too, else a later return to the old identity reuses stale args/env.
+          // Identity mismatch clears sleeping launch config; clear registry too or returning old identity reuses stale args/env.
           let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
           if (registryMatches && registryEntry) {
             nextLaunchConfigs = {
@@ -161,8 +159,7 @@ export function createAgentStatusProviderSessionActions(
               s.acknowledgedAgentsByPaneKey,
               retiredPaneKeys
             ),
-            // Why the cleared-at/manual-unread maps stay: the pane survives this transition, so a
-            // repeat heartbeat would resurrect cleared history. They are swept on pane retirement.
+            // Pane survives, so preserve cutoff/manual-unread against heartbeat history replay; retirement owns cleanup.
             unreadAgentCompletionPanes: removePaneKeys(
               s.unreadAgentCompletionPanes,
               retiredPaneKeys

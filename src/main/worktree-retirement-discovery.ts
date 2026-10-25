@@ -116,10 +116,10 @@ async function claudeProjectsSources(args: {
   let complete = true
   const hostParents = encodeParents(args.workspaceRoots)
   if (hostParents.length > 0) {
-    for (const projectsDir of [
+    for (const projectsDir of new Set([
       getClaudeProjectsDir(args.home ?? homedir(), args.env ?? process.env),
       ...claudeProfileHistoryDirs('projects')
-    ]) {
+    ])) {
       sources.push({ projectsDir, encodedParents: hostParents })
     }
   }

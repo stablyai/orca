@@ -156,7 +156,6 @@ describe('system SSH forward process', () => {
     expect(forwardFlagIdx).toBeGreaterThan(-1)
     expect(localForwardIdx).toBeGreaterThan(-1)
     expect(exitOnForwardFailureIdx).toBeGreaterThan(-1)
-    // Why: -N and -L must appear before -- or OpenSSH treats them as remote command args.
     expect(forwardFlagIdx).toBeLessThan(terminatorIdx)
     expect(localForwardIdx).toBeLessThan(terminatorIdx)
     expect(args[exitOnForwardFailureIdx - 1]).toBe('-o')
@@ -205,8 +204,7 @@ describe('system SSH forward process', () => {
     expectNoOrcaControlMasterArgs(args)
   })
 
-  // Why: through the user's master, the master owns the listener (it outlives the child's kill)
-  // and logs sshd's refusals on its own stderr, where the managed tunnel never sees them.
+  // A user master owns the listener and refusal stderr beyond the client's lifetime.
   it("never rides the user's ssh_config ControlMaster", () => {
     spawnMock.mockReturnValue(createFakeProcess())
 
@@ -301,7 +299,6 @@ describe('system SSH forward process', () => {
       startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
     ).rejects.toThrow('Local port 127.0.0.1:5173 is not available')
     expect(stopOrphanMock).toHaveBeenCalledWith(5173, expect.any(Array))
-    // Why: any fixed-port forward reaches here, and the master's forward may be the user's own.
     expect(cancelMuxedMock).not.toHaveBeenCalled()
     expect(spawnMock).not.toHaveBeenCalled()
   })
@@ -535,11 +532,7 @@ describe('system SSH forward process', () => {
 
     await vi.advanceTimersByTimeAsync(1)
 
-    // Why asserted before awaiting `pending`: dropping the post-kill bound is the regression this
-    // test exists to catch, and awaiting a promise that then never settles reports it as a 30s suite
-    // timeout instead of a failed assertion.
-    // Why this is not a death claim: the promise resolving bounds teardown; nothing here records the
-    // child as gone or drops state that assumes it is.
+    // Assert before awaiting so a missing bound fails directly; resolving teardown does not prove child exit.
     expect(resolved).toBe(true)
     expect(child.kill).toHaveBeenCalledTimes(2)
     await pending

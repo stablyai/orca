@@ -47,7 +47,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('profile-state recovery launch', () => {
-  it('preserves direct participation only for plain Node without an explicit Electron executable', () => {
+  it('requires an app executable or Electron Node mode to launch recovery', () => {
     vi.stubEnv('ELECTRON_RUN_AS_NODE', undefined)
     vi.stubEnv('ORCA_APP_EXECUTABLE', undefined)
     expect(canLaunchProfileStateRecovery()).toBe(false)

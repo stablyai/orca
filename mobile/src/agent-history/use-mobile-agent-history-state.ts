@@ -19,9 +19,7 @@ import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
 
-// Why: mirror the desktop renderer's SESSION_LIMIT=500. limit caps only the
-// global recency list; the in-scope Claude union is capped separately host-side,
-// so the response can still be large — hence virtualization + lazy preview.
+// Match desktop SESSION_LIMIT=500 for recency only; host separately caps in-scope union, so large responses still need virtualization/lazy previews.
 const MOBILE_AI_VAULT_SESSION_LIMIT = 500
 
 export type AgentHistoryScreenState =
@@ -34,8 +32,7 @@ export type MobileAgentHistoryStateParams = {
   hostId: string
   worktreeId: string
   worktrees: readonly Worktree[]
-  // Why: distinguishes "worktree list not fetched yet" from "fetched, but this
-  // worktree isn't in it" so a scoped tab holds loading only for the former.
+  // Distinguish unfetched worktree list from fetched-but-missing workspace; only first holds loading.
   worktreesLoaded: boolean
 }
 
@@ -75,9 +72,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     [worktrees, worktreeId]
   )
   const activeWorktreePath = activeWorktree?.path ?? null
-  // Why: the host union only widens, so the screen narrows by these cwd
-  // path-prefixes for the current scope (empty for 'all'). Same derivation the
-  // RPC scopePaths use, reused client-side for the actual narrowing.
+  // Reuse host hint prefixes for client narrowing: host union only widens, and All leaves prefixes empty.
   const scopeFilterPaths = useMemo(
     () => deriveMobileAiVaultScopePaths(scope, activeWorktree, worktrees),
     [scope, activeWorktree, worktrees]
@@ -95,9 +90,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       if (!client || connState !== 'connected') {
         if (isCurrent()) {
           setHostStatusProbe(null)
-          // Why: keep the stale list visible through transient reconnects
-          // (connState flips re-run the load effect) instead of tearing it
-          // down to a full-screen error, matching the host list screen.
+          // Keep stale rows visible during reconnect reloads instead of replacing them with full-screen error, matching host list.
           setScreenState((prev) =>
             prev.kind === 'ready' ? prev : { kind: 'error', message: 'Waiting for host…' }
           )
@@ -107,8 +100,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
 
       setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
       try {
-        // Gate on the capability so older hosts lacking the method are detected
-        // and we never call a missing RPC.
+        // Gate capability before calling RPC absent on older hosts.
         const statusReply = await agentHistoryHostStatusRead.request(client)
         if (!isCurrent()) {
           return
@@ -123,10 +115,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           return
         }
 
-        // Why: a scoped tab needs the active worktree's path to narrow. Until the
-        // worktree list has loaded, hold loading rather than firing an unscoped
-        // fetch that would briefly show unrelated host history. Once loaded we
-        // proceed even if the worktree isn't found, to avoid a stuck spinner.
+        // Wait for worktree list before scoped fetch to avoid unrelated history flash; once loaded, proceed even if workspace is missing to avoid stuck spinner.
         if (options.scope !== 'all' && !activeWorktree && !worktreesLoaded) {
           if (isCurrent()) {
             setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
@@ -166,11 +155,9 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     [activeWorktree, client, clientGeneration, connState, hostId, worktrees, worktreesLoaded]
   )
 
-  // Initial + reconnect load. Why: scope switches reuse the host's 15s cache
-  // (force:false) so a tab tap is cheap; only an explicit refresh bypasses it.
+  // Initial/reconnect/scope loads reuse host’s 15s cache; only explicit refresh bypasses it.
   useEffect(() => {
     void loadSessions({ scope, force: false })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- scope handled by onSelectScope
   }, [loadSessions])
 
   const onSelectScope = useCallback(
@@ -184,8 +171,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
-      // Why: pull-to-refresh bypasses the host TTL (force:true) and joins any
-      // active inflight scan; otherwise a refresh within 15s shows no change.
+      // Refresh with force:true bypasses 15s TTL and joins inflight scan; cached result would show no change.
       await loadSessions({ scope, force: true })
     } finally {
       if (mountedRef.current) {

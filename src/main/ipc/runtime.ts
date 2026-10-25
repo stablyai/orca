@@ -73,8 +73,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher's RpcSuccess/RpcFailure union is the same envelope RuntimeRpcResponse describes; only the `result` generic differs, and this call site declares it as unknown.
-      return (await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
+      return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {
           id: 'desktop-ipc',
           authToken: 'desktop-ipc',
@@ -88,7 +87,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           connectionId: desktopSenders.connectionIdFor(event.sender),
           clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
         }
-      )) as RuntimeRpcResponse<unknown>
+      )
     }
   )
 

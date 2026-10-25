@@ -61,7 +61,7 @@ export function ZcodePlanAccountsSection({
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const storeZcodeUsage = useAppStore((s) => s.rateLimits.zcode)
   const hostLabel = host.label
-  // Why: this computer's poll says nothing about another host's plan.
+  // This computer’s usage poll cannot describe another host’s plan.
   const zcodeUsage = hostLabel === null ? storeZcodeUsage : null
   const { status, access, apiKeyDraft, setApiKeyDraft, credentialBusy, saveApiKey, clearApiKey } =
     useZcodePlanCredentials(zcodeUsage?.updatedAt, host.owner)
@@ -85,7 +85,7 @@ export function ZcodePlanAccountsSection({
     if (!siteEditable || (value !== 'zai' && value !== 'bigmodel') || value === site) {
       return
     }
-    // Why: the host invalidates and refreshes on this settings change, so no refresh is needed here.
+    // The host refreshes after this setting changes; avoid a duplicate request.
     void usageSettings.update({ zcodePlanSite: value })
   }
 

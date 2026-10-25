@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SshRemotePtyLease, SshTarget } from '../../../shared/ssh-types'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import {
   preflightOrcadMigrationExport,
@@ -74,7 +74,7 @@ describe('migration export preflight', () => {
   it('previews a connected but unused host as movable with no blockers', () => {
     const store = preflightStore((store) => {
       store.addSshTarget(TARGET)
-      // What the renderer writes on connect: the reconnect hint names the now-connected target.
+      // Connect writes this reconnect hint before migration preflight.
       store.patchWorkspaceSession({ activeConnectionIdsAtShutdown: [TARGET.id] })
     })
     expect(preflightOrcadMigrationExport(store, TARGET.id)).toMatchObject({

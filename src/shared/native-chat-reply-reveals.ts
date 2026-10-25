@@ -2,11 +2,9 @@
 
 import type { NativeChatTextReveal } from './native-chat-text-reveal'
 
-/** What one open transcript knows about its replies being drawn. Per transcript, because row
- *  keys are only unique within one: a legacy preview's live row has the same key in every chat. */
+/** Per-transcript reveal state: legacy live-row keys repeat across chats. */
 export type NativeChatReplyReveals = {
-  /** Rows that first appeared at the end of the transcript while it was open: replies that
-   *  began while the reader was watching, not ones already written when the pane opened. */
+  /** Tail replies first seen while the transcript was open; exclude history already written before opening. */
   begun: Set<string>
   /** How much of a row was drawn when it left the window, so returning does not replay it. */
   drawn: Map<string, NativeChatTextReveal>
@@ -28,8 +26,7 @@ export function createNativeChatReplyRevealTracker(): NativeChatReplyRevealTrack
   }
 }
 
-/** Brings the reveals up to the transcript's rows. Runs in render, so a row's first draw already
- *  knows; once per change of rows or loaded messages, so it is idempotent. */
+/** Update once per row/message change during render so first paint sees correct reveal state; idempotent. */
 export function trackNativeChatReplyRows(
   state: NativeChatReplyRevealTracker,
   rowKeys: readonly string[],
@@ -46,8 +43,7 @@ export function trackNativeChatReplyRows(
         drawn.delete(key)
       }
     }
-    // Known while loaded, so a row that leaves and returns (a section closed and reopened) is not
-    // taken for a reply beginning.
+    // Remember loaded rows across section collapse/reopen so returning history cannot begin a new reveal.
     if (lastKey !== undefined && !state.known.has(lastKey) && state.known.size > 0) {
       begun.add(lastKey)
     }

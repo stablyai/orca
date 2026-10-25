@@ -8,13 +8,7 @@ const require = createRequire(import.meta.url)
 const scriptDir = import.meta.dirname
 const mobileRoot = path.resolve(scriptDir, '..')
 const outputPath = path.join(mobileRoot, 'src', 'terminal', 'terminal-webview-engine.generated.ts')
-/**
- * The stylesheet is written beside the engine rather than inside it because the two have different
- * consumers. The WebView document needs both, as text; the web page needs the CSS and must never
- * resolve the 612 KiB engine string, which is unusable under the shell's `script-src 'self'` and
- * is the largest module the session route's closure would otherwise carry. One file each is what
- * lets the page import one without reaching the other.
- */
+// Emit stylesheet separately: native WebView needs both strings; page needs CSS without pulling in ~612 KiB engine string forbidden by script-src self.
 const cssOutputPath = path.join(
   mobileRoot,
   'src',
@@ -26,8 +20,7 @@ const target = 'chrome74'
 const packages = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-webgl']
 
 async function readPackageVersion(packageName) {
-  // Why: a package.json module specifier must use '/' — path.join emits '\' on
-  // Windows, yielding an unresolvable bare specifier that fails postinstall there.
+  // Use / in package specifier; path.join emits unresolvable backslashes on Windows.
   const packageJsonPath = require.resolve(`${packageName}/package.json`)
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
   return `${packageName}@${packageJson.version}`
@@ -103,10 +96,7 @@ async function main() {
     readFile(path.join(mobileRoot, 'assets', 'fonts', 'SymbolsNerdFontMono-Regular.woff2')),
     ...packages.map(readPackageVersion)
   ])
-  // Why: the no-external-URL regression gate bans http(s):// anywhere in the
-  // terminal document. These xmlns URIs live inside data: URLs (never fetched);
-  // percent-encoding the scheme colon satisfies the gate and URI-decodes back
-  // before the SVG is parsed.
+  // Percent-encode xmlns scheme colons inside data URLs: no fetch occurs, but literal http(s) trips document URL gate; SVG parsing decodes them.
   const engineCss = rawEngineCss
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/http:\/\/www\.w3\.org\/2000\/svg/g, 'http%3A//www.w3.org/2000/svg')

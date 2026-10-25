@@ -4,11 +4,11 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import type { PtyProcessInfo } from '../providers/pty-process-info'
 
 export function registerTerminalListExecutionHostScopeTests(): void {
-  // An agent once declared a task exited because `terminal list` came back without
-  // its worker: the worker was live on an SSH host, and nothing in the response
-  // said the listing was scoped or which host each row ran on.
+  // A scoped list must identify its hosts so omitting a live remote worker cannot be mistaken for exit.
 
   const LOCAL_WORKTREE_ID = 'repo-local::/tmp/local-worktree'
   const SSH_WORKTREE_ID = 'repo-ssh::/remote/ssh-worktree'
@@ -369,23 +369,24 @@ export function registerTerminalListExecutionHostScopeTests(): void {
       expect(result.hostScope?.omittedHostIds).toEqual(['local', 'ssh:box-1'])
     })
 
-    // The renderer's surface census can read an empty scope on a plain local machine, not
-    // only on a degraded host: a superseded inventory answers for no host at all.
-    it('reports an empty scope when a concurrent inventory refresh supersedes this one', async () => {
+    // A targeted listing a newer census overtook joins that census instead of answering for no
+    // host; re-listing would overtake the newer one in turn (two workspaces sleeping at once).
+    it('answers from a newer concurrent inventory refresh instead of an empty scope', async () => {
       const runtime = makeRuntime([])
       const releases: (() => void)[] = []
+      const listProcessesWithHostScope = vi.fn(
+        () =>
+          new Promise<{ processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }>((resolve) => {
+            releases.push(() => resolve({ processes: [], hostIds: [LOCAL_EXECUTION_HOST_ID] }))
+          })
+      )
       runtime.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'never' })),
         write: () => true,
         kill: () => true,
+        getForegroundProcess: async () => null,
         listProcesses: vi.fn(async () => []),
-        listProcessesWithHostScope: vi.fn(
-          () =>
-            new Promise((resolve) => {
-              releases.push(() => resolve({ processes: [], hostIds: ['local'] }))
-            })
-        )
-      } as never)
+        listProcessesWithHostScope
+      })
 
       const superseded = runtime.listTerminals(`id:${LOCAL_WORKTREE_ID}`)
       await vi.waitFor(() => expect(releases).toHaveLength(1))
@@ -394,8 +395,9 @@ export function registerTerminalListExecutionHostScopeTests(): void {
       releases[1]!()
       releases[0]!()
 
-      expect((await superseded).hostScope?.hostIds).toEqual([])
+      expect((await superseded).hostScope?.hostIds).toEqual(['local'])
       expect((await current).hostScope?.hostIds).toEqual(['local'])
+      expect(listProcessesWithHostScope).toHaveBeenCalledTimes(2)
     })
 
     it('reports the hosts a worktree-scoped listing skipped, so an empty result is not absolute', async () => {

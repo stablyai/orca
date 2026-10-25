@@ -6,12 +6,7 @@ import {
   resetRuntimeMobileAgentStatusProjectionCacheForTests
 } from './sync-runtime-graph/agent-status-projection'
 
-// Reference: the pre-change whole-array serialization, kept verbatim apart from the sort, which
-// is now a code-unit compare — the projection is only ever `===`-compared, never displayed, so it
-// needs to be deterministic rather than locale-correct. `localeCompareOrderedEntries` below pins
-// that the two orders still serialize the same entries. The bucket width is read from the module
-// under test so a drifted constant cannot make this reference silently disagree for a reason
-// unrelated to the change.
+// Keep pre-change serialization as oracle, except code-unit sorting used only for equality. Pin identical entries across locale order and read bucket width from production to avoid unrelated constant drift.
 const BUCKET_MS = AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS
 type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
 function mainAgentKey(mainAgent: MainAgentStatus) {
@@ -121,10 +116,7 @@ describe('mobile agent-status projection equivalence', () => {
       }).toEqual({ index, projection: referenceProjection(statusMap) })
     }
 
-    // Now exercise the cache: replace one entry the way setAgentStatus does and
-    // confirm the reused rows still produce the reference output. The changes must
-    // be observable in the projection — a sub-bucket updatedAt nudge is not, so a
-    // stale-entry reuse bug would slip through.
+    // Replace one entry like setAgentStatus and require observable projection change; sub-bucket timestamp nudges cannot catch stale reuse.
     let current = many
     for (let round = 0; round < 4; round += 1) {
       current = {
@@ -145,8 +137,7 @@ describe('mobile agent-status projection equivalence', () => {
 
   it('serializes the same entries the localeCompare order did', () => {
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    // Keys where locale and code-unit order disagree: 'tab-1:' sorts after 'tab-10:' by code unit
-    // (':' > '0') and before it by locale, and case/accent handling differs too.
+    // Use keys whose locale/code-unit orders differ, including tab-1: versus tab-10: and case/accents.
     const map: AppState['agentStatusByPaneKey'] = {}
     for (const paneKey of ['tab-1:leaf-0', 'tab-10:leaf-0', 'B:leaf-0', 'a:leaf-0', 'á:leaf-0']) {
       map[paneKey] = makeEntry(0, { paneKey })

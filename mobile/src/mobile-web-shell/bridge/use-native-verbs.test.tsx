@@ -1,10 +1,8 @@
-/** The page's side of the verbs, over the real pair: what it sends, and what it refuses to send. */
 import type { ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Avoid Expo imports through re-exported screen hooks; this test calls none of them.
 vi.mock('../../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -81,7 +79,6 @@ describe('a page calling a native verb', () => {
       mime: 'text',
       value: 'copied'
     })
-    // The whole point of the seam: it never reached the desktop's client.
     expect(pair.rpc.requests).toEqual([])
   })
 
@@ -128,17 +125,12 @@ describe('a shell that granted no native verbs', () => {
     expect(verbs.granted).toBe(false)
     const before = page.sent.length
     await expect(verbs.readClipboardText()).rejects.toThrow(/did not grant/)
-    // A rejection after a round trip and one that never left look the same to an `await`; only the
-    // first would have put a request on the wire.
+    // Inspect the wire to distinguish local refusal from an otherwise identical rejected round trip.
     expect(page.sent).toHaveLength(before)
   })
 })
 
-/**
- * The member exists so the raw port stays inside the module that owns it. That is only true while
- * it cannot be used as a raw port: a desktop method sent through it would reach the desktop, and
- * the inventory would not see it, because a bare-identifier call is not a shape the scan counts.
- */
+// The typed member must reject desktop methods too; widened callers could otherwise bypass the raw-port inventory’s call shapes.
 describe('the native verb member on the client', () => {
   it('refuses a method outside the prefix instead of sending it to the desktop', async () => {
     const pair = createFakeBridgePortPair()
@@ -154,12 +146,7 @@ describe('the native verb member on the client', () => {
   })
 })
 
-/**
- * Every refusal reaches the caller under one type, carrying the shell's own code.
- *
- * Without this a caller had to read message text to tell an out-of-scope mime from a clipboard too
- * large to send, and those are different things to do something about.
- */
+// Preserve one typed refusal with a stable code; callers must not distinguish recovery actions by message text.
 describe('a verb the shell refuses', () => {
   async function rejectionFrom(serveNativeVerb: () => Promise<unknown>): Promise<NativeVerbError> {
     const pair = createFakeBridgePortPair({ serveNativeVerb })
@@ -174,15 +161,13 @@ describe('a verb the shell refuses', () => {
   }
 
   it('names an out-of-scope mime as its own reason, without the handler message', async () => {
-    // A coded error, not the handler's class: what the host reads is the `code` property, so this
-    // is the contract between the two and importing the real class would pull react-native in.
+    // Model only the handler’s code property; importing its real class would load React Native into this test.
     const declined = Object.assign(new Error('image is not served by this build'), {
       code: 'native_verb_out_of_scope'
     })
     const error = await rejectionFrom(() => Promise.reject(declined))
     expect(error.reason).toBe('native_verb_out_of_scope')
-    // The handler's words stay on the device: this one names the mime, and a read that failed
-    // after reading could name what it read.
+    // Handler messages remain on-device because failed reads may contain the data they read.
     expect(error.message).not.toContain('image')
   })
 
@@ -198,7 +183,6 @@ describe('a verb the shell refuses', () => {
       (await rejectionFrom(() => Promise.resolve({ value: 'a'.repeat(9 * 1024 * 1024) }))).reason,
       (await rejectionFrom(() => Promise.resolve({ nonsense: 1 }))).reason
     ]
-    // No `unreported`: every path this build can take names itself.
     for (const reason of reasons) {
       expect(NATIVE_VERB_REASONS, reason).toContain(reason)
       expect(reason).not.toBe('unreported')
@@ -226,9 +210,7 @@ describe('a verb the shell refuses', () => {
 
 describe('a code this page has never heard of', () => {
   it('floors to unreported rather than crossing verbatim', async () => {
-    // Delivered as a frame, not through the pair: this build's host normalises an unknown code to
-    // `native_verb_failed` before it leaves, so the only way to be a page reading a shell newer
-    // than itself is to be handed the frame such a shell would send.
+    // Inject a newer-shell code directly; this host normalizes unknown codes before sending, so the pair cannot produce it itself.
     const page = createPageClient()
     page.deliver({ ...INIT, grants: { ...GRANTS, native: [...BRIDGE_NATIVE_VERB_NAMES] } })
     act(() => {

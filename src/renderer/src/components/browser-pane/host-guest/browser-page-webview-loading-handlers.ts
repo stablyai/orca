@@ -74,8 +74,7 @@ export function createBrowserPageWebviewLoadingHandlers({
   }
 
   const handleDidStopLoading = (): void => {
-    // Why every stop, success or failure: admission only starts a background-opened guest; once its
-    // first load settles, the normal active/paint-retention rules own whether it stays laid out.
+    // Admission starts background guests only; after any first load settlement, normal paint-retention rules decide layout.
     releaseBrowserPageMount(browserTabId)
     const currentUrl = webview.getURL() || webview.src || 'about:blank'
     const browserModelUrl = redactKagiSessionToken(currentUrl)
@@ -84,8 +83,7 @@ export function createBrowserPageWebviewLoadingHandlers({
       const attemptedUrl = redactKagiSessionToken(
         browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
       )
-      // Why: did-fail-load's own code says what happened (and whether waiting can fix it); only
-      // a failure that never reported one gets the generic message.
+      // Retain reported failure codes and retry semantics; use a generic message only when none arrived.
       const failure =
         resolveActiveBrowserLoadFailure(activeLoadFailure, attemptedUrl) ??
         ({

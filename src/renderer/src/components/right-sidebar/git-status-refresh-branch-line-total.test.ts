@@ -59,8 +59,7 @@ describe('branch line total request gate on git status refreshes', () => {
       deps: makeDeps()
     })
 
-    // Why: no OID on the request is the whole performance contract — the host
-    // runs no ranged diff, so a background worktree costs nothing.
+    // Omitting the merge base avoids host ranged-diff cost for background worktrees.
     expect(gitStatus).toHaveBeenCalledWith({
       admissionTier: 'status',
       worktreePath: '/repo',
@@ -109,8 +108,7 @@ describe('branch line total request gate on git status refreshes', () => {
     const gitStatus = stubGitStatus()
     setBranchLineTotalMergeBase('wt-1', MERGE_BASE)
 
-    // Why: this path used to build no options object at all, so the gate was
-    // silently dropped on the most common (fs-watcher) refresh.
+    // The common watcher refresh used to omit options and silently lose the gate.
     await refreshGitStatusForWorktree({
       target: { kind: 'local' },
       worktreeId: 'wt-1',
@@ -219,8 +217,7 @@ describe('branch line total request gate on git status refreshes', () => {
     })
   })
 
-  // Why: a strict refresh is exactly the commit/push/sync that moves the number;
-  // skipping the gate there would blank the chip until the next automatic poll.
+  // Commit/push/sync moves totals; keep the gate so strict refreshes cannot blank the chip.
   it('sends the merge base on a strict refresh', async () => {
     const gitStatus = stubGitStatus()
     setBranchLineTotalMergeBase('wt-strict', MERGE_BASE)

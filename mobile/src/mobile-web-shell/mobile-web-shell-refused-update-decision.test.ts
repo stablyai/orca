@@ -13,25 +13,15 @@ import {
 
 const DOWNLOAD_FAILED = { kind: 'failed', reason: 'download-failed', retriedOnce: false }
 
-/**
- * The host is up, it serves a generation this shell could not take, and one that works is on disk.
- *
- * Refusing the new bytes is right — a truncated asset does not hash, and a host that will not say
- * what it serves has not been read. What was wrong was the screen that followed: a wall with a
- * "Try again" over an intact workspace the offline path would have opened without being asked.
- * Falling back here is the same branch the unreachable host takes, so the generation is judged by
- * its own route list rather than by the manifest it was about to be replaced from.
- */
+// Refused updates should fall back to intact cached bytes under their own routes/grants, as offline entry does, while respecting any reachable host’s compatibility window.
 describe('an update this shell refused falls back to the generation that already works', () => {
-  /** The newer generation the host serves: different bytes, so a different id, and a route-grant
-   *  edit beside them that only the bundle carrying it may be run under. */
+  // Change assets and grants so the new manifest cannot safely authorize the old bytes.
   const NEWER = manifestFacts({
     ...MANIFEST_WIRE,
     buildId: 'c'.repeat(64),
     routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'storage'] }]
   })
 
-  /** Connected, N on disk, N+1 read and asked for, and its fetch refused. */
   function refused() {
     return run(
       afterCacheRead(CACHED).session,
@@ -98,10 +88,7 @@ describe('an update this shell refused falls back to the generation that already
   })
 
   it('walls the cached generation the host has moved past rather than serving it', () => {
-    // The hole the fallback opened. The offline branch skips the compat check because a host
-    // nobody can reach cannot have changed; this host answered, and an update usually exists
-    // precisely because it moved. Serving these bytes would run the page outside the protocol
-    // window the host it is talking to states.
+    // Unlike offline fallback, this reachable host can have moved outside the cached bundle’s compatibility window.
     const step = run(
       run(afterCacheRead(CACHED_BELOW_HOST_FLOOR).session, {
         type: 'manifest-read',
@@ -119,14 +106,11 @@ describe('an update this shell refused falls back to the generation that already
         requiredBundleRuntimeProtocolVersion: 1
       }
     })
-    // The wall, not the download-failed screen: what is wrong is the bundle against this host, and
-    // "Try again" would re-run a refusal that is not about the link.
     expect(withoutRecord(step.effects)).toEqual([])
   })
 
   it('shows the download failure when the cached bundle never carried the route, before any wall', () => {
-    // The newer manifest claimed the route, so the cache lacking it is this download's failure.
-    // Below the host's floor as well: the wall judges bytes about to be shown, and these are not.
+    // An unclaimed cached route is download failure, not a compat wall, even when those unused bytes are below the host floor.
     const fetching = run(afterCacheRead({ ...CACHED_BELOW_HOST_FLOOR, routes: [] }).session, {
       type: 'manifest-read',
       manifest: NEWER
@@ -138,8 +122,7 @@ describe('an update this shell refused falls back to the generation that already
   })
 
   it('shows the download failure for a generation from before routes were listed at all', () => {
-    // `routes: undefined` is every generation cached by a desktop older than the field. It claims
-    // no route, so it cannot claim this one, and it must not be walled for that.
+    // Older cached manifests lack routes and cannot claim this one; do not wall bytes that will not run.
     const fetching = run(
       afterCacheRead({ ...CACHED_BELOW_HOST_FLOOR, routes: undefined }).session,
       { type: 'manifest-read', manifest: NEWER }
@@ -149,19 +132,10 @@ describe('an update this shell refused falls back to the generation that already
   })
 })
 
-/**
- * What the gates say at the moment of the refusal, and the one answer the shell has for each.
- *
- * Gates that change while the download is in flight are stored without restarting it — a `fetching`
- * session does not await them — so by the time the refusal lands they may say something the flow
- * never started under. Every one of these is a verdict the shell already answers somewhere, and the
- * fallback has to give the same answer rather than a second opinion: walling a host whose status
- * simply went unreadable is the `bundle-unavailable` wall the gate was built to prevent.
- */
+// Gates can change during fetching; fallback must use their current verdict, including recoverable unreadable status, instead of inventing another decision.
 describe('the fallback answers each gate verdict the way the rest of the shell does', () => {
   const NEWER = manifestFacts({ ...MANIFEST_WIRE, buildId: 'c'.repeat(64) })
 
-  /** Refused while the gates have since become whatever `patch` says. */
   function refusedUnder(patch: Parameters<typeof gates>[0], cached = CACHED) {
     const fetching = run(afterCacheRead(cached).session, { type: 'manifest-read', manifest: NEWER })
     const moved = run(fetching.session, { type: 'gates-changed', gates: gates(patch) })
@@ -169,7 +143,6 @@ describe('the fallback answers each gate verdict the way the rest of the shell d
   }
 
   it('walls the host when it has stopped serving a bundle at all', () => {
-    // Not the cached page: the gate's own answer, which is what `gateVerdict` answers elsewhere.
     const step = refusedUnder({ hostCapabilities: [] })
     expect(step.session.state).toEqual({
       kind: 'wall',
@@ -186,15 +159,13 @@ describe('the fallback answers each gate verdict the way the rest of the shell d
       reason: 'status-unreadable',
       retriedOnce: false
     })
-    // Recoverable, exactly as a cold entry on the same gates is: a readable status re-arms it.
     expect(run(step.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([
       { kind: 'open-cache' }
     ])
   })
 
   it('serves a generation the host can no longer be asked about, compat check and all skipped', () => {
-    // The offline rule, and the one arm where a below-floor generation is still opened: a host
-    // nobody can reach cannot have moved past it, because nothing has been heard from it.
+    // Offline fallback skips compatibility checks because no reachable host has stated a newer window.
     const step = refusedUnder({ reachability: 'unreachable' }, CACHED_BELOW_HOST_FLOOR)
     expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(step.session.updateNotice).toBe('update-failed')
@@ -204,7 +175,6 @@ describe('the fallback answers each gate verdict the way the rest of the shell d
     const step = refusedUnder({ reachability: 'connecting' })
     expect(step.session.state).toEqual({ kind: 'checking' })
     expect(withoutRecord(step.effects)).toEqual([])
-    // And the settled gate picks it back up, which `fetching` would never have done.
     expect(run(step.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([
       { kind: 'open-cache' }
     ])
@@ -217,7 +187,6 @@ describe('the fallback answers each gate verdict the way the rest of the shell d
   })
 
   it('judges the generation only on the verdict that leaves a host to judge against', () => {
-    // `open` is that verdict, and it is the only one that reaches the compat check.
     const step = refusedUnder({}, CACHED_BELOW_HOST_FLOOR)
     expect(step.session.state).toMatchObject({ kind: 'wall' })
   })

@@ -30,8 +30,7 @@ import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdi
 import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status-contract'
 import type { StructuredTab } from './structured-agent-session-tabs'
 
-/** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
- *  that publishes views is copied verbatim; only an older host's task list is converted here. */
+/** Copy modern child views verbatim; convert legacy host task lists and retain the legacy live-agent roster. */
 function childWorkFor(summary: AgentSessionStatusSummary): {
   children?: AgentChildWorkView[]
   subagents?: AgentSubagentSnapshot[]
@@ -49,8 +48,7 @@ function childWorkFor(summary: AgentSessionStatusSummary): {
   return subagents ? { subagents } : {}
 }
 
-/** A start the host refused leaves it no session to publish, so the launch's own failure is the
- *  row: the same failed verdict the host publishes for a send the agent's start refused. */
+/** Refused creates leave no host session, so publish their launch failure like host-reported start failures. */
 function projectFailedStart(
   transaction: AgentStatusBatchTransaction,
   tab: StructuredTab,
@@ -86,8 +84,7 @@ function projectFailedStart(
       sessionBoundary: false
     },
     terminalTitle: tab.label,
-    // Dated by the failure, as a host row is by its journal: it ages the same, a restart does not
-    // refresh it, and it replaces whatever newer-dated row the pane key held.
+    // Keep failure dating across restart, replacing even newer pane rows without refreshing its age.
     timing: { updatedAt: failedAt, allowOlderTimestamp: true, stateStartedAt: failedAt },
     routing: { tabId: tab.id, worktreeId: tab.worktreeId },
     metadata: { terminalResumeEligible: false }
@@ -99,12 +96,10 @@ export function projectStatus(
   tab: StructuredTab,
   summary: AgentSessionStatusSummary | null,
   observation: 'live' | 'unverifiable',
-  /** When the launch failed; null while it has not. */
   launchFailedAt: number | null
 ): void {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const store = transaction.getState()
-  // No persisted turn yet (or nothing known): the row shows no agent status at all.
   if (!summary?.status) {
     if (launchFailedAt !== null) {
       projectFailedStart(transaction, tab, paneKey, launchFailedAt)
@@ -136,8 +131,7 @@ export function projectStatus(
     interrupted: mainAgentTurnInterrupted(mainAgent),
     prompt: summary.latestPrompt,
     agentType: tab.agentSessionAgent,
-    // The host projects these from the journal so the row reads like a hook-reported one:
-    // the turn's running or latest tool while it is live, the agent's last words once it settles.
+    // Project host journal model, live tool and settled reply fields as hook rows do.
     ...(summary.model ? { model: summary.model } : {}),
     ...(summary.toolName ? { toolName: summary.toolName } : {}),
     ...(summary.toolInput ? { toolInput: summary.toolInput } : {}),
@@ -184,8 +178,7 @@ export function projectStatus(
       updatedAt: summary.updatedAt,
       // This ordered host feed can correct a legacy publication clock after upgrade.
       allowOlderTimestamp: true,
-      // Same continuity key as the host ingest: monitoring and working are distinct published
-      // states, so the timer beside the label must restart when the label changes.
+      // Match host continuity: monitoring/working labels are distinct states and must restart their own clocks.
       stateStartedAt:
         structuredAgentSessionRowStateStartedAt(desired, summary) ??
         (desired.state !== 'done' &&
@@ -193,8 +186,7 @@ export function projectStatus(
         current.workingMode === desired.workingMode
           ? current.stateStartedAt
           : summary.updatedAt),
-      // Same rule as the host ingest: the journal clock stopped when the lead's turn did, so a
-      // row held open by child work alone is dated by when this client saw it instead.
+      // Child-only work outlives the lead’s journal clock; date its evidence by local observation, as host ingest does.
       evidenceObservedAt: isAgentStatusHeldOpenByChildWork(desired) ? Date.now() : summary.updatedAt
     },
     routing: { tabId: tab.id, worktreeId: tab.worktreeId },

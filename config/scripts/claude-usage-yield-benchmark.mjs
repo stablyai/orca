@@ -1,17 +1,6 @@
 #!/usr/bin/env node
-// Benchmark: the event-loop yield in the Claude usage scanner's batch loops.
-//
-// scanner.ts yielded with `setTimeout(resolve, 0)`, which Node clamps to ~1ms. The
-// loops yield once per FILE_SCAN_BATCH_SIZE files across two passes, so a machine with
-// thousands of transcripts spent seconds parked on timers doing no work. setImmediate
-// yields on the same tick's check phase with no clamp. The sibling scanner
-// (src/main/codex-usage/scanner.ts) already used setImmediate.
-//
-// The yield exists to keep the main process responsive during a scan, so this also
-// measures worst-case latency for a concurrent task -- a "faster" yield that starved
-// other work would be a regression, not a win.
-//
-// Run with:  node config/scripts/claude-usage-yield-benchmark.mjs
+// Compare setTimeout(0)’s ~1ms clamp per scanner batch with setImmediate across both passes; thousands of transcripts previously spent seconds waiting.
+// Measure concurrent-task latency too: faster scans must not starve other main-process work. Run: node config/scripts/claude-usage-yield-benchmark.mjs
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -20,9 +9,7 @@ import { performance } from 'node:perf_hooks'
 const REPO_ROOT = new URL('../..', import.meta.url)
 const ROUNDS = Number(process.env.ORCA_YIELD_BENCH_ROUNDS ?? '10')
 
-// Why re-read the source: the claim is that the scanner yields once per batch across
-// two loops. If the batch size or the yield sites change, these numbers stop meaning
-// what the header says, so fail loudly instead of reporting a stale ratio.
+// Read real batch size/yield sites or scanner drift makes benchmark claims stale.
 const SCANNER_SOURCE = readFileSync(new URL('src/main/claude-usage/scanner.ts', REPO_ROOT), 'utf8')
 const batchMatch = SCANNER_SOURCE.match(/const FILE_SCAN_BATCH_SIZE = (\d+)/)
 if (!batchMatch) {
@@ -33,8 +20,7 @@ const YIELD_SITES = (SCANNER_SOURCE.match(/await yieldToEventLoop\(\)/g) ?? []).
 if (YIELD_SITES === 0) {
   throw new Error('no yieldToEventLoop call sites found; this benchmark is stale')
 }
-// Match the call, not the word: a comment mentioning setImmediate would satisfy a
-// bare substring check even after the yield reverted to setTimeout.
+// Match calls: a bare setImmediate mention in prose cannot prove production yields.
 if (!/setImmediate\(resolve\)/.test(SCANNER_SOURCE)) {
   throw new Error('scanner no longer yields with setImmediate; this benchmark is stale')
 }
@@ -74,15 +60,12 @@ const transcriptCount = (() => {
 
 const FALLBACK_TRANSCRIPTS = 7500
 const effectiveTranscripts = transcriptCount > 0 ? transcriptCount : FALLBACK_TRANSCRIPTS
-// Each pass walks ceil(files / batch) batches and yields after every batch except the
-// last, so a pass yields batchesPerPass - 1 times.
 const BATCHES_PER_PASS = Math.max(1, Math.ceil(effectiveTranscripts / FILE_SCAN_BATCH_SIZE))
 const YIELDS_PER_SCAN = Math.max(1, (BATCHES_PER_PASS - 1) * YIELD_SITES)
 
 const yieldWithTimeout = () => new Promise((resolve) => setTimeout(resolve, 0))
 const yieldWithImmediate = () => new Promise((resolve) => setImmediate(resolve))
 
-// Mirrors the scanner's shape: a little synchronous work per batch, then a yield.
 async function runBatchLoop(doYield, batches) {
   let sink = 0
   for (let batch = 0; batch < batches; batch += 1) {
@@ -162,8 +145,7 @@ for (const yields of [100, 500, YIELDS_PER_SCAN]) {
   // runBatchLoop yields batches - 1 times, so ask for one more batch than yields.
   const batches = yields + 1
   const { timeoutMs, immediateMs } = await measure(batches)
-  // Why report the absolute saving too: the setImmediate arm is small enough that
-  // background load moves the RATIO a lot while the removed wall time barely budges.
+  // Report absolute saving too: background load moves the tiny setImmediate denominator and ratio disproportionately.
   console.log(
     `${pad(yields, 8)} ${pad(`${timeoutMs.toFixed(1)} ms`, 14)} ${pad(`${immediateMs.toFixed(1)} ms`, 13)} ${pad(`${(timeoutMs / immediateMs).toFixed(1)}x`, 9)} ${pad(`${(timeoutMs - immediateMs).toFixed(0)} ms`, 11)}`
   )

@@ -2,7 +2,7 @@ export const PET_SIZE_MIN = 60
 export const PET_SIZE_MAX = 360
 export const PET_SIZE_DEFAULT = 180
 
-/** User-uploaded pet image metadata; renderer fetches bytes from main via pet:read (id, fileName), never learning the on-disk path. */
+/** Fetch pet bytes via pet:read(id,fileName); keep storage paths out of the renderer. */
 export type CustomPet = {
   id: string
   label: string
@@ -11,7 +11,7 @@ export type CustomPet = {
   mimeType: string
   /** Storage layout: `image` = legacy flat file `custom/<id>.<ext>`; `bundle` = `.codex-pet` expanded into `custom/<id>/`; absent = legacy `image`. */
   kind?: 'image' | 'bundle'
-  /** Sprite-sheet metadata; present iff from a `.codex-pet` bundle with a manifest frame layout. Dims derived in main so the renderer needn't probe the image. */
+  /** Main derives sprite dimensions from .codex-pet manifests so renderers need not probe images. */
   sprite?: {
     frameWidth: number
     frameHeight: number

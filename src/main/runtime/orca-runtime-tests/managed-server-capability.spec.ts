@@ -6,7 +6,7 @@ import {
 } from '../managed-server-actions-registry'
 
 describe('managed server capability', () => {
-  // A runtime without the desktop's SSH registry must not point clients at methods that refuse.
+  // Without desktop SSH registry, never advertise methods that can only refuse.
   it('is advertised only where the desktop registered the managed-server actions', () => {
     registerManagedServerActions(null)
     expect(createRuntime().getStatus().capabilities).not.toContain('managedServer.v1')

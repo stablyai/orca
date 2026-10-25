@@ -4,10 +4,7 @@ import {
 } from '../../../shared/sidebar-list/workspace-live-content'
 import { ProducerRevision } from './producer-revision'
 
-/**
- * Per-workspace live terminal content, re-read on the same per-workspace funnel the activity
- * producer refreshes on, so it moves with every PTY bind, exit and verdict.
- */
+/** Refresh live terminal content through the activity producer's per-workspace funnel, including PTY binds, exits and verdicts. */
 export class WorkspaceLiveContentProducer {
   readonly revision = new ProducerRevision()
   private readonly content = new Map<string, WorkspaceLiveContent>()

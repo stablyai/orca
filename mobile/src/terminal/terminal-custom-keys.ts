@@ -25,8 +25,7 @@ function isCustomKey(value: unknown): value is CustomKey {
   )
 }
 
-// Throws on a failed read, so a write never starts from an empty list it made up. Stored data that
-// is not a key holds nothing to keep, so it reads as absent and the next write replaces it.
+// Propagate read failures so writes cannot invent an empty baseline; malformed stored keys may be replaced.
 async function readStoredCustomKeys(): Promise<CustomKey[]> {
   const raw = await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY)
   try {
@@ -42,14 +41,11 @@ export function loadCustomKeys(): Promise<CustomKey[]> {
 }
 
 function writeCustomKeys(keys: CustomKey[]): Promise<void> {
-  // Through the one write path, which notes the mirror on an accepted write and on nothing else
-  // (ruling 35). There is no rollback here any more because there is nothing to undo: on the page
-  // a value over the cap rejects, and a rejected write never reached the map.
+  // Persist before mirroring; page refusals must never update the accepted-value cache.
   return persistMirrored(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
 }
 
-// Every write to the stored list takes a turn here, so a settings save, an add and a removal never
-// land over one that started first, and an add or removal reads what the last write saved.
+// Serialize all list mutations so add/remove read the last accepted write.
 let customKeysWriteTurn: Promise<unknown> = Promise.resolve()
 
 function inCustomKeysWriteTurn<T>(write: () => Promise<T>): Promise<T> {
@@ -72,8 +68,7 @@ export function updateStoredCustomKeys(
   })
 }
 
-// Like the modal's add: resolves with the stored list only once the store took it, so a refused write
-// never drops a row from screen that the next load would bring back.
+// Resolve only after persistence so refused deletes cannot remove rows that reappear on reload.
 export function removeCustomKey(id: string): Promise<CustomKey[]> {
   return updateStoredCustomKeys((keys) => keys.filter((key) => key.id !== id))
 }

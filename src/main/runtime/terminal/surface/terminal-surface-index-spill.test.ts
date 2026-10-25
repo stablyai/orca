@@ -1,5 +1,4 @@
-// Layout-owner build (L257, #18202): a local workspace's terminal tabs an older build left in a
-// paired server's partition are main's panes; a server's or SSH host's own workspaces are not.
+// Adopt local terminal tabs older builds spilled into runtime partitions; preserve server/SSH ownership (#18202).
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -145,8 +144,7 @@ describe('a local workspace’s tabs in a paired server’s partition (switch on
     expect(index.surfaces().worktreeIds.has(SERVER_WORKTREE)).toBe(false)
   })
 
-  // A terminal a paired server runs, saved in its partition under a local workspace, is the
-  // server's (an orchestration worker): the window keeps mirroring it, never as a local pane.
+  // Paired-server terminals remain mirrored server panes even when saved under a local workspace.
   it('leave a tab bound to a terminal a paired server runs to the window', () => {
     const remote = toRemoteRuntimePtyId('term_on_host', 'env-1')
     const index = indexOf(

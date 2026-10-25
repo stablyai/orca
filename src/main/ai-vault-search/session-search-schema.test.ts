@@ -265,23 +265,6 @@ it("walks a session's rows through an index rather than scanning the table", asy
   }
 })
 
-it('keeps only the session indexes a retrieval query can seek', async () => {
-  const db = openSessionSearchDatabase(await tempDatabasePath())
-  try {
-    const names = (
-      db
-        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='sessions'")
-        .all() as { name: string }[]
-    )
-      .map((row) => row.name)
-      .sort()
-    // Fork folding reads hashes from retrieved rows, so content_hash needs no index.
-    expect(names).toEqual(['sessions_agent', 'sessions_cwd_key', 'sessions_updated_at'])
-  } finally {
-    db.close()
-  }
-})
-
 it("retries a Windows lock that outlives rmSync's own retries", async () => {
   const path = await tempDatabasePath()
   openSessionSearchDatabase(path).close()

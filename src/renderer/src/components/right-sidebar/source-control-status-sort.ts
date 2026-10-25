@@ -2,8 +2,7 @@ import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { compareFileNames } from '../../../../shared/file-name-sort'
 
 export function compareGitStatusEntries(a: GitStatusEntry, b: GitStatusEntry): number {
-  // Why: compareFileNames (not the raw collator) so numeric-collation ties
-  // ("2" vs "02") stay a total order shared with the File Explorer.
+  // Use compareFileNames to break numeric ties (2/02) consistently with File Explorer.
   return getConflictSortRank(a) - getConflictSortRank(b) || compareFileNames(a.path, b.path)
 }
 

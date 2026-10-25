@@ -2,16 +2,8 @@ import type { Image, View } from 'react-native'
 import type { FrameLayer } from './mobile-browser-frame-state'
 import type { BrowserFrameDisplayHandlers } from './browser-frame-layer-paint'
 
-/**
- * Web sibling: on RN Web a ref is the DOM node itself and `setNativeProps` does not exist, so the
- * native writes throw rather than paint. RN Web renders an `<Image>` as a host element whose first
- * child carries the `background-image`, and a `<View>` as one element, so a frame is still one
- * style write per layer.
- *
- * The accessibility `<img>` RN Web renders beside the frame is a prop, not a style, so the
- * streaming writes never move it: it holds the frame the layers mounted with, which is what a
- * screen reader and the browser's image context menu see.
- */
+// RN Web refs are DOM nodes without setNativeProps; write Image’s first-child background and View opacity directly.
+// Sibling accessibility img is prop-driven and retains mount frame until a pane render updates it.
 function elementOf(node: Image | View | null): HTMLElement | null {
   return node instanceof HTMLElement ? node : null
 }
@@ -33,21 +25,14 @@ export function updateBrowserImageSource(image: Image | null, uri: string): void
   if (host === null) {
     return
   }
-  // The child is where `resizeMode` already put `background-size`/`background-position`; writing
-  // the host instead would paint the frame unscaled behind RN Web's own layout styles.
+  // Paint child with existing background-size/position; host write would be unscaled behind layout styles.
   const surface = host.firstElementChild
   const target = surface instanceof HTMLElement ? surface : host
   // A data URI is base64 and a scheme, so it carries no quote to escape.
   target.style.backgroundImage = `url("${uri}")`
 }
 
-/**
- * Decode the frame before the layer holding it is allowed to become visible.
- *
- * A background write fires no load event, so without this the pending layer is never flipped and
- * the pane freezes on its first frame. The probe shares the document's image cache with the layer,
- * so the decode awaited here is the one the flip is waiting for rather than a second copy.
- */
+// Await shared-cache image decode before showing hidden layer: background writes emit no load event and would strand first frame.
 export function whenBrowserFrameDisplayable(
   uri: string,
   handlers: BrowserFrameDisplayHandlers

@@ -17,9 +17,7 @@ export const customKeyModalStyles = StyleSheet.create({
     borderColor: colors.borderSubtle,
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    // 22 on both platforms, and no binding to the seam: the floor is the rule and this clears it,
-    // so reading the seam here would have lowered a one-character capture field to 16 to satisfy
-    // a census. C7 ruling 12.
+    // Keep 22px key capture above input floor; binding seam would lower it to 16px merely to satisfy census (C7 ruling 12).
     fontSize: 22,
     fontWeight: '600',
     textAlign: 'center'

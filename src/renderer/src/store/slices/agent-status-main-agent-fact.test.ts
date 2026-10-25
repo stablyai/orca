@@ -161,8 +161,7 @@ describe('session-boundary done semantics (STA-3386)', () => {
       agentType: 'claude',
       sessionBoundary: true
     })
-    // Why: the session just CONNECTED — the registered-launch-agent identity must survive
-    // or an idle resumed TUI loses its pane identity evidence at startup.
+    // Connection boundary must preserve registered-launch identity so resumed idle TUIs keep startup pane evidence.
     expect(store.getState().agentLaunchConfigByPaneKey[PANE]).toBeDefined()
 
     store.getState().setAgentStatus(PANE, {
@@ -195,8 +194,7 @@ describe('session-boundary done semantics (STA-3386)', () => {
 
     const entry = store.getState().agentStatusByPaneKey[PANE]
     expect(entry.sessionBoundary).toBe(true)
-    // Why: the finished timestamp and unread badge fall through to history for boundary
-    // entries — losing the real done here erases an unacknowledged completion.
+    // Boundary entries read finished/unread state from history; losing real done erases unacknowledged completion.
     expect(entry.stateHistory.some((h) => h.state === 'done')).toBe(true)
   })
 

@@ -1,4 +1,3 @@
-/** Parsing for the `local-wsl` manifest source: a desktop's own WSL projects, moving into their distro. */
 import type {
   OrcadMigrationLocalWslManifestSource,
   OrcadMigrationManifest

@@ -6,8 +6,8 @@ import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
 } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import { initializeCodexAppServerConnection } from './app-server/codex-app-server-handshake'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexBackgroundTaskTracker, codexChildWorkSink } from './codex-background-task-tracker'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'

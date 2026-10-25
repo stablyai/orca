@@ -37,7 +37,6 @@ export type CombinedDiffTreeVisibility = {
 
 export type { CombinedDiffTreeNode }
 
-/** Build the uncommitted tree shape without volatile viewed/loading flags. */
 export function buildCombinedDiffUncommittedTreeGroups(
   entries: readonly CombinedDiffFileTreeEntry[]
 ): CombinedDiffTreeGroup[] {
@@ -58,7 +57,6 @@ export function buildCombinedDiffUncommittedTreeGroups(
   }).filter((group): group is CombinedDiffTreeGroup => group !== null)
 }
 
-/** Build the committed tree shape without volatile viewed/loading flags. */
 export function buildCombinedDiffBranchTreeRoots(
   mode: Extract<CombinedDiffFileTreeMode, 'all' | 'branch' | 'commit'>,
   entries: readonly CombinedDiffFileTreeEntry[]
@@ -71,7 +69,6 @@ export function buildCombinedDiffBranchTreeRoots(
   return roots as CombinedDiffTreeNode[]
 }
 
-/** Flatten a stable tree shape; this is the path used when viewed files are included. */
 export function flattenCombinedDiffTreeRoots(
   roots: readonly CombinedDiffTreeNode[],
   collapsedDirectoryKeys: ReadonlySet<string>
@@ -82,10 +79,7 @@ export function flattenCombinedDiffTreeRoots(
   ) as CombinedDiffTreeNode[]
 }
 
-/**
- * Apply viewed state as a lightweight overlay. It filters and re-compacts the already-sorted tree
- * in linear time, preserving the file-tree shape while avoiding a fresh path build and sort.
- */
+/** Overlay viewed state in linear time on the sorted tree, avoiding path rebuilds and sorting. */
 export function getViewedCombinedDiffTreeVisibility({
   roots,
   collapsedDirectoryKeys,
@@ -131,8 +125,7 @@ export function getViewedCombinedDiffTreeVisibility({
     }
     const names = [projected.source.name]
     let compacted = projected
-    // Keep a collapsed directory as a visible boundary; filtering must not compact it away and
-    // accidentally expose descendants that the user explicitly hid.
+    // Collapsed directories remain boundaries; filtering must not compact them away and expose hidden children.
     while (
       !collapsedDirectoryKeys.has(compacted.source.key) &&
       compacted.children.length === 1 &&

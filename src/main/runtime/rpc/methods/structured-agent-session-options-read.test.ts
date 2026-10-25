@@ -199,8 +199,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     clearStructuredHostStub()
   })
 
-  // A new chat's picker reads before its create lands; on a host with no saved chats nothing else
-  // has built the host yet, and a refusal here left the picker on the client's built-in list.
+  // New-chat pickers may be the first host caller; refusing before installation leaves only client-built-in models.
   it('builds the host for a structured chat and answers from its catalog', async () => {
     const reply = await call(
       'agentSession.modelCatalog',
@@ -213,8 +212,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     expect(read).toHaveBeenCalledWith({ agent: 'codex', sessionId: SESSION })
   })
 
-  // Terminal-backed chat reads with no session: a host that runs no structured chat keeps its
-  // journal closed, and the read falls back to the CLI listing.
+  // Session-less terminal-chat reads must use CLI listing without opening a structured journal.
   it('does not build the host for a read that names no session', async () => {
     const reply = await call('agentSession.modelCatalog', { agent: 'codex' }, STRUCTURED_CLIENT, {
       ensureStructuredAgentSessionHost: installHost

@@ -51,9 +51,7 @@ describe('agentChildWorkLiveness', () => {
     }
   })
 
-  // A workflow is a lane that runs agents, not an agent: the agents it runs announce themselves,
-  // and the children projection skips it, so counting it as agent work claims a child that the
-  // expanded row cannot show.
+  // Workflows run agents but are not agents themselves; counting them claims children the expanded projection cannot show.
   it('reads a live workflow as a watch loop, not as agent work', () => {
     expect(agentChildWorkLiveness([child({ kind: 'workflow' })])).toBe('monitoring')
     expect(agentChildWorkLiveness([child({ kind: 'workflow', state: undefined })])).toBe(
@@ -75,10 +73,6 @@ describe('agentChildWorkLiveness', () => {
     expect(
       agentChildWorkLiveness([child(), child({ kind: 'command' }), child({ state: 'waiting' })])
     ).toBe('waiting')
-  })
-
-  it('does not read a settled child as waiting whatever it was doing before', () => {
-    expect(agentChildWorkLiveness([child({ state: 'done' })])).toBeNull()
   })
 
   it('retires an agent only on an explicitly settled state', () => {

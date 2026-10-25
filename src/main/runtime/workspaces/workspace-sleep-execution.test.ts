@@ -48,7 +48,6 @@ function deps(overrides: Partial<WorkspaceSleepDeps> = {}) {
   return { log, deps: all }
 }
 
-/** Each workspace's sleep in `queue`, keyed by its id. */
 function queued(queue = new WorkspaceLifecycleQueue()): WorkspaceSleepQueue {
   return {
     submit: (target, command) => queue.submit(target.worktreeId, command),

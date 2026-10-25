@@ -61,7 +61,6 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     activeGitLabReview ? hostedReviewCacheKey : prCacheKey
   ])
   const gitLabDetailsLoadingGenerationRef = useRef(0)
-  // Fetch checks via cached store method
   const fetchChecks = useCallback(
     async ({
       force = false,
@@ -227,7 +226,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           return
         }
         console.warn('Failed to fetch GitLab MR checks:', err)
-        // Why: one MR details read carries both the pipeline and the discussion.
+        // One MR details request contains both pipeline and discussion; report failure for both.
         const message = checksPanelLoadErrorMessage(
           err,
           forgeOwnerHostIdForWorkspace(repo, activeWorktree)

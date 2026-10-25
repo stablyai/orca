@@ -98,12 +98,10 @@ describe('createSharedNowClock', () => {
     })
 
     const unsubscribe = clock.subscribe(listener)
-    // Hidden on mount: no timer armed, no forced render, snapshot untouched.
     expect(setIntervalMock).not.toHaveBeenCalled()
     expect(listener).not.toHaveBeenCalled()
     expect(clock.getSnapshot()).toBe(1_000)
 
-    // Becoming visible catches the stale label up and arms the shared timer.
     now = 90_000
     visibilityState = 'visible'
     documentListeners.get('visibilitychange')?.()
@@ -111,7 +109,6 @@ describe('createSharedNowClock', () => {
     expect(clock.getSnapshot()).toBe(90_000)
     expect(setIntervalMock).toHaveBeenCalledTimes(1)
 
-    // Hiding again stops the shared timer so it stops ticking in the background.
     visibilityState = 'hidden'
     documentListeners.get('visibilitychange')?.()
     expect(clearIntervalMock).toHaveBeenCalledWith(handle)
@@ -137,7 +134,6 @@ describe('useNow', () => {
     })
     expect(hook.result.current).toBe(1_000)
 
-    // A disabled caller must not arm the shared interval on its own.
     act(() => vi.advanceTimersByTime(5_000))
     expect(hook.result.current).toBe(1_000)
 

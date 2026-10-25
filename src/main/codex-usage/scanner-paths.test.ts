@@ -464,6 +464,40 @@ describe('listCodexSessionFiles', () => {
     expect(result.processedFiles[1]?.hasDeferredClaims).toBe(true)
   })
 
+  it('dedupes fork copies whose timestamps Codex rewrote to the fork time', async () => {
+    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+    mkdirSync(sessionsDir, { recursive: true })
+    const meta = (id: string): string =>
+      `${JSON.stringify({ type: 'session_meta', payload: { id, cwd: join(fakeHomeDir, 'repo') } })}\n`
+    const turn = (turnId: string): string =>
+      `${JSON.stringify({ type: 'turn_context', payload: { turn_id: turnId, cwd: join(fakeHomeDir, 'repo') } })}\n`
+    const parentTurns = (at: string): string =>
+      [turn('turn-1'), usageRecord(at, 10), turn('turn-2'), usageRecord(at, 5, 15)].join('')
+    writeFileSync(
+      join(sessionsDir, 'aaaa-parent.jsonl'),
+      `${meta('parent')}${parentTurns('2026-05-25T12:00:00.000Z')}`
+    )
+    // Each fork copies the parent with rewritten timestamps, then runs an identical new turn.
+    for (const [name, turnId] of [
+      ['bbbb-fork', 'turn-b'],
+      ['cccc-fork', 'turn-c']
+    ]) {
+      writeFileSync(
+        join(sessionsDir, `${name}.jsonl`),
+        `${meta(name)}${meta('parent')}${parentTurns('2026-05-27T12:00:00.000Z')}${turn(turnId)}${usageRecord('2026-05-27T12:01:00.000Z', 7, 22)}`
+      )
+    }
+
+    const result = await scanCodexUsageFiles([], [])
+
+    expect(
+      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
+    ).toBe(29)
+    expect(
+      result.dailyAggregates.find((aggregate) => aggregate.day === '2026-05-27')?.totalTokens
+    ).toBe(14)
+  })
+
   it('does not re-count the cumulative session for copied total-only records', async () => {
     const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
     mkdirSync(sessionsDir, { recursive: true })

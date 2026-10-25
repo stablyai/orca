@@ -51,9 +51,7 @@ export function resolveSelectedProjectRowRepo(input: {
     return { status: 'no_global_match' }
   }
 
-  // Why: prefer origin only among repos the user actually selected. Applying
-  // that preference globally let an open-but-unselected clone of the upstream
-  // repo hide the selected fork, reproducing #12647 for anyone holding both.
+  // Prefer origins within selected repos only; an unselected upstream clone must not hide a selected fork.
   const selectedOrigin = origin.filter((match) => input.selectedRepoIds.has(match.id))
   const selectedMatches =
     selectedOrigin.length > 0

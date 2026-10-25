@@ -19,12 +19,7 @@ import {
   type StatementDelay
 } from './test-fixtures/delayed-postgres-database.js'
 
-// Reproduces the Asia drain: a draining cell's releases each end with a one-row
-// UPDATE of the source relay_cells row, held for a round trip to COMMIT, while
-// the directors re-place its reconnecting hosts. Placement used to lock every
-// relay_cells row and starved (about 9/s at 6 releases/s, 5/s at 18/s, every
-// director backend lock-waiting); it now locks only the targets. Prints one
-// line per run and asserts the after picture.
+// Reproduce Asia source-row release locks during reconnect placement: fleet locking fell to ~9/s at 6 releases/s and ~5/s at 18/s. Assert/report target-only locking avoids that contention.
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
@@ -768,9 +763,7 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
   }, 120_000)
 
   it('keeps placing while an Asia drain holds the source row', async () => {
-    // Before the fix: 90 and 140 of 200 dials rejected by the sticky lane and
-    // about 3.5 of 3.5 active director backends lock-waiting. Pass bars are on
-    // those, not on placements/s, which a slow runner's pacing alone can move.
+    // Baseline sticky rejects were 90–140/200 with ~3.5/3.5 backends lock-waiting; assert those, since runner pacing alone changes placements/s.
     for (const [rate, neighboursCapped] of [
       [6, false],
       [18, false],
@@ -782,9 +775,7 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
       expect(report.director.lockWaitingMean).toBeLessThan(0.5)
       expect(report.dials.placedCrossRegion).toBe(neighboursCapped ? report.dials.placed : 0)
       if (rate === 18) {
-        // The release commits with its counter write, so the source row is no longer
-        // held for a round trip and releases stop shedding to lease expiry. With the
-        // separate COMMIT, 79 of 180 landed and the rest timed out waiting for the pool.
+        // Fused counter/COMMIT removes the lock-held reply round trip; separate COMMIT once completed only 79/180 releases before pool timeouts.
         expect(report.releases.ok).toBe(report.releases.attempted)
       }
     }

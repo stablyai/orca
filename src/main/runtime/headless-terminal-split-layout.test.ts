@@ -66,7 +66,6 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       splitFromLeafId: 'leaf-b',
       direction: 'horizontal'
     })
-    // 3 leaves total; the split happened at leaf-b, leaf-a untouched.
     expect(countTerminalLayoutLeaves(next.root)).toBe(3)
     expect(next.root).toEqual({
       type: 'split',
@@ -161,8 +160,7 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
   })
 
   it('does not collapse — the persisted layout keeps both leaves (regression guard)', () => {
-    // Why: the reported bug was the split collapsing back to one pane. After a
-    // split, a rebuild reads this persisted layout, so it MUST stay multi-leaf.
+    // Rebuild from the persisted split must retain multiple leaves.
     const afterSplit = buildHeadlessTerminalSplitLayout(
       {
         root: { type: 'leaf', leafId: 'leaf-a' },

@@ -1,13 +1,5 @@
-/**
- * Out-of-band `pty:modelRestoreNeeded` (main → renderer) payload.
- *
- * Why a dedicated channel instead of an in-band sentinel chunk: an empty
- * `pty:data` chunk is indistinguishable from a real chunk whose bytes were
- * entirely stripped by renderer-side OSC-9999 cleaning, so an in-band marker
- * could spuriously trigger full snapshot restores on visible panes. The
- * marker is delivery machinery, not PTY data — remote-runtime transports
- * never see it.
- */
+/** Dedicated main→renderer restore markers avoid ambiguous empty data chunks left by OSC-9999 stripping,
+ * which could spuriously restore visible panes. Delivery-only: remote transports never see this channel. */
 export type PtyModelRestoreReason = 'hidden-drop' | 'unhide' | 'pending-cap' | 'delivery-heal'
 
 export type PtyModelRestoreNeededEvent = {

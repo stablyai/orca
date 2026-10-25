@@ -1,25 +1,4 @@
-/**
- * Reproduction harness for issue #6648:
- * "Remote host attempting to view a file results in error"
- *
- * On Windows, opening a file to edit it on a remote (SSH) host fails with:
- *   "Error invoking remote method 'fs:readFile': Error: Access denied: path
- *    resolves outside allowed directories."
- *
- * That message (PATH_ACCESS_DENIED_MESSAGE) is only produced by the LOCAL
- * filesystem resolver, which means the remote file path reached the local
- * read path WITHOUT a connectionId. This harness drives the real renderer
- * code paths to show how that happens and stays latched:
- *
- *   1. A connected SSH repo's connectionId is resolved from state.repos. While
- *      the SSH repo is still hydrating (e.g. right after a session restore on a
- *      slow Windows SSH connect), getConnectionId returns `undefined`.
- *   2. readRuntimeFileContent treats `undefined`/`null` connectionId identically
- *      and falls back to a LOCAL fs.readFile of the remote POSIX path.
- *   3. The local resolver denies the remote path -> PATH_ACCESS_DENIED_MESSAGE.
- *   4. The editor's retry gate refuses to retry "access denied", so the error
- *      latches permanently even after the SSH repo finishes hydrating.
- */
+// SSH repo hydration once left connectionId undefined, routing remote POSIX paths through local authorization and latching access-denied errors even after hydration (#6648, Windows). Exercise the real owner-not-ready guard so reads wait instead.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import { useAppStore } from '@/store'
@@ -93,8 +72,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// Replays the editor read path from useEditorPanelContentState.loadFileContent,
-// including the owner-not-ready guard added for #6648.
+// Replay editor loadFileContent with #6648 owner-not-ready guard.
 async function openRemoteFileInEditor() {
   const resolvedConnectionId = getConnectionIdForFile(REMOTE_WORKTREE_ID, REMOTE_FILE_PATH)
   const connectionId = resolvedConnectionId ?? undefined
@@ -156,9 +134,7 @@ describe('issue #6648: opening a remote-host file in the editor', () => {
   })
 
   it('FIXED: fails retryably (not a local access-denied) while the SSH repo hydrates', async () => {
-    // Session restore reopened the remote tab, but the SSH repo has not landed
-    // in state.repos yet (relay/connection still establishing — slower on
-    // Windows). getConnectionIdForFile returns undefined for the unknown repo.
+    // Restored tab precedes SSH repo hydration, especially on Windows; unknown repo yields undefined connection ID.
     useAppStore.setState({ repos: [], worktreesByRepo: {} })
 
     expect(getConnectionIdForFile(REMOTE_WORKTREE_ID, REMOTE_FILE_PATH)).toBeUndefined()
@@ -193,8 +169,7 @@ describe('issue #6648: opening a remote-host file in the editor', () => {
   it('retry gate retries owner-not-ready but not access-denied or the terminal message', () => {
     // owner-not-ready auto-retries (while connecting)...
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
-    // ...but a genuine access-denied and the budget-exhausted terminal message
-    // are NOT auto-retried (the terminal one only restarts via the Retry button).
+    // Genuine access denial and exhausted retry budget never auto-retry; terminal failure requires Retry.
     expect(shouldRetryFileLoadError(PATH_ACCESS_DENIED_MESSAGE)).toBe(false)
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
   })
@@ -202,9 +177,7 @@ describe('issue #6648: opening a remote-host file in the editor', () => {
 
 describe('issue #6831: opening a floating-workspace file in the editor', () => {
   it('FIXED: treats the floating workspace as local instead of waiting for repo hydration', async () => {
-    // The floating workspace is a synthetic local workspace, not a repo-backed
-    // SSH worktree. Before this guard, the owner check reproduced #6831 by
-    // throwing WORKTREE_OWNER_NOT_READY_ERROR forever when repos were empty.
+    // Floating workspace is synthetic local identity; missing repos must not make its owner guard wait forever (#6831).
     useAppStore.setState({ repos: [], worktreesByRepo: {} })
 
     expect(getConnectionIdForFile(FLOATING_TERMINAL_WORKTREE_ID, FLOATING_FILE_PATH)).toBeNull()

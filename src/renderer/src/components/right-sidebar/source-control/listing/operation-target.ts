@@ -6,7 +6,7 @@ import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 
 export type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
 
-// Why: source-control operations outlive the focused worktree, so each one pins the host it started on.
+// Pin the starting host because operations can outlive workspace focus.
 export type SourceControlOperationTarget = Omit<RuntimeGitContext, 'target'> & {
   /** The repo owner's transport; `null` when no repo row names one, which refuses the call. */
   target: RuntimeClientTarget | null

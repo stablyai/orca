@@ -1,18 +1,4 @@
-/**
- * Durable provider handle chain for an agent session.
- *
- * A handle names one provider conversation without saying what the provider means by it. Shared
- * code reads only its transport, its agent, and the provider's own conversation id; anything else
- * the provider needs to resume is `resumeCursor`, which only that provider's adapter reads. How a
- * handle is stored and sent lives in agent-session-provider-handle-encoding.ts.
- *
- * Resumes extend the chain, forks start a new identity root, and the chain records which is which
- * so a fork is never presented as a resume. A creation the provider never saved can be superseded
- * by a new creation, which takes its place instead of standing beside it: the unsaved handle was
- * never a conversation to continue. A saved conversation the provider could not restore is instead
- * replaced: a new creation follows it and names it, so the chain still says what the agent forgot
- * and when.
- */
+/** Handles expose transport, agent and conversation ID; adapters alone read resumeCursor (encoding lives separately). Resumes extend a chain; forks change its root. Supersede unsaved creations in place; replace lost saved conversations with a following creation so forgotten history remains attributable. */
 
 import type { AgentType } from './agent-status-types'
 import {
@@ -39,21 +25,15 @@ export {
   isStructuredAgentId
 } from './agent-session-provider-handle-encoding'
 
-/**
- * The structured agents every build ships. They are not the whole set: a host may register more,
- * advertises that it does with the registered-agents capability, and lists them through
- * `agentSession.agents`. A client that has not learned a host's list knows only these.
- */
+/** Built-ins are only the fallback list; hosts advertise registered-agents and publish additional agents/capabilities through agentSession.agents. */
 export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex'] as const
 
 export type AgentSessionHandleProvider = (typeof AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS)[number]
 
-/** A structured agent a host registered: one of the built-ins or any agent id the host lists.
- *  Checked as a slug by `isStructuredAgentId`; whether a host runs it is its registry's answer. */
+/** A host-registered agent slug; isStructuredAgentId checks syntax, the host registry checks availability. */
 export type StructuredAgentId = string
 
-/** Whether an agent is one of the two built-ins, for features only they have. It does NOT answer
- *  whether an agent has a structured chat: that is `isStructuredAgentId` plus the host's registry. */
+/** Built-in-specific features only; structured-chat support requires a valid agent slug and host registration. */
 export function isAgentSessionHandleProvider(value: unknown): value is AgentSessionHandleProvider {
   return value === 'claude' || value === 'codex'
 }
@@ -62,19 +42,13 @@ export function isAgentSessionHandleProvider(value: unknown): value is AgentSess
 export type AgentSessionProviderTransport = 'claude-sdk' | 'codex-app-server' | (string & {})
 
 export type AgentSessionProviderHandle = {
-  /**
-   * The id space `nativeId` was minted in, which can differ from the agent's current transport. A
-   * mismatch with the running build makes the chat not resumable there, never the record unreadable.
-   */
+  /** nativeId namespace may differ from the current transport; a mismatch prevents resume, never record loading. */
   transport: AgentSessionProviderTransport
   /** Orca agent whose binary resumes the conversation; one transport serves many agents. */
   agent: AgentType
   /** The provider's own conversation id: Claude's session id, Codex's thread id. */
   nativeId: string
-  /**
-   * Adapter-owned resume position (Claude: transcript leaf). Shared code never parses it; it is never
-   * identity, except inside Claude's legacy handle key.
-   */
+  /** Adapter-owned resume state; shared code never parses it. Only Claude's legacy key includes its cursor as identity. */
   resumeCursor?: string
 }
 
@@ -194,10 +168,7 @@ export function isAgentSessionProviderHandleChain(
   }
 }
 
-/**
- * Append one link, rejecting anything that would let a fork masquerade as a resume or let a
- * late writer rewrite the chain under an older fence.
- */
+/** Reject forks presented as resumes and stale-fence writes that would rewrite the chain. */
 export function appendAgentSessionProviderHandleLink(
   chain: AgentSessionProviderHandleChain,
   link: AgentSessionProviderHandleLink
@@ -247,8 +218,7 @@ function appendLink(
     throw new Error('agent_session_provider_handle_invalid')
   }
   if (link.origin === 'resumed' && !sameRoot) {
-    // Why: a resume that lands on another identity root forked; recording it as a resume would
-    // make Orca claim continuity the provider never gave.
+    // A changed root is a fork; calling it a resume would claim continuity the provider never gave.
     throw new Error('agent_session_provider_handle_forked')
   }
   if (link.origin === 'forked') {
@@ -279,20 +249,13 @@ function appendNewLink(
     throw new Error('agent_session_provider_handle_invalid')
   }
   if (chain.length >= MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS) {
-    // Why: dropping older links would erase fork provenance, so refuse and let the caller roll
-    // the journal epoch instead of silently losing where this conversation came from.
+    // Refuse at the cap and let the caller roll the journal epoch; dropping links would erase fork provenance.
     throw new Error('agent_session_provider_handle_chain_overflow')
   }
   return [...chain, link]
 }
 
-/**
- * Replace the head, a creation the provider proved it never saved, with the creation that took its
- * place. Every other head names a conversation the provider held (a resume or fork proved it, an
- * adoption imported it), so only a `created` head can be superseded, and only by a new identity
- * root that names it. A superseded replacement passes on what it replaced: the conversation that
- * was lost is still lost.
- */
+/** Replace only an unsaved created head with a named new identity root; resumed/forked/adopted heads prove saved conversations. Pass replacement provenance through supersession so lost history stays recorded. */
 function supersedeUnsavedCreation(
   chain: AgentSessionProviderHandleChain,
   head: AgentSessionProviderHandleLink,
@@ -313,8 +276,6 @@ function supersedeUnsavedCreation(
   // Why: in place, so a chat reopened unused across many restarts never grows toward the cap.
   return earlier.length === 0 ? [next] : appendLink(earlier, next, true)
 }
-
-// ─── Stored form ────────────────────────────────────────────────────────────
 
 /** A link as a record row stores it: only the handle has a stored form of its own. */
 export type PersistedAgentSessionProviderHandleLink = Omit<

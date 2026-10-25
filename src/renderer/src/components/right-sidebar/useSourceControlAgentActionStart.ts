@@ -34,8 +34,7 @@ type UseSourceControlAgentActionStartArgs = {
   groupId?: string | null
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
-  /** Why: SSH hosts launch the plain `orca` shim, so the previewed command must
-   * drop the Linux-only `orca-ide` rename to match the real launch. */
+  /** SSH uses plain orca; omit the local Linux orca-ide rename in its preview. */
   isRemote?: boolean
   launchSource: LaunchSource
   recoveryContext?: RuntimeGitContext | null

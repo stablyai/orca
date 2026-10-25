@@ -197,8 +197,7 @@ describe('terminal file link actions', () => {
     expect(rowCount(remoteRequest.mock.calls[0][0])).toBe(rowCount(localRequest.mock.calls[0][0]))
   })
 
-  // Why: a directory has nothing to hand the OS, and the download row would offer a transfer that
-  // can only fail. The popover is built on hover, so the path shape decides rather than a stat.
+  // Hover rows are synchronous; path shape excludes directories without a host stat round trip.
   it('drops the remote download row for a path that announces itself as a directory', () => {
     mocks.canOpenWithSystemDefault = false
     const request = vi.fn()

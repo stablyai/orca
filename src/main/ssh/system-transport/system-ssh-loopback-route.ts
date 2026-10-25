@@ -1,8 +1,4 @@
-/**
- * Connection reuse for proxied targets where OpenSSH cannot multiplex (Windows has no ControlMaster).
- * One held `ssh -N -L` pays the ProxyCommand/ProxyJump handshake once; later commands log in over
- * 127.0.0.1 through it instead of re-running the proxy for every exec.
- */
+/** On Windows, hold a proxied ssh -N -L once; route later execs through loopback to avoid repeated proxy handshakes without ControlMaster. */
 import type { ChildProcessHandle as ChildProcess } from '@orca/process-host/process-spec'
 import {
   childProcessHasExited,
@@ -23,7 +19,7 @@ import {
   waitForSystemSshForwardStartup
 } from './system-ssh-forward-process'
 
-// Why long: the forward pays the full proxy handshake, which is the slow part this route exists for.
+// Allow the full proxy handshake: avoiding repeats is the route's purpose.
 export const SYSTEM_SSH_LOOPBACK_ROUTE_LISTEN_TIMEOUT_MS = 60_000
 export const SYSTEM_SSH_LOOPBACK_ROUTE_PROBE_TIMEOUT_MS = 15_000
 const LOOPBACK_ROUTE_PROBE_MARKER = 'ORCA-SYSTEM-SSH-LOOPBACK-OK'
@@ -110,7 +106,7 @@ export async function startSystemSshLoopbackRoute(
       signal
     )
     const args = { localPort: forward.localPort, hostKeyAlias }
-    // Why: a listening forward does not prove sshd allows it (AllowTcpForwarding) or that auth works over it.
+    // Listening alone proves neither sshd forwarding permission nor authentication over the route.
     await probeLoopbackRoute(target, { ...options, loopbackRoute: args }, signal)
     signal?.throwIfAborted()
     return {

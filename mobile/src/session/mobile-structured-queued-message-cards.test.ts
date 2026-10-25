@@ -9,7 +9,6 @@ import {
   mobileQueuedMessageCards
 } from './mobile-structured-queued-message-cards'
 
-/** A returned card as the host publishes it: the refusal's sentence and its typed fact. */
 function returnedAs(fact: Parameters<typeof agentSessionFailureWords>[0]) {
   const { reason, rejection } = agentSessionFailureWords(fact, { surface: 'rejection' })
   return { state: 'returned' as const, returnedReason: reason, returnedRejection: rejection }
@@ -125,7 +124,6 @@ describe('mobileQueuedMessageCards', () => {
     expect(mobileQueuedMessageCards([], [])).toEqual([])
   })
 
-  // The card knows no open question or paused queue: the question and the pause row say why.
   it('captions nothing on a plain waiting draft, as the desktop row', () => {
     const [card] = mobileQueuedMessageCards([draft({ messageId: 'a' })], [])
     expect(card).toEqual({
@@ -208,8 +206,7 @@ describe('mobileQueuedMessageCards', () => {
   })
 
   it('shows a draft a Stop requeued beside its rejected hand-off', () => {
-    // The requeued draft keeps its id; its withdrawn hand-off stays in the journal as rejected and
-    // the transcript hides it, so hiding the card too would leave the text unreachable.
+    // Rejected hand-offs stay hidden in history; the requeued card is the only reachable copy of their text.
     const cards = mobileQueuedMessageCards(
       [
         draft({ messageId: 'requeued' }),
@@ -314,7 +311,6 @@ describe('mobileQueuedMessageCards', () => {
       "Couldn't send — tap Send to retry",
       'Paused'
     ])
-    // Only a failed send alerts; a plain pause is not the card's fault.
     expect(cards.map((card) => card.needsAttention)).toEqual([true, false])
   })
 

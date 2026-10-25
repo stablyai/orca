@@ -187,7 +187,7 @@ describe('useChecksPanelPolling live behavior', () => {
     const message = 'Could not load from this computer: glab: not logged in'
     expect(model.setChecksError).toHaveBeenCalledWith(message)
     expect(model.setCommentsError).toHaveBeenCalledWith(message)
-    // Why: a later reset would clear the error; only the scope reset may precede it.
+    // Later resets would clear the error; only the scope reset may precede it.
     const setChecks = vi.mocked(model.setChecks).mock
     const setChecksError = vi.mocked(model.setChecksError).mock
     expect(Math.max(0, ...setChecks.invocationCallOrder)).toBeLessThan(

@@ -20,7 +20,7 @@ describe('nativeChatToolLineLabel', () => {
     expect(label.filePath).toBe('2 files')
   })
 
-  it('links a read or an edit, never a listed folder', () => {
+  it('links a read, never a listed folder', () => {
     const read = nativeChatToolLineLabel({
       type: 'tool-call',
       name: 'Read',

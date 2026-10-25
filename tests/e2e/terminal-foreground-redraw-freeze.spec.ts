@@ -11,8 +11,7 @@ import { waitForTerminalPtyDataInjector } from './helpers/terminal-pty-injection
 // Repro commands:
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "active OpenTUI-style"
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "captured OpenCode/OpenTUI" --reporter=json
-// The captured replay uses an artificial OpenCode source-tree harness that
-// imports OpenCode's spinner frames and emits real OpenTUI <=2KB redraw chunks.
+// Captured replay imports OpenCode spinner frames and emits real OpenTUI ≤2KB redraw chunks from an artificial source-tree harness.
 
 type SchedulerDebugSnapshot = {
   deferredForegroundEnqueueCount: number
@@ -184,7 +183,7 @@ async function installActivePaneRefreshProbe(page: Page): Promise<void> {
           : null
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
+    if (!manager || !pane) {
       throw new Error('Active terminal pane is unavailable')
     }
     const terminal = pane.terminal as unknown as {
@@ -359,8 +358,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
     const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
     await waitForTerminalPtyDataInjector(orcaPage, paneKey)
     const webglAttached = await forceActivePaneWebglRenderer(orcaPage)
-    // Why: Linux headless CI intentionally disables GPU. Declare that
-    // environment unsupported instead of weakening the WebGL-only oracle.
+    // Linux headless CI disables GPU; skip that unsupported environment rather than weaken the WebGL oracle.
     test.skip(!webglAttached, 'WebGL is unavailable for the refresh-policy probe')
     if (!webglAttached) {
       return
@@ -396,11 +394,9 @@ test.describe('Terminal foreground redraw freeze repro', () => {
           refreshDelta.synchronousDom
         } debouncedWebgl=${refreshDelta.debouncedWebgl} debouncedDom=${refreshDelta.debouncedDom}`
       })
-      // Why: a synchronous full-grid WebGL refresh duplicates xterm's
-      // already-queued animation frame and was the #6655 CPU hotspot.
+      // Synchronous full-grid refresh duplicates xterm’s queued frame and was the #6655 CPU hotspot.
       expect(refreshDelta.synchronousWebgl).toBe(0)
-      // Requiring an observed public WebGL refresh prevents a mid-run DOM
-      // fallback from turning the zero-sync assertion into a vacuous pass.
+      // Require a public WebGL refresh so mid-run DOM fallback cannot make zero-sync vacuously pass.
       expect(refreshDelta.debouncedWebgl).toBeGreaterThan(0)
     } finally {
       await disposeActivePaneRefreshProbe(orcaPage)
@@ -424,8 +420,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
 
     expect(measurement.injectedFrames).toBe(REDRAW_FRAME_COUNT)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
-    // Why: this is the PR #4558 contract. Once the foreground immediate budget
-    // is exhausted, throughput redraws must enter the async foreground drain.
+    // #4558: after the immediate foreground budget, throughput redraws must enter the async drain.
     expect(scheduler.deferredForegroundEnqueueCount).toBeGreaterThan(0)
   })
 

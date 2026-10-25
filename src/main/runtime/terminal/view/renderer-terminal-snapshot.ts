@@ -5,14 +5,14 @@ import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
 export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
 
-  // Why: mobile may subscribe before the PTY spawns; wait for it so subscribe proceeds with phone-fit instead of a bare scrollback+end.
+  // Wait for pre-spawn subscriptions to gain a PTY so phone-fit can attach instead of ending on bare history.
   waitForLeafPtyId(handle: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<string> {
     const leaf = this.resolveLeafForHandle(handle)
     if (leaf?.ptyId) {
       return Promise.resolve(leaf.ptyId)
     }
 
-    // Why: ptyId null→real invalidates the old handle; capture tabId+leafId now for direct leaf lookup afterward.
+    // First PTY binding invalidates pre-spawn handles; retain pane coordinates for subsequent lookup.
     const record = this.handles.get(handle)
     const savedTabId = record?.tabId ?? null
     const savedLeafId = record?.leafId ?? null
@@ -52,9 +52,8 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
       }, timeoutMs)
 
       check = (): void => {
-        // Try the handle first (works if handle wasn't invalidated yet)
         let ptyId = this.resolveLeafForHandle(handle)?.ptyId
-        // Why: ptyId null→real invalidates the old handle; fall back to direct leaf lookup by saved coordinates.
+        // Fall back to captured coordinates after the pre-spawn handle invalidates.
         if (!ptyId && savedTabId && savedLeafId) {
           const directLeaf = this.leaves.get(this.getLeafKey(savedTabId, savedLeafId))
           ptyId = directLeaf?.ptyId ?? null
@@ -148,7 +147,7 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
     )
   }
 
-  // Why: a leaf exists before its PTY spawns; a handle issued while ptyId is null gets invalidated on the next sync, so wait for a connected PTY.
+  // Issue handles only after PTY connection; pre-spawn handles invalidate on the next graph sync.
   protected resolveHandleForTab(tabId: string): string | null {
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === tabId && leaf.ptyId !== null) {

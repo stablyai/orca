@@ -38,7 +38,7 @@ function normalizeClientSessionTabSelection(
   }
 }
 
-// Why: this state comes off disk (and, for remote runtimes, another machine); a bad payload must degrade to "no selection", not throw.
+// Malformed disk/remote payloads must degrade to no selection without throwing.
 export function normalizePersistedMobileClientTabSelections(
   raw: unknown
 ): PersistedMobileClientTabSelections {

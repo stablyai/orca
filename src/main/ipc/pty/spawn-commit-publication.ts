@@ -36,7 +36,10 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
   const { state } = input
   const { deps, args, result } = state
   const runtime = deps.runtime
-  runtime?.noteTerminalSpawnCommit?.(result, input.expectedSourceBinding)
+  runtime?.noteTerminalSpawnCommit?.(
+    { ...result, spawnRequestedAt: state.spawnRequestedAt },
+    input.expectedSourceBinding
+  )
   input.spawnTiming?.log(result.id, {
     daemon: state.isDaemonHostSpawn,
     reattach: result.isReattach ?? false

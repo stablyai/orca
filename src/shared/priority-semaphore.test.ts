@@ -12,7 +12,6 @@ describe('PrioritySemaphore', () => {
       return r
     })
 
-    // Give microtasks a chance to flush
     await new Promise((r) => setTimeout(r, 10))
     expect(acquired).toBe(false)
 
@@ -28,7 +27,6 @@ describe('PrioritySemaphore', () => {
 
     const order: string[] = []
 
-    // Queue a low-priority and then a high-priority waiter
     const pLow = sem.acquire(1).then((r) => {
       order.push('low')
       return r
@@ -38,7 +36,6 @@ describe('PrioritySemaphore', () => {
       return r
     })
 
-    // Release — high priority should go first
     r1()
 
     const rHigh = await pHigh
@@ -101,11 +98,9 @@ describe('PrioritySemaphore', () => {
       return r
     })
 
-    // Release both slots
     r1()
     r2()
 
-    // High priority B should get a slot before low-priority A and C
     const rB = await pB
     rB()
     const rA = await pA

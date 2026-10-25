@@ -67,7 +67,7 @@ export function interruptedLocalWorktreeRemovalJob(
         stopSignal,
         removedPushTarget,
         acquireWatcherRemoval: (path) => {
-          // Why same tick: the gate takes over the loading fence's path with no gap for a spawn.
+          // Take the gate in the same tick as the loading fence so no spawn can enter between them.
           releaseStartupRemovalFence(record.worktreeId)
           return host.acquireWatcherRemoval(path)
         },
@@ -117,12 +117,8 @@ type InterruptedLocalWorktreeRemovalArgs = Pick<
   stopSignal: AbortSignal
 }
 
-/**
- * Finishes a removal a quit or crash interrupted, or a failed one whose folder the user removed.
- * What is left comes from Git and disk, not the record: a checkout Git registers is deleted by Git
- * with the recorded choices, or only unregistered when its `.git` is gone; a folder Git no longer
- * registers is refused, never deleted; with the folder gone, the rest of the delete finishes.
- */
+/** Finish from Git/disk evidence: registered checkouts use recorded deletion choices; missing .git permits unregister only.
+ * Never delete an unregistered remaining folder; once it is gone, finish the recorded cleanup. */
 async function finishInterruptedLocalWorktreeRemoval(
   args: InterruptedLocalWorktreeRemovalArgs
 ): Promise<RemoveWorktreeResult> {
@@ -166,8 +162,7 @@ async function finishInterruptedLocalWorktreeRemoval(
     throw differentCheckoutAtPathError(record.worktreePath)
   }
   if (deletable && (await isCheckoutMissingGitLink(deletable.path, localOptions))) {
-    // Why: Git can neither remove nor validate a checkout whose `.git` it deleted first (Windows
-    // order); prune drops only the registration, keeping every file, so the checks below apply.
+    // If Git deleted .git first, it cannot remove/validate the checkout; prune registration only and keep all files for the checks below.
     await removeStaleLocalWorktreeRegistration({
       canonicalWorktreePath: deletable.path,
       repoPath: repo.path,
@@ -177,7 +172,7 @@ async function finishInterruptedLocalWorktreeRemoval(
     })
     deletable = undefined
   }
-  // Before the teardown, so a refused folder keeps its terminals and watchers.
+  // Check before teardown so refused folders retain terminals/watchers.
   if (!deletable) {
     await assertUnregisteredCheckoutGone(record.worktreePath, worktrees)
   }
@@ -200,7 +195,7 @@ async function finishInterruptedLocalWorktreeRemoval(
       repo.path,
       record.worktreePath,
       record.deleteBranch && record.branch ? { name: record.branch, head: record.head } : null,
-      // Again after the teardown's waits: a folder may have appeared at the path meanwhile.
+      // Recheck after teardown awaits in case a folder appeared meanwhile.
       () => assertUnregisteredCheckoutGone(record.worktreePath),
       localOptions
     )

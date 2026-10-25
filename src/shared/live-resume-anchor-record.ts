@@ -9,14 +9,8 @@ import {
 } from './agent-session-resume'
 import { isPiCompatibleAgentType } from './pi-agent-kind'
 
-/**
- * True when `record` is nothing more than this completed pane's own live resume
- * anchor — the checkpoint `setAgentStatus` writes for every resumable agent the
- * moment its turn ends — rather than a real sleep capture.
- *
- * Deliberately carries no vendor gate and no automatic-resume check: it answers
- * "does this record match the pane?", not "may this pane be hibernated?".
- */
+/** Identify a completed pane’s own live resume anchor written at turn end, not a sleep capture.
+ * No vendor/automatic-resume gate: this checks record identity, not hibernation eligibility. */
 export function isLiveResumeAnchorForCompletedAgent(
   entry: AnchorStatus | undefined,
   record: SleepingAgentSessionRecord | undefined,
@@ -40,8 +34,7 @@ export function isLiveResumeAnchorForCompletedAgent(
   )
 }
 
-// Why: retention call sites (manual-sleep promotion, quit capture) keep the
-// Pi-only meaning they shipped with; only automatic hibernation broadened.
+// Manual-sleep/quit retention preserves shipped Pi-only semantics; only automatic hibernation broadened.
 export function isCompletedPiCompatibleAgentWithLiveRecoveryRecord(
   entry: AnchorStatus | undefined,
   record: SleepingAgentSessionRecord | undefined,

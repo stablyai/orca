@@ -1,7 +1,5 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// A chat worker's coordinator mail lands in its Dispatch's mailbox. When the pointer to it was held
-// (the provider died before taking it), the chat's next idle edge points it again, after a restart
-// or in the same chat after /clear, as it does for a chat's own mail.
+// Worker mail belongs to its Dispatch mailbox; held pointers redrive on the next idle edge, including after restart or clear.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'

@@ -114,8 +114,7 @@ describe('dropAgentStatus cleared-at/manual-unread lifecycle', () => {
     seedLiveWithClearState(store)
     store.getState().dropAgentStatus('tab-a:1')
     expect(store.getState().agentStatusByPaneKey['tab-a:1']).toBeUndefined()
-    // The pane may republish its full stateHistory; without the cutoff every
-    // cleared event would flood back as unread (the Clear-completed undo bug).
+    // Cutoff prevents full stateHistory republication resurrecting cleared events as unread.
     expect(store.getState().activityClearedAtByPaneKey['tab-a:1']).toBe(5_000)
     expect(store.getState().manuallyUnreadTurnsByPaneKey['tab-a:1']).toBeGreaterThan(0)
   })
@@ -144,8 +143,7 @@ describe('dropAgentStatusByTabPrefix preserveActivityClearedState', () => {
     store.getState().dropAgentStatusByTabPrefix('tab-a', { preserveActivityClearedState: true })
 
     expect(store.getState().agentStatusByPaneKey['tab-a:1']).toBeUndefined()
-    // Loss of contact is not pane death: the host republishes the same panes on reconnect,
-    // and the preserved cutoff keeps cleared activity from replaying.
+    // Lost contact is not death; retain cutoffs across reconnect republication.
     expect(store.getState().activityClearedAtByPaneKey['tab-a:1']).toBe(5_000)
     expect(store.getState().manuallyUnreadTurnsByPaneKey['tab-a:1']).toBeGreaterThan(0)
 
@@ -159,8 +157,7 @@ describe('sanitizeActivityClearedAtByPaneKey hydration TTL', () => {
   it('keeps cutoffs past the 7-day ack TTL so they outlive the persisted entries they guard', () => {
     const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000
     const record = { 'tab-a:1': eightDaysAgo }
-    // Main prunes persisted entries at 7d from receivedAt; a same-aged cutoff must survive
-    // hydration or the entry it shadows replays as unread on restart.
+    // Cutoffs must survive the same 7d receivedAt horizon as persisted entries or restart replays unread history.
     expect(sanitizeAcknowledgedAgentsByPaneKey(record)).toEqual({})
     expect(sanitizeActivityClearedAtByPaneKey(record)).toEqual(record)
 

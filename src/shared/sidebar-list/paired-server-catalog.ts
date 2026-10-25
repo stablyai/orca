@@ -36,11 +36,7 @@ function answer<Schema extends z.ZodType>(
   return parsed.success ? parsed.data : null
 }
 
-/**
- * The reads the window's all-host catalog makes of a server (repo.list, projectGroup.list,
- * project.list, projectHostSetup.list). Null when repo.list fails; `previous` keeps the groups a
- * failed group read would otherwise drop.
- */
+/** Fetch the server’s repos/groups/projects/setups; failed repo reads return null and failed group reads retain previous groups. */
 export async function fetchPairedServerCatalog(
   environmentId: string,
   call: (method: string) => Promise<RuntimeRpcResponse<unknown>>,

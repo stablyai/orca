@@ -3,15 +3,11 @@ import type { PRComment } from '../../../../shared/github/comment-types'
 /** Posted when a selected review comment is sent to AI. */
 export const PR_COMMENT_AI_FIXING_REPLY = 'Fixing. Will be in the next commit'
 
-/**
- * GitHub App logins carry a `[bot]` suffix that does not resolve as an @-mention
- * (`@coderabbitai[bot]` renders literally; `@coderabbitai` reaches the bot).
- */
+/** Strip GitHub App [bot] suffixes because @coderabbitai[bot] is literal while @coderabbitai mentions the bot. */
 export function formatPRCommentMentionHandle(author: string | undefined): string {
   return (author ?? '').replace(/\[bot\]$/i, '').trim()
 }
 
-/** Top-level conversation reply body, addressed to the comment author. */
 export function buildPRCommentConversationReplyBody(
   author: string | undefined,
   body: string
@@ -22,7 +18,6 @@ export function buildPRCommentConversationReplyBody(
 
 const ACK_SNIPPET_MAX_LENGTH = 72
 
-/** First readable line of a comment body, minus HTML comments and markdown markers. */
 function summarizePRCommentBody(body: string): string {
   const cleaned = body.replace(/<!--[\s\S]*?-->/g, ' ')
   let start = 0
@@ -58,10 +53,7 @@ export function describePRCommentAckTarget(comment: PRComment): string {
   return snippet ? `${kind} — ${snippet}` : kind
 }
 
-/**
- * One conversation comment covering every selected comment that has no nested-reply
- * endpoint, so a bulk send leaves a single readable ack instead of N "Fixing." posts.
- */
+/** Batch selections without nested-reply endpoints into one acknowledgement rather than repeated Fixing posts. */
 export function buildPRCommentBatchConversationReplyBody(comments: readonly PRComment[]): string {
   if (comments.length === 0) {
     return ''

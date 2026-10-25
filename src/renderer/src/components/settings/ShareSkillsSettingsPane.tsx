@@ -141,8 +141,7 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
         </section>
       ) : null}
 
-      {/* Why: the link inventory grows without bound and belongs with the page
-          that publishes it; settings keeps the preference and the way over. */}
+      {/* Keep unbounded link inventory on its publishing page; Settings retains the preference and navigation. */}
       {signedIn && !isWebClient ? (
         <section className="flex flex-wrap items-center gap-4 py-5">
           <div className="min-w-0 flex-1 space-y-1">

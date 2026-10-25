@@ -42,22 +42,18 @@ function resolveStatusPermission(status: AgentStatusEntry): MobileNativeChatProm
   )
 }
 
-/** Derives the prompt cards shown above the composer. */
 export function useMobileNativeChatPrompts(args: {
   enabled: boolean
   /** A structured chat reads only its async question here; its journal prompts are its own cards. */
   structured?: MobileStructuredAskSession | null
   status: AgentStatusEntry | null | undefined
   messages: readonly NativeChatMessage[]
-  /** True while `messages` is an unsettled read (including the cached list held
-   *  across a reconnect). Required: an ask derived from it may already be answered. */
+  // Unsettled/retained reconnect history may contain answered asks and cannot supply current prompt cards.
   transcriptLoading: boolean
 }): MobileNativeChatPrompts {
   const { enabled, structured = null, status, messages, transcriptLoading } = args
   const blocked = status?.state === 'waiting' || status?.state === 'blocked'
-  // Both permission paths sit inside the paused gate: an approval envelope can
-  // outlive its answer (the host keeps it sticky), so only a waiting/blocked
-  // agent may surface it — never a working or done one (STA-3144).
+  // Sticky approvals outlive their answers; surface them only while waiting/blocked.
   const permission = blocked && status ? resolveStatusPermission(status) : null
   const question =
     blocked && status && !permission ? parseAgentQuestion(status.lastAssistantMessage ?? '') : null
@@ -98,11 +94,7 @@ export function useMobileNativeChatPrompts(args: {
     permission: askFromStatus ? null : permission,
     question: askFromStatus ? null : question,
     detectedAsk: enabled ? detectedAsk : null,
-    // Only the status payload needs the paused gate the approval envelope uses:
-    // it outlives its answer, so a working/done agent must not surface one. The
-    // transcript fallback clears itself when the tool result lands, and it is the
-    // only source left once the hook row goes stale and projects to `done` with
-    // no interactivePrompt — gating it too strands a genuinely pending question.
+    // Gate sticky status questions on pause, but keep transcript asks until tool results arrive because stale status can project done.
     ask: enabled ? ((blocked ? askFromStatus : null) ?? askFromMessages) : null
   }
 }

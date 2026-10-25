@@ -88,8 +88,7 @@ export function NotificationsPane({
     const outcome = await sendNotificationSettingsTestNotification(
       notificationSettings,
       volumeDraft,
-      // Why: the card renders delivery state inline, so the ambiguous darwin
-      // "check if a banner appeared" toasts would contradict it.
+      // Inline delivery state replaces ambiguous macOS banner-check toasts.
       showsMacPermissionCard ? { suppressSystemPermissionToasts: true } : undefined
     )
     if (!showsMacPermissionCard) {

@@ -1,9 +1,4 @@
-// `agentSession.conversationOutline` — every user message in a structured session, for the
-// message rail's map of the whole thread.
-//
-// Additive and negotiated: a client calls it only once the host advertises
-// `agent-session.conversation-outline.v1`, and treats any failure as "no outline", which
-// leaves the rail on the messages it has loaded.
+// Negotiate conversation-outline.v1 for the thread's full user-message map; failures fall back to the rail's loaded messages.
 
 import { readAgentSessionConversationOutline } from '../../../native-chat/agent-session-wire/agent-session-conversation-outline'
 import { defineMethod } from '../core'

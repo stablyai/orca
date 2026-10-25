@@ -474,6 +474,7 @@ describe('served relay URL', () => {
     expect(await (await fetch(`${relayUrl}/health`)).json()).toEqual({
       ok: true,
       connectionCapacityProtocol: 2,
+      capacityReportedCapMin: true,
       drainPaceWindowMaxMs: 1_200_000
     })
     expect(await (await fetch(`${relayUrl}/ready`)).json()).toEqual({ ok: true })
@@ -732,9 +733,7 @@ describe('served relay URL', () => {
   })
 
   it('restates a pending connection to the rebound control, detailed only when advertised', async () => {
-    // The one link the unit tests cannot reach: an upgrade that really carries
-    // x-orca-host-capabilities must reach acceptControl and change the ack. A
-    // typo in the header name here passes every other test in the suite.
+    // Real upgrade must carry x-orca-host-capabilities into acceptControl; unit tests cannot catch a misspelled header here.
     const host = await openHostControl()
     const hostId = createHash('sha256')
       .update(host.keyPair.publicKey)
@@ -784,8 +783,7 @@ describe('served relay URL', () => {
       controlResumeSecret: String(capable.ack.controlResumeSecret),
       previousGeneration: 1
     })
-    // A shipped host parses these entries strictly, so an unannounced key would
-    // fail the whole ack and kill a control that was working.
+    // Legacy hosts strictly decode entries; unadvertised fields would kill an otherwise healthy control.
     expect(legacy.ack.pendingConns).toEqual([
       { connId: connection.connId, connTicket: connection.connTicket }
     ])
@@ -2190,8 +2188,7 @@ describe('served relay URL', () => {
         blockedExpiredUnregistered: 0,
         blockedExpiredOnNewerTargetAssignment: 0
       })
-      // Completion must prove the source has stopped admitting new work, even in
-      // the served admin workflow that performs its own topology preflight.
+      // Admin completion must prove source admission stopped despite its separate topology preflight.
       expect((await cellState('cell-a', false)).status).toBe(200)
 
       cellB = spawnTopologyRelay({

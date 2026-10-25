@@ -30,9 +30,6 @@ function trimEnd(s: string): string {
   return s.trimEnd()
 }
 
-/**
- * Simulates the onCreate flow: empty-list repair then getMarkdown().
- */
 function simulateOnCreate(diskContent: string): string {
   const editor = createEditor(diskContent)
   try {
@@ -43,13 +40,7 @@ function simulateOnCreate(diskContent: string): string {
   }
 }
 
-// -----------------------------------------------------------------------
-// 1. trimEnd normalization prevents phantom dirty from trailing newlines
-//
-// getMarkdown() always appends a trailing \n. For content that round-trips
-// cleanly (no structural repair changes), the ONLY difference is that
-// trailing newline. trimEnd() must eliminate that false positive.
-// -----------------------------------------------------------------------
+// getMarkdown appends a newline; trimEnd must prevent a false dirty flag on otherwise unchanged documents.
 describe('trailing newline does not cause false dirty state', () => {
   const roundTripCases: [string, string][] = [
     ['simple paragraph', 'Hello world'],
@@ -75,10 +66,7 @@ describe('trailing newline does not cause false dirty state', () => {
   })
 })
 
-// -----------------------------------------------------------------------
-// 2. Hard-wrapped prose must stay structurally clean. The rich editor renders
-//    soft breaks through CSS reflow, not by splitting the document model.
-// -----------------------------------------------------------------------
+// Soft breaks reflow through CSS and must not split the document model.
 describe('document soft-break round-trip', () => {
   it('keeps consecutive source lines in one paragraph', () => {
     const editor = createEditor('Line one\nLine two\nLine three')
@@ -116,9 +104,6 @@ describe('document soft-break round-trip', () => {
   })
 })
 
-// -----------------------------------------------------------------------
-// 4. Actual user edits must still be detected as dirty.
-// -----------------------------------------------------------------------
 describe('real edits are detected as dirty', () => {
   it('ProseMirror transaction produces a dirty diff', () => {
     const diskContent = '# README\n\nOriginal text'
@@ -126,7 +111,6 @@ describe('real edits are detected as dirty', () => {
     try {
       normalizeEmptyListItems(editor)
 
-      // Insert text via a ProseMirror transaction (no DOM required)
       const { tr } = editor.state
       const insertPos = editor.state.doc.content.size - 1
       editor.view.dispatch(tr.insertText(' added', insertPos))
@@ -144,7 +128,6 @@ describe('real edits are detected as dirty', () => {
     try {
       normalizeEmptyListItems(editor)
 
-      // Delete the last paragraph node
       const doc = editor.state.doc
       const lastChild = doc.lastChild!
       const from = doc.content.size - lastChild.nodeSize

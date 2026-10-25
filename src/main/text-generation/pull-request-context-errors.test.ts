@@ -17,8 +17,6 @@ function createContextInput(base = 'main') {
 }
 
 describe('getPullRequestDraftContext error handling', () => {
-  // Why: error and validation cases live outside the remote-resolution matrix
-  // so each suite stays focused while preserving the same git command coverage.
   it('does not run rebase before collecting PR context', async () => {
     const execGit = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'fetch') {

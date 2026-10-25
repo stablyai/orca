@@ -120,9 +120,7 @@ describe('resolveAgentStartupPlanInputs', () => {
 })
 
 describe('a picked session option outranks configured launch arguments', () => {
-  // Why this composes rather than asserting the flag: the flag's name says what it sets, not what
-  // a user sees. What a user sees is one model flag on argv instead of two, and a chat surface
-  // that can name the model they picked.
+  // Compose the surfaces: prove one model flag reaches argv and the chat can name the selected model, beyond asserting the policy flag.
   function commandFor(settings: AgentStartupSettings) {
     return buildAgentStartupPlan({
       ...resolveAgentStartupPlanInputs({
@@ -156,5 +154,43 @@ describe('a picked session option outranks configured launch arguments', () => {
     expect(commandFor({ agentDefaultArgs: { codex: '--search' } })?.launchCommand).toContain(
       "'--search'"
     )
+  })
+})
+
+describe('an Orca-driven launch skips the startup update prompt (#15814, #18153)', () => {
+  function planFor(
+    agent: 'codex' | 'claude',
+    suppressStartupUpdatePrompt: boolean,
+    sessionOptions?: { model: string }
+  ) {
+    return buildAgentStartupPlan({
+      ...resolveAgentStartupPlanInputs({
+        agent,
+        settings: { agentDefaultArgs: { codex: '--search' } },
+        platform: 'darwin',
+        isRemote: false,
+        shell: undefined,
+        suppressStartupUpdatePrompt,
+        ...(sessionOptions ? { sessionOptions } : {})
+      }),
+      prompt: '',
+      allowEmptyPromptLaunch: true
+    })
+  }
+
+  it('adds Codex config only to the typed command, never to the resumable one', () => {
+    for (const sessionOptions of [undefined, { model: 'gpt-5' }]) {
+      const ordinary = planFor('codex', false, sessionOptions)
+      const suppressed = planFor('codex', true, sessionOptions)
+      expect(ordinary?.launchCommand).not.toContain('check_for_update_on_startup')
+      expect(suppressed?.launchCommand).toBe(
+        ordinary?.launchCommand.replace(/^codex/, "codex '-c' 'check_for_update_on_startup=false'")
+      )
+      expect(suppressed?.launchConfig).toEqual(ordinary?.launchConfig)
+    }
+  })
+
+  it('leaves agents without a startup updater unchanged', () => {
+    expect(planFor('claude', true)?.launchCommand).toBe(planFor('claude', false)?.launchCommand)
   })
 })

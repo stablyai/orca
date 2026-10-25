@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// Pastes into a structured chat on a paired server land in that server's attachment store, on
-// every paste path; the server checks each stored path again when it admits the message.
+// All paired-chat paste paths store on the server; admission rechecks every stored attachment path.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -237,7 +236,6 @@ describe('pasting into a structured chat on a paired server', () => {
     await act(async () => probe.api().handlePaste(imagePasteEvent('caption')))
     expect(insertTypedText).toHaveBeenCalledWith('caption')
     expect(setNotice).not.toHaveBeenCalledWith('needs newer server')
-    // The operation ends quietly when this server cannot store its image.
     expect(probe.begun()).toBe(1)
     expect(probe.revealed()).toBe(0)
     expect(probe.chips).toEqual([])

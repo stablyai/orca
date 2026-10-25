@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A restored editor tab moved to its owning workspace in a layout-owner build (ORCA_LAYOUT_OWNER=main):
-// the window asks main to move it under the ids it proposes, and main's frame draws the move with
-// the file's content rekeyed in the same update.
+// With main layout ownership, restored-file moves and content rekeys must arrive together in main’s frame.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
@@ -13,7 +11,6 @@ import type { LayoutCommand } from '../../../../shared/workspace-layout/workspac
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -119,7 +116,6 @@ function openRestoredSource(): string {
   )
 }
 
-/** The window's move when the restored tab's file loads under a sibling workspace (F42). */
 function reparent(
   fileId: string,
   targetWorktreeId = TARGET,

@@ -24,7 +24,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('vim myfile.ts')).toBeNull()
   })
 
-  // --- Gemini symbols ---
   it('detects Gemini permission symbol ✋', () => {
     expect(detectAgentStatusFromTitle('✋ Gemini CLI')).toBe('permission')
   })
@@ -45,12 +44,10 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('✋✦ Gemini CLI')).toBe('permission')
   })
 
-  // --- Braille spinner characters ---
   it('detects braille spinner ⠋ as working', () => {
     expect(detectAgentStatusFromTitle('⠋ Codex is thinking')).toBe('working')
   })
 
-  // --- Agent name keyword combos ---
   it('detects permission requests from agent titles', () => {
     expect(detectAgentStatusFromTitle('Claude Code - action required')).toBe('permission')
   })
@@ -87,7 +84,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('opencode running tests')).toBe('working')
   })
 
-  // --- Claude Code title prefixes ---
   it('detects ". " prefix as working (Claude Code)', () => {
     expect(detectAgentStatusFromTitle('. claude')).toBe('working')
   })
@@ -96,8 +92,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('* claude')).toBe('idle')
   })
 
-  // --- Real Claude Code OSC titles ---
-  // Claude Code sets title to task description, NOT "Claude Code"
   it('detects ✳ prefix as idle (Claude Code with task description)', () => {
     expect(detectAgentStatusFromTitle('✳ User acknowledgment and confirmation')).toBe('idle')
   })
@@ -114,7 +108,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('⠂ Claude Code')).toBe('working')
   })
 
-  // --- Agent name alone defaults to idle ---
   it('returns idle for bare agent name "claude"', () => {
     expect(detectAgentStatusFromTitle('claude')).toBe('idle')
   })
@@ -159,8 +152,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('π - session-name - my-project')).toBe('idle')
   })
 
-  // --- Cursor (cursor-agent) synthesized titles ---
-  // Why: cursor-agent's native title stays "Cursor Agent" all turn, so Orca synthesizes decorated titles for the spinner/unread pipeline.
   it('treats the bare "Cursor Agent" native title as a no-op (not idle)', () => {
     // Why: if the native title classified as idle, cursor's per-turn re-emissions would stomp the spinner off mid-turn.
     expect(detectAgentStatusFromTitle('Cursor Agent')).toBeNull()
@@ -206,7 +197,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
   })
 
-  // --- Case insensitivity ---
   it('is case-insensitive for agent names', () => {
     expect(detectAgentStatusFromTitle('CLAUDE')).toBe('idle')
     expect(detectAgentStatusFromTitle('Codex Working')).toBe('working')
@@ -277,6 +267,17 @@ describe('detectAgentStatusFromTitle path-separator rejection', () => {
 })
 
 describe('clearWorkingIndicators', () => {
+  it.each([
+    ['Codex:working;thinking|running!', 'Codex:;|!'],
+    ['Codex (working),thinking:running…', 'Codex (),:…'],
+    ['Codex working thinking running', 'Codex'],
+    ['Codex working/thinking', 'Codex /thinking'],
+    ['Codex working\\thinking', 'Codex \\thinking'],
+    ['Codex reworking is-thinking-cap C:\\running', 'Codex reworking is-thinking-cap C:\\running']
+  ])('preserves delimiters while removing status words from %s', (title, expected) => {
+    expect(clearWorkingIndicators(title)).toBe(expected)
+  })
+
   it('strips Claude Code ". " working prefix', () => {
     const cleared = clearWorkingIndicators('. claude')
     expect(cleared).toBe('claude')
@@ -523,45 +524,41 @@ describe('isClaudeAgent', () => {
 })
 
 describe('createAgentStatusTracker', () => {
-  // --- Claude Code: real captured OSC title sequence (v2.1.86) ---
-  // Claude Code sets the title to the TASK DESCRIPTION, not "Claude Code"; ✳ prefix is the only reliable idle indicator.
+  // Claude Code v2.1.86 emits task descriptions; only ✳ identifies idle in this captured sequence.
   it('fires on Claude Code working → idle (real captured titles)', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    // Exact sequence captured from Claude Code v2.1.86 via script(1)
-    tracker.handleTitle('✳ Claude Code') // startup idle
+    tracker.handleTitle('✳ Claude Code')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('⠂ Claude Code') // working
+    tracker.handleTitle('⠂ Claude Code')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('⠐ Claude Code') // still working
+    tracker.handleTitle('⠐ Claude Code')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    // Claude Code changes title to task description mid-stream!
-    tracker.handleTitle('⠐ User acknowledgment and confirmation') // working
+    tracker.handleTitle('⠐ User acknowledgment and confirmation')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('⠂ User acknowledgment and confirmation') // working
+    tracker.handleTitle('⠂ User acknowledgment and confirmation')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('✳ User acknowledgment and confirmation') // done → idle
+    tracker.handleTitle('✳ User acknowledgment and confirmation')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
-  // --- Gemini CLI: real title patterns from source code ---
   it('fires on Gemini CLI working → idle (real title patterns)', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('◇  Ready (my-project)') // startup idle
+    tracker.handleTitle('◇  Ready (my-project)')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('✦  Implementing feature (my-project)') // working
+    tracker.handleTitle('✦  Implementing feature (my-project)')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('◇  Ready (my-project)') // done → idle
+    tracker.handleTitle('◇  Ready (my-project)')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -569,8 +566,8 @@ describe('createAgentStatusTracker', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('✦  Working… (my-project)') // working
-    tracker.handleTitle('✋  Action Required (my-project)') // permission
+    tracker.handleTitle('✦  Working… (my-project)')
+    tracker.handleTitle('✋  Action Required (my-project)')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -578,36 +575,35 @@ describe('createAgentStatusTracker', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⏲  Working… (my-project)') // silent working
-    tracker.handleTitle('◇  Ready (my-project)') // idle
+    tracker.handleTitle('⏲  Working… (my-project)')
+    tracker.handleTitle('◇  Ready (my-project)')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
-  // --- Codex: braille spinner working, bare name idle ---
   it('fires on Codex working → idle', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⠋ Codex is thinking') // working
-    tracker.handleTitle('codex') // idle (bare name)
+    tracker.handleTitle('⠋ Codex is thinking')
+    tracker.handleTitle('codex')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
-  // Why: cursor's native "Cursor Agent" re-emissions between synthesized working frames must not fire onBecameIdle before the done frame.
+  // Cursor’s bare native title between synthesized frames must not trigger idle before done.
   it('fires on Cursor working → idle across native "Cursor Agent" re-emissions', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⠋ Cursor Agent') // synthesized working
+    tracker.handleTitle('⠋ Cursor Agent')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('Cursor Agent') // cursor's native re-emission — no-op
+    tracker.handleTitle('Cursor Agent')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('Cursor Agent') // more native re-emissions
+    tracker.handleTitle('Cursor Agent')
     expect(onBecameIdle).not.toHaveBeenCalled()
 
-    tracker.handleTitle('Cursor ready') // synthesized done → idle
+    tracker.handleTitle('Cursor ready')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -629,30 +625,26 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
-  // --- Multiple cycles ---
   it('fires on each working → idle cycle', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    // Cycle 1
     tracker.handleTitle('⠂ Fix login bug')
     tracker.handleTitle('✳ Fix login bug')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
 
-    // Cycle 2
     tracker.handleTitle('⠐ Refactor auth module')
     tracker.handleTitle('✳ Refactor auth module')
     expect(onBecameIdle).toHaveBeenCalledTimes(2)
   })
 
-  // --- Non-agent titles should not interfere ---
   it('ignores non-agent titles without losing working state', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⠂ Claude Code') // working
-    tracker.handleTitle('bash') // non-agent (returns null) — should NOT reset
-    tracker.handleTitle('✳ Some task description') // idle → should still fire
+    tracker.handleTitle('⠂ Claude Code')
+    tracker.handleTitle('bash')
+    tracker.handleTitle('✳ Some task description')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
@@ -660,8 +652,8 @@ describe('createAgentStatusTracker', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('✳ Claude Code') // idle
-    tracker.handleTitle('✳ Some other task') // still idle
+    tracker.handleTitle('✳ Claude Code')
+    tracker.handleTitle('✳ Some other task')
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
@@ -680,18 +672,16 @@ describe('createAgentStatusTracker', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    tracker.handleTitle('⠂ Claude Code') // working
+    tracker.handleTitle('⠂ Claude Code')
     tracker.reset()
-    tracker.handleTitle('✳ Claude Code') // idle — must NOT fire after reset
+    tracker.handleTitle('✳ Claude Code')
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
-  // --- End-to-end: raw OSC bytes → extractLastOscTitle → tracker ---
   it('end-to-end: extracts OSC title and detects Claude Code transition', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
 
-    // Real title patterns: task description, NOT "Claude Code"
     const oscTitle = (title: string): string => `\x1b]0;${title}\x07`
 
     const chunks = [

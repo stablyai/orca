@@ -62,12 +62,7 @@ export function registeredModelCatalogDiscovery(
   return { probes, listingNamesConfiguredModel, listsInChatFolder }
 }
 
-/**
- * The host-deps slice for the catalog surface: hydrates the store from disk
- * once, then builds the service — or nothing, when the runtime cannot name
- * the currently selected account, in which case every catalog read answers
- * `unknown` rather than guessing a key.
- */
+/** Hydrate once and build catalog service only with a known selected account; otherwise answer unknown rather than guess its key. */
 export async function modelCatalogHostDeps(input: {
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'listRecords'>
   agents: Pick<StructuredAgentRegistry, 'definition'>

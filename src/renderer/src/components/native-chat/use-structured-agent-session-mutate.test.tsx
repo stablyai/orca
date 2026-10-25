@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-// One press is one action: a later press of the same control is never answered from an earlier one.
-
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -41,7 +39,7 @@ const CONFLICT = {
   refusal: { code: 'agent_session_conflict', message: 'The chat changed.' }
 } as const
 
-/** The host's ledger: an id it already ran gets that answer again, and nothing runs. */
+/** Model host idempotency: replay recorded answers without repeating the operation. */
 function ledgerHost(run: (method: string, params: Params) => Answer) {
   const ledger = new Map<string, Answer>()
   const ids: string[] = []
@@ -128,7 +126,6 @@ describe('a write pressed again', () => {
 
   it('says nothing when the same answer is clicked again after its reply was lost', async () => {
     const resolution = { state: 'resolved', selectedOptionId: 'allow' }
-    // A host that already resolved the prompt that way answers with the resolution it holds.
     const host = ledgerHost(() => ({
       ok: true,
       value: { itemId: 'item-1', revision: 2, resolution }
@@ -185,7 +182,6 @@ describe('a conversation command typed again', () => {
   })
 })
 
-/** A host that holds each Stop until the test answers the ones it was sent. */
 function heldStops() {
   const answers: (() => void)[] = []
   const ids: string[] = []

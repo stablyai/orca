@@ -178,8 +178,7 @@ export default function AiVaultSessionDropLayer({
         return true
       }
       if (payload.structuredSession) {
-        // Same row, same reveal as clicking Resume. Activating by id alone cannot reach a chat
-        // whose tab is closed, which is the case this drop is most often used for.
+        // Use Resume’s reveal path because activating a chat by ID alone cannot reopen its closed tab.
         void activateAiVaultStructuredSession(payload)
         return true
       }
@@ -251,9 +250,7 @@ export default function AiVaultSessionDropLayer({
                 })
               : payload
           if (!startup) {
-            // Why: the host just proved the prebuilt command pins another
-            // account's home, so an unrepinnable payload (older serializer)
-            // must fail loudly rather than silently resume under it.
+            // Refuse old payloads that cannot repin the startup command; silently using another account’s home is unsafe.
             throw new Error(
               result.substituteCodexHome
                 ? 'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'

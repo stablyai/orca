@@ -1,10 +1,4 @@
-/**
- * FNV-1a stamp for one editor draft's text.
- *
- * Why its own module: it is the single hash shared by the mobile sync key and the mobile session
- * snapshot, and its cost is proportional to the draft's length — so callers must memoize it per
- * file rather than re-running it whenever the drafts record is re-spread.
- */
+// Share FNV-1a draft stamps across mobile keys/snapshots. Cost scales with text length; memoize per file or record spreads rehash every draft.
 export function stableHashString(value: string): string {
   let hash = 2166136261
   for (let i = 0; i < value.length; i += 1) {

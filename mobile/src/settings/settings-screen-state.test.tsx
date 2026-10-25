@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import NotificationsScreen from './notification-settings-screen'
 import VoiceSettingsScreen from './voice-settings-screen'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   View: 'View',
@@ -99,7 +100,7 @@ describe('shared settings screen state', () => {
       )
     })
     expect(JSON.stringify(renderer.toJSON())).not.toContain('Failed to load voice settings')
-    expect(renderer.root.findAllByType('ActivityIndicator')).toHaveLength(1)
+    expect(findAllByHostType(renderer.root, 'ActivityIndicator')).toHaveLength(1)
   })
   it('drops a poll that resolves after a toggle instead of clobbering it', async () => {
     const loaded = {
@@ -153,7 +154,7 @@ describe('shared settings screen state', () => {
     // Without the request-epoch fence the stale read would flip the switch back on.
     expect(switchProps().value).toBe(false)
   })
-  it('does not enable notifications after denied OS permission', async () => {
+  it('does not enable notifications when permission is not granted', async () => {
     const denied = {
       granted: false,
       status: 'undetermined',

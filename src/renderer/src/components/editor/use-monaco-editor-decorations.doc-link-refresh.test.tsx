@@ -55,8 +55,7 @@ describe('useMonacoEditorDecorations doc-link refresh', () => {
       )
     }
 
-    // Why: `createMarkdownDocLinkDecorationController` already subscribes to
-    // `onDidChangeModelContent`, so the React mirror was pure duplicate work.
+    // The controller already subscribes to model content; a React mirror would duplicate refreshes.
     expect(refresh).not.toHaveBeenCalled()
   })
 

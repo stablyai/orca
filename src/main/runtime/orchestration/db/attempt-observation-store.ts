@@ -161,10 +161,7 @@ export function getAttemptObservationFacts(
   ).map(exposeAttemptObservationFact)
 }
 
-/** A sibling attempt still running for the same Task. Both the outcome projection and the
- *  attention query must read the identical predicate or one reports an outcome the other calls
- *  unknown. `taskId`/`dispatchId` are SQL expressions the caller writes ('?' or a joined column),
- *  never user input. */
+/** Share the active-sibling predicate between outcome and attention queries; arguments are trusted SQL expressions. */
 export function activeSiblingAttemptSql(taskId: string, dispatchId: string): string {
   return `SELECT 1 FROM dispatch_contexts active
      JOIN worker_dispatches sibling ON sibling.dispatch_id = active.id

@@ -72,7 +72,7 @@ it('keeps a narrower cached panel off the broader key while a late matching pane
     push({ scanKey: broader, progress: { ...cachedProgress, scanId: 'later', stage: 'finding' } })
   )
   expect(narrowerPanel.result.current).toBeNull()
-  // A remote host has no progress stream yet; its panel keeps today's spinner and error line.
+  // Without remote progress evidence, retain the existing spinner/error presentation.
   expect(remote.result.current).toBeNull()
   expect(allHosts.result.current).toBeNull()
 })

@@ -33,10 +33,7 @@ export function liftAgentPermissionArgs(
   return { choice: null, args: original }
 }
 
-/**
- * Splits an env-driven bypass (Goose's `GOOSE_MODE=auto`) out of an environment record. Names
- * follow the execution host's identity; unknown browser caches preserve ambiguous spellings.
- */
+/** Lift env bypass with execution-host name casing; unknown browser caches retain ambiguous spellings. */
 export function liftAgentPermissionEnv(
   agent: TuiAgent,
   env: Record<string, string> | null | undefined,
@@ -75,11 +72,7 @@ type AgentPermissionProfile = Required<
   >
 >
 
-/**
- * Moves each agent's permission out of its Arguments into a stored choice, once per profile.
- * Orca's own flags become the choice and leave the text; no flag means the agent's own settings
- * (those terminals passed none). Text that sets permissions some other way is left whole, on own.
- */
+/** Migrate exact Orca permission recipes once, preserving unrelated text on own; absent flags also mean own because those launches passed none. */
 export function migrateAgentPermissionChoice(
   settings: Partial<AgentPermissionProfile>,
   platform: NodeJS.Platform | null | undefined = agentPermissionHostPlatform()

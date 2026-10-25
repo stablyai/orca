@@ -115,7 +115,6 @@ class ExpoTwoWayAudioModule : Module() {
              }
          }
 
-        // Register events
         Events(
             ON_MIC_DATA_EVENT,
             ON_INPUT_VOLUME_LEVEL_EVENT,

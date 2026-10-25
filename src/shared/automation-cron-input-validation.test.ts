@@ -32,8 +32,7 @@ describe('cron oversized steps (#15895)', () => {
     expect(isValidAutomationSchedule('0 9 * * */7')).toBe(true)
   })
 
-  // The gate is input-only. A row persisted before it keeps running the cadence it was saved
-  // with rather than throwing mid-tick, which is what keeps it editable (see the editor tests).
+  // Input-only validation preserves legacy cadence without mid-tick errors, keeping stored schedules editable.
   it('still runs a persisted oversized step, degenerating it to its single value', () => {
     expect(isRunnableAutomationSchedule('*/90 * * * *')).toBe(true)
     expect(ascending(parseCronExpression('*/90 * * * *').minutes)).toEqual([0])
@@ -47,8 +46,7 @@ describe('cron oversized steps (#15895)', () => {
   })
 })
 
-// Node reads the OS timezone on Windows and ignores a runtime process.env.TZ change, so the
-// stub — and the precondition asserting it took — cannot work there.
+// Windows Node uses OS timezone and ignores runtime TZ changes, so skip this stub/precondition there.
 describe.skipIf(process.platform === 'win32')('cron occurrence local-time controls', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -91,9 +89,7 @@ describe.skipIf(process.platform === 'win32')('cron occurrence local-time contro
     expect(new Date(second).getHours()).toBe(1)
     expect(second - first).toBe(60 * 60 * 1000)
 
-    // Pre-existing limit this change does not touch or fix (#20154): local 01:30 is ambiguous,
-    // so flooring it rebuilds the earlier EDT instant and the scan lands back on the EST repeat
-    // instead of tomorrow. Pinned so a later DST fix has to update it deliberately.
+    // Pin existing DST ambiguity (#20154): flooring 01:30 rebuilds earlier EDT and scans into repeated EST, not tomorrow.
     expect(
       nextAutomationOccurrenceAfter('30 1 * * *', new Date(2026, 0, 1).getTime(), second)
     ).toBe(second)

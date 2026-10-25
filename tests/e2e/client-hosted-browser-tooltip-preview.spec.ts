@@ -1,7 +1,4 @@
-// Throwaway interactive preview (untracked): shows the client-hosted browser
-// intro tooltip in a headed paired client and holds the app open for review.
-// Run: ORCA_TOOLTIP_PREVIEW=1 pnpm exec playwright test --config tests/playwright.config.ts \
-//   --project electron-headless --workers=1 tests/e2e/client-hosted-browser-tooltip-preview.spec.ts
+// Opt-in client-hosted browser tooltip preview; enable with ORCA_TOOLTIP_PREVIEW=1.
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Page } from '@stablyai/playwright-test'

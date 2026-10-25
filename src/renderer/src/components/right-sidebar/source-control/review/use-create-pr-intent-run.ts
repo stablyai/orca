@@ -15,10 +15,6 @@ import type { SourceControlCreatePrIntentReview } from './use-create-pr-intent-r
 import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
 import type { SourceControlHostedReviewProviderHint } from './use-hosted-review-provider-hint'
 
-/**
- * One-click "Create PR": commits, pushes, and opens the review, refusing to continue the moment the
- * run no longer owns the worktree it started on.
- */
 export function useSourceControlCreatePrIntentRun({
   activeRepo,
   activeWorktreeId,
@@ -108,10 +104,9 @@ export function useSourceControlCreatePrIntentRun({
       worktreeId: activeWorktreeId,
       worktreePath,
       branch: branchName,
-      // Why: token carries the same provisional provider used for UI copy so a failed
-      // eligibility IPC can synthesize local prep steps for the correct host.
+      // Preserve the UI provider so failed eligibility probes can synthesize the right host’s local prep steps.
       provider: provisionalHostedReviewProvider,
-      // Why: intent crosses async commit/push steps, so the base stays tied to what was selected when the run started.
+      // Pin the selected base across asynchronous commit/push steps.
       baseRef: effectiveBaseRef ?? null
     })
     const operationTarget = getCreatePrIntentOperationTarget(token)

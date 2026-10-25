@@ -1,9 +1,4 @@
-// `agentSession.item`: one item whole, for "Show full output". Every other read sends the client a
-// head of each tool output and diff (agent-session-item-wire-form.ts); the journal keeps the rest.
-//
-// Additive and negotiated: a client calls it only once the host advertises
-// `agent-session.item-detail.v1`. The reply is fitted to one reply's limit and marked when that
-// still had to shorten it; a phone's bridge splits a reply that size.
+// Negotiate item-detail.v1 for full journal items beyond preview heads; fit replies to transport limits and mark remaining truncation.
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { ItemParams } from '../../../../shared/rpc-contract/structured-agent-session-params'

@@ -157,7 +157,7 @@ function source() {
   }
 }
 
-/** The real staging module behind the RPC shapes, so resume reads what a host would report. */
+/** Use real staging semantics so resume observes host-equivalent state. */
 function realDestination(capabilities: readonly string[]) {
   const readState = async (): Promise<OrcadMigrationCatalogState> => {
     const blobUploads = inspectOrcadMigrationBlobUploads(manifest, root)

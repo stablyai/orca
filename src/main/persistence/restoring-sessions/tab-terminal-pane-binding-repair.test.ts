@@ -1,6 +1,4 @@
-// A terminal named only on its tab (an older session, or an unvisited SSH tab's relay session):
-// the load repair binds it to the tab's one unbound pane, as the window's reconnect rebinds it, so
-// main's layout, frames and saves hold it before the pane mounts.
+// Recover tab-only terminal bindings before panes mount so main's frames and saves retain them.
 
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
@@ -28,7 +26,6 @@ import {
 
 const SSH_HOST = toSshExecutionHostId('box')
 
-/** One tab whose saved pane binds nothing; its terminal is named on the row only. */
 function tabLevelSession(
   key: string,
   hostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
@@ -145,7 +142,7 @@ describe("load repair: a tab's own terminal and its unbound pane", () => {
       { id: 'g1', tabs: [{ id: 'tab-b', leaves: [[leaf(2)]] }] }
     ])
     stored.tabsByWorktree[GIT_KEY]![0]!.ptyId = 'pty-shared'
-    // A row outside the tab bar naming the tab-bar tab's terminal and one of its own.
+    // Hidden row shares one tab-bar terminal and names a separate terminal of its own.
     stored.tabsByWorktree[GIT_KEY]!.push({
       ...stored.tabsByWorktree[GIT_KEY]![0]!,
       id: 'tab-a',
@@ -193,7 +190,6 @@ describe("load repair: a tab's own terminal and its unbound pane", () => {
         connectionId: 'box'
       }
     ]
-    // A local repo's workspace in the same partition still binds its row's terminal.
     state.workspaceSession = tabLevelSession(SSH_KEY)
     const local = tabLevelSession(GIT_KEY)
     local.tabsByWorktree[GIT_KEY]![0]!.id = 'tab-g'

@@ -4,7 +4,6 @@ import { observableModel } from '../observable-model'
 import { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 
-/** Task-model mounts: GitHub project metadata, Linear issue detail and task client settings. */
 export function taskMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>,
   options: MountOptions

@@ -25,7 +25,10 @@ async function load(contents) {
           }))
           bundler.onLoad({ filter: /.*/, namespace: 'bench' }, (args) => ({
             contents: args.path.endsWith('markdown-round-trip')
-              ? 'export const getRichMarkdownRoundTripOutput = (content) => content'
+              ? `export const getRichMarkdownRoundTripOutput = (content) => content
+                export const getRichMarkdownPassthroughOutput = () => {
+                  throw new Error("unexpected editor passthrough")
+                }`
               : 'export const translate = (_key, fallback) => fallback',
             loader: 'js'
           }))

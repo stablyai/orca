@@ -36,7 +36,7 @@ describe('resolveSshWorkspaceForget', () => {
     const result = resolveSshWorkspaceForget({
       repo: { connectionId: 'ssh-dead' },
       sshConnectionStates: new Map(),
-      sshTargetLabels: new Map() // ssh-dead not present -> ghost
+      sshTargetLabels: new Map()
     })
     expect(result).toEqual({ kind: 'ghost', targetId: 'ssh-dead' })
   })

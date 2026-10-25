@@ -14,7 +14,7 @@ export type MonacoEditorDecorations = {
   updateMarkdownCompletionDocuments: () => void
 }
 
-// Why: these resources are keyed to the current Monaco model, so they refresh on content/language change and tear down together on model swap or unmount.
+// Keep model-owned decorations together so swaps and unmounts release their resources.
 export function useMonacoEditorDecorations(params: {
   editorRef: MutableRefObject<editor.IStandaloneCodeEditor | null>
   mountedEditor: editor.IStandaloneCodeEditor | null
@@ -52,11 +52,7 @@ export function useMonacoEditorDecorations(params: {
     }
   }, [editorRef, language, markdownDocuments])
 
-  // Why: content changes are already covered by the controller's own
-  // `onDidChangeModelContent` subscription (which also catches programmatic
-  // edits this effect never saw), so mirroring `content` here only doubled the
-  // debounce timer churn per keystroke. A language swap on a retained model has
-  // no content event, so that trigger stays.
+  // The controller observes content edits; only language swaps lack that event and need this explicit refresh.
   useEffect(() => {
     markdownDocLinkDecorationsRef.current?.refresh()
   }, [language])

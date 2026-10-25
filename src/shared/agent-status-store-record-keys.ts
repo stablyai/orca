@@ -1,6 +1,4 @@
-// Keys the store derives from its own records. A stored record is frozen, so a key re-derived for
-// every edge that touches the record (an alias re-validated with its child, a retired binding read
-// on every lookup) is computed once per record.
+// Cache derived keys per frozen record to avoid repeating work on each evidence edge, alias validation and retired-binding lookup.
 
 import {
   serializeAgentChildWorkAliasKey,

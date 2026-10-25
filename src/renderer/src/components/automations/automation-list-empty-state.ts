@@ -9,13 +9,7 @@ import {
   type AutomationHostRecoveryAction
 } from './automation-host-status-descriptors'
 
-/**
- * Picks which empty/partial/failure state the list is actually in.
- *
- * The load-bearing rule: a host that is disconnected, unreachable, or not yet
- * hydrated is never described as empty. "No automations" is a claim about
- * storage, and none of those states have looked at storage.
- */
+/** Describe disconnected, unreachable or unhydrated hosts as unknown, never empty; no storage read established that claim. */
 
 export type AutomationListEmptyStateKind =
   /** Rows exist; render the list, not a state. */
@@ -158,11 +152,7 @@ function groupHostStatus(entry: AutomationHostCatalogEntry): AutomationHostFilte
   return entry.authorityHealth === 'unavailable' ? 'unavailable' : 'ready'
 }
 
-/**
- * The All-hosts group asks the same question about one host that the single-host
- * view asks, so it asks it here. A second set of branches would drift, and the
- * drift is what lets a host nobody could reach be described as empty.
- */
+/** Reuse the single-host resolver for All-hosts groups so unreachable cannot drift into empty. */
 export function resolveAutomationHostGroupEmptyState(
   input: AutomationListHostGroupEmptyStateInput
 ): AutomationListEmptyState {

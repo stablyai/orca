@@ -31,7 +31,6 @@ export type VisibilityResumeCoordinatorOptions = {
   activeRuntimeWorktreeKey: () => string | null
 }
 
-/** Coordinates inventory omissions and cross-environment replay during visibility resumes. */
 export class VisibilityResumeCoordinator {
   private batch: VisibilityResumeBatch | null = null
 

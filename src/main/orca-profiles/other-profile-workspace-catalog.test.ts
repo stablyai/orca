@@ -1,8 +1,3 @@
-/**
- * Terminal history is keyed by worktree id under a root with no profile
- * segment, while the Store the GC consults holds one profile's ids. Without
- * these, switching profiles makes every other profile's history look orphaned.
- */
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -81,8 +76,7 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
     )
   })
 
-  // The active profile's ids come from the live Store, which is authoritative;
-  // re-reading its file would only race a write in progress.
+  // The live Store owns active-profile IDs; rereading its file could race writes.
   it('skips the active profile', () => {
     const root = userDataWithProfiles('active', [
       { id: 'active', state: { worktreeMeta: { 'repo::/active': {} } } }
@@ -256,8 +250,7 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
     })
   })
 
-  // A single-profile install must not pay for this, and no index at all is the
-  // pre-profiles layout rather than an error.
+  // No index is a valid pre-profiles installation.
   it('is empty and complete when there is no profile index', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-gc-profiles-'))
     roots.push(root)

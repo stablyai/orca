@@ -72,7 +72,7 @@ function counts(db: SyncDatabase): Record<string, number> {
   }
 }
 
-it('writes a whole read in one transaction', () => {
+it('publishes all rows from a completed whole read', () => {
   replayTranscriptRead({ messages: userMessages('needle text', 300) })
 
   const after = counts(index.db)

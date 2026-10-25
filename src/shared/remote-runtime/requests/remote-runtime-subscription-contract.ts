@@ -31,7 +31,6 @@ export type RemoteRuntimeSubscriptionOptions = RemoteRuntimeSocketLivenessOption
   perMessageDeflate?: boolean
   outboundQueue?: RemoteRuntimeOutboundQueueOptions
   outboundMemoryBudget?: RemoteRuntimeOutboundMemoryBudget
-  // Why: overridable so the connect-bound regression test can pin the ordering against the
-  // subscription-start timer without spending production wall-clock.
+  // Override to test ordering against the subscription-start timeout without production waits.
   connectTimeoutMs?: number
 }

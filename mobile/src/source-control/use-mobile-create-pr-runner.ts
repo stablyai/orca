@@ -72,7 +72,7 @@ export function useMobileCreatePrRunner({
       }
       let progress: MobileHostedReviewCreateIntentProgress | null = null
       const ran = await runGitWorkflow(pushFirst ? 'push-create-pr' : 'create-pr', async () => {
-        // Why: this run commits the box's message, so it supersedes a running generation too.
+        // Committing the current message supersedes any generation still in flight.
         cancelGenerateCommitMessage()
         created.current = await runMobileHostedReviewCreateIntent(client, worktreeId, {
           branch,

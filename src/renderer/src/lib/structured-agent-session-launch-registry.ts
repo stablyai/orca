@@ -78,8 +78,7 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
   return () => structuredLaunchListeners.delete(listener)
 }
 
-// Why keyed by agent: one worktree can hold a Claude and a Codex launch at once.
-// Why keyed by conversation: a resume must not coalesce onto an unrelated blank launch.
+// Key by agent for concurrent Claude/Codex starts, and conversation so resumes never join unrelated blank launches.
 export function structuredLaunchIdentity(
   worktreeId: string,
   agent: TuiAgent,
@@ -254,8 +253,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     }
     state.cancelled = true
     state.callers.outcome = 'cancelled'
-    // The tombstone is the durable authority; drop the in-memory launch so bulk closes cannot
-    // retain a dead promise for the lifetime of the renderer.
+    // Tombstones remain durable authority; drop in-memory dead promises so bulk closes cannot retain them all session.
     deleteStructuredLaunchStateIfCurrent(state)
   } else if (
     ORCA_LAYOUT_OWNER_IS_MAIN &&

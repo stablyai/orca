@@ -7,7 +7,6 @@ import { parseIpynbOutput, type IpynbCell, type IpynbOutput } from './ipynb-pars
 
 type CellRunProps = { filePath: string; cellKey: string }
 
-/** The gutter for a code cell, reflecting its run in the notebook's kernel session. */
 export function IpynbCellRunPrompt({
   filePath,
   cellKey,

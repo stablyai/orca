@@ -1,8 +1,4 @@
-/**
- * An agent with no rest signal of its own (amp) settles only on a quiet foreground, and only
- * once it has painted. The shell's prompt and the echoed launch command land first, so the
- * runtime must tell them apart from the agent's paint by the shell's command-start marker.
- */
+/** Quiet foreground is insufficient until the agent paints; use command-start markers to exclude shell prompts and launch echo. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'

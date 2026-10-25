@@ -344,7 +344,7 @@ describe('ExternalConversationSeam send', () => {
       'term-1',
       'hello',
       expect.objectContaining({
-        inputKind: 'driving',
+        inputKind: 'orchestration',
         onPermission: 'wait',
         expectedBinding: { ptyId: 'pty-1', processIncarnation: 'inc-pty-1' },
         signal: expect.any(AbortSignal)

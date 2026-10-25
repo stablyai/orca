@@ -92,8 +92,7 @@ export function MobileDiffReviewLine({
   )
 }
 
-// Row height comes from the 18px code lineHeight alone (no vertical padding or
-// minHeight) so mobile diff density matches the desktop diff editor (STA-1239).
+// Use 18px lineHeight alone without padding/minHeight to match desktop diff density (STA-1239).
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',

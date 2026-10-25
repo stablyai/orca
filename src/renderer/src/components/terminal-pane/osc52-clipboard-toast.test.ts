@@ -78,9 +78,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
   })
 
   it('keeps the session notice unspent when the toast throws', async () => {
-    // Why: with the latch above toast.info, a throw burns the opted-out user's one
-    // hint and every later blocked write fails silently. Only a throwing first call
-    // separates the two orderings — the passing case satisfies both.
+    // Throw on the first toast to prove failed display cannot spend the session’s only notice.
     const { showOsc52ClipboardBlockedToast } = await importToastModule()
     toastInfoMock.mockImplementationOnce(() => {
       throw new Error('toast unavailable')
@@ -93,8 +91,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
   })
 
   it('mentions Grok and Zellij in every supported locale', () => {
-    // Why assert the catalog, not the code fallback: en.json is bundled as the
-    // `en` resource, so a catalog value silently wins over translate()'s fallback.
+    // Assert en.json because its bundled resource overrides translate’s fallback.
     const locales = [en, es, ja, ko, zh]
 
     for (const locale of locales) {

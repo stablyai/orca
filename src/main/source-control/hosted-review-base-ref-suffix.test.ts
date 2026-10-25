@@ -16,9 +16,7 @@ describe('baseRefExistsOnRemote suffix fallback', () => {
   })
 
   it('does not answer a bare base with a nested branch of the same final segment', async () => {
-    // The replaced `refs/remotes/*/main` could not cross a slash. A repo with
-    // `origin/feature/main` but no `origin/main` must still read as absent, or
-    // the review is submitted against a base the provider will reject.
+    // Suffix matches must have one remote segment; origin/feature/main cannot prove origin/main exists.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }

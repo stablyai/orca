@@ -26,8 +26,7 @@ function fullPayload(body: AgentJournalItemBody): AgentJournalBoundedPayload | n
   return body.kind === 'diff' ? body.patch : null
 }
 
-/** A tool's output in an opened row: a head of it, and the whole of it on request, read from the
- *  host that keeps it. State is the row's own, so a live revision never fights it. */
+/** Read full output from its owning host on request; keep expansion state independent of live revisions. */
 export function NativeChatToolOutput({
   body
 }: {

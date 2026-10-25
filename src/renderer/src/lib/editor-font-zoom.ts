@@ -21,15 +21,12 @@ export function nextEditorFontZoomLevel(current: number, direction: EditorZoomDi
 }
 
 export function computeEditorFontSize(baseFontSize: number, zoomLevel: number): number {
-  // Why: Monaco and markdown surfaces become unreadable or visually broken at
-  // extreme values. Clamp after applying zoom so all editor-like surfaces stay
-  // within the same safe range regardless of their own default base size.
+  // Clamp after zoom so editor/markdown surfaces stay readable regardless of base size.
   return Math.max(8, Math.min(32, baseFontSize + zoomLevel))
 }
 
 export function computeDiffEditorFontSize(baseFontSize: number, zoomLevel: number): number {
-  // Why: diff editors have denser gutters and inline decorations, so matching
-  // terminal font size makes review views feel oversized relative to app chrome.
+  // Dense diff gutters/decorations need smaller defaults than terminal text to fit app chrome.
   return computeEditorFontSize(baseFontSize - 0.5, zoomLevel)
 }
 
@@ -46,10 +43,7 @@ export function resolveEditorFontFamily(settings?: EditorFontFamilySettings | nu
   return settings?.editorFontFamily?.trim() || settings?.terminalFontFamily || 'monospace'
 }
 
-/**
- * Fallback-backed stack for code painted outside Monaco. Monaco appends its own fallbacks to a
- * bare name; a plain element does not, so an unresolvable name like "SF Mono" drops to serif.
- */
+/** Monaco adds fallback fonts itself; other code surfaces need an explicit stack or unknown names can fall back to serif. */
 export function resolveEditorFontStack(settings?: EditorFontFamilySettings | null): string {
   const family = settings?.editorFontFamily?.trim() || settings?.terminalFontFamily?.trim() || ''
   // A comma list is already a CSS stack; quoting it would make it one unknown family name.
