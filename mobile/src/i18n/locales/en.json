@@ -535,7 +535,9 @@
     },
     "bottomBar": {
       "connectFirst": "Connect a desktop to start new work.",
-      "newWorkspace": "New workspace"
+      "tasks": "Tasks",
+      "newWorkspace": "New workspace",
+      "create": "Create"
     },
     "desktops": {
       "pairDesktop": "Pair a desktop"
@@ -830,6 +832,7 @@
       "done": "Done"
     },
     "hostWorkspaceListStates": {
+      "addProject": "Add a project",
       "checkHost": "Check that your computer is awake and Orca is running",
       "loadFailed": "Could not load workspaces from this host",
       "noMatches": "No matching workspaces",

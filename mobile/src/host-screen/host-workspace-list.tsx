@@ -111,6 +111,11 @@ export function HostWorkspaceList({
         bottomInset={hasRows ? 0 : Math.max(bottomBarHeight, insets.bottom)}
         onClearSearch={() => state.setSearch('')}
         onReconnect={hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
+        onAddProject={
+          actions.addProjectSupported && connState === 'connected' && !isReadOnly
+            ? actions.openCreateMenu
+            : undefined
+        }
       />
     )
 
@@ -173,6 +178,7 @@ export function HostWorkspaceList({
         <HostWorkspaceListReopen aboveRows={sections.length > 0} />
       ) : hasRows ? null : (
         listState
+
       )}
 
       {sections.length > 0 && (

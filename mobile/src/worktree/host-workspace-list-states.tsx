@@ -2,6 +2,7 @@ import { Text, View } from 'react-native'
 import { CircleAlert, FolderTree, WifiOff } from 'lucide-react-native'
 import { MobileNoMatchState, MobileStateView } from '../components/MobileStateView'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { isConnectionOutage, verdictDisplayLabel } from '../transport/connection-health'
@@ -18,6 +19,9 @@ export function HostWorkspaceListStates(
     bottomInset: number
     onClearSearch: () => void
     onReconnect: (() => void) | null
+    /** Offered only when nothing is filtered out, so it reads as "this host has no projects yet". */
+    onAddProject?: () => void
+
   }
 ) {
   const t = useMobileTranslation()
@@ -86,8 +90,14 @@ export function HostWorkspaceListStates(
             ? t('worktree.hostWorkspaceListStates.noFilterMatches', 'No workspaces match filters')
             : t('worktree.hostWorkspaceListStates.empty', 'No workspaces')
         }
+        action={
+          props.activeFilterCount === 0 && props.onAddProject
+            ? { label: t('worktree.hostWorkspaceListStates.addProject', 'Add a project'), onPress: props.onAddProject }
+            : null
+        }
         bottomInset={bottomInset}
       />
+
     )
   }
   return null

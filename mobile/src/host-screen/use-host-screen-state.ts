@@ -73,6 +73,9 @@ export function useHostScreenState(
     newWorktreeModalVisibleRef.current = visible
     setShowNewWorktree(visible)
   }, [])
+  const [showAddProject, setShowAddProject] = useState(false)
+  // A just-added project the next New Workspace sheet should start on.
+  const [newWorktreeInitialRepoId, setNewWorktreeInitialRepoId] = useState<string | null>(null)
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
@@ -96,6 +99,7 @@ export function useHostScreenState(
     hostPlatform,
     hostStoredDescriptor,
     lastKnownWorktrees,
+    newWorktreeInitialRepoId,
     newWorktreeModalVisibleRef,
     optimisticActiveWorktreeIdentity,
     pinnedIds,
@@ -124,15 +128,18 @@ export function useHostScreenState(
     setRepoHostIdByRepoId,
     setServedProjectSections,
     setDesktopRepos,
+    setNewWorktreeInitialRepoId,
     setNewWorktreeVisible,
     setSearch,
     setServerNotice,
     setServerWorkspaces,
     setShowWorkspaceOptions,
+    setShowAddProject,
     setShowPinnedInGroups,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
+    showAddProject,
     showNewWorktree,
     showWorkspaceOptions,
     showPinnedInGroups,

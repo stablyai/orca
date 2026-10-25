@@ -20,6 +20,7 @@ export function useNewWorkspaceRepositories(args: {
   serverClients?: ReadonlyMap<ExecutionHostId, RpcClient>
   hostId?: string
   visible: boolean
+  initialRepoId?: string | null
 }): {
   repos: MobileWorkspaceRepo[]
   allRepos: MobileWorkspaceRepo[]
@@ -30,7 +31,7 @@ export function useNewWorkspaceRepositories(args: {
   loadError: string | null
   retryLoad: () => void
 } {
-  const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible } = args
+  const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible, initialRepoId } = args
   const [initialRepos] = useState(() =>
     hostId ? (getCachedRepos(hostId) as MobileWorkspaceRepo[] | null) : null
   )
@@ -41,6 +42,9 @@ export function useNewWorkspaceRepositories(args: {
   // Null until a read fails; an empty string is a refusal with no reason to show.
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
+  // The cached list predates a just-added project, so a preferred pick waits for a fresh one.
+  const [listedFresh, setListedFresh] = useState(false)
+
   const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
   // Why: trust checks count same-id rows on every host, as desktop does; only the picker filters.
   const allRepos = useMemo(
@@ -58,7 +62,20 @@ export function useNewWorkspaceRepositories(args: {
   )
 
   useEffect(() => {
-    if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
+    if (!visible || !lastVisitedRepo.loaded || selectedRepo) {
+      return
+    }
+    if (initialRepoId) {
+      const initialRepo = repos.find((repo) => repo.id === initialRepoId)
+      if (initialRepo) {
+        setSelectedRepo(initialRepo)
+        return
+      }
+      if (!listedFresh) {
+        return
+      }
+    }
+    if (repos.length === 0) {
       return
     }
     const preferredRepoId = resolveNewWorkspaceDialogRepoId({
@@ -69,7 +86,15 @@ export function useNewWorkspaceRepositories(args: {
     if (preferredRepo) {
       setSelectedRepo(preferredRepo)
     }
-  }, [lastVisitedRepo.loaded, lastVisitedRepo.repoId, repos, selectedRepo, visible])
+  }, [
+    lastVisitedRepo.loaded,
+    lastVisitedRepo.repoId,
+    initialRepoId,
+    listedFresh,
+    repos,
+    selectedRepo,
+    visible
+  ])
 
   useEffect(() => {
     if (!visible || !client) {
@@ -100,6 +125,7 @@ export function useNewWorkspaceRepositories(args: {
       .finally(() => {
         if (!stale) {
           setLoading(false)
+          setListedFresh(true)
         }
       })
     return () => {

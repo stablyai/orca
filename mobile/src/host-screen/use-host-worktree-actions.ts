@@ -12,6 +12,7 @@ import {
   rpcClientForExecutionHost,
   workspaceRouteExecutionHost
 } from '../transport/execution-host-scoped-rpc-client'
+import { MOBILE_ADD_PROJECT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { serverUpdateNeededNotice } from '../host-route-notice'
 import type { ConnectionState } from '../transport/types'
 import { leaveHostRoute } from '../host-route-exit'
@@ -54,7 +55,9 @@ export function useHostWorktreeActions(args: {
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
     serverWorkspaces,
+    setNewWorktreeInitialRepoId,
     setNewWorktreeVisible,
+    setShowAddProject,
     setServerNotice,
     setServerWorkspaces,
     setSleptIds,
@@ -75,14 +78,27 @@ export function useHostWorktreeActions(args: {
     }
   }, [router])
 
-  const openNewWorktreeModal = useCallback(
-    () => setNewWorktreeVisible(true),
-    [setNewWorktreeVisible]
+  const openNewWorktreeForRepo = useCallback(
+    (repoId?: string) => {
+      setNewWorktreeInitialRepoId(repoId ?? null)
+      setNewWorktreeVisible(true)
+    },
+    [setNewWorktreeInitialRepoId, setNewWorktreeVisible]
   )
-  const closeNewWorktreeModal = useCallback(
-    () => setNewWorktreeVisible(false),
-    [setNewWorktreeVisible]
-  )
+  const closeNewWorktreeModal = useCallback(() => {
+    setNewWorktreeVisible(false)
+    setNewWorktreeInitialRepoId(null)
+  }, [setNewWorktreeInitialRepoId, setNewWorktreeVisible])
+  // Older hosts refuse the phone's repo.add/create/clone, so + keeps opening New Workspace directly there.
+  const addProjectSupported = hostCapabilities.includes(MOBILE_ADD_PROJECT_RUNTIME_CAPABILITY)
+  const openCreateMenu = useCallback(() => {
+    if (addProjectSupported) {
+      setShowAddProject(true)
+    } else {
+      setNewWorktreeVisible(true)
+    }
+  }, [addProjectSupported, setNewWorktreeVisible, setShowAddProject])
+  const closeAddProject = useCallback(() => setShowAddProject(false), [setShowAddProject])
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -269,7 +285,10 @@ export function useHostWorktreeActions(args: {
     leaveHost,
     navigateFromHostList,
     openFloatingWorkspace,
-    openNewWorktreeModal,
+    addProjectSupported,
+    closeAddProject,
+    openCreateMenu,
+    openNewWorktreeForRepo,
     closeNewWorktreeModal,
     openWorktreeSession,
     putWorktreeToSleep,
