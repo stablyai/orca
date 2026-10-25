@@ -18,6 +18,12 @@ export type WorktreeDeleteOptions = {
   expectedInstanceId?: string
   /** Pin deletion to the confirmed host because workspace IDs repeat across hosts. */
   expectedHostId?: ExecutionHostId
+  /** Opens the dialog without its "don't ask again" escape, even when the user opted out of it. */
+  forceConfirm?: boolean
+  /** Nobody asked for this delete, so the dialog must not land focus on Delete. */
+  unprompted?: boolean
+  /** Throws to abort a no-dialog delete just before it is sent. */
+  assertBeforeDispatch?: () => void
 }
 
 export type WorktreeDeleteWithToastOptions = {
