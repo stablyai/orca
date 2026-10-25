@@ -30,3 +30,32 @@ it('binds reviewed technical exceptions to their exact English source', () => {
     'auto.components.TaskPage.3659f9792a'
   ])
 })
+
+it('requires Russian categories only for count-resolved source families', () => {
+  const english = {
+    items_one: '{{count}} item',
+    items_other: '{{count}} items',
+    found_theme_one: 'Theme found',
+    found_theme_other: 'Themes found'
+  }
+  const russian = {
+    items_one: '{{count}} элемент',
+    items_other: '{{count}} элемента',
+    found_theme_one: 'Найдена тема',
+    found_theme_other: 'Найдены темы'
+  }
+  expect(
+    russianTranslationProgress(english, russian, new Set(['items'])).missingPluralForms
+  ).toEqual(['items_few', 'items_many'])
+  expect(
+    russianTranslationProgress(
+      english,
+      {
+        ...russian,
+        items_few: '{{count}} элемента',
+        items_many: '{{count}} элементов'
+      },
+      new Set(['items'])
+    ).missingPluralForms
+  ).toEqual([])
+})

@@ -17937,7 +17937,13 @@
           "clear": "Убрать из списка",
           "markManyRead_one": "Отметить агента прочитанным ({{count}})",
           "markManyUnread_one": "Отметить агента непрочитанным ({{count}})",
-          "clearMany_one": "Убрать агента из списка ({{count}})"
+          "clearMany_one": "Убрать агента из списка ({{count}})",
+          "clearMany_few": "Убрать агентов из списка: {{count}}",
+          "clearMany_many": "Убрать агентов из списка: {{count}}",
+          "markManyRead_few": "Отметить агентов прочитанными: {{count}}",
+          "markManyRead_many": "Отметить агентов прочитанными: {{count}}",
+          "markManyUnread_few": "Отметить агентов непрочитанными: {{count}}",
+          "markManyUnread_many": "Отметить агентов непрочитанными: {{count}}"
         },
         "clearCompleted": {
           "undo": "Отменить действие",

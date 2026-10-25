@@ -40,8 +40,8 @@ function getEn(enEntries, locale, key) {
 }
 
 function protectedMarkup(value) {
-  return [...value.matchAll(/<\/?[a-z][^>]*>|`[^`\n]+`|\]\(([^)]+)\)/gi)]
-    .map(([match]) => match)
+  return [...value.matchAll(/<\/?[a-z][^>]*>|`[^`\n]+`|\]\(([^)]+)\)|https?:\/\/[^\s<>"`]+/gi)]
+    .map(([match]) => (match.startsWith('http') ? match.replace(/[.,;!?]+$/, '') : match))
     .sort()
     .join('|')
 }

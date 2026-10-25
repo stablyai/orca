@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 
 import { flattenCatalogEntries, resolveLocaleSourceKey } from './verify-localization-catalog.mjs'
 import { shouldPreserveEnglishValue } from './locale-translation-policy.mjs'
+import { collectCountLookupKeys } from './localization-count-lookups.mjs'
 import reviewedInvariants from '../localization-russian-invariants.json' with { type: 'json' }
 
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
@@ -58,7 +59,7 @@ function translationDomain(key) {
   return 'navigation-workspace-runtime'
 }
 
-export function russianTranslationProgress(english, russian) {
+export function russianTranslationProgress(english, russian, countKeys = new Set()) {
   const enEntries = flattenCatalogEntries(english)
   const ruEntries = flattenCatalogEntries(russian)
   const missing = []
@@ -95,7 +96,24 @@ export function russianTranslationProgress(english, russian) {
       extra.push(key)
     }
   }
+  const missingPluralForms = []
+  for (const base of [...countKeys].sort()) {
+    const source = enEntries.get(`${base}_other`)
+    if (!source) {
+      continue
+    }
+    for (const category of new Intl.PluralRules('ru').resolvedOptions().pluralCategories) {
+      const key = `${base}_${category}`
+      const target = ruEntries.get(key)
+      if (typeof target === 'string' && target.trim()) {
+        continue
+      }
+      missingPluralForms.push(key)
+      domains[translationDomain(key)].ru[key] = { source, translation: '' }
+    }
+  }
   return {
+    missingPluralForms,
     sourceLeaves: enEntries.size,
     translated,
     unchanged,
@@ -115,7 +133,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
       JSON.parse(await fs.readFile(path.join(root, LOCALES_DIR, `${locale}.json`), 'utf8'))
     )
   )
-  const progress = russianTranslationProgress(english, russian)
+  const progress = russianTranslationProgress(english, russian, await collectCountLookupKeys(root))
   const summary = {
     ...progress,
     domains: Object.fromEntries(
@@ -147,7 +165,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
     console.log(JSON.stringify(summary, null, 2))
   } else {
     console.log(
-      `ru: ${progress.translated}/${progress.sourceLeaves} translated; ${progress.unchanged.length} equal to English (${progress.unreviewedCopies.length} unreviewed copies); ${progress.missing.length} missing; ${progress.pluralForms} additional plural forms; ${progress.extra.length} unknown IDs.`
+      `ru: ${progress.translated}/${progress.sourceLeaves} translated; ${progress.unchanged.length} equal to English (${progress.unreviewedCopies.length} unreviewed copies); ${progress.missing.length} missing; ${progress.pluralForms} additional plural forms; ${progress.extra.length} unknown IDs; ${progress.missingPluralForms.length} missing count forms.`
     )
     for (const [domain, count] of Object.entries(summary.domains)) {
       console.log(`${domain}: ${count} missing`)
@@ -155,7 +173,9 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
   }
   return progress.extra.length > 0 ||
     (argv.includes('--require-complete') &&
-      (progress.missing.length > 0 || progress.unreviewedCopies.length > 0))
+      (progress.missing.length > 0 ||
+        progress.unreviewedCopies.length > 0 ||
+        progress.missingPluralForms.length > 0))
     ? 1
     : 0
 }

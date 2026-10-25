@@ -77,6 +77,8 @@ describe('reviewed Russian translation deltas', () => {
       'Откройте <settings><strong>настройки</settings></strong>'
     ],
     ['Run `orca status`', 'Выполните `orca stop`'],
+    ['See https://example.com/docs', 'См. https://example.com/other'],
+    ['See https://example.com/docs?q=a#top.', 'См. https://example.com/docs?q=b#top.'],
     ['See [docs](https://example.com/docs)', 'Откройте [документацию](https://example.com/other)']
   ])('preserves protected markup and literal commands in %s', async (source, translation) => {
     const { root, target, delta } = await fixture({ action: source })
@@ -104,4 +106,13 @@ describe('reviewed Russian translation deltas', () => {
       }
     })
   })
+})
+
+it('allows punctuation outside an unchanged prose URL to be translated', async () => {
+  const source = 'See https://example.com/docs.'
+  const translation = 'См. https://example.com/docs!'
+  const { root, target, delta } = await fixture({ action: source })
+  await writeFile(delta, JSON.stringify({ ru: { action: { source, translation } } }))
+  await applyTranslationDelta(root, delta)
+  expect(JSON.parse(await readFile(target, 'utf8')).action).toBe(translation)
 })

@@ -49,8 +49,8 @@ describe('terminal drop reports', () => {
       Array.from({ length: count }, () => ({ reason: '/secret/project/file.txt' }))
     )
     expect(toast.error).toHaveBeenLastCalledWith(failures)
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.not.stringContaining('/secret/project/file.txt')
+    expect(toast.error).not.toHaveBeenCalledWith(
+      expect.stringContaining('/secret/project/file.txt')
     )
   })
 
