@@ -9,6 +9,7 @@ import {
 } from '../../shared/runtime-environment-store'
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
+import { writeWslHostDeployment } from '../../shared/wsl-host-deployment-store'
 import type { WslHostServerStop, WslHostStatus } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
@@ -544,6 +545,21 @@ describe('WslHostService', () => {
     })
     await service.add({ distro: 'Ubuntu' })
     expect(knownWhileAdding).toBe(true)
+  })
+
+  it('realigns at startup a record a crash left off its pairing, so the window sees a WSL host', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    const saved = findWslHostDeployment(userDataPath, 'wsl:ubuntu')!
+    writeWslHostDeployment(userDataPath, 'wsl:ubuntu', { ...saved, localPort: saved.localPort + 1 })
+    expect(listEnvironments(userDataPath)[0].orcadDeployment).toBeUndefined()
+
+    await makeService(connector).start()
+    expect(listEnvironments(userDataPath)[0].orcadDeployment).toMatchObject({
+      kind: 'wsl',
+      localPort: saved.localPort
+    })
   })
 
   it('adopts holders at startup only when a WSL host exists', async () => {
