@@ -4,6 +4,7 @@ import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoptio
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-renderer-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
+import { resolveOsOpenedFolders } from './os-opened-folders'
 import { resolveOsOpenedDocuments } from './os-opened-documents'
 import {
   onStructuredAgentSessionsHeldChanged,
@@ -74,6 +75,16 @@ export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
     state.pendingOpenSettings.matches(event.sender.id, { consume: true })
   )
+  ipcMain.handle('ui:consumePendingFolderOpens', async () => {
+    state.osFolderOpenListenerReady = true
+    const paths = state.osOpenedFolders.consume()
+    try {
+      return await resolveOsOpenedFolders(paths)
+    } catch (error) {
+      state.osOpenedFolders.restore(paths)
+      throw error
+    }
+  })
   ipcMain.handle('ui:consumePendingSkillShare', () => state.skillShareDeepLinks.consume())
   // Why: the renderer pulls this once its ui:openMarkdownFiles listener attaches, so a
   // cold-start "Open With" queued before mount still opens. The pull doubles as the proof

@@ -182,6 +182,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     // Why cleared here: a reload drops the old ui:openMarkdownFiles listener, and the fresh
     // renderer re-attaches by pulling. Pushing into the gap between would be silently lost.
     state.osDocumentOpenListenerReady = false
+    state.osFolderOpenListenerReady = false
     const currentStore = state.store
     if (currentStore && resolveConsent(currentStore.getSettings()).effective === 'enabled') {
       trackAppOpenedOnce()
