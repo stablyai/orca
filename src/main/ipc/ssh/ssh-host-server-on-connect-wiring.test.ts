@@ -62,8 +62,7 @@ beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'host-server-wiring-'))
   store = createSqliteTestStore(Store, { dataFile: join(userDataPath, 'orca-data.json') })
   store.addSshTarget(TARGET)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SshConnectionStore wraps the real test store it is given.
-  mocks.registry.current = new SshConnectionStore(store as never)
+  mocks.registry.current = new SshConnectionStore(store)
 })
 
 afterEach(async () => {

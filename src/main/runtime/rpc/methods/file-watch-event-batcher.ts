@@ -1,6 +1,6 @@
 import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
 import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
-import { MAX_BATCHED_WATCHER_EVENTS } from '../../../ipc/filesystem-watcher-event-batch'
+import { MAX_BATCHED_WATCHER_EVENTS } from '../../../ipc/filesystem/watchers/filesystem-watcher-event-batch'
 import type { FileWatchBatchCadence } from '../../../../shared/rpc-contract/files-target-params'
 
 // Why: older clients restart a read per batch and drop superseded results, so a 100 ms

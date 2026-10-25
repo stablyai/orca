@@ -20,7 +20,7 @@ function entry(overrides: Partial<AutomationHostCatalogEntry> = {}): AutomationH
   return {
     stableRef: { authority: { kind: 'desktop' }, selector: { kind: 'self' } },
     owner: { authority: { kind: 'desktop' }, selector: { kind: 'self' } },
-    stableKey: 'desktop:self',
+    stableKey: 'host:desktop:self',
     label: 'This computer',
     authorityLabel: 'Desktop',
     kind: 'self',
@@ -39,7 +39,7 @@ function sshEntry(targetGeneration: number): AutomationHostCatalogEntry {
       authority: { kind: 'desktop' },
       selector: { kind: 'ssh', targetId: 'box', targetGeneration }
     },
-    stableKey: 'desktop:ssh:box',
+    stableKey: 'host:desktop:ssh:box',
     kind: 'ssh'
   })
 }
@@ -82,13 +82,13 @@ describe('create destination resolution', () => {
   it('prefers the explicit selection and only then the active workspace', () => {
     const entries = [entry(), sshEntry(3)]
     expect(
-      preselectAutomationCreateHost(entries, 'desktop:ssh:box', 'desktop:self')?.stableKey
-    ).toBe('desktop:ssh:box')
-    expect(preselectAutomationCreateHost(entries, null, 'desktop:self')?.stableKey).toBe(
-      'desktop:self'
+      preselectAutomationCreateHost(entries, 'host:desktop:ssh:box', 'host:desktop:self')?.stableKey
+    ).toBe('host:desktop:ssh:box')
+    expect(preselectAutomationCreateHost(entries, null, 'host:desktop:self')?.stableKey).toBe(
+      'host:desktop:self'
     )
     // An unresolvable workspace host leaves the choice open rather than picking one.
-    expect(preselectAutomationCreateHost(entries, null, 'desktop:ssh:gone')).toBeNull()
+    expect(preselectAutomationCreateHost(entries, null, 'host:desktop:ssh:gone')).toBeNull()
     expect(preselectAutomationCreateHost(entries, null, null)).toBeNull()
   })
 })
@@ -172,14 +172,14 @@ describe('offered create hosts', () => {
   it('does not blame the server for hosts another repair or none would fix', () => {
     // Unverified since disconnect: the repair is a reconnect, not an update.
     const unverified = entry({
-      stableKey: 'desktop:ssh:cold',
+      stableKey: 'host:desktop:ssh:cold',
       kind: 'ssh',
       querySupport: 'legacy-unscoped',
       scopeGap: 'target-unverified'
     })
     // Scoped but not yet hydrated: disabled, and no repair to name.
     const unhydrated = entry({
-      stableKey: 'desktop:ssh:warm',
+      stableKey: 'host:desktop:ssh:warm',
       kind: 'ssh',
       owner: null,
       catalogState: 'unhydrated'
@@ -199,19 +199,19 @@ describe('sole create host', () => {
   }
 
   it('states the only eligible host and never one of several', () => {
-    expect(soleAutomationCreateHost([entry()], hydrated)?.stableKey).toBe('desktop:self')
+    expect(soleAutomationCreateHost([entry()], hydrated)?.stableKey).toBe('host:desktop:self')
     expect(soleAutomationCreateHost([entry(), sshEntry(3)], hydrated)).toBeNull()
     // An orphan bucket, an unowned host, and a view-only host are not candidates at all.
     expect(
       soleAutomationCreateHost([entry(), entry({ stableKey: 'orphan', kind: 'orphan' })], hydrated)
         ?.stableKey
-    ).toBe('desktop:self')
+    ).toBe('host:desktop:self')
     expect(
       soleAutomationCreateHost(
         [entry(), entry({ stableKey: 'legacy', querySupport: 'legacy-unscoped' })],
         hydrated
       )?.stableKey
-    ).toBe('desktop:self')
+    ).toBe('host:desktop:self')
   })
 
   it('states nothing until the catalog has settled', () => {
@@ -244,7 +244,7 @@ describe('create project mismatch', () => {
       addedAt: 1,
       worktreeBaseRef: 'main',
       ...overrides
-    } as Repo
+    }
   }
   const desktopSelf = {
     authority: { kind: 'desktop' } as const,

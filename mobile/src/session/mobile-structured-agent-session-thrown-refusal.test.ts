@@ -6,6 +6,8 @@ import {
   callAgentSession,
   requestStructuredAgentSessionMutation
 } from './mobile-structured-agent-session-rpc'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import type { RpcResponse } from '../transport/types'
 
 // As `mapRuntimeError` sends a thrown refusal (pinned in `src/main/runtime/rpc/errors.test.ts`):
 // its message is the bare code, and its reason rides in data.
@@ -21,9 +23,12 @@ const THROWN_JOURNAL_REFUSAL = {
 }
 
 function refusingClient(): RpcClient {
-  const sendRequest = async () => ({ id: 'req-1', ok: false, error: THROWN_JOURNAL_REFUSAL })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paths under test reach only `sendRequest`.
-  return { sendRequest } as unknown as RpcClient
+  const sendRequest = async (): Promise<RpcResponse> => ({
+    id: 'req-1',
+    ok: false,
+    error: THROWN_JOURNAL_REFUSAL
+  })
+  return stubRpcClient({ sendRequest })
 }
 
 describe('a refusal the host threw', () => {
@@ -79,7 +84,7 @@ describe('a refusal the host threw', () => {
 describe('a write refused on a journal a newer Orca wrote', () => {
   // As the host answers it (pinned in `journal-open-failure.test.ts`).
   const newerOrcaClient = (): RpcClient => {
-    const sendRequest = async () => ({
+    const sendRequest = async (): Promise<RpcResponse> => ({
       id: 'req-1',
       ok: true,
       result: {
@@ -91,8 +96,7 @@ describe('a write refused on a journal a newer Orca wrote', () => {
         }
       }
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paths under test reach only `sendRequest`.
-    return { sendRequest } as unknown as RpcClient
+    return stubRpcClient({ sendRequest })
   }
 
   it.each([

@@ -700,6 +700,50 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    // Review of #33425: Sleep's adoption of an unattached session must not re-adopt one this
+    // client suspended after a seed failure, or Wake loses everything before the restore.
+    it('keeps a seed-failed session suspended when it is slept after an adapter restart', async () => {
+      const sessionId = 'cold-restore-seed-failure-sleep'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-07-10T08:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'recovered marker\r\n')
+
+      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const originalWriteSync = HeadlessEmulator.prototype.writeSync
+      const writeSyncSpy = vi
+        .spyOn(HeadlessEmulator.prototype, 'writeSync')
+        .mockImplementation(function (this: HeadlessEmulator, data) {
+          return data.includes('recovered marker') ? false : originalWriteSync.call(this, data)
+        })
+      try {
+        await first.spawn({ cols: 80, rows: 24, sessionId })
+        lastSubprocess._simulateData('fresh-only output\r\n')
+        await first.disconnectOnly()
+
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+        await historyAdapter.shutdown(sessionId, { immediate: true, keepHistory: true })
+
+        expect(existsSync(join(sessionDir, 'checkpoint.json'))).toBe(false)
+        expect(readFileSync(join(sessionDir, 'scrollback.bin'), 'utf8')).toContain(
+          'recovered marker'
+        )
+      } finally {
+        writeSyncSpy.mockRestore()
+      }
+    })
+
     it('does not cold-restore for clean shutdown (endedAt set)', async () => {
       const sessionId = 'clean-exit'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))

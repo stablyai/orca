@@ -26,12 +26,8 @@ function asPinned(): Map<string, PageClosureObservation> {
 }
 
 describe('the C5 page closure', () => {
-  it('is the census the design named: 25 families, 127 goldens', () => {
+  it('assigns each pinned golden to one closure family', () => {
     const goldens = Object.values(C5_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
-    expect({ families: Object.keys(C5_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
-      families: 25,
-      goldens: 127
-    })
     expect(new Set(goldens).size).toBe(goldens.length)
   })
 

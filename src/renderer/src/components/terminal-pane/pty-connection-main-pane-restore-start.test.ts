@@ -23,6 +23,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -88,10 +89,7 @@ async function connectBound(
     restoredPtyIdByLeafId: { [LEAF]: 'pty-old' },
     isVisibleRef: { current: visible }
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-  const args = [createPane(1), createManager(1), deps] as unknown as Parameters<
-    typeof connectPanePty
-  >
+  const args = mockPanePtyArgs(createPane(1), createManager(1), deps)
   const connection = connectPanePty(...args)
   await flushAsyncTicks()
   return { transport, deps, connection }

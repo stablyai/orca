@@ -9,7 +9,9 @@ import { build } from 'esbuild'
 
 const ENTRY_PATH = resolve('out/main/parcel-watcher-process-entry.js')
 const POOL_SOURCE = resolve('src/main/ipc/runtime-watcher-process-pool.ts')
-const FAILURE_SOURCE = resolve('src/main/ipc/parcel-watcher-process-failure.ts')
+const FAILURE_SOURCE = resolve(
+  'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-failure.ts'
+)
 const REGISTRY_SOURCE = resolve(
   'src/main/ipc/filesystem/watcher-process/parcel-watcher-child-registry.ts'
 )

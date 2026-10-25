@@ -14,7 +14,6 @@ on:
       - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
       - 'config/scripts/*-plugin.test.mjs'
       - '!config/scripts/renderer-scrollbar-style-plugin.test.mjs'
-      - '!config/scripts/mobile-pairing-qrcode-import-plugin.test.mjs'
       # Keep in sync with the contract list in config/vitest.performance.config.ts;
       # without these a rename lands green and only breaks the next nightly.
       - 'src/main/sqlite/sync-database.test.ts'

@@ -12,8 +12,13 @@ import {
   launchWorkspaceId,
   type LaunchWorkspace
 } from '../../shared/launch-parity-window-request.test-fixture'
-import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
+import { isHiddenRendererPty } from './pty/delivery/pty-hidden-delivery-gate'
 import { HOST_TAB_ID } from './pty-launch-parity-host.test-cases'
+import {
+  partialRuntimeStore,
+  storeProject,
+  storeProjectGroup
+} from '../runtime/runtime-store-partial-fixture'
 
 const WINDOWS_ENV = {
   COMSPEC: 'C:\\Windows\\system32\\cmd.exe',
@@ -155,13 +160,13 @@ export function startParityLanes(
     ...bindingStore,
     getSettings: () => settings,
     getProjects: () => [
-      {
+      storeProject({
         id: 'project-1',
         sourceRepoIds: ['repo-1'],
         ...(args.workspace.projectRuntime
           ? { localWindowsRuntimePreference: args.workspace.projectRuntime }
           : {})
-      }
+      })
     ],
     getRepo: (id: string) => (repo && id === repo.id ? repo : undefined),
     getRepos: () => (repo ? [repo] : []),
@@ -169,10 +174,11 @@ export function startParityLanes(
     getWorktreeMeta: () => undefined,
     getFolderWorkspace: () => folderWorkspace ?? undefined,
     getFolderWorkspaces: () => (folderWorkspace ? [folderWorkspace] : []),
-    getProjectGroups: () => [{ id: 'pg-1', name: 'group', parentPath: null, connectionId: null }]
+    getProjectGroups: () => [
+      storeProjectGroup({ id: 'pg-1', name: 'group', parentPath: null, connectionId: null })
+    ]
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launches read only the store members defined above; the rest of the persistence store is unreachable here.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   const provider = vi.fn(async (options: { sessionId?: string }) => {
     if (args.spawnError) {
       throw args.spawnError

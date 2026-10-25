@@ -396,6 +396,36 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
   })
 
+  it("recognizes an older Claude Code's npm entrypoint, which a pnpm or yarn shim or npx runs", () => {
+    const windowsPath = String.raw`C:\Users\dev\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\cli.js`
+    for (const command of [
+      'node /Users/dev/Library/pnpm/global/5/node_modules/@anthropic-ai/claude-code/cli.js',
+      'node /usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js --resume abc',
+      `node.exe ${windowsPath}`
+    ]) {
+      expect(recognizeAgentProcessFromCommandLine(command)).toEqual({
+        agent: 'claude',
+        processName: 'claude'
+      })
+    }
+  })
+
+  it('leaves a print-mode run of that entrypoint unrecognized, as it does the native binary', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js -p "summarize"'
+      )
+    ).toBeNull()
+  })
+
+  it.each([
+    'node /tmp/node_modules/@other/claude-code/cli.js',
+    'node /tmp/node_modules/@anthropic-ai/claude-code/dist/cli.js',
+    'node /tmp/server.js /tmp/node_modules/@anthropic-ai/claude-code/cli.js'
+  ])('does not recognize a Claude Code entrypoint lookalike or argument: %s', (command) => {
+    expect(recognizeAgentProcessFromCommandLine(command)).toBeNull()
+  })
+
   it('recognizes Prime Agent by its binary and npm entrypoint', () => {
     expect(recognizeAgentProcess('prime-agent')).toEqual({
       agent: 'prime-agent',

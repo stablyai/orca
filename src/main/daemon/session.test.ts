@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
+import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -412,8 +413,10 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['first\n', 'second\n'])
     })
 
-    it('contains live color replies without releasing queued startup input', async () => {
-      const reply = '\x1b[?997;1n'
+    it.each([
+      ['color', '\x1b[?997;1n'],
+      ['XTVERSION', '\x1bP>|xterm.js(6.1.0)\x1b\\']
+    ])('contains live %s replies without releasing queued startup input', async (_, reply) => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
       session.write('codex\n')
 
@@ -635,9 +638,23 @@ describe('Session', () => {
   })
 
   describe('kill', () => {
+    beforeEach(() => {
+      killWithDescendantSweepMock.mockImplementation((_pid: number, killRoot: () => void) => {
+        killRoot()
+      })
+    })
+
+    function gracefulClose(): void | Promise<void> {
+      return new TerminalSessionTeardown(new Map([['test-session', session]])).killSession(
+        'test-session',
+        session,
+        false
+      )
+    }
+
     it('kills the subprocess', () => {
       createSession()
-      session.kill()
+      void gracefulClose()
       expect(subprocess.killed).toBe(true)
       expect(session.isTerminating).toBe(true)
     })
@@ -652,52 +669,12 @@ describe('Session', () => {
       }
       createSession()
 
-      expect(() => session.kill()).toThrow('graceful kill rejected')
+      expect(() => gracefulClose()).toThrow('graceful kill rejected')
       expect(session.isTerminating).toBe(false)
-      expect(() => session.kill()).not.toThrow()
+      expect(() => gracefulClose()).not.toThrow()
 
       expect(attempts).toBe(2)
       expect(session.isTerminating).toBe(true)
-    })
-
-    it('non-agent kill stays synchronous and never routes through the descendant sweep', () => {
-      createSession()
-      session.kill()
-      expect(subprocess.killed).toBe(true)
-      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
-    })
-
-    it('agent kill routes through the descendant sweep with the subprocess as root', () => {
-      createSession({ launchAgent: 'claude' })
-      session.kill()
-      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
-        subprocess.pid,
-        expect.any(Function),
-        expect.objectContaining({ ownsRoot: expect.any(Function) })
-      )
-      expect(subprocess.killed).toBe(false)
-      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
-      killRoot()
-      expect(subprocess.killed).toBe(true)
-    })
-
-    it('agent kill hands the sweep the pty job, which outlives a reparented child', () => {
-      // Detached grandchildren may escape PID ancestry but remain owned by the PTY job.
-      createSession({ launchAgent: 'claude' })
-      session.kill()
-      const deps = killWithDescendantSweepMock.mock.calls[0][2] as {
-        terminateOwnedTree?: () => string
-      }
-      expect(deps.terminateOwnedTree?.()).toBe('terminated')
-    })
-
-    it('agent kill root callback is a no-op after the session already exited', () => {
-      createSession({ launchAgent: 'claude' })
-      session.kill()
-      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
-      subprocess.simulateExit(0)
-      killRoot()
-      expect(subprocess.killed).toBe(false)
     })
 
     it('notifies attached clients on exit after kill', async () => {
@@ -709,7 +686,7 @@ describe('Session', () => {
         onExit: (code) => exitCodes.push(code)
       })
 
-      session.kill()
+      void gracefulClose()
 
       await new Promise((r) => setTimeout(r, 20))
       expect(exitCodes).toEqual([0])
@@ -720,7 +697,7 @@ describe('Session', () => {
       subprocess.kill = () => {}
       const forceKillSpy = vi.spyOn(subprocess, 'forceKill')
 
-      session.kill()
+      void gracefulClose()
       expect(session.state).not.toBe('exited')
 
       vi.advanceTimersByTime(5_000)
@@ -763,7 +740,7 @@ describe('Session', () => {
       }
       createSession()
 
-      session.kill()
+      void gracefulClose()
       await vi.advanceTimersByTimeAsync(5_000)
       expect(forceKillAttempts).toBe(1)
       expect(session.isTerminating).toBe(true)
@@ -782,7 +759,7 @@ describe('Session', () => {
       const onExit = vi.fn()
       session.attachClient({ onData, onExit })
 
-      session.kill()
+      void gracefulClose()
       vi.advanceTimersByTime(5_000)
 
       subprocess.simulateData('late output')

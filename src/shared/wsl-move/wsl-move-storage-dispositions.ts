@@ -59,6 +59,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/jira-linked-view-storage.ts',
       'src/renderer/src/components/jira-list-columns.ts',
       'src/renderer/src/components/jira-prompt-templates.ts',
+      'src/renderer/src/components/jira-view-mode-storage.ts',
       'src/renderer/src/components/landing-preflight-dismissal.ts',
       'src/renderer/src/components/linear-issue-view-storage.ts',
       'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',

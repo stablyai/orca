@@ -189,6 +189,26 @@ describe('updateManagedOrcadEnvironment', () => {
     expect(mocks.deploy.mock.calls[1]?.[0].admitRecord(newer, 'v3')).toBeNull()
   })
 
+  it('updates past live terminals only over the confirmed build, keeping the downgrade refusal', async () => {
+    const running = {
+      ...harness.context().activationRecord,
+      active: 'v1',
+      activeAppVersion: '0.0.0-test'
+    }
+    mocks.deploy.mockResolvedValue({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, {
+      selector: 'Managed',
+      pastLiveTerminals: { incumbentVersion: 'v1' }
+    })
+    const deployed = mocks.deploy.mock.calls[0]?.[0]
+    expect(deployed.force).toBe('live-terminals')
+    expect(deployed.admitRecord(running, 'v3')).toBeNull()
+    expect(deployed.admitRecord({ ...running, active: 'v2' }, 'v3')).toMatch(/changed since/)
+    expect(
+      deployed.admitRecord({ ...running, active: 'v1', activeAppVersion: '99.0.0' }, 'v3')
+    ).toMatch(/last ran/)
+  })
+
   it('offers Force when Update was refused by policy', async () => {
     mocks.deploy.mockResolvedValueOnce({
       outcome: 'installed-not-activated',

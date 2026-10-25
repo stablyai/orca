@@ -79,6 +79,8 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/windows/windows-administrator-status.win32.test.ts',
   'src/main/windows/windows-administrator-restart.win32.test.ts',
   'src/main/daemon/daemon-pid-identity-native.win32.test.ts',
+  'src/main/daemon/node-pty-conout-worker-errors.test.ts',
+  'src/main/daemon/node-pty-windows-output-error.win32.test.ts',
   'src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts',
   'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',

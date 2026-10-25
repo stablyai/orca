@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
+import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
 /**

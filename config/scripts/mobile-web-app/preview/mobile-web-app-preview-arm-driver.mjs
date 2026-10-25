@@ -3,18 +3,20 @@
  */
 import { recordRequestsTo } from './mobile-web-app-preview-request-log.mjs'
 import { watchImageEvidence } from './mobile-web-app-preview-image-evidence.mjs'
-import { artifact } from './mobile-web-app-preview-artifact-fixture.mjs'
+import { ARTIFACT_RGB, artifact } from './mobile-web-app-preview-artifact-fixture.mjs'
 import { pollReportsUntil } from './mobile-web-app-preview-csp-reports.mjs'
 import { describePreviewFrame, untilAborted } from './mobile-web-app-preview-frame-diagnosis.mjs'
 import {
   previewFrame,
   settleAfterMount,
+  waitForFrameInputRouting,
   waitForLoadedFrame
 } from './mobile-web-app-preview-frame-readiness.mjs'
 import {
   probePreviewPixel,
   readPreviewArm,
-  readPreviewToggles
+  readPreviewToggles,
+  waitForPaintedPreview
 } from './mobile-web-app-preview-frame-readings.mjs'
 
 /**
@@ -129,6 +131,19 @@ export async function openPreviewArm(
       document.addEventListener('securitypolicyviolation', (event) => {
         window.__violations.push(`${event.violatedDirective} ${event.blockedURI || 'inline'}`)
       })
+      // Pointer input the embedder kept for itself over the frame; see `waitForFrameInputRouting`.
+      if (window === window.top) {
+        window.__embedderFramePointer = 0
+        document.addEventListener(
+          'mousemove',
+          (event) => {
+            if (event.target instanceof HTMLIFrameElement) {
+              window.__embedderFramePointer += 1
+            }
+          },
+          true
+        )
+      }
     })
     // The nonce in the document's own URL: the policy this response carries names a report endpoint
     // with the same nonce, which is how a report from a `srcdoc` frame with no URL of its own is
@@ -179,7 +194,11 @@ export async function openPreviewArm(
     // produced, and by then the top frame is mid-navigation and the iframe has blanked to its own
     // background. So the precondition "there was a rendered artifact to tap" is this reading, and the
     // one below is only meaningful for a case that did nothing.
-    const pixelBefore = await probePreviewPixel(page, clip)
+    // A `'load'` arm's frame leaves the artifact on purpose, so only the others wait for its paint.
+    const pixelBefore =
+      frameReady === 'load'
+        ? await probePreviewPixel(page, clip)
+        : await waitForPaintedPreview(page, clip, ARTIFACT_RGB, signal)
     // Sampled before the action as well, because the toggle's whole claim is that it changes.
     const togglesBefore = await readPreviewToggles(page)
     let actError = null
@@ -189,6 +208,7 @@ export async function openPreviewArm(
       if (!artifactFrame || artifactFrame.isDetached()) {
         throw new Error('The loaded preview frame is missing before its action')
       }
+      await waitForFrameInputRouting(page, clip, signal, arm)
       await act({ page, frame: artifactFrame }).catch((error) => {
         actError = String(error).split('\n')[0]
       })

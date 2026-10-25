@@ -579,7 +579,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('injects pending orchestration messages into Cursor Agent without auto-submitting', async () => {
+  it('submits the mail pointer to Cursor Agent only after the paste-burst delay', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -606,51 +606,17 @@ describe('OrcaRuntimeService', () => {
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
       )
-      await vi.advanceTimersByTimeAsync(500)
-      const submitWrites = write.mock.calls.filter(
-        ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
-      )
-      expect(submitWrites).toHaveLength(0)
+      const isSubmit = ([ptyId, text]: unknown[]): boolean => ptyId === 'pty-1' && text === '\r'
+      // Why: Cursor reads Enter within a 35ms keystroke burst as a newline, so it must trail the pointer.
+      await vi.advanceTimersByTimeAsync(100)
+      expect(write.mock.calls.filter(isSubmit)).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(400)
+      expect(write.mock.calls.filter(isSubmit)).toHaveLength(1)
 
       const unread = db.getUnreadMessages(mailbox)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
       expect(unread[0].delivered_at).toEqual(expect.any(String))
-      db.close()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('still auto-submits to a non-Cursor agent when its idle title mentions Cursor Agent', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(store)
-      const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
-      setInMemoryOrchestrationMessages(runtime, db)
-      runtime.setPtyController({
-        write,
-        writeWithSettlement: settledWriteStub(write),
-        kill: vi.fn(),
-        getForegroundProcess: async () => null
-      })
-      syncSinglePty(runtime, 'pty-1', { tabTitle: 'cursor-repro-branch' })
-
-      const [terminal] = (await runtime.listTerminals()).terminals
-      bindSinglePtyRun(db, terminal.handle)
-      runtime.onPtyData('pty-1', '\x1b]0;. Investigate Cursor Agent\x07', 100)
-      runtime.onPtyData('pty-1', '\x1b]0;* Investigate Cursor Agent\x07', 101)
-      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello claude' })
-
-      runtime.deliverPendingMessagesForHandle(terminal.handle)
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(write).toHaveBeenCalledWith(
-        'pty-1',
-        expect.stringContaining('You have 1 orchestration message')
-      )
-      expect(write).toHaveBeenCalledWith('pty-1', '\r')
       db.close()
     } finally {
       vi.useRealTimers()

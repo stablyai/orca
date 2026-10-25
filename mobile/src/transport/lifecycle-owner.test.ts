@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative, resolve } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 import { censusSourceFiles } from '../test-support/census-source-files'
 import {
@@ -513,7 +513,7 @@ describe('loader write fence', () => {
     // the scan found no holder and no loader to look inside.
     expect(
       holders.map(({ path }) => relative(mobileRoot, path).split(/[/\\]/).join('/'))
-    ).toContain('src/session/use-mobile-native-chat-file-search.ts')
+    ).toContain('src/session/native-chat/composer/use-mobile-native-chat-file-search.ts')
     expect(
       holders.reduce((total, { path, source }) => total + loaders(path, source).length, 0)
     ).toBeGreaterThan(0)

@@ -24,6 +24,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
   let mockStoreState: StoreState
@@ -130,7 +131,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
           .mockResolvedValueOnce(1)
           .mockResolvedValueOnce(2)
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
         await flushAsyncTicks(20)
         for (const fn of pendingTimeouts) {
           fn()
@@ -258,7 +259,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
           .mockResolvedValueOnce(1)
           .mockResolvedValueOnce(2)
 
-        connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+        connectPanePty(...mockPanePtyArgs(createPane(2), createManager(2), deps))
         await flushAsyncTicks(20)
         for (const fn of pendingTimeouts) {
           fn()
@@ -336,7 +337,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks(20)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -401,7 +402,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks(20)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)

@@ -19,10 +19,10 @@ const execFileAsync = promisify(execFile)
 type MarketplaceFixture = {
   root: string
   home: string
-  gitEnvironment: NodeJS.ProcessEnv
+  gitEnvironment: Record<string, string>
 }
 
-function isolatedGitProcessEnv(gitEnvironment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+function isolatedGitProcessEnv(gitEnvironment: Record<string, string>): NodeJS.ProcessEnv {
   return {
     ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
     ...gitEnvironment
@@ -32,14 +32,14 @@ function isolatedGitProcessEnv(gitEnvironment: NodeJS.ProcessEnv): NodeJS.Proces
 async function runGit(
   cwd: string,
   args: string[],
-  gitEnvironment: NodeJS.ProcessEnv
+  gitEnvironment: Record<string, string>
 ): Promise<void> {
   await execFileAsync('git', args, { cwd, env: isolatedGitProcessEnv(gitEnvironment) })
 }
 
 async function commitRepository(
   repository: string,
-  gitEnvironment: NodeJS.ProcessEnv
+  gitEnvironment: Record<string, string>
 ): Promise<void> {
   await runGit(repository, ['init', '--quiet'], gitEnvironment)
   await runGit(repository, ['checkout', '--quiet', '-b', 'main'], gitEnvironment)
@@ -65,7 +65,7 @@ async function copyLaunchPlugin(
   repositories: string,
   repositoryName: string,
   launchDirectory: string,
-  gitEnvironment: NodeJS.ProcessEnv
+  gitEnvironment: Record<string, string>
 ): Promise<void> {
   const repository = join(repositories, `${repositoryName}.git`)
   await cp(join(process.cwd(), 'resources', 'plugins', 'launch', launchDirectory), repository, {
@@ -74,11 +74,14 @@ async function copyLaunchPlugin(
   await commitRepository(repository, gitEnvironment)
 }
 
-async function configureFixtureGit(home: string, repositories: string): Promise<NodeJS.ProcessEnv> {
+async function configureFixtureGit(
+  home: string,
+  repositories: string
+): Promise<Record<string, string>> {
   const hooksDirectory = join(home, 'hooks')
   const configPath = join(home, '.gitconfig')
   await mkdir(hooksDirectory, { recursive: true })
-  const gitEnvironment: NodeJS.ProcessEnv = {
+  const gitEnvironment: Record<string, string> = {
     GIT_CONFIG_GLOBAL: configPath,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0'

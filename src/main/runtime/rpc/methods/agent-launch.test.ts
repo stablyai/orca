@@ -649,8 +649,7 @@ describe('launch inputs that cross the wire', () => {
     if (!options) {
       throw new Error('createTerminal was not called')
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub records whatever options the method passed; each assertion below checks a field before reading it.
-    return options as Record<string, unknown>
+    return options
   }
 
   it('carries agentArgs and cwd through to the terminal create', async () => {

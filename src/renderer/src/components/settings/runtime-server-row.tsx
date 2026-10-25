@@ -166,9 +166,15 @@ export function RuntimeServerRow({
 
   const versionText = getRuntimeServerVersionText(
     remoteUpdate,
-    managed?.status?.activeVersion ?? row.descriptorStatus?.appVersion
+    managed?.status?.activeAppVersion ??
+      managed?.status?.activeVersion ??
+      row.descriptorStatus?.appVersion
   )
-  const availableText = getRuntimeServerAvailableUpdateText(remoteUpdate)
+  const availableText =
+    getRuntimeServerAvailableUpdateText(remoteUpdate) ??
+    (managed?.status?.availableUpdate
+      ? translate('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
+      : null)
   const infoParts = [sshRoute ?? address, versionText].filter((part): part is string =>
     Boolean(part)
   )

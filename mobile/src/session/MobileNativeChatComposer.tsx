@@ -5,8 +5,8 @@ import { colors } from '../theme/mobile-theme'
 import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../src/shared/native-chat-turn-status'
 import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
-import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
-import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import { MobileNativeChatComposerAttachments } from './native-chat/composer/MobileNativeChatComposerAttachments'
+import type { PendingNativeChatFile } from './native-chat/composer/mobile-native-chat-file-attachment'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { mobileNativeChatAttachActions } from './mobile-native-chat-attach-actions'
 import {
@@ -14,7 +14,7 @@ import {
   type MobileNativeChatPickerPresentation,
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'

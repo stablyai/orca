@@ -12,6 +12,7 @@ import type {
   PtyProcessInspectionOptions
 } from '../providers/pty-process-inspection'
 import { clientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
+import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
   // Detached daemon PTYs can host agents; cleanup must not treat every foreground process as an idle shell.
@@ -129,15 +130,63 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         killed.push(session.sessionId)
       } else {
         alive.push(session.sessionId)
-        // Include background sessions in the final disconnect checkpoint.
-        this.activeSessionIds.add(session.sessionId)
-        await this.reconcileLiveSessionHistory(session).catch((err) =>
-          console.warn('[history] live-session reconciliation failed:', session.sessionId, err)
-        )
+        await this.adoptLiveSession(session)
       }
     }
 
     return { alive, killed }
+  }
+
+  /**
+   * A session this client never spawned or reattached, such as one a relaunched app's window has
+   * not reopened: adopted before its Sleep, or that Sleep writes no checkpoint and keeps no folder.
+   */
+  protected async adoptListedSessionForSleep(
+    sessionId: string,
+    deadlineMs?: number
+  ): Promise<void> {
+    // Why active too: a session this client suspended after a seed failure must stay suspended,
+    // or its fresh-only screen would replace the history it was restored from.
+    if (
+      !this.historyManager ||
+      this.historyManager.hasWriter(sessionId) ||
+      this.activeSessionIds.has(sessionId)
+    ) {
+      return
+    }
+    const result = await this.client.request<ListSessionsResult>(
+      'listSessions',
+      undefined,
+      remainingDaemonRequestTimeoutMs(deadlineMs)
+    )
+    const session = result.sessions.find((entry) => entry.sessionId === sessionId && entry.isAlive)
+    if (session) {
+      await this.adoptLiveSession(session, { activeOnlyIfReconciled: true })
+    }
+  }
+
+  private async adoptLiveSession(
+    session: SessionInfo,
+    opts: { activeOnlyIfReconciled?: boolean } = {}
+  ): Promise<void> {
+    // Include background sessions in the final disconnect checkpoint.
+    if (!opts.activeOnlyIfReconciled) {
+      this.activeSessionIds.add(session.sessionId)
+    }
+    // Sleep reads a WSL shell's folder by what only the daemon still knows about the pane.
+    if (session.wslDistro) {
+      this.wslDistrosBySessionId.set(session.sessionId, session.wslDistro)
+      if (session.paneKey) {
+        this.wslPaneKeysBySessionId.set(session.sessionId, session.paneKey)
+      }
+    }
+    await this.reconcileLiveSessionHistory(session).catch((err) =>
+      console.warn('[history] live-session reconciliation failed:', session.sessionId, err)
+    )
+    // Why after: an exit seen during the reconcile closed the writer; that session is not live.
+    if (opts.activeOnlyIfReconciled && this.historyManager?.hasWriter(session.sessionId)) {
+      this.activeSessionIds.add(session.sessionId)
+    }
   }
 
   protected async reconcileLiveSessionHistory(session: SessionInfo): Promise<void> {

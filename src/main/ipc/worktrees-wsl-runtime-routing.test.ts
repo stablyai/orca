@@ -1,3 +1,4 @@
+import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   setPlatform,
@@ -437,7 +438,7 @@ describe('registerWorktreeHandlers', () => {
         'origin',
         '+refs/heads/feature/add-feature:refs/remotes/origin/feature/add-feature'
       ],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      { cwd: '/workspace/repo', wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', 'origin/feature/add-feature'],

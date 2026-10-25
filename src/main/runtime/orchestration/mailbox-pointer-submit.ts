@@ -24,6 +24,7 @@ type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   ) => OrchestrationMailboxPointerSubmitTarget | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
@@ -89,10 +90,12 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       if (!exactTarget?.leaf.writable || !sameMailbox) {
         clearAndRedrive = true
       } else if (
-        exactTarget.leaf.lastAgentStatusObservedLive &&
-        exactTarget.leaf.lastAgentStatus === null
+        (exactTarget.leaf.lastAgentStatusObservedLive &&
+          exactTarget.leaf.lastAgentStatus === null) ||
+        deps.isPtyAwaitingUserInput(input.ptyId)
       ) {
-        // A neutral title can outlive the foreground check; no Enter has been attempted yet.
+        // A neutral title can outlive the foreground check, and an open dialog would take the
+        // Enter as its answer; no Enter has been attempted yet.
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deferredUntilIdle = true

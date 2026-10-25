@@ -95,6 +95,8 @@ describe('browserManager', () => {
       id: 104,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -123,6 +125,8 @@ describe('browserManager', () => {
         id: 129,
         isDestroyed: vi.fn(() => false),
         getType: vi.fn(() => 'webview'),
+        isCurrentlyAudible: vi.fn(() => false),
+        send: vi.fn(),
         setBackgroundThrottling: guestSetBackgroundThrottlingMock,
         setWindowOpenHandler: guestSetWindowOpenHandlerMock,
         on: guestOnMock,
@@ -196,6 +200,8 @@ describe('browserManager', () => {
       id: 139,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -231,6 +237,8 @@ describe('browserManager', () => {
     const guest = {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       getURL: vi.fn(() => 'https://example.com/'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -259,6 +267,8 @@ describe('browserManager', () => {
     const guest = {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       getURL: vi.fn(() => currentUrl),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -283,6 +293,8 @@ describe('browserManager', () => {
       id: 101,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -344,6 +356,8 @@ describe('browserManager', () => {
       id: 777,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -367,6 +381,8 @@ describe('browserManager', () => {
       id: 303,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -391,6 +407,8 @@ describe('browserManager', () => {
       id: 304,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -421,6 +439,8 @@ describe('browserManager', () => {
       id: 306,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -453,6 +473,8 @@ describe('browserManager', () => {
       id: 305,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -513,6 +535,8 @@ describe('browserManager', () => {
       id: 501,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: oldGuestOnMock,
@@ -524,6 +548,8 @@ describe('browserManager', () => {
       id: 502,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: newGuestOnMock,
@@ -558,6 +584,8 @@ describe('browserManager', () => {
       webContentsId: newGuest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about load-failure routing.
+    rendererSendMock.mockClear()
 
     const oldDidFailLoadHandler = oldGuestOnMock.mock.calls.find(
       ([event]) => event === 'did-fail-load'
@@ -608,6 +636,8 @@ describe('browserManager', () => {
       id: 808,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -654,6 +684,8 @@ describe('browserManager', () => {
       id: 809,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -690,5 +722,50 @@ describe('browserManager', () => {
     browserManager.unregisterGuest('browser-no-debugger')
     expect(debuggerHandlers.has('detach')).toBe(false)
     expect(debuggerAttachMock).not.toHaveBeenCalled()
+  })
+
+  // The renderer re-applies a tab's mute on each registration report and clears the
+  // speaker on the unregister report, so neither may be skipped.
+  it('reports page audio on registration and on change, and silence on unregister', () => {
+    const rendererSend = vi.fn()
+    const guest = {
+      id: 301,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => true),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === guest.id
+        ? guest
+        : id === rendererWebContentsId
+          ? { isDestroyed: () => false, send: rendererSend }
+          : null
+    )
+    browserManager.attachGuestPolicies(guest as never)
+    const onAudioStateChanged: (event: { audible: boolean }) => void = guestOnMock.mock.calls.find(
+      ([event]) => event === 'audio-state-changed'
+    )?.[1]
+
+    browserManager.registerGuest({
+      browserPageId: 'page-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    onAudioStateChanged({ audible: false })
+    browserManager.unregisterGuest('page-1')
+    onAudioStateChanged({ audible: true })
+
+    expect(
+      rendererSend.mock.calls.filter(([channel]) => channel === 'browser:audio-state-changed')
+    ).toEqual([
+      ['browser:audio-state-changed', { browserPageId: 'page-1', audible: true }],
+      ['browser:audio-state-changed', { browserPageId: 'page-1', audible: false }],
+      ['browser:audio-state-changed', { browserPageId: 'page-1', audible: false }]
+    ])
   })
 })

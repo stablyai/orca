@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { Terminal } from '@xterm/headless'
 import { Session } from './session'
+import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
@@ -101,7 +102,11 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     await manager.openSession(sessionId, { cwd: '/Users/dev/feature-branch', cols: 80, rows: 24 })
     await manager.checkpoint(sessionId, armed!)
 
-    agent.kill()
+    void new TerminalSessionTeardown(new Map([[sessionId, agent]])).killSession(
+      sessionId,
+      agent,
+      false
+    )
     agentPty.simulateKilledExit()
     agent.dispose()
     expect(killWithDescendantSweepMock).toHaveBeenCalled()
@@ -156,7 +161,11 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
 
     await manager.openSession(sessionId, { cwd: '/Users/dev/feature-branch', cols: 80, rows: 24 })
     await manager.checkpoint(sessionId, agent.getSnapshot()!)
-    agent.kill()
+    void new TerminalSessionTeardown(new Map([[sessionId, agent]])).killSession(
+      sessionId,
+      agent,
+      false
+    )
     agentPty.simulateKilledExit()
     agent.dispose()
 
@@ -213,7 +222,11 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
 
     await manager.openSession(sessionId, { cwd: '/Users/dev/feature-branch', cols: 80, rows: 24 })
     await manager.checkpoint(sessionId, agent.getSnapshot()!)
-    agent.kill()
+    void new TerminalSessionTeardown(new Map([[sessionId, agent]])).killSession(
+      sessionId,
+      agent,
+      false
+    )
     agentPty.simulateKilledExit()
     agent.dispose()
 

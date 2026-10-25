@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore, storeWorktreeMeta } from './runtime-store-partial-fixture'
 
 // BUG-9: a network drop to a relay host made `worktree ps` print `live:0 pty:no` for a terminal
 // that was still running. Lost contact is `unverifiable`, never zero.
@@ -35,13 +36,12 @@ function makeStore() {
     getRepos: vi.fn(() => [REPO]),
     getRepo: vi.fn((id: string) => (id === REPO.id ? REPO : undefined)),
     // Why: this process serves no SSH git, so the SSH repo lists its stored rows.
-    getAllWorktreeMeta: vi.fn(() => ({ [WORKTREE_ID]: {} })),
+    getAllWorktreeMeta: vi.fn(() => ({ [WORKTREE_ID]: storeWorktreeMeta() })),
     getWorktreeMeta: vi.fn(() => undefined),
     setWorktreeMeta: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     getAllWorktreeLineage: vi.fn(() => ({})),
     getAllWorkspaceLineage: vi.fn(() => ({})),
-    getGitHubCache: vi.fn(() => undefined),
     getSettings: vi.fn(() => ({ workspaceDir: '/tmp/workspaces' })),
     getProjects: vi.fn(() => [])
   }
@@ -51,8 +51,7 @@ function makeRuntime(controller: {
   hasPty: () => boolean | null
   listProcesses: () => Promise<{ id: string; worktreeId: string }[]>
 }): OrcaRuntimeService {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only the store methods this fixture defines.
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
   runtime.setPtyController(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree.ps reaches only listProcesses and hasPty on this controller.
     {

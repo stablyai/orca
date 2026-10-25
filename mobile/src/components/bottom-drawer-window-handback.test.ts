@@ -1,4 +1,4 @@
-import { createElement, useEffect } from 'react'
+import { createElement, useEffect, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -88,11 +88,14 @@ function SheetBody() {
 }
 
 function drawer(interactive: boolean) {
-  return createElement(
-    MountedBottomDrawer,
-    { visible: true, interactive, onClose: noop, onHidden: noop },
-    createElement(SheetBody)
-  )
+  const props: ComponentProps<typeof MountedBottomDrawer> = {
+    visible: true,
+    interactive,
+    onClose: noop,
+    onHidden: noop,
+    children: createElement(SheetBody)
+  }
+  return createElement(MountedBottomDrawer, props)
 }
 
 function render(interactive: boolean): ReactTestRenderer {

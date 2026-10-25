@@ -137,7 +137,7 @@ afterEach(() => {
 })
 
 describe('automation host query controller', () => {
-  it('advances catalog generations before fetching anything', async () => {
+  it('syncs catalog generations and fetches the catalog host', async () => {
     const listScoped = vi.fn(() => Promise.resolve(emptyList()))
     const { controller } = createController(listScoped)
     expect(getAuthorityCatalogGeneration(RUNTIME)).toBe(0)

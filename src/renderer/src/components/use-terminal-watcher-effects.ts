@@ -167,8 +167,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       })
     }
     syncParkedTerminalTabWatchersForWorkspaces(syncEntriesByWorktreeId)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [
+    activationDeferredMountTabIdsByWorktreeRef,
     activeTabId,
     activeView,
     activityTerminalPortals,
@@ -179,6 +179,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
     effectiveParkedTerminalWorktreeIds,
+    measurableBackgroundWorktreeIdsRef,
+    mountedWorktreeIdsRef,
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,

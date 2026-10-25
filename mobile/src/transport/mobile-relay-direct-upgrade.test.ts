@@ -107,7 +107,7 @@ describe('existing direct pairing relay upgrade', () => {
 
     expect(journal).not.toBeNull()
     expect(deps.writeJournal.mock.invocationCallOrder[0]).toBeLessThan(
-      client.sendRequest.mock.invocationCallOrder[0]!
+      vi.mocked(client.sendRequest).mock.invocationCallOrder[0]!
     )
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'pairing.provisionRelay', {
       reqId: journal!.reqId,

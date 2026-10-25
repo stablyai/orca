@@ -29,7 +29,7 @@ describe('fetchPrHeadTrackingRef', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['fetch', 'origin', '+refs/heads/feature/x:refs/remotes/origin/feature/x'],
-      { cwd: '/repo' }
+      { cwd: '/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
   })
 

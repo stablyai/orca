@@ -1,0 +1,29 @@
+# Native-chat class strings stay on the chat design tokens, including variant-prefixed classes.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: native-chat-no-weakened-focus-ring
+language: typescript
+severity: error
+message: 'A focus ring at reduced opacity fails 3:1 contrast on the chat canvas: use ring-ring. See docs/styleguide/native-chat.md.'
+files:
+  - '**/src/renderer/src/components/native-chat/**'
+ignores:
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*-benchmark.*'
+rule:
+  kind: string_fragment
+  regex: '(?:^|\s)!?(?:(?:\[[^\]\s]*\]|[^\s:\[\]])+:)*!?ring-ring/\d+!?(?:\s|$)'
+---
+id: native-chat-no-weakened-focus-ring-tsx
+language: tsx
+severity: error
+message: 'A focus ring at reduced opacity fails 3:1 contrast on the chat canvas: use ring-ring. See docs/styleguide/native-chat.md.'
+files:
+  - '**/src/renderer/src/components/native-chat/**'
+ignores:
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*-benchmark.*'
+rule:
+  kind: string_fragment
+  regex: '(?:^|\s)!?(?:(?:\[[^\]\s]*\]|[^\s:\[\]])+:)*!?ring-ring/\d+!?(?:\s|$)'

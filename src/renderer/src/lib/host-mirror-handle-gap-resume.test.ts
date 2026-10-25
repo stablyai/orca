@@ -24,6 +24,7 @@ import {
   hasHostMirrorHandleWaitExpired,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 
 // The window this pins: a paired runtime publishes a workspace's tab rows and its PTY handles on
 // separate frames, so there is a frame where the row exists and `ptyIdsByTabId` is still empty.
@@ -72,17 +73,15 @@ function seedMirroredWorkspace(worktree: ReturnType<typeof makeCreatedAgentWorkt
     activeWorktreeId: worktree.id,
     activeView: 'terminal',
     tabsByWorktree: {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries the fields this suite drives; the cast only supplies the rest of the declared shape.
-      [worktree.id]: [{ id: WEB_TAB_ID, title: 'Claude', ptyId: null } as never]
+      [worktree.id]: [makeTerminalTab({ id: WEB_TAB_ID, worktreeId: worktree.id, title: 'Claude' })]
     },
     terminalLayoutsByTabId: {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries the fields this suite drives; the cast only supplies the rest of the declared shape.
       [WEB_TAB_ID]: {
         root: { type: 'leaf', leafId: LEAF_ID },
         activeLeafId: LEAF_ID,
         expandedLeafId: null,
         ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-handle-gap@@term_1' }
-      } as never
+      }
     },
     // The gap itself: the row is published, its handle has not arrived.
     ptyIdsByTabId: {},
@@ -91,8 +90,7 @@ function seedMirroredWorkspace(worktree: ReturnType<typeof makeCreatedAgentWorkt
     automaticAgentResumeClaimsByTabId: {},
     agentStatusByPaneKey: {}
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-  useAppStore.setState(state as AppState)
+  useAppStore.setState(state)
 }
 
 /** A cold split mirror whose sibling is ready before this leaf has ever held a binding. */
@@ -100,14 +98,12 @@ function seedSplitTabWithOnlySiblingReady(
   worktree: ReturnType<typeof makeCreatedAgentWorktree>
 ): void {
   seedMirroredWorkspace(worktree)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     terminalLayoutsByTabId: {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries the fields this suite drives; the cast only supplies the rest of the declared shape.
       [WEB_TAB_ID]: {
         root: {
           type: 'split',
-          direction: 'row',
+          direction: 'vertical',
           first: { type: 'leaf', leafId: LEAF_ID },
           second: { type: 'leaf', leafId: SIBLING_LEAF_ID }
         },
@@ -115,35 +111,32 @@ function seedSplitTabWithOnlySiblingReady(
         expandedLeafId: null,
         // Only the ready sibling is bound; the record's leaf has never held a handle.
         ptyIdsByLeafId: { [SIBLING_LEAF_ID]: 'remote:env-handle-gap@@term_sibling' }
-      } as never
+      }
     },
     ptyIdsByTabId: { [WEB_TAB_ID]: ['remote:env-handle-gap@@term_sibling'] }
-  } as never)
+  })
 }
 
 /** A second published mirrored row in the same environment, with its own leaf binding. */
 function seedSecondMirroredPane(worktreeId: string): void {
   const before = useAppStore.getState()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     tabsByWorktree: {
       [worktreeId]: [
         ...(before.tabsByWorktree[worktreeId] ?? []),
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal names every field this suite reads; the cast only supplies the rest of the declared shape.
-        { id: SECOND_TAB_ID, title: 'Claude 2', ptyId: null } as never
+        makeTerminalTab({ id: SECOND_TAB_ID, worktreeId, title: 'Claude 2' })
       ]
     },
     terminalLayoutsByTabId: {
       ...before.terminalLayoutsByTabId,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries the fields this suite drives; the cast only supplies the rest of the declared shape.
       [SECOND_TAB_ID]: {
         root: { type: 'leaf', leafId: SECOND_LEAF_ID },
         activeLeafId: SECOND_LEAF_ID,
         expandedLeafId: null,
         ptyIdsByLeafId: { [SECOND_LEAF_ID]: 'remote:env-handle-gap@@term_2' }
-      } as never
+      }
     }
-  } as never)
+  })
 }
 
 /** The capture the reported flow produces: recorded mid-turn, so it is active work, not history. */
@@ -154,7 +147,6 @@ function seedActiveSleepingRecordFor(
   sessionId: string
 ): string {
   const paneKey = makePaneKey(tabId, leafId)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     sleepingAgentSessionsByPaneKey: {
       ...useAppStore.getState().sleepingAgentSessionsByPaneKey,
@@ -173,7 +165,7 @@ function seedActiveSleepingRecordFor(
         origin: 'live'
       }
     }
-  } as never)
+  })
   return paneKey
 }
 
@@ -324,18 +316,16 @@ describe('resume across the mirror handle gap', () => {
     const worktree = makeRuntimeOwnedWorktree()
     seedMirroredWorkspace(worktree)
     seedActiveSleepingRecord(worktree.id)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
     useAppStore.setState({
       terminalLayoutsByTabId: {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries the fields this suite drives; the cast only supplies the rest of the declared shape.
         [WEB_TAB_ID]: {
           root: { type: 'leaf', leafId: LEAF_ID },
           activeLeafId: LEAF_ID,
           expandedLeafId: null,
           ptyIdsByLeafId: {}
-        } as never
+        }
       }
-    } as never)
+    })
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
 
     expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
@@ -633,8 +623,7 @@ describe('resume across the mirror handle gap', () => {
     expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
 
     // Teardown drops every row the environment owned.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-    useAppStore.setState({ tabsByWorktree: {}, terminalLayoutsByTabId: {} } as never)
+    useAppStore.setState({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })
 
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
     // Nothing may still be scheduled against the torn-down environment.

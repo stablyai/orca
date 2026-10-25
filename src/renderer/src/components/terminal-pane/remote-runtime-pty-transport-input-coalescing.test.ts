@@ -223,37 +223,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('sends coalesced terminal input as binary frames once the stream is established', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
-      })
-
-      await transport.connect({ url: '', callbacks: {} })
-      const { streamId } = latestSubscribePayload()
-      runtimeCall.mockClear()
-      subscriptionSendBinary.mockClear()
-
-      expect(transport.sendInput('a', 'driving')).toBe(true)
-      expect(transport.sendInput('b', 'driving')).toBe(true)
-      await vi.runOnlyPendingTimersAsync()
-
-      expect(runtimeCall).not.toHaveBeenCalled()
-      expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
-      const frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
-      expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
-      expect(frame?.streamId).toBe(streamId)
-      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('ab')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not coalesce large remote terminal input chunks above the terminal ceiling', async () => {
+  it('flushes a full terminal input chunk before the following input', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')

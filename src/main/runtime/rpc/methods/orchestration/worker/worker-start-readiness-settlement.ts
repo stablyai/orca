@@ -1,3 +1,7 @@
+import {
+  AGENT_PROMPT_EFFECT_TIMEOUT_MS,
+  ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS
+} from '../../../../../../shared/orchestration-timing-budgets'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
@@ -52,6 +56,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
   args.onStage('dispatch_input')
+  const deliveryStartedAt = Date.now()
   const delivery = await deliverWorkerDispatchPreamble({
     runtime,
     db,
@@ -83,7 +88,16 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const promptDelivery = delivery.prompt
   const turnStart: WorkerTurnStartObservation =
     delivery.structuredTurnStart ??
-    (await observeWorkerTurnStart({ runtime, terminalHandle, prompt: promptDelivery }))
+    (await observeWorkerTurnStart({
+      runtime,
+      terminalHandle,
+      prompt: promptDelivery,
+      // Why: a delivery that waited out a held Windows paste must still fit the client's grace.
+      timeoutMs: Math.min(
+        AGENT_PROMPT_EFFECT_TIMEOUT_MS,
+        Math.max(0, ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS - (Date.now() - deliveryStartedAt))
+      )
+    }))
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
   monitorWorkerSetup({
     runtime,

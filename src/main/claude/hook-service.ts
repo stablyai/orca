@@ -47,6 +47,7 @@ import {
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
+import { claudeAcceptsExecFormHooks } from './claude-hook-event-versions'
 import {
   getClaudeManagedHookPlan,
   OPENCLAUDE_MANAGED_HOOK_PLAN,
@@ -125,7 +126,8 @@ export class ClaudeHookService {
     const events = this.managedHookPlan(options).install.map((event) => event.eventName)
     const { missing, matchedForms } = findManagedEventHookForms(config, events, (eventName) =>
       [null, exePath].map((path) =>
-        getManagedEventHook(eventName, scriptPath, this.options.settings, path)
+        // An installed exec form proves its CLI accepted it, whatever the probe now reports.
+        getManagedEventHook(eventName, scriptPath, this.options.settings, path, { execForm: true })
       )
     )
     const presentCount = matchedForms.length
@@ -181,9 +183,11 @@ export class ClaudeHookService {
 
     const plan = this.managedHookPlan(options)
     const exePath = this.usesWindowsEntry ? installWindowsClaudeHookExecutable(scriptPath) : null
+    const execForm = claudeAcceptsExecFormHooks(options.claudeVersion)
     let nextConfig = applyManagedHooks(
       config,
-      (eventName) => getManagedEventHook(eventName, scriptPath, this.options.settings, exePath),
+      (eventName) =>
+        getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
       getManagedScriptFileName(this.options.settings),
       plan
     )

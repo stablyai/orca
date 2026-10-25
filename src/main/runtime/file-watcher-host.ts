@@ -3,17 +3,17 @@ import {
   forgetRuntimeWatcherProcessRoot,
   resetRuntimeWatcherProcessForTest,
   subscribeViaRuntimeWatcherProcess
-} from '../ipc/parcel-watcher-process'
-import type { WatcherProcessEvent } from '../ipc/parcel-watcher-process-protocol'
-import type { WatcherProcessSubscription } from '../ipc/parcel-watcher-process-subscription'
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process'
+import type { WatcherProcessEvent } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
+import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import {
   isWatcherProcessFailure,
   type WatcherProcessFailure
-} from '../ipc/parcel-watcher-process-failure'
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import {
   WATCHER_IGNORE_DIRS,
   buildParcelWatcherIgnoreOptions
-} from '../ipc/filesystem-watcher-ignore'
+} from '../ipc/filesystem/watchers/filesystem-watcher-ignore'
 import { createRuntimeRootOwnershipReleaser } from './runtime-root-watch-ownership'
 import { closeRuntimeRootWatch } from './runtime-root-watch-teardown'
 import {

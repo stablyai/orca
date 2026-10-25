@@ -110,10 +110,13 @@ describe('Electron Vite output contract', () => {
   it('can skip main source maps during development without changing build output settings', () => {
     try {
       vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', undefined)
+      vi.stubEnv('ORCA_DEV_BUNDLED', undefined)
       const defaults = configureElectronVite({ command: 'serve', mode: 'development' })
       expect(defaults.main?.build?.sourcemap).toBe('hidden')
       expect(defaults.main?.build?.minify).toBe(false)
+      expect(defaults.renderer?.experimental?.bundledDev).toBe(true)
       vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', '0')
+      vi.stubEnv('ORCA_DEV_BUNDLED', '0')
       const development = configureElectronVite({ command: 'serve', mode: 'development' })
       expect(development.main?.build?.sourcemap).toBe(false)
       expect(development.main?.build?.minify).toBe(false)

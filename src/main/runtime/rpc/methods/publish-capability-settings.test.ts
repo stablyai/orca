@@ -3,6 +3,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { SettingsUpdate } from '../../../../shared/rpc-contract/client-settings-params'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeStore } from '../../runtime-store-contract'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/orca-state', isPackaged: true }
@@ -22,8 +23,7 @@ function runtimeWithSharing(
       return settings
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: construction and getClientSettings require only getSettings from this fixture.
-  return new OrcaRuntimeService(store as RuntimeStore)
+  return new OrcaRuntimeService(partialRuntimeStore(store))
 }
 
 // A client may read the host's publish permissions, but cannot grant them over RPC.

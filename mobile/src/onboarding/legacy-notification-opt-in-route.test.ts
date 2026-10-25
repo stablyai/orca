@@ -24,11 +24,11 @@ describe('legacy notification opt-in destination', () => {
     })
   })
 
-  it.each([
+  it.each<[string[] | undefined, string | undefined]>([
     [['first-host', 'second-host'], 'first-host'],
     [[], undefined],
     [undefined, undefined]
-  ] as const)('normalizes hostId %j to %s', (hostId, expectedHostId) => {
+  ])('normalizes hostId %j to %s', (hostId, expectedHostId) => {
     expect(legacyNotificationOptInDestination({ hostId })).toEqual({
       pathname: '/mobile-onboarding',
       params: {

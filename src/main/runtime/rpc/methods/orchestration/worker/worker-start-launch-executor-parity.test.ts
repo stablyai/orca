@@ -196,6 +196,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_new', {
       startupAgent: 'claude',
       launchSource: 'orchestration',
+      suppressStartupUpdatePrompt: true,
       title: 'worker-task_1',
       surfaceOwner: false
     })
@@ -258,6 +259,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_existing', {
       startupAgent: 'claude',
       launchSource: 'orchestration',
+      suppressStartupUpdatePrompt: true,
       title: 'worker-task_1',
       surfaceOwner: false
     })

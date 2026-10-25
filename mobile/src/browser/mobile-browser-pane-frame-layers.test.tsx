@@ -9,9 +9,9 @@ import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
 } from '../transport/browser-screencast-protocol'
-import type { RpcClient } from '../transport/rpc-client'
 import { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request'
 import { MobileBrowserPane, type MobileBrowserTab } from './MobileBrowserPane'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 vi.mock('./use-browser-binary-screencast-grant', () => ({
   useBrowserBinaryScreencastGrant: vi.fn(() => true)
@@ -195,8 +195,7 @@ let pageCounter = 0
 async function renderPane() {
   pageCounter += 1
   const frames: { push: ((frame: BrowserScreencastFrame) => void) | null } = { push: null }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane only subscribes here; no request is sent in these cases.
-  const client = {
+  const client = stubRpcClient({
     subscribe: (
       _method: string,
       _params: unknown,
@@ -205,9 +204,8 @@ async function renderPane() {
     ) => {
       frames.push = options?.onBinaryFrame ?? null
       return () => {}
-    },
-    request: vi.fn()
-  } as unknown as RpcClient
+    }
+  })
   const tab: MobileBrowserTab = {
     type: 'browser',
     id: `tab-${pageCounter}`,

@@ -44,7 +44,12 @@ const CHECKS: PRCheckDetail[] = [
 
 // A host reply that settled fine at the transport but carries no result — the
 // `result-absent` partition of the reply matrix.
-const RESULT_ABSENT_REPLY: RpcResponse = { id: 'x', ok: true, _meta: { runtimeId: 'r' } }
+const RESULT_ABSENT_REPLY: RpcResponse = {
+  id: 'x',
+  ok: true,
+  result: undefined,
+  _meta: { runtimeId: 'r' }
+}
 
 function ghInfo(over: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
   return {

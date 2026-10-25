@@ -35,8 +35,7 @@ function subscriberCount(): number {
 async function stream(id: string, frames: RpcResponse[]): Promise<void> {
   await dispatcher.dispatchStreaming(
     { id, authToken: 'token', method: 'agentSession.subscribe', params: { sessionId: SESSION } },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher writes RpcResponse JSON.
-    (raw) => frames.push(JSON.parse(raw) as RpcResponse),
+    (raw) => frames.push(JSON.parse(raw)),
     CLIENT
   )
 }
@@ -76,8 +75,7 @@ it('drops the subscriber a client unsubscribes, and keeps its sibling (U-02)', a
       method: 'agentSession.unsubscribe',
       params: { sessionId: SESSION, subscriptionId: 'frame-a' }
     },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher writes RpcResponse JSON.
-    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
+    (raw) => replies.push(JSON.parse(raw)),
     CLIENT
   )
   expect(replies[0]).toMatchObject({ ok: true })

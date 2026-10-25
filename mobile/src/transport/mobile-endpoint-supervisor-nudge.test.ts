@@ -138,7 +138,7 @@ describe('mobile endpoint supervisor nudges', () => {
 
   it('queues a network replacement that lands while another dial owns the mutex', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
-    let resolveWrite: (() => void) | null = null
+    let resolveWrite: (() => void) | undefined
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       writeBundle: vi

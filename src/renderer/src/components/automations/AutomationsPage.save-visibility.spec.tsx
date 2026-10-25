@@ -79,13 +79,12 @@ describe('AutomationsPage save visibility', () => {
   it('lists it when the authority publishes its scoped change event', async () => {
     desktopStoreHolds([])
     mocks.state.automationHostFilter = DESKTOP_SELF_FILTER
-    api.automations.create.mockResolvedValue(CREATED)
 
     const { container } = await renderPage()
     await settleHostQueries()
 
+    expect(rows(container, 'automation-row')).toEqual([])
     desktopStoreHolds([CREATED])
-    await createSweep()
     // What `automations:create` publishes for a Self record, verbatim.
     await act(async () => {
       window.dispatchEvent(
@@ -97,6 +96,7 @@ describe('AutomationsPage save visibility', () => {
     })
 
     expect(rows(container, 'automation-row')).toEqual(['Sweep'])
+    expect(api.automations.create).not.toHaveBeenCalled()
   })
 
   it('lists it after the page is reopened', async () => {

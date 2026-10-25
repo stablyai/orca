@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 // Exempt: functions written to settle every failure themselves. Keyed file#name.
 const NEVER_REJECTS = new Map([
   ['relay-background-operation.ts#runRelayBackgroundOperation', 'catches and logs every failure'],
+  ['cloud-run-instance-zone.ts#readCloudRunInstanceZone', 'one try/catch; resolves undefined on any failure'],
   ['assignment-cleanup-steps.ts#runAssignmentCleanup', 'runs each step through the above'],
   ['cell-heartbeat-client.ts#send', 'one try/catch around the whole send'],
   ['cell-reserve-client.ts#send', 'one try/catch around the request; resolves every item'],

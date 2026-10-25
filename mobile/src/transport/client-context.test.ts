@@ -542,7 +542,7 @@ describe('useHostClient', () => {
 
     expect(connectMock).not.toHaveBeenCalled()
     expect(fake.closeMock).not.toHaveBeenCalled()
-    act(() => renderer.unmount())
+    act(() => renderer?.unmount())
   })
 
   it('does not open a client after provider unmount during an in-flight lookup', async () => {

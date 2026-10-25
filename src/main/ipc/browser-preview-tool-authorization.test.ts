@@ -128,6 +128,7 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:setViewportOverride',
   'browser:getPageSiteDisplay',
   'browser:zoomPage',
+  'browser:setPageAudioMuted',
   'browser:setPageSiteColorScheme',
   'browser:publishClientPageMetadata',
   'browser:cancelDownload',

@@ -1,5 +1,5 @@
 import { app, type Event } from 'electron'
-import { closeAllWatchers } from '../ipc/filesystem-watcher-shutdown'
+import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../ipc/pty/kill-all'

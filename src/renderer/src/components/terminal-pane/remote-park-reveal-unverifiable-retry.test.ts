@@ -8,11 +8,10 @@ import {
   createPane,
   captureCallbackTerminalWrites,
   createManager,
-  type MockPane,
-  type MockPaneManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -142,18 +141,9 @@ function pairedParkingHostStatus(): StoreState['runtimeStatusByEnvironmentId'] {
   ])
 }
 
-type ConnectMockPane = (
-  pane: MockPane,
-  manager: MockPaneManager,
-  deps: PaneConnectionDeps
-) => { dispose: () => void }
-
 async function revealParkedRemotePane(
   serializeBufferOutcome: ReturnType<typeof vi.fn>
 ): Promise<{ transport: MockTransport; writes: string[]; dispose: () => void }> {
-  const { connectPanePty } = await import('./pty-connection')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared mock pane, manager, and deps stand in for the real xterm-backed objects, exactly as every other connectPanePty suite drives them.
-  const connectMockPane = connectPanePty as unknown as ConnectMockPane
   const transport = createMockTransport()
   // The remote transport's park-reveal result: a bare reattach with no relay tail.
   transport.connect.mockImplementation(async () => {
@@ -180,7 +170,7 @@ async function revealParkedRemotePane(
   const pane = createPane(1)
   const { writes } = captureCallbackTerminalWrites(pane)
   // Why the active pane: an inactive split defers its restore to the frame scheduler.
-  const binding = connectMockPane(
+  const binding = await connectMockPanePty(
     pane,
     createManager(1, 1),
     createDeps({

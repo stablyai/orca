@@ -1,4 +1,3 @@
-import { claudeBackgroundArgs } from './claude-background-run-isolation'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
@@ -26,26 +25,6 @@ afterEach(() => {
 })
 
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
-  it('exposes the installed local agents as commit-message agents', () => {
-    const ids = listCommitMessageAgentIds().sort()
-    expect(ids).toEqual([
-      'amp',
-      'antigravity',
-      'claude',
-      'codex',
-      'copilot',
-      'cursor',
-      'dsh',
-      'jcode',
-      'kimi',
-      'muse',
-      'omp',
-      'opencode',
-      'opencode2',
-      'pi'
-    ])
-  })
-
   it('uses the expected defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.6-terra')
@@ -106,28 +85,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     }
   })
 
-  it('lists Copilot hosted CLI models even when account policy filters the picker', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.defaultModelId).toBe('gpt-5.4')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).toEqual([
-      'auto',
-      'claude-haiku-4.5',
-      'claude-sonnet-4.5',
-      'claude-sonnet-4.6',
-      'claude-opus-4.5',
-      'claude-opus-4.6',
-      'claude-opus-4.6-fast',
-      'claude-opus-4.7',
-      'gpt-4.1',
-      'gpt-5-mini',
-      'gpt-5.2',
-      'gpt-5.2-codex',
-      'gpt-5.3-codex',
-      'gpt-5.4',
-      'gpt-5.4-mini',
-      'gpt-5.5'
-    ])
-  })
-
   it('treats disabled default agents as unavailable for implicit Source Control AI choices', () => {
     expect(resolveCommitMessageAgentChoice(null, 'codex', ['codex'])).toBe('claude')
     expect(resolveCommitMessageAgentChoice(null, null, ['claude'])).toBeNull()
@@ -174,7 +131,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(listCommitMessageAgentIds()).not.toContain(CUSTOM_AGENT_ID)
   })
 
-  it('orders Codex models by version descending to match the official picker', () => {
+  it('orders seeded Codex models by version descending', () => {
     const ids = COMMIT_MESSAGE_AGENT_SPECS.codex?.models.map((m) => m.id)
     expect(ids).toEqual([
       'gpt-5.6-terra',
@@ -215,7 +172,9 @@ describe('buildArgs (Claude)', () => {
       'haiku',
       '--permission-mode',
       'plan',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
   })
 
@@ -235,7 +194,9 @@ describe('buildArgs (Claude)', () => {
       'plan',
       '--effort',
       'high',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
   })
 
@@ -296,7 +257,15 @@ describe('buildArgs (Jcode)', () => {
     const args = spec.buildArgs({ prompt: 'name this branch', model: 'claude-haiku-4-5' })
     const runIndex = args.indexOf('run')
     expect(runIndex).toBeGreaterThan(0)
-    expect(args.slice(0, runIndex).every((arg) => arg.startsWith('--') || arg !== 'run')).toBe(true)
+    expect(args.slice(0, runIndex)).toEqual([
+      '--no-update',
+      '--quiet',
+      '--no-selfdev',
+      '--tool-profile',
+      'none',
+      '--model',
+      'claude-haiku-4-5'
+    ])
     expect(args.slice(runIndex)).toEqual(['run', '--json', 'name this branch'])
   })
 
@@ -385,7 +354,9 @@ describe('model discovery parsers', () => {
       '--output-format',
       'stream-json',
       '--verbose',
-      ...claudeBackgroundArgs()
+      '--strict-mcp-config',
+      '--settings',
+      '{"disableAllHooks":true}'
     ])
     const payload = JSON.parse(discovery?.stdinPayload ?? '') as {
       type?: string

@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import './FloatingTerminalPanel.bounds.spec'
 import './FloatingTerminalPanel.focus.spec'
@@ -17,7 +18,7 @@ vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
 }))
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
   return { ...actual, ...createReactHookOverrides() }
 })

@@ -15,7 +15,7 @@ import {
   markRuntimeOwnedHiddenRendererPty,
   recordHiddenRendererPtyDataDrop,
   unmarkHiddenRendererPty
-} from '../../pty-hidden-delivery-gate'
+} from '../delivery/pty-hidden-delivery-gate'
 import { attachingRendererViewPtys } from '../delivery/visibility-state'
 import { attemptStablePaneAttach } from './stable-pane-attach'
 import type { StablePaneOwner } from './stable-owner'

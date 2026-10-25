@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test as base, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
+import type { GitHubWorkItem } from '../../src/shared/github/work-item-types'
 
 const fakeGhDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-fake-gh-'))
 const fakeGhBody = `#!/usr/bin/env node
@@ -51,13 +52,10 @@ if (process.platform === 'win32') {
 }
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeGhDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_GH_EXEC_TIMEOUT_MS: '1000'
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeGhDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    ORCA_GH_EXEC_TIMEOUT_MS: '1000'
+  }
 })
 
 test.afterAll(() => {
@@ -101,7 +99,7 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
     if (!repo) {
       throw new Error(`Expected repo to be loaded: ${repoPath}`)
     }
-    const item = {
+    const item: GitHubWorkItem = {
       id: 'issue-5388',
       type: 'issue',
       number: 5388,

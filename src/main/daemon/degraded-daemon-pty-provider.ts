@@ -317,8 +317,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     for (const id of this.getSessionIdsRoutedTo('current-daemon')) {
       this.ownerRecovery.forgetRoute(id)
       // Restart also kills listed sessions the adapter never tracked as active.
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-      for (const listener of [...this.exitListeners]) {
+      // Why: listeners may unsubscribe during iteration.
+      for (const listener of Array.from(this.exitListeners)) {
         listener({ id, code, ...exit })
       }
     }

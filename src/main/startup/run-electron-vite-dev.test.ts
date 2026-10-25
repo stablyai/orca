@@ -102,7 +102,13 @@ function devWrapperTestEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     }
   }
   delete env.ELECTRON_EXEC_PATH
-  return { ...env, ORCA_SKIP_DEV_STORAGE_RECLAIM: '1', ...extra }
+  return {
+    ...env,
+    ORCA_SKIP_DEV_STORAGE_RECLAIM: '1',
+    // Why: the runner otherwise creates this worktree's real per-worktree profile under appData.
+    ORCA_DEV_USER_DATA_PATH: join(tmpdir(), 'orca-dev-wrapper-test-profile'),
+    ...extra
+  }
 }
 
 /**

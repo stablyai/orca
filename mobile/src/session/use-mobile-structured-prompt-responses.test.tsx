@@ -24,7 +24,7 @@ type PromptResponses = ReturnType<typeof useMobileStructuredPromptResponses>
 let currentHook: PromptResponses | null = null
 let renderer: ReactTestRenderer | null = null
 
-function groupedPrompt(itemId: string, revision: number): AgentJournalRenderItem {
+function groupedPrompt(itemId: string, revision: number): StructuredQuestionItem {
   return {
     itemId,
     revision,
@@ -63,7 +63,7 @@ function sessionState(prompt: AgentJournalRenderItem): StructuredAgentSessionSta
   return { ...EMPTY_STRUCTURED_AGENT_SESSION, status: 'ready', items: [prompt] }
 }
 
-function projectedResponse(prompt: AgentJournalRenderItem, draft: PromptResponses['groupedDraft']) {
+function projectedResponse(prompt: StructuredQuestionItem, draft: PromptResponses['groupedDraft']) {
   const projected = projectStructuredQuestion(prompt, draft)
   const response = projected?.optionTokens[0]
   if (!response) {
@@ -371,7 +371,7 @@ describe('useMobileStructuredPromptResponses', () => {
         throw new Error('expected a grouped question')
       }
       const [first, second] = base.body.questions
-      const prompt: AgentJournalRenderItem = {
+      const prompt: StructuredQuestionItem = {
         ...base,
         body: { ...base.body, questions: [first!, { ...second!, freeTextQuestionId: 'q2' }] }
       }
@@ -410,7 +410,7 @@ describe('useMobileStructuredPromptResponses', () => {
         throw new Error('expected a grouped question')
       }
       const [first, second] = base.body.questions
-      const prompt: AgentJournalRenderItem = {
+      const prompt: StructuredQuestionItem = {
         ...base,
         body: { ...base.body, questions: [{ ...first!, freeTextQuestionId: 'q1' }, second!] }
       }

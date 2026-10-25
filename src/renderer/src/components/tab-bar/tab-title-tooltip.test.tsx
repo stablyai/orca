@@ -110,13 +110,21 @@ vi.mock('@/store', () => ({
       settings: null
       unreadTerminalTabs: Record<string, boolean>
       agentStatusByPaneKey: Record<string, never>
+      browserPagesByWorkspace: Record<string, never>
+      browserAudiblePageIds: Record<string, never>
+      browserAudioMutedTabIds: Record<string, never>
+      setBrowserTabAudioMuted: () => void
     }) => unknown
   ) =>
     selector({
       openMarkdownPreview: vi.fn(),
       settings: null,
       unreadTerminalTabs: {},
-      agentStatusByPaneKey: {}
+      agentStatusByPaneKey: {},
+      browserPagesByWorkspace: {},
+      browserAudiblePageIds: {},
+      browserAudioMutedTabIds: {},
+      setBrowserTabAudioMuted: vi.fn()
     })
 }))
 
@@ -205,7 +213,7 @@ function expectTooltipContent(markup: string, text: string): void {
   expect(markup).toContain('data-side="bottom"')
   expect(markup).toContain('data-variant="tab-preview" data-side="bottom" data-side-offset="0"')
   expect(markup).toContain('data-variant="tab-preview"')
-  expect(markup).toContain(text)
+  expect(markup).toContain(`data-tab-hover-card-title="true">${text}</div>`)
 }
 
 function makeTerminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {

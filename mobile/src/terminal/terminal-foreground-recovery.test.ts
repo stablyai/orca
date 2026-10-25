@@ -19,12 +19,28 @@ type RecoveryHarness = {
   runScheduled: () => void
 }
 
+function terminalHandle(): TerminalWebViewHandle {
+  return {
+    prepareForForegroundRecovery: vi.fn(),
+    write: vi.fn(),
+    init: vi.fn(),
+    resize: vi.fn(),
+    reflow: vi.fn(),
+    clear: vi.fn(),
+    fitDimensions: vi.fn(() => null),
+    resetZoom: vi.fn(),
+    cancelSelect: vi.fn(),
+    doSelectAll: vi.fn(),
+    awaitReady: vi.fn(async () => {})
+  }
+}
+
 function createHarness(): RecoveryHarness {
   const scheduled: Array<() => void> = []
   return {
     activeHandleRef: { current: 'term-1' },
     terminalRefs: {
-      current: new Map([['term-1', {} as TerminalWebViewHandle]])
+      current: new Map([['term-1', terminalHandle()]])
     },
     initializedHandlesRef: { current: new Set(['term-1']) },
     connStateRef: { current: 'connected' },
@@ -50,7 +66,7 @@ describe('terminal foreground recovery', () => {
     expect(shouldRecoverTerminalOnAppStateChange('background', 'active', 'android')).toBe(false)
   })
 
-  it('forces an initialized active terminal to replay scrollback after foregrounding', () => {
+  it('retires an initialized active subscription and schedules its replacement', () => {
     const harness = createHarness()
 
     const recovered = recoverActiveTerminalAfterForeground(harness)
@@ -71,7 +87,7 @@ describe('terminal foreground recovery', () => {
 
   it('marks inactive mounted terminal buffers stale so their next activation can replay', () => {
     const harness = createHarness()
-    harness.terminalRefs.current.set('term-2', {} as TerminalWebViewHandle)
+    harness.terminalRefs.current.set('term-2', terminalHandle())
     harness.initializedHandlesRef.current.add('term-2')
 
     const recovered = recoverActiveTerminalAfterForeground(harness)
@@ -107,7 +123,7 @@ describe('terminal foreground recovery', () => {
     expect(harness.schedule).not.toHaveBeenCalled()
   })
 
-  it('replays scrollback when re-run after the deferred reconnect completes', () => {
+  it('resubscribes when re-run after a deferred reconnect completes', () => {
     const harness = createHarness()
     harness.connStateRef.current = 'reconnecting'
 

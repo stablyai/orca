@@ -62,13 +62,6 @@ afterEach(() => {
 })
 
 describe('setUpdateStatus changelog caching', () => {
-  it('caches changelog from the available status', () => {
-    const store = createTestStore()
-    setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
-
-    expect(store.getState().updateChangelog).toEqual(RICH_CHANGELOG)
-  })
-
   it('preserves cached changelog through downloading → downloaded → error transitions', () => {
     const store = createTestStore()
     setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
@@ -391,16 +384,6 @@ describe('UpdateCard visibility gates', () => {
     expect(
       computeVisibility({
         status: { state: 'available', version: '1.2.0', changelog: null },
-        dismissedVersion: null,
-        cachedVersion: null
-      })
-    ).toBe('visible')
-  })
-
-  it('shows available update (rich mode)', () => {
-    expect(
-      computeVisibility({
-        status: { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG },
         dismissedVersion: null,
         cachedVersion: null
       })

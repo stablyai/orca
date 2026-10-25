@@ -31,8 +31,13 @@ const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provid
 const { __resetDetectedWorktreeScanCacheForTests, invalidateDetectedWorktreeScanCache } =
   await import('./detected-worktree-scan-cache')
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only id, path, displayName and connectionId off the repo row.
-const localRepo = { id: 'repo-local', path: '/repos/local', displayName: 'local' } as Repo
+const localRepo: Repo = {
+  id: 'repo-local',
+  path: '/repos/local',
+  displayName: 'local',
+  badgeColor: '#000',
+  addedAt: 0
+}
 
 function createStore(repo: Repo) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only these store methods; the pruning that would need more is mocked above.

@@ -24,6 +24,7 @@ import {
   mainLayoutApplyTransport,
   mainStartsPaneAs
 } from './pty-connection-test-main-pane-start-fixtures'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -67,10 +68,7 @@ async function connectWithStart(start: TerminalPaneStart | undefined) {
     terminalPaneStartsByPaneKey: start ? { [PANE_KEY]: start } : {}
   })
   const deps = buildPaneConnectionDeps(() => mockStoreState, { tabId: TAB })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-  const args = [createPane(1), createManager(1), deps] as unknown as Parameters<
-    typeof connectPanePty
-  >
+  const args = mockPanePtyArgs(createPane(1), createManager(1), deps)
   connectPanePty(...args)
   await flushAsyncTicks()
   return { transport, deps }
@@ -143,10 +141,7 @@ describe('a pane main is starting a terminal for', () => {
       tabId: TAB,
       paneTransportsRef: { current: new Map([[1, source]]) }
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const args = [createPane(2), createManager(2), deps] as unknown as Parameters<
-      typeof connectPanePty
-    >
+    const args = mockPanePtyArgs(createPane(2), createManager(2), deps)
     connectPanePty(...args)
     await flushAsyncTicks()
     expect(transport.connect).not.toHaveBeenCalled()

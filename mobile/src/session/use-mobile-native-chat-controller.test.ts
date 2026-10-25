@@ -142,7 +142,7 @@ vi.mock('./mobile-native-chat-permission-send', () => ({
 vi.mock('./use-mobile-native-chat-stop', () => ({
   useMobileNativeChatStop: () => vi.fn()
 }))
-vi.mock('./use-mobile-native-chat-file-search', () => ({
+vi.mock('./native-chat/composer/use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
 // Partial: the stale-input heal reaches the real transport through image-send,

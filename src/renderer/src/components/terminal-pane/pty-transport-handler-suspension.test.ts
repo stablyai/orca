@@ -48,7 +48,7 @@ describe('createIpcPtyTransport', () => {
 
     onExit?.({ id: 'pty-old', code: 0 })
 
-    expect(onPtyExit).not.toHaveBeenCalledWith('pty-old')
+    expect(onPtyExit).not.toHaveBeenCalledWith('pty-old', 0)
     expect(transport.getPtyId()).toBe('pty-new')
     expect(transport.isConnected()).toBe(true)
 

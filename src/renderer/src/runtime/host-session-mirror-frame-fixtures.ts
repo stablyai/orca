@@ -2,6 +2,8 @@ import { vi, type Mock } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { AppState } from '@/store'
+import { makeTerminalTab } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 /** Shared with the frame-ordering suites through their `vi.mock` factories, so
  *  this module must stay free of runtime imports that would form a cycle. */
@@ -130,6 +132,6 @@ export function makePtylessHostSnapshot(
   return snapshot as never
 }
 
-export function mirrorTabRow(tabId: string, worktreeId: string): unknown {
-  return { id: tabId, title: 'Codex', ptyId: null, worktreeId }
+export function mirrorTabRow(tabId: string, worktreeId: string): TerminalTab {
+  return makeTerminalTab({ id: tabId, worktreeId, title: 'Codex' })
 }

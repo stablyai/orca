@@ -1,9 +1,10 @@
-import { createElement, useEffect } from 'react'
+import { createElement, useEffect, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { HostProtocolGate } from './HostProtocolGate'
 import { useHostProtocolGates } from './host-protocol-gates-context'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const nativeTestState = vi.hoisted(() => ({
   openUrl: vi.fn(),
@@ -64,11 +65,16 @@ function MountProbe() {
 }
 
 function gateElement() {
-  return createElement(
-    HostProtocolGate,
-    { hostId: 'host-1' },
-    createElement('HostContent', null, createElement(GateConsumer), createElement(MountProbe))
-  )
+  const props: ComponentProps<typeof HostProtocolGate> = {
+    hostId: 'host-1',
+    children: createElement(
+      'HostContent',
+      null,
+      createElement(GateConsumer),
+      createElement(MountProbe)
+    )
+  }
+  return createElement(HostProtocolGate, props)
 }
 
 async function renderGate(): Promise<ReactTestRenderer> {
@@ -127,7 +133,8 @@ describe('HostProtocolGate', () => {
     expect(output).toContain('Open GitHub Releases')
     expect(output).not.toContain('mobile app store')
     expect(output).not.toContain('HostContent')
-    act(() => renderer?.root.findAllByType('Pressable')[0]?.props.onPress())
+    const [openReleases] = findAllByHostType(renderer.root, 'Pressable')
+    act(() => openReleases?.props.onPress())
     expect(nativeTestState.openUrl).toHaveBeenCalledWith(
       'https://github.com/stablyai/orca/releases'
     )
@@ -203,9 +210,9 @@ describe('HostProtocolGate', () => {
     expect(output).toContain('Checking host compatibility')
     // Why: the cold-start remount this replaces is exactly what destroys in-flight deep navigation.
     expect(probeMounts.count).toBe(1)
-    const overlay = renderer.root
-      .findAllByType('View')
-      .find((node) => node.props.accessibilityViewIsModal === true)
+    const overlay = findAllByHostType(renderer.root, 'View').find(
+      (node) => node.props.accessibilityViewIsModal === true
+    )
     expect(overlay?.props.pointerEvents).toBe('auto')
   })
 

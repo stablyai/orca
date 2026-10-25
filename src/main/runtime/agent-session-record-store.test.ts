@@ -304,7 +304,7 @@ describe('acquisition path', () => {
 })
 
 describe('concurrent claims', () => {
-  it('lets exactly one of two concurrent reservations win and never spawns the loser', async () => {
+  it('grants exactly one of two concurrent reservations at the next fence', async () => {
     const store = await open()
     await establishOwner(store)
     const request = () =>

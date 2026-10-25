@@ -6,6 +6,7 @@ import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
@@ -76,8 +77,7 @@ function fakeClient(calls: PendingCall[]): RpcClient {
     new Promise<RpcResponse>((resolve) => {
       calls.push({ method, params, settle: resolve })
     })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these loaders reach `sendRequest` and nothing else on the client; the owner's scope holds the instance by identity without calling it.
-  return { sendRequest } as RpcClient
+  return stubRpcClient({ sendRequest })
 }
 
 /** Settles the oldest unanswered call for `method`, which is what orders one attempt against another. */

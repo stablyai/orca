@@ -212,6 +212,21 @@ describe('createNewTerminalTab', () => {
     })
     expect(createTab).not.toHaveBeenCalled()
   })
+
+  it('reports a failed host launch to the caller instead of toasting it', async () => {
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    createWebRuntimeSessionTerminalMock.mockResolvedValue({ status: 'failed', message: 'offline' })
+    getStateMock.mockReturnValue(terminalOwnerRows('web-runtime'))
+    const onSettled = vi.fn()
+
+    createNewTerminalTab('wt-1', undefined, { command: 'git fetch --unshallow origin', onSettled })
+
+    await vi.waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'git fetch --unshallow origin' }),
+      { notifyFailure: false }
+    )
+  })
 })
 
 describe('closeTerminalTab', () => {

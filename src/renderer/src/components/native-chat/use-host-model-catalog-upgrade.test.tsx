@@ -38,8 +38,7 @@ const HOST_CATALOG = {
   fetchedAt: 1_000
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no test here sends a pick over a fence, so mutate is never called.
-const mutate = vi.fn(async () => null) as unknown as StructuredAgentSessionMutate
+const mutate: StructuredAgentSessionMutate = vi.fn(async () => null)
 
 type Props = { hidden?: boolean; attached?: boolean; sessionId?: string }
 

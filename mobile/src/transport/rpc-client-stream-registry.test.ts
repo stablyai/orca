@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { RpcClientStreamRegistry } from './rpc-client-stream-registry'
-import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import {
+  encodeTerminalStreamFrame,
+  TerminalStreamOpcode
+} from '../../../src/shared/terminal-stream-protocol'
 import type { ConnectionState, RpcResponse } from './types'
 
 type SentRequest = {

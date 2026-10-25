@@ -19,7 +19,7 @@ import {
   type AgentType,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
-import { isImageSourceUserTurn } from './mobile-native-chat-image-transcript-markers'
+import { isImageSourceUserTurn } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the

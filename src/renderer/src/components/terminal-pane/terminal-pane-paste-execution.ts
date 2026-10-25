@@ -18,6 +18,8 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
+import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
+import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 
 export type TerminalPanePasteExecution = ReturnType<typeof createTerminalPanePasteExecution>
 
@@ -101,6 +103,31 @@ export function createTerminalPanePasteExecution(
     }
   }
 
+  // Why: resolved per pane and PTY host; split siblings and remote hosts can need
+  // different multiline paste protocols (Windows Codex needs input-record newlines).
+  const resolvePaneProtectedMultilinePasteOptions = (
+    pane: ManagedPane
+  ): TerminalPasteTextOptions | undefined => {
+    const state = useAppStore.getState()
+    const options = resolveProtectedMultilinePasteOptionsForPane({
+      isWindowsClient: forceBracketedMultilineTextPaste,
+      hostPlatform: resolveTerminalInputHostPlatform({
+        clientPlatform: shortcutPlatform,
+        state,
+        worktreeId,
+        transport: paneTransportsRef.current.get(pane.id) ?? null
+      }),
+      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+      tabId,
+      leafId: pane.leafId
+    })
+    // Why: non-Windows clients keep xterm's own bracketing; only the Windows input-record contract is added.
+    return forceBracketedMultilineTextPaste || options?.windowsInputRecordNewline
+      ? options
+      : undefined
+  }
+
   const pasteFromClipboard = (
     pane: ManagedPane,
     source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
@@ -119,7 +146,7 @@ export function createTerminalPanePasteExecution(
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
       runtimeEnvironmentId,
-      forceBracketedMultilineTextPaste,
+      protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, source, activeElementAtDispatch, text, options),
       onTextPasteError: () =>
@@ -130,5 +157,5 @@ export function createTerminalPanePasteExecution(
     })
   }
 
-  return { executePanePasteText, pasteFromClipboard }
+  return { executePanePasteText, pasteFromClipboard, resolvePaneProtectedMultilinePasteOptions }
 }

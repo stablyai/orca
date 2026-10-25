@@ -21,7 +21,6 @@ import {
   type DirectoryCache,
   type FileExplorerRow
 } from './file-tree'
-import type { RpcFailure } from '../transport/types'
 import { colors, spacing } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
@@ -116,8 +115,7 @@ export function MobileFileExplorerPanel(props: {
         })
         const directory = fileDirectoryRead.interpret(response)
         if (!directory.accepted) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
-          const refusal = (response as RpcFailure).error
+          const refusal = response.ok ? undefined : response.error
           // Why: desktops that predate the files.readDir mobile allowlist
           // entry still serve the capped files.list; fall back so the Files
           // tab keeps working until the desktop updates.
@@ -144,8 +142,7 @@ export function MobileFileExplorerPanel(props: {
               return
             }
             throw new Error(
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
-              (legacyReply as RpcFailure).error?.message ||
+              (legacyReply.ok ? undefined : legacyReply.error)?.message ||
                 refusal?.message ||
                 'Unable to load files'
             )

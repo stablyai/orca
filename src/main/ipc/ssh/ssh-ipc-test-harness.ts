@@ -73,6 +73,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     removeForward: vi.fn(),
     listForwards: vi.fn().mockReturnValue([]),
     removeAllForwards: vi.fn(),
+    closeStaleForwards: vi.fn(),
     closeAll: vi.fn(),
     dispose: vi.fn(),
     setCallbacks: vi.fn(),
@@ -125,6 +126,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockPortForwardManager.removeForwardAndWait.mockReset()
     mockPortForwardManager.listForwards.mockReset().mockReturnValue([])
     mockPortForwardManager.removeAllForwards.mockReset()
+    mockPortForwardManager.closeStaleForwards.mockReset().mockResolvedValue(undefined)
     mockPortForwardManager.closeAll.mockReset().mockResolvedValue(undefined)
     mockPortForwardManager.dispose.mockReset()
     mockPortForwardManager.setCallbacks.mockReset()

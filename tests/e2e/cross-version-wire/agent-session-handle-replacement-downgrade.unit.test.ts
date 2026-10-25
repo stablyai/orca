@@ -78,15 +78,24 @@ const REPLACED = [
   })
 ]
 
-function storeMaps(value: unknown) {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('records' in value) ||
-    !(value.records instanceof Map) ||
-    !('unreadableRecords' in value) ||
-    !(value.unreadableRecords instanceof Map)
-  ) {
+type OldStoreMaps = {
+  records: Map<unknown, unknown>
+  unreadableRecords: Map<unknown, unknown>
+}
+
+function hasStoreMaps(value: unknown): value is OldStoreMaps {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'records' in value &&
+    value.records instanceof Map &&
+    'unreadableRecords' in value &&
+    value.unreadableRecords instanceof Map
+  )
+}
+
+function storeMaps(value: unknown): OldStoreMaps {
+  if (!hasStoreMaps(value)) {
     throw new Error('old store must expose its readable and unreadable rows')
   }
   return value

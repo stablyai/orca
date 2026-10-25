@@ -2,12 +2,15 @@
 // opening a chat saves it, closing removes it, and a chat the index restores without one gets one.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { normalizeExecutionHostId } from '../../shared/execution-host'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { chatTabCommandsSettled, layoutApplyOn } from './session-layout-apply.test-fixture'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const WT = 'repo-1::/tmp/worktree-a'
 
@@ -23,8 +26,7 @@ function createRuntime() {
       terminalLayoutsByTabId: {}
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these store methods on these paths.
-  const runtime = new OrcaRuntimeService(runtimeStore(state) as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(runtimeStore(state)))
   return { runtime, state }
 }
 
@@ -142,8 +144,7 @@ describe('a chat tab on a host with no window', () => {
     await settled()
     expect(savedChatIds(state)).toEqual(['chat-1'])
     // A fresh runtime lists no chats, as when the close RPC or a worker stop runs before a restore.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these store methods on these paths.
-    const fresh = new OrcaRuntimeService(runtimeStore(state) as never)
+    const fresh = new OrcaRuntimeService(partialRuntimeStore(runtimeStore(state)))
     useChatHost({ getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] }) })
 
     fresh.onStructuredSessionTabHidden('chat-1')
@@ -181,8 +182,11 @@ describe('a chat tab on a host with no window', () => {
     const store = {
       getRepos: () => [],
       getSettings: () => ({}),
-      getWorkspaceSessionHostIds: () => [...sessions.keys()],
-      getWorkspaceSession: (hostId = 'local') => sessions.get(hostId) ?? null,
+      getWorkspaceSessionHostIds: () =>
+        [...sessions.keys()].flatMap((id) => normalizeExecutionHostId(id) ?? []),
+      // An unsaved partition reads as the default layout, as the Store answers it.
+      getWorkspaceSession: (hostId = 'local') =>
+        sessions.get(hostId) ?? getDefaultWorkspaceSession(),
       setWorkspaceSession: (next: WorkspaceSessionState, hostId = 'local') => {
         sessions.set(hostId, next)
       },
@@ -191,8 +195,7 @@ describe('a chat tab on a host with no window', () => {
         (next, hostId) => sessions.set(hostId, next)
       )
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these store methods on these paths.
-    const runtime = new OrcaRuntimeService(store as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
     useChatHost({ getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] }) })
 
     runtime.onStructuredSessionTabHidden('chat-1')

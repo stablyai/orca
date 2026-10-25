@@ -47,7 +47,7 @@ vi.mock('fs/promises', () => ({
   unlink: unlinkMock
 }))
 
-import { registerFilesystemMutationHandlers } from './filesystem-mutations'
+import { registerFilesystemMutationHandlers } from './filesystem/filesystem-mutations'
 
 const REPO_PATH = path.resolve('/workspace/repo')
 const WORKSPACE_DIR = path.resolve('/workspace')

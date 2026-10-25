@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
+import { scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
@@ -16,6 +17,14 @@ const ANTI_SLOP_DISABLE_PATTERN =
   /\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\banti-slop\//
 const REACT_DOCTOR_DISABLE_PATTERN =
   /^\s*\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+react-doctor\/[\w-]+(?:\s*,\s*react-doctor\/[\w-]+)*\s*(?:--(?:(?!\*\/).)*)?(?:\*\/)?\s*$/
+const JS_PLUGINS_CONFIG = 'config/oxlint-js-plugins.json'
+// The root scan no longer loads these plugins, so their suppressions belong to the JS plugins scan.
+const JS_PLUGIN_NAMES = JSON.parse(
+  readFileSync(new URL(`../../${JS_PLUGINS_CONFIG}`, import.meta.url), 'utf8')
+).jsPlugins.map((plugin) => plugin.name)
+const JS_PLUGIN_DISABLE_PATTERN = new RegExp(
+  String.raw`\/[/*]\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s[^\n]*\b(?:${JS_PLUGIN_NAMES.join('|')})\/`
+)
 const EXPLICIT_DISABLE_RULE_PATTERN = /(?:-disable(?:-next-line|-line)?\s+|^)[\w-]+(?:\/[\w-]+)?/
 export const OXLINT_SCANS = [
   {
@@ -23,6 +32,12 @@ export const OXLINT_SCANS = [
     // config would apply root rules to mobile/, whose .oxlintrc.json turns them off.
     label: 'code quality',
     args: ['--report-unused-disable-directives-severity', 'warn']
+  },
+  {
+    // Why separate: any JS plugin makes Oxlint hand every file's AST to Node, which costs the
+    // default `oxlint` run several times its native time, so these rules run only in gates.
+    label: 'JS plugins',
+    args: ['--config', JS_PLUGINS_CONFIG]
   },
   {
     label: 'casting code quality',
@@ -483,7 +498,10 @@ export function isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, scanLab
   }
   return (diagnostic.labels ?? []).some((label) =>
     diagnosticHighlightedLines(root, diagnostic.filename, label.span).some(
-      (line) => ANTI_SLOP_DISABLE_PATTERN.test(line) || REACT_DOCTOR_DISABLE_PATTERN.test(line)
+      (line) =>
+        ANTI_SLOP_DISABLE_PATTERN.test(line) ||
+        REACT_DOCTOR_DISABLE_PATTERN.test(line) ||
+        JS_PLUGIN_DISABLE_PATTERN.test(line)
     )
   )
 }
@@ -541,6 +559,24 @@ function runOxlintScan(root, scan, files) {
   return parseOxlintOutput(result.stdout, scan.label).diagnostics ?? []
 }
 
+/** ast-grep matches as Oxlint-shaped diagnostics; `info` flaky-test rules are owned by their ratchet. */
+export function runAstGrepScan(root, files) {
+  return scanAstGrep(root, { minSeverity: 'warning', paths: files }).map((match) => ({
+    filename: match.file,
+    code: `ast-grep(${match.ruleId})`,
+    message: match.message,
+    labels: [
+      {
+        span: {
+          line: match.range.start.line + 1,
+          offset: match.range.byteOffset.start,
+          length: match.range.byteOffset.end - match.range.byteOffset.start
+        }
+      }
+    ]
+  }))
+}
+
 export function main(
   root = process.cwd(),
   requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
@@ -574,6 +610,17 @@ export function main(
       `${scan.label}: ${diagnostics.length} new finding(s) across ${files.length} changed file(s).`
     )
   }
+
+  const astGrepFindings = runAstGrepScan(root, files).filter((diagnostic) =>
+    diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks, movedCodeMatcher)
+  )
+  for (const diagnostic of astGrepFindings) {
+    printDiagnostic(diagnostic, root)
+  }
+  failures += astGrepFindings.length
+  console.log(
+    `ast-grep: ${astGrepFindings.length} new finding(s) across ${files.length} changed file(s).`
+  )
 
   const missingSafety = findCastingDirectivesMissingSafety(root, rangesByFile)
   for (const diagnostic of missingSafety) {

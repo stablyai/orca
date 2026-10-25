@@ -17,6 +17,7 @@ import {
   expectSettingsWorkScale,
   createGlobalSettingsFixture
 } from '../../../../shared/global-settings-test-fixture'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
 vi.mock('../../../codex/managed-wsl-home-shell-preflight', () => ({
   prepareManagedWslCodexHomeBeforeShellLaunch: async ({
@@ -56,8 +57,7 @@ it.each([20, 200])('projects %s repos without launch work', async (n) => {
     updateSettings: (updates) => Object.assign(settings, updates),
     runDurableMutation: async (mutate) => mutate().value
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these settings and offline-label paths use only the supplied store methods.
-  const host = new OrcaRuntimeService(store as unknown as RuntimeStore)
+  const host = new OrcaRuntimeService(partialRuntimeStore(store))
   vi.spyOn(host, 'configureNotificationDismissalStore').mockImplementation(() => {})
   vi.spyOn(host.pairedServerRows!, 'attach').mockReturnValue(() => {})
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: invoking captured label callbacks; only relay retirement subscribes, no transport is used.

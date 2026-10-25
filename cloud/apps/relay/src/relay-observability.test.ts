@@ -4,6 +4,7 @@ import { observeRelayDatabase } from './observed-relay-database.js'
 import {
   CONTROL_RTT_RESERVOIR_LIMIT,
   observedRelayRequests,
+  percentile,
   PRE_AUTH_RESERVOIR_LIMIT,
   RelayObservability,
   STICKY_CONNECTION_LIMIT,
@@ -316,6 +317,8 @@ describe('relay observability', () => {
       stickySqlMsP99: 198,
       stickyStatementsP50: 14,
       stickyStatementsMax: 14,
+      // 50 statements at 300 ms and 100 at 5-6 ms: the pooled median is the fast connection's.
+      stickyStatementMsP50: 6,
       stickySqlByConnection: {
         '1': {
           requests: 50,
@@ -330,6 +333,20 @@ describe('relay observability', () => {
     })
     expect(entries[1]).not.toHaveProperty('stickySlotsDelta')
     expect(entries[1]).not.toHaveProperty('stickySqlByConnection')
+  })
+
+  it('stamps the instance zone once it is known', () => {
+    const entries: Record<string, unknown>[] = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    observability.flush(counts)
+    observability.setInstanceZone('us-central1-a')
+    observability.flush(counts)
+
+    expect(entries[0]).not.toHaveProperty('instanceZone')
+    expect(entries[1]).toMatchObject({ instanceZone: 'us-central1-a' })
   })
 
   it('bounds the per-connection sticky summary', () => {
@@ -804,15 +821,15 @@ describe('relay observability', () => {
     })
 
     await database.query('SELECT 1')
-    await expect(database.transaction(async (tx) => await tx.queryLocked('SELECT 2'))).rejects.toThrow(
+    await expect(
+      database.transaction(async (tx) => await tx.queryLocked('SELECT 2'))
+    ).rejects.toThrow('database unavailable')
+    await expect(database.queryLocked('SELECT 3', [], { failIfUnavailable: true })).rejects.toThrow(
+      'database_lock_unavailable'
+    )
+    await expect(database.queryLocked('SELECT 4', [], { failIfUnavailable: true })).rejects.toThrow(
       'database unavailable'
     )
-    await expect(
-      database.queryLocked('SELECT 3', [], { failIfUnavailable: true })
-    ).rejects.toThrow('database_lock_unavailable')
-    await expect(
-      database.queryLocked('SELECT 4', [], { failIfUnavailable: true })
-    ).rejects.toThrow('database unavailable')
     expect(recordSql).toHaveBeenCalledTimes(4)
     expect(recordSql.mock.calls.map((call) => call[1])).toEqual([true, false, true, false])
   })
@@ -841,25 +858,45 @@ describe('latency window summarisation', () => {
     { name: 'unsorted', values: [10, 1, 5, 3], expected: { p50: 3, p95: 10, max: 10 } },
     { name: 'duplicates', values: [4, 4, 4], expected: { p50: 4, p95: 4, max: 4 } },
     { name: 'negative', values: [-5, -1, -9, -3, -2], expected: { p50: -3, p95: -1, max: 0 } },
-    { name: 'mixed signs', values: [-2, 3, -7, 0, 11, -0.5], expected: { p50: -0.5, p95: 11, max: 11 } },
+    {
+      name: 'mixed signs',
+      values: [-2, 3, -7, 0, 11, -0.5],
+      expected: { p50: -0.5, p95: 11, max: 11 }
+    },
     { name: 'signed zero', values: [0, -0, -0, 0], expected: { p50: 0, p95: 0, max: 0 } },
     {
       name: 'NaN',
       values: [Number.NaN, Number.NaN],
       expected: { p50: Number.NaN, p95: Number.NaN, max: Number.NaN }
     },
-    { name: 'positive infinity', values: [Infinity, 3, 1], expected: { p50: 3, p95: Infinity, max: Infinity } },
-    { name: 'negative infinity', values: [-Infinity, -3, -1], expected: { p50: -3, p95: -1, max: 0 } },
-    { name: 'both infinities', values: [Infinity, -Infinity, 3, -Infinity], expected: { p50: -Infinity, p95: Infinity, max: Infinity } },
-    { name: 'rounding', values: [0.00049, 0.0005, 0.00051, 0.9995], expected: { p50: 0.001, p95: 1, max: 1 } }
+    {
+      name: 'positive infinity',
+      values: [Infinity, 3, 1],
+      expected: { p50: 3, p95: Infinity, max: Infinity }
+    },
+    {
+      name: 'negative infinity',
+      values: [-Infinity, -3, -1],
+      expected: { p50: -3, p95: -1, max: 0 }
+    },
+    {
+      name: 'both infinities',
+      values: [Infinity, -Infinity, 3, -Infinity],
+      expected: { p50: -Infinity, p95: Infinity, max: Infinity }
+    },
+    {
+      name: 'rounding',
+      values: [0.00049, 0.0005, 0.00051, 0.9995],
+      expected: { p50: 0.001, p95: 1, max: 1 }
+    }
   ])('publishes explicit p50, p95 and maximum for $name samples', ({ values, expected }) => {
     expect(summaryThroughFlush(values)).toEqual(expected)
   })
 
-  it('leaves the caller window untouched when publishing a summary', () => {
+  it('leaves the caller window untouched when computing a percentile', () => {
     const samples = [5, -1, Number.NaN, 3, -0]
     const before = [...samples]
-    summaryThroughFlush(samples)
+    percentile(samples, 0.5)
     expect(samples).toEqual(before)
   })
 })

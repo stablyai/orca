@@ -418,6 +418,7 @@ const DESKTOP_IRRELEVANT_PREFIXES = [
 ]
 
 const STATIC_ANALYSIS_AUDIT_SCRIPTS = [
+  'lint:js-plugins',
   'audit:code-quality:native',
   'audit:code-quality:type-aware',
   'audit:anti-slop'

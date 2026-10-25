@@ -90,8 +90,17 @@ describe('reading the refused frames back', () => {
 describe('undoing the counterfactual', () => {
   it('removes every `_meta`, however deep, and nothing else', () => {
     expect(
-      withoutRpcMeta([{ value: { ok: true, _meta: { runtimeId: 'r' }, result: [1] } }])
-    ).toEqual([{ value: { ok: true, result: [1] } }])
+      withoutRpcMeta([
+        {
+          _meta: { runtimeId: 'outer' },
+          value: {
+            ok: true,
+            _meta: { runtimeId: 'inner' },
+            result: [1, null, { _meta: { runtimeId: 'nested' }, _metaish: 'keep' }]
+          }
+        }
+      ])
+    ).toEqual([{ value: { ok: true, result: [1, null, { _metaish: 'keep' }] } }])
   })
 })
 
@@ -106,6 +115,12 @@ describe('the fields that diverged', () => {
     const expected = recording({})
     const actual: Recording = { scenario: 's', checkpoints: [] }
     expect(divergingFields(expected, actual)).toEqual(['checkpoints'])
+    expect(
+      divergingFields(expected, {
+        scenario: 's',
+        checkpoints: expected.checkpoints.map((checkpoint) => ({ ...checkpoint, id: 'renamed' }))
+      })
+    ).toEqual(['checkpoints'])
   })
 
   it('is empty when the two agree', () => {

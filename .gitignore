@@ -70,6 +70,8 @@ desktop.ini
 /.cache/vite/
 /.cache/vite.lock/
 /.cache/typecheck/
+/.cache/fixtures/
+/.cache/check-changed.json
 
 # Logs
 *.log
@@ -99,7 +101,7 @@ design-docs/
 
 # Local-only design/planning docs (not checked in).
 # Durable docs that should be tracked must live in one of the allow-listed
-# locations below (assets, readme, STYLEGUIDE, and mobile terminal shortcut bar).
+# locations below (assets, readme, STYLEGUIDE + styleguide/, and mobile terminal shortcut bar).
 docs/**
 !docs/
 # The deployable docs app is source, not local engineering notes.
@@ -112,10 +114,13 @@ docs/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
+!docs/styleguide/
+!docs/styleguide/**
 !docs/reference/
 !docs/reference/cross-platform-support.md
 !docs/reference/git-workflow.md
 !docs/reference/test-antipatterns.md
+!docs/reference/component-fixtures.md
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/mobile-terminal-shortcut-bar.md
 

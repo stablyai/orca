@@ -165,7 +165,7 @@ describe('mobile Relay background lifecycle', () => {
   })
 
   it('arms lease rotation when confirmation persistence finishes during the grace', async () => {
-    let finishWrite: (() => void) | null = null
+    let finishWrite: (() => void) | undefined
     const writeStarted = new Promise<void>((resolve) => {
       finishWrite = resolve
     })

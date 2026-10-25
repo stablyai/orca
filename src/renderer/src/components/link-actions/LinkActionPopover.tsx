@@ -14,6 +14,8 @@ import type { LinkAction, LinkActionRequest } from './link-action-request'
 type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
   request: TRequest | null
   onClose: (dismissed?: TRequest) => void
+  onPointerDownOutside?: (event: Event) => void
+  onOpenSettings?: () => void
 }
 
 function ActionRow({
@@ -54,7 +56,9 @@ function ActionRow({
 /** Shared by the terminal and native chat: pick where a clicked link opens. */
 export function LinkActionPopover<TRequest extends LinkActionRequest>({
   request,
-  onClose
+  onClose,
+  onPointerDownOutside,
+  onOpenSettings
 }: LinkActionPopoverProps<TRequest>): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
@@ -113,6 +117,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
 
   const openTerminalLinkSettings = (): void => {
     onClose()
+    onOpenSettings?.()
     openSettingsTarget({
       pane: 'browser',
       repoId: null,
@@ -139,6 +144,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={() => request.restoreFocus()}
+          onPointerDownOutside={onPointerDownOutside}
         >
           <div className="mb-0.5 flex items-center gap-1 overflow-hidden border-b border-border px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             <span

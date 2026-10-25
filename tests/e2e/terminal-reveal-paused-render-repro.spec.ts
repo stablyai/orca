@@ -466,7 +466,7 @@ test.describe('terminal reveal paused-render recovery', () => {
     expect(held.screen).toContain('REVEALED_FRAME')
 
     await orcaPage.evaluate((tabId) => {
-      window.__paneManagers?.get(tabId)?.scheduleRevealRepaint?.()
+      window.__paneManagers?.get(tabId)?.scheduleRevealRepaint()
     }, tabId)
     await expect
       .poll(async () => (await readSynchronizedRevealProbe(orcaPage)).atlasClears)
@@ -595,7 +595,7 @@ test.describe('terminal reveal paused-render recovery', () => {
     })
     const beforeWatchdog = await readSynchronizedRevealProbe(orcaPage)
     await orcaPage.evaluate((tabId) => {
-      window.__paneManagers?.get(tabId)?.scheduleRevealPresent?.()
+      window.__paneManagers?.get(tabId)?.scheduleRevealPresent()
     }, tabId)
     await expect
       .poll(async () => (await readSynchronizedRevealProbe(orcaPage)).synchronizedOutput, {

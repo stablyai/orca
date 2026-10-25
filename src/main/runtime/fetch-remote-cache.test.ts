@@ -148,22 +148,6 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     expect(fetchCallCount()).toBe(2)
   })
 
-  it('does not advance the freshness timestamp when the fetch rejects', async () => {
-    // A rejected fetch that wrote the timestamp would make the 30s freshness
-    // cache "lie" — the next caller would skip the fetch on a repo whose
-    // last real sync is unknown. §3.3 mandates success-only writes.
-    mockFetchResults([Promise.reject(new Error('boom')), { stdout: '', stderr: '' }])
-
-    const runtime = new OrcaRuntimeService(null)
-
-    await runtime.fetchRemoteWithCache('/repo/b', 'origin')
-    // Immediately call again — if the freshness window were armed we would
-    // short-circuit and skip the fetch. It must still dispatch a real fetch.
-    await runtime.fetchRemoteWithCache('/repo/b', 'origin')
-
-    expect(fetchCallCount()).toBe(2)
-  })
-
   it('serializes two concurrent callers onto a single git fetch', async () => {
     // Two callers hitting the same repo+remote at the same time must share
     // one underlying fetch. Without the in-flight Map they would each

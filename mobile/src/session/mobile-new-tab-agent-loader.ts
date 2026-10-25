@@ -134,8 +134,7 @@ async function loadDetectedAgents(
     return loadFolderDetectedAgents(client, worktreeId, host)
   }
   const repoResponse = await newTabRepoListRead.request(client)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const repos = (newTabRepoListRead.interpret(repoResponse) as MobileRuntimeRepoSummary[]) ?? []
+  const repos: MobileRuntimeRepoSummary[] = newTabRepoListRead.interpret(repoResponse)
   const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
   const repo = repos.find((candidate) => candidate.id === repoId)
   if (!repo) {

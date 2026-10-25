@@ -61,12 +61,13 @@ function terminalCreateResponse(): RpcResponse {
 
 function createScope(client: RpcClient) {
   const sessionTabs: MobileSessionTab[] = []
+  const hostCapabilities: string[] = []
   return {
     nativeChatController: { setTabView: vi.fn() },
     hostId: 'host-1',
     worktreeId: 'workspace-1',
     client,
-    hostCapabilities: [],
+    hostCapabilities,
     connState: 'connected',
     setTerminals: vi.fn(),
     terminalsRef: { current: [] },

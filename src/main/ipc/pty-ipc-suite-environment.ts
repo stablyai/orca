@@ -52,7 +52,7 @@ import {
   _resetLocalPtyProviderStateForTest
 } from '../providers/local-pty-provider'
 import { setLocalPtyProvider } from './pty/provider/registry'
-import { _resetHiddenRendererPtyDeliveryGateForTest } from './pty-hidden-delivery-gate'
+import { _resetHiddenRendererPtyDeliveryGateForTest } from './pty/delivery/pty-hidden-delivery-gate'
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 import { _resetWslCachesForTests } from '../wsl'
 

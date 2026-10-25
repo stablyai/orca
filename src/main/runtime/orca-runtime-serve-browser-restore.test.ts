@@ -1,5 +1,4 @@
 import './orca-runtime-test-lifecycle.spec'
-import type { RuntimeStore } from './runtime-store-contract'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import {
@@ -18,8 +17,7 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
   const saved = session
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(saved)
   Object.assign(runtimeStore, { getWorkspaceSessionHostIds: () => ['local'] })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The shared fixture supplies RuntimeStore methods; its legacy Mock return type loses callable signatures.
-  const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+  const runtime = new OrcaRuntimeService(runtimeStore)
   const livePages: string[] = []
   const createTab = vi.fn(async ({ browserPageId }: { browserPageId?: string }) => {
     livePages.push(browserPageId!)

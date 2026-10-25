@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ReviewScreenState } from '../session/mobile-diff-review-screen-model'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import type { RpcResponse } from '../transport/types'
 
 // iOS cannot present a review sheet while another is still on screen (even mid-close): the second
 // presentation silently fails and every later tap on the screen is swallowed. These drive the real
@@ -58,11 +60,11 @@ const { useMobileDiffReviewController } =
   await import('../session/use-mobile-diff-review-controller')
 
 type Controller = ReturnType<typeof useMobileDiffReviewController>
-type Deferred = { promise: Promise<unknown>; resolve: (value: unknown) => void }
+type Deferred = { promise: Promise<RpcResponse>; resolve: (value: RpcResponse) => void }
 
 function deferred(): Deferred {
-  let resolve: (value: unknown) => void = () => {}
-  const promise = new Promise<unknown>((settle) => {
+  let resolve: (value: RpcResponse) => void = () => {}
+  const promise = new Promise<RpcResponse>((settle) => {
     resolve = settle
   })
   return { promise, resolve }
@@ -92,13 +94,18 @@ const SNAPSHOT: ReviewScreenState = {
   reviewState: { version: 1, files: {} }
 }
 
-const TABS_REPLY = {
+const TABS_REPLY: RpcResponse = {
   id: 'tabs',
   ok: true,
   result: { tabs: [{ type: 'terminal', id: 'tab-1', terminal: 'terminal-1', title: 'codex' }] },
   _meta: { runtimeId: 'runtime' }
 }
-const SAVE_REPLY = { id: 'save', ok: true, result: {}, _meta: { runtimeId: 'runtime' } }
+const SAVE_REPLY: RpcResponse = {
+  id: 'save',
+  ok: true,
+  result: {},
+  _meta: { runtimeId: 'runtime' }
+}
 
 let renderer: ReactTestRenderer | null = null
 let controller: Controller
@@ -135,14 +142,13 @@ async function mountScreen(snapshot: ReviewScreenState = SNAPSHOT): Promise<void
   })
   loadSnapshot.mockResolvedValue(snapshot)
   await act(async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the operations under test only call `sendRequest`.
-    renderer = create(createElement(Screen, { client: { sendRequest } as unknown as RpcClient }))
+    renderer = create(createElement(Screen, { client: stubRpcClient({ sendRequest }) }))
     await Promise.resolve()
   })
   expect(controller.currentItem).not.toBeNull()
 }
 
-async function answer(method: string, reply: unknown): Promise<void> {
+async function answer(method: string, reply: RpcResponse): Promise<void> {
   const pending = replies.get(method)
   expect(pending, `${method} was never requested`).toBeDefined()
   await act(async () => {

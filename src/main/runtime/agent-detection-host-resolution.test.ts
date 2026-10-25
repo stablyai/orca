@@ -20,18 +20,19 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { Repo } from '../../shared/repo-types'
 import type { Project } from '../../shared/project-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const originalPlatform = process.platform
 
 function makeRuntime(repos: Repo[], projects: Project[] = []) {
-  const store = {
-    getRepo: (id: string) => repos.find((repo) => repo.id === id),
-    getRepos: () => repos,
-    getProjects: () => projects,
-    getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } })
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: detection resolution reads only the repo, project and settings members supplied here.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getRepos: () => repos,
+      getProjects: () => projects,
+      getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } })
+    })
+  )
   const selector = vi.fn<(selector: string) => Promise<ResolvedWorktree>>()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replaces the protected worktree lookup this method awaits; its signature is restated above.
   ;(runtime as unknown as { resolveWorktreeSelector: typeof selector }).resolveWorktreeSelector =

@@ -304,7 +304,7 @@ async function moveHostAwayFromWorktree(page: Page, targetWorktreeId: string): P
     if (!state || !alternate) {
       return null
     }
-    state.setActiveView('editor')
+    state.setActiveView('terminal')
     state.setActiveWorktree(alternate.id)
     return alternate.id
   }, targetWorktreeId)

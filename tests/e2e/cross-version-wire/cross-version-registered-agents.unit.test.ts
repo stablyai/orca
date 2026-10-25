@@ -38,7 +38,8 @@ import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   resolveBaselineReleaseRef,
-  type ReleaseCheckout
+  type ReleaseCheckout,
+  releaseModuleExport
 } from './release-checkout'
 import {
   loadAgentSessionWireBuild,
@@ -72,15 +73,6 @@ type Baseline = {
 
 let baseline: Baseline
 let current: AgentSessionWireBuild
-
-function member<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the baseline release exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a release module is typed unknown; the name is the same export this build calls, and a missing one throws above.
-  return value as T
-}
 
 // v1.4.228 moved `isStructuredTab` to shared code; keeping both locations lets the rolling baseline
 // cross that move and an older pinned ref still load.
@@ -121,11 +113,14 @@ beforeAll(async () => {
   baseline = {
     ref,
     wire,
-    desktopClientCapabilities: member(capabilities, 'DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES'),
-    projectSessionTabAgentStatus: member(projection, 'projectSessionTabAgentStatus'),
-    parseWorkspaceSession: member(schema, 'parseWorkspaceSession'),
-    isStructuredTab: member(tabs, 'isStructuredTab'),
-    isPersistedAgentSessionRecord: member(record, 'isPersistedAgentSessionRecord')
+    desktopClientCapabilities: releaseModuleExport(
+      capabilities,
+      'DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES'
+    ),
+    projectSessionTabAgentStatus: releaseModuleExport(projection, 'projectSessionTabAgentStatus'),
+    parseWorkspaceSession: releaseModuleExport(schema, 'parseWorkspaceSession'),
+    isStructuredTab: releaseModuleExport(tabs, 'isStructuredTab'),
+    isPersistedAgentSessionRecord: releaseModuleExport(record, 'isPersistedAgentSessionRecord')
   }
 }, SUITE_TIMEOUT_MS)
 

@@ -24,6 +24,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     onDownloadProgress: () => noopUnsubscribe,
     onDownloadFinished: () => noopUnsubscribe,
     onContextMenuRequested: () => noopUnsubscribe,
+    onTargetUrlChanged: () => noopUnsubscribe,
     onContextMenuDismissed: () => noopUnsubscribe,
     onNavigationUpdate: () => noopUnsubscribe,
     onActivateView: () => noopUnsubscribe,

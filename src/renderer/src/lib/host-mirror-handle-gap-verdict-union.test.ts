@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
@@ -12,6 +12,8 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 
 /**
  * The UNION suite for `expiredGenerationByPane`.
@@ -52,7 +54,7 @@ const ENV_OF_TAB: Record<string, string> = {
 
 /** Publishes rows AND the layout PTY binding each pane holds — the binding is the pane's identity. */
 function setLiveTabs(tabIds: string[], ptyByTabId: Record<string, string> = {}): void {
-  const layouts: Record<string, unknown> = {}
+  const layouts: Record<string, TerminalLayoutSnapshot> = {}
   for (const id of tabIds) {
     const ptyId = ptyByTabId[id] ?? `remote:${ENV_OF_TAB[id] ?? ENV_A}@@term_${id}`
     layouts[id] = {
@@ -62,12 +64,13 @@ function setLiveTabs(tabIds: string[], ptyByTabId: Record<string, string> = {}):
       ptyIdsByLeafId: { [`leaf-${id}`]: ptyId }
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
-    tabsByWorktree: { [WORKTREE]: tabIds.map((id) => ({ id, title: id, ptyId: null })) },
+    tabsByWorktree: {
+      [WORKTREE]: tabIds.map((id) => makeTerminalTab({ id, worktreeId: WORKTREE, title: id }))
+    },
     terminalLayoutsByTabId: layouts,
     ptyIdsByTabId: {}
-  } as unknown as AppState)
+  })
 }
 
 function parkAndExpire(environmentId: string, tabId: string): void {

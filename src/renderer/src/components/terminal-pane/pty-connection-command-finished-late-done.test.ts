@@ -18,6 +18,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -168,12 +169,11 @@ describe('command-finished drop and a Done that lands after it', () => {
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
     const pane = createPane(1)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const args = [
+    const args = mockPanePtyArgs(
       pane,
       createManager(1),
       createDeps({ isVisibleRef: { current: false } })
-    ] as unknown as Parameters<typeof connectPanePty>
+    )
     connectPanePty(...args)
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()

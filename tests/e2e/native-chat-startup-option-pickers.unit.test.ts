@@ -128,6 +128,7 @@ it('picks model then effort through the menus during startup and uses both in th
         models: ['opus', 'sonnet'].map((id) => ({
           id,
           label: id,
+          isDefault: id === 'opus',
           efforts: [
             { value: 'low', label: 'Low' },
             { value: 'high', label: 'High' }
@@ -139,7 +140,7 @@ it('picks model then effort through the menus during startup and uses both in th
     render(
       createElement(
         TooltipProvider,
-        {},
+        null,
         createElement(NativeChatSessionOptionPickers, {
           surface: {
             getSnapshot: () => snapshot,

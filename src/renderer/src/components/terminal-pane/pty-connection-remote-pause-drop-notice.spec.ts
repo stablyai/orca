@@ -15,6 +15,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 // Why: switching back to a remote pane cost a 5000-row snapshot even when the host dropped nothing (#24863).
 export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
@@ -76,8 +77,7 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
       const deps = buildPaneConnectionDeps(() => mockStoreState, {
         isVisibleRef: { current: true }
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures model the pane, manager and deps surface connectPanePty reads.
-      const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+      const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
       await flushAsyncTicks(6)
       const setVisible = async (visible: boolean): Promise<void> => {
         deps.isVisibleRef.current = visible

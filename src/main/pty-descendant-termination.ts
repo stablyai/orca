@@ -45,7 +45,7 @@ function readFreshProcessTable(
   return new Promise((resolve, reject) => {
     execFile(
       'ps',
-      ['-axo', 'pid=,ppid=,pgid=,lstart='],
+      ['-axo', 'pid=,ppid=,pgid=,tpgid=,lstart='],
       {
         maxBuffer: PS_MAX_BUFFER_BYTES,
         timeout: timeoutMs,

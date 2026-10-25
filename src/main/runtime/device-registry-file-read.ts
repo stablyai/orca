@@ -20,13 +20,20 @@ export function readDeviceRegistryFile(registryPath: string): DeviceRegistryFile
   const doubtful = corruptRegistryCopyExists(registryPath)
   try {
     hardenExistingSecureFile(registryPath)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: normalizeLoadedDeviceRow re-validates every field; a non-array throws below and reads as corrupt.
-    const parsed = JSON.parse(readFileSync(registryPath, 'utf-8')) as DeviceEntry[]
+    const parsed: unknown = JSON.parse(readFileSync(registryPath, 'utf-8'))
+    if (!Array.isArray(parsed)) {
+      throw new Error('Device registry is not an array')
+    }
+    const devices = parsed
+      .map(normalizeLoadedDeviceRow)
+      .filter((device): device is DeviceEntry => device !== null)
+    // Why: a dropped row may still be some client's credential; set the file aside like a corrupt one.
+    const droppedRows = devices.length !== parsed.length
     return {
-      devices: parsed.map(normalizeLoadedDeviceRow),
+      devices,
       unreadable: false,
-      doubtful,
-      corruptFilePending: false
+      doubtful: doubtful || droppedRows,
+      corruptFilePending: droppedRows
     }
   } catch (error) {
     if (isMissingFileError(error)) {

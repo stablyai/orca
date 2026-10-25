@@ -127,7 +127,7 @@ describe('discovered skill ordering', () => {
   it('sorts discovery sources like the per-call label comparator', () => {
     const sources = Array.from({ length: 400 }, (_, index) => discoverySource(index))
     const expected = [...sources].sort((a, b) =>
-      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Parity oracle.
+      // ast-grep-ignore: no-repeated-collator -- Parity oracle.
       a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
     )
     const NativeCollator = Intl.Collator

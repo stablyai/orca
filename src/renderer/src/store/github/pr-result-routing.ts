@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import {
@@ -75,7 +76,7 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
   cache: AppState['hostedReviewCache']
   repoPath: string
   branch: string
-  settings: AppState['settings']
+  settings: RuntimeFocusSettings
   repoId?: string
   connectionId?: string | null
   executionHostId?: string | null

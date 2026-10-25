@@ -21,6 +21,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { RuntimeStore } from '../runtime-store-contract'
 
 describe('OrcaRuntimeService', () => {
   describe('deliberately parked pane activation (STA-3465)', () => {
@@ -52,7 +53,7 @@ describe('OrcaRuntimeService', () => {
     }
 
     function makeParkedRuntime(
-      runtimeStore: unknown,
+      runtimeStore: RuntimeStore,
       host: {
         deps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
         livePtyIds?: string[]
@@ -62,8 +63,7 @@ describe('OrcaRuntimeService', () => {
       spawn: ReturnType<typeof vi.fn>
     } {
       const spawn = vi.fn().mockResolvedValue({ id: 'persisted-pty' })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, host.deps)
+      const runtime = new OrcaRuntimeService(runtimeStore, undefined, host.deps)
       runtime.setPtyController({
         spawn,
         write: () => true,

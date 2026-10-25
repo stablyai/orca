@@ -69,7 +69,7 @@ export async function initializeMultiplexStream(
           meta.seq
         )
       }
-      for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
+      for (const chunk of iterateTerminalOutputFrameChunks(data, meta, 'span')) {
         state.queueOrSendOutput(stream, chunk)
       }
     }),

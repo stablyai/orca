@@ -53,8 +53,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     if (manager) {
       applyTerminalPaneAttentionToManager(manager, tabId)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId])
+  }, [tabId, managerRef])
   useLayoutEffect(() => {
     applyTerminalPaneAttention()
     return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)
@@ -74,7 +73,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     if (needsFit && (isVisible || shouldMeasureHiddenStartup)) {
       fitPanes(manager)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     paneCount,
     paneLayoutRevision,
@@ -82,7 +80,8 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     renamingPaneId,
     sessionRestoredBannerPaneIds,
     isVisible,
-    shouldMeasureHiddenStartup
+    shouldMeasureHiddenStartup,
+    managerRef
   ])
 
   const syncPaneTitleOverlayRects = useCallback((): void => {
@@ -108,8 +107,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     setPaneTitleOverlayRects((previous) =>
       arePaneTitleOverlayRectsEqual(previous, nextRects) ? previous : nextRects
     )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  }, [containerRef, managerRef, setPaneTitleOverlayRects])
 
   useLayoutEffect(() => {
     const manager = managerRef.current
@@ -140,7 +138,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         cancelAnimationFrame(frame)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     expandedPaneId,
     isolatedPaneKey,
@@ -150,7 +147,10 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     paneTitles,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
-    syncPaneTitleOverlayRects
+    syncPaneTitleOverlayRects,
+    containerRef,
+    managerRef,
+    setPaneTitleOverlayRects
   ])
 
   useEffect(() => {
@@ -162,8 +162,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       const next = pruneSessionRestoredBannerPaneIds(previous, manager.getPanes())
       return next === previous ? previous : next
     })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [paneCount])
+  }, [paneCount, managerRef, setSessionRestoredBannerPaneIds])
 
   useEffect(() => {
     const captureBuffers = (options?: ShutdownBufferCaptureOptions): void => {
@@ -217,8 +216,15 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         shutdownBufferCaptures.delete(tabId)
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, worktreeId, setTabLayout, setTabLocalOnlyScrollback])
+  }, [
+    tabId,
+    worktreeId,
+    setTabLayout,
+    setTabLocalOnlyScrollback,
+    clearedScrollbackLeafIdsRef,
+    managerRef,
+    paneTransportsRef
+  ])
 
   useEffect(() => {
     if (renamingPaneId === null) {
@@ -243,6 +249,5 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       document.removeEventListener('pointerdown', markPointerBlurIntent, true)
       document.removeEventListener('keydown', markKeyboardBlurIntent, true)
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [renamingPaneId])
+  }, [renamingPaneId, renameInputRef, renameUserRequestedBlurCommitRef])
 }

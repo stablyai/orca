@@ -46,8 +46,7 @@ function graph(ptyId: string | null, extraLeafPtyId?: string) {
 
 function makeHost(options: { livePtyIds: Set<string> }) {
   const writes: string[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Graph sync and terminal send read no store fields.
-  const runtime = new OrcaRuntimeService(null as never)
+  const runtime = new OrcaRuntimeService(null)
   runtime.setPtyController({
     write: (_ptyId, data) => {
       writes.push(data)

@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
+import { unusedOrcadHostTransport } from './unused-host-transport.test-fixture'
 
 // The proof's remote commands run in a real local shell.
 vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
@@ -71,8 +72,7 @@ async function fenceOfExitedHolder() {
   )
   const host = getRemoteHostPlatform('linux-x64')
   const proof = exitedOwnLockProof(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand is mocked to a local shell, so the connection is never used.
-    { conn: {} as never, host },
+    { conn: unusedOrcadHostTransport(), host },
     { baseDir: dir, guardsStateMutation: true }
   )
   const token = await proof.find(lock)

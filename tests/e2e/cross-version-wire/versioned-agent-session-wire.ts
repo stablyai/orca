@@ -90,12 +90,16 @@ async function loadClientProjection(
     load('/src/shared/structured-agent-session-projection.ts'),
     load('/src/shared/agent-session-journal-schemas.ts')
   ])
-  const client = Object.assign({}, ...modules)
+  const client: Record<string, unknown> = Object.assign({}, ...modules)
+  const itemSchema = client.AgentJournalRenderItemSchema
   if (
     typeof client.reduceStructuredAgentSession !== 'function' ||
     typeof client.projectStructuredItemsToNativeChat !== 'function' ||
     !client.EMPTY_STRUCTURED_AGENT_SESSION ||
-    typeof client.AgentJournalRenderItemSchema?.parse !== 'function'
+    typeof itemSchema !== 'object' ||
+    itemSchema === null ||
+    !('parse' in itemSchema) ||
+    typeof itemSchema.parse !== 'function'
   ) {
     throw new Error('Release does not export the structured transcript reader')
   }

@@ -91,7 +91,7 @@ describe.skipIf(process.platform === 'win32')(
       expect(err.code).toBe(2)
     })
 
-    it('round-trips write/read/stat/rename and rejects paths outside home', async () => {
+    it('round-trips write/read/rename and rejects paths outside home', async () => {
       const adapter = createWslHookSftpAdapter(harness.mux)
       await new Promise<void>((resolve, reject) => {
         adapter.writeFile(
@@ -511,7 +511,7 @@ describe('WslHookRelayManager', () => {
     manager.disposeAll()
   })
 
-  it('marks the distro failed when the relay exits and re-ensures only after cooldown', async () => {
+  it('marks the distro failed when the relay exits and blocks an immediate re-ensure', async () => {
     const children: ReturnType<typeof fakeChild>[] = []
     const spawnRelay = vi.fn(() => {
       const child = fakeChild()

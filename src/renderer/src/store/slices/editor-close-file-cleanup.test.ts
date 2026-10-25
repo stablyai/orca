@@ -1,5 +1,6 @@
 import type { StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
   createEditorStore,
   createEditorTabsStore,
@@ -97,9 +98,8 @@ describe('createEditorSlice untitled cleanup routing', () => {
   })
 
   function seedRemoteWorktree(store: StoreApi<AppState>): void {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store under test reads only these fields of the partial state.
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       repos: [
         {
           id: 'repo1',
@@ -136,7 +136,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
           }
         ]
       }
-    } as Partial<AppState>)
+    })
   }
 
   it('closeFile deletes untouched remote untitled files through runtime file RPC', async () => {
@@ -232,10 +232,10 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile does not delete when worktree ownership metadata is missing', async () => {
     const store = createEditorStore()
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       repos: [],
       worktreesByRepo: {}
-    } as Partial<AppState>)
+    })
     const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',

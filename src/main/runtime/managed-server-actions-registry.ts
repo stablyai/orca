@@ -4,6 +4,7 @@
  * `orca serve`) has no SSH registry to manage servers from, and does not advertise them.
  */
 import type {
+  OrcadManagedPastLiveTerminals,
   OrcadManagedCancelStopResult,
   OrcadManagedDeployResult,
   OrcadManagedForgetResult,
@@ -15,7 +16,11 @@ import type {
 
 export type ManagedServerActions = {
   status: (selector: string) => Promise<OrcadManagedRuntimeStatus>
-  update: (selector: string, force: boolean) => Promise<OrcadManagedDeployResult>
+  update: (
+    selector: string,
+    force: boolean,
+    pastLiveTerminals?: OrcadManagedPastLiveTerminals
+  ) => Promise<OrcadManagedDeployResult>
   rollback: (selector: string) => Promise<OrcadManagedRollbackResult>
   /** `acceptChangedState` restores the snapshot over state a rejected build changed. */
   recover: (selector: string, acceptChangedState?: boolean) => Promise<OrcadManagedRecoveryResult>

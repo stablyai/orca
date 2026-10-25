@@ -4,14 +4,18 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
-import type { RpcClient } from './rpc-client'
+import type { RpcClient, SendRequestOptions } from './rpc-client'
 import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile, RpcResponse } from './types'
 
 export class FakeSession implements RpcClient {
   readonly sendRequest = vi.fn(
-    async (_method: string, _params?: unknown): Promise<RpcResponse> => ({
+    async (
+      _method: string,
+      _params?: unknown,
+      _options?: SendRequestOptions
+    ): Promise<RpcResponse> => ({
       id: 'rpc-1',
       ok: true,
       result: {},

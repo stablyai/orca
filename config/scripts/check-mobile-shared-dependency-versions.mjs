@@ -10,6 +10,12 @@ import { lockedVersion, lockfileRootImporter } from './pnpm-lockfile-root-import
 // merges two copies only at the same version; else zod-wrapped schemas infer `{}` (phone-feed-list.ts).
 export const SHARED_DEPENDENCIES = ['zod', 'tweetnacl', '@noble/hashes', '@types/ws']
 
+// Mobile typechecks through the root runner, whose Bun path accepts one TypeScript version, and
+// mobile CI runs its tests with the root's Vitest CLI against mobile's `vitest` imports.
+export const TOOLCHAIN_DEPENDENCIES = ['typescript', 'typescript-api', 'vitest']
+
+const CHECKED_DEPENDENCIES = [...SHARED_DEPENDENCIES, ...TOOLCHAIN_DEPENDENCIES]
+
 function importerVersion(importer, name) {
   return lockedVersion(importer.dependencies?.[name] ?? importer.devDependencies?.[name])
 }
@@ -17,7 +23,7 @@ function importerVersion(importer, name) {
 export function findSharedDependencyVersionProblems({
   rootImporter,
   mobileImporter,
-  names = SHARED_DEPENDENCIES
+  names = CHECKED_DEPENDENCIES
 }) {
   const problems = []
   for (const name of names) {
@@ -49,7 +55,7 @@ export function main(root = resolve(import.meta.dirname, '../..')) {
     )
     return 1
   }
-  console.log(`Root and mobile lock the same ${SHARED_DEPENDENCIES.join(', ')}.`)
+  console.log(`Root and mobile lock the same ${CHECKED_DEPENDENCIES.join(', ')}.`)
   return 0
 }
 

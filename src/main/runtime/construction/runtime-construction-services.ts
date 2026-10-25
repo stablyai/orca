@@ -229,6 +229,7 @@ export abstract class RuntimeConstructionServices {
     tabId: string
     leafId: string
   }): boolean
+  protected abstract isPtyAwaitingUserInput(ptyId: string): boolean
   abstract getTerminalOrchestrationCliCommand(
     handle: string
   ): ReturnType<typeof resolveTerminalOrchestrationCliCommand>

@@ -38,6 +38,7 @@ export type HostAgentLaunchArgs = {
   pendingActivationSpawn?: boolean
   /** The view the tab opens in, decided as for any new agent tab. */
   viewMode?: Tab['viewMode']
+  suppressStartupUpdatePrompt?: boolean
 }
 
 function stringSessionOptions(options: Record<string, SessionOptionValue> | undefined): {
@@ -87,7 +88,10 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     pendingStartup: {
       command: '',
       launchAgent: args.agent,
-      agentLaunch: { launch: launchParams(args) }
+      agentLaunch: {
+        launch: launchParams(args),
+        ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
+      }
     }
   })
   if (args.cwd?.trim()) {

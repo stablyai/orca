@@ -85,8 +85,7 @@ function makeRuntime(
   const spawn = vi.fn<(args: unknown) => Promise<{ id: string }>>(
     opts.spawn ?? (() => Promise.resolve({ id: 'resumed-pty' }))
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-  const runtime = new OrcaRuntimeService(fixture.runtimeStore as never, undefined, {
+  const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
     getDesktopWindowStatus: () => 'openable',
     ...(opts.rows ? { getAgentProviderSessionSnapshot: opts.rows } : {}),
     ...(opts.checkHookAgentPresence ? { checkHookAgentPresence: opts.checkHookAgentPresence } : {}),
@@ -106,10 +105,10 @@ function makeRuntime(
   const attachWindow = (webContents?: { send: (...args: unknown[]) => void }): void => {
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.markGraphReady(TEST_WINDOW_ID)
-    electronMocks.BrowserWindow.fromId.mockReturnValue(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only isDestroyed and webContents.send from the window mock.
-      { isDestroyed: () => false, ...(webContents ? { webContents } : {}) } as never
-    )
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      ...(webContents ? { webContents } : {})
+    })
   }
   const resume = (
     overrides: {

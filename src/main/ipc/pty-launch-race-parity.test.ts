@@ -10,7 +10,10 @@ import {
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as JcodeRuntimeDir from '../../shared/jcode-runtime-dir'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { getHiddenRendererPtyIds, isHiddenRendererPty } from './pty-hidden-delivery-gate'
+import {
+  getHiddenRendererPtyIds,
+  isHiddenRendererPty
+} from './pty/delivery/pty-hidden-delivery-gate'
 import { ptySizes } from './pty/delivery/visibility-state'
 import { clearProviderPtyState } from './pty/provider/state-cleanup'
 import * as paneSpawnReservations from './pty/pane/spawn-reservation'

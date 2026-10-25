@@ -818,6 +818,18 @@
           "localBaseRefRefreshFailedDetailDirty": "The worktree where local {{value0}} is checked out has uncommitted changes. Commit, stash, or discard those changes, then update local {{value0}} manually.",
           "localBaseRefRefreshFailedDetailNotFastForward": "Local {{value0}} does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.",
           "localBaseRefRefreshFailedDetailError": "Git returned an error while updating local {{value0}}. Check the repo for locked refs or unusual worktree state, then update local {{value0}} manually.",
+          "localBaseRefShallowHistoryTitle": "Local {{value0}} not updated: shallow clone",
+          "localBaseRefShallowHistoryNamed": "\"{{value0}}\" was created from {{value1}} and is unaffected. Orca could not also update your local {{value2}} branch because this clone only has recent history, so Git cannot confirm local {{value2}} is just behind. To fix this for every new workspace, run once:",
+          "localBaseRefShallowHistory": "Your workspace was created from {{value0}} and is unaffected. Orca could not also update your local {{value1}} branch because this clone only has recent history, so Git cannot confirm local {{value1}} is just behind. To fix this for every new workspace, run once:",
+          "localBaseRefRefreshTurnOff": "Disable Check",
+          "localBaseRefRefreshTurnOffHelp": "What Disable Check does",
+          "localBaseRefRefreshTurnOffTooltip": "Turns off the Orca setting {{value0}}. Orca will stop updating local {{value1}} when you create a workspace, and this warning will stop appearing. New workspaces are unaffected. Turn it back on anytime in Settings › Git.",
+          "localBaseRefUnshallow": "Unshallow",
+          "localBaseRefUnshallowFailed": "Could not open a terminal for this workspace",
+          "localBaseRefUnshallowFailedDescription": "Run {{value0}} in a terminal in this repository instead.",
+          "localBaseRefRefreshTurnedOff": "Orca will no longer update local {{value0}}",
+          "localBaseRefRefreshTurnedOffDescription": "Turn it back on in Settings › {{value0}}.",
+          "localBaseRefRefreshTurnOffFailed": "Could not turn off {{value0}}",
           "0216895fb5": "Failed to delete branch",
           "c6cf133786": "This workspace is no longer available.",
           "19db0085fb": "Local branch deleted",
@@ -1393,6 +1405,11 @@
       "aiVaultResumeRefusal": {
         "openInChat": "This {{value0}} conversation is open in a chat. Refresh Session History to open it.",
         "ownershipUnknown": "Orca could not confirm who owns this {{value0}} conversation. Refresh Session History and try again."
+      },
+      "composerCreateHandoff": {
+        "reopen": "Reopen",
+        "preparationTimedOut": "Worktree preparation timed out.",
+        "needsInput": "Worktree was not created because it needs more input."
       },
       "pendingWorktreeCreation": {
         "checkingOutFiles": "Checking out files… {{percent}}%",
@@ -12202,7 +12219,8 @@
           "failed": "Update failed",
           "serviceManagerHelp": "Update Orca on the server host — through its system package manager if it was installed from a .deb or .rpm, otherwise through the service manager that starts it.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
-          "legacyHelp": "Remote updates are unavailable for this server. Update Orca on the server host."
+          "legacyHelp": "Remote updates are unavailable for this server. Update Orca on the server host.",
+          "managedOverSshHelp": "This desktop updates this server over SSH. Use Update on its row in Remote Orca Servers."
         },
         "BrowserLinkRoutingSetting": {
           "description": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
@@ -12948,7 +12966,10 @@
             "forgetDescription": "Unlinks this server here without contacting its host. If the host comes back, the server may still be running there.",
             "orcaVersion": "Orca on this host: {{version}}",
             "stopOrcaDescription": "Stops Orca on the SSH host and removes it from this list.",
-            "updateOrcaOnHost": "Update Orca on this host"
+            "updateOrcaOnHost": "Update Orca on this host",
+            "updateAnyway": "Update anyway",
+            "notNow": "Not now",
+            "forceUpdate": "Terminals are running on this host. They keep running through the update, and their panes reconnect when Orca’s server restarts."
           },
           "title": "Orca on your SSH hosts",
           "description": "Orca installs itself on an empty SSH host and keeps itself up to date.",
@@ -19710,7 +19731,9 @@
           "switchToChatView": "Continue in Chat UI"
         },
         "BrowserTab": {
-          "closeOthers": "Close Others"
+          "closeOthers": "Close Others",
+          "muteTab": "Mute Tab",
+          "unmuteTab": "Unmute Tab"
         },
         "EditorFileTabContextMenu": {
           "closeOthers": "Close Others"
@@ -20875,7 +20898,9 @@
         "settingRestart": "Always restart",
         "settingKeep": "Never restart",
         "restartingOne": "Restarting 1 Claude session on {{account}}",
-        "restartingOther": "Restarting {{count}} Claude sessions on {{account}}"
+        "restartingOther": "Restarting {{count}} Claude sessions on {{account}}",
+        "uncheckedOne": "Couldn't check 1 terminal for Claude. If Claude is running there, it stays on {{previous}} until restarted.",
+        "uncheckedOther": "Couldn't check {{count}} terminals for Claude. Any Claude running there stays on {{previous}} until restarted."
       }
     },
     "managedData": {

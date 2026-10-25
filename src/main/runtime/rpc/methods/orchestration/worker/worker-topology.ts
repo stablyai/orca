@@ -70,6 +70,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     // configured launcher instead of executing the raw id.
     startupAgent: args.agent,
     launchSource: 'orchestration',
+    suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar

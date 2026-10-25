@@ -43,8 +43,8 @@ const storeBox = vi.hoisted(() => ({
   state: null as Record<string, unknown> | null
 }))
 
-vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('react'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     useCallback: <T>(callback: T) => callback,

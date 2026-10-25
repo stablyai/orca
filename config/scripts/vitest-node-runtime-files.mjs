@@ -183,7 +183,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/structured-agent-session-windowless-layout-host.test.ts',
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/relay-control-client.test.ts',
-  'src/main/ipc/filesystem-watcher-ignore-real.test.ts',
+  'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environments/runtime-environment-preference.test.ts',
   // Real fs.watch file bindings; Bun's watcher is not the one Electron runs.
   'src/main/ipc/rebinding-file-watch.test.ts',
@@ -197,6 +197,7 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/vitest-node-runtime-pool.test.ts'
 ]
 
-export function getNodeRuntimeInclude() {
-  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests()]
+/** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */
+export function getNodeRuntimeInclude({ filters } = {}) {
+  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests({ filters })]
 }

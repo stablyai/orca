@@ -6,6 +6,7 @@ import {
 } from '../pty-descendant-exit-verification'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { hasErrorCode } from '../daemon/daemon-process-inspection'
 
 /** What the teardown observed of the descendants; null when it signalled but observed nothing. */
 export type ProviderProcessTeardownVerdict = DescendantTreeVerdict | null
@@ -37,8 +38,7 @@ function terminateDedicatedPosixGroup(
     signalGroup(rootPid, 'SIGKILL')
   } catch (error) {
     // ESRCH says only that the group is empty; a descendant that left it, or a root that never led it, may live.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Node process.kill errors expose an optional errno code; only that field is read.
-    return (error as NodeJS.ErrnoException).code === 'ESRCH' ? null : 'unverifiable'
+    return hasErrorCode(error, 'ESRCH') ? null : 'unverifiable'
   }
   // Outside the try: that catch is the ESRCH contract, not a breadcrumb handler.
   recordSelfInitiatedTreeKill({

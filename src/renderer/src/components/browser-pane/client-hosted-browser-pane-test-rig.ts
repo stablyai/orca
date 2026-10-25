@@ -46,6 +46,7 @@ export function installClientHostedPaneApi(overrides?: {
         onPermissionDenied: inert,
         onContextMenuRequested: inert,
         onContextMenuDismissed: inert,
+        onTargetUrlChanged: inert,
         openDevTools: vi.fn(async () => true),
         proceedCertificate: vi.fn(async () => ({ ok: true })),
         publishClientPageMetadata: vi.fn(async () => ({ status: 'published', accepted: true })),

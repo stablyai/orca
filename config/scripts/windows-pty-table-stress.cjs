@@ -43,7 +43,6 @@ async function exerciseTable() {
       useConptyDll: true
     })
     const record = { proc, output: '', exited: false, closed: false }
-    const marker = `ORCA_PTY_READY_${spawned.length}`
     let resolveReady
     record.ready = new Promise((resolve) => {
       resolveReady = resolve
@@ -55,16 +54,14 @@ async function exerciseTable() {
         resolveExit(event)
       })
     })
+    // First output is node-pty's own readiness, after which kill/resize/clear stop deferring.
+    // Not typed input: ConPTY rarely starts without an input reader, which the daemon respawns.
     proc.onData((chunk) => {
       record.output = (record.output + chunk).slice(-2048)
-      if (record.output.includes(marker)) {
-        resolveReady(true)
-      }
+      resolveReady(true)
     })
     observer.watch(record, { round, slot })
     spawned.push(record)
-    // Escaping one letter keeps echoed input from satisfying the output marker.
-    proc.write(`echo ${marker.replace('READY', 'REA^DY')}\r`)
     return record
   }
 

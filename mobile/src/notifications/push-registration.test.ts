@@ -228,9 +228,9 @@ describe('push registration capability gating', () => {
 
 describe('push registration token changes', () => {
   it('re-registers every connected host when the provider rolls the token', async () => {
-    let onTokenChange: ((token: MobilePushToken) => void) | null = null
+    const tokenListener: { onChange?: (token: MobilePushToken) => void } = {}
     vi.mocked(addPushTokenListener).mockImplementation((listener) => {
-      onTokenChange = listener
+      tokenListener.onChange = listener
       return () => {}
     })
     const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
@@ -242,7 +242,7 @@ describe('push registration token changes', () => {
     await flush()
     const stop = startPushTokenSync()
 
-    onTokenChange?.({ platform: 'ios', token: 'b'.repeat(64), apnsEnvironment: 'sandbox' })
+    tokenListener.onChange?.({ platform: 'ios', token: 'b'.repeat(64), apnsEnvironment: 'sandbox' })
     await flush()
 
     const registers = sent.filter((request) => request.method === 'notifications.registerPush')
@@ -391,7 +391,7 @@ describe('push unregistration', () => {
 
   it('re-arms the unregister when the switch goes off while a register is in flight', async () => {
     const sent: string[] = []
-    let releaseRegister: (() => void) | null = null
+    const register: { release?: () => void } = {}
     const client = {
       sendRequest: vi.fn(async (method: string) => {
         sent.push(method)
@@ -400,7 +400,7 @@ describe('push unregistration', () => {
         }
         if (method === 'notifications.registerPush') {
           await new Promise<void>((resolve) => {
-            releaseRegister = resolve
+            register.release = resolve
           })
           return ok({ registered: true, registrationId: 'registration-1' })
         }
@@ -414,7 +414,7 @@ describe('push unregistration', () => {
     // The sweep snapshots `registered` while this host is still only in flight.
     const switchedOff = setRemotePushEnabled(false)
     await flush()
-    releaseRegister?.()
+    register.release?.()
     await switchedOff
     await flush()
 

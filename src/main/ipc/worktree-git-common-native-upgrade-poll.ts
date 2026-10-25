@@ -1,4 +1,4 @@
-import { CRASH_FUSE_COOLDOWN_INITIAL_MS } from './parcel-watcher-crash-fuse'
+import { CRASH_FUSE_COOLDOWN_INITIAL_MS } from './filesystem/watcher-process/parcel-watcher-crash-fuse'
 
 // Retry when the crash fuse half-opens so fallback polling does not remain permanent until restart.
 export const GIT_COMMON_NATIVE_UPGRADE_INTERVAL_MS = CRASH_FUSE_COOLDOWN_INITIAL_MS

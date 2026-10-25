@@ -196,6 +196,8 @@ describe('browserManager grab operations', () => {
         webContentsId: GRAB_GUEST_WEB_CONTENTS_ID,
         rendererWebContentsId: GRAB_RENDERER_WEB_CONTENTS_ID
       })
+      // Registration also reports audio state; this test is about the chord.
+      rendererSendMock.mockClear()
 
       const preventDefault = pressAnnotateChord()
 

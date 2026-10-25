@@ -131,8 +131,9 @@ describe('which lane a freshly launched worker waits on', () => {
 
 describe('which idle-lane worker starts also answer on their composer marker', () => {
   // Their only rest signal is their bare name, which a launch holds to quiet output; Grok's logo
-  // animates for ten seconds after its composer glyph. Gemini's title needs corroboration: absent.
-  it('is exactly the bare-name agents whose composer draws a marker', () => {
+  // animates for ten seconds after its composer glyph. Claude's `✳` title can be turned off.
+  // Gemini's title needs corroboration: absent.
+  it('is exactly the bare-name or title-optional agents whose composer draws a marker', () => {
     expect(
       Object.keys(EXPECTED_LANES)
         .filter(isTuiAgent)
@@ -142,7 +143,7 @@ describe('which idle-lane worker starts also answer on their composer marker', (
             workerStartReadsComposerMarker(agent)
         )
         .sort()
-    ).toEqual(['dsh', 'grok', 'mimo-code'])
+    ).toEqual(['claude', 'claude-agent-teams', 'dsh', 'grok', 'mimo-code'])
   })
 })
 

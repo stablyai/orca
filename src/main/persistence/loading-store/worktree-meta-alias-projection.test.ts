@@ -1,6 +1,7 @@
 import {
   closeTestStores,
   createSqliteTestStore,
+  readPersistedState,
   readPersistedStateJson
 } from '../persistence-test-harness'
 /**
@@ -283,8 +284,7 @@ describe('worktree meta alias projection', () => {
 
     // What a build without this change does with that file: parse it, run the metadata normalizer
     // it already ships (untouched here), write the result back.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const downgraded = JSON.parse(readPersistedStateJson(dataFile)) as PersistedState
+    const downgraded = readPersistedState(dataFile)
     normalizeWorktreeLinkedItemMetadata(downgraded)
     expect(Object.keys(downgraded.worktreeMeta).sort()).toEqual(Object.keys(before.meta).sort())
     // It drops the aliases whose identity row is not there; it never touches a locator row.
@@ -306,8 +306,7 @@ describe('worktree meta alias projection', () => {
       before.meta[worktreeId(0)]
     )
     rolledBack.flush()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const reminted = JSON.parse(readPersistedStateJson(rollbackDataFile)) as PersistedState
+    const reminted = readPersistedState(rollbackDataFile)
     expect(
       reminted.worktreeIdentityAliases?.[composeWorktreeHostIdentity(LOCAL, worktreeId(0))]
     ).toEqual([
@@ -375,8 +374,7 @@ describe('worktree meta alias projection', () => {
       )
       expect(store.getAllWorktreeMeta()[worktreeId(0)]?.displayName).toBe('workspace-0')
       store.flush()
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-      const onDisk = JSON.parse(readPersistedStateJson(dataFile)) as PersistedState
+      const onDisk = readPersistedState(dataFile)
       expect(Object.keys(onDisk.worktreeMeta).length).toBe(
         Object.keys(fixture.state.worktreeMeta).length
       )
@@ -419,8 +417,7 @@ describe('worktree meta alias projection', () => {
     expect(Object.keys(store.getAllWorktreeMeta())).toEqual([worktreeId(0)])
     store.flush()
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const onDisk = JSON.parse(readPersistedStateJson(dataFile)) as PersistedState
+    const onDisk = readPersistedState(dataFile)
     expect(Object.hasOwn(onDisk, 'worktreeMetaByIdentity')).toBe(false)
     // The locator map and its lineage companions are all still there, untouched by the projection.
     expect(Object.keys(onDisk.worktreeMeta)).toEqual([worktreeId(0)])

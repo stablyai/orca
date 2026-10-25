@@ -135,8 +135,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
       }
       closeDialogDebounceTimers.clear()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [])
+  }, [closeDialogDebounceTimersRef, measurableBackgroundWorktreeIdsRef, mountedWorktreeIdsRef])
 
   useEffect(() => {
     const timers = terminalWorktreeParkingTimersRef.current
@@ -146,8 +145,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
       }
       timers.clear()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the controller ref preserves its original stable identity.
-  }, [])
+  }, [terminalWorktreeParkingTimersRef])
 
   return {
     measurableBackgroundWorktreeTimersRef,

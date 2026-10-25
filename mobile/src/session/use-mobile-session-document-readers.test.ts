@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { hookMount, performHookAction } from '../test-support/rpc-recording/hook-mount'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { RpcResponse } from '../transport/types'
-import type { MarkdownDocState } from './mobile-session-route-types'
+import type { FileDocState, MarkdownDocState } from './mobile-session-route-types'
 import { useMobileSessionDocumentReaders } from './use-mobile-session-document-readers'
 
 const META = { runtimeId: 'runtime-1' }
@@ -41,6 +41,54 @@ async function readMarkdown(reply: RpcResponse): Promise<MarkdownDocState | unde
   hook.unmount()
   return docs.get('tab-md')
 }
+
+async function readFile(
+  relativePath: string,
+  reply: RpcResponse
+): Promise<FileDocState | undefined> {
+  let docs = new Map<string, FileDocState>()
+  let readers: ReturnType<typeof useMobileSessionDocumentReaders> | undefined
+  const hook = hookMount(() => {
+    readers = useMobileSessionDocumentReaders(
+      mountFixture<Parameters<typeof useMobileSessionDocumentReaders>[0]>({
+        worktreeId: 'wt-1',
+        client: { sendRequest: vi.fn(async (): Promise<RpcResponse> => reply) },
+        setMarkdownDocs: () => {},
+        setFileDocs: (update) => {
+          docs = typeof update === 'function' ? update(docs) : update
+        }
+      })
+    )
+  })
+  hook.mount()
+  await performHookAction(() =>
+    readers?.readFileTab(
+      mountFixture<Parameters<typeof readers.readFileTab>[0]>({
+        type: 'file',
+        id: 'tab-file',
+        relativePath,
+        isDirty: false
+      })
+    )
+  )
+  hook.unmount()
+  return docs.get('tab-file')
+}
+
+describe('useMobileSessionDocumentReaders file reads', () => {
+  it('explains a desktop tab of a file outside the workspace instead of a generic failure', async () => {
+    const doc = await readFile('/other/report.txt', {
+      id: 'frame-1',
+      ok: false,
+      error: { code: 'runtime_error', message: 'invalid_relative_path' },
+      _meta: META
+    })
+    expect(doc).toEqual({
+      status: 'error',
+      message: 'This file is outside the workspace. Open it on desktop to view it.'
+    })
+  })
+})
 
 function readTabResult(extra: Record<string, unknown> = {}): RpcResponse {
   return {

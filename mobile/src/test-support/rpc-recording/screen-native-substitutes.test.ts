@@ -56,11 +56,16 @@ describe('the inert screen substitutes', () => {
     let rendered: ReturnType<typeof create> | undefined
     act(() => {
       rendered = create(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the substitute is an inert element component by construction.
-        createElement(member('react-native', 'Pressable') as ElementType, {}, () => {
-          invoked++
-          return null
-        })
+        createElement(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the substitute is an inert element component by construction.
+          member('react-native', 'Pressable') as ElementType,
+          {},
+          // @ts-expect-error -- deliberately invalid function children; asserts the substitute drops them
+          () => {
+            invoked++
+            return null
+          }
+        )
       )
     })
     expect(invoked).toBe(0)

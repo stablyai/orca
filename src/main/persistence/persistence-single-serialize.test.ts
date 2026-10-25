@@ -1,6 +1,7 @@
 import {
   closeTestStores,
   createSqliteTestStore,
+  readPersistedState,
   readPersistedStateJson
 } from './persistence-test-harness'
 // Random-IV ciphertext changes on every encryption; identical state must still skip redundant writes.
@@ -168,10 +169,7 @@ describe('persistence single-serialize save guard', () => {
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
-    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
-      settings: { opencodeSessionCookie: string; httpProxyUrl: string }
-    }
+    const persisted = readPersistedState(dataFile())
     expect(persisted.settings.opencodeSessionCookie).toBe('')
     expect(persisted.settings.httpProxyUrl).toBe('')
 

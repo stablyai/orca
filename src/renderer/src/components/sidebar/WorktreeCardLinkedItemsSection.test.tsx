@@ -173,7 +173,7 @@ describe('workspace linked references in hover details', () => {
     expect(screen.queryByText('Used for checks')).toBeNull()
     expect(screen.getAllByLabelText('Checks: Passing')).toHaveLength(1)
   })
-  it('offers Orca link destinations without activating the parent and dismisses hover', () => {
+  it('offers Orca link destinations without activating the parent or dismissing hover', () => {
     const openUrl = vi.fn()
     Object.defineProperty(window, 'api', { configurable: true, value: { shell: { openUrl } } })
     const parentClick = vi.fn()
@@ -189,7 +189,7 @@ describe('workspace linked references in hover details', () => {
     expect(screen.getByRole('button', { name: /System Browser/ })).toBeTruthy()
     expect(parentClick).not.toHaveBeenCalled()
     expect(container.querySelector('[data-hover-open]')?.getAttribute('data-hover-open')).toBe(
-      'false'
+      'true'
     )
   })
   it('opens link management from either section header and dismisses hover', () => {

@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -40,7 +41,7 @@ describe('MobileNativeChatPermission', () => {
         })
       )
     })
-    const button = renderer.root.findByType('Pressable')
+    const button = findByHostType(renderer!.root, 'Pressable')
 
     act(() => {
       button.props.onPress()
@@ -66,7 +67,7 @@ describe('MobileNativeChatPermission', () => {
         })
       )
     })
-    const cancel = renderer.root.findByProps({ accessibilityLabel: 'Cancel' })
+    const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
     await act(async () => cancel.props.onPress())
     expect(onCancel).toHaveBeenCalledWith({ itemId: 'approval-1', expectedRevision: 4 })
   })
@@ -88,11 +89,11 @@ describe('MobileNativeChatPermission', () => {
       )
     })
 
-    const card = renderer.root.findByProps({ testID: 'native-chat-approval-card' })
-    const title = renderer.root.findByProps({ testID: 'native-chat-approval-title' })
-    const content = renderer.root.findByProps({ testID: 'native-chat-approval-content' })
-    const actions = renderer.root.findByProps({ testID: 'native-chat-approval-actions' })
-    const contentText = content.findAllByType('Text')
+    const card = renderer!.root.findByProps({ testID: 'native-chat-approval-card' })
+    const title = renderer!.root.findByProps({ testID: 'native-chat-approval-title' })
+    const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
+    const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
+    const contentText = findAllByHostType(content, 'Text')
     const containsText = (value: string): boolean =>
       contentText.some((node) => {
         const children = Array.isArray(node.props.children)
@@ -155,9 +156,8 @@ describe('MobileNativeChatPermission', () => {
         })
       )
     })
-    const content = renderer.root.findByProps({ testID: 'native-chat-approval-content' })
-    return content
-      .findAllByType('Text')
+    const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
+    return findAllByHostType(content, 'Text')
       .flatMap((node) => [node.props.children].flat())
       .filter((child): child is string => typeof child === 'string')
       .join('')
@@ -179,14 +179,14 @@ describe('MobileNativeChatPermission', () => {
       )
     })
 
-    const content = renderer.root.findByProps({ testID: 'native-chat-approval-content' })
-    const actions = renderer.root.findByProps({ testID: 'native-chat-approval-actions' })
+    const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
+    const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
 
     // Same shared region as every other context row, so it inherits the cap.
     expect(content.props.style).toMatchObject({ maxHeight: 240, minHeight: 0, flexShrink: 1 })
-    expect(content.findByType('MobileMarkdown').props.content).toBe(planText)
+    expect(findByHostType(content, 'MobileMarkdown').props.content).toBe(planText)
     // The path renders as an interpolated child, so match within the children.
-    const planFileShown = content.findAllByType('Text').some((node) => {
+    const planFileShown = findAllByHostType(content, 'Text').some((node) => {
       const children = Array.isArray(node.props.children)
         ? node.props.children
         : [node.props.children]
@@ -224,7 +224,7 @@ describe('MobileNativeChatPermission', () => {
         )
       })
       const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
-      return { onRespond, onCancel, options: actions.findAllByType('Pressable') }
+      return { onRespond, onCancel, options: findAllByHostType(actions, 'Pressable') }
     }
 
     it('with no detail: says so, answers nothing, and only its cancel reaches the host', async () => {

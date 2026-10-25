@@ -26,6 +26,7 @@ import {
   recordSshConnectionOpened
 } from '../../ssh/connection/ssh-connection-attribution'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
+import { clearSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 
 const { mockSshStore, mockConnectionManager } = mocks
 
@@ -142,6 +143,55 @@ describe('SSH IPC handlers', () => {
       )
     } finally {
       end()
+    }
+  })
+
+  // #32484: at startup the managed server's tunnel brings the host up and its status arrives
+  // without any SSH connect, so restoring only from the connect path left saved forwards off.
+  it.each([
+    { kind: 'managed', environmentId: 'env-test' } as const,
+    { kind: 'relay', reason: 'orcad_unavailable', bridged: true } as const
+  ])('restores saved forwards whenever a $kind status is published', async (status) => {
+    const conn = { id: 'conn-1', getConnectGeneration: () => 1 }
+    mockSshStore.getTarget.mockReturnValue({
+      ...target,
+      portForwards: [{ localPort: 8080, remoteHost: '127.0.0.1', remotePort: 3000 }]
+    })
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    clearSshHostServerStatus('ssh-1')
+    try {
+      setSshHostServerStatus('ssh-1', status)
+      await vi.waitFor(() =>
+        expect(mocks.mockPortForwardManager.addForward).toHaveBeenCalledWith(
+          'ssh-1',
+          conn,
+          8080,
+          '127.0.0.1',
+          3000,
+          undefined
+        )
+      )
+    } finally {
+      clearSshHostServerStatus('ssh-1')
+    }
+  })
+
+  it('leaves saved forwards alone while the server decision is unsettled', async () => {
+    mockSshStore.getTarget.mockReturnValue({
+      ...target,
+      portForwards: [{ localPort: 8080, remoteHost: '127.0.0.1', remotePort: 3000 }]
+    })
+    mockConnectionManager.getConnection.mockReturnValue({
+      id: 'conn-1',
+      getConnectGeneration: () => 1
+    })
+    try {
+      setSshHostServerStatus('ssh-1', { kind: 'setting-up', phase: 'deploying' })
+      setSshHostServerStatus('ssh-1', { kind: 'relay', reason: 'orcad_unavailable' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(mocks.mockPortForwardManager.addForward).not.toHaveBeenCalled()
+    } finally {
+      clearSshHostServerStatus('ssh-1')
     }
   })
 })

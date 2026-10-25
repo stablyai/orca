@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { makeAnnotation } from './browser-annotation-test-fixture'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
 import type { ManagedBrowserProfileOwner } from '../../../../shared/browser-profile-scope'
@@ -294,8 +294,7 @@ describe('createBrowserSlice annotations', () => {
     Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
     const { store, main } = await createTestStoreDrawnFromMain({
       repos: [],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the browser keys are read.
-      settings: { browserProfileScope: 'repo' } as AppState['settings'],
+      settings: { ...getDefaultSettings('/tmp'), browserProfileScope: 'repo' },
       defaultBrowserSessionProfileId: 'user-default'
     })
 

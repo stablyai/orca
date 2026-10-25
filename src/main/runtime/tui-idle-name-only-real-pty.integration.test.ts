@@ -86,11 +86,7 @@ async function terminalWait(
 ): Promise<{ satisfied: boolean; elapsedMs: number }> {
   const startedAt = Date.now()
   try {
-    const result = await waitMethod.handler(
-      { terminal, for: 'tui-idle', timeoutMs },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: terminal.wait reads only `runtime` off its context; the rest is request plumbing this fixture has no use for.
-      { runtime } as Parameters<typeof waitMethod.handler>[1]
-    )
+    const result = await waitMethod.handler({ terminal, for: 'tui-idle', timeoutMs }, { runtime })
     return { satisfied: result.wait.satisfied === true, elapsedMs: Date.now() - startedAt }
   } catch (error) {
     // Why only `timeout`: an unsatisfied wait is the outcome under test, but any other

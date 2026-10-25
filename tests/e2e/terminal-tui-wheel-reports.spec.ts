@@ -1,3 +1,4 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import type { Page } from '@stablyai/playwright-test'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
@@ -58,8 +59,9 @@ async function probeSmallMouseWheelReports(
 
         const rect = screen.getBoundingClientRect()
         const cellHeight =
-          pane.terminal._core?._renderService?.dimensions?.css?.cell?.height ??
-          rect.height / pane.terminal.rows
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+          (pane.terminal as XtermWithRenderDimensions)._core?._renderService?.dimensions?.css?.cell
+            ?.height ?? rect.height / pane.terminal.rows
         const scrollSensitivity = Number(pane.terminal.options.scrollSensitivity ?? 1)
         // Why: this is a notched mouse wheel event that Chromium can surface as a
         // small pixel delta; xterm's <50px damping accumulates it for four ticks.
@@ -148,8 +150,9 @@ async function probeTimedSmallMouseWheelReports(
 
         const rect = screen.getBoundingClientRect()
         const cellHeight =
-          pane.terminal._core?._renderService?.dimensions?.css?.cell?.height ??
-          rect.height / pane.terminal.rows
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+          (pane.terminal as XtermWithRenderDimensions)._core?._renderService?.dimensions?.css?.cell
+            ?.height ?? rect.height / pane.terminal.rows
         const scrollSensitivity = Number(pane.terminal.options.scrollSensitivity ?? 1)
         // Why: this is a notched mouse wheel event that Chromium can surface as a
         // small pixel delta; xterm's <50px damping accumulates it for four ticks.

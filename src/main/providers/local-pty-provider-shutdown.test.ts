@@ -523,6 +523,8 @@ describe('LocalPtyProvider', () => {
         expect.any(Function),
         expect.objectContaining({ ownsRoot: expect.any(Function) })
       )
+      // Root group SIGKILL must wait for the descendant SIGTERM grace, or Claude skips SessionEnd.
+      expect(killWithDescendantSweepMock.mock.calls[0][2].awaitEscalation()).toBe(true)
     })
   })
 

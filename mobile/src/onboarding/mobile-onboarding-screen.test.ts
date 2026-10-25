@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MobileOnboardingScreen from '../../app/mobile-onboarding'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({
   params: { hostId: 'paired-host', steps: 'session-view,notifications' },
@@ -102,7 +103,7 @@ describe('MobileOnboardingScreen', () => {
   }
 
   function trackStyle() {
-    return renderer!.root.findByType('AnimatedView').props.style[1]
+    return findByHostType(renderer!.root, 'AnimatedView').props.style[1]
   }
 
   function trackWidth(): number {
@@ -116,7 +117,7 @@ describe('MobileOnboardingScreen', () => {
   }
 
   function pages() {
-    return renderer!.root.findAllByType('MobileOnboardingPage')
+    return findAllByHostType(renderer!.root, 'MobileOnboardingPage')
   }
 
   it('advances from session view to notifications before opening the paired host', async () => {

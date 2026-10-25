@@ -63,8 +63,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         pane.terminal.focus()
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [refreshMobileOverlays, scheduleRestoredTerminalRefit]
+    [refreshMobileOverlays, scheduleRestoredTerminalRefit, paneTransportsRef, settingsRef]
   )
   const restoreAllTerminalFits = useCallback(
     async (focusPane: ManagedPane): Promise<void> => {
@@ -77,8 +76,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         focusPane.terminal.focus()
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [getMobileOwnedTerminalPtyIds, scheduleRestoredTerminalRefit]
+    [getMobileOwnedTerminalPtyIds, scheduleRestoredTerminalRefit, settingsRef]
   )
   const terminalShouldHandleMiddleClick = useCallback(
     (target: EventTarget | null): target is Node => {
@@ -115,8 +113,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         null
       )
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [terminalShouldHandleMiddleClick]
+    [terminalShouldHandleMiddleClick, managerRef]
   )
   const handlePrimarySelectionMiddleMouseDown = useCallback(
     (event: React.MouseEvent<HTMLDivElement>): void => {
@@ -182,8 +179,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)
       })
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [findTerminalPaneForMiddleClick, tabId]
+    [findTerminalPaneForMiddleClick, tabId, managerRef, paneTransportsRef, setTerminalError]
   )
   const handlePrimarySelectionAuxClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>): void => {
@@ -205,10 +201,12 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     },
     [findTerminalPaneForMiddleClick]
   )
-  const activatePaneTitleInteraction = useCallback((paneId: number): void => {
-    managerRef.current?.setActivePane(paneId, { focus: false })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [])
+  const activatePaneTitleInteraction = useCallback(
+    (paneId: number): void => {
+      managerRef.current?.setActivePane(paneId, { focus: false })
+    },
+    [managerRef]
+  )
   const splitTerminalPaneFromHeader = useCallback(
     (pane: ManagedPane, direction: 'vertical' | 'horizontal') => {
       const manager = managerRef.current
@@ -228,15 +226,13 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         source: 'context_menu'
       })
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [cwd]
+    [cwd, managerRef, paneCwdRef, paneTransportsRef, tabId, worktreeId]
   )
   const beginPaneDragFromHeader = useCallback(
     (paneId: number, handle: HTMLElement, event: PointerEvent) => {
       managerRef.current?.beginPaneDragFromPointerDown(paneId, handle, event)
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    []
+    [managerRef]
   )
 
   return {

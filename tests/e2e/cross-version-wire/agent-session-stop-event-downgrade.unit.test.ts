@@ -21,7 +21,11 @@ import {
   SAVED_BY_NEWER_ORCA
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import {
+  importReleaseCheckoutModule,
+  materializeReleaseCheckout,
+  releaseModuleExport
+} from './release-checkout'
 import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
@@ -92,11 +96,11 @@ test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
       const rawJson = JSON.stringify(since.rows)
       const checkout = await materializeReleaseCheckout(ref)
       const reducer = await importReleaseCheckoutModule(checkout, `${JOURNAL}/journal-reducer.ts`)
-      const create = releaseExport<(sessionId: string, epoch: string) => OldReplay['state']>(
+      const create = releaseModuleExport<(sessionId: string, epoch: string) => OldReplay['state']>(
         reducer,
         'createJournalReducerState'
       )
-      const fold = releaseExport<(state: OldReplay['state'], row: JournalRow) => void>(
+      const fold = releaseModuleExport<(state: OldReplay['state'], row: JournalRow) => void>(
         reducer,
         'applyJournalRow'
       )
@@ -122,16 +126,6 @@ test.each(['v1.4.219', 'v1.4.220', WRITABLE_BASELINE_REF])(
 
 function item(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
-}
-
-/** A function the pinned release exports, typed as the caller calls it. */
-function releaseExport<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (typeof value !== 'function') {
-    throw new Error(`the pinned release exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a function the pinned release exports; each caller names the signature it calls, and a changed one fails the test.
-  return value as T
 }
 
 type OldReplay = {
@@ -178,26 +172,24 @@ test("an older build keeps every row around a Stop's event, a Resume and a reope
         'src/main/native-chat/agent-session-wire/agent-session-journal-batch.ts'
       ].map((path) => importReleaseCheckoutModule(checkout, path))
     )
-    const openJournalDatabase = releaseExport<(path: string) => { db: { close: () => void } }>(
-      database,
-      'openJournalDatabase'
-    )
-    const upsertJournalSessionRow = releaseExport<
+    const openJournalDatabase = releaseModuleExport<
+      (path: string) => { db: { close: () => void } }
+    >(database, 'openJournalDatabase')
+    const upsertJournalSessionRow = releaseModuleExport<
       (...args: [unknown, string, string, number]) => void
     >(table, 'upsertJournalSessionRow')
-    const insertJournalRow = releaseExport<(...args: [unknown, string, JournalRow]) => void>(
+    const insertJournalRow = releaseModuleExport<(...args: [unknown, string, JournalRow]) => void>(
       table,
       'insertJournalRow'
     )
-    const replayJournal = releaseExport<(...args: [unknown, boolean, string]) => OldReplay | null>(
-      open,
-      'replayJournal'
-    )
-    const renderJournalState = releaseExport<(state: unknown) => unknown>(
+    const replayJournal = releaseModuleExport<
+      (...args: [unknown, boolean, string]) => OldReplay | null
+    >(open, 'replayJournal')
+    const renderJournalState = releaseModuleExport<(state: unknown) => unknown>(
       reducer,
       'renderJournalState'
     )
-    const projectJournalBatch = releaseExport<
+    const projectJournalBatch = releaseModuleExport<
       (input: { rows: readonly JournalRow[]; snapshot: unknown; afterSequence: number }) => {
         ok: boolean
         batch?: { items: unknown[]; removedItemIds: string[] }
@@ -282,7 +274,7 @@ test("an older build opens this build's journal writable and appends to it; the 
       checkout,
       `${JOURNAL}/journal-host-database-test-support.ts`
     )
-    const older = releaseExport<() => OlderOpener>(support, 'createTrackedJournalOpener')()
+    const older = releaseModuleExport<() => OlderOpener>(support, 'createTrackedJournalOpener')()
     try {
       const downgraded = await older.open({ identity: OLDER_IDENTITY, stateDirectory: directory })
       expect(downgraded.isReadOnly).toBe(false)
@@ -354,7 +346,7 @@ test("this build keeps a newer build's row kind and refuses the load; a build be
       checkout,
       `${JOURNAL}/journal-host-database-test-support.ts`
     )
-    const older = releaseExport<() => OlderOpener>(support, 'createTrackedJournalOpener')()
+    const older = releaseModuleExport<() => OlderOpener>(support, 'createTrackedJournalOpener')()
     try {
       await older.open({ identity: OLDER_IDENTITY, stateDirectory: directory })
     } finally {

@@ -73,7 +73,6 @@ function delay(ms) {
 
 // Strip CSI / OSC / two-char VT escapes so the marker regex can match executed
 // PTY output that ConPTY interleaves with cursor-move and SGR color codes.
-// eslint-disable-next-line no-control-regex -- ANSI escapes are control chars by definition
 const ANSI_ESCAPE = /\[[0-9;?]*[ -/]*[@-~]|\][^]*?|[@-Z\\-_]/g
 
 function stripAnsi(text) {

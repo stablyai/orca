@@ -269,6 +269,10 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
         return worker?.ptyId ?? null
       })
       .toBeTruthy()
+    const workerPtyId = worker?.ptyId
+    if (!workerPtyId) {
+      throw new Error('Codex worker PTY was not listed')
+    }
     const workerPaneKey = `${worker!.tabId}:${worker!.leafId}`
     await expect
       .poll(async () => {
@@ -327,9 +331,9 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
 
     await session.close(firstApp)
     firstApp = null
-    await removeDetachedDaemonSession(session.userDataDir, worker!.ptyId)
+    await removeDetachedDaemonSession(session.userDataDir, workerPtyId)
     await expect
-      .poll(() => detachedDaemonSessionExists(session.userDataDir, worker!.ptyId))
+      .poll(() => detachedDaemonSessionExists(session.userDataDir, workerPtyId))
       .toBe(false)
     await expect.poll(() => isProcessAlive(initialSpawn.pid)).toBe(false)
     rmSync(interruptionLedgerPath, { force: true })
@@ -343,7 +347,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
       .poll(async () => {
         const listed = await secondClient.call<RuntimeTerminalListResult>('terminal.list')
         return listed.result.terminals.filter(
-          (terminal) => terminal.ptyId === worker!.ptyId || terminal.title === 'Codex Ready'
+          (terminal) => terminal.ptyId === workerPtyId || terminal.title === 'Codex Ready'
         )
       })
       .toEqual([])

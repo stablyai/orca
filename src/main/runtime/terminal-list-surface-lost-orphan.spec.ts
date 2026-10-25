@@ -7,6 +7,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 export function registerTerminalListSurfaceLostOrphanTests(): void {
   // #18191: a terminal whose pane the graph dropped kept reporting `orphaned: false` with a
@@ -114,8 +115,7 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
   /** Both PTYs stay live on the host throughout; only the graph changes. */
   function makeRuntime(session?: WorkspaceSessionState): OrcaRuntimeService {
     const store = makeStore(session)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore returns the repo and session reads this suite drives; the rest of Store is unreached.
-    const runtime = new OrcaRuntimeService(store as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
     storesByRuntime.set(runtime, store)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub carries the four controller members this suite drives; both PTYs stay live throughout.
     runtime.setPtyController({

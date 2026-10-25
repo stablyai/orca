@@ -4,7 +4,6 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 
 const mocks = vi.hoisted(() => ({
   ownerEnvironmentIdForWorkspace: vi.fn(),
@@ -30,6 +29,7 @@ import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
+import { publicRuntimeEnvironment } from './paired-runtime-environment-test-fixture'
 
 const ENV_A = 'env-a'
 const WORKTREE = 'repo-a::worktree-a'
@@ -106,10 +106,9 @@ describe('useWebSessionTabsSync under an unverifiable host probe', () => {
     })
     resetWebSessionTabsSnapshotFreshnessForTests()
     clearHostLiveTerminalProbesForTests()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror scan and revision ledger read only id, createdAt and pairingRevision.
     const runtimeEnvironments = [
-      { id: ENV_A, createdAt: 100, pairingRevision: REVISION_A }
-    ] as PublicKnownRuntimeEnvironment[]
+      publicRuntimeEnvironment({ id: ENV_A, createdAt: 100, pairingRevision: REVISION_A })
+    ]
     replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
     useAppStore.setState(
       {

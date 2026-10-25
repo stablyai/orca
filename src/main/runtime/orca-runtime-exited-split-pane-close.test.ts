@@ -4,6 +4,7 @@ import { collectLeafIds } from '../../shared/terminal-pane-layout-tree'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -81,14 +82,15 @@ function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabs
 /** A runtime over one stored session, with the window's two split panes registered. */
 function splitRuntime(): { runtime: OrcaRuntimeService; session: () => WorkspaceSessionState } {
   let session = splitSession()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exit path reads only these store members.
-  const runtime = new OrcaRuntimeService({
-    getRepos: () => [LIVE_REPO],
-    getWorkspaceSession: () => session,
-    setWorkspaceSession: (next: WorkspaceSessionState) => {
-      session = next
-    }
-  } as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getRepos: () => [LIVE_REPO],
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: (next: WorkspaceSessionState) => {
+        session = next
+      }
+    })
+  )
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
     tabs: [

@@ -2,10 +2,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_DONE_QUIET_MS } from '../../shared/agent-transitions'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
+import { getDefaultNotificationSettings } from '../../shared/notification-settings-defaults'
 import { AgentHookServer } from '../agent-hooks/server'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
-import type { RuntimeStore } from './runtime-store-contract'
+import {
+  partialRuntimeStore,
+  storeFolderWorkspace,
+  storeProjectGroup,
+  storeRepo,
+  storeWorktreeMeta,
+  type PartialRuntimeStore
+} from './runtime-store-partial-fixture'
 
 // Switched on, as it ships next: that build's host reads hookless agents' titles itself.
 vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
@@ -14,18 +22,22 @@ const WT = 'repo-1::/tmp/worktree-a'
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 
 function createHost(windowId: number | null = HEADLESS_RUNTIME_WINDOW_ID) {
-  const store = {
+  const store: PartialRuntimeStore = {
     getRepos: () => [],
     getRepo: (id: string) =>
-      id === 'repo-1' ? { id, connectionId: null, displayName: 'orca' } : undefined,
-    getSettings: () => ({ notifications: { enabled: true, agentTaskComplete: true } }),
-    getWorktreeMeta: (id: string) => (id === WT ? { displayName: 'feature' } : undefined),
+      id === 'repo-1'
+        ? storeRepo({ id, path: '/repo-1', connectionId: null, displayName: 'orca' })
+        : undefined,
+    getSettings: () => ({ notifications: getDefaultNotificationSettings() }),
+    getWorktreeMeta: (id: string) =>
+      id === WT ? storeWorktreeMeta({ displayName: 'feature' }) : undefined,
     getAllWorktreeMeta: () => ({}),
-    getFolderWorkspaces: () => [{ id: 'f1', name: 'Notes', projectGroupId: 'g1' }],
-    getProjectGroups: () => [{ id: 'g1', name: 'Research' }]
+    getFolderWorkspaces: () => [
+      storeFolderWorkspace({ id: 'f1', name: 'Notes', projectGroupId: 'g1', folderPath: '/notes' })
+    ],
+    getProjectGroups: () => [storeProjectGroup({ id: 'g1', name: 'Research' })]
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the push path reads only these members.
-  const runtime = new OrcaRuntimeService(store as unknown as RuntimeStore)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   if (windowId !== null) {
     runtime.syncWindowGraph(windowId, { tabs: [], leaves: [] })
   }

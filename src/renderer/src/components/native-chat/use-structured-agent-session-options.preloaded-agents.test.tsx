@@ -41,7 +41,6 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 import { installHostModelCatalogSnapshotsSync } from '@/runtime/host-model-catalog-snapshots-sync'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
 // Grok, OpenCode and OMP chats were used, but none has a saved model pick: the user's report was
@@ -110,8 +109,7 @@ function renderNewChat(agent: string) {
       fence: null,
       turnId: null,
       unloadedTurnRevisions: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no pick is made, so mutate is never called.
-      mutate: vi.fn() as unknown as StructuredAgentSessionMutate,
+      mutate: vi.fn(),
       launch: { kind: 'new', heldOptions: {}, worktree: 'id:wt-1' }
     })
     frames.push(pill(options.optionSnapshot))

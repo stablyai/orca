@@ -290,7 +290,6 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   )
 
   // Close all clients on provider unmount. Empty deps: [closeEntry] would let Fast Refresh tear down all live sockets.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const store = storeRef.current
     return () => {

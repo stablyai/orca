@@ -88,7 +88,6 @@ describe.skipIf(!benchEnabled)('scheduler drain ceiling', () => {
   it('measures foreground (visible pane flood) and background ceilings', async () => {
     const foreground = await measure({ foreground: true })
     const background = await measure({ foreground: false })
-    // eslint-disable-next-line no-console -- bench harness output
     console.log(
       `\n[scheduler-ceiling] foreground flood: ${foreground.toFixed(1)} MB/s, background: ${background.toFixed(1)} MB/s (simulated time, instant parse)`
     )

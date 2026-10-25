@@ -22,6 +22,7 @@ import {
 } from './state-equality-files'
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
+import { isAgentSessionTabOfAnotherHost } from './mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 
 export function prepareWebSessionTabsSnapshotBrowser(
@@ -46,6 +47,14 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const publishedAgentSessionIds = new Set(
     snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
   )
+  // A chat this frame publishes or replaces is its to rebuild, whichever host last showed it.
+  const claimedAgentSessionIds = new Set(publishedAgentSessionIds)
+  for (const tab of snapshot.tabs) {
+    if (tab.type === 'agent-session' && tab.replacesSessionId) {
+      claimedAgentSessionIds.add(tab.replacesSessionId)
+    }
+  }
+  const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const readyBrowserTabs = reconcilesNonAgentTabs ? snapshot.tabs.filter(isReadyBrowserTab) : []
@@ -187,6 +196,12 @@ export function prepareWebSessionTabsSnapshotBrowser(
   advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId)
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
+      if (
+        !claimedAgentSessionIds.has(tab.entityId) &&
+        isAgentSessionTabOfAnotherHost(state, tab, snapshotExecutionHostId)
+      ) {
+        return true
+      }
       // A matching host row is authoritative; retaining the provisional tab beside its mirror
       // would briefly render two panes before lifecycle publication is recorded.
       // A host that cannot list its chats is no evidence this one closed.

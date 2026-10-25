@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../types'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
   TEST_SSH_AUTHORITY,
   makeDetectedResult,
   qualifyDetectedResult
 } from './worktrees-detected-listing-fixtures'
-import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'
 import { worktreeCatalogVersionKey } from './worktrees/listing/worktree-catalog-version-state'
 import { completeSameIdHostScopedRemoval } from './worktrees/teardown/host-qualified-worktree-removal'
 import { applyCreatedWorktree } from './worktrees/create/created-worktree-state-merge'
@@ -41,19 +41,20 @@ function seed(store: ReturnType<typeof createTestStore>) {
     repoId: 'repo1',
     path: '/path/surviving'
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture tabs carry only the fields the purge and teardown paths read.
   store.setState({
     repos: [
       { id: 'repo1', path: '/path/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
     ],
     worktreesByRepo: { repo1: [created, surviving] },
     detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [created, surviving]) },
-    tabsByWorktree: { [created.id]: [{ id: 'tab-created', worktreeId: created.id }] },
+    tabsByWorktree: {
+      [created.id]: [makeTerminalTab({ id: 'tab-created', worktreeId: created.id })]
+    },
     // The create reply that produced `created` has been applied at sequence 7.
     worktreeCatalogVersionByRepoHost: {
       [worktreeCatalogVersionKey('repo1', 'local')]: APPLIED_BY_CREATE
     }
-  } as unknown as Partial<AppState>)
+  })
   return { created, surviving }
 }
 
@@ -168,9 +169,8 @@ describe('fetchWorktrees with a listing versioned before an applied create', () 
       repoId: 'repo1',
       hostId: runtimeHost
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture settings carry only the field runtime routing reads.
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
       repos: [
         {
           id: 'repo1',
@@ -185,7 +185,7 @@ describe('fetchWorktrees with a listing versioned before an applied create', () 
       worktreeCatalogVersionByRepoHost: {
         [worktreeCatalogVersionKey('repo1', runtimeHost)]: APPLIED_BY_CREATE
       }
-    } as unknown as Partial<AppState>)
+    })
     runtimeEnvironmentCall.mockImplementation(async ({ method }: { method: string }) => ({
       id: 'rpc',
       ok: true,
@@ -365,14 +365,13 @@ describe('the startup hydration purge behind a listing that is no longer current
     const created = makeWorktree({ id: 'repo1::/path/created', repoId: 'repo1' })
     const other = makeWorktree({ id: 'repo2::/path/other', repoId: 'repo2' })
     const zombieId = 'repo1::/path/deleted-last-session'
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture tabs carry only the fields the purge reads.
     store.setState({
       repos: [
         { id: 'repo1', path: '/path/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 },
         { id: 'repo2', path: '/path/repo2', displayName: 'Repo 2', badgeColor: '#000', addedAt: 0 }
       ],
-      tabsByWorktree: { [zombieId]: [{ id: 'tab-zombie', worktreeId: zombieId }] }
-    } as unknown as Partial<AppState>)
+      tabsByWorktree: { [zombieId]: [makeTerminalTab({ id: 'tab-zombie', worktreeId: zombieId })] }
+    })
     let releaseRepo2: () => void = () => {}
     const repo2Held = new Promise<void>((resolve) => {
       releaseRepo2 = resolve
@@ -401,13 +400,12 @@ describe('the startup hydration purge behind a listing that is no longer current
       worktree: created,
       catalogVersion: APPLIED_BY_CREATE
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture tabs carry only the fields the purge reads.
     store.setState({
       tabsByWorktree: {
         ...store.getState().tabsByWorktree,
-        [created.id]: [{ id: 'tab-created', worktreeId: created.id }]
+        [created.id]: [makeTerminalTab({ id: 'tab-created', worktreeId: created.id })]
       }
-    } as unknown as Partial<AppState>)
+    })
     releaseRepo2()
     await startup
 
@@ -440,11 +438,10 @@ describe('the startup hydration purge behind a listing that is no longer current
       badgeColor: '#000',
       addedAt: 0
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture tabs carry only the fields the purge reads.
     store.setState({
       repos: [repo1],
-      tabsByWorktree: { [zombieId]: [{ id: 'tab-zombie', worktreeId: zombieId }] }
-    } as unknown as Partial<AppState>)
+      tabsByWorktree: { [zombieId]: [makeTerminalTab({ id: 'tab-zombie', worktreeId: zombieId })] }
+    })
     mockApi.worktrees.listDetected.mockImplementation(async (args) => {
       // A second owner on the same host makes the listing's owner ambiguous by the time it lands.
       store.setState({ repos: [repo1, { ...repo1 }] })

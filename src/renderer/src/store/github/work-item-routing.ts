@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
@@ -44,7 +45,7 @@ export type GitHubWorkItemsListArgs = {
 export function settingsForGitHubRepoOwner(
   settings: AppState['settings'],
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (!repo) {
     return settings
   }
@@ -59,18 +60,15 @@ export function settingsForGitHubRepoOwner(
 function withActiveRuntimeEnvironmentId(
   settings: AppState['settings'],
   activeRuntimeEnvironmentId: string | null
-): AppState['settings'] {
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId }
-    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing readers only consume activeRuntimeEnvironmentId before settings hydrate.
-      ({ activeRuntimeEnvironmentId } as AppState['settings'])
+): RuntimeFocusSettings {
+  return settings ? { ...settings, activeRuntimeEnvironmentId } : { activeRuntimeEnvironmentId }
 }
 
 function settingsForGitHubTaskSource(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id'> | undefined,
   sourceContext: TaskSourceContext
-): AppState['settings'] {
+): RuntimeFocusSettings {
   const sourceHost = parseExecutionHostId(sourceContext.hostId)
   return withActiveRuntimeEnvironmentId(
     state.settings,
@@ -133,7 +131,7 @@ export function getGitHubRepoSourceSettings(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (sourceContext?.provider === 'github') {
     return settingsForGitHubTaskSource(state, repo, sourceContext)
   }

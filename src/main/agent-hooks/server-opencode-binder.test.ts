@@ -176,9 +176,24 @@ describe('opencode binder loop', () => {
     expect(server.readRegistry('ses_live')).toBeUndefined()
   })
 
-  it('stops the loop without hanging the process', () => {
-    store.add()
-    expect(() => server.stop()).not.toThrow()
+  it('stops polling after loop shutdown', async () => {
+    vi.useFakeTimers()
+    try {
+      store.add()
+      server.startBinderLoop()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(server.readRegistry('ses_live')).toBe(PANE_A)
+      expect(vi.getTimerCount()).toBe(1)
+
+      server.stop()
+      expect(vi.getTimerCount()).toBe(0)
+      const callsAtStop = store.calls.length
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(store.calls).toHaveLength(callsAtStop)
+    } finally {
+      server.stop()
+      vi.useRealTimers()
+    }
   })
 
   it('runs a round immediately on loop start', async () => {

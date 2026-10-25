@@ -1,0 +1,83 @@
+id: test-no-wall-clock
+valid:
+  - "const createdAt = Date.parse('2026-01-01T00:00:00Z')"
+  - "const fixed = new Date('2026-01-01T00:00:00Z')"
+  - 'const dir = join(tmpdir(), `run-${Date.now()}`)'
+  - |
+    vi.useFakeTimers()
+    const now = Date.now()
+invalid:
+  - const started = Date.now()
+  - 'const record = { closedAt: new Date() }'
+---
+id: test-no-real-time-wait
+valid:
+  - await new Promise((resolve) => setTimeout(resolve, 0))
+  - await new Promise((resolve) => setImmediate(resolve))
+  - "await new Promise((resolve, reject) => { setTimeout(() => reject(new Error('timeout')), 5_000); emitter.once('ready', resolve) })"
+  - await vi.advanceTimersByTimeAsync(1_000)
+  - await expect.poll(() => read()).toBe(true)
+invalid:
+  - await new Promise((resolve) => setTimeout(resolve, 50))
+  - await new Promise<void>((r) => setTimeout(r, 50))
+  - await new Promise((resolve) => setTimeout(() => resolve(), DELAY_MS))
+  - 'await new Promise((resolve) => { setTimeout(resolve, 20) })'
+  - await page.waitForTimeout(500)
+  - await sleep(100)
+  - await setTimeout(100)
+  - 'while (!ready()) { await sleep(0); await sleep(25) }'
+---
+id: test-no-polling-loop
+valid:
+  - 'for (const item of items) { await sleep(10) }'
+  - 'while (queue.length > 0) { await drain(queue.shift()) }'
+  - 'await expect.poll(() => read(), { timeout: 5_000 }).toBe(true)'
+invalid:
+  - 'while (!ready()) { await new Promise((resolve) => setTimeout(resolve, 20)) }'
+  - 'do { value = read(); await sleep(50) } while (value === undefined)'
+  - 'while (!ready()) { await sleep(0); await sleep(25) }'
+  - 'for (let attempt = 0; attempt < 20; attempt++) { if (done()) break; await page.waitForTimeout(100) }'
+---
+id: test-skip-needs-quarantine
+valid:
+  - |
+    // quarantine: #1234 times out on Windows runners
+    it.skip('restores the session', async () => {})
+  - |
+    // quarantine: #1234 flakes under load
+    // Re-enable once the PTY fixture is deterministic.
+    describe.skip('pty fixture', () => {})
+  - test.skip(process.platform === 'win32', 'POSIX shell only')
+  - it.skipIf(isWindows)('uses POSIX paths', () => {})
+invalid:
+  - it.skip('restores the session', async () => {})
+  - test.fixme('drag reorders tabs', async () => {})
+  - test.describe.skip('layout', () => {})
+  - it.only('focuses', () => {})
+  - |
+    // TODO: re-enable
+    it.skip('restores the session', async () => {})
+  - |
+    // quarantine: flaky
+    it.skip('restores the session', async () => {})
+---
+id: test-timeout-needs-reason
+valid:
+  - "it('reads', async () => {})"
+  - |
+    // Spawns a real shell, which is slow on Windows runners.
+    it('spawns', async () => {}, 20_000)
+  - |
+    it('spawns', async () => {},
+      // Spawns a real shell.
+      20_000)
+  - |
+    // Builds the packaged app first.
+    test.setTimeout(300_000)
+  - 'await expect(locator).toBeVisible({ timeout: 10_000 })'
+invalid:
+  - "it('spawns', async () => {}, 20_000)"
+  - "it('spawns', { timeout: 20_000 }, async () => {})"
+  - "describe('suite', { timeout: 60_000 }, () => {})"
+  - test.setTimeout(300_000)
+  - test.slow()
