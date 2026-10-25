@@ -270,12 +270,14 @@ export class RelayAuthCoordinator {
     } catch (error) {
       if (this.isEpochCurrent(epoch)) {
         // Why: silent broker-open failures made a dead relay look like standby
-        // during incident diagnosis; the message carries operation + status.
+        // during incident diagnosis; the message carries operation + status,
+        // and the reason names the transport cause undici hides behind "fetch failed".
+        this.unavailableReason = relayUnavailableReasonFor(error)
         console.warn(
           '[relay] broker reconcile failed:',
-          error instanceof Error ? error.message : String(error)
+          error instanceof Error ? error.message : String(error),
+          `(${this.unavailableReason})`
         )
-        this.unavailableReason = relayUnavailableReasonFor(error)
         this.publish('offline')
         if (shouldRetryRelayConnectionError(error)) {
           const retryAfterMs = relayRetryFloorMs(error, this.retry.attempts)
