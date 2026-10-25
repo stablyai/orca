@@ -7,10 +7,12 @@ import { listEnvironments } from './runtime-environment-store'
 import {
   addWslHostEnvironment,
   findWslHostDeployment,
+  reconcileWslHostBridgePorts,
   refreshWslHostPairing,
   removeWslHostEnvironment
 } from './runtime-environment-wsl-host-store'
 import { getPreferredPairingOffer } from './runtime-environments'
+import { writeWslHostDeployment } from './wsl-host-deployment-store'
 
 const publicKeyB64 = Buffer.alloc(32, 7).toString('base64')
 
@@ -101,6 +103,76 @@ describe('WSL host environment store', () => {
       localPort: 42001,
       remotePort: 6770
     })
+  })
+
+  it('saves a moved bridge without reading its new record against the old pairing', () => {
+    // An id of its own: the conflict warning is logged once per message per process.
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:moved-bridge',
+      name: 'Moved (WSL)',
+      pairingCode: code(42000),
+      record,
+      now: 100
+    })
+    const warn = vi.mocked(console.warn)
+    warn.mockClear()
+
+    const refreshed = refreshWslHostPairing(userDataPath, 'wsl:moved-bridge', {
+      pairingCode: code(42001),
+      localPort: 42001,
+      remotePort: 6768
+    })
+
+    expect(refreshed.pairingChanged).toBe(true)
+    expect(refreshed.environment.orcadDeployment).toMatchObject({ kind: 'wsl', localPort: 42001 })
+    expect(warn.mock.calls.flat().join('\n')).not.toMatch(/conflicts with the server's pairing/)
+  })
+
+  it('heals a crash between saving the moved bridge and its pairing, keeping the saved pairing', () => {
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:crashed',
+      name: 'Crashed (WSL)',
+      pairingCode: code(42000),
+      record,
+      now: 100
+    })
+    const saved = findWslHostDeployment(userDataPath, 'wsl:crashed')!
+    // The crash: refreshWslHostPairing's first write landed, its pairing write never did.
+    writeWslHostDeployment(userDataPath, 'wsl:crashed', {
+      ...saved,
+      localPort: 42001,
+      remotePort: 6770
+    })
+    const [crashed] = listEnvironments(userDataPath)
+    expect(crashed.orcadDeployment).toBeUndefined()
+
+    expect(reconcileWslHostBridgePorts(userDataPath)).toEqual(['wsl:crashed'])
+    const [healed] = listEnvironments(userDataPath)
+    expect(healed.orcadDeployment).toMatchObject({
+      kind: 'wsl',
+      localPort: 42000,
+      remotePort: 6770
+    })
+    expect(getPreferredPairingOffer(healed)).toEqual(getPreferredPairingOffer(crashed))
+    expect(reconcileWslHostBridgePorts(userDataPath)).toEqual([])
+
+    // The next connect saves both.
+    refreshWslHostPairing(userDataPath, 'wsl:crashed', {
+      pairingCode: code(42002, 'token-2'),
+      localPort: 42002,
+      remotePort: 6770
+    })
+    expect(listEnvironments(userDataPath)[0].orcadDeployment).toMatchObject({ localPort: 42002 })
+  })
+
+  it('leaves a record alone when its server has no pairing to follow', () => {
+    writeWslHostDeployment(userDataPath, 'wsl:orphan', {
+      ...record,
+      environmentId: 'wsl:orphan',
+      createdAt: 1
+    })
+    expect(reconcileWslHostBridgePorts(userDataPath)).toEqual([])
+    expect(findWslHostDeployment(userDataPath, 'wsl:orphan')?.localPort).toBe(42000)
   })
 
   it('removes the environment and its record', () => {
