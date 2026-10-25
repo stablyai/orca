@@ -12,7 +12,10 @@ import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment
 } from './structured-agent-launch-support'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from './structured-agent-runtime-metadata'
+import {
+  STRUCTURED_AGENT_RUNTIME_METADATA,
+  structuredAgentRuntimeMetadata
+} from './structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from './structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from './structured-agent-shell-environment'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -87,6 +90,18 @@ async function observeChatProgram(
     return 'unknown'
   }
   return chatProgram.installable?.() ? 'installable' : 'missing'
+}
+
+/** True when a chat start would fail until Orca installs the agent's chat program on this host. */
+export async function structuredAgentChatProgramNeedsInstall(
+  agent: string,
+  runtime: HealthRuntime
+): Promise<boolean> {
+  const metadata = structuredAgentRuntimeMetadata(agent)
+  return Boolean(
+    metadata?.chatProgram?.installable &&
+    (await observeChatProgram(metadata, runtime)) === 'installable'
+  )
 }
 
 /** Refresh shell facts on install, settings or agent Refresh; retain health without readers for immediate later subscription. */

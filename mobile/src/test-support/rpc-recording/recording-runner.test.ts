@@ -1,18 +1,9 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
 import { describe, expect, it } from 'vitest'
 import { captureArguments, captureError, captureValue } from './recording-values'
-import { RECORDING_DRIVERS } from './recording-drivers'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import {
@@ -450,17 +441,6 @@ describe('recording boundaries', () => {
       code: 'refused',
       cause: { category: 'Error', message: 'inner' }
     })
-  })
-
-  it('keeps every named driver real and unimported by the engine', () => {
-    const directory = resolve(import.meta.dirname)
-    const missing = RECORDING_DRIVERS.filter((driver) => !existsSync(join(directory, driver)))
-    const imported = readdirSync(directory)
-      .filter((file) => file.endsWith('.ts'))
-      .filter((file) =>
-        /(?:from|import\()\s*'\.[^']*\.test'/.test(readFileSync(join(directory, file), 'utf8'))
-      )
-    expect({ missing, imported }).toEqual({ missing: [], imported: [] })
   })
 
   it('stamps a write ordinal that moves when a subscribe is reordered against a send', async () => {

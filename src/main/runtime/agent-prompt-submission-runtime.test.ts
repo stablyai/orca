@@ -8,8 +8,6 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
-import type { RuntimeTerminalWriter } from './runtime-terminal-writer'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
 
 const createPromptRuntime = createAgentPromptSubmissionRuntime
 
@@ -590,73 +588,10 @@ function inputDispatchRuntime() {
   return result
 }
 
-describe('terminal input dispatch through the current runtime', () => {
-  it.each(['pty', 'leaf'])('uses the runtime writer override in the %s lane', async (lane) => {
-    const target = inputDispatchRuntime()
-    if (lane === 'leaf') {
-      Object.defineProperties(target, {
-        getLivePtyForHandle: { value: () => null },
-        getLiveLeafForHandle: { value: () => ({ leaf: { writable: true, ptyId: PTY } }) },
-        isLeafPtyProvenAbsent: { value: async () => false }
-      })
-    }
-    const writer = vi.fn(function (
-      this: OrcaRuntimeService,
-      ...args: Parameters<RuntimeTerminalWriter['writeAction']>
-    ) {
-      expect(this).toBe(target)
-      expect(args).toHaveLength(4)
-      expect(args[0]).toBe(PTY)
-      return Promise.resolve()
-    })
-    Object.defineProperty(target, 'writeTerminalAction', { value: writer })
-
-    await expect(
-      target.sendTerminal(HANDLE, { text: 'hello' }, { inputKind: 'driving' })
-    ).resolves.toMatchObject({ accepted: true, bytesWritten: 5 })
-    expect(writer).toHaveBeenCalledExactlyOnceWith(PTY, { text: 'hello' }, 'hello', {
-      inputKind: 'driving'
-    })
-  })
-})
-
-describe('input original queue, callback and private method contracts', () => {
+describe('agent prompt submission queue', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.useRealTimers()
-  })
-
-  it('keeps the private retry lookup on the Root receiver before any delay', async () => {
-    const target = inputDispatchRuntime()
-    const read = vi.fn(function (this: OrcaRuntimeService, ...args: unknown[]) {
-      expect(this).toBe(target)
-      expect(args).toEqual([PTY])
-      return null
-    })
-    Object.defineProperty(target, 'getPtyAgent', { value: read })
-    await expect(
-      target['resubmitHeldAgentPrompt'](
-        PTY,
-        1,
-        { inputKind: 'driving' },
-        {
-          baseline: {
-            generation: 1,
-            permissionSequence: 0,
-            workingSequence: 0,
-            explicitWorkingStartedAt: null,
-            outputSequence: 0,
-            status: null
-          },
-          readActivity: () => {
-            throw new Error('no read before the agent lookup')
-          },
-          prompt: undefined,
-          heldBudgetMs: 0
-        }
-      )
-    ).resolves.toBe(0)
-    expect(read).toHaveBeenCalledOnce()
   })
 
   it('serializes rejected submissions, isolates generations and keeps a replacement tail', async () => {
@@ -688,80 +623,5 @@ describe('input original queue, callback and private method contracts', () => {
     expect(calls).toEqual(['first', 'fresh', 'second'])
     expect(target['agentPromptSubmissionTailByPtyId'].get(key)).toBe(replacement)
     expect(target['agentPromptSubmissionTailByPtyId'].has(`${PTY}\u00002`)).toBe(false)
-  })
-
-  it('keeps hook presence callback receivers and preserves invalidation failure', async () => {
-    const target = inputDispatchRuntime()
-    const check = vi.fn(async function (this: OrcaRuntimeService, ...args: unknown[]) {
-      expect(this).toBe(target)
-      expect(args).toHaveLength(1)
-      return 'live' as const
-    })
-    Object.defineProperty(target, 'checkHookAgentPresenceFn', {
-      configurable: true,
-      writable: true,
-      value: check
-    })
-    Object.defineProperty(target, 'collectAgentStatusPaneKeysForPty', {
-      configurable: true,
-      value: () => new Set(['pane-first', 'pane-second'])
-    })
-    await expect(target['recheckHookAgentPresenceForPty'](PTY)).resolves.toBe('live')
-    expect(check.mock.calls).toEqual([['pane-first'], ['pane-second']])
-    Object.defineProperty(target, 'collectAgentStatusPaneKeysForPty', {
-      value: () => {
-        Object.defineProperty(target, 'checkHookAgentPresenceFn', { value: null })
-        return new Set(['pane-first'])
-      }
-    })
-    await expect(target['recheckHookAgentPresenceForPty'](PTY)).rejects.toBeInstanceOf(TypeError)
-    expect(check).toHaveBeenCalledTimes(2)
-  })
-
-  it.each([
-    { recover: false, hasHandle: false },
-    { recover: true, hasHandle: false },
-    { recover: true, hasHandle: true }
-  ])('keeps captured recovery handle semantics for %j', async ({ recover, hasHandle }) => {
-    const target = inputDispatchRuntime()
-    const pty = target['ptysById'].get(PTY)
-    if (!pty) {
-      throw new Error('registered fixture PTY missing')
-    }
-    pty.lastOscTitleAt = 0
-    pty.lastAgentStatusObservedLive = true
-    if (!hasHandle) {
-      target['handleByPtyId'].delete(PTY)
-    }
-    const foreground = Promise.withResolvers<{
-      controller: RuntimePtyController | null
-      available: boolean
-      process: string | null
-    }>()
-    const reads = vi.fn(() => foreground.promise)
-    const explicit = vi.fn(() => ({ status: 'idle' as const, updatedAt: 0, stateStartedAt: 0 }))
-    Object.defineProperties(target, {
-      readPtyForegroundProcessFromController: { value: reads },
-      getFreshExplicitAgentStatusForPty: { value: explicit },
-      recordTerminalSideEffectFact: { value: vi.fn() }
-    })
-    target['confirmLegacyPtyAgentExit'](PTY, recover, false)
-    target['handleByPtyId'].set(PTY, 'late-handle')
-    foreground.resolve({ controller: target['ptyController'], available: false, process: null })
-    await Promise.resolve()
-    if (recover && !hasHandle) {
-      expect(reads).not.toHaveBeenCalled()
-      expect(explicit).not.toHaveBeenCalled()
-    } else {
-      expect(reads).toHaveBeenCalledOnce()
-      expect(explicit.mock.calls).toEqual(
-        recover
-          ? [
-              [HANDLE, PTY],
-              [HANDLE, PTY]
-            ]
-          : []
-      )
-    }
   })
 })

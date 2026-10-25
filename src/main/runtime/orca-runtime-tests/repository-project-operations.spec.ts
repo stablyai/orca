@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { realpath } from 'node:fs/promises'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   EventEmitter,
@@ -120,7 +121,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-'))
+    // The runtime stores the resolved path; macOS tmpdir sits behind the /private symlink.
+    const tempRoot = await realpath(await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-')))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -338,7 +340,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps existing-folder imports split by runtime host on the same normalized path', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-host-'))
+    // The runtime stores the resolved path; macOS tmpdir sits behind the /private symlink.
+    const tempRoot = await realpath(await mkdtemp(join(tmpdir(), 'orca-runtime-project-host-')))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {

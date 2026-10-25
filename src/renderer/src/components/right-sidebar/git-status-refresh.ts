@@ -9,6 +9,7 @@ import {
 } from './push-target-upstream-refresh-cache'
 import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import {
   beginAutomaticUpstreamRefresh,
@@ -24,7 +25,8 @@ export type GitStatusRefreshDeps = {
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string | null }
+    identity: { head?: string; branch?: string | null },
+    ownerHostId: ExecutionHostId | null
   ) => void
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
   fetchUpstreamStatus: (
@@ -99,6 +101,7 @@ export function clearGitStatusRefreshOrderingForTests(): void {
 
 export async function refreshGitStatusForWorktree({
   target,
+  ownerHostId,
   worktreeId,
   worktreePath,
   connectionId,
@@ -108,6 +111,8 @@ export async function refreshGitStatusForWorktree({
 }: {
   /** The worktree owner's transport. */
   target: RuntimeClientTarget
+  /** The copy `target` answers for, read when the request starts. */
+  ownerHostId: ExecutionHostId | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
@@ -146,11 +151,15 @@ export async function refreshGitStatusForWorktree({
 
     deps.setGitStatus(worktreeId, status)
     // Read shell-driven branch changes from git status --branch without another worktree-list poll.
-    deps.updateWorktreeGitIdentity(worktreeId, {
-      head: status.head,
-      // Detached HEAD needs explicit null to clear any stale branch name.
-      branch: status.branch ?? (status.head ? null : undefined)
-    })
+    deps.updateWorktreeGitIdentity(
+      worktreeId,
+      {
+        head: status.head,
+        // Detached HEAD needs explicit null to clear any stale branch name.
+        branch: status.branch ?? (status.head ? null : undefined)
+      },
+      ownerHostId
+    )
     request?.onStatusAccepted?.(status)
     if (pushTarget) {
       // Use Orca's explicit publish target for PR-created worktrees rather than Git's configured upstream.
@@ -179,7 +188,14 @@ export async function refreshGitStatusForWorktree({
       if (upstreamStatus) {
         // Briefly reuse unchanged automatic comparisons because explicit targets require several Git subprocesses.
         storeCachedAutomaticPushTargetUpstreamStatus(
-          { target, worktreeId, worktreePath, connectionId, pushTarget, status },
+          {
+            target,
+            worktreeId,
+            worktreePath,
+            connectionId,
+            pushTarget,
+            status
+          },
           upstreamStatus
         )
       }
@@ -225,6 +241,7 @@ export async function refreshGitStatusForWorktree({
 
 export async function refreshGitStatusForWorktreeStrict({
   target,
+  ownerHostId,
   worktreeId,
   worktreePath,
   connectionId,
@@ -233,6 +250,8 @@ export async function refreshGitStatusForWorktreeStrict({
 }: {
   /** The worktree owner's transport. */
   target: RuntimeClientTarget
+  /** The copy `target` answers for, read when the request starts. */
+  ownerHostId: ExecutionHostId | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
@@ -264,11 +283,15 @@ export async function refreshGitStatusForWorktreeStrict({
 
   deps.setGitStatus(worktreeId, status)
   // Read shell-driven branch changes from git status --branch without another worktree-list poll.
-  deps.updateWorktreeGitIdentity(worktreeId, {
-    head: status.head,
-    // Detached HEAD needs explicit null to clear any stale branch name.
-    branch: status.branch ?? (status.head ? null : undefined)
-  })
+  deps.updateWorktreeGitIdentity(
+    worktreeId,
+    {
+      head: status.head,
+      // Detached HEAD needs explicit null to clear any stale branch name.
+      branch: status.branch ?? (status.head ? null : undefined)
+    },
+    ownerHostId
+  )
   if (pushTarget) {
     // Use Orca's explicit publish target for PR-created worktrees rather than Git's configured upstream.
     const upstreamStatus = await getRuntimeGitUpstreamStatus(

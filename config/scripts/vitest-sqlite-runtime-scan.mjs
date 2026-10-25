@@ -19,6 +19,7 @@ const SQLITE_HARNESSES = new Set([
   'agent-session-record-store-test-harness',
   'structured-agent-session-rest-test-rig',
   'journal-host-database-test-support',
+  'terminal-topology-profile-fixture',
   'acknowledged-terminal-tab-retirement-fixture'
 ])
 export const SQLITE_MODULES = [

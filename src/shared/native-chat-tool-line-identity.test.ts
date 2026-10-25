@@ -5,12 +5,22 @@ import { nativeChatToolLineIdentity } from './native-chat-tool-line-identity'
 it('keys an anonymous mobile row by a bounded summary, so a refetched copy keeps it', () => {
   const input = {
     command: 'ls',
-    toJSON: () => {
-      throw new Error('Input must stay unread.')
+    a: 1,
+    b: 2,
+    c: 3,
+    d: 4,
+    e: 5,
+    f: 6,
+    g: 7,
+    get unread() {
+      throw new Error('Input beyond the preview budget must stay unread.')
     }
   }
   const block: NativeChatToolCallBlock = { type: 'tool-call', name: 'Bash', input }
   const original = nativeChatToolLineIdentity(block, new Map(), true)
+  expect(original).toBe(
+    'tool-call:Bash:{"command":"ls","a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"g":7,"…":"…"}:0'
+  )
   expect(nativeChatToolLineIdentity({ ...block }, new Map(), true)).toBe(original)
   const seen = new Map<string, number>()
   expect(nativeChatToolLineIdentity(block, seen, true)).not.toBe(

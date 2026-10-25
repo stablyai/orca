@@ -4236,10 +4236,6 @@
               "waiting": {
                 "label": "Se actualiza cuando Claude se ejecuta",
                 "message": "El uso de Claude se actualizará la próxima vez que ejecutes Claude."
-              },
-              "expired": {
-                "label": "Inicio de sesión caducado",
-                "message": "El uso de Claude ha caducado. Inicia Claude en esta cuenta para actualizarlo."
               }
             },
             "remoteOwnerNotConfigured": "No configurado en {{server}}",

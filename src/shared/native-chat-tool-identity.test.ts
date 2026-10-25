@@ -8,14 +8,12 @@ import {
 } from './native-chat-tool-identity'
 
 describe('MCP tool identity', () => {
-  it.each(['mcp__linear__list_issues'])(
-    'splits %s for display without changing the identifier',
-    (name) => {
-      const raw = name
-      expect(mcpToolIdentity(name)).toEqual({ server: 'Linear', tool: 'list issues' })
-      expect(name).toBe(raw)
-    }
-  )
+  it('splits a qualified MCP name into display labels', () => {
+    expect(mcpToolIdentity('mcp__linear__list_issues')).toEqual({
+      server: 'Linear',
+      tool: 'list issues'
+    })
+  })
   it.each([
     'linear/list_issues',
     'linear.list_issues',

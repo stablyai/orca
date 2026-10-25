@@ -72,7 +72,8 @@ describe('agentResumeHostAuthorityCapability', () => {
       omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
       kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
       dsh: AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
-      kiro: 'agent-session.kiro-resume.v1'
+      kiro: 'agent-session.kiro-resume.v1',
+      hermes: 'agent-session.hermes-resume.v1'
     })
   })
 })

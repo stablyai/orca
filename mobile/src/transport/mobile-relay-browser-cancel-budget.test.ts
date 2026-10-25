@@ -64,28 +64,33 @@ describe('relay browser cancellation resource budget', () => {
       waitForConnected: async () => {},
       sendFrame: (request) => {
         methods.push(request.method)
-        if (request.method === 'browser.screencast' && (request.params as { page?: string }).page) {
-          hostRun = host.start(request.params as Parameters<typeof host.start>[0], {
-            connectionId: 'relay-connection',
-            sendBinary: (bytes) => {
-              frameSends++
-              frameBytes += bytes.byteLength
-              return true
-            },
-            emit: (result: BrowserScreencastResult) => {
-              if (result.type === 'ready') {
-                ready.resolve({
-                  id: request.id,
-                  ok: true,
-                  streaming: true,
-                  result,
-                  _meta: { runtimeId: 'host' }
-                })
+        if (request.method === 'browser.screencast') {
+          expect(request.params).toEqual({ page: 'page' })
+          hostRun = host.start(
+            { page: 'page' },
+            {
+              connectionId: 'relay-connection',
+              sendBinary: (bytes) => {
+                frameSends++
+                frameBytes += bytes.byteLength
+                return true
+              },
+              emit: (result: BrowserScreencastResult) => {
+                if (result.type === 'ready') {
+                  ready.resolve({
+                    id: request.id,
+                    ok: true,
+                    streaming: true,
+                    result,
+                    _meta: { runtimeId: 'host' }
+                  })
+                }
               }
             }
-          })
+          )
         } else if (request.method === 'browser.screencast.unsubscribe') {
-          cleanup((request.params as { subscriptionId: string }).subscriptionId)
+          expect(request.params).toEqual({ subscriptionId: 'server-stream' })
+          cleanup('server-stream')
         }
         return true
       }
@@ -93,6 +98,8 @@ describe('relay browser cancellation resource budget', () => {
     const cancel = streams.subscribe('browser.screencast', { page: 'page' }, () => {})
     try {
       const response = await ready.promise
+      expect(sendBinary(new Uint8Array(65_536))).toBe(true)
+      expect({ frameSends, frameBytes }).toEqual({ frameSends: 1, frameBytes: 65_536 })
       if (early) {
         cancel()
       }
@@ -108,8 +115,8 @@ describe('relay browser cancellation resource budget', () => {
       expect({ stopped, subscriptions: subscriptions.size, frameSends, frameBytes }).toEqual({
         stopped: true,
         subscriptions: 0,
-        frameSends: 0,
-        frameBytes: 0
+        frameSends: 1,
+        frameBytes: 65_536
       })
       expect(methods).toEqual(['browser.screencast', 'browser.screencast.unsubscribe'])
     } finally {

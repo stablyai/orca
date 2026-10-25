@@ -14,7 +14,10 @@ import {
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
-import { AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY } from '../../../shared/agent-session-resume-runtime-capabilities'
+import {
+  AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session-resume-runtime-capabilities'
 
 // New resumable enum members can make older hosts return invalid_argument instead of legacy fallback, killing panes. Probe per-agent capability; exhaustive Record requires an explicit gate or deliberate undefined for additions.
 const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
@@ -46,7 +49,8 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   dsh: AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
   // Why: jcode resumed by id (--resume <id>) through the same host-authority session enum the generic probe covers.
   jcode: undefined,
-  kiro: AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY
+  kiro: AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY,
+  hermes: AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>
 
 export function agentResumeHostAuthorityCapability(

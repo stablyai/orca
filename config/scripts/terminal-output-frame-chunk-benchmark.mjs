@@ -58,6 +58,11 @@ const CLIPBOARD_SOURCE = readFileSync(
   'utf8'
 )
 
+const UTF8_SOURCE = readFileSync(
+  new URL('../../src/shared/utf8-byte-limits.ts', import.meta.url),
+  'utf8'
+)
+
 // Match executable source markers so a stale benchmark fails instead of misleading.
 for (const [source, label, marker] of [
   [
@@ -74,7 +79,8 @@ for (const [source, label, marker] of [
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'const text = data.slice(chunkStart, end)'],
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'data.charCodeAt(index + 1)'],
   [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'export function measureClipboardTextByteLength('],
-  [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'text.codePointAt(index)']
+  [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'return measureUtf8ByteLength(text, options)'],
+  [UTF8_SOURCE, 'utf8-byte-limits.ts', 'const codePoint = readUtf8CodePointAt(text, index)']
 ]) {
   if (!source.includes(marker)) {
     throw new Error(`${label} no longer contains \`${marker}\`; this benchmark is stale`)
@@ -106,7 +112,7 @@ function previousGate(data) {
   )
 }
 
-// Pre-fix arm: the exact code that shipped, including the second full walk in the gate.
+// Baseline per-code-point chunk assembly, retaining the current UTF-8 scanner and codec.
 function* iterateBefore(data, meta) {
   const rawLength = meta?.rawLength ?? data.length
   if (meta?.transformed || rawLength !== data.length) {
@@ -188,7 +194,7 @@ function drain(iterate, data, meta) {
   let frames = 0
   let bytes = 0
   let seqSum = 0
-  for (const frame of iterate(data, meta)) {
+  for (const frame of iterate(data, meta, 'span')) {
     frames += 1
     bytes += frame.bytes.byteLength
     seqSum += frame.seq ?? 0
@@ -199,7 +205,7 @@ function drain(iterate, data, meta) {
 
 function describeFrames(iterate, data, meta) {
   const descriptions = []
-  for (const frame of iterate(data, meta)) {
+  for (const frame of iterate(data, meta, 'span')) {
     descriptions.push(
       `${Buffer.from(frame.bytes).toString('base64')}|${frame.seq ?? 'u'}|${frame.opcode ?? 'u'}`
     )

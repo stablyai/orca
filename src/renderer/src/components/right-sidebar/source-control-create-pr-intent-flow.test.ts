@@ -25,7 +25,8 @@ describe('source-control Create PR intent flow helpers', () => {
         worktreePath: '/repo',
         branch: 'feature',
         provider: 'github',
-        baseRef: 'origin/main'
+        baseRef: 'origin/main',
+        pinnedCopy: null
       })
 
       expect(token.startedAt).toBe(123)
@@ -49,7 +50,8 @@ describe('source-control Create PR intent flow helpers', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       branch: 'feature/pr',
-      provider: 'github'
+      provider: 'github',
+      pinnedCopy: null
     })
 
     expect(createPrIntentGitStatusMatchesToken(token, { branch: 'refs/heads/feature/pr' })).toBe(
@@ -69,7 +71,8 @@ describe('source-control Create PR intent flow helpers', () => {
       worktreeId: 'wt-1',
       worktreePath: wt1Path,
       branch: 'feature/pr',
-      provider: 'github'
+      provider: 'github',
+      pinnedCopy: null
     })
 
     expect(
@@ -99,7 +102,8 @@ describe('source-control Create PR intent flow helpers', () => {
       worktreePath,
       branch: 'feature/pr',
       provider: 'github',
-      baseRef: 'refs/remotes/origin/main'
+      baseRef: 'refs/remotes/origin/main',
+      pinnedCopy: null
     })
 
     expect(

@@ -3,7 +3,6 @@ import { resolveAgentStatusIdentity } from './agent-status-identity'
 import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
-import { extractAgentProviderSession } from './agent-session-resume'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -29,6 +28,7 @@ import {
 } from './agent-hook-listener/opencode-session-registry'
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
+import { readPaneProviderSession } from './agent-hook-listener/pane-provider-session'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
   'prompt_input_exit',
@@ -74,11 +74,7 @@ export function normalizeHookPayload(
     hookPayloadRecord.hookEventName ??
     // Only jcode posts lifecycle under event; other providers may use that field for unrelated data.
     (source === 'jcode' ? hookPayloadRecord.event : undefined)
-  // Codex child hooks expose the child's session_id on the parent's pane.
-  const providerSession =
-    source === 'codex' && readString(hookPayloadRecord, 'agent_id')
-      ? null
-      : extractAgentProviderSession(source, hookPayloadRecord)
+  const providerSession = readPaneProviderSession(state, source, stampedPaneKey, hookPayloadRecord)
   if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
     return null
   }

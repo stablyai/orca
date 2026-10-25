@@ -34,7 +34,11 @@ function admitsHermesEvent(
     if (turn && hookPayload.platform === 'subagent') {
       turn.childSessionIds.add(sessionId)
     } else {
-      state.hermesTurnByPaneKey.set(paneKey, { ended: false, childSessionIds: new Set() })
+      state.hermesTurnByPaneKey.set(paneKey, {
+        ended: false,
+        childSessionIds: new Set(),
+        sessionId
+      })
     }
     return true
   }
@@ -46,6 +50,18 @@ function admitsHermesEvent(
   }
   const isToolEvent = eventName === 'pre_tool_call' || eventName === 'post_tool_call'
   return !(isToolEvent && turn?.ended)
+}
+
+/** The hook payload with a `delegate_task` child's session id replaced by its parent pane's. */
+export function withHermesPaneSessionId(
+  state: HookListenerState,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): Record<string, unknown> {
+  const turn = state.hermesTurnByPaneKey.get(paneKey)
+  const sessionId = typeof hookPayload.session_id === 'string' ? hookPayload.session_id : ''
+  const isChild = hookPayload.platform === 'subagent' || turn?.childSessionIds.has(sessionId)
+  return isChild ? { ...hookPayload, session_id: turn?.sessionId } : hookPayload
 }
 
 export function normalizeHermesEvent(

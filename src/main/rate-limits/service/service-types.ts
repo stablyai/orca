@@ -108,8 +108,8 @@ export const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProv
   'grok'
 ])
 export const STALE_THRESHOLD_MS = 30 * 60 * 1000
-// Retry-After can exceed generic stale expiry; keep informational quota visible through longer 429 windows.
-export const RATE_LIMITED_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
+// 429 Retry-After and an idle Claude login's lapsed token outlast generic expiry; keep informational quota visible.
+export const LONG_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
 // Deduplicate identical per-turn live posts to avoid renderer push floods.
 export const LIVE_CLAUDE_INGEST_DEDUPE_MS = 30 * 1000
 export const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000

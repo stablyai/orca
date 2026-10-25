@@ -183,7 +183,17 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).not.toContain(prompt)
     expect(plan?.followupPrompt).toBeNull()
-    expect(plan?.launchConfig.agentCommand).toBe('hermes --tui')
+    expect(plan?.launchConfig.agentCommand).toBe(
+      buildAgentStartupPlan({
+        agent: 'hermes',
+        prompt: '',
+        allowEmptyPromptLaunch: true,
+        cmdOverrides: {},
+        agentArgs: '--yolo',
+        platform: testCase.platform,
+        shell: testCase.shell
+      })?.launchConfig.agentCommand
+    )
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe(prompt)
     const script =
       testCase.shell === 'posix'
@@ -443,6 +453,23 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
+  })
+
+  it('resumes an agent from the folder it ran in when the pane starts elsewhere (#16960)', () => {
+    const resume = (cwd: string, launchCwd: string) =>
+      buildAgentResumeStartupPlan({
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 's1', cwd },
+        cmdOverrides: {},
+        platform: 'darwin',
+        launchCwd
+      })?.launchCommand
+
+    expect(resume('/repo/pkg', '/repo')).toBe("cd '/repo/pkg' && claude '--resume' 's1'")
+    expect(resume('/repo/', '/repo')).toBe("claude '--resume' 's1'")
+    expect(resume('/home/me/repo', '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')).toBe(
+      "claude '--resume' 's1'"
+    )
   })
 
   it('quotes Windows resume argv for cmd.exe when shell is cmd', () => {

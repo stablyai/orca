@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from './tui-agent-startup'
 import {
   unwrapPosixShellScript,
   unwrapPowerShellScript
@@ -224,5 +224,25 @@ describe('hermes startup plans', () => {
 
     expect(plan?.launchCommand).toBe('hermes --tui')
     expect(plan?.followupPrompt).toBeNull()
+  })
+
+  it('keeps the override and agent args of a prompted Hermes launch when it resumes', () => {
+    const launch = buildAgentStartupPlan({
+      agent: 'hermes',
+      prompt: 'start work',
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      agentArgs: '--yolo',
+      platform: 'linux'
+    })
+    const resume = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      platform: 'linux',
+      agentCommand: launch?.launchConfig.agentCommand,
+      agentArgs: launch?.launchConfig.agentArgs
+    })
+
+    expect(resume?.launchCommand).toBe("hermes --profile work '--yolo' '--resume' 's1'")
   })
 })

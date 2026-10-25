@@ -4221,10 +4221,6 @@
               "waiting": {
                 "label": "Claude の実行時に更新",
                 "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
-              },
-              "expired": {
-                "label": "サインインの有効期限切れ",
-                "message": "Claude の使用状況が期限切れです。このアカウントで Claude を起動して更新してください。"
               }
             },
             "remoteOwnerNotConfigured": "{{server}} では未構成",

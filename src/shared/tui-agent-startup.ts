@@ -72,10 +72,23 @@ export function buildAgentStartupPlan(args: {
   }
   const launchCommand =
     agent === 'omp' ? withFreshOmpLaunch(baseCommand.command, shell) : baseCommand.command
+  // Hermes query launches splice agentArgs themselves; record them anyway so a resume keeps them.
+  const recordedCommand = usesQuery
+    ? resolveAgentLaunchCommand({
+        agent,
+        cmdOverrides,
+        platform,
+        shell,
+        agentArgs: args.agentArgs,
+        isRemote: args.isRemote
+      })
+    : baseCommand
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
     // Picker flags apply once; resumed providers restore their own state and keep only explicit user args.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    agentCommand: recordedCommand.ok
+      ? recordedCommand.commandWithoutSessionOptions
+      : baseCommand.commandWithoutSessionOptions
   })
 
   if (!trimmedPrompt) {

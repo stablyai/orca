@@ -148,7 +148,14 @@ describe('Claude managed hook events by resolved version', () => {
 
     const downgraded = install(current, '2.1.32')
 
-    for (const event of ['StopFailure', 'PostCompact', 'TeammateIdle', 'SessionEnd']) {
+    for (const event of [
+      'StopFailure',
+      'PostCompact',
+      'TeammateIdle',
+      'SessionEnd',
+      'Elicitation',
+      'ElicitationResult'
+    ]) {
       expect(downgraded.hooks?.[event], event).toBeUndefined()
     }
   })

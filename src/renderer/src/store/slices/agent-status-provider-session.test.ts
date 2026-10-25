@@ -240,6 +240,41 @@ describe('recordAgentProviderSession', () => {
     })
   })
 
+  it('keeps launch flags on the live record of a pane that woke from sleep', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
+    } as Partial<AppState>)
+    const paneKey = 'tab-1:leaf-1'
+    const launchConfig = {
+      agentArgs: '--dangerously-skip-permissions --model haiku',
+      agentEnv: { CLAUDE_PROFILE: 'work' }
+    }
+    store.getState().registerAgentLaunchConfig(paneKey, launchConfig, {
+      agentType: 'claude',
+      launchToken: 'wake-1',
+      tabId: 'tab-1',
+      leafId: 'leaf-1'
+    })
+    // The woken pane's spawn consumes the sleeping record it resumed.
+    store.getState().clearSleepingAgentSession(paneKey)
+    store
+      .getState()
+      .recordAgentProviderSession(
+        paneKey,
+        'claude',
+        { key: 'session_id', id: 'claude-session-1' },
+        { updatedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: null },
+        { launchToken: 'wake-1' }
+      )
+
+    // This record is what the next cold restore resumes from.
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]?.launchConfig).toEqual(
+      launchConfig
+    )
+  })
+
   it('keeps the activity cutoff and manual-unread stamp across a heartbeat for the same pane', () => {
     const store = createTestStore()
     store.setState({

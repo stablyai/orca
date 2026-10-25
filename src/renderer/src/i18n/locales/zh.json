@@ -4221,10 +4221,6 @@
               "waiting": {
                 "label": "运行 Claude 时更新",
                 "message": "Claude 用量将在下次运行 Claude 时更新。"
-              },
-              "expired": {
-                "label": "登录已过期",
-                "message": "Claude 用量已过期。请在此账户中启动 Claude 以刷新。"
               }
             },
             "remoteOwnerNotConfigured": "未在 {{server}} 上配置",

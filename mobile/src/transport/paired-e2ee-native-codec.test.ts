@@ -167,25 +167,27 @@ describe('the native paired E2EE codec', () => {
   })
 
   it('opens and refuses exactly the frames the JS paths do, never advancing on a refusal', async () => {
-    const { primitives: nativePrimitives, native } = await load(true)
-    const { primitives: fallbackPrimitives, native: absent } = await load(false)
-    expect(native).not.toBeNull()
-    expect(absent).toBeNull()
-    const originalPrimitives: PairedE2EEPrimitives = {
-      ...fallbackPrimitives,
-      openSecretbox: undefined,
-      decodeCanonicalBase64: undefined,
-      decodeUtf8: undefined
-    }
-    const sessions = [nativePrimitives, fallbackPrimitives, originalPrimitives].map((primitives) =>
-      pairedSession(primitives)
-    )
-    const wire = inboundWire(sessions[0]!.schedule)
+    const wire = inboundWire(pairedSession((await load(true)).primitives).schedule)
     expect(wire.filter((entry) => entry.plaintext === null).length).toBeGreaterThan(50)
-    for (const { session } of sessions) {
+    for (const mode of ['native', 'fallback', 'original']) {
+      const { primitives, native } = await load(mode === 'native')
+      expect(native === null).toBe(mode !== 'native')
+      const originalPrimitives: PairedE2EEPrimitives = {
+        ...primitives,
+        openSecretbox: undefined,
+        decodeCanonicalBase64: undefined,
+        decodeUtf8: undefined
+      }
+      const { session } = pairedSession(mode === 'original' ? originalPrimitives : primitives)
+      secretboxOpenCalls.mockClear()
       expect(wire.map(({ frame }) => session.openText(frame))).toEqual(
         wire.map(({ plaintext }) => plaintext)
       )
+      if (mode === 'native') {
+        expect(secretboxOpenCalls).toHaveBeenCalled()
+      } else {
+        expect(secretboxOpenCalls).not.toHaveBeenCalled()
+      }
     }
   })
 
@@ -221,10 +223,11 @@ describe('the native paired E2EE codec', () => {
 
   // UTF-8 fallback must preserve an already-opened frame whose counter advanced.
   it('falls back to TextDecoder when native UTF-8 throws', async () => {
-    const { primitives } = await load(true)
-    bindings!.codec.decodeUtf8 = () => {
+    const { primitives, native } = await load(true)
+    expect(native).not.toBeNull()
+    const decodeUtf8 = vi.spyOn(bindings!.codec, 'decodeUtf8').mockImplementation(() => {
       throw new Error('native UTF-8 failed')
-    }
+    })
     const { session, schedule } = pairedSession(primitives)
     const frames = ['{"a":1}', 'é✓🙂'].map((payload, counter) =>
       b64(
@@ -239,6 +242,7 @@ describe('the native paired E2EE codec', () => {
       )
     )
     expect(frames.map((frame) => session.openText(frame))).toEqual(['{"a":1}', 'é✓🙂'])
+    expect(decodeUtf8).toHaveBeenCalledTimes(2)
   })
 
   // libsodium sizes its output as the box length minus the MAC, which underflows and crashes.

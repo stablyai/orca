@@ -53,7 +53,7 @@ type TestLocation = {
 
 type SupportResult = {
   supported: boolean
-  reason?: 'agent' | 'remote' | 'wsl'
+  reason?: 'agent' | 'remote' | 'wsl' | 'chat-program'
 }
 
 function createRuntime(location: TestLocation): OrcaRuntimeService {
