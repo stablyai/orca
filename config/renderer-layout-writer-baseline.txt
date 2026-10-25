@@ -53,7 +53,8 @@
 1 src/renderer/src/store/slices/browser/browser-hydration-state.ts
 5 src/renderer/src/store/slices/browser/browser-page-focus-actions.ts
 2 src/renderer/src/store/slices/browser/browser-page-state-actions.ts
-6 src/renderer/src/store/slices/browser/browser-tab-actions.ts
+1 src/renderer/src/store/slices/browser/browser-tab-actions.ts
+5 src/renderer/src/store/slices/browser/browser-tab-open-view.ts # extracted from browser-tab-actions.ts
 4 src/renderer/src/store/slices/browser/browser-tab-focus-actions.ts
 2 src/renderer/src/store/slices/browser/create-browser-slice.ts
 9 src/renderer/src/store/slices/editor/actions/check-run-details-actions.ts

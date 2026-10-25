@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
 import type {
   ActivityGroupBy,
   AgentActivityDisplayMode,
@@ -215,4 +216,6 @@ export type UISlicePersistence = {
   setBrowserDefaultZoomLevel: (level: number) => void
   browserKagiSessionLink: string | null
   setBrowserKagiSessionLink: (link: string | null) => void
+  browserDevToolsDock: BrowserDevToolsDockLayout
+  setBrowserDevToolsDock: (layout: BrowserDevToolsDockLayout) => void
 }

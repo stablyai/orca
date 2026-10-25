@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Compare per-comparison localeCompare options with hoisted Intl.Collator on Source Control refresh; assert identical sorted output before timing.
 import { execFileSync } from 'node:child_process'
+import { build } from 'esbuild'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
@@ -26,26 +27,40 @@ function conflictRank(entry) {
   return 2
 }
 
-// Pre-fix: resolves a collator per comparison.
+// Per-call baseline preserves production's locale and deterministic numeric ties.
 function compareBefore(a, b) {
   return (
-    conflictRank(a) - conflictRank(b) || a.path.localeCompare(b.path, undefined, { numeric: true })
+    conflictRank(a) - conflictRank(b) ||
+    a.path.localeCompare(b.path, 'en', { numeric: true }) ||
+    (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
   )
 }
 
-// Post-fix: one hoisted collator, mirroring source-control-status-sort.ts.
-const collator = new Intl.Collator(undefined, { numeric: true })
-function compareAfter(a, b) {
-  return conflictRank(a) - conflictRank(b) || collator.compare(a.path, b.path)
-}
+const { outputFiles } = await build({
+  entryPoints: [
+    fileURLToPath(
+      new URL(
+        '../../src/renderer/src/components/right-sidebar/source-control-status-sort.ts',
+        import.meta.url
+      )
+    )
+  ],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  write: false
+})
+const { compareGitStatusEntries: compareAfter } = await import(
+  `data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`
+)
 
 // Use real byte-sorted Git paths: shuffled input inflates win over nearly sorted production arrays.
-const REPO_PATHS = execFileSync('git', ['ls-files'], {
+const REPO_PATHS = execFileSync('git', ['ls-files', '-z'], {
   cwd: fileURLToPath(new URL('../..', import.meta.url)),
   maxBuffer: 256 * 1024 * 1024
 })
   .toString()
-  .split('\n')
+  .split('\0')
   .filter(Boolean)
 
 function makeEntries(count) {
@@ -88,7 +103,7 @@ for (const count of [3, 17, 26, 63, 308, 1000]) {
   const entries = makeEntries(count)
   const before = [...entries].sort(compareBefore).map((entry) => entry.path)
   const after = [...entries].sort(compareAfter).map((entry) => entry.path)
-  if (before.join('\n') !== after.join('\n')) {
+  if (before.length !== after.length || before.some((path, index) => path !== after[index])) {
     throw new Error(`sort order differs at ${count} files`)
   }
   const beforeMs = measure(compareBefore, entries)

@@ -75,7 +75,13 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
     }
   }
 
-  for (const { page, certificateFailure, remotePageId, placement } of mirroredBrowserTabs) {
+  for (const {
+    page,
+    certificateFailure,
+    remotePageId,
+    browserProfileId,
+    placement
+  } of mirroredBrowserTabs) {
     const current = nextBrowserPagesByWorkspace[page.workspaceId] ?? []
     if (!sameBrowserPages(current, [page])) {
       nextBrowserPagesByWorkspace =
@@ -88,6 +94,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
     if (
       currentHandle?.environmentId !== environmentId ||
       currentHandle.remotePageId !== remotePageId ||
+      currentHandle.browserProfileId !== browserProfileId ||
       // A host snapshot is the adoption boundary for a staged handle.
       currentHandle.staged === true ||
       // Restored markers are spent when the host republishes the page.
@@ -101,6 +108,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
       nextRemoteBrowserPageHandlesByPageId[page.id] = {
         environmentId,
         remotePageId,
+        ...(browserProfileId ? { browserProfileId } : {}),
         ...(placement ? { placement } : {})
       }
     }

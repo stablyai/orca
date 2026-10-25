@@ -1,5 +1,6 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { findVisibleBrowserLinkTarget } from '@/lib/visible-browser-link-target'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -155,14 +156,19 @@ export function registerBrowserStateIpcBridge(
       if (!sourcePage || runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
+      const placement = findVisibleBrowserLinkTarget(store, sourcePage.worktreeId)
       const openedPageId = openUrlInTabBesideBrowserPage({
         sourcePageId: browserPageId,
         worktreeId: sourcePage.worktreeId,
         url,
-        activate: activate ?? true
+        activate: activate ?? true,
+        placement
       })
       if (openedPageId) {
         markBrowserPageOpenedByPage(openedPageId)
+        if (placement && activate !== false) {
+          store.focusGroup(sourcePage.worktreeId, placement.targetGroupId)
+        }
       }
     })
   )

@@ -47,6 +47,7 @@ export type TabsSlice = {
         | 'isPreview'
         | 'isPinned'
       > & {
+        validatePlacement: (state: AppState) => void
         targetGroupId: string
         /** Creates the tab in a new split group instead; wins over targetGroupId. */
         split: TabSplitTarget

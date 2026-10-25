@@ -17,6 +17,7 @@ const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
+  makeDeferred,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
@@ -80,7 +81,22 @@ describe("a paired desktop's Reopen of a held pane (layout-owner build)", () => 
     const { runtime, spawn } = await heldPaneRuntime()
     expect(publishedStatus(runtime)).toBe('held')
 
-    await expect(runtime.reopenHeldTerminalPanes([PANE])).resolves.toEqual({ reopened: true })
+    const stopStarted = makeDeferred()
+    const stopFinished = makeDeferred()
+    daemonHold.reopen.mockImplementationOnce(async () => {
+      stopStarted.resolve()
+      await stopFinished.promise
+      return { reopened: true }
+    })
+    const reopening = runtime.reopenHeldTerminalPanes([PANE])
+    await stopStarted.promise
+    try {
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(publishedStatus(runtime)).toBe('held')
+    } finally {
+      stopFinished.resolve()
+    }
+    await expect(reopening).resolves.toEqual({ reopened: true })
 
     expect(daemonHold.reopen).toHaveBeenCalledOnce()
     expect(spawn).toHaveBeenCalledTimes(2)

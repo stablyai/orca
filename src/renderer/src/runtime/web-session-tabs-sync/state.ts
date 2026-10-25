@@ -187,6 +187,7 @@ export type MirroredBrowserTab = {
   page: BrowserPage
   certificateFailure: BrowserCertificateFailure | null
   remotePageId: string
+  browserProfileId?: string
   placement?: RuntimeBrowserPlacement
   unifiedTab: Tab
   hostTabId: string

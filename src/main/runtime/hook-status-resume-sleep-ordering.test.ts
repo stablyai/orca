@@ -45,6 +45,7 @@ function makeRuntimeWithSlowFirstWrite() {
   const firstWriteDurable = new Promise<void>((resolve) => {
     releaseFirstWrite = resolve
   })
+  const firstWriteEntered = Promise.withResolvers<void>()
   let writes = 0
   const applyLayoutCommand = vi.fn(
     async (
@@ -59,6 +60,7 @@ function makeRuntimeWithSlowFirstWrite() {
       }
       writes += 1
       if (writes === 1) {
+        firstWriteEntered.resolve()
         await firstWriteDurable
       }
       return { ok: true, result: {} }
@@ -66,7 +68,7 @@ function makeRuntimeWithSlowFirstWrite() {
   )
   const runtime = new OrcaRuntimeService(Object.assign(runtimeStore, { applyLayoutCommand }))
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-  return { runtime, getSession, releaseFirstWrite }
+  return { runtime, getSession, releaseFirstWrite, firstWriteEntered: firstWriteEntered.promise }
 }
 
 function sleepCapture(updatedAt: number): WorktreeSleepResumeCapture {
@@ -98,11 +100,11 @@ function sleepCapture(updatedAt: number): WorktreeSleepResumeCapture {
 
 describe('a queued hook status and a workspace sleep', () => {
   it('keeps the sleep’s record when a status accepted before the sleep is written after it', async () => {
-    const { runtime, getSession, releaseFirstWrite } = makeRuntimeWithSlowFirstWrite()
+    const { runtime, getSession, releaseFirstWrite, firstWriteEntered } =
+      makeRuntimeWithSlowFirstWrite()
     runtime.recordHookStatusResume(codexRow())
-    await vi.waitFor(() =>
-      expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
-    )
+    await firstWriteEntered
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
     runtime.recordHookStatusResume(codexRow({ state: 'blocked', receivedAt: 11 }))
 
     const slept = runtime['sleepResumeRecords'].persist(TEST_WORKTREE_ID, sleepCapture(11), [
@@ -120,11 +122,11 @@ describe('a queued hook status and a workspace sleep', () => {
   })
 
   it('keeps a window sleep’s record when a status accepted before it is written after it', async () => {
-    const { runtime, getSession, releaseFirstWrite } = makeRuntimeWithSlowFirstWrite()
+    const { runtime, getSession, releaseFirstWrite, firstWriteEntered } =
+      makeRuntimeWithSlowFirstWrite()
     runtime.recordHookStatusResume(codexRow())
-    await vi.waitFor(() =>
-      expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
-    )
+    await firstWriteEntered
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
     runtime.recordHookStatusResume(codexRow({ state: 'blocked', receivedAt: 11 }))
 
     const [record] = sleepCapture(11).get(PTY_ID)!.records

@@ -1,6 +1,6 @@
 import './native-chat-reasoning-row.spec'
 import './native-chat-reasoning-order.spec'
-import './native-chat-tool-activity.spec'
+import './native-chat/tools/native-chat-tool-activity.spec'
 import './native-chat/tools/native-chat-tool-pair-limit.spec'
 import './native-chat/tools/native-chat-tool-fold-attribution.spec'
 import './native-chat-turn-grouping.spec'

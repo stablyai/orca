@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
 import { extractIconHref } from '../../src/main/repo-icon-source-href.ts'
 
-// Original production expressions, preserved for the before/after measurement.
+// Regex comparator retained for the before/after measurement.
 const html =
   /<link\b(?=[^>]*\brel=["'](?:icon|shortcut icon)["'])(?=[^>]*\bhref=["']([^"'?]+))[^>]*>/i
 const object =
@@ -32,6 +32,16 @@ function measurePair(source) {
     beforeMs: beforeSamples.sort((a, b) => a - b)[2],
     afterMs: afterSamples.sort((a, b) => a - b)[2]
   }
+}
+
+for (const [source, expected] of [
+  ['<link rel="icon" href="/favicon.ico?version=1">', '/favicon.ico'],
+  ["<link href='/shortcut.svg' rel='shortcut icon'>", '/shortcut.svg'],
+  ['{ rel: "icon", href: "/object.png?version=1" }', '/object.png'],
+  ["{ href: '/shortcut-object.svg', rel: 'shortcut icon' }", '/shortcut-object.svg']
+]) {
+  assert.equal(original(source), expected)
+  assert.equal(extractIconHref(source), expected)
 }
 
 const results = []

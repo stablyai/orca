@@ -5,7 +5,7 @@ import {
   countToolCalls,
   summarizeToolInput,
   summarizeToolRun
-} from './native-chat-tool-summary'
+} from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 
 describe('summarizeToolInput', () => {
   it('passes short strings through and collapses whitespace', () => {

@@ -90,6 +90,7 @@ describe('pairing keychain', () => {
 
     const rotated = secureStoreMock.setItemAsync.mock.calls.at(-1)!
     expect(serviceOf(rotated[2] as Options)).toBe('orca.pairing.v1')
+    expect(rotated[0]).toBe(TOKEN_KEY)
     expect(rotated[1]).toBe('token')
     expect(generationRecord).toBe('1')
   })
@@ -209,6 +210,7 @@ describe('pairing keychain', () => {
       serviceOf(options) === 'orca.pairing.v1' ? 'token' : null
     )
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('token')
+    expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
   })
 
   it('reads through the rotated service once a rotation has been committed', async () => {
@@ -218,6 +220,7 @@ describe('pairing keychain', () => {
     )
 
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('rotated-token')
+    expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
   })
 
   it('falls back to a retired service so rotation does not orphan a still-readable token', async () => {
@@ -227,6 +230,7 @@ describe('pairing keychain', () => {
     )
 
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('legacy-token')
+    expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(3)
   })
 
@@ -241,6 +245,7 @@ describe('pairing keychain', () => {
     })
 
     await expect(readPairingKeychainItem(TOKEN_KEY)).rejects.toBe(currentError)
+    expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(1)
   })
 
@@ -280,11 +285,13 @@ describe('pairing keychain', () => {
 
     // Treat Android’s indistinguishable absent/undecryptable null as absent so callers can clean orphans.
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBeNull()
+    expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(1)
 
     // Keep presence so later reads cannot resurrect superseded legacy secrets.
     expect(presenceRecord).toBe('1')
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBeNull()
+    expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(2)
   })
 
@@ -295,6 +302,7 @@ describe('pairing keychain', () => {
     )
 
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('legacy-token')
+    expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
   })
 
   it('probes every bounded service when the generation record is temporarily unreadable', async () => {
@@ -309,6 +317,7 @@ describe('pairing keychain', () => {
     )
 
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('rotated-token')
+    expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
 
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(7)
   })
@@ -328,10 +337,13 @@ describe('pairing keychain', () => {
 
     await deletePairingKeychainItem(TOKEN_KEY)
 
-    const services = secureStoreMock.deleteItemAsync.mock.calls.map((call) =>
-      serviceOf(call[1] as Options)
-    )
-    expect(services).toEqual(['orca.pairing.v2', 'orca.pairing.v1', undefined])
+    expect(
+      secureStoreMock.deleteItemAsync.mock.calls.map(([key, options]) => [key, serviceOf(options)])
+    ).toEqual([
+      [TOKEN_KEY, 'orca.pairing.v2'],
+      [TOKEN_KEY, 'orca.pairing.v1'],
+      [TOKEN_KEY, undefined]
+    ])
     expect(asyncStorageMock.removeItem).toHaveBeenCalledWith(TOKEN_PRESENCE_KEY)
   })
 
@@ -345,25 +357,49 @@ describe('pairing keychain', () => {
     })
 
     await expect(deletePairingKeychainItem(TOKEN_KEY)).rejects.toBe(deleteError)
-    expect(secureStoreMock.deleteItemAsync).toHaveBeenCalledTimes(3)
+    expect(
+      secureStoreMock.deleteItemAsync.mock.calls.map(([key, options]) => [key, serviceOf(options)])
+    ).toEqual([
+      [TOKEN_KEY, 'orca.pairing.v2'],
+      [TOKEN_KEY, 'orca.pairing.v1'],
+      [TOKEN_KEY, undefined]
+    ])
     expect(asyncStorageMock.removeItem).not.toHaveBeenCalled()
   })
 
   it('serializes writes that share the global generation', async () => {
-    let releaseFirst!: () => void
-    const firstWrite = new Promise<void>((resolve) => {
-      releaseFirst = resolve
+    vi.useFakeTimers()
+    const entered = Promise.withResolvers<void>()
+    const held = Promise.withResolvers<void>()
+    const order: string[] = []
+    secureStoreMock.setItemAsync.mockImplementation(async (key: string, value: string) => {
+      order.push(`start:${key}:${value}`)
+      if (key === TOKEN_KEY) {
+        entered.resolve()
+        await held.promise
+      }
+      order.push(`finish:${key}:${value}`)
     })
-    secureStoreMock.setItemAsync.mockImplementationOnce(async () => firstWrite)
+    try {
+      const first = writePairingKeychainItem(TOKEN_KEY, 'first')
+      const second = writePairingKeychainItem(`${TOKEN_KEY}.second`, 'second')
+      await entered.promise
+      await vi.advanceTimersByTimeAsync(0)
+      expect(order).toEqual([`start:${TOKEN_KEY}:first`])
 
-    const first = writePairingKeychainItem(TOKEN_KEY, 'first')
-    const second = writePairingKeychainItem(`${TOKEN_KEY}.second`, 'second')
-    await vi.waitFor(() => expect(secureStoreMock.setItemAsync).toHaveBeenCalledTimes(1))
+      held.resolve()
+      await Promise.all([first, second])
 
-    releaseFirst()
-    await Promise.all([first, second])
-
-    expect(secureStoreMock.setItemAsync).toHaveBeenCalledTimes(2)
+      expect(order).toEqual([
+        `start:${TOKEN_KEY}:first`,
+        `finish:${TOKEN_KEY}:first`,
+        `start:${TOKEN_KEY}.second:second`,
+        `finish:${TOKEN_KEY}.second:second`
+      ])
+    } finally {
+      held.resolve()
+      vi.useRealTimers()
+    }
   })
 
   it.each(['not-a-number', '', ' ', '0:pending'])(
@@ -375,6 +411,7 @@ describe('pairing keychain', () => {
       )
 
       await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('rotated-token')
+      expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
     }
   )
 
@@ -397,7 +434,22 @@ describe('pairing keychain', () => {
 
       await deletePairingKeychainItem(TOKEN_KEY)
 
-      expect(secureStoreMock.deleteItemAsync).toHaveBeenCalledTimes(9)
+      expect(
+        secureStoreMock.deleteItemAsync.mock.calls.map(([key, options]) => [
+          key,
+          serviceOf(options)
+        ])
+      ).toEqual([
+        [TOKEN_KEY, 'orca.pairing.v8'],
+        [TOKEN_KEY, 'orca.pairing.v7'],
+        [TOKEN_KEY, 'orca.pairing.v6'],
+        [TOKEN_KEY, 'orca.pairing.v5'],
+        [TOKEN_KEY, 'orca.pairing.v4'],
+        [TOKEN_KEY, 'orca.pairing.v3'],
+        [TOKEN_KEY, 'orca.pairing.v2'],
+        [TOKEN_KEY, 'orca.pairing.v1'],
+        [TOKEN_KEY, undefined]
+      ])
     }
   )
 

@@ -33,6 +33,7 @@ describe('modifier routing across link source owners', () => {
   })
 
   it('still lets the inverting modifier pull a local link into Orca', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
 
     openHttpLink('https://example.com/', {

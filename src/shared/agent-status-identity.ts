@@ -51,6 +51,7 @@ export function resolveAgentStatusIdentity(args: {
   existing?: ExistingAgentIdentity
   incoming?: AgentType
   incomingProcess?: AgentProcessIdentity
+  incomingSession?: string
   now: number
   staleAfterMs?: number
 }): AgentIdentityResolution {
@@ -80,6 +81,17 @@ export function resolveAgentStatusIdentity(args: {
       // Why: a nested `claude -p` shares the pane key; only the owner's own process speaks for it.
       inheritedFromActivePane: otherProcessOwner
     }
+  }
+  const owner = args.existing.agentPresence
+  if (
+    owner?.session &&
+    !owner.ended &&
+    owner.agent === incomingAgentType &&
+    owner.session === args.incomingSession &&
+    !otherProcessOwner
+  ) {
+    // Why: a child that posted while the owner idled must not silence the owner's own session.
+    return { agentType: incomingAgentType, inheritedFromActivePane: false }
   }
   const canonical = resolveCanonicalPaneAgentIdentity({
     hookAgent: incomingAgentType as TuiAgent,

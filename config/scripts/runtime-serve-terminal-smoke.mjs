@@ -21,7 +21,7 @@ const ORCAD_ENTRY = join(ORCAD_DIR, ORCAD_SERVER_ENTRY_FILENAME)
 const READY_TIMEOUT_MS = 120_000
 const OUTPUT_TIMEOUT_MS = 30_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
-// Why a random high port: a fixed one collides with a developer's own `orca serve`.
+// Offset the port when a developer's own `orca serve` is already using it.
 const PORT = 6800 + Math.floor(Number(process.env.ORCA_SMOKE_PORT_OFFSET ?? '0'))
 
 function log(message) {
@@ -65,6 +65,11 @@ function orca(pairingCode, args) {
   )
   if (result.error) {
     throw new Error(`orca ${args[0]} failed to spawn: ${result.error.message}`)
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `orca ${args.join(' ')} exited ${result.signal ?? result.status}:\n${result.stderr || result.stdout}`
+    )
   }
   const line = (result.stdout ?? '').trim()
   if (!line.startsWith('{')) {
@@ -311,18 +316,18 @@ async function main() {
     log(`created ${terminal.handle}`)
 
     // Why invoke node rather than `echo`: the shell differs per platform, node does not.
-    const nonce = `ORCA_SMOKE_${randomBytes(8).toString('hex')}`
+    const nonce = randomBytes(8).toString('hex')
     orca(pairingCode, [
       'terminal',
       'send',
       '--terminal',
       terminal.handle,
       '--text',
-      `"${process.execPath}" -e "console.log('${nonce}')"`,
+      `"${process.execPath}" -e "console.log('ORCA_SMOKE_' + '${nonce}')"`,
       '--enter'
     ])
 
-    if (!(await waitForNonce(pairingCode, terminal.handle, nonce))) {
+    if (!(await waitForNonce(pairingCode, terminal.handle, `ORCA_SMOKE_${nonce}`))) {
       throw new Error(
         `terminal produced no output containing ${nonce} within ${OUTPUT_TIMEOUT_MS}ms — ` +
           `the server started and answered RPC, but its PTY path is dead`

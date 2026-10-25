@@ -2,7 +2,10 @@ import type { RuntimeHeadlessTerminal } from '../../runtime-terminal-state-recor
 import { splitFreebuffScreenUpdates } from '../../../../shared/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './terminal-buffer-operations'
 import { observeFreebuffTerminalStatus } from '../../freebuff-terminal-status'
-import { observeCodexCapacityTerminalStatus } from '../../codex-capacity-terminal-status'
+import {
+  observeCodexCapacityTerminalStatus,
+  observeCodexReconnectFailure
+} from '../../codex-notice-terminal-status'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 import {
   detectAgentStatusFromTitle,
@@ -13,6 +16,7 @@ import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-au
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
   protected abstract markPaneLiveTitlesDirty(): void
+  protected abstract settleLostAgentSession(ptyId: string): void
 
   // Create emulator state synchronously and chain renderer hydration first so concurrent live bytes cannot be overwritten by a late seed (docs/mobile-prefer-renderer-scrollback.md).
   maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null {
@@ -158,20 +162,30 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         await state.emulator.write(chunk, { forwardQueryReplies })
         const pty = this.ptysById.get(ptyId)
-        if (pty && !pty.connectionId && this.headlessTerminals.get(ptyId) === state) {
-          const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
+        if (!pty || this.headlessTerminals.get(ptyId) !== state) {
+          continue
+        }
+        const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
+        const readStatus = () => {
+          const paneKey =
+            this.getLeavesForPty(ptyId).map((leaf) => this.makeRuntimePaneKey(leaf))[0] ??
+            this.paneOfPty(pty).paneKey
+          return paneKey ? this.getAgentStatusSnapshotForPaneFn?.(paneKey)[0] : undefined
+        }
+        // Remote hosts report status themselves, but only this runtime can settle its own dispatches.
+        if (
+          observeCodexReconnectFailure(state.emulator, chunk, command, pty.launchAgent, readStatus)
+        ) {
+          this.settleLostAgentSession(ptyId)
+        }
+        if (!pty.connectionId) {
           const payload =
             observeCodexCapacityTerminalStatus(
               state.emulator,
               chunk,
               command,
               pty.launchAgent,
-              () => {
-                const paneKey =
-                  this.getLeavesForPty(ptyId).map((leaf) => this.makeRuntimePaneKey(leaf))[0] ??
-                  this.paneOfPty(pty).paneKey
-                return paneKey ? this.getAgentStatusSnapshotForPaneFn?.(paneKey)[0] : undefined
-              },
+              readStatus,
               outputObservedAt
             ) ?? observeFreebuffTerminalStatus(state.emulator, chunk, command, pty.launchAgent)
           if (payload) {

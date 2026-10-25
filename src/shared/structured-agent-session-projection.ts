@@ -20,7 +20,7 @@ import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
 } from './agent-status-types'
-import { describeToolInput } from './native-chat-tool-summary'
+import { describeToolInput } from './native-chat/tools/native-chat-tool-summary'
 import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
 import {
   hasStructuredAgentSessionRequest,

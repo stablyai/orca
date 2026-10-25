@@ -212,6 +212,13 @@ export const UiUpdateFields = z
       .optional(),
     browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
+    browserDevToolsDock: z
+      .object({
+        side: z.enum(['bottom', 'right']),
+        bottomFraction: z.number().finite(),
+        rightFraction: z.number().finite()
+      })
+      .optional(),
     windowBounds: z
       .object({
         x: z.number().finite(),

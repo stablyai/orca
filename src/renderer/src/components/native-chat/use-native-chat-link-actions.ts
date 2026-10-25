@@ -59,6 +59,7 @@ export function useNativeChatLinkActions(
       const anchor = event.currentTarget
       handleNativeChatWebLink(event, route.url, {
         worktreeId: context.worktreeId,
+        sourceTabId: context.sourceTabId,
         ...resolveNativeChatHttpLinkRouting(state, context.worktreeId),
         actionsEnabled: plainClickBehavior === 'actions',
         plainClickBehavior,

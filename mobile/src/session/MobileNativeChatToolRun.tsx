@@ -23,16 +23,16 @@ import {
   describeLatestToolCall,
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
-} from '../../../src/shared/native-chat-tool-activity'
-import { nativeChatToolRunIconName } from '../../../src/shared/native-chat-tool-icon'
-import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat-tool-line-identity'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-activity'
+import { nativeChatToolRunIconName } from '../../../src/shared/native-chat/tools/native-chat-tool-icon'
+import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat/tools/native-chat-tool-line-identity'
 import { pairNativeChatToolResults } from '../../../src/shared/native-chat/tools/native-chat-tool-pairing'
-import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
+import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat/tools/native-chat-tool-run-outcome'
 import {
   NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH,
   nativeChatToolRunSentence
-} from '../../../src/shared/native-chat-tool-run-sentence'
-import { countToolCalls } from '../../../src/shared/native-chat-tool-summary'
+} from '../../../src/shared/native-chat/tools/native-chat-tool-run-sentence'
+import { countToolCalls } from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import { buildEditCards } from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
   isToolCallBlock,

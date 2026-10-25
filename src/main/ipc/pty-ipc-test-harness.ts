@@ -1,6 +1,6 @@
 import { createPtyIpcSuiteEnvironment } from './pty-ipc-suite-environment'
 import { createPtyIpcProviderFixtures } from './pty-ipc-provider-fixtures'
-import { createPtyIpcListenerAccessors } from './pty-ipc-listener-accessors'
+import { createPtyIpcListenerAccessors } from './pty/pty-ipc-listener-accessors'
 import { createPtyIpcSpawnDrivers } from './pty-ipc-spawn-drivers'
 
 export type PtyIpcSuiteFixtures = ReturnType<typeof createPtyIpcSuiteEnvironment> &

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { loadAnsiConsumers } from '../../config/scripts/check-job-log-consumer-oracles.mjs'
 import { gitLabJobTraceToLogExcerpt } from './gitlab-job-log-excerpt'
-import { surfaceNativeChatCommandOutputs } from './native-chat-command-output'
+import { surfaceNativeChatCommandOutputs } from './native-chat/tools/native-chat-command-output'
 import type { NativeChatMessage } from './native-chat-types'
 import { normalizeNativeChatUserText } from './native-chat-image-transcript-markers'
 

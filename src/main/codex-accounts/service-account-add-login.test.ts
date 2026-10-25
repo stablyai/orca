@@ -234,8 +234,10 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn(
       (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         const loginHome = options.env.CODEX_HOME
-        expect(loginHome).toBeTruthy()
-        expect(readFileSync(join(loginHome!, '.orca-managed-home'), 'utf-8')).toBe('account-1\n')
+        expect(loginHome).toMatch(/[\\/]account-1[\\/]home[\\/]\.orca-reauth-login$/)
+        expect(readFileSync(join(managedHomePath, '.orca-managed-home'), 'utf-8')).toBe(
+          'account-1\n'
+        )
         expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
 
         const child = new EventEmitter() as EventEmitter & {

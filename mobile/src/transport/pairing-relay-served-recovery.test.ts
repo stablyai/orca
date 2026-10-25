@@ -47,7 +47,10 @@ describe('served relay pairing recovery', () => {
     })
 
     await expect(candidate.sendRequest('status.get')).resolves.toMatchObject({ ok: true })
-    expect(resolveDirector).toHaveBeenCalledOnce()
+    expect(resolveDirector).toHaveBeenCalledExactlyOnceWith({
+      ...journal.metadata.relay,
+      inviteToken: journal.secrets.inviteToken
+    })
     expect(persistMove).toHaveBeenCalledWith(resolvedRelay)
   })
 

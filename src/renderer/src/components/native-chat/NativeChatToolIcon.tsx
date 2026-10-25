@@ -12,13 +12,13 @@ import {
   SquareTerminal,
   Wrench
 } from 'lucide-react'
-import type { NativeChatMcpIdentity } from '../../../../shared/native-chat-tool-identity'
+import type { NativeChatMcpIdentity } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   nativeChatToolIconName,
   type NativeChatToolIconName
-} from '../../../../shared/native-chat-tool-icon'
+} from '../../../../shared/native-chat/tools/native-chat-tool-icon'
 
 const NATIVE_CHAT_TOOL_GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   eye: Eye,

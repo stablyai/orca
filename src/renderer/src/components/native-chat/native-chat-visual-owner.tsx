@@ -6,6 +6,7 @@ export type NativeChatVisualOwner = {
   target: RuntimeClientTarget
   sessionId: string
   worktreeId: string
+  tabId?: string
 }
 
 export const NativeChatVisualOwnerContext = createContext<NativeChatVisualOwner | null>(null)
@@ -36,10 +37,11 @@ export function NativeChatVisualOwnerProvider({
             target:
               environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId },
             sessionId,
+            tabId,
             worktreeId
           }
         : null,
-    [environmentId, sessionId, worktreeId]
+    [environmentId, sessionId, tabId, worktreeId]
   )
   return (
     <NativeChatVisualOwnerContext.Provider value={owner}>

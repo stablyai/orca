@@ -4,7 +4,7 @@ import {
   briefToolArg,
   createToolInputDisplay,
   describeToolInput
-} from '../../shared/native-chat-tool-summary'
+} from '../../shared/native-chat/tools/native-chat-tool-summary'
 import {
   codexItemBody,
   codexItemIdentity,

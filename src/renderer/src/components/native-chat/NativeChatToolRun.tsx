@@ -15,15 +15,15 @@ import {
 } from '../../../../shared/native-chat-types'
 import { isRenderableSubagentGroup } from '../../../../shared/native-chat-subagent-summary'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
-import { countToolCalls } from './native-chat-tool-summary'
+import { countToolCalls } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { nativeChatToolRunSentence } from './native-chat-tool-run-label'
 import {
   describeLatestToolCall,
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
-} from '../../../../shared/native-chat-tool-activity'
-import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
-import { nativeChatToolRunOutcome } from '../../../../shared/native-chat-tool-run-outcome'
+} from '../../../../shared/native-chat/tools/native-chat-tool-activity'
+import { nativeChatToolRunIconName } from '../../../../shared/native-chat/tools/native-chat-tool-icon'
+import { nativeChatToolRunOutcome } from '../../../../shared/native-chat/tools/native-chat-tool-run-outcome'
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject

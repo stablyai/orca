@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import en from '@/i18n/locales/en.json'
-import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat-tool-activity'
+import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
 import {
   NATIVE_CHAT_COMPOSER_PLACEHOLDER,
   NATIVE_CHAT_TURN_STATUS_COPY
@@ -9,8 +9,8 @@ import {
   NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY,
   NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY,
   NATIVE_CHAT_TOOL_RUN_SENTENCE_JOINERS
-} from '../../../../shared/native-chat-tool-run-sentence'
-import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../../shared/native-chat-tool-line-label'
+} from '../../../../shared/native-chat/tools/native-chat-tool-run-sentence'
+import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 import { NATIVE_CHAT_DIFF_CARD_COPY } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import { NATIVE_CHAT_TASK_LIST_COPY } from '../../../../shared/native-chat-task-list'
 

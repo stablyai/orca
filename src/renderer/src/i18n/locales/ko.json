@@ -310,6 +310,7 @@
     "view": "보기",
     "reload": "새로고침",
     "forceReload": "강제 새로고침",
+    "toggleDevTools": "개발자 도구 전환",
     "resetSize": "크기 재설정",
     "zoomIn": "확대",
     "zoomOut": "축소",
@@ -16934,7 +16935,12 @@
             "copyImage": "이미지 복사",
             "copyImageAddress": "이미지 주소 복사",
             "searchSelection": "{{value0}}에서 “{{value1}}” 검색",
-            "inspect": "검사"
+            "inspect": "검사",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "오른쪽에 도킹",
+            "devToolsDockBottom": "아래쪽에 도킹",
+            "devToolsUndock": "별도 창에서 열기",
+            "devToolsClose": "DevTools 닫기"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "취소",

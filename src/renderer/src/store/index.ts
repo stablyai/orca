@@ -1,3 +1,4 @@
+import { canOfferHttpLinkGroupAction } from '@/lib/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
@@ -55,6 +56,7 @@ import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import {
   registerHttpLinkStoreAccessor,
+  registerHttpLinkGroupActionAvailability,
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
@@ -147,11 +149,37 @@ export const useAppStore = create<AppState>()(
   )
 )
 
-registerHttpLinkStoreAccessor(() => useAppStore.getState())
+registerHttpLinkStoreAccessor(() => useAppStore.getState(), useAppStore.subscribe)
+registerHttpLinkGroupActionAvailability((request) =>
+  canOfferHttpLinkGroupAction(useAppStore.getState(), request)
+)
 attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {
-  const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
+  const { openWorkspaceBrowserTab, openWorkspaceBrowserTabForLink } =
+    await import('@/lib/workspace-browser-tab-open')
+  if (request.linkContext) {
+    const outcome = await openWorkspaceBrowserTabForLink({
+      ...request,
+      linkContext: request.linkContext
+    })
+    if (
+      outcome.status === 'failed' ||
+      (outcome.status === 'refused' && !request.linkContext.linkIntent?.targetGroupId)
+    ) {
+      const { intentPresentation } = await import('@/lib/workspace-browser-tab-presentation')
+      throw new Error(intentPresentation(request.intent, request.url).error)
+    }
+    if (
+      request.linkContext.linkIntent?.targetGroupId &&
+      (outcome.status === 'refused' || outcome.status === 'unsupported')
+    ) {
+      const { showOpenInGroupRefusedToast } =
+        await import('@/components/terminal-pane/terminal-file-open-in-group-toast')
+      showOpenInGroupRefusedToast(request.url)
+    }
+    return outcome.status === 'opened' ? outcome.result.browserPageId : null
+  }
   return openWorkspaceBrowserTab(request)
 })
 

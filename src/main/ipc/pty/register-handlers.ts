@@ -58,7 +58,7 @@ import { bindProviderListeners } from './provider/bind-listeners'
 import { installPtySerializeBufferIpc } from './ipc/serialize-buffer'
 import { installPtyResizeVisibilityIpc } from './ipc/resize-visibility'
 import { adoptStablePane } from './pane/adopt-stable'
-import { getPtyIpc } from '../pty-host-bindings'
+import { getPtyIpc } from './pty-host-bindings'
 import {
   noCodexResumeLaunch,
   prepareCodexResumeHome,

@@ -1,9 +1,21 @@
 #!/usr/bin/env node
 // Compare replay signal’s old CSI scan with shipped 256KB-tail/shared-regex path; assert equivalence before timing deterministic seeded payloads.
 // Also measure Kitty-mode scan unchanged and with slower includes prefilter; run node config/scripts/terminal-reattach-payload-scan-benchmark.mjs.
+import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
-import { CSI_SEQUENCE_PATTERN } from '../../src/shared/ansi-escape-sequences.ts'
-import { TerminalKittyKeyboardModeTracker } from '../../src/shared/terminal-kitty-keyboard-mode-tracker.ts'
+import { fileURLToPath } from 'node:url'
+import { createJiti } from 'jiti'
+
+const jiti = createJiti(import.meta.url, {
+  alias: { '@': fileURLToPath(new URL('../../src/renderer/src', import.meta.url)) }
+})
+const { CSI_SEQUENCE_PATTERN } = await jiti.import('../../src/shared/ansi-escape-sequences.ts')
+const { TerminalKittyKeyboardModeTracker } = await jiti.import(
+  '../../src/shared/terminal-kitty-keyboard-mode-tracker.ts'
+)
+const { hasCursorAgentReattachPayloadScreenSignal: signalSuffixRegex } = await jiti.import(
+  '../../src/renderer/src/components/terminal-pane/pty-connection/cursor-agent-reattach-screen.ts'
+)
 
 const ROUNDS = Number(process.env.ORCA_REATTACH_SCAN_BENCH_ROUNDS ?? '7')
 const MIN_ITERATION_MS = 120
@@ -86,7 +98,7 @@ function buildPayloads() {
   ]
 }
 
-// Baseline: verbatim copy of pty-connection.ts:448 (not exported).
+// Historical full-payload CSI character scan for comparison.
 function stripBaseline(data) {
   let normalized = ''
   let index = 0
@@ -112,13 +124,9 @@ const stripRegex = (data) => data.replace(CSI_SEQUENCE_PATTERN, '')
 
 const HEADER = 'Cursor Agent'
 const TAIL_CHARS = 5000
-// Mirrors CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS in pty-connection.ts.
-const SUFFIX_RAW_CHARS = 256 * 1024
 
 const signalBaseline = (data) => hasSignal(stripBaseline(data))
 const signalRegex = (data) => hasSignal(stripRegex(data))
-const signalSuffixRegex = (data) =>
-  hasSignal(stripRegex(data.length > SUFFIX_RAW_CHARS ? data.slice(-SUFFIX_RAW_CHARS) : data))
 
 function hasSignal(normalized) {
   const headerIndex = normalized.lastIndexOf(HEADER)
@@ -197,12 +205,13 @@ const kittyScan = (data) => {
 }
 // The includes() introducer pre-filter a daemon-side mode scan would use.
 const kittyGated = (data) => {
-  if (!data.includes('\x1b[?') && !data.includes('\x1bc') && !data.includes('\x9b')) {
+  if (!data.includes('\x1b[') && !data.includes('\x1bc') && !data.includes('\x9b')) {
     return 0
   }
   return kittyScan(data)
 }
 for (const { name, data } of payloads) {
+  assert.equal(kittyGated(data), kittyScan(data), `Kitty gate disagrees on ${name}`)
   console.log(
     `${pad(name, 36)} ${pad(kb(data), 8)} ${pad(measure(kittyScan, data).toFixed(3), 11)} ${pad(measure(kittyGated, data).toFixed(3), 15)}`
   )
@@ -212,19 +221,22 @@ for (const { name, data } of payloads) {
 const liveChunk = buildColoredScrollback(4 * 1024, 5).replaceAll('\x1b', '')
 const introducerRows = [
   ['4KB live chunk, no escapes', liveChunk],
-  ['4KB live chunk, \\x1b[?25l present', `${liveChunk}\x1b[?25l`]
+  ['4KB live chunk, \\x1b[?25l present', `${liveChunk}\x1b[?25l`],
+  ['4KB live chunk, Kitty flags 3', `${liveChunk}\x1b[>3u`],
+  ['4KB live chunk, Kitty flags 7', `${liveChunk}\x1b[=7u`]
 ]
 console.log(
   `\n${pad('payload', 36)} ${pad('size', 8)} ${pad('scanReplay', 11)} ${pad('+includes gate', 15)}`
 )
 for (const [name, data] of introducerRows) {
+  assert.equal(kittyGated(data), kittyScan(data), `Kitty gate disagrees on ${name}`)
   console.log(
     `${pad(name, 36)} ${pad(kb(data), 8)} ${pad(measure(kittyScan, data).toFixed(3), 11)} ${pad(measure(kittyGated, data).toFixed(3), 15)}`
   )
 }
 
 console.log(
-  '\nSnapshot/replay payloads always contain \\x1b[?, so the includes() gate never fires on\nthe reattach path — it only helps the live per-chunk path.'
+  '\nThese replay fixtures contain CSI escapes, so the includes() gate never skips\ntheir scan. The live plain-output row measures the no-escape fast path.'
 )
 
 // Time xterm on identical bytes as reference cost for deciding whether scan optimization matters.

@@ -310,6 +310,7 @@
     "view": "查看",
     "reload": "重新加载",
     "forceReload": "强制重新加载",
+    "toggleDevTools": "切换开发者工具",
     "resetSize": "重置缩放",
     "zoomIn": "放大",
     "zoomOut": "缩小",
@@ -16934,7 +16935,12 @@
             "copyImage": "复制图片",
             "copyImageAddress": "复制图片地址",
             "searchSelection": "使用 {{value0}} 搜索“{{value1}}”",
-            "inspect": "检查"
+            "inspect": "检查",
+            "devToolsTitle": "DevTools",
+            "devToolsDockRight": "停靠到右侧",
+            "devToolsDockBottom": "停靠到底部",
+            "devToolsUndock": "在单独窗口中打开",
+            "devToolsClose": "关闭 DevTools"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",

@@ -39,9 +39,7 @@ export function stageWebRuntimeBrowserTab(args: {
       executionHostId: toRuntimeExecutionHostId(args.environmentId),
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.title !== undefined ? { title: args.title } : {}),
-      ...(args.profileId !== undefined && args.profileId !== null
-        ? { sessionProfileId: args.profileId }
-        : {}),
+      ...(args.profileId !== undefined ? { sessionProfileId: args.profileId } : {}),
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
       ...(args.focusAddressBar !== undefined ? { focusAddressBar: args.focusAddressBar } : {})
     })

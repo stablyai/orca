@@ -143,6 +143,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'browserDefaultSearchEngine',
   'browserDefaultZoomLevel',
   'browserKagiSessionLink',
+  'browserDevToolsDock',
   'windowBounds',
   'windowMaximized',
   'dashboardPopoutBounds',

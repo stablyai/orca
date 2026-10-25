@@ -3,7 +3,7 @@ import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { MobileNativeChatLongPressContent as Content } from './MobileNativeChatLongPressContent'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
-import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
+import { selectActiveToolCall } from '../../../src/shared/native-chat/tools/native-chat-tool-activity'
 import {
   isImageRefBlock,
   isSubagentGroupBlock,

@@ -1,5 +1,5 @@
 import { sha256 } from '@noble/hashes/sha256'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
@@ -119,7 +119,7 @@ function waveHost(files: Record<string, string>, options: WaveHostOptions = {}) 
     close: vi.fn()
   }
 
-  const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const settleMicrotasks = () => vi.advanceTimersByTimeAsync(0)
 
   // Drain after settlement too so unstopped sibling reads remain visible.
   const runWaves = async (
@@ -167,6 +167,9 @@ function syntheticBundle(): Record<string, string> {
     'z-big.js': big
   }
 }
+
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => vi.useRealTimers())
 
 describe('fetchMobileWebBundle chunk pipeline', () => {
   it('keeps four chunk reads in flight across the whole bundle, largest asset first', async () => {

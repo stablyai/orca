@@ -122,6 +122,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       incoming: terminalOwnedPayload.payload.agentType,
       // Relay presence is the execution host's owner verdict, not the sender's identity.
       incomingProcess: payload.connectionId ? undefined : incoming.agentPresence?.process,
+      incomingSession: terminalOwnedPayload.providerSession?.id,
       now
     })
     if (

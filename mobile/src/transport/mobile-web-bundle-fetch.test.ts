@@ -139,13 +139,6 @@ function chunkCallCount(calls: readonly HostCall[]): number {
   return calls.filter((call) => call.method === 'mobileWeb.bundle.chunk').length
 }
 
-// Drain enough ticks to expose a worker pool missing its stop check.
-async function drainPendingHostWork(): Promise<void> {
-  for (let tick = 0; tick < 300; tick += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-}
-
 describe('fetchMobileWebBundle', () => {
   it('pages every asset to eof and returns the verified bytes', async () => {
     const host = bundleHost({ 'index.html': '<h1>orca</h1>', 'assets/app.js': 'x=1' })
@@ -438,35 +431,41 @@ describe('fetchMobileWebBundle', () => {
   })
 
   it('stops the other reads mid-asset once one chunk is refused', async () => {
-    const host = bundleHost(
-      {
-        'a.js': 'x',
-        'b.js': 'b'.repeat(40),
-        'c.js': 'c'.repeat(40),
-        'd.js': 'd'.repeat(40)
-      },
-      {
-        chunkBytes: 1,
-        intercept: (call) =>
-          call.method === 'mobileWeb.bundle.chunk' &&
-          paramField(call.params, 'path') === 'b.js' &&
-          paramField(call.params, 'offset') === 1
-            ? new Error('mobile_web_bundle_asset_unknown')
-            : undefined
-      }
-    )
+    vi.useFakeTimers()
+    try {
+      const host = bundleHost(
+        {
+          'a.js': 'x',
+          'b.js': 'b'.repeat(40),
+          'c.js': 'c'.repeat(40),
+          'd.js': 'd'.repeat(40)
+        },
+        {
+          chunkBytes: 1,
+          intercept: (call) =>
+            call.method === 'mobileWeb.bundle.chunk' &&
+            paramField(call.params, 'path') === 'b.js' &&
+            paramField(call.params, 'offset') === 1
+              ? new Error('mobile_web_bundle_asset_unknown')
+              : undefined
+        }
+      )
 
-    const error = await fetchMobileWebBundle({ client: host.client }).catch(
-      (thrown: unknown) => thrown
-    )
-    const atRejection = chunkCallCount(host.calls)
-    await drainPendingHostWork()
+      const outcome = fetchMobileWebBundle({ client: host.client }).then(
+        () => ({ error: undefined, atRejection: chunkCallCount(host.calls) }),
+        (error: unknown) => ({ error, atRejection: chunkCallCount(host.calls) })
+      )
+      await vi.runAllTimersAsync()
+      const { error, atRejection } = await outcome
 
-    // The refusal is what the caller sees; the internal stop never surfaces.
-    expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_asset_unknown')
-    // Stop checks allow at most another concurrency window, never all remaining chunks.
-    expect(chunkCallCount(host.calls)).toBeLessThanOrEqual(atRejection + 4)
-    expect(chunkCallCount(host.calls)).toBeLessThan(10)
+      // The refusal is what the caller sees; the internal stop never surfaces.
+      expect(readMobileWebBundleErrorCode(error)).toBe('mobile_web_bundle_asset_unknown')
+      // Stop checks allow at most another concurrency window, never all remaining chunks.
+      expect(chunkCallCount(host.calls)).toBeLessThanOrEqual(atRejection + 4)
+      expect(chunkCallCount(host.calls)).toBeLessThan(10)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('asks for nothing at all when the caller arrives already aborted', async () => {

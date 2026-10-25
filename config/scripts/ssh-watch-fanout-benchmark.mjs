@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Compare repeated per-registration/event NFC normalization with pre-normalized root matchers/event paths for SSH watcher batches.
+// Model repeated per-root/event normalization versus hoisted root matchers/event paths for SSH watcher batches.
 // Assert identical routed results before timing and import production normalizer so folding drift cannot invalidate measurement.
+import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
+import { createJiti } from 'jiti'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const ITERATIONS = Number(process.env.ORCA_SSH_WATCH_BENCH_ITERATIONS ?? '200')
@@ -19,25 +20,15 @@ for (const [name, value] of [
   }
 }
 
-// Recheck production normalization source: if NFC fold/cost changes, benchmark’s assumption no longer holds.
-const PATH_SOURCE = readFileSync(
-  new URL('../../src/shared/cross-platform-path.ts', import.meta.url),
-  'utf8'
-)
-for (const marker of ['normalize(', 'createNormalizedPathInsideOrEqualMatcher']) {
-  if (!PATH_SOURCE.includes(marker)) {
-    throw new Error(`cross-platform-path.ts no longer contains ${marker}; this benchmark is stale`)
-  }
-}
-
-// Import the real normalizer so both arms fold paths exactly as production does.
+// Jiti resolves the production graph’s extensionless TypeScript imports.
+const jiti = createJiti(import.meta.url)
 const {
   normalizeRuntimePathForComparison,
   isPathInsideOrEqual,
   createNormalizedPathInsideOrEqualMatcher
-} = await import(new URL('../../src/shared/cross-platform-path.ts', import.meta.url).href)
+} = await jiti.import('../../src/shared/cross-platform-path.ts')
 
-// Pre-fix: mirrors the original routeSshFilesystemWatchNotification inner loop.
+// Historical per-pair normalization model.
 function routeBefore(roots, events, sink) {
   for (const rootPath of roots) {
     const matching = events.filter((event) => isPathInsideOrEqual(rootPath, event.absolutePath))
@@ -47,7 +38,7 @@ function routeBefore(roots, events, sink) {
   }
 }
 
-// Post-fix: mirrors the current implementation.
+// Synthetic hoisted-normalization model; this does not invoke the application router.
 function routeAfter(roots, events, sink) {
   const normalizedEvents = events.map((event) => ({
     event,
@@ -65,13 +56,14 @@ function routeAfter(roots, events, sink) {
 }
 
 // Use real paths: length/segments determine normalization cost, which short synthetic paths understate.
-const REPO_PATHS = execFileSync('git', ['ls-files'], {
+const REPO_PATHS = execFileSync('git', ['ls-files', '-z'], {
   cwd: REPO_ROOT,
   maxBuffer: 256 * 1024 * 1024
 })
   .toString()
-  .split('\n')
+  .split('\0')
   .filter(Boolean)
+assert.ok(REPO_PATHS.length > 0, 'Benchmark needs tracked paths')
 
 // Model multi-worktree host with explorer and base-directory watchers per root.
 function makeRoots(count) {
@@ -93,10 +85,8 @@ function makeEvents(roots, count) {
 
 function collect(roots, events, route) {
   const seen = []
-  route(roots, events, (rootPath, matching) =>
-    seen.push(`${rootPath} ${matching.map((event) => event.absolutePath).join(',')}`)
-  )
-  return seen.join('\n')
+  route(roots, events, (rootPath, matching) => seen.push([rootPath, matching]))
+  return seen
 }
 
 // Interleave rounds and compare medians to share CPU/load drift; batch ordering alone varied observed win from 6.7x to 23.3x.
@@ -145,12 +135,11 @@ for (const [rootCount, eventCount] of [
   const events = makeEvents(roots, eventCount)
   const before = collect(roots, events, routeBefore)
   const after = collect(roots, events, routeAfter)
-  if (before !== after) {
-    throw new Error(`routing differs at ${rootCount} roots x ${eventCount} events`)
-  }
-  if (!before.includes(' ')) {
-    throw new Error(`fixture routed nothing at ${rootCount} roots x ${eventCount} events`)
-  }
+  assert.deepEqual(after, before, `routing differs at ${rootCount} roots x ${eventCount} events`)
+  assert.ok(
+    before.length > 0,
+    `fixture routed nothing at ${rootCount} roots x ${eventCount} events`
+  )
   const { beforeMs, afterMs } = measureInterleaved(roots, events)
   console.log(
     `${pad(rootCount, 6)} ${pad(eventCount, 7)} ${pad(`${beforeMs.toFixed(3)} ms`, 11)} ${pad(`${afterMs.toFixed(3)} ms`, 11)} ${pad(`${(beforeMs / afterMs).toFixed(1)}x`, 9)}`
@@ -158,5 +147,5 @@ for (const [rootCount, eventCount] of [
 }
 
 console.log(
-  '\nThis times routing only. The saving scales with roots x events, so it is small\nfor a single-worktree session and largest during a remote checkout storm, which\nis exactly when the main process is already busy.'
+  '\nThis times synthetic routing models with production path normalization.\nIt excludes application dispatch, relay transport, and filesystem work.'
 )

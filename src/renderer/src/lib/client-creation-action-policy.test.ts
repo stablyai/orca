@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { createBrowserLinkTestStore, WORKSPACE } from './browser-link-open.test-fixture'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -14,6 +15,7 @@ import {
   assertManagedBrowserMaterializationAllowed,
   assertRuntimeManagedBrowserCreationAvailable,
   getClientCreationActionPolicy,
+  getWorkspaceClientCreationActionPolicy,
   resolveClientCreationActionPolicy,
   runtimeHostsPagesOnThisDesktop,
   type RuntimeBrowserHostingState
@@ -125,6 +127,26 @@ describe('resolveClientCreationActionPolicy', () => {
 })
 
 describe('client creation action guards', () => {
+  it.each([false, true])('does not read server focus for a workspace policy (web: %s)', (web) => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', web)
+    const store = createBrowserLinkTestStore()
+    const settings = getDefaultSettings('/home/test')
+    Object.defineProperty(settings, 'activeRuntimeEnvironmentId', {
+      get: () => {
+        throw new Error('Workspace policy read server focus')
+      }
+    })
+    store.setState({ settings })
+
+    const policy = getWorkspaceClientCreationActionPolicy(store.getState(), WORKSPACE)
+    expect(policy['managed-browser']).toEqual(
+      web
+        ? { state: 'hidden', reason: MANAGED_BROWSER_UNAVAILABLE_MESSAGE }
+        : { state: 'enabled', provider: 'local-client' }
+    )
+    expect(getClientCreationActionPolicy(store.getState(), WORKSPACE)).toEqual(policy)
+  })
+
   it('fails closed for an older paired runtime and rejects local browser materialization', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     const state = {

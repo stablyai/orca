@@ -111,6 +111,9 @@ describe('stable logical RPC client', () => {
       undefined
     )
     expect(oldSession.close).toHaveBeenCalledOnce()
+    expect(nextSession.subscribe.mock.invocationCallOrder[0]).toBeLessThan(
+      oldSession.close.mock.invocationCallOrder[0]!
+    )
     expect(client.getActivePath()).toBe('relay')
     expect(client.getGeneration()).toBe(2)
     oldSession.emitStream('stale')

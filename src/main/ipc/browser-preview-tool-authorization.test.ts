@@ -123,6 +123,8 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:proceedCertificate',
   'browser:activeTabChanged',
   'browser:openDevTools',
+  'browser:closeDevTools',
+  'browser:setDevToolsDockBounds',
   'browser:addWordToDictionary',
   'browser:copyImageAt',
   'browser:setViewportOverride',

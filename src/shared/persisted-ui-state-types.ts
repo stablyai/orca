@@ -1,4 +1,5 @@
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
+import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
@@ -196,6 +197,8 @@ export type PersistedUIState = {
   browserDefaultZoomLevel?: number
   /** Optional Kagi private-session link used only when Kagi is the search engine. */
   browserKagiSessionLink?: string | null
+  /** Side and size of DevTools docked in a browser pane; one choice for every page, like Chrome. */
+  browserDevToolsDock?: BrowserDevToolsDockLayout
   /** Saved window bounds so the app restores last position/size instead of maximizing each launch. */
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */

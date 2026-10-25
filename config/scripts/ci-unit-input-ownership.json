@@ -34,12 +34,12 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/shared/native-chat-tool-identity.ts",
+      "file": "src/shared/native-chat/tools/native-chat-tool-identity.ts",
       "inputs": [],
       "emptyEnv": [],
-      "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80",
+      "sourceClosureSha256": "1e813201b2fb133e5166c14223d6d04bca99c2946c8dca5db155420a2b41d36c",
       "reason": "Reviewed data/URL parsing only; no indirect repository input. Imported source dependencies remain graph edges.",
-      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
+      "contextSha256": "030c2dd077f6b9d453554d2bb85b9a3362ef3d7c8f3f5def5c3821112f6c0632"
     },
     {
       "file": "src/shared/pairing.ts",

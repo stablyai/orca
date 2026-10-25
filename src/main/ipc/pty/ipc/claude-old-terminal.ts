@@ -2,7 +2,7 @@ import {
   getClaudeProfileRouter,
   getClaudeWslProfileRouter
 } from '../../../claude-accounts/claude-profile-installed-router'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import {
   CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION,
   CLAUDE_ACCOUNT_FUNCTION_REVERTED_DAEMON_PROTOCOL_VERSION

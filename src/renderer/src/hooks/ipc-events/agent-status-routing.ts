@@ -2,9 +2,13 @@ import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authorit
 import type { AppState } from '../../store/types'
 import { titleHasAgentName } from '../../../../shared/agent-detection'
 import type {
+  AgentStatusEntry,
   AgentStatusIpcPayload,
+  AgentType,
   ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
+import { resolveAgentStatusIdentity } from '../../../../shared/agent-status-identity'
+import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { useAppStore } from '../../store'
 
@@ -128,6 +132,32 @@ export function resolveHookPayloadAgentType(
   }
   // OpenClaude uses Claude-compatible hooks; title evidence keeps it out of Claude-only handling.
   return { ...payload, agentType: 'openclaude' }
+}
+
+/** Nested CLIs inherit the pane key; drop their hooks unless the host names them the pane's owner. */
+export function isInheritedFromActivePane(
+  existing: AgentStatusEntry,
+  data: AgentStatusIpcPayload,
+  incoming: AgentType | undefined,
+  owner: { connectionId: string | null | undefined; worktreeId: string | undefined }
+): boolean {
+  const sameTerminal = sameAgentStatusTerminalOwner(
+    { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
+    {
+      connectionId:
+        (owner.connectionId === undefined ? existing.connectionId : owner.connectionId) ?? null,
+      worktreeId: data.worktreeId ?? owner.worktreeId ?? existing.worktreeId
+    }
+  )
+  return (
+    sameTerminal &&
+    resolveAgentStatusIdentity({
+      existing: { ...existing, agentPresence: data.paneOwner },
+      incoming,
+      incomingSession: data.providerSession?.id,
+      now: data.receivedAt
+    }).inheritedFromActivePane
+  )
 }
 
 export { resolvePaneKey } from '../../lib/agent-status-pane-ownership'

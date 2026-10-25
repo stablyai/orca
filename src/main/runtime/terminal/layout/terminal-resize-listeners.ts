@@ -23,6 +23,7 @@ import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { escalateWorkerFailure } from '../../orchestration/worker-failure-escalation'
 import { dispatchReportMailbox } from '../../orchestration/dispatch-report-mailbox'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import type { OrchestrationDb } from '../../orchestration/db'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
   subscribeToTerminalResize(
@@ -56,53 +57,113 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     exitCode: number,
     cause: TerminalExitCause
   ): void {
-    const db = this._orchestrationDb
-    if (!db) {
-      return
-    }
+    const errorContext = describeTerminalExitCause(cause)
+    this.failActiveDispatchAndEscalate(handle, paneKey ?? undefined, {
+      error: errorContext,
+      options: { workerProcessExited: true, terminationReason: cause.kind },
+      processExited: true,
+      // Escalate unexpected exits on the next coordinator check even before its circuit breaker trips.
+      escalate: !isDeliberateTerminalExit(cause),
+      describe: (task, outcome) => ({
+        subject: `Agent exited unexpectedly (${errorContext})`,
+        body: `Worker ${handle} stopped while running task ${task}. ${errorContext}.${outcome}`
+      }),
+      payload: { exitCode, exitCause: cause }
+    })
+  }
 
-    // Pane identity survives handle reminting.
-    const dispatch = db.getActiveDispatchForTerminal(handle, paneKey ?? undefined)
-    if (!dispatch) {
-      return
+  /** Codex outlives a failed reconnect, so no PTY exit will ever settle its dispatch (#24791). */
+  protected settleLostAgentSession(ptyId: string): void {
+    const surfaces: { handle: string | undefined; paneKey?: string }[] = [
+      ...this.getLeavesForPty(ptyId).map((leaf) => ({
+        handle: this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)),
+        paneKey: this.makeRuntimePaneKey(leaf)
+      })),
+      // Pane identity survives handle reminting, as on the exit path.
+      {
+        handle: this.handleByPtyId.get(ptyId),
+        paneKey: this.paneOfPty(this.ptysById.get(ptyId)).paneKey ?? undefined
+      }
+    ]
+    const reason = 'Codex lost its app-server and could not reconnect; relaunch Codex to continue'
+    try {
+      surfaces.some(
+        ({ handle, paneKey }) =>
+          handle !== undefined &&
+          this.failActiveDispatchAndEscalate(handle, paneKey, {
+            error: reason,
+            // The terminal and worktree stay up for inspection; workerProcessExited bypasses the active-worker guard for this dead session.
+            options: { workerProcessExited: true, workerStage: 'agent_session_lost' },
+            processExited: false,
+            escalate: true,
+            describe: (task, outcome) => ({
+              subject: 'Agent session lost',
+              body: `Worker ${handle} can no longer run task ${task}: ${reason}. Its terminal is still open for inspection.${outcome}`
+            }),
+            payload: { reason }
+          })
+      )
+    } catch (error) {
+      console.warn('[orchestration] failed to settle a lost agent session', ptyId, error)
     }
-    // Only this runtime's in-flight stop claims a clean exit; durable stopping rows from a crashed runtime cannot absorb later crashes.
+  }
+
+  /** Returns whether the surface had an active dispatch. */
+  private failActiveDispatchAndEscalate(
+    handle: string,
+    paneKey: string | undefined,
+    failure: {
+      error: string
+      options: Parameters<OrchestrationDb['failDispatch']>[2]
+      processExited: boolean
+      escalate: boolean
+      describe: (task: string, outcome: string) => { subject: string; body: string }
+      payload: Record<string, unknown>
+    }
+  ): boolean {
+    const db = this._orchestrationDb
+    // Pane identity survives handle reminting.
+    const dispatch = db?.getActiveDispatchForTerminal(handle, paneKey)
+    if (!db || !dispatch) {
+      return false
+    }
+    // Only this runtime's in-flight stop claims the outcome; durable stopping rows from a crashed runtime cannot absorb later failures.
     const stopping = db.getWorkerDispatch?.(dispatch.id)
     if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
-      db.settleWorkerStop(dispatch.id)
-      return
+      if (failure.processExited) {
+        db.settleWorkerStop(dispatch.id)
+      }
+      return true
     }
-
-    const errorContext = describeTerminalExitCause(cause)
-    const settled = db.failDispatch(dispatch.id, errorContext, {
-      workerProcessExited: true,
-      terminationReason: cause.kind
-    })
-    if (isDeliberateTerminalExit(cause)) {
-      return
+    const settled = db.failDispatch(dispatch.id, failure.error, failure.options)
+    if (!failure.escalate) {
+      return true
     }
-
-    // Escalate unexpected exits on the next coordinator check even before its circuit breaker trips.
     escalateWorkerFailure(
       db,
       dispatch,
       {
         from: handle,
         mailbox: () => dispatchReportMailbox(db, dispatch),
-        describe: (task) => ({
-          subject: `Agent exited unexpectedly (${errorContext})`,
-          body: `Worker ${handle} stopped while running task ${task}. ${errorContext}.${settled?.status === 'circuit_broken' ? ' This task has now failed too many times, so it will not be retried automatically.' : settled?.status === 'failed' ? ' The task is ready to be dispatched again.' : ''}`
-        }),
+        describe: (task) =>
+          failure.describe(
+            task,
+            settled?.status === 'circuit_broken'
+              ? ' This task has now failed too many times, so it will not be retried automatically.'
+              : settled?.status === 'failed'
+                ? ' The task is ready to be dispatched again.'
+                : ''
+          ),
         payload: {
           taskId: dispatch.task_id,
           dispatchId: dispatch.id,
-          exitCode,
-          exitCause: cause,
+          ...failure.payload,
           handle
         }
       },
       (to, type) => this.notifyMessageArrived(to, type)
     )
+    return true
   }
 
   async listTerminals(

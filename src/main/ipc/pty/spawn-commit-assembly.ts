@@ -9,7 +9,7 @@ import { markNativeWindowsConptyPty } from '../../runtime/terminal-model-query-a
 import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
-import type { PtySpawnTiming } from '../pty-spawn-timing'
+import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { CodexHomePtySpawnedLifecycleArgs } from './host-env/types'
 import {
   codexReattachedHomeRouteField,

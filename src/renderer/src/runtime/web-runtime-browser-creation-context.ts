@@ -1,3 +1,4 @@
+import { subscribeLinkOpenRequests } from '../lib/link-open-request'
 import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
 import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
@@ -32,6 +33,8 @@ import { selectWebRuntimeSessionBrowserWorktree } from './web-runtime-session-wo
 
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
+  isCurrentRequest?: () => boolean
+  onMaterialized?: (remotePageId: string) => void
   environmentId?: string | null
   url?: string
   profileId?: string | null
@@ -191,6 +194,19 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, context.guardedPageId)
       context.unsubscribeFocusGuard()
     })
+  }
+  if (args.isCurrentRequest) {
+    const unsubscribeState = context.unsubscribeFocusGuard
+    const unsubscribeRequests = subscribeLinkOpenRequests(() => {
+      if (args.isCurrentRequest?.() === false) {
+        clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, context.guardedPageId)
+        context.unsubscribeFocusGuard()
+      }
+    })
+    context.unsubscribeFocusGuard = () => {
+      unsubscribeState()
+      unsubscribeRequests()
+    }
   }
 }
 

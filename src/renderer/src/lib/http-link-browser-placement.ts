@@ -7,6 +7,7 @@ import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browse
 import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-open'
 import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 
 export type HttpLinkBrowserPlacement = { targetGroupId: string } | { split: TabSplitTarget }
@@ -17,7 +18,7 @@ export type HttpLinkBrowserTabState = Partial<
   groupsByWorktree?: Record<string, readonly Pick<TabGroup, 'id' | 'activeTabId'>[]>
   unifiedTabsByWorktree?: Record<
     string,
-    readonly (Pick<Tab, 'id'> & Partial<Pick<Tab, 'contentType'>>)[]
+    readonly (Pick<Tab, 'id'> & Partial<Pick<Tab, 'contentType' | 'groupId' | 'lastFocusedAt'>>)[]
   >
   settings?: Partial<Pick<GlobalSettings, 'openLinksInAppInBackground'>> | null
   createBrowserTab: (
@@ -37,15 +38,12 @@ export function resolveHttpLinkBrowserPlacement(
   state: Omit<HttpLinkBrowserTabState, 'createBrowserTab'>,
   worktreeId: string
 ): HttpLinkBrowserPlacement | null {
-  const groups = state.groupsByWorktree?.[worktreeId] ?? []
-  const tabsById = new Map((state.unifiedTabsByWorktree?.[worktreeId] ?? []).map((t) => [t.id, t]))
-  const visibleGroupIds = liveLayoutGroupIds(state, worktreeId)
-  for (const groupId of visibleGroupIds) {
-    const activeTabId = groups.find((group) => group.id === groupId)?.activeTabId
-    if (activeTabId && tabsById.get(activeTabId)?.contentType === 'browser') {
-      return { targetGroupId: groupId }
-    }
+  const visibleBrowser = findVisibleBrowserLinkTarget(state, worktreeId)
+  if (visibleBrowser) {
+    return visibleBrowser
   }
+  const groups = state.groupsByWorktree?.[worktreeId] ?? []
+  const visibleGroupIds = liveLayoutGroupIds(state, worktreeId)
   const sourceGroupId = state.activeGroupIdByWorktree?.[worktreeId]
   if (!sourceGroupId || !visibleGroupIds.has(sourceGroupId)) {
     return null
@@ -68,11 +66,11 @@ export function openLocalHttpLinkTab(
   state: HttpLinkBrowserTabState,
   worktreeId: string,
   url: string,
-  placement = resolveHttpLinkBrowserPlacement(state, worktreeId)
+  placement = resolveHttpLinkBrowserPlacement(state, worktreeId),
+  activate = !isHttpLinkBackgroundOpen(state)
 ): void {
-  const background = isHttpLinkBackgroundOpen(state)
-  const tab = state.createBrowserTab(worktreeId, url, { activate: !background, ...placement })
-  if (background) {
+  const tab = state.createBrowserTab(worktreeId, url, { activate, ...placement })
+  if (!activate) {
     return
   }
   showWorkspaceTabs(state, worktreeId)
@@ -99,7 +97,7 @@ export function prepareRemoteHttpLinkTab(
 }
 
 /** A link clicked in Agents View lands in the workspace's tab layout, so bring that layout on screen. */
-function showWorkspaceTabs(
+export function showWorkspaceTabs(
   state: Pick<HttpLinkBrowserTabState, 'activeView' | 'setActiveView'>,
   worktreeId: string
 ): void {

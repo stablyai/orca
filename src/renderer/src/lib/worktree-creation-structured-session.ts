@@ -108,7 +108,8 @@ export async function launchStructuredWorktreeSession(
         if (args.shouldActivateOnCompletion && !activation) {
           try {
             activation = activateAndRevealWorktree(args.worktreeId, {
-              providesInitialSurface: true
+              providesInitialSurface: true,
+              worktreeCreationId: args.creationId
             })
           } catch (error) {
             // Why: without a revealed workspace the provisional tab has no visible owner.

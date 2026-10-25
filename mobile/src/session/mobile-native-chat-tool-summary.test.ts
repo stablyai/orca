@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { summarizeToolInput, toolFilePath } from '../../../src/shared/native-chat-tool-summary'
+import {
+  summarizeToolInput,
+  toolFilePath
+} from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 
 describe('summarizeToolInput', () => {
   it('passes short strings through, collapsing whitespace', () => {

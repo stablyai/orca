@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import { cancelHistoryGc } from '../terminal-history-gc'
 import type { registerSshHandlers } from '../ipc/ssh/ssh'
-import type { registerDaemonManagementHandlers } from '../ipc/pty-management'
+import type { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
 import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import type { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import {
@@ -116,7 +116,7 @@ vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() })
 vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: registerPtyHandlersMock }))
 
 vi.mock('../ipc/ssh/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
-vi.mock('../ipc/pty-management', () => ({
+vi.mock('../ipc/pty/pty-management', () => ({
   registerDaemonManagementHandlers: registerDaemonManagementHandlersMock
 }))
 vi.mock('../ipc/workspace-cleanup', () => ({

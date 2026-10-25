@@ -114,8 +114,11 @@ function clickLink({
 describe('rich Markdown alternate browser click', () => {
   it.each([true, false])('opens Orca when the system browser is primary (Mac: %s)', (isMac) => {
     expect(clickLink({ isMac })).toBe(true)
-    expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/docs', {
-      activate: true
+    expect(openOwnedBrowser).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/docs',
+      intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
     })
     expect(openUrl).not.toHaveBeenCalled()
     expect(activateMarkdownLink).not.toHaveBeenCalled()
@@ -143,6 +146,7 @@ describe('rich Markdown alternate browser click', () => {
       workspaceId: 'wt-1',
       url: 'https://example.com/docs',
       intent: { kind: 'url' },
+      linkContext: { linkIntent: null, canReveal: expect.any(Function) },
       ...(sourceOwner.kind === 'ssh'
         ? { expectedSshConnectionId: sourceOwner.connectionId }
         : sourceOwner.kind === 'runtime'

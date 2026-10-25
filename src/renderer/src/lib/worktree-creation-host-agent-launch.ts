@@ -5,6 +5,7 @@ import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { InitialTerminalOptions } from '@/lib/worktree-activation-store-contract'
 import type {
   CreatedWorktreeResult,
   HostAgentLaunch
@@ -31,8 +32,35 @@ export function hostPlannableAgentLaunch(
   }
 }
 
-/** Host-planned launches also own window startup/recovery; starting either here could duplicate the agent. */
+type CreationTerminalOptions = Pick<
+  InitialTerminalOptions,
+  'worktreeCreationId' | 'createNewTerminalForStartup' | 'backendStartupTerminalSpawned'
+>
+
+/** A terminal opened mid-create must not swallow the agent launch; only this creation may seed past its pending guard. */
 export function windowStartupAfterCreate(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  result: CreatedWorktreeResult
+): {
+  startup?: WorktreeStartupPayload
+  agent: TuiAgent | null
+  terminalOptions: CreationTerminalOptions
+} {
+  const backendSpawned = result.startupTerminal?.spawned === true
+  const plan = planWindowStartup(request, result, backendSpawned)
+  return {
+    ...plan,
+    terminalOptions: {
+      worktreeCreationId: creationId,
+      ...(plan.startup ? { createNewTerminalForStartup: true } : {}),
+      ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+    }
+  }
+}
+
+/** Host-planned launches also own window startup/recovery; starting either here could duplicate the agent. */
+function planWindowStartup(
   request: WorktreeCreationRequest,
   result: CreatedWorktreeResult,
   backendSpawned: boolean
