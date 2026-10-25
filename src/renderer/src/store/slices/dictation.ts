@@ -2,8 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { DictationState, SpeechModelState } from '../../../../shared/speech-types'
 
-/** A message the native chat composer sends at `deadline` unless the user cancels. */
-export type PendingDictationAutoSend = { deadline: number }
+type PendingDictationAutoSend = { deadline: number }
 
 export type DictationSlice = {
   dictationState: DictationState

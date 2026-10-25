@@ -24,7 +24,7 @@ function secondsUntil(deadline: number): number {
 
 function DictationAutoSendIndicator({ deadline }: { deadline: number }) {
   const [seconds, setSeconds] = useState(() => secondsUntil(deadline))
-  // Why: a live region that ticks every second would interrupt screen readers.
+  // A live region that ticks every second would interrupt screen readers.
   const [announcedSeconds] = useState(seconds)
   useEffect(() => {
     setSeconds(secondsUntil(deadline))

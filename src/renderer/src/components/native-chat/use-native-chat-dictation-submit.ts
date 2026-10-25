@@ -2,7 +2,6 @@ import { useEffect, useEffectEvent, type RefObject } from 'react'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { DICTATION_SUBMIT_EVENT } from '../dictation/dictation-auto-send'
 
-/** Sends, as Enter would, when a dictation countdown into this composer's input ends. */
 export function useNativeChatDictationSubmit(
   inputRef: RefObject<NativeChatComposerInput | null>,
   send: () => void

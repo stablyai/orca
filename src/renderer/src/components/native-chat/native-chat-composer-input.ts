@@ -38,7 +38,6 @@ export type NativeChatPromptEditorProps = Omit<
   isComposing?: () => boolean
   initialValue: string
   disabled: boolean
-  /** Lets dictation send this editor's message when it ends. */
   dictationAutoSend?: boolean
   placeholder: string
   onChange: (input: NativeChatComposerInput) => void

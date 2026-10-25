@@ -9,13 +9,12 @@ import {
   type DictationAutoSend
 } from './dictation-auto-send'
 
-/** How a stopping dictation ended, known only once its stopped event arrives. */
-export type DictationSessionOutcome = {
+type DictationSessionOutcome = {
   finalTranscriptReceived: boolean
   sessionErrored: boolean
 }
 
-export type ReportDictationOutcome = (outcome: DictationSessionOutcome) => void
+type ReportDictationOutcome = (outcome: DictationSessionOutcome) => void
 
 async function allDelivered(insertions: readonly Promise<boolean>[]): Promise<boolean> {
   const results = await Promise.allSettled(insertions)
@@ -24,13 +23,9 @@ async function allDelivered(insertions: readonly Promise<boolean>[]): Promise<bo
   )
 }
 
-/** Owns the one pending send a stopping dictation can start, and everything that cancels it. */
 export function useDictationAutoSend(): {
   trackInsertion: (insertion: Promise<boolean>) => void
-  /**
-   * Starts watching for takeover when Stop is first accepted, once per dictation; later calls for
-   * the same dictation return the same reporter. Report the outcome once the stopped event arrives.
-   */
+  // Repeat calls within one dictation return the first reporter instead of re-arming.
   watchStopping: (target: DictationInsertionTarget | null) => ReportDictationOutcome
 } {
   const setPendingDictationAutoSend = useAppStore((s) => s.setPendingDictationAutoSend)
@@ -101,7 +96,7 @@ export function useDictationAutoSend(): {
   )
 
   useEffect(() => {
-    // Why: new speech appends to the same draft; its own stop starts a fresh countdown.
+    // New speech appends to the same draft; its own Stop starts a fresh countdown.
     if (dictationState === 'starting') {
       pendingInsertionsRef.current = []
       reportOutcomeRef.current = null

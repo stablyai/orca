@@ -58,7 +58,7 @@ export function DictationController() {
     async (sessionId: string) => {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
-      // Why: a user who takes over while the final transcript is still coming keeps their draft.
+      // Watch before final delivery so a takeover while the transcript lands keeps the draft.
       const reportAutoSendOutcome = watchAutoSend(insertionTargetRef.current)
       stopCapture()
       try {
@@ -264,7 +264,7 @@ export function DictationController() {
       stopRequestedDuringStartRef.current = true
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
-      // Why: startup can take a while to finish; takeover during it must count too.
+      // Startup can be slow; a takeover while it finishes must also keep the draft.
       watchAutoSend(insertionTargetRef.current)
       stopCapture({ preserveBufferedAudio: true })
       return
