@@ -308,6 +308,48 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByTestId('card').dataset.now).toBe('190000')
   })
 
+  it.each([
+    { hostKind: 'local', executionHostId: 'local', workspaceKind: 'worktree' },
+    { hostKind: 'ssh', executionHostId: 'ssh:target-1', workspaceKind: 'folder' },
+    { hostKind: 'remote', executionHostId: 'runtime:env-1', workspaceKind: 'worktree' }
+  ] as const)('opens a $hostKind workspace directly when the card has no preview PTY', (host) => {
+    const agent = card({ ...host, ptyId: null, leafId: null, unseen: true })
+    const onRevealAgent = vi.fn()
+    render(
+      <AgentKanbanBoard
+        snapshot={{ generatedAt: 1, cards: [agent] }}
+        onRevealAgent={onRevealAgent}
+      />
+    )
+
+    fireEvent.click(screen.getByTestId('card'))
+
+    expect(onRevealAgent).toHaveBeenCalledExactlyOnceWith({
+      repoId: agent.repoId,
+      worktreeId: agent.worktreeId,
+      executionHostId: host.executionHostId,
+      tabId: agent.tabId,
+      leafId: null
+    })
+    expect(ackAgent).toHaveBeenCalledExactlyOnceWith(agent.paneKey, 'explicit')
+    expect(screen.getByTestId('terminal-dialog')).toHaveAttribute('data-open', 'false')
+  })
+
+  it('keeps the preview for a live terminal instead of revealing the workspace', () => {
+    const onRevealAgent = vi.fn()
+    render(
+      <AgentKanbanBoard
+        snapshot={{ generatedAt: 1, cards: [card({})] }}
+        onRevealAgent={onRevealAgent}
+      />
+    )
+
+    fireEvent.click(screen.getByTestId('card'))
+
+    expect(screen.getByTestId('terminal-dialog')).toHaveAttribute('data-open', 'true')
+    expect(onRevealAgent).not.toHaveBeenCalled()
+  })
+
   it('keeps the terminal dialog open across bucket moves and card removal', () => {
     const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
     const { rerender } = render(

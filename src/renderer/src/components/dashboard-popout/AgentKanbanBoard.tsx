@@ -213,10 +213,20 @@ export function AgentKanbanBoard({
   const handleOpenTerminal = useCallback(
     (card: DashboardCard) => {
       onAckAgent(card.paneKey, 'explicit')
+      if (!card.ptyId) {
+        onRevealAgent({
+          repoId: card.repoId,
+          worktreeId: card.worktreeId,
+          executionHostId: card.executionHostId,
+          tabId: card.tabId,
+          leafId: card.leafId
+        })
+        return
+      }
       clickAcked.current = { paneKey: card.paneKey, stateChangedAt: card.stateChangedAt }
       setOpenedCard(card)
     },
-    [onAckAgent]
+    [onAckAgent, onRevealAgent]
   )
   // Acknowledge state changes while watched so open-dialog cards do not become unseen again.
   useEffect(() => {
