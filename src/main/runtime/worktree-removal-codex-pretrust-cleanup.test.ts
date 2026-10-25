@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OrcaRuntimeService } from './orca-runtime'
 import { upsertOrcaCreatedProjectTrustLevel } from '../codex/config-toml-trust'
+import { runExclusivelyForCodexTrustConfig } from '../codex/codex-trust-config-mutation-queue'
 
 const WORKTREE_ID = 'repo-1::/tmp/worktrees/feature-r1'
 const PROJECT = '/tmp/worktrees/feature-r1'
@@ -18,20 +19,23 @@ const FOLDER_SUFFIX = '::workspace:5e8cc6b2-1d3f-4a5b-9c2d-7f6e5a4b3c2d'
 function makeRuntimePurge(meta: Record<string, unknown> = {}) {
   const store = {
     getWorktreeMeta: () => meta,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake only supplies the meta/query members these cases drive.
     getRepos: () => [] as never[],
     removeWorktreeMeta: () => {},
     getRepo: () => undefined,
     getSettings: () => ({})
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service constructor only reads the store members the fake supplies.
   const runtime = new OrcaRuntimeService(store as never)
   return (worktreeId: string, hostId?: string) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite spies one private member by its exact declared shape.
     (
       runtime as unknown as {
         removeWorktreeMetadataAndHistory: (
           store: unknown,
           worktreeId: string,
           hostId?: string
-        ) => void
+        ) => void | Promise<void>
       }
     ).removeWorktreeMetadataAndHistory(store, worktreeId, hostId)
 }
@@ -102,5 +106,91 @@ describe('worktree removal cleans up the Codex pretrust Orca wrote', () => {
     await vi.waitFor(() => {
       expect(readFileSync(configPath, 'utf-8')).not.toContain(`[projects."${PROJECT}"]`)
     })
+  })
+
+  it('does not complete the purge before the recorded entry is deleted', async () => {
+    upsertOrcaCreatedProjectTrustLevel(configPath, PROJECT, 'trusted')
+    // Why: holding the config's mutation lane parks the cleanup, so "the purge
+    // finished" and "the entry is gone" can be told apart. A recreated path
+    // inherits trust_level = "trusted" if the purge reports completion first.
+    let releaseLane!: () => void
+    const laneHeld = new Promise<void>((resolve) => {
+      releaseLane = resolve
+    })
+    const hold = runExclusivelyForCodexTrustConfig(configPath, () => laneHeld)
+    const purge = makeRuntimePurge()
+
+    const removalAck = purge(WORKTREE_ID)
+
+    // The cleanup is queued behind the held lane: nothing landed yet.
+    expect(readFileSync(configPath, 'utf-8')).toContain(`[projects."${PROJECT}"]`)
+    // A settled purge here is the bug: the removal ack must wait for the
+    // deletion that is still parked on the config lane. A 0ms macrotask loses
+    // to any settled ack (microtasks first) and wins only against a pending one.
+    const settledBeforeCleanup = await Promise.race([
+      Promise.resolve(removalAck).then(() => true),
+      new Promise<false>((resolve) => {
+        setTimeout(() => resolve(false), 0)
+      })
+    ])
+    expect(settledBeforeCleanup).toBe(false)
+    releaseLane()
+    await hold
+    await removalAck
+    expect(readFileSync(configPath, 'utf-8')).not.toContain(`[projects."${PROJECT}"]`)
+  })
+
+  it('hands the folder-workspace forgetting dep the purge promise, not void', async () => {
+    // Why parked: the wired dep used to void the purge promise, so the folder
+    // delete had nothing to await and a forgotten workspace could report
+    // before the recorded entry was deleted.
+    let releasePurge!: () => void
+    const purgeParked = new Promise<void>((resolve) => {
+      releasePurge = resolve
+    })
+    const store = {
+      getWorktreeMeta: () => ({}),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake only supplies the meta/query members these cases drive.
+      getRepos: () => [] as never[],
+      removeWorktreeMeta: () => {},
+      getRepo: () => undefined,
+      getSettings: () => ({})
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service constructor only reads the store members the fake supplies.
+    const runtime = new OrcaRuntimeService(store as never)
+    const purgeSpy = vi
+      .spyOn(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite spies one private member by its exact declared shape.
+        runtime as unknown as {
+          removeWorktreeMetadataAndHistory: (store: unknown, worktreeId: string) => Promise<void>
+        },
+        'removeWorktreeMetadataAndHistory'
+      )
+      .mockReturnValue(purgeParked)
+    const cleanupRemovedFolderWorkspaceState =
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite reads one private member by its exact declared shape.
+      (
+        runtime as unknown as {
+          projectGroups: {
+            deps: {
+              cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void | Promise<void>
+            }
+          }
+        }
+      ).projectGroups.deps.cleanupRemovedFolderWorkspaceState
+
+    const cleanup = cleanupRemovedFolderWorkspaceState('folder:ws-1')
+    expect(purgeSpy).toHaveBeenCalledWith(expect.anything(), 'folder:ws-1')
+
+    // Voiding the promise made this resolve instantly; the dep must hand the
+    // caller the still-pending purge to await.
+    let settledEarly = false
+    void Promise.resolve(cleanup).then(() => {
+      settledEarly = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(settledEarly).toBe(false)
+    releasePurge()
+    await cleanup
   })
 })

@@ -39,7 +39,7 @@ type RuntimeProjectGroupDependencies = {
     path: string,
     connectionId?: string
   ) => Promise<{ finish(removed: boolean): Promise<void> }>
-  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
+  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void | Promise<void>
   emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
 }
 
@@ -270,6 +270,7 @@ export class RuntimeProjectGroupController {
     let gate:
       | Awaited<ReturnType<RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']>>
       | undefined
+    let cleanupState: void | Promise<void> = undefined
     try {
       if (workspace) {
         const worktreeId = folderWorkspaceKey(folderWorkspaceId)
@@ -287,7 +288,11 @@ export class RuntimeProjectGroupController {
           )
           await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
         }
-        this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
+        // Fired here (timing unchanged) but awaited at the end: the delete may
+        // only resolve after the purge has landed. `folder:<uuid>` ids parse to
+        // no filesystem path, so the pretrust drop inside the purge skips here —
+        // safe: the folder itself stays and sibling workspaces may share its path.
+        cleanupState = this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
       }
       const deleted = store.removeFolderWorkspace(folderWorkspaceId)
       if (deleted) {
@@ -301,6 +306,7 @@ export class RuntimeProjectGroupController {
           })
         }
       }
+      await cleanupState
       return { deleted }
     } finally {
       await gate?.finish(false)
