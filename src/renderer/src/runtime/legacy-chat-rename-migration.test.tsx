@@ -4,6 +4,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
+import * as conversationNames from '../../../shared/agent-session/agent-session-conversation-name'
+import * as structuredTabs from '../../../shared/structured-agent-session-tab'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type * as LayoutRouting from '@/store/terminals/tab-change-through-layout-owner'
@@ -224,6 +226,87 @@ it('keeps invisible aliases without retrying them while valid migration and expl
     }
   })
   expect(current(1).customLabel).toBe(joiners.customLabel)
+})
+
+it('bounds reconciliation scans linearly at N and 10N without resending unchanged or in-flight aliases', async () => {
+  const normalize = vi.spyOn(conversationNames, 'normalizeAgentSessionConversationName')
+  const enumerate = vi.spyOn(structuredTabs, 'isStructuredTab')
+  const aliases = ['x'.repeat(5000), '\u200B'.repeat(5000), '\u200C\u200D'.repeat(2500), null]
+  for (const count of [40, 400]) {
+    const tabs = Array.from({ length: count }, (_, index) =>
+      chat({
+        id: `scale-tab-${index}`,
+        entityId: `scale-session-${index}`,
+        executionHostId: 'runtime:paired',
+        customLabel: aliases[index % aliases.length]
+      })
+    )
+    seed(tabs[0])
+    useAppStore.setState({
+      unifiedTabsByWorktree: { [workspace.id]: tabs },
+      groupsByWorktree: {
+        [workspace.id]: [
+          {
+            id: 'group',
+            worktreeId: workspace.id,
+            activeTabId: tabs[0].id,
+            tabOrder: tabs.map((tab) => tab.id)
+          }
+        ]
+      }
+    })
+    mock.rpc.mockReset()
+    const acknowledge: (() => void)[] = []
+    mock.rpc.mockImplementation(
+      () => new Promise((resolve) => acknowledge.push(() => resolve({ applied: true })))
+    )
+    const expectScan = (population: readonly Tab[]) => {
+      expect(enumerate).toHaveBeenCalledTimes(population.length)
+      expect(normalize).toHaveBeenCalledTimes(population.length)
+      expect(normalize.mock.calls.map(([alias]) => alias)).toEqual(
+        population.map((tab) => tab.customLabel ?? '')
+      )
+      enumerate.mockClear()
+      normalize.mockClear()
+    }
+    enumerate.mockClear()
+    normalize.mockClear()
+    const stop = installLegacyChatRenameMigration()
+    stops.push(stop)
+    expectScan(tabs)
+    await waitFor(() => expect(mock.rpc).toHaveBeenCalledTimes(count / 4))
+    expect(mock.rpc.mock.calls.map(([, , params]) => params)).toEqual(
+      tabs
+        .filter((_, index) => index % 4 === 0)
+        .map((tab) => ({ sessionId: tab.entityId, name: 'x'.repeat(200), legacyAlias: true }))
+    )
+
+    // A new snapshot with identical candidates still scans, but must not send again.
+    useAppStore.setState({ unifiedTabsByWorktree: { [workspace.id]: [...tabs] } })
+    expectScan(tabs)
+    // Changing the candidate set reaches the in-flight check rather than the unchanged shortcut.
+    useAppStore.setState({ unifiedTabsByWorktree: { [workspace.id]: tabs.slice(1) } })
+    expectScan(tabs.slice(1))
+    useAppStore.setState({ unifiedTabsByWorktree: { [workspace.id]: [...tabs] } })
+    expectScan(tabs)
+    await act(async () => {})
+    expect(mock.rpc).toHaveBeenCalledTimes(count / 4)
+    expect(
+      buildPersistedUnifiedTabSessionData(useAppStore.getState()).unifiedTabs?.[workspace.id]?.map(
+        (tab) => tab.customLabel
+      )
+    ).toEqual(tabs.map((tab) => tab.customLabel))
+
+    stop()
+    // Refusing cleanup lets outstanding requests settle without unrelated per-alias store writes.
+    mock.layout.mockImplementation((_state, _target, _change, _local, answers) => {
+      answers?.refused?.()
+      return true
+    })
+    await act(async () => acknowledge.forEach((resolve) => resolve()))
+    expect(mock.layout).toHaveBeenCalledTimes(count / 4)
+    mock.layout.mockReset()
+  }
 })
 
 it('migrates an inactive restored alias after reconnect and clears both saved copies only after acknowledgment', async () => {
