@@ -62,6 +62,7 @@ export type TerminalDraftSaveResult =
   | { ok: false; status: 'conflict'; conflict: TerminalDraftConflict }
   | { ok: false; status: 'stale_lease'; epoch: number }
   | { ok: false; status: 'locked'; reason: 'terminal_input_locked' }
+  | { ok: false; status: 'stale_binding'; reason: 'terminal_handle_stale' }
   | { ok: false; status: 'unsupported'; reason: TerminalDraftUnavailableReason }
   | { ok: false; status: 'unknown'; reason: 'bridge_timeout' | 'invalid_bridge_reply' | 'disposed' }
 
@@ -94,5 +95,6 @@ export type TerminalDraftSubmitResult =
   | { ok: false; status: 'conflict'; conflict: TerminalDraftConflict }
   | { ok: false; status: 'stale_lease'; epoch: number }
   | { ok: false; status: 'locked'; reason: 'terminal_input_locked' }
+  | { ok: false; status: 'stale_binding'; reason: 'terminal_handle_stale' }
   | { ok: false; status: 'unsupported'; reason: TerminalDraftUnavailableReason }
   | { ok: false; status: 'unknown'; reason: 'bridge_timeout' | 'invalid_bridge_reply' | 'disposed' }

@@ -44,6 +44,13 @@ export const TERMINAL_DRAFT_METHODS = [
         return { ok: false, status: 'unsupported', reason: 'not_live' }
       }
       await assertTerminalSendTextWithinLimit(params.text)
+      const isBindingLive = (): boolean => {
+        try {
+          return runtime.resolveLiveLeafForHandle(params.terminal)?.ptyId === ptyId
+        } catch {
+          return false
+        }
+      }
       return getTerminalDraftCoordinator().save({
         ptyId,
         client: params.client,
@@ -51,6 +58,7 @@ export const TERMINAL_DRAFT_METHODS = [
         baseToken: params.baseToken,
         text: params.text,
         operationId: params.operationId,
+        isBindingLive,
         canWrite: () => !isTerminalInputLockedForClient(runtime, ptyId, params.client)
       })
     }
@@ -65,6 +73,13 @@ export const TERMINAL_DRAFT_METHODS = [
         return { ok: false, status: 'unsupported', reason: 'not_live' }
       }
       await assertTerminalSendTextWithinLimit(params.text)
+      const isBindingLive = (): boolean => {
+        try {
+          return runtime.resolveLiveLeafForHandle(params.terminal)?.ptyId === ptyId
+        } catch {
+          return false
+        }
+      }
       return getTerminalDraftCoordinator().submit({
         ptyId,
         client: params.client,
@@ -72,6 +87,7 @@ export const TERMINAL_DRAFT_METHODS = [
         baseToken: params.baseToken,
         text: params.text,
         operationId: params.operationId,
+        isBindingLive,
         canWrite: () => !isTerminalInputLockedForClient(runtime, ptyId, params.client),
         submitInput: async () => {
           // Why: the lock can move while the draft replacement is in flight; recheck at the Enter.

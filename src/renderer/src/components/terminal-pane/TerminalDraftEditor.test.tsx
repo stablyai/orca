@@ -278,6 +278,38 @@ describe('TerminalDraftEditor', () => {
     expect(container.textContent).not.toContain('The terminal draft was changed elsewhere.')
   })
 
+  it('keeps dirty local text when Reload cannot persist to localStorage', async () => {
+    beginDesktopTerminalDraft.mockResolvedValue({
+      ok: true,
+      supported: true,
+      adapter: 'pi-editor',
+      epoch: 10,
+      text: 'remote',
+      sourceToken: 'token-quota'
+    })
+    renderEditor()
+    await openEditor()
+    const field = textarea()!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(field, 'local survives quota')
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    try {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Reload the terminal draft"]')
+        ?.click()
+      for (let index = 0; index < 6; index += 1) {
+        await tick()
+      }
+    } finally {
+      setItem.mockRestore()
+    }
+    expect(textarea()?.value).toBe('local survives quota')
+  })
+
   it('keeps dirty local text when Reload is used', async () => {
     beginDesktopTerminalDraft.mockResolvedValue({
       ok: true,

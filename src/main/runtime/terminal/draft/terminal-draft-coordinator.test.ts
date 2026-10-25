@@ -193,6 +193,30 @@ describe('TerminalDraftCoordinator', () => {
     expect(harness.remoteText()).toBe('first\nsecond\nthird\nfourth')
   })
 
+  it('refuses a draft write after the handle stopped naming this PTY', async () => {
+    const harness = createHarness()
+    const begun = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })
+    if (!begun.ok) {
+      throw new Error('expected begin')
+    }
+    const saved = await harness.coordinator.save({
+      ptyId: 'pty-1',
+      client: desktop,
+      epoch: begun.epoch,
+      baseToken: begun.sourceToken,
+      text: 'stale handle must not write',
+      operationId: 'op-stale-binding',
+      isBindingLive: () => false
+    })
+    expect(saved).toMatchObject({
+      ok: false,
+      status: 'stale_binding',
+      reason: 'terminal_handle_stale'
+    })
+    expect(harness.replace).not.toHaveBeenCalled()
+    expect(harness.remoteText()).toBe('first\nsecond\nthird\nfourth')
+  })
+
   it('submits the draft and reports Enter acceptance separately from the save', async () => {
     const harness = createHarness()
     const begun = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })

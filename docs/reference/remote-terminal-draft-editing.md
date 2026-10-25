@@ -94,9 +94,10 @@ disposal is rejected, and capture, replace, and Enter completions are rechecked 
 install a lease or cache a result for the replacement process.
 
 `terminal.draft.save` writes the whole text and does not press Enter. Both save and submit
-recheck the existing terminal input lock immediately before the editor write, and submit checks it
-again at the actual Enter write. A locked client gets `status: "locked"` and nothing is written;
-a lock that arrives after the draft write yields `saved_not_submitted` rather than an Enter.
+recheck the existing terminal input lock and the handle→PTY binding immediately before the editor
+write, and submit checks both again at the actual Enter write. A locked client gets
+`status: "locked"`; a remapped handle gets `status: "stale_binding"`; neither writes. A lock that
+arrives after the draft write yields `saved_not_submitted` rather than an Enter.
 
 `terminal.draft.submit` writes the whole text, then asks the existing runtime send path for a
 single Enter write with a write settlement. The answer distinguishes:
@@ -114,8 +115,9 @@ obvious retry duplication, but it is not a cross-crash exactly-once promise for 
   Save/Reload/Send are explicit. Closing or navigating away with unsaved text parks a recovery
   copy, and reopening against changed terminal text surfaces a conflict instead of overwriting.
   A conflict adopts the terminal's current token so "Use terminal version" and "Keep my text" both
-  produce a save that can proceed. Reload persists dirty text first, so it is restored or shown as
-  a conflict instead of being silently discarded. A clean unmount clears a recovery record only
+  produce a save that can proceed. Reload passes the dirty text to the capture as an in-memory snapshot, so it is restored or shown
+  as a conflict even when localStorage is full or unavailable; the storage write remains a
+  best-effort backup. A clean unmount clears a recovery record only
   when this mount had opened the draft; a parked record it never touched is left alone. Each
   editor instance has its own lease identity.
 - Mobile: the buffered command bar gets a download action that pulls the terminal draft, a save

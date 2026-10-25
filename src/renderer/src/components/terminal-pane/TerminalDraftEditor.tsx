@@ -4,7 +4,8 @@ import {
   clearRecoveredDraft,
   readRecoveredDraft,
   resolveDraftRecovery,
-  writeRecoveredDraft
+  writeRecoveredDraft,
+  type LocalRecovery
 } from './terminal-draft-recovery'
 import { TerminalDraftTrigger } from './TerminalDraftTrigger'
 import { TerminalDraftPanel } from './TerminalDraftPanel'
@@ -82,7 +83,7 @@ export function TerminalDraftEditor({
   }, [])
 
   const open = useCallback(
-    async (force = false) => {
+    async (force = false, parked?: LocalRecovery) => {
       const ptyId = getPtyId()
       if (!ptyId) {
         setPhase('unsupported')
@@ -120,7 +121,7 @@ export function TerminalDraftEditor({
         baseTokenRef.current = result.sourceToken
         remoteTextRef.current = result.text
         const resolved = resolveDraftRecovery({
-          local: readRecoveredDraft(recoveryKey),
+          local: parked ?? readRecoveredDraft(recoveryKey),
           remoteText: result.text,
           remoteToken: result.sourceToken
         })
@@ -192,6 +193,11 @@ export function TerminalDraftEditor({
     }
     if (result.status === 'locked') {
       setStatus('Another device is using terminal input. Nothing was written.')
+      return false
+    }
+    if (result.status === 'stale_binding') {
+      setActionsLocked(true)
+      setStatus('This terminal changed. Reopen the draft to continue.')
       return false
     }
     if (result.status === 'stale_lease') {
@@ -328,10 +334,12 @@ export function TerminalDraftEditor({
       reason={reason}
       onTextChange={updateText}
       onReload={() => {
-        if (dirty) {
-          writeRecoveredDraft(recoveryKey, { text, remoteText: remoteTextRef.current })
+        const parked = dirty ? { text, remoteText: remoteTextRef.current } : undefined
+        // Why: the in-memory snapshot survives a full or unavailable localStorage.
+        if (parked) {
+          writeRecoveredDraft(recoveryKey, parked)
         }
-        void open()
+        void open(false, parked)
       }}
       onSave={() => void save()}
       onSubmit={() => void submit()}

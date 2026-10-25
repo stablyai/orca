@@ -161,6 +161,7 @@ export class TerminalDraftCoordinator {
     text: string
     operationId: string
     canWrite?: () => boolean
+    isBindingLive?: () => boolean
   }): Promise<TerminalDraftSaveResult> {
     return this.gate.runExclusive(input.ptyId, (generation) =>
       generation === this.gate.generation(input.ptyId)
@@ -178,6 +179,7 @@ export class TerminalDraftCoordinator {
     operationId: string
     submitInput: TerminalDraftSubmitInput
     canWrite?: () => boolean
+    isBindingLive?: () => boolean
   }): Promise<TerminalDraftSubmitResult> {
     return this.gate.runExclusive(input.ptyId, (generation) =>
       generation === this.gate.generation(input.ptyId)
@@ -207,6 +209,7 @@ export class TerminalDraftCoordinator {
       text: string
       operationId: string
       canWrite?: () => boolean
+      isBindingLive?: () => boolean
     },
     generation: number
   ): Promise<TerminalDraftSaveResult> {
@@ -226,6 +229,9 @@ export class TerminalDraftCoordinator {
     if ('result' in prepared) {
       this.operations.rememberSave(input.ptyId, input.operationId, prepared.result)
       return prepared.result
+    }
+    if (input.isBindingLive && !input.isBindingLive()) {
+      return { ok: false, status: 'stale_binding', reason: 'terminal_handle_stale' }
     }
     if (input.canWrite && !input.canWrite()) {
       return { ok: false, status: 'locked', reason: 'terminal_input_locked' }
@@ -249,6 +255,7 @@ export class TerminalDraftCoordinator {
       operationId: string
       submitInput: TerminalDraftSubmitInput
       canWrite?: () => boolean
+      isBindingLive?: () => boolean
     },
     generation: number
   ): Promise<TerminalDraftSubmitResult> {
@@ -269,6 +276,9 @@ export class TerminalDraftCoordinator {
       const failure = prepared.result
       this.operations.rememberSubmit(input.ptyId, input.operationId, failure)
       return failure
+    }
+    if (input.isBindingLive && !input.isBindingLive()) {
+      return { ok: false, status: 'stale_binding', reason: 'terminal_handle_stale' }
     }
     if (input.canWrite && !input.canWrite()) {
       return { ok: false, status: 'locked', reason: 'terminal_input_locked' }
