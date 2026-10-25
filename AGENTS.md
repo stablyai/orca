@@ -1,5 +1,6 @@
 # Useful Commands
 
+- **Before handoff**: `pnpm check:changed --maxWorkers=2` is the one gate to run before saying done: format, lint, changed-code gate, typecheck, affected tests, and touched ratchets against `origin/main` plus local edits. It exits at once when nothing changed since its last pass (`--force` reruns).
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
 - Local typechecks use incremental tsrs on Apple Silicon macOS and x64/arm64 Linux; other platforms use Bun. Keep `.cache/typecheck/` between checks; delete it to force a fresh local check. `pnpm typecheck:ci` explicitly uses Bun; `pnpm tc --compiler=native` uses TypeScript.
 - **Test**: `pnpm test [path/to/file.test.ts]`

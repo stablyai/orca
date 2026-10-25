@@ -70,6 +70,7 @@ desktop.ini
 /.cache/vite/
 /.cache/vite.lock/
 /.cache/typecheck/
+/.cache/check-changed.json
 
 # Logs
 *.log
