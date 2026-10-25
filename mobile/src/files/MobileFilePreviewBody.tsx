@@ -1,4 +1,6 @@
 import { MobileFileMediaPreview } from './MobileFileMediaPreview'
+import { MobilePdfHandoff } from './MobilePdfHandoff'
+import { mobilePdfHandoffMime } from './mobile-pdf-handoff'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { ActivityIndicator, Image, ScrollView, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
@@ -49,6 +51,14 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         <Text style={styles.stateText}>Empty file</Text>
       </View>
     )
+  }
+  if (mobilePdfHandoffMime(options.relativePath)) {
+    const media = {
+      worktreeId: options.worktreeId ?? '',
+      relativePath: options.relativePath,
+      mimeType: 'application/pdf'
+    }
+    return <MobilePdfHandoff media={media} client={options.client ?? null} title={options.title} />
   }
   if (preview.kind === 'media') {
     return (

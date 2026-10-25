@@ -30,6 +30,7 @@ import {
 } from './mobile-file-preview-editability'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
+import { mobilePdfHandoffMime } from './mobile-pdf-handoff'
 import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
 
 type Props = {
@@ -92,6 +93,15 @@ export function MobileFilePreviewScreen({ route }: Props) {
   }, [savedContent])
 
   const loadPreview = useCallback(async () => {
+    if (previewParams) {
+      const previewPath =
+        previewParams.source === 'terminalArtifact'
+          ? (previewParams.absolutePath ?? '')
+          : (previewParams.relativePath ?? '')
+      if (mobilePdfHandoffMime(previewPath)) {
+        return
+      }
+    }
     const loadSourceKey = previewSourceKey
     if (!previewParams || !previewSource || loadSourceKey !== routePreviewSourceKey) {
       setPreview(previewError(route.ok ? 'Unable to load preview' : route.message))
