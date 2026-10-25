@@ -7,8 +7,22 @@ import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import { expect, test } from './helpers/orca-app'
 import { removeWorktreeViaStore } from './helpers/dead-terminal'
+import {
+  ensureTerminalVisible,
+  getActiveTabId,
+  getActiveTabType,
+  waitForActiveWorktree
+} from './helpers/store'
+import {
+  readTerminalPaneDomLeafOrder,
+  splitActiveTerminalPane,
+  waitForActiveTerminalManager,
+  waitForPaneCount
+} from './helpers/terminal'
 
 async function openPluginSettings(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -44,6 +58,38 @@ async function openDemoPanel(page: Page): Promise<void> {
   )
 }
 
+async function waitForPaneHandles(
+  client: RuntimeClient,
+  worktreeId: string,
+  tabId: string,
+  leafIds: string[]
+): Promise<string[]> {
+  let handles: string[] = []
+  await expect
+    .poll(
+      async () => {
+        const listed = await client
+          .call<RuntimeTerminalListResult>('terminal.list', {
+            worktree: `id:${worktreeId}`,
+            limit: 200
+          })
+          .catch(() => null)
+        const terminals = listed?.result.terminals ?? []
+        handles = leafIds.map(
+          (leafId) =>
+            terminals.find(
+              (terminal) =>
+                terminal.tabId === tabId && terminal.leafId === leafId && terminal.connected
+            )?.handle ?? ''
+        )
+        return handles.every((handle) => handle.length > 0)
+      },
+      { timeout: 15_000, message: 'terminal.list did not report a handle for every split pane' }
+    )
+    .toBe(true)
+  return handles
+}
+
 async function createWorktree(page: Page, name: string): Promise<string> {
   await page.waitForFunction(
     () => {
@@ -69,7 +115,10 @@ async function createWorktree(page: Page, name: string): Promise<string> {
   }, name)
 }
 
-test('runs hello-orca panel, command, and event behind visible consent', async ({ orcaPage }) => {
+test('runs hello-orca panel, command, and event behind visible consent', async ({
+  electronApp,
+  orcaPage
+}) => {
   const tempRoot = await mkdtemp(join(tmpdir(), 'orca-hello-plugin-e2e-'))
   const pluginRoot = join(tempRoot, 'hello-orca')
   let createdWorktreeId: string | null = null
@@ -153,6 +202,56 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
         name: 'Hello Orca reloaded'
       })
     ).toBeVisible({ timeout: 15_000 })
+
+    const worktreeId = await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage)
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    const tabId = await getActiveTabId(orcaPage)
+    const leafIds = await readTerminalPaneDomLeafOrder(orcaPage)
+    expect(leafIds).toHaveLength(2)
+    const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    const handles = await waitForPaneHandles(
+      new RuntimeClient(userDataDir, 30_000),
+      worktreeId,
+      tabId!,
+      leafIds
+    )
+    const panel = orcaPage.frameLocator('iframe[title="Hello Orca"]')
+    for (const [index, leafId] of leafIds.entries()) {
+      await orcaPage.locator(`.pane[data-leaf-id="${leafId}"]`).click()
+      await panel.getByRole('button', { name: 'Read workspace context' }).click()
+      await expect(panel.getByRole('combobox')).toHaveValue(handles[index]!)
+    }
+
+    await orcaPage.evaluate((id) => {
+      window.__store?.getState().createBrowserTab(id, 'about:blank', {
+        title: 'Plugin context browser',
+        activate: true
+      })
+    }, worktreeId)
+    await expect.poll(() => getActiveTabType(orcaPage)).toBe('browser')
+    const panelFrame = await (
+      await orcaPage.locator('iframe[title="Hello Orca"]').elementHandle()
+    )?.contentFrame()
+    await expect
+      .poll(async () => {
+        const context = await panelFrame!.evaluate<{
+          value: { activeTerminalId: string | null; terminals: { id: string }[] } | null
+        }>("call('workspace.readContext')")
+        return {
+          activeTerminalId: context.value?.activeTerminalId,
+          terminalIds: context.value?.terminals.map((terminal) => terminal.id).sort()
+        }
+      })
+      .toEqual({ activeTerminalId: null, terminalIds: [...handles].sort() })
+    await panel.getByRole('button', { name: 'Read workspace context' }).click()
+    await expect(panel.getByRole('combobox')).toHaveValue('')
+    const send = panel.getByRole('button', { name: /into selected terminal/ })
+    await expect(send).toBeDisabled()
+    await panel.getByRole('combobox').selectOption(handles[0]!)
+    await expect(send).toBeEnabled()
 
     createdWorktreeId = await createWorktree(orcaPage, `plugin-event-${Date.now()}`)
     await expect

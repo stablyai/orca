@@ -1,7 +1,12 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-host-api'
+import {
+  getPluginHostMethodSpec,
+  PLUGIN_TERMINAL_AGENT_MAX_LENGTH,
+  PLUGIN_TERMINAL_ID_MAX_LENGTH,
+  PLUGIN_WORKSPACE_TERMINAL_LIMIT
+} from '../../shared/plugins/plugin-host-api'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
 
@@ -119,7 +124,14 @@ describe('executePluginHostCall mutation auditing', () => {
   })
 })
 
-function createTerminalHarness(terminalHandles: string[]): {
+type ListedTerminal = Awaited<
+  ReturnType<PluginRuntimeDelegate['listTerminals']>
+>['terminals'][number]
+
+function createTerminalHarness(
+  terminals: (string | ListedTerminal)[],
+  activePane: { tabId: string; leafId: string } | null = null
+): {
   delegate: PluginRuntimeDelegate
   services: PluginHostServices
 } {
@@ -131,8 +143,13 @@ function createTerminalHarness(terminalHandles: string[]): {
       displayName: 'Repo'
     }),
     listTerminals: vi.fn().mockResolvedValue({
-      terminals: terminalHandles.map((handle) => ({ handle, title: null }))
+      terminals: terminals.map((terminal) =>
+        typeof terminal === 'string'
+          ? { handle: terminal, tabId: 'tab-1', leafId: terminal, title: 'claude: secret prompt' }
+          : terminal
+      )
     }),
+    getActiveTerminalPane: vi.fn().mockReturnValue(activePane),
     sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
     dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true })
   }
@@ -233,7 +250,105 @@ describe('terminal.sendText explicit worktree routing', () => {
     expect(outcome.ok && (outcome.value as { terminals: unknown[] }).terminals).toHaveLength(
       PLUGIN_WORKSPACE_TERMINAL_LIMIT
     )
+    expect(outcome).not.toHaveProperty('value.terminals.0.title')
     expect(delegate.listTerminals).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('workspace.readContext active terminal', () => {
+  const claudePane = { handle: 'terminal:ssh:claude', tabId: 'tab-1', leafId: 'pane:1' }
+  const shellPane = { handle: 'terminal:local:shell', tabId: 'tab-1', leafId: 'pane:2' }
+
+  async function readContext(services: PluginHostServices): Promise<unknown> {
+    const outcome = await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'workspace.readContext',
+      params: {},
+      viaPanel: true,
+      grantedCapabilities: ['workspace:read'],
+      services
+    })
+    if (!outcome.ok) {
+      throw new Error(`readContext failed: ${outcome.error}`)
+    }
+    return outcome.value
+  }
+
+  it('names the focused pane and each terminal agent', async () => {
+    const { delegate, services } = createTerminalHarness(
+      [{ ...claudePane, agentIdentity: 'claude' }, shellPane],
+      { tabId: 'tab-1', leafId: 'pane:1' }
+    )
+
+    await expect(readContext(services)).resolves.toEqual({
+      branch: 'main',
+      displayName: 'Repo',
+      terminals: [
+        { id: 'terminal:ssh:claude', agent: 'claude' },
+        { id: 'terminal:local:shell', agent: null }
+      ],
+      activeTerminalId: 'terminal:ssh:claude'
+    })
+    expect(delegate.getActiveTerminalPane).toHaveBeenCalledWith('worktree-1')
+  })
+
+  it('picks the focused leaf among the panes of one split tab', async () => {
+    const { services } = createTerminalHarness([claudePane, shellPane], {
+      tabId: 'tab-1',
+      leafId: 'pane:2'
+    })
+
+    await expect(readContext(services)).resolves.toMatchObject({
+      activeTerminalId: 'terminal:local:shell'
+    })
+  })
+
+  it('returns null when the active tab is not a terminal', async () => {
+    const { services } = createTerminalHarness([claudePane, shellPane], null)
+
+    await expect(readContext(services)).resolves.toMatchObject({ activeTerminalId: null })
+  })
+
+  it('returns null when the focused pane is not in the returned terminals', async () => {
+    const oversized = {
+      handle: 'x'.repeat(PLUGIN_TERMINAL_ID_MAX_LENGTH + 1),
+      tabId: 'tab-2',
+      leafId: 'pane:1'
+    }
+    const { services } = createTerminalHarness([claudePane, oversized], {
+      tabId: 'tab-2',
+      leafId: 'pane:1'
+    })
+
+    await expect(readContext(services)).resolves.toEqual({
+      branch: 'main',
+      displayName: 'Repo',
+      terminals: [{ id: 'terminal:ssh:claude', agent: null }],
+      activeTerminalId: null
+    })
+  })
+
+  it('drops an oversized agent id instead of truncating it', async () => {
+    const { services } = createTerminalHarness([
+      { ...claudePane, agentIdentity: 'a'.repeat(PLUGIN_TERMINAL_AGENT_MAX_LENGTH + 1) }
+    ])
+
+    await expect(readContext(services)).resolves.toMatchObject({
+      terminals: [{ id: 'terminal:ssh:claude', agent: null }]
+    })
+  })
+
+  it('rejects a result whose active terminal is not one of its terminals', () => {
+    const result = getPluginHostMethodSpec('workspace.readContext')!.result
+
+    expect(
+      result.safeParse({
+        branch: 'main',
+        displayName: 'Repo',
+        terminals: [{ id: 'terminal:local:one', agent: null }],
+        activeTerminalId: 'terminal:local:other'
+      }).success
+    ).toBe(false)
   })
 })
 

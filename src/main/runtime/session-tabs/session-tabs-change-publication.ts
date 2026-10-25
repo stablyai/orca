@@ -11,6 +11,7 @@ import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { getMobileSessionTabOrderIds } from '../mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
+import { resolveActiveTerminalPane, type ActiveTerminalPane } from '../active-terminal-pane'
 
 export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
   protected scheduleMobileSessionTabsChanged(worktreeId: string): void {
@@ -67,6 +68,10 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         )
       }
     }
+  }
+
+  getActiveTerminalPane(worktreeId: string): ActiveTerminalPane | null {
+    return resolveActiveTerminalPane(this.mobileSessionTabsByWorktree.get(worktreeId))
   }
 
   protected getMobileSessionTabsForWorktree(
