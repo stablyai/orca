@@ -44,4 +44,31 @@ describe('collapsed-groups', () => {
     window.localStorage.setItem(STORAGE_KEY, '{bad-json}')
     expect(loadCollapsedGroups('proj_1:view_1')).toEqual(new Set())
   })
+
+  it('discards malformed scope values and preserves valid ones', () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        'proj_1:view_1': 42,
+        'proj_1:view_2': 'string-not-array',
+        'proj_1:view_3': [1, 2, 3],
+        'proj_1:view_4': ['valid_group_a', 'valid_group_b']
+      })
+    )
+
+    expect(loadCollapsedGroups('proj_1:view_1')).toEqual(new Set())
+    expect(loadCollapsedGroups('proj_1:view_2')).toEqual(new Set())
+    expect(loadCollapsedGroups('proj_1:view_3')).toEqual(new Set())
+    expect(loadCollapsedGroups('proj_1:view_4')).toEqual(
+      new Set(['valid_group_a', 'valid_group_b'])
+    )
+  })
+
+  it('handles non-object root JSON values gracefully', () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify([1, 2, 3]))
+    expect(loadCollapsedGroups('proj_1:view_1')).toEqual(new Set())
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify('a-string'))
+    expect(loadCollapsedGroups('proj_1:view_1')).toEqual(new Set())
+  })
 })

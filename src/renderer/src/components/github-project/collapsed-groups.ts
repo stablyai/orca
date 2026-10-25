@@ -14,8 +14,15 @@ function readMap(): CollapsedMap {
     if (!raw) {
       return {}
     }
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? (parsed as CollapsedMap) : {}
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {}
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([, value]) => Array.isArray(value) && value.every((item) => typeof item === 'string')
+      )
+    ) as CollapsedMap
   } catch {
     return {}
   }
