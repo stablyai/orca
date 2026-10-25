@@ -19,6 +19,7 @@ import {
 import type { CreateOrAttachResult, GetSnapshotResult } from './types'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { logWslSpawnOrigin } from './daemon-spawn-origin-log'
 import { isMissingWorkingDirectoryError } from '../providers/working-directory-validation'
 
 /** A daemon kept running across an update trusts `interactive` even for a claimed resume. */
@@ -219,6 +220,14 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       context.effectiveCwd = requestedCwd
       context.restoreInfo = { ...recovered, cwd: requestedCwd }
       return deliverSeedAndCreate()
+    })
+    logWslSpawnOrigin({
+      sessionId: context.sessionId,
+      wslDistro: context.wslDistro,
+      isNew: result.isNew,
+      attachOnly: context.attachOnly,
+      spawnIntent: context.opts.spawnIntent,
+      coldRestore: context.restoreInfo !== null
     })
     return historySeedUnavailable && result.historySeeded === undefined
       ? { ...result, historySeeded: false }
