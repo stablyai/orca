@@ -22,6 +22,7 @@ import {
   readCommandMarkerCache
 } from './native-chat-command-marker'
 import { stripNoiseMessages } from './native-chat-noise'
+import { LIFECYCLE_CLOCK_SKEW_SLACK_MS } from './native-chat-live-status'
 
 function userMessage(id: string, text: string, timestamp = 1): NativeChatMessage {
   return {
@@ -204,6 +205,33 @@ describe('prunePendingSends', () => {
     ]
 
     expect(prunePendingSends(pending, transcript)).toEqual([])
+  })
+
+  it('prunes a wall-clock first send when host timestamp is within clock skew slack', () => {
+    const sentAt = 1_700_000_000_000
+    const pending: NativeChatPendingSend[] = [
+      { id: 'p1', text: 'fix the bug', sentAt, afterMessageId: null }
+    ]
+    const transcript = [
+      userMessage('u1', 'fix the bug', sentAt - 1500),
+      assistantMessage('a1', 'done', sentAt - 1000)
+    ]
+
+    expect(prunePendingSends(pending, transcript)).toEqual([])
+  })
+
+  it('does not prune a wall-clock first send when host timestamp is beyond clock skew slack', () => {
+    const sentAt = 1_700_000_000_000
+    const pending: NativeChatPendingSend[] = [
+      { id: 'p1', text: 'fix the bug', sentAt, afterMessageId: null }
+    ]
+    const hostTs = sentAt - (LIFECYCLE_CLOCK_SKEW_SLACK_MS + 500)
+    const transcript = [
+      userMessage('u1', 'fix the bug', hostTs),
+      assistantMessage('a1', 'done', hostTs + 1)
+    ]
+
+    expect(prunePendingSends(pending, transcript)).toEqual(pending)
   })
 
   it('prunes only one of two identical pending sends for one completed turn', () => {
@@ -575,6 +603,17 @@ describe('pendingSendsAsMessages', () => {
     ])
   })
 
+  it('projects entry.queued onto the optimistic message so follow-ups rank after streaming', () => {
+    const messages = pendingSendsAsMessages([
+      { id: 'p1', text: 'trigger', sentAt: 10 },
+      { id: 'p2', text: 'follow-up', sentAt: 20, queued: true }
+    ])
+    expect(messages.map((message) => ({ id: message.id, queued: message.queued }))).toEqual([
+      { id: 'pending:p1', queued: undefined },
+      { id: 'pending:p2', queued: true }
+    ])
+  })
+
   it('includes image refs for pending attachment sends', () => {
     const messages = pendingSendsAsMessages([
       { id: 'p1', text: 'what do you see?', imagePaths: ['/tmp/shot.png'], sentAt: 42 }
@@ -785,6 +824,41 @@ describe('launchPromptAsMessage', () => {
     const oldHistory = [
       { ...userMessage('old-user', 'run tests'), timestamp: 10 },
       { ...assistantMessage('old-answer', 'passed'), timestamp: 20 }
+    ]
+
+    expect(launchPromptAsMessage(entry, oldHistory)).not.toBeNull()
+    expect(shouldPruneLaunchPrompt(entry, oldHistory)).toBe(false)
+  })
+
+  it('hides and prunes a launch prompt when host turn is within clock skew slack', () => {
+    const createdAt = 1_700_000_000_000
+    const entry = {
+      tabId: 'tab-1',
+      agent: 'claude' as const,
+      text: 'run tests',
+      createdAt
+    }
+    const hostTs = createdAt - 1500
+    const userOnly = [userMessage('u1', 'run tests', hostTs)]
+    const advanced = [...userOnly, assistantMessage('a1', 'done', hostTs + 1)]
+
+    expect(launchPromptAsMessage(entry, userOnly)).toBeNull()
+    expect(shouldPruneLaunchPrompt(entry, userOnly)).toBe(false)
+    expect(shouldPruneLaunchPrompt(entry, advanced)).toBe(true)
+  })
+
+  it('does not bind a launch prompt to a turn beyond clock skew slack', () => {
+    const createdAt = 1_700_000_000_000
+    const entry = {
+      tabId: 'tab-1',
+      agent: 'claude' as const,
+      text: 'run tests',
+      createdAt
+    }
+    const oldTs = createdAt - (LIFECYCLE_CLOCK_SKEW_SLACK_MS + 500)
+    const oldHistory = [
+      userMessage('old-user', 'run tests', oldTs),
+      assistantMessage('old-answer', 'passed', oldTs + 1)
     ]
 
     expect(launchPromptAsMessage(entry, oldHistory)).not.toBeNull()
