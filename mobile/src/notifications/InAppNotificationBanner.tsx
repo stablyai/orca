@@ -67,12 +67,22 @@ export function InAppNotificationBanner() {
   const isUrgent = banner.tone === 'urgent'
   const isTerminalBell = banner.title.startsWith('Bell in ')
   const accentColor = isUrgent ? colors.statusAmber : colors.statusGreen
-  const badgeText = isUrgent
-    ? '⚡ Needs input'
+  const badgeIcon = isUrgent ? '⚡' : isTerminalBell ? '🔔' : '✅'
+  const badgeLabel = isUrgent
+    ? 'Needs input'
     : isTerminalBell
-      ? '🔔 Terminal bell'
-      : '✅ Completed'
+      ? 'Terminal bell'
+      : 'Completed'
   const canNavigate = Boolean(banner.hostId)
+  const promptText = banner.prompt?.trim() ?? ''
+  const hasPrompt = promptText.length > 0
+  const accessibilitySummary = [
+    `${badgeLabel}: ${banner.title}`,
+    hasPrompt ? promptText : undefined,
+    banner.body.length > 0 ? banner.body : undefined
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join('. ')
 
   const handlePress = () => {
     dismissInAppNotificationBanner(banner.id)
@@ -152,7 +162,7 @@ export function InAppNotificationBanner() {
       <View style={styles.capsule}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${badgeText}: ${banner.title}. ${banner.body}`}
+          accessibilityLabel={accessibilitySummary}
           onPress={handlePress}
           style={({ pressed }) => [styles.mainPressable, pressed && styles.capsulePressed]}
         >
@@ -160,18 +170,23 @@ export function InAppNotificationBanner() {
           <View style={styles.content}>
             <View style={styles.headerRow}>
               <View style={[styles.badge, isUrgent ? styles.badgeUrgent : styles.badgeComplete]}>
-                <Text style={[styles.badgeText, { color: accentColor }]}>{badgeText}</Text>
+                <Text style={[styles.badgeText, { color: accentColor }]}>{badgeIcon}</Text>
               </View>
-              <Text numberOfLines={1} style={styles.hostName}>
-                {banner.hostName}
+              <Text numberOfLines={1} ellipsizeMode="tail" style={styles.title}>
+                {banner.title}
               </Text>
-              {canNavigate ? <Text style={styles.jumpHint}>Jump →</Text> : null}
             </View>
-            <Text numberOfLines={1} style={styles.title}>
-              {banner.title}
-            </Text>
+            {hasPrompt ? (
+              <Text numberOfLines={1} ellipsizeMode="tail" style={styles.promptLine}>
+                {promptText}
+              </Text>
+            ) : null}
             {banner.body.length > 0 ? (
-              <Text numberOfLines={2} style={styles.body}>
+              <Text
+                numberOfLines={hasPrompt ? 1 : 2}
+                ellipsizeMode="tail"
+                style={styles.body}
+              >
                 {banner.body}
               </Text>
             ) : null}
@@ -237,11 +252,11 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.xs + 2
   },
   badge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
     borderRadius: radii.row
   },
   badgeUrgent: {
@@ -254,20 +269,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700'
   },
-  hostName: {
-    flex: 1,
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  jumpHint: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '600'
-  },
   title: {
+    flex: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '700'
+  },
+  promptLine: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    lineHeight: 17
   },
   body: {
     color: colors.textSecondary,

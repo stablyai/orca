@@ -824,24 +824,8 @@ it('decodes session.tabs.subscribe tabsDelta updates, tracks agentSession RPCs, 
     worktree: 'repo::/work',
     activeTabId: 'tab-a',
     tabs: [
-      {
-        id: 'tab-a',
-        parentTabId: 'tab-a',
-        leafId: '11111111-1111-4111-8111-111111111111',
-        type: 'terminal',
-        title: 'Shell 1',
-        isActive: true,
-        terminal: 'term-1'
-      },
-      {
-        id: 'tab-b',
-        parentTabId: 'tab-b',
-        leafId: '22222222-2222-4222-8222-222222222222',
-        type: 'terminal',
-        title: 'Claude',
-        isActive: false,
-        terminal: 'term-2'
-      }
+      { id: 'tab-a', parentTabId: 'tab-a', leafId: '11111111-1111-4111-8111-111111111111', type: 'terminal', title: 'Shell 1', isActive: true, terminal: 'term-1' },
+      { id: 'tab-b', parentTabId: 'tab-b', leafId: '22222222-2222-4222-8222-222222222222', type: 'terminal', title: 'Claude', isActive: false, terminal: 'term-2' }
     ]
   })
 

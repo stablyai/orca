@@ -75,6 +75,7 @@ describe('registerNotificationHandlers', () => {
       source: 'agent-task-complete',
       title: 'feat/notis - Hermes finished',
       body: 'The diff updates notification formatting.',
+      agentPrompt: 'Summarize the diff',
       worktreeId: 'repo::wt1',
       agentState: 'done'
     })
@@ -196,10 +197,17 @@ describe('registerNotificationHandlers', () => {
     )
 
     const handler = getDispatchHandler()
-    expect(await handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1' })).toEqual({
+    expect(
+      await handler({}, { source: 'agent-task-complete', agentState: 'done', worktreeId: 'repo::wt1' })
+    ).toEqual({
       delivered: true
     })
-    expect(await handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt1' })).toEqual({
+    expect(
+      await handler(
+        {},
+        { source: 'agent-task-complete', agentState: 'waiting', worktreeId: 'repo::wt1' }
+      )
+    ).toEqual({
       delivered: false,
       reason: 'cooldown'
     })

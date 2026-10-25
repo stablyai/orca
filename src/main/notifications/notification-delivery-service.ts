@@ -121,6 +121,7 @@ export function createNotificationDeliveryService(
             ...(!desktopAllowed ? { desktopAllowed: false } : {}),
             title: notificationOptions.title,
             body: notificationOptions.body,
+            ...(request.agentPrompt ? { agentPrompt: request.agentPrompt } : {}),
             worktreeId: request.worktreeId,
             // The phone asks the execution host for tabs, which never name this window's mirror tabs.
             ...(request.paneKey ? { paneKey: toHostSessionPaneKey(request.paneKey) } : {}),

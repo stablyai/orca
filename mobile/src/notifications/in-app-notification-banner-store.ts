@@ -11,6 +11,7 @@ export type InAppNotificationBannerItem = Readonly<{
   hostId?: string
   hostName: string
   title: string
+  prompt?: string
   body: string
   worktreeId?: string
   paneKey?: string

@@ -15,6 +15,7 @@ import {
   dismissSupersededPaneTrayNotifications,
   isNotificationTargetConsumed
 } from './consumed-notification-tray-dismissal'
+import { readBridgeNotificationAgentContext } from './bridge-session-viewing-tracker'
 import {
   dismissInAppNotificationBannerById,
   publishInAppNotificationBanner,
@@ -47,6 +48,10 @@ function tryDecodeSegment(raw: string | undefined): string | undefined {
   }
 }
 
+function normalizeSingleLineText(raw: string | undefined): string {
+  return raw?.replace(/\s+/g, ' ').trim() ?? ''
+}
+
 export function classifyNotificationTone(
   event: Pick<DesktopNotificationDispatchEvent, 'source' | 'agentState' | 'title' | 'body'>
 ): NotificationTone {
@@ -56,9 +61,7 @@ export function classifyNotificationTone(
   if (event.agentState === 'waiting' || event.agentState === 'blocked') {
     return 'urgent'
   }
-  return URGENT_TEXT_PATTERN.test(`${event.title ?? ''} ${event.body ?? ''}`)
-    ? 'urgent'
-    : 'complete'
+  return URGENT_TEXT_PATTERN.test(`${event.title ?? ''} ${event.body ?? ''}`) ? 'urgent' : 'complete'
 }
 
 export function resolveEventPaneKey(
@@ -172,6 +175,15 @@ export async function presentSocketNotificationFallback(
   }
   const tone = classifyNotificationTone(event)
   const hostName = host.name?.trim() || hostId
+  const fallbackContext = readBridgeNotificationAgentContext(
+    hostId,
+    payload.worktreeId,
+    payload.paneKey
+  )
+  const prompt = normalizeSingleLineText(event.agentPrompt ?? fallbackContext.prompt)
+  const bannerBody = normalizeSingleLineText(
+    event.agentLastAssistantMessage || body || fallbackContext.lastAssistantMessage
+  )
   const osNotificationIdentifier = payload.notificationId
     ? `${hostFingerprint}:${payload.notificationId}`
     : payload.worktreeId && payload.paneKey
@@ -188,7 +200,8 @@ export async function presentSocketNotificationFallback(
       hostId,
       hostName,
       title: title || 'Orca',
-      body,
+      ...(prompt ? { prompt } : {}),
+      body: bannerBody,
       osNotificationIdentifier,
       createdAt: Date.now()
     })

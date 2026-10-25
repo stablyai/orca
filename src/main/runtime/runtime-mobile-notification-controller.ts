@@ -28,6 +28,7 @@ export type MobileNotificationDispatchEvent = {
   source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin'
   title: string
   body: string
+  agentPrompt?: string
   worktreeId?: string
   /** The pane the phone opens on tap; old phones ignore it and open the workspace's default tab. */
   paneKey?: string

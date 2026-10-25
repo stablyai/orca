@@ -220,20 +220,10 @@ export function useInPageNotificationBridge(params: {
   route: BridgeInitRoute
   setViewingWorkspace: (value: NotificationViewingWorkspace | null) => void
 }): void {
-  const {
-    pageReady,
-    overlay,
-    ownsHostArea,
-    hostId,
-    isFocused,
-    publishRoute,
-    route,
-    setViewingWorkspace
-  } = params
+  const { pageReady, overlay, ownsHostArea, hostId, isFocused, publishRoute, route, setViewingWorkspace } = params
   const sessionWorkspace = !overlay ? pageRouteWorkspace(route.pathname) : null
   const handlesHostNavigation =
-    !overlay &&
-    (sessionWorkspace !== null || ownsHostArea || isHostRouteOf(route.pathname, hostId))
+    !overlay && (sessionWorkspace !== null || ownsHostArea || isHostRouteOf(route.pathname, hostId))
   const enabled = pageReady && handlesHostNavigation
   useEffect(() => {
     if (!handlesHostNavigation) {
@@ -242,15 +232,10 @@ export function useInPageNotificationBridge(params: {
     const key = normalizeHostKey(hostId)
     mountedHostBridgesByKey.set(key, (mountedHostBridgesByKey.get(key) ?? 0) + 1)
     if (sessionWorkspace) {
-      mountedSessionRouteBridgesByKey.set(
-        key,
-        (mountedSessionRouteBridgesByKey.get(key) ?? 0) + 1
-      )
+      mountedSessionRouteBridgesByKey.set(key, (mountedSessionRouteBridgesByKey.get(key) ?? 0) + 1)
       const state = getOrCreateBridgeSessionState(key)
       state.worktreeId = sessionWorkspace.worktreeId
-      if (route.params?.executionHost) {
-        state.executionHost = route.params.executionHost
-      }
+      state.executionHost = route.params?.executionHost ?? state.executionHost
       const existingPaneKey =
         state.selectedByWorktree.get(sessionWorkspace.worktreeId)?.paneKey ?? state.paneKey
       activeInPageHostKeys.add(key)
@@ -280,13 +265,7 @@ export function useInPageNotificationBridge(params: {
         mountedHostBridgesByKey.set(key, remaining)
       }
     }
-  }, [
-    handlesHostNavigation,
-    hostId,
-    route.params?.executionHost,
-    sessionWorkspace?.worktreeId,
-    setViewingWorkspace
-  ])
+  }, [handlesHostNavigation, hostId, route.params?.executionHost, sessionWorkspace?.worktreeId, setViewingWorkspace])
   useEffect(() => {
     if (!enabled) {
       return

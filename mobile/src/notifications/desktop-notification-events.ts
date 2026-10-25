@@ -7,6 +7,8 @@ export type DesktopNotificationDispatchEvent = {
   agentState?: string
   title?: string
   body?: string
+  agentPrompt?: string
+  agentLastAssistantMessage?: string
   worktreeId?: string
   executionHost?: string
   paneKey?: string

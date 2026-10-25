@@ -124,6 +124,7 @@ export function createStructuredAttentionMobileDelivery(
         ...(!desktopAllowed ? { desktopAllowed: false } : {}),
         title,
         body,
+        ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
         worktreeId: scope.workspaceId,
         // The host has no window tab id; the phone matches this session-derived key to the chat.
         paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),

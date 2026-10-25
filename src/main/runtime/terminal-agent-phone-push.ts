@@ -92,6 +92,7 @@ export class TerminalAgentPhonePush {
       source: 'agent-task-complete',
       title,
       body,
+      ...(row.prompt ? { agentPrompt: row.prompt } : {}),
       worktreeId,
       paneKey,
       ...(notificationId ? { notificationId } : {}),

@@ -154,6 +154,11 @@ describe('in-app-notification-banner-store', () => {
       const pressables = renderer.root.findAllByType('Pressable')
       expect(pressables).toHaveLength(2)
       expect(pressables[0].findAllByType('Pressable')).toHaveLength(1)
+      const urgentTextValues = pressables[0]
+        .findAllByType('Text')
+        .map((node) => node.props.children)
+      expect(urgentTextValues).toEqual(['⚡', 'Needs input', 'Check host'])
+      expect(urgentTextValues).not.toContain('Jump →')
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(8000)
@@ -162,14 +167,27 @@ describe('in-app-notification-banner-store', () => {
           tone: 'complete',
           hostId: 'host-1',
           hostName: 'Work Laptop',
-          title: 'Completed',
-          body: 'Check host',
+          title: 'orca / main - Claude finished',
+          prompt: 'Fix the notification capsule layout',
+          body: 'Updated the banner to show prompt and output.',
           createdAt: 2000
         })
       })
 
       expect(renderer.root.findByType('View').props.accessibilityRole).toBeUndefined()
       expect(renderer.root.findByType('View').props.accessibilityLiveRegion).toBe('polite')
+      const completeTextNodes = renderer.root
+        .findAllByType('Pressable')[0]
+        .findAllByType('Text')
+      expect(completeTextNodes.map((node) => node.props.children)).toEqual([
+        '✅',
+        'orca / main - Claude finished',
+        'Fix the notification capsule layout',
+        'Updated the banner to show prompt and output.'
+      ])
+      expect(completeTextNodes[1].props.numberOfLines).toBe(1)
+      expect(completeTextNodes[2].props.numberOfLines).toBe(1)
+      expect(completeTextNodes[3].props.numberOfLines).toBe(1)
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(8000)

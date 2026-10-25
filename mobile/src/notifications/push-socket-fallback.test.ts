@@ -174,6 +174,7 @@ describe('presentSocketNotificationFallback', () => {
       alert({
         agentState: 'done',
         title: 'orca · main',
+        agentPrompt: '  Summarize\nthe diff  ',
         body: 'Claude finished',
         paneKey: undefined,
         notificationId: 'agent:wt-1:tab-9%3Aleaf-1:12345'
@@ -195,6 +196,7 @@ describe('presentSocketNotificationFallback', () => {
       })
     )
     expect(getCurrentInAppNotificationBanner()?.paneKey).toBe('tab-9:leaf-1')
+    expect(getCurrentInAppNotificationBanner()?.prompt).toBe('Summarize the diff')
   })
 
   it('uses the silent channel when sound is off', async () => {
