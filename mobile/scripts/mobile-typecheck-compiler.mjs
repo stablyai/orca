@@ -1,38 +1,31 @@
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { runProcessSync } from '@orca/process-host'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveProjectCompilerInfo } from '../../config/scripts/run-typecheck-projects-in-parallel.mjs'
+import { resolvePinnedBunExecutable } from '../../config/scripts/pinned-bun-executable.mjs'
+import {
+  resolveTypecheckCommand,
+  selectTypecheckCompiler
+} from '../../config/scripts/run-typecheck-projects-in-parallel.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
-const require = createRequire(import.meta.url)
 
-export function resolveMobileTypecheckCompiler() {
-  const mode = process.env.ORCA_MOBILE_TYPECHECK_COMPILER ?? 'javascript'
-  if (mode !== 'javascript' && mode !== 'native') {
-    throw new Error(`Unknown mobile typecheck compiler: ${mode}`)
+/**
+ * The root runner's compiler command for a mobile project, run from `cwd` so diagnostics name
+ * files relative to it. Compiler: ORCA_MOBILE_TYPECHECK_COMPILER (auto|tsrs|bun|native).
+ */
+export function resolveMobileTypecheckCommand(project, cwd = process.cwd()) {
+  const requested = process.env.ORCA_MOBILE_TYPECHECK_COMPILER ?? 'auto'
+  if (!/^(auto|tsrs|bun|native)$/.test(requested)) {
+    throw new Error(`Unknown mobile typecheck compiler: ${requested}`)
   }
-  const native = mode === 'native'
-  // Expo needs mobile's JavaScript compiler API; CI can use the root native compiler.
-  const compiler = resolveProjectCompilerInfo(
-    native ? 'package.json' : 'mobile/tsconfig.json',
+  const selection = selectTypecheckCompiler(requested, {
+    root,
+    resolveBunExecutable: (repoRoot) => resolvePinnedBunExecutable(repoRoot, runProcessSync)
+  })
+  const command = resolveTypecheckCommand(resolve(cwd, project), {
+    ...selection,
+    bunThreads: 2,
     root
-  )
-  if (native) {
-    // Use the package's resolver, then let process-host hide Windows children.
-    const getExecutablePath = require(
-      join(dirname(compiler.program), '../lib/getExePath.js')
-    ).default
-    return {
-      program: getExecutablePath(),
-      args: ['--incremental', 'false'],
-      native,
-      version: compiler.version
-    }
-  }
-  return {
-    program: process.execPath,
-    args: [compiler.program],
-    native,
-    version: compiler.version
-  }
+  })
+  return { ...command, cwd, compiler: selection.compiler }
 }
