@@ -166,7 +166,7 @@ export function codexLeadStateForHookEvent(
   eventName: string | undefined,
   normalizedState?: ParsedAgentStatusPayload['state']
 ): CodexLeadTurnState['state'] | undefined {
-  if (eventName === 'Stop' || eventName === 'Interrupt') {
+  if (eventName === 'Stop' || eventName === 'Interrupt' || eventName === 'SessionStart') {
     return 'done'
   }
   if (eventName === 'PermissionRequest') {
@@ -176,7 +176,6 @@ export function codexLeadStateForHookEvent(
     return normalizedState === 'working' ? 'working' : 'waiting'
   }
   if (
-    eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse'

@@ -13,6 +13,7 @@ import {
 import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
 
 export { DSH_WHALE, isDshTerminalTitle } from './agent-title-core'
+import { isCodexNativeSessionTitle } from './codex-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -103,7 +104,12 @@ export function isPiAgentTitle(title: string): boolean {
  * agents have different (or no) caching semantics.
  */
 function computeIsClaudeAgent(title: string): boolean {
-  if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
+  if (
+    !title ||
+    isClaudeManagementTitle(title) ||
+    isOpenCodeNativeTitle(title) ||
+    isCodexNativeSessionTitle(title)
+  ) {
     return false
   }
   // Why: DSH's working title is `⠂ 🐋 …`/`⠐ 🐋 …`, and the braille branch below would
@@ -164,6 +170,9 @@ function computeAgentLabel(title: string): string | null {
   // include status glyphs from other agents without changing OpenCode identity.
   if (isOpenCodeNativeTitle(title)) {
     return 'OpenCode'
+  }
+  if (isCodexNativeSessionTitle(title)) {
+    return 'Codex'
   }
   // Why: Claude Code title text is often the task title. If that task mentions
   // another CLI, the Claude-specific prefix is the identity signal, not the words.
