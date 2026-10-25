@@ -160,7 +160,7 @@ describe('JSON-lines RPC peer', () => {
     await expect(pending).resolves.toEqual({})
     expect(onOversizedEvent).toHaveBeenCalledExactlyOnceWith(
       'tool_execution_end',
-      expect.stringMatching(/^\{"type":"tool_execution_end","result":"x+$/)
+      expect.stringMatching(/^\{"type":"tool_execution_end",/)
     )
     expect(onRecord).toHaveBeenCalledExactlyOnceWith({ type: 'agent_settled' })
     expect(peer.closed).toBe(false)

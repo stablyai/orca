@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 
 export const piRpcModelSchema = z.looseObject({
   id: z.string(),
@@ -76,12 +77,12 @@ const SKIPPED_MESSAGE_END_HEAD = /^\{"type":"message_end","message":\{"role":"([
 export function piRpcSkippedEvent(
   type: string,
   prefix: string
-): { head: { type: string; [field: string]: unknown } | null; contentLost: boolean } {
+): { head: JsonlRpcRecord | null; contentLost: boolean } {
   if (LIFECYCLE_ONLY_EVENTS.has(type)) {
     return { head: { type }, contentLost: false }
   }
-  const tool = SKIPPED_TOOL_END_HEAD.exec(prefix)
-  const role = SKIPPED_MESSAGE_END_HEAD.exec(prefix)?.[1]
+  const tool = type === 'tool_execution_end' ? SKIPPED_TOOL_END_HEAD.exec(prefix) : null
+  const role = type === 'message_end' ? SKIPPED_MESSAGE_END_HEAD.exec(prefix)?.[1] : undefined
   // An oversized tool result is content, not a short error, so the call closes as completed.
   const head = tool
     ? { type, toolCallId: tool[1], toolName: tool[2] }

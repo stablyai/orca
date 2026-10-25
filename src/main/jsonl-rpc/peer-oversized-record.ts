@@ -1,7 +1,7 @@
 import type { NdjsonRejectedRecord } from '../../shared/main-process-ndjson-framer'
 
 /** A reply over the line cap, refused for the one request that asked to survive it. */
-export class JsonlRpcReplyTooLargeError extends Error {
+class JsonlRpcReplyTooLargeError extends Error {
   constructor(
     readonly command: string,
     readonly observedBytes: number,
@@ -53,7 +53,7 @@ function oversizedEventType(
     : type
 }
 
-export type JsonlRpcOversizedRecordTarget = {
+type JsonlRpcOversizedRecordTarget = {
   highestOptionalAssigned: number
   maxLineBytes: number
   pendingCommand: (id: string) => string | undefined
@@ -68,18 +68,22 @@ export function settleOversizedJsonlRecord(
   target: JsonlRpcOversizedRecordTarget
 ): void {
   const id = oversizedReplyRequest(rejected, target.highestOptionalAssigned)
-  const event = id ? null : oversizedEventType(rejected)
-  const command = id ? target.pendingCommand(id) : undefined
+  if (id) {
+    const command = target.pendingCommand(id)
+    if (command) {
+      const error = new JsonlRpcReplyTooLargeError(
+        command,
+        rejected.observedBytes,
+        target.maxLineBytes
+      )
+      target.rejectPending(id, error)
+    }
+    return
+  }
+  const event = oversizedEventType(rejected)
   if (event) {
     target.skipEvent(event)
-  } else if (!id) {
+  } else {
     target.close(new Error('JSON-lines RPC record exceeded the size limit'))
-  } else if (command) {
-    const error = new JsonlRpcReplyTooLargeError(
-      command,
-      rejected.observedBytes,
-      target.maxLineBytes
-    )
-    target.rejectPending(id, error)
   }
 }
