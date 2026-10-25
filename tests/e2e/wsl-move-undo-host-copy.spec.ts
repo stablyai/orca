@@ -29,6 +29,7 @@ const GATE = { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' }
 test("undo stops the host's copy first, so the project's terminal runs in one place", async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX shell commands')
+  // A move, a host terminal start and the undo's reload, each booting a full app.
   test.setTimeout(900_000)
   const root = mkdtempSync(path.join(os.tmpdir(), 'orca-undo-host-copy-'))
   const repoPath = realpathSync(createMovedRepo(root))
