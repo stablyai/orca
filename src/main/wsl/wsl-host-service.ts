@@ -4,7 +4,10 @@
  * or while a project or terminal the user has open needs it; never for background work.
  */
 import { errorMessage } from '../../shared/error-message'
-import { removeWslHostEnvironment } from '../../shared/runtime-environment-wsl-host-store'
+import {
+  reconcileWslHostBridgePorts,
+  removeWslHostEnvironment
+} from '../../shared/runtime-environment-wsl-host-store'
 import {
   readWslHostDeployments,
   type WslHostDeploymentRecord
@@ -281,6 +284,14 @@ export class WslHostService {
 
   /** Startup: keep the holders a previous run left, without booting anything. */
   async start(): Promise<void> {
+    // Synchronous, before the window first lists its servers.
+    try {
+      for (const environmentId of reconcileWslHostBridgePorts(this.deps.userDataPath())) {
+        console.warn(`[wsl-hosts] Realigned ${environmentId}'s bridge port with its pairing.`)
+      }
+    } catch (error) {
+      console.warn('[wsl-hosts] Could not check WSL host records against their pairings:', error)
+    }
     if (!this.connector || !this.canRun() || this.records().length === 0) {
       return
     }
