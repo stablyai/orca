@@ -18,3 +18,17 @@ index cbe9bb8e8bb97ca69e1026d2335857ec7ae32a16..86c4f393b76a4d433be297833188058c
          this._domNode.className = 'gutter monaco-editor';
          const scrollDecoration = this._domNode.appendChild(h('div.scroll-decoration', { role: 'presentation', ariaHidden: 'true', style: { width: '100%' } })
              .root);
+diff --git a/esm/vs/editor/standalone/browser/standaloneCodeEditor.js b/esm/vs/editor/standalone/browser/standaloneCodeEditor.js
+index a9b1495..69a03f2 100644
+--- a/esm/vs/editor/standalone/browser/standaloneCodeEditor.js
++++ b/esm/vs/editor/standalone/browser/standaloneCodeEditor.js
+@@ -262,6 +262,9 @@ let StandaloneDiffEditor2 = class StandaloneDiffEditor2 extends DiffEditorWidget
+             themeService.setAutoDetectHighContrast(Boolean(options.autoDetectHighContrast));
+         }
+         super(domElement, options, {}, contextKeyService, instantiationService, codeEditorService, accessibilitySignalService, editorProgressService);
++        // Orca patch: the inner editors just pointed the global hover delegate factory at this diff
++        // editor's child instantiation service, which dies with it; later ActionBars would throw.
++        setHoverDelegateFactory((placement, enableInstantHover) => instantiationService.createInstance(WorkbenchHoverDelegate, placement, { instantHover: enableInstantHover }, {}));
+         this._configurationService = configurationService;
+         this._standaloneThemeService = themeService;
+         this._register(themeDomRegistration);
