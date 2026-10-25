@@ -18,7 +18,8 @@ type Props = { media: MobileFileMedia; client: MobileFilePreviewRpcSender | null
 
 export function MobilePdfHandoff(props: Props) {
   // Downloaded PDF bytes are written to a temporary file before sharing.
-  const { media, client, title } = props
+  const { media: propMedia, client, title } = props
+  const { worktreeId, relativePath, mimeType } = propMedia
   const [state, setState] = useState<State>({ status: 'idle' })
   const [attempt, setAttempt] = useState(0)
 
@@ -27,6 +28,7 @@ export function MobilePdfHandoff(props: Props) {
       return
     }
     const controller = new AbortController()
+    const media: MobileFileMedia = { worktreeId, relativePath, mimeType }
     const parts: Uint8Array[] = []
     const sink: MobileMediaSink = {
       append: (bytes) => {
@@ -54,12 +56,20 @@ export function MobilePdfHandoff(props: Props) {
           bytes.set(part, offset)
           offset += part.byteLength
         }
+        parts.length = 0
         const FileSystem = await import('expo-file-system')
-        const safeName = (media.relativePath.split(/[/\\]/).pop() ?? 'document.pdf').replace(
+        if (controller.signal.aborted) {
+          return
+        }
+        const safeName = (relativePath.split(/[/\\]/).pop() ?? 'document.pdf').replace(
           /[^a-zA-Z0-9._-]/g,
           '_'
         )
-        const file = new FileSystem.File(FileSystem.Paths.cache, `orca-pdf-handoff-${safeName}`)
+        const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const file = new FileSystem.File(
+          FileSystem.Paths.cache,
+          `orca-pdf-handoff-${unique}-${safeName}`
+        )
         file.create({ overwrite: true })
         file.write(bytes)
         fileUri = file.uri
@@ -87,7 +97,7 @@ export function MobilePdfHandoff(props: Props) {
         }
       }
     }
-  }, [client, media, attempt])
+  }, [client, worktreeId, relativePath, mimeType, attempt])
 
   if (!client) {
     return (
@@ -120,7 +130,7 @@ export function MobilePdfHandoff(props: Props) {
             void (async () => {
               const Sharing = await import('expo-sharing')
               await Sharing.shareAsync(state.uri, {
-                mimeType: media.mimeType,
+                mimeType: mimeType,
                 dialogTitle: `Open ${title}`
               })
             })()
