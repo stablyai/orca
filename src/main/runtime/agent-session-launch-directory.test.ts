@@ -9,7 +9,7 @@ import { resolveAgentSessionLaunchDirectory } from './agent-session-launch-direc
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 
 const statFault = vi.hoisted(() => {
   const fault: { error: Error | null } = { error: null }

@@ -43,6 +43,8 @@ export type AutomationHostCatalogSource = {
   desktopLabel?: string
   desktopSsh: AutomationCatalogSshSource
   runtimes: readonly AutomationCatalogRuntimeSource[]
+  /** The saved runtime this client's local transport reaches, when it has no runtime of its own. */
+  desktopAliasEnvironmentId?: string | null
   runtimeCatalogSettled: boolean
   referencedStableKeys?: Iterable<string>
   /** Authoritative orphan counts the cache has seen, keyed by authority catalog key. */
@@ -143,6 +145,9 @@ export function buildAutomationHostCatalogSource(
         ...withOrphanCount(orphanCountFor(source, authority))
       }
     }),
+    ...(source.desktopAliasEnvironmentId
+      ? { desktopAliasEnvironmentId: source.desktopAliasEnvironmentId }
+      : {}),
     runtimeCatalogSettled: source.runtimeCatalogSettled,
     ...(source.referencedStableKeys ? { referencedStableKeys: source.referencedStableKeys } : {})
   }

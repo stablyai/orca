@@ -59,7 +59,7 @@ describe('uploadMobileNativeChatImages', () => {
     // Native chat defers the paste to submit — nothing is sent to the terminal here.
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
-    expect(saveCall?.params).toMatchObject({ connectionId: 'conn-7' })
+    expect(saveCall?.params).toEqual({ contentBase64: 'AAAA', connectionId: 'conn-7' })
   })
 
   it('uploads all three selected images in picker order', async () => {
@@ -114,7 +114,7 @@ describe('uploadMobileNativeChatImages', () => {
     ])
   })
 
-  it('returns null when the picker is cancelled and uploads nothing', async () => {
+  it('returns an empty array when the picker is cancelled and uploads nothing', async () => {
     const client = clientWithResponses([])
 
     const result = await uploadMobileNativeChatImages('library', {

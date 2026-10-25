@@ -15,6 +15,7 @@ const baseInput: WslUsageSnapshotInput = {
   wslPackageVersion: null,
   wslAvailableCached: null,
   projects: [],
+  windowsDriveReposWithWslWorktrees: 0,
   wslHostsGateOpen: false
 }
 
@@ -133,6 +134,7 @@ describe('buildWslUsageSnapshot', () => {
         { location: 'distro_fs', kind: 'folder', distro: 'ubuntu' },
         { location: 'windows_drive', kind: 'git', distro: null }
       ],
+      windowsDriveReposWithWslWorktrees: 1,
       wslHostsGateOpen: false
     })
     expect(props).toEqual({
@@ -146,6 +148,7 @@ describe('buildWslUsageSnapshot', () => {
       projects_wsl_total: '2-5',
       projects_wsl_distro_fs: '2-5',
       projects_wsl_windows_drive: '1',
+      projects_wsl_windows_drive_wsl_worktrees: '1',
       projects_wsl_git: '2-5',
       projects_wsl_folder: '1',
       project_distros_used: '2-5',

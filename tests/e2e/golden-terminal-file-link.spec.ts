@@ -202,7 +202,7 @@ test('opens a terminal file link and observes an external edit @golden', async (
   }
 })
 
-test('reuses a terminal file link already open in a sibling workspace @golden', async ({
+test('opens a sibling workspace file here read-only, and the hint opens it there @golden', async ({
   orcaPage
 }) => {
   test.setTimeout(180_000)
@@ -298,20 +298,33 @@ test('reuses a terminal file link already open in a sibling workspace @golden', 
 
   const editorHeader = orcaPage.locator('.editor-header-path').first()
   await expect(editorHeader).toContainText('package.json', { timeout: 20_000 })
+  const renderedFile = (): Promise<{ filePath: string; activeWorktreeId: string | null }> =>
+    orcaPage
+      .evaluate(() => ({
+        filePath: window.__monacoEditorE2E?.filePath ?? '',
+        activeWorktreeId: window.__store?.getState()?.activeWorktreeId ?? null
+      }))
+      .then((rendered) => ({ ...rendered, filePath: canonicalFileIdentity(rendered.filePath) }))
+  // #32158: the click keeps the user in the workspace whose terminal printed the link.
   await expect
-    .poll(
-      async () => {
-        const rendered = await orcaPage.evaluate(() => ({
-          filePath: window.__monacoEditorE2E?.filePath ?? '',
-          activeWorktreeId: window.__store?.getState()?.activeWorktreeId ?? null
-        }))
-        return {
-          filePath: canonicalFileIdentity(rendered.filePath),
-          activeWorktreeId: rendered.activeWorktreeId
-        }
-      },
-      { timeout: 20_000, message: 'sibling workspace never rendered the linked file' }
-    )
-    .toEqual({ filePath: canonicalFileIdentity(filePath), activeWorktreeId: sibling.id })
+    .poll(renderedFile, { timeout: 20_000, message: 'the linked file never rendered here' })
+    .toEqual({ filePath: canonicalFileIdentity(filePath), activeWorktreeId: sourceWorktreeId })
   await expect(orcaPage.getByText('Loading...', { exact: true })).toHaveCount(0)
+  const sourceTabReadOnly = await orcaPage.evaluate(
+    ({ filePath, sourceWorktreeId }) =>
+      window.__store
+        ?.getState()
+        .openFiles.find(
+          (file) => file.worktreeId === sourceWorktreeId && file.filePath === filePath
+        )?.readOnly === true,
+    { filePath, sourceWorktreeId }
+  )
+  expect(sourceTabReadOnly).toBe(true)
+
+  const hint = orcaPage.locator('[data-sonner-toast]').filter({ hasText: 'This file is in' })
+  await expect(hint).toBeVisible()
+  await hint.getByRole('button', { name: 'Open there' }).click()
+  await expect
+    .poll(renderedFile, { timeout: 20_000, message: 'the hint never opened the file there' })
+    .toEqual({ filePath: canonicalFileIdentity(filePath), activeWorktreeId: sibling.id })
 })

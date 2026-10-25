@@ -2,7 +2,9 @@ import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import {
+  isSameComposerWorkspace,
   nativeChatAttachmentOwnerUnchanged,
+  type ComposerWorkspace,
   type NativeChatAttachmentFocusOptions,
   type NativeChatResolvedPathOptions
 } from './native-chat-resolved-path-ownership'
@@ -25,6 +27,7 @@ import {
   type NativeChatReservedAttachment
 } from './native-chat-session-attachment-drop'
 import { userNamedFileAccess } from '@/lib/local-file-access'
+import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
@@ -46,22 +49,6 @@ export type UseNativeChatExternalAttachmentsArgs = {
   /** Chips shown while a file uploads, so Send waits for it. */
   pendingChips: NativeChatPendingAttachmentChips
   setNotice: (notice: string | null) => void
-}
-
-type ComposerWorkspace = {
-  structuredWorktreeId?: string
-  terminalTabId: string
-  structuredSession?: NativeChatStructuredAttachmentSession
-}
-
-function isSameComposerWorkspace(captured: ComposerWorkspace, current: ComposerWorkspace): boolean {
-  return (
-    captured.structuredWorktreeId === current.structuredWorktreeId &&
-    captured.terminalTabId === current.terminalTabId &&
-    captured.structuredSession?.sessionId === current.structuredSession?.sessionId &&
-    captured.structuredSession?.runtimeEnvironmentId ===
-      current.structuredSession?.runtimeEnvironmentId
-  )
 }
 
 /**
@@ -264,7 +251,7 @@ export function useNativeChatExternalAttachments({
       options?: NativeChatAttachmentFocusOptions
     ) => {
       const intake = captureIntake(destinationIsCurrent, options)
-      const deliver: CapturedNativeChatDrop = async (paths: string[]): Promise<void> => {
+      const attach = async (paths: string[]): Promise<void> => {
         if (paths.length === 0 || disabledRef.current || !mountedRef.current) {
           return
         }
@@ -275,6 +262,9 @@ export function useNativeChatExternalAttachments({
         }
         await intake.run(reserveNativeChatAttachmentChips(intake.chips, paths))
       }
+      // Every pick and drop ends here, so the web client's held files are released here.
+      const deliver: CapturedNativeChatDrop = (paths) =>
+        attach(paths).finally(() => releaseBrowserAttachmentFiles(paths))
       deliver.preparationConsumer = intake.preparationConsumer
       return deliver
     },
@@ -310,6 +300,8 @@ export function useNativeChatExternalAttachments({
     (paths: string[], options?: NativeChatAttachmentFocusOptions): void => {
       if (!disabledRef.current && mountedRef.current && paths.length > 0) {
         void captureExternalDrop(undefined, options)(paths)
+      } else {
+        releaseBrowserAttachmentFiles(paths)
       }
     },
     [captureExternalDrop, mountedRef]

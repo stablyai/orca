@@ -161,7 +161,9 @@ describe('mobileWeb.bundle.v1 on a released client', () => {
     expect(advertised.probedCapabilities).toContain(MOBILE_WEB_BUNDLE_CAPABILITY)
     expect(advertised.quickCommandsSupported).toBe(true)
     expect(advertised.worktreeCreateSupport?.tasksSupported).toBe(true)
-    expect(advertised.worktreeCreateSupport?.worktreeCreateIdempotency).not.toBe(false)
+    expect(advertised.worktreeCreateSupport?.worktreeCreateIdempotency).toEqual({
+      dedupeTtlMs: 60_000
+    })
     expect(oldDesktop.gates.hostCapabilities).not.toContain(MOBILE_WEB_BUNDLE_CAPABILITY)
 
     expect(asIfNeverAdvertised(advertised)).toEqual(oldDesktop)

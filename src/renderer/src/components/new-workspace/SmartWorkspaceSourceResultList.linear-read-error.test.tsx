@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => {
     state: {
       checkLinearConnection: vi.fn(),
       linearStatus,
+      // The repo's own host: its status refresh reaches the composer's host-scoped read.
+      linearStatusContextKey: 'runtime:env-1#0',
       linearStatusChecked: true,
       settings: null,
       preflightStatus: null,
@@ -38,6 +40,9 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
+}))
+vi.mock('@/runtime/runtime-linear-client', () => ({
+  linearStatus: async () => mocks.state.linearStatus
 }))
 vi.mock('@/lib/local-preflight-context', () => ({
   getLocalPreflightContext: () => ({}),

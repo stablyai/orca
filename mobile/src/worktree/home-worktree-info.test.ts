@@ -91,12 +91,10 @@ describe('homeHostWorktreeSummary', () => {
 
   it('stops calling aged-out counts live even while a refresh is only pending', () => {
     // A snapshot rehydrated from a previous app session describes a host we have not reached yet.
-    expect(homeHostWorktreeSummary(loaded, provenAt + HOME_WORKTREE_COUNTS_LIVE_MAX_AGE_MS)).toBe(
-      '12 worktrees · 2 active'
+    expect(homeHostWorktreeSummary(loaded, provenAt + 600_000)).toBe('12 worktrees · 2 active')
+    expect(homeHostWorktreeSummary(loaded, provenAt + 600_001)).toBe(
+      'Last known: 12 worktrees · 2 active'
     )
-    expect(
-      homeHostWorktreeSummary(loaded, provenAt + HOME_WORKTREE_COUNTS_LIVE_MAX_AGE_MS + 1)
-    ).toBe('Last known: 12 worktrees · 2 active')
     expect(homeHostWorktreeSummary(loaded, provenAt + 3 * 86_400_000)).toBe(
       'Last known: 12 worktrees · 2 active'
     )

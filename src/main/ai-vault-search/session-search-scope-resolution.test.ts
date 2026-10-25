@@ -139,8 +139,7 @@ describe('project scope', () => {
       { kind: 'project', projectKey: 'repo:repo-1' },
       catalog({ repos: [{ id: 'repo-1', path: '/work/app', worktreeBasePath: '/trees/app' }] })
     )
-    // The global nested root stays in: a worktree created before the base path
-    // was set still lives there, which is why ownership enumerates both.
+    // Include older worktrees created before the repo’s base path was configured.
     expect(paths(resolution)).toEqual(['/home/me/orca/workspaces/app', '/trees/app', '/work/app'])
   })
 
@@ -153,8 +152,6 @@ describe('project scope', () => {
       { kind: 'project', projectKey: 'repo:repo-1' },
       catalog({ settings: { workspaceDir: '/home/me/ws', nestWorkspaces: false }, worktreeMeta })
     )
-    // 100 worktrees plus the checkout: past AI_VAULT_SCOPE_PATHS_MAX_COUNT, which
-    // is why these never travel through the request's `filters.scopePaths`.
     expect(paths(resolution)).toHaveLength(101)
   })
 
@@ -203,8 +200,6 @@ describe('project scope', () => {
         ]
       })
     )
-    // The global nested root is in as well: this repo row carries no base path
-    // of its own, so that is still where Orca would create its worktrees.
     expect(paths(resolution)).toEqual(['/home/me/orca/workspaces/app', '/srv/app', '/srv/trees'])
   })
 

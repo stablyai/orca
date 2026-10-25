@@ -58,8 +58,6 @@ describe('registerPtyHandlers', () => {
   } = setupPtyIpcSuite()
 
   describe('agent_started telemetry', () => {
-    // Why: telemetry-plan.md§Agent launch semantics — agent_started fires only after provider.spawn resolves; a malformed payload must not emit a silent event.
-    // Why: telemetry-plan.md§Agent launch semantics — agent_started fires only after provider.spawn resolves; a malformed payload must not emit a silent event.
     it('emits agent_started after a successful spawn when telemetry is supplied', async () => {
       handlers.clear()
       registerPtyHandlers(mainWindow as never)
@@ -99,7 +97,7 @@ describe('registerPtyHandlers', () => {
       expect(trackMock).not.toHaveBeenCalledWith('agent_started', expect.anything())
     })
     it('does not emit agent_started when provider.spawn throws', async () => {
-      // Why: agent_started fires only on confirmed launch — inject a throwing provider to hit the catch path with no race against the real LocalPtyProvider.
+      // A throwing provider proves failed spawns cannot emit agent_started.
       setLocalPtyProvider({
         spawn: vi.fn(async () => {
           throw new Error('spawn boom')
@@ -189,7 +187,7 @@ describe('registerPtyHandlers', () => {
         controller.serializeBuffer('pty-11'),
         controller.serializeBuffer('pty-12')
       ]
-      // Why: the bug registered one listener per request, so 12 concurrent calls would trip Node's MaxListeners.
+      // Per-request listeners would cross Node's limit with these 12 concurrent requests.
       const responseChannelRegistrations = onMock.mock.calls.filter(
         (call: unknown[]) => call[0] === 'pty:serializeBuffer:response'
       )
@@ -328,7 +326,7 @@ describe('registerPtyHandlers', () => {
       expect(runtime.serializeHiddenOutputRecoveryBuffer).toHaveBeenCalledWith('pty-1', {
         scrollbackRows: 50_000
       })
-      // Why pendingDeliveryStartSeq === seq: pending delivery queue is empty, so low-seq live chunks must not be dropped against the snapshot baseline.
+      // An empty pending queue must not make the snapshot baseline discard low-sequence live chunks.
       expect(result).toEqual({
         data: 'snapshot\r\n',
         cols: 120,

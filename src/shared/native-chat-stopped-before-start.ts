@@ -11,7 +11,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import { inSendOrder } from './native-chat-send-order'
+import { inSendOrder } from './native-chat/native-chat-send-order'
 import { stoppedTurnOpeners, structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 

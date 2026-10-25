@@ -94,8 +94,8 @@ export async function startWorkspaceAgent(
     autoRenameBranchFromWork: false,
     // As the composer's folder submit passes them.
     agentCmdOverrides: settings?.agentCmdOverrides,
-    agentArgs: resolveTuiAgentLaunchArgs(producer.agent, settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(producer.agent, settings?.agentDefaultEnv),
+    agentArgs: resolveTuiAgentLaunchArgs(producer.agent, settings),
+    agentEnv: resolveTuiAgentLaunchEnv(producer.agent, settings),
     terminalWindowsShell: settings?.terminalWindowsShell,
     launchSource: 'new_workspace_composer',
     createFolderWorkspace: async () => folderWorkspace ?? null,

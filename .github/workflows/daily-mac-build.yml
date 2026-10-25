@@ -73,7 +73,7 @@ jobs:
   # Why: the app and the orcad template it ships must come from one commit, so resolve main once.
   resolve-main:
     if: github.repository == 'stablyai/orca'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
       head_sha: ${{ steps.resolve.outputs.head_sha }}
@@ -99,6 +99,7 @@ jobs:
     with:
       ref: ${{ needs.resolve-main.outputs.head_sha }}
       build_template: true
+      fast_runners: true
 
   build-daily-mac:
     needs:
@@ -566,7 +567,7 @@ jobs:
   post-daily-e2e:
     needs: build-daily-mac
     if: ${{ needs.build-daily-mac.outputs.published == 'true' && needs.build-daily-mac.outputs.head_sha != '' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       actions: write
     steps:
@@ -614,3 +615,4 @@ jobs:
       ref: ${{ needs.build-daily-mac.outputs.head_sha }}
       version: ${{ needs.build-daily-mac.outputs.version }}
       orcad_template: true
+      fast_release: true

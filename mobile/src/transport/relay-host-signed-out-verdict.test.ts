@@ -72,6 +72,7 @@ describe('relay close reason on the phone', () => {
     })
 
     expect(onHostCloseReason).toHaveBeenCalledWith(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+    expect(onError).toHaveBeenCalledOnce()
     expect(onError).toHaveBeenCalledWith(
       new RelayOuterError(
         MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE,
@@ -161,17 +162,11 @@ describe('the sign-out the cell reported outranks a later plain 4404', () => {
     const controller = controllerReporting(reported)
 
     controller.assertHostReachability('signed-out')
+    expect(reported).toEqual(['connecting', 'signed-out'])
     controller.registerFailure(new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE), false)
     controller.registerFailure(new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE), false)
 
     expect(reported).toEqual(['connecting', 'signed-out'])
-  })
-
-  it('needs no streak: one cell close reason is the whole evidence', () => {
-    const reported: RelayHostReachability[] = []
-    controllerReporting(reported).assertHostReachability('signed-out')
-
-    expect(reported.at(-1)).toBe('signed-out')
   })
 
   it('retires on a connection like every other verdict', () => {

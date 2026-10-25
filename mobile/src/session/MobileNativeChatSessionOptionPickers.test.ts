@@ -258,7 +258,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(rowByText('Opus 4.8').props.accessibilityState?.checked).toBe(false)
   })
 
-  it('closes without dispatch when re-picking the tracked value', async () => {
+  it('does not dispatch when re-picking the tracked value', async () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR])
     await act(async () => pill('Model').props.onPress())
     await act(async () => rowByText('Sonnet 5').props.onPress())

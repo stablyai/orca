@@ -330,13 +330,11 @@ describe('withCliRuntimeOnPath', () => {
     makeExecutable(join(v20, 'codex'))
     makeExecutable(join(v22, 'node'))
 
-    // default is v22, but codex only exists under v20
     const env = { PATH: [v22, '/usr/bin'].join(delimiter) }
     const codex = resolveCodexCommand({ platform: 'darwin', pathEnv: env.PATH, homePath: root })
     expect(codex).toBe(join(v20, 'codex'))
 
     const paired = withCliRuntimeOnPath(codex, env, { platform: 'darwin' })
-    // the shebang's `node` must now come from v20, not v22
     expect(paired.PATH.split(delimiter)[0]).toBe(v20)
   })
 
@@ -347,6 +345,33 @@ describe('withCliRuntimeOnPath', () => {
     const env = { PATH: '/usr/bin' }
 
     expect(withCliRuntimeOnPath(join(brew, 'codex'), env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('leaves PATH untouched for a compiled CLI beside a node (Homebrew, /usr/bin)', () => {
+    const root = makeCommandFixture('orca-pair-')
+    const brew = join(root, 'opt', 'homebrew', 'bin')
+    makeExecutable(join(brew, 'node'))
+    makeExecutable(join(brew, 'codex'))
+    writeFileSync(join(brew, 'codex'), Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0x07]))
+    const env = { PATH: '/usr/bin' }
+
+    expect(withCliRuntimeOnPath(join(brew, 'codex'), env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('pairs over the inherited PATH when the env names none, instead of replacing it', () => {
+    const root = makeCommandFixture('orca-pair-')
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    makeExecutable(join(v20, 'node'))
+    makeExecutable(join(v20, 'codex'))
+    const inherited = process.env.PATH
+    onTestFinished(() => {
+      process.env.PATH = inherited
+    })
+    process.env.PATH = ['/opt/inherited/bin', '/usr/bin'].join(delimiter)
+
+    const noPath: NodeJS.ProcessEnv = {}
+    const paired = withCliRuntimeOnPath(join(v20, 'codex'), noPath, { platform: 'darwin' })
+    expect(paired.PATH).toBe([v20, '/opt/inherited/bin', '/usr/bin'].join(delimiter))
   })
 
   it('leaves PATH untouched for a bare command name', () => {
@@ -369,9 +394,6 @@ describe('withCliRuntimeOnPath', () => {
     const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
     makeExecutable(join(v20, 'node.exe'))
     makeExecutable(join(v20, 'codex.cmd'))
-    // Why: win32 resolves env names case-insensitively, so a block may spell it
-    // any way. Reading a narrower set than the twin-dedupe deletes would drop
-    // this entry unread and hand the child a PATH containing only our directory.
     const env = { path: 'C:\\Windows;C:\\Windows\\System32', HOME: 'x' }
 
     const paired = withCliRuntimeOnPath(join(v20, 'codex.cmd'), env, { platform: 'win32' })
@@ -384,15 +406,12 @@ describe('withCliRuntimeOnPath', () => {
     const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
     makeExecutable(join(v20, 'node.exe'))
     makeExecutable(join(v20, 'codex.cmd'))
-    // Why both keys: with only `Path` seeded the assertion is vacuous — the
-    // helper cannot invent a `PATH` key, so the dedupe loop could be deleted
-    // wholesale and this test would still pass.
+    // Seed both casings so removing the duplicate-key cleanup would fail this test.
     const env = { Path: 'C:\\Windows;C:\\Windows\\System32', PATH: 'C:\\Stale' }
 
     const paired = withCliRuntimeOnPath(join(v20, 'codex.cmd'), env, { platform: 'win32' })
     expect(Object.keys(paired)).toEqual(['Path'])
-    // Why the whole string: splitting on the host delimiter while joining on ';'
-    // shredded every drive letter into `C;\\Windows`.
+    // Compare the whole PATH to catch drive letters split by the host's delimiter.
     expect(paired.Path).toBe([v20, 'C:\\Windows', 'C:\\Windows\\System32'].join(';'))
   })
 })

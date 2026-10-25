@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../shared/orcad-terminal-census'
 import {
+  moveManagedOrcadLocalPort,
   recordManagedOrcadMigration,
   refreshManagedOrcadPairing
 } from '../../shared/runtime-environment-managed-orcad-store'
@@ -270,6 +271,21 @@ describe('updateManagedOrcadEnvironment', () => {
     mocks.probe.mockResolvedValueOnce(managedReadiness('startup-offer-token'))
     await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
     expectEnrolledPairing()
+  })
+
+  it('saves the new pairing on the tunnel port the census moved to', async () => {
+    mocks.census.mockImplementationOnce(async () => {
+      moveManagedOrcadLocalPort(harness.userDataPath, 'environment-1', MANAGED_LOCAL_PORT + 1)
+      return idle
+    })
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    mocks.probe.mockResolvedValueOnce(managedReadiness())
+
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+
+    const [environment] = listEnvironments(harness.userDataPath)
+    expect(environment?.orcadDeployment?.localPort).toBe(MANAGED_LOCAL_PORT + 1)
+    expect(environment?.endpoints[0]?.endpoint).toBe(`ws://127.0.0.1:${MANAGED_LOCAL_PORT + 1}/`)
   })
 })
 

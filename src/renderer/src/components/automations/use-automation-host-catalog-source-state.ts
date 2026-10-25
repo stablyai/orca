@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type {
   AutomationCatalogRuntimeSource,
@@ -23,7 +24,7 @@ type AutomationHostCatalogSourceStateInput = {
 
 export type AutomationHostCatalogSourceState = Pick<
   AutomationHostCatalogSource,
-  'desktopSsh' | 'runtimes' | 'runtimeCatalogSettled'
+  'desktopSsh' | 'runtimes' | 'desktopAliasEnvironmentId' | 'runtimeCatalogSettled'
 >
 
 export function useAutomationHostCatalogSourceState({
@@ -81,9 +82,12 @@ export function useAutomationHostCatalogSourceState({
     [runtimeEnvironments, runtimeStatusByEnvironmentId, sshStateByEnvironment]
   )
 
+  // A web client's local calls are its paired server's, so Desktop and that runtime are one authority.
+  const desktopAliasEnvironmentId = getPairedWebClientEnvironmentId({ runtimeEnvironments })
+
   // Memoized: consumers key whole-catalog rebuilds on this object's identity.
   return useMemo(
-    () => ({ desktopSsh, runtimes, runtimeCatalogSettled }),
-    [desktopSsh, runtimes, runtimeCatalogSettled]
+    () => ({ desktopSsh, runtimes, desktopAliasEnvironmentId, runtimeCatalogSettled }),
+    [desktopSsh, runtimes, desktopAliasEnvironmentId, runtimeCatalogSettled]
   )
 }

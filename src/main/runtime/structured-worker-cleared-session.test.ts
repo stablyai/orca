@@ -39,7 +39,7 @@ const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
 const { sealedChildEnv } = await import('./structured-session-child-env.test-support')
 const { foundAgentSessionRecord } = await import('./agent-session-record-founding')
 const { applyAgentSessionRestartAdjudication } =
-  await import('./agent-session-restart-lease-transitions')
+  await import('./agent-session/ownership/agent-session-restart-lease-transitions')
 const { openTestAgentSessionRecordStore } =
   await import('./agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('./orca-runtime')

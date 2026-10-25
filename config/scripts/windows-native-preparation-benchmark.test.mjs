@@ -133,6 +133,8 @@ test('uses case-insensitive environment comparisons and never publishes values',
     }),
     ['vcinstalldir']
   )
+  assert.equal(parent.hash, 'b68036d62c67af93146be4c25bdb3987424b02fae8738cc4cb4ecf960813d97b')
+  assert.notEqual(parent.hash, environmentReceipt({ ...original, TOKEN: 'changed' }).hash)
   assert(!JSON.stringify(parent).includes('private'))
   assert.throws(() => environmentReceipt({ PATH: 'first', Path: 'second' }), /Duplicate/)
 })

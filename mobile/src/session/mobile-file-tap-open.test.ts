@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openMobileFileTap } from './mobile-file-tap-open'
 
 function ok(result: unknown) {
@@ -21,6 +21,14 @@ function activeTerminalState(activated: boolean) {
     activeTabType: 'terminal'
   }
 }
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('openMobileFileTap', () => {
   it('opens absolute terminal artifacts through the grant-backed preview route', async () => {
@@ -130,7 +138,7 @@ describe('openMobileFileTap', () => {
     })
     await Promise.resolve()
     await Promise.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.open',
@@ -715,7 +723,7 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.open',

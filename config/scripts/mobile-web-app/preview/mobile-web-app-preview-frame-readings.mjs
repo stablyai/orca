@@ -161,7 +161,8 @@ export async function readPreviewArm({
   return {
     page,
     pixelBefore,
-    pixel: await probePreviewPixel(page, clip),
+    // A top-frame navigation can discard the capture surface; its paint precondition is pixelBefore.
+    pixel: navigations.some((one) => one.main) ? null : await probePreviewPixel(page, clip),
     declaredSandbox: await page.evaluate(() => window.__sandbox),
     togglesBefore,
     toggles: await readPreviewToggles(page),

@@ -7,7 +7,7 @@
 // pays once per revision rather than once per consumer.
 
 import { backgroundTaskBlocks, claimBackgroundTaskTwins } from './native-chat-background-task-row'
-import { isWordlessProviderFrameBlock } from './native-chat-provider-frame-summary'
+import { isWordlessProviderFrameBlock } from './native-chat/native-chat-provider-frame-summary'
 import { isReplacedSubagentGroupTwin, subagentGroupBlocks } from './native-chat-subagent-summary'
 import {
   isBackgroundTaskBlock,

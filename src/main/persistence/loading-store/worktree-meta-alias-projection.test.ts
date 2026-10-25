@@ -2,7 +2,7 @@ import {
   closeTestStores,
   createSqliteTestStore,
   readPersistedStateJson
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 /**
  * `setWorktreeMetaForHost` puts one object in both `worktreeMeta` and `worktreeMetaByIdentity`, so
  * a heavy profile serializes every metadata row twice. On a measured 3.64 MB install 1,347 of
@@ -272,7 +272,7 @@ describe('worktree meta alias projection', () => {
    * now-dangling aliases and `migrateLegacyWorktreeMetadata` re-mints the identical identity key
    * from the `instanceId` the locator row still carries. Nothing is lost at any step.
    */
-  it('loses no row on a build that has no rebuild at all', () => {
+  it('preserves rows through metadata normalization before current Store reimport', () => {
     const fixture = buildFixture()
     const dataFile = tempDataFile()
     writeFixture(dataFile, fixture.state)

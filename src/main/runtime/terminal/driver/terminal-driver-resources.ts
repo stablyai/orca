@@ -51,7 +51,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     repoId?: string
     hostId?: ExecutionHostId
   }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost>
-  abstract getAuthoritativeWindow(): BrowserWindow
+  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
   protected abstract getAvailableAuthoritativeWindow(): BrowserWindow | null
   protected abstract markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,

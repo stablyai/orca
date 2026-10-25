@@ -1,4 +1,4 @@
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -42,7 +42,6 @@ const LAUNCH_TARGET = {
   terminalPtyId: 'pty-1'
 }
 
-/** Well past the reconciler's post-ready settle window. */
 const AFTER_SETTLE_MS = 10 * 60 * 1000
 
 function createAutomation(store: TestStore): Automation {
@@ -60,7 +59,6 @@ function createAutomation(store: TestStore): Automation {
   })
 }
 
-/** A run left behind by a quit while its agent was mid-task. */
 function retainDispatchedRun(store: TestStore, automation: Automation): AutomationRun {
   const run = store.createAutomationRun(automation, Date.now() - 60_000, 'manual')
   return store.updateAutomationRun({
@@ -79,7 +77,6 @@ function readRun(store: TestStore, automationId: string, runId: string): Automat
   return run
 }
 
-/** Stands in for the window graph: null until the pane it describes is mounted. */
 function createPaneSurface(): {
   observer: AutomationRunTerminalObserver
   mountPane: () => void
@@ -122,8 +119,6 @@ describe('reconciling retained runs against a graph that has not published yet',
   })
 
   it('does not fail a desktop-startup retained run while the window graph is empty', async () => {
-    // Desktop arms automations inside openMainWindow, before the renderer has
-    // loaded — every pane lookup returns null and none of it is evidence.
     const store = await createStore()
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)
@@ -184,7 +179,6 @@ describe('reconciling retained runs against a graph that has not published yet',
     service.setRendererReady()
     await vi.advanceTimersByTimeAsync(5_000)
 
-    // The restored pane comes back and its renderer reports the real outcome.
     surface.mountPane()
     await service.markDispatchResult({
       runId: retained.id,
@@ -201,8 +195,6 @@ describe('reconciling retained runs against a graph that has not published yet',
   })
 
   it('does not fail a serve-startup retained run whose host pane has not reattached', async () => {
-    // Serve publishes an explicitly empty graph and adopts SSH panes only after
-    // the connection comes up, so its surface answers null at start() too.
     const store = await createStore()
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)

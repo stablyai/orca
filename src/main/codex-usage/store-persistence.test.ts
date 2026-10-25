@@ -114,7 +114,6 @@ describe('CodexUsageStore', () => {
 
     scanMock.mockClear()
     await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(true)
-    // Control: a current-schema cache lets the worker reuse its processed files.
     expect(scanMock).toHaveBeenLastCalledWith([], {
       path: sourceCachePath,
       schemaVersion: CODEX_USAGE_SCHEMA_VERSION,

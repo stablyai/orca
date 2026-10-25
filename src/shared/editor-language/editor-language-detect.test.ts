@@ -21,6 +21,23 @@ describe('detectLanguage', () => {
   })
 
   it.each([
+    'Main.lean',
+    'lakefile.lean',
+    'C:\\proofs\\MAIN.LEAN',
+    '\\\\server\\share\\Main.lean',
+    '/home/user/folder workspace/Proof.LeAn'
+  ])('maps Lean source %s to the lean language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('lean')
+  })
+
+  it.each(['Main.lean.bak', 'Main.leanx', 'proofs.lean/README', 'proofs.lean\\README'])(
+    'keeps non-Lean file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
+
+  it.each([
     'documents/report.typ',
     'C:\\documents\\REPORT.TYP',
     '\\\\server\\share\\report.typ',

@@ -145,3 +145,26 @@ export function ensureDetectedAgentsForNewWorktree(
     ? state.ensureRuntimeDetectedAgents(host.environmentId, worktreeId)
     : (ensureDetectedAgentsForRepo(state, repo) ?? Promise.resolve([]))
 }
+
+/** IDs and the latest attempt outcome always describe the same target. */
+export function readAgentInventoryForTarget(state: AppState, target: AgentDetectionTarget) {
+  if (target.kind === 'local') {
+    return state.readLocalAgentInventory(target.worktreeId)
+  }
+  const ids = readDetectedAgentsForTarget(state, target)
+  if (target.kind !== 'runtime') {
+    return { ids, state: state.remoteAgentInventoryOutcome(target.connectionId) }
+  }
+  const key = getRuntimeAgentInventoryKey(target.environmentId, target.worktreeId)
+  const unsupported = state.runtimeAgentDetectionNeedsServerUpdate[key]
+  return {
+    ids,
+    state: unsupported ? ('unsupported' as const) : state.runtimeAgentInventoryOutcome(key)
+  }
+}
+export function readAgentInventoryForWorktree(state: AppState, worktreeId: string) {
+  const target = detectionTargetForWorktree(state, worktreeId)
+  return target
+    ? readAgentInventoryForTarget(state, target)
+    : { ids: null, state: 'unresolved' as const }
+}

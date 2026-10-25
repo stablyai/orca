@@ -26,13 +26,15 @@ export function useAutomationsPageSetupState({
   local: AutomationsPageLocalState
   list: AutomationsPageListState
 }) {
-  const { repos, settings, projectHostSetups, worktreesByRepo } = store
+  const { repos, settings, projectHostSetups, worktreesByRepo, pendingAutomationRunNavigation } =
+    store
   const {
     automationYamlHooksByRepoKey,
     automationHookCheckPromisesRef,
     setAutomationYamlHooksByRepoKey,
     setupDecisionTouchedRef,
     selectedAutomationRuns,
+    runHistoryReloadToken,
     draft,
     automationHostTargetKey,
     selectedAutomationRunPageId
@@ -160,7 +162,12 @@ export function useAutomationsPageSetupState({
     selectedAutomationRuns.rowKey === selectedRow.key &&
     selectedAutomationRuns.ownerKey ===
       capturedAutomationOwnerKey(capturedAutomationOwner(capturedAutomationOwners, selectedRow.key))
-  const selectedRunsNotice = selectedRunsMatchSelection ? selectedAutomationRuns.notice : null
+  const selectedRunsReady =
+    selectedRunsMatchSelection &&
+    selectedAutomationRuns.reloadToken === runHistoryReloadToken &&
+    (!pendingAutomationRunNavigation ||
+      selectedAutomationRuns.navigation === pendingAutomationRunNavigation)
+  const selectedRunsNotice = selectedRunsReady ? selectedAutomationRuns.notice : null
   const selectedRuns = useMemo(
     () =>
       selected && selectedRunsMatchSelection
@@ -187,6 +194,7 @@ export function useAutomationsPageSetupState({
     getDraftSetupDecisionDefaultSignature,
     markSetupDecisionTouched,
     selectedRuns,
+    selectedRunsReady,
     selectedRunsNotice,
     selectedAutomationRunPage,
     worktrees,

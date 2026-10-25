@@ -78,13 +78,24 @@ export function isMobileFileDiffSource(
 }
 
 export function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
+  // A tab mirrored from a paired host is that host's; republishing it echoes it back to the host.
+  if (file.mirroredFromRuntimeSession === true) {
+    return false
+  }
   // Combined diff tabs use display labels as paths and need the desktop renderer.
-  return !(
+  if (
     file.diffSource === 'combined-all' ||
     file.diffSource === 'combined-uncommitted' ||
     file.diffSource === 'combined-branch' ||
     file.diffSource === 'combined-commit'
-  )
+  ) {
+    return false
+  }
+  // Why: a phone reads a plain file tab by its workspace-relative path; a tab naming a file
+  // outside its workspace (an external file, or another workspace's file viewed here, #32158)
+  // has none. Markdown tabs are read through the desktop's tab instead, so they still show.
+  const isMarkdown = file.language === 'markdown' || file.mode === 'markdown-preview'
+  return isMarkdown || file.relativePath !== file.filePath
 }
 
 /**

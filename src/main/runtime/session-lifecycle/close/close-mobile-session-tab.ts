@@ -19,7 +19,7 @@ import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-regist
 import type { RuntimeEdgeCommandSurface } from '../../runtime-edge-command-controller'
 import { SESSION_TAB_NOT_FOUND_ERROR } from '../../../../shared/session-tab-close'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
-import { structuredAgentSessionTabCloseCause } from '../../structured-agent-session-tab-close-cause'
+import { structuredAgentSessionTabCloseCause } from '../../agent-session/structured-agent-session-tab-close-cause'
 import { retireHeadlessMobileSessionEditorTab } from '../../mobile-session-editor-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 

@@ -1,4 +1,4 @@
-import { prefixJiraReviewTitle } from '../../../../shared/jira-review-title'
+import { prefixJiraReviewTitle } from '../../../../shared/jira/jira-review-title'
 import type {
   PullRequestGenerationFields,
   PullRequestGenerationRecord

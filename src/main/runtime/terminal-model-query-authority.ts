@@ -33,7 +33,8 @@ export function isTerminalModelQueryAuthorityEnabled(
  *  hidden-gate drop sites, so "chunk dropped" and "main answers" cannot
  *  diverge for live chunks. Remote view subscribers (mobile/web/remote
  *  desktop xterms on the multiplexed stream) keep view authority, so main
- *  yields while one is attached. */
+ *  yields while one is attached and not paused: a paused stream drops the
+ *  chunk, as the hidden gate does. */
 export function shouldModelAnswerHiddenPtyQueries(opts: {
   ptyId: string
   settings: TerminalModelQueryAuthoritySettings | null | undefined

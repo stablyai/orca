@@ -273,7 +273,7 @@ describe('ToolRun', () => {
       })
     }
 
-    it('opens a rewrite to every removed and added line, interleaved, with nothing cut', () => {
+    it('opens a rewrite to every removed and added line in unified order, with nothing cut', () => {
       const before = Array.from({ length: 15 }, (_, i) => `old ${i}`).join('\n')
       const after = Array.from({ length: 15 }, (_, i) => `new ${i}`).join('\n')
       const tree = render([
@@ -287,7 +287,7 @@ describe('ToolRun', () => {
       expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Edited', 'a.ts', '+15', '-15']))
       openRow(tree, 'a.ts')
       const rows = textIn(tree.root).filter((text) => /^(old|new) \d+$/.test(text))
-      expect(rows).toHaveLength(30)
+      expect(rows).toEqual([...before.split('\n'), ...after.split('\n')])
       expect(textIn(tree.root).some((text) => text.includes('truncated'))).toBe(false)
       // The result the card speaks for draws no row of its own.
       expect(textIn(tree.root)).not.toContain('The file src/a.ts has been updated.')

@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import { removeWatcherCanaryDirectory } from './parcel-watcher-canary-directory'
-import type { WatcherCancellationTracker } from './parcel-watcher-cancellation-tracker'
+import type { WatcherCancellationTracker } from './filesystem/watcher-process/parcel-watcher-cancellation-tracker'
 import {
   type PendingWatcherUnsubscribe,
   resolvePendingWatcherUnsubscribes
@@ -8,8 +8,8 @@ import {
 import {
   resetPendingSubscribeAttempt,
   takePendingSubscribe
-} from './parcel-watcher-pending-subscribe'
-import { signalWatcherChild } from './parcel-watcher-child-termination'
+} from './filesystem/watcher-process/parcel-watcher-pending-subscribe'
+import { signalWatcherChild } from './filesystem/watcher-process/parcel-watcher-child-termination'
 import { watcherHostFailure } from './parcel-watcher-process-failure'
 import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
 

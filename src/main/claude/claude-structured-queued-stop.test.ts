@@ -1,7 +1,3 @@
-// A send Claude queued behind the running turn is dropped by Stop, so it must settle as withdrawn.
-// Orca's SessionStart hook proves most starts before the turn's system/init, which is the only
-// frame that says whether the CLI can cancel its queue.
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -17,14 +13,13 @@ import {
   type FakeConnection
 } from './claude-structured-session-test-support'
 
-// As Claude Code 2.1.280 advertises them on a turn's system/init frame.
+// Captured from Claude Code 2.1.280 system/init.
 const CAPABILITIES = ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1', 'msg_lifecycle_v1']
 
 type Settlement = Parameters<
   NonNullable<ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']>
 >[0]
 
-/** Answers the way the real CLI does: cancel_queued cancels the queue, a plain interrupt keeps it. */
 function claudeCli(options: Parameters<typeof fakeClaude>[0] = {}) {
   let queued: string[] = []
   const claude = fakeClaude({
@@ -111,7 +106,6 @@ function completeTurn(connection: FakeConnection, uuid: string): void {
   })
 }
 
-/** Writes a send and opens its turn with the echo, which adopts the client uuid. */
 async function sendAndOpen(
   adapter: ReturnType<typeof adapterFor>,
   connection: FakeConnection,
@@ -130,8 +124,7 @@ function send(adapter: ReturnType<typeof adapterFor>, clientMessageId: string) {
   return adapter.dispatch({ sessionId: 'session-1', clientMessageId, body: USER_MESSAGE, fence: 7 })
 }
 
-/** Stops `turnId` as the phone does, naming it, while the journal still reads the queued send as
- *  pending, and reads the outcome without moving the clock: that handover must hold no Stop. */
+/** Pending delivery must not delay Stop; read the outcome without advancing time. */
 async function namedStop(adapter: ReturnType<typeof adapterFor>, turnId: string): Promise<unknown> {
   vi.useFakeTimers()
   try {
@@ -151,7 +144,6 @@ async function namedStop(adapter: ReturnType<typeof adapterFor>, turnId: string)
   }
 }
 
-/** Sends A and opens its turn, queues B behind it, then Stops A by name as the phone does. */
 async function stopWithQueuedFollowUp(
   cli: ReturnType<typeof claudeCli>,
   openTurn: (connection: FakeConnection) => void
@@ -175,6 +167,7 @@ const WITHDRAWN = [
     sessionId: 'session-1',
     clientMessageId: 'client-b',
     state: 'rejected',
+    unrun: true,
     reason: DISPATCH_REJECTED_CANCELLED,
     rejection: { kind: 'cancelled' }
   }
@@ -199,7 +192,6 @@ describe('Stop with a follow-up Claude queued behind the running turn', () => {
     expect(bySessionStart).toEqual(byInit)
   })
 
-  // Claude may already hold a swept send in the stopped turn, so it is never re-sent as history.
   it('settles the swept follow-up without proof it never reached Claude', async () => {
     const { settlements } = await stopWithQueuedFollowUp(
       claudeCli({ initProof: 'init', capabilities: CAPABILITIES }),
@@ -234,8 +226,7 @@ describe('Stop with a follow-up Claude queued behind the running turn', () => {
   it('keeps what a turn advertised when the start is read after it', async () => {
     const cli = claudeCli({ initProof: 'session-start' })
     const open = cli.claude.openConnection
-    // The turn's init lands while startup still waits on get_settings, as a send that starts the
-    // agent allows.
+    // Deliver turn init before startup's get_settings resolves.
     cli.claude.openConnection = async (launch, handlers) => {
       const connection = await open(launch, handlers)
       const getSettings = connection.getSettings
@@ -293,7 +284,6 @@ describe('Stop with a follow-up Claude queued behind the running turn', () => {
     const shownTurnId = runningTurnId(bodies)
     await send(adapter, 'client-b')
     cli.queue(String(connection.sent.at(-1)!.uuid))
-    // The phone's copy still shows the first turn, which ends before its Stop lands.
     completeTurn(connection, 'result-a')
     expect(openTurnId(bodies)).toBeNull()
 

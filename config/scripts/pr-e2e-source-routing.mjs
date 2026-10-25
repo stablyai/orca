@@ -289,6 +289,17 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    // A saved managed tunnel port that can no longer be bound moves to a free one (#33182).
+    id: 'ssh.orcad-unbindable-tunnel-port',
+    specs: ['tests/e2e/ssh-orcad-unbindable-tunnel-port.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/managed-server\/lifecycle\/orcad-managed-tunnel|main\/ssh\/system-transport\/system-ssh-forward-port-reservation|shared\/runtime-environment-(?:sidecar|managed-orcad-store))/.test(
+          file
+        ))
+  },
+  {
     // Why: hand-kept routes missed #30130 and #30120; scoped to managed-host code to bound lane cost.
     id: 'ssh.orcad-remote-sources',
     specs: [
@@ -520,6 +531,7 @@ export function selectPrE2eSpecs(
         (file.startsWith('tests/e2e/helpers/') &&
           [...specs].some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX))) ||
         file === '.github/workflows/e2e.yml' ||
+        file === '.github/scripts/prepare-ubuntu-apt.sh' ||
         file === 'config/scripts/ci-e2e-job-selection.mjs'
     )
   ) {

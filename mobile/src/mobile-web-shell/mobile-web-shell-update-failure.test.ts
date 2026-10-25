@@ -80,7 +80,7 @@ describe('readFailureSide', () => {
 })
 
 describe('updateFailureWallOf', () => {
-  it('flattens each blocked verdict to one code', () => {
+  it('flattens bundle availability and protocol-version verdicts to stable codes', () => {
     expect(updateFailureWallOf({ kind: 'blocked', reason: 'bundle-unavailable' })).toBe(
       'bundle-unavailable'
     )

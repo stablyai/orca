@@ -157,11 +157,8 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
       state: await readRateLimits(false)
     }),
     refreshClaudeForTarget: refresh,
-    // Why: the server owns its poll cadence; a web tab must not retune it.
-    setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: refreshInactive,
     fetchInactiveCodexAccounts: refreshInactive,
-    refreshMiniMax: refresh,
     refreshGrok: refresh,
     onUpdate: (callback) => {
       listeners.add(callback)

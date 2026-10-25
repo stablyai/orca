@@ -1,5 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime-client-error-classification'
+import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import {
   encodeTerminalStreamFrame,
   type TerminalStreamOpcode

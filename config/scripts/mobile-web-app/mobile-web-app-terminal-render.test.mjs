@@ -107,9 +107,9 @@ describeRender(
       expect(fonts).toHaveLength(1)
       expect(fonts[0].status()).toBe(200)
       expect(fonts[0].headers()['content-type']).toBe('font/woff2')
-      expect(new URL(fonts[0].url()).pathname).toBe(
-        '/assets/8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467.woff2'
-      )
+      const fontUrl = new URL(fonts[0].url())
+      expect(fontUrl.origin).toBe(new URL(page.url()).origin)
+      expect(fontUrl.pathname).toMatch(/^\/assets\/[^/]+\.woff2$/)
       expect(
         await page.evaluate(() => document.fonts.check('13px "Orca Nerd Font Symbols"', '\ue0b0'))
       ).toBe(true)

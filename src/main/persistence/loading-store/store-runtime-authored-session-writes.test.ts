@@ -1,5 +1,5 @@
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * Drives the real `Store`, not the helper and not a fake.
  *

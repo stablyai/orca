@@ -184,7 +184,7 @@ export function getGitHubWorkItemRequestContext(
       }
     }
   }
-  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, requestTarget)
+  const runtimeRepo = getRuntimeRepoTarget(state, { repoId, repoPath }, requestTarget)
   return {
     repoId,
     repoPath,

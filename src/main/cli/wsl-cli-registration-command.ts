@@ -22,8 +22,7 @@ export function buildWslCliInstallCommand(
   const bridgePath = getBridgePathFromCommandPath(status.commandPath)
   const legacyCommandPath = `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
   return [
-    // Why -eu not -euo pipefail: transported via runWslProcess's `sh -s`,
-    // and no pipe here needs pipefail -- dash on Ubuntu 20.04 lacks the option.
+    // Runs under sh; Ubuntu 20.04 dash lacks pipefail, and no pipeline here needs it.
     'set -eu',
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WSL status sets pathDirectory to dirname(commandPath) whenever commandPath is set, and the caller requires commandPath.
     `mkdir -p ${quotePosixShellDoubleQuotedApostrophe(status.pathDirectory as string)}`,

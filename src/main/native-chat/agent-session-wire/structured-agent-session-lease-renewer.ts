@@ -16,8 +16,7 @@ const HELD_CHILD: AgentSessionOwnerProbe = {
 export class StructuredAgentSessionLeaseRenewer {
   private timer: ReturnType<typeof setInterval> | null = null
   private running = false
-  /** The tick in flight. Never rejects: the timer path logs renewal failures,
-   *  and stopping must not turn one into a teardown failure as well. */
+  /** Never rejects: timer failures are logged and must not also fail teardown. */
   private inFlight: Promise<void> = Promise.resolve()
 
   constructor(
@@ -27,7 +26,6 @@ export class StructuredAgentSessionLeaseRenewer {
       probeMany?: (
         records: readonly AgentSessionRecord[]
       ) => Promise<Map<string, AgentSessionOwnerProbe>>
-      /** Whether this runtime holds the session's child at `fence` and has not seen it exit. */
       holdsLiveChild: (sessionId: string, fence: number) => boolean
       now: () => number
       logger: StructuredAgentSessionLogger
@@ -43,9 +41,7 @@ export class StructuredAgentSessionLeaseRenewer {
     this.timer.unref?.()
   }
 
-  /** Clearing the interval only stops the NEXT tick. A tick already past its guard still has a
-   *  store transaction to commit, so a stop that returned before it landed would let the write
-   *  outlive whatever tore the host down. */
+  /** Join in-flight commits; clearing the timer alone lets writes outlive host teardown. */
   stop(): Promise<void> {
     if (this.timer) {
       clearInterval(this.timer)
@@ -75,12 +71,10 @@ export class StructuredAgentSessionLeaseRenewer {
         !record.lease.unreconciled &&
         record.lease.claimStatus === 'live' &&
         record.lease.ownerProcess !== null &&
-        // A record parked in recovery has no transport the host can vouch for; renewing it
-        // keeps an orphan pid's lease reading as a healthy owner.
+        // Recovery has no owned transport; renewing would make an orphan PID appear healthy.
         record.lease.handoffStage !== 'recovering'
     )
-    // A child this runtime holds proves itself; a PID probe can be indeterminate for it (no start
-    // time, no token echo), which would freeze the lease at its last proof.
+    // Held children prove ownership even when PID probes lack start-time/token evidence.
     const holds = (record: AgentSessionRecord): boolean =>
       this.input.holdsLiveChild(record.sessionId, record.lease.runtimeFence)
     const held = records.filter(holds)
@@ -88,7 +82,7 @@ export class StructuredAgentSessionLeaseRenewer {
     const probes =
       unheld.length > 0 ? await this.probe(unheld) : new Map<string, AgentSessionOwnerProbe>()
     for (const record of held) {
-      // Re-read after the probes: an exit received meanwhile ends the child's proof.
+      // Exit during probes invalidates held-child proof.
       if (holds(record)) {
         probes.set(record.sessionId, HELD_CHILD)
       }
@@ -112,8 +106,7 @@ export class StructuredAgentSessionLeaseRenewer {
         now
       })
     }
-    // One transaction for every renewal on the healthy path. If one renewal is superseded,
-    // retrying individually preserves isolation.
+    // Batch healthy renewals; retry superseded entries individually to preserve isolation.
     let results: PromiseSettledResult<AgentSessionRecord>[]
     try {
       const renewed = await this.input.store.renewLeases(renewals)
@@ -159,7 +152,7 @@ export class StructuredAgentSessionLeaseRenewer {
     }
   }
 
-  /** Lease and ownership failures are transient: the next tick, attach or send retries them. */
+  /** Lease/ownership failures are transient; future ticks or operations retry. */
   private reportFailure(sessionId: string, error: unknown): void {
     this.input.logger.warn('renewing a chat lease failed', {
       scope: 'lease-renewal',

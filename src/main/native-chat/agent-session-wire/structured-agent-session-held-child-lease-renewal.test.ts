@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { probeAgentSessionProcessIdentity } from '../../runtime/agent-session-process-identity-probe'
+import { probeAgentSessionProcessIdentity } from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
@@ -20,7 +20,6 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-/** A live owner recorded without a start time, as on a host that could not read one. */
 async function liveStoreWithoutStartTime(): Promise<{
   root: string
   store: AgentSessionRecordStore
@@ -73,7 +72,7 @@ async function liveStoreWithoutStartTime(): Promise<{
   return { root, store, fence }
 }
 
-/** The real PID probe on `platform`, with the recorded pid present: no start time, no token echo. */
+/** Present PID without start time/token evidence, using the real platform probe. */
 function pidProbe(platform: NodeJS.Platform) {
   return vi.fn((record: AgentSessionRecord) =>
     probeAgentSessionProcessIdentity({
@@ -83,8 +82,6 @@ function pidProbe(platform: NodeJS.Platform) {
   )
 }
 
-/** The host's child record, read against an adapter that owns the process for `gen-1` until the
- *  test says its root exited. */
 function hostWith(child: StructuredAgentSessionProviderChild | null) {
   const session = { child }
   const adapter: { liveGeneration: string | null } = { liveGeneration: 'gen-1' }
@@ -141,12 +138,11 @@ describe.each(['darwin', 'win32'] as const)('lease renewal of a held child on %s
     const { renewer } = renewerFor(store, probe, clock, holdsLiveChild)
     await renewer.renewNow()
 
-    // The child is still on the host's record: only the adapter has seen the exit so far.
+    // Adapter exit evidence must override a still-indexed host child.
     adapter.liveGeneration = null
     clock.now = NOW + 20_000
     await renewer.renewNow()
 
-    // Back on the PID probe, which cannot vouch for it: the lease keeps its last proof.
     expect(probe).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.lastRenewedAt).toBe(NOW + 10_000)
   })
@@ -160,7 +156,6 @@ describe.each(['darwin', 'win32'] as const)('lease renewal of a held child on %s
     clock.now = NOW + 20_000
     await renewer.renewNow()
 
-    // Orca crashed: the next runtime holds no child and finds the recorded pid gone.
     const reopened = await openTestAgentSessionRecordStore(root)
     await reopened.reconcileOnRestart({
       probe: async () => ({ outcome: 'pid-absent' }),
@@ -175,7 +170,6 @@ describe.each(['darwin', 'win32'] as const)('lease renewal of a held child on %s
 
   it('still probes a record this runtime does not hold at its fence', async () => {
     const { store, fence } = await liveStoreWithoutStartTime()
-    // An older child, one whose acquisition the adapter does not run, or none at all.
     for (const child of [
       { generation: 'gen-0', fence: fence - 1, phase: 'ready' } as const,
       { generation: 'gen-2', fence, phase: 'ready' } as const,

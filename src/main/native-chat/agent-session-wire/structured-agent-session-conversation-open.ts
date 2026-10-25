@@ -4,7 +4,7 @@
 // A damaged journal fails the open, which refuses it as unloadable. It marks what an earlier host
 // process handed over and left unanswered as in doubt, and settles what it left running — the
 // crash boundary. That
-// needs no lease: provider history decides such a row later, under a won lease, in the attach. A
+// needs no lease, and the doubt is final: whether the provider took such a row is never guessed. A
 // row an earlier process accepted and never handed over (it quit or crashed first) is settled here
 // too, before any reader, command or child sees it: a person's message is kept as a card, the rest
 // rejected (`journal-unsent-send-hold.ts`). The cards then wait for the chat's next turn
@@ -24,10 +24,7 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import {
-  markStructuredQueueReopen,
-  structuredAgentSessionHostInstance
-} from './structured-agent-session-queued-pause'
+import { markStructuredQueueReopen } from './structured-agent-session-queued-pause'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -43,8 +40,7 @@ export type StructuredAgentSessionConversationOpenDeps = {
   logger: StructuredAgentSessionHostDeps['logger']
 }
 
-/** An acquisition's own open: its reserve cleared the record's death evidence, so it settles
- *  what the gone generation left running itself, from what it read before. */
+/** Acquisition retains prior death evidence because reservation clears it. */
 export type StructuredAgentSessionConversationOpenOptions = {
   acquisition?: boolean
 }
@@ -52,15 +48,13 @@ export type StructuredAgentSessionConversationOpenOptions = {
 export type StructuredAgentSessionConversationOpenContext = {
   deps: StructuredAgentSessionConversationOpenDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
-  /** Indexes a conversation that just became open; the host publishes it and wakes delivery. */
   adoptOpened: (
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
   ) => Promise<void>
 }
 
-/** The open conversation, or null when this host has no record of it. For a caller inside the
- *  session's serialize, which is what makes "not open yet" exact. */
+/** Caller holds serialization so the open-or-absent decision is exact. */
 export async function openStructuredAgentSessionConversation(
   context: StructuredAgentSessionConversationOpenContext,
   sessionId: string,
@@ -79,14 +73,12 @@ export async function openStructuredAgentSessionConversation(
   return opened.session
 }
 
-/** The open itself, indexed by nobody yet: the caller adopts the result. Any open that settles
- *  needs the store, which names the runtimes this one replaced. */
+/** Caller adopts the unindexed journal; settlement needs store ownership history. */
 export async function openStructuredAgentSessionConversationJournal(
   deps: StructuredAgentSessionConversationOpenDeps,
   record: AgentSessionRecord,
   options?: StructuredAgentSessionConversationOpenOptions
 ): Promise<OpenedStructuredAgentSessionConversation>
-/** An acquisition's open settles nothing itself, so it needs no store. */
 export async function openStructuredAgentSessionConversationJournal(
   deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'>,
   record: AgentSessionRecord,
@@ -107,7 +99,7 @@ export async function openStructuredAgentSessionConversationJournal(
   const identity = journalIdentityFor(record, params)
   const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
   try {
-    // A handed-over row found here is only doubt, which provider history decides under a won lease.
+    // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
     await journal.markPendingSubmissionsUnknown(fence)
   } catch (error) {
     deps.logger.warn('marking pending sends unknown on open failed', {
@@ -117,38 +109,26 @@ export async function openStructuredAgentSessionConversationJournal(
     })
   }
   try {
-    // Before a Stop this open serves can withdraw one: a Stop never withdraws a card.
-    await holdUnsentSends(journal, {
-      fence,
-      hostInstance: structuredAgentSessionHostInstance(),
-      hold: { cause: 'hostRestarted' }
-    })
+    // Preserve leftover personal sends before any Stop can withdraw them.
+    await holdUnsentSends(journal, { fence, hold: { cause: 'hostRestarted' } })
   } catch (error) {
-    // The row stays queued. The delivery loop's first step tries again before it hands anything
-    // over; if that fails too, the loop fails and rejects every queued send.
+    // Failed leftovers stay queued; delivery retries before handover or rejects all if recovery still fails.
     deps.logger.warn('settling sends an earlier process left queued failed on open', {
       scope: 'open-leftover-sends',
       sessionId,
       error
     })
   }
-  // After the leftovers became cards, so the mark follows every card this open found. Every open
-  // comes after the chat stopped running: the idle sweep never closes one with cards waiting.
+  // Mark after recovering cards; idle sweeping never closes handles while cards wait.
   await markStructuredQueueReopen(sessionId, journal, fence, deps.logger)
-  // No child in this process writes to a journal nobody had open, so whatever it shows running
-  // belongs to a generation that is gone, whatever the lease still claims. Settled before any
-  // reader or child sees it.
+  // No local child writes unopened journals; settle the gone generation before readers/new children.
   if (!options.acquisition) {
     await settleGoneGeneration(deps, record, journal)
   }
   return { session: { journal, params, child: null } }
 }
 
-/**
- * The open's settle again, for a conversation already open: a proof of death written since it
- * opened (the startup reconcile, a recovery) revises what the open could only call `unverifiable`.
- * A record holds a proof only while released, so no child here is writing. A no-op once revised.
- */
+/** New released-owner death proof can refine prior unverifiable work; no-op after revision. */
 export async function resettleOpenStructuredAgentSessionConversation(
   deps: StructuredAgentSessionConversationOpenDeps,
   sessionId: string,
@@ -177,7 +157,7 @@ async function settleGoneGeneration(
       failureTextContext: structuredAgentSessionFailureWordsContext(record)
     })
   } catch (error) {
-    // Best effort: the next open or acquire re-derives it.
+    // Best effort; next open/acquisition retries.
     deps.logger.warn("settling a gone agent's work on open failed", {
       scope: 'open-dead-generation',
       sessionId: record.sessionId,

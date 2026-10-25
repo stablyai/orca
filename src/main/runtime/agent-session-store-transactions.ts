@@ -29,7 +29,7 @@ import {
 import {
   agentSessionReplacedRuntimes,
   type AgentSessionReplacedRuntime
-} from './agent-session-replaced-runtime'
+} from './agent-session/agent-session-replaced-runtime'
 import {
   agentSessionStoreDraftRowWrites,
   draftAgentSessionStoreState,

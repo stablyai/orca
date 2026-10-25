@@ -40,6 +40,7 @@ type Tick = {
   structured?: boolean
   activeTabId?: string | null
   setTabView?: (tabId: string, view: 'terminal') => void
+  attachImage?: (source: 'library' | 'camera') => Promise<void>
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -77,7 +78,14 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   return createElement(MobileNativeChatOverlay, {
     controller,
     activeSessionTabId: tick.activeTabId,
-    images: {} as never,
+    onOpenFile: vi.fn(),
+    images: {
+      attachments: [],
+      isAttaching: false,
+      attachImage: tick.attachImage ?? vi.fn(async () => {}),
+      removeAttachment: vi.fn(),
+      sendNativeChat: vi.fn(async () => true)
+    },
     onMicPress: vi.fn(),
     micActive: false,
     dictationMode: 'toggle',
@@ -277,10 +285,17 @@ describe('MobileNativeChatOverlay attach button', () => {
   )
 
   it.each([true, false])('offers attach only when the agent takes images (%s)', async (accepts) => {
+    const attachImage = vi.fn(async () => {})
     await act(async () => {
-      renderer = create(overlayElement({ acceptsImages: accepts }))
+      renderer = create(overlayElement({ acceptsImages: accepts, attachImage }))
     })
     const view = renderer!.root.find((node) => node.type === 'ChatView')
     expect(typeof view.props.onAttachImage === 'function').toBe(accepts)
+    if (accepts) {
+      await act(async () => view.props.onAttachImage())
+      expect(attachImage).toHaveBeenCalledExactlyOnceWith('library')
+    } else {
+      expect(attachImage).not.toHaveBeenCalled()
+    }
   })
 })

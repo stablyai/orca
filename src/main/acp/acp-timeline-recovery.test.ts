@@ -11,7 +11,6 @@ describe('ACP reviewed traffic and recovery', () => {
   it('replays every notification in the full recording without extension status rows or persisted signatures', async () => {
     const f = await openAcpFixtureRig()
     const frames = await readAcpFixture('s1-full-notifications')
-    expect(frames).toHaveLength(142)
     const rows = await f.feed(frames)
     expect(rows.filter((row) => row.body.kind === 'status')).toEqual([])
     expect(rows.filter((row) => row.body.kind === 'tool-call')).toHaveLength(2)

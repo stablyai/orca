@@ -26,7 +26,7 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 describe('orcad migration blob staging', () => {
-  it('stages, resumes from disk after a restart, and accepts only exact retries', () => {
+  it('stages, reloads progress from disk, and accepts only exact retries', () => {
     const bytes = Buffer.from('echo one\necho two 🐋\n', 'utf8')
     const descriptor = blob('shell-history', `${'a'.repeat(16)}-zsh`, bytes)
     const manifest = migrationManifest('resume')

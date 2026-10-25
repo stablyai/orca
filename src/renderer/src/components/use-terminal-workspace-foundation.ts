@@ -7,7 +7,7 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-e
 import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reused-array-identity'
-import { selectPairedRuntimeParkingEnvironmentIds } from './terminal-pane/terminal-hidden-view-parking'
+import { usePairedRuntimeParkingEnvironmentIds } from '@/store/use-runtime-status-view'
 import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
@@ -77,11 +77,7 @@ export function useTerminalWorkspaceFoundation() {
   const terminalSshParkingEnabled = useAppStore(
     (state) => state.settings?.terminalSshViewParking !== false
   )
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
-  const pairedRuntimeParkingEnvironmentIds = useMemo(
-    () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
-    [runtimeStatusByEnvironmentId]
-  )
+  const pairedRuntimeParkingEnvironmentIds = usePairedRuntimeParkingEnvironmentIds()
   const terminalRetentionBudgetEnabled = useAppStore(
     (state) => state.settings?.terminalHiddenWorktreeRetentionBudget !== false
   )
@@ -115,7 +111,6 @@ export function useTerminalWorkspaceFoundation() {
     pendingStartupByTabId,
     terminalParkingEnabled,
     terminalSshParkingEnabled,
-    runtimeStatusByEnvironmentId,
     pairedRuntimeParkingEnvironmentIds,
     terminalRetentionBudgetEnabled,
     browserGuestRetentionBudgetEnabled,

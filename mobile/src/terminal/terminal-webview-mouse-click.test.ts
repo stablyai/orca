@@ -86,6 +86,7 @@ describe('terminal WebView external mouse click', () => {
 
   it('lets the touch dispatcher own a gesture when touch events follow pointerdown', () => {
     mouse.boot()
+    mouse.writeLegacyMouseEncoding()
     mouse.activeTerminal().modes.mouseTrackingMode = 'vt200'
 
     mouse.dispatchPointer('pointerdown', { x: 40, y: 60, button: 0, buttons: 1 })

@@ -36,7 +36,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     agentTeamsEnv?: Record<string, string>
   ): Record<string, string>
 
-  abstract getAuthoritativeWindow(): BrowserWindow
+  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
 
   abstract waitForTerminalHandle(tabId: string, timeoutMs?: number): Promise<string>
 

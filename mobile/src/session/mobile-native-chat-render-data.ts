@@ -5,8 +5,8 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
-import { nativeChatStreamingMessage } from '../../../src/shared/native-chat-streaming'
-import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat-provider-frame-summary'
+import { nativeChatStreamingMessage } from '../../../src/shared/native-chat/native-chat-streaming'
+import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat/native-chat-provider-frame-summary'
 import {
   foldToolMessages,
   isUndrawnProviderFrameMessage

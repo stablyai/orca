@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHost, TerminalViewportChange } from './document-host-seams'
@@ -45,11 +45,16 @@ function scopeWithGrid(host: TerminalDocumentHost = {}): TerminalDocumentScope {
 
 const started: TerminalDocumentScope[] = []
 
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
 afterEach(() => {
   while (started.length > 0) {
     stopTerminalDocument(started.pop()!)
   }
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 /** A started document over a grid, with the page's seams the case names. */
@@ -68,8 +73,8 @@ function startedWithGrid(host: TerminalDocumentHost): TerminalDocumentScope {
   return scope
 }
 
-/** One frame after everything already queued: happy-dom runs frames in order. */
-const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+/** Advance one frame, including the document's already queued work. */
+const nextFrame = () => vi.advanceTimersToNextFrame()
 
 /** Frame by frame until the document has done what the case waits on; init chains a few. */
 async function framesUntil(done: () => boolean, { required = true } = {}) {

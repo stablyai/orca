@@ -18,10 +18,16 @@ describe('pairToolBlocks', () => {
       { type: 'tool-call', name: 'Edit', input: {} },
       { type: 'tool-result', output: 'ok' }
     ])
-    expect(pairs).toHaveLength(2)
-    expect(pairs[0]!.call?.name).toBe('Bash')
-    expect(pairs[0]!.result?.output).toBe('a\nb')
-    expect(pairs[1]!.call?.name).toBe('Edit')
+    expect(pairs).toEqual([
+      {
+        call: { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+        result: { type: 'tool-result', output: 'a\nb' }
+      },
+      {
+        call: { type: 'tool-call', name: 'Edit', input: {} },
+        result: { type: 'tool-result', output: 'ok' }
+      }
+    ])
   })
 
   it('keeps an orphan result on its own', () => {
@@ -91,12 +97,12 @@ describe('foldToolMessages', () => {
       msg('tool', [{ type: 'tool-result', output: 'ok' }], 't2')
     ])
     expect(folded).toHaveLength(1)
-    expect(folded[0]!.blocks.map((b) => b.type)).toEqual([
-      'text',
-      'tool-call',
-      'tool-result',
-      'tool-call',
-      'tool-result'
+    expect(folded[0]!.blocks).toEqual([
+      { type: 'text', text: 'doing' },
+      { type: 'tool-call', name: 'Bash', input: {} },
+      { type: 'tool-result', output: 'done' },
+      { type: 'tool-call', name: 'Edit', input: {} },
+      { type: 'tool-result', output: 'ok' }
     ])
   })
 

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks, renderHeadlessBuffer } from './pty-connection-test-async'
 import {
+  terminalWriteText,
   LEAF_1,
   createMockTransport,
   createPane,
@@ -110,7 +111,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       pane.terminal.cols = 80
       pane.terminal.rows = 8
       const writes: string[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         writes.push(data)
         callback?.()
       })
@@ -200,7 +202,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       pane.terminal.cols = 80
       pane.terminal.rows = 8
       const writes: string[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         writes.push(data)
         callback?.()
       })
@@ -282,7 +285,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       pane.terminal.cols = 80
       pane.terminal.rows = 8
       const writes: string[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         writes.push(data)
         callback?.()
       })

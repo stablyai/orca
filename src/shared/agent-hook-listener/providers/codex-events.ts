@@ -11,6 +11,7 @@ import {
 } from '../../agent-lead-status-fold'
 import {
   codexRosterToSnapshots,
+  enrichCodexSubagentIdentity,
   finishCodexSubagent,
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
@@ -36,6 +37,7 @@ import {
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
+import { isForeignEphemeralCodexThread } from './codex-ephemeral-threads'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -107,8 +109,24 @@ export function normalizeCodexSubagentLifecycleEvent(
       },
       Date.now()
     )
+    enrichCodexSubagentIdentity(
+      roster,
+      agentId,
+      readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
+    )
+    const parentPath =
+      state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath ??
+      state.lastStatusByPaneKey.get(paneKey)?.providerSession?.transcriptPath
+    if (parentPath) {
+      reconcileCodexSubagentTranscript(
+        getOrCreateCodexSubagentTranscriptState(state, paneKey),
+        roster,
+        parentPath
+      )
+    }
   } else {
     finishCodexSubagent(roster, agentId)
+    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.delete(agentId)
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }
@@ -153,17 +171,8 @@ export function normalizeCodexEvent(
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
-  const sessionId = readString(hookPayload, 'session_id')
-  const currentSessionId = state.lastStatusByPaneKey.get(paneKey)?.providerSession?.id
   // Ephemeral side chats share the pane but must not replace its recorded main turn.
-  if (
-    hookPayload.transcript_path === null &&
-    !readString(hookPayload, 'agent_id') &&
-    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath &&
-    sessionId &&
-    currentSessionId &&
-    sessionId !== currentSessionId
-  ) {
+  if (isForeignEphemeralCodexThread(state, paneKey, eventName, hookPayload)) {
     return null
   }
 
@@ -236,6 +245,11 @@ export function normalizeCodexEvent(
         state: childState === 'waiting' ? 'waiting' : 'working'
       },
       Date.now()
+    )
+    enrichCodexSubagentIdentity(
+      getOrCreateCodexSubagentRoster(state, paneKey),
+      agentId,
+      transcriptPath
     )
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }

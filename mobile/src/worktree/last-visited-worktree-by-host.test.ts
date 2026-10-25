@@ -74,6 +74,14 @@ describe('readLastVisitedWorktreeOnHost', () => {
     }
     expect(readLastVisitedWorktreeOnHost(raw, 'host-0')).toBeNull()
     expect(readLastVisitedWorktreeOnHost(raw, 'host-19')).toEqual({ worktreeId: 'repo::/w/a' })
+    expect(readLastVisitedWorktreeOnHost(raw, 'host-3')).toBeNull()
+    expect(readLastVisitedWorktreeOnHost(raw, 'host-4')).toEqual({ worktreeId: 'repo::/w/a' })
+    raw = withLastVisitedWorktree(raw, { hostId: 'host-4', worktreeId: 'repo::/w/revisited' })
+    raw = withLastVisitedWorktree(raw, { hostId: 'host-20', worktreeId: 'repo::/w/new' })
+    expect(readLastVisitedWorktreeOnHost(raw, 'host-4')).toEqual({
+      worktreeId: 'repo::/w/revisited'
+    })
+    expect(readLastVisitedWorktreeOnHost(raw, 'host-5')).toBeNull()
   })
 })
 
@@ -121,16 +129,12 @@ describe('writeLastVisitedWorktree', () => {
 
   it('handles a store that refuses the write instead of leaving the rejection loose', async () => {
     storage.rejection = new Error('quota exceeded')
-    const seen: unknown[] = []
-    const listener = (reason: unknown) => seen.push(reason)
-    process.on('unhandledRejection', listener)
     try {
-      await writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'repo::/w/c' })
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await expect(
+        writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'repo::/w/c' })
+      ).resolves.toBeUndefined()
     } finally {
-      process.off('unhandledRejection', listener)
       storage.rejection = null
     }
-    expect(seen).toEqual([])
   })
 })

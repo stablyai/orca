@@ -11,44 +11,32 @@ import { isBrowserPagePromptQuiet, quietBrowserPagePrompts } from './browser-pag
 
 export const BROWSER_PAGE_PROMPT_TIMEOUT_MS = 120_000
 
-/**
- * Where a page's prompt shows: the window showing its tab, or nowhere yet because a new tab started
- * loading before its window registered it. Null: no window on this machine (e.g. streamed from a
- * server).
- */
+// New tabs may prompt before registration; a null target means no local window.
 export type BrowserPagePromptTarget =
   | { browserPageId: string; renderer: Electron.WebContents }
   | 'awaiting-registration'
 
-/** Runs once per request: with the user's answer, or null when declined, expired or the page left. */
 type SettlePrompt<A> = (answer: A | null) => void | 'failed' | Promise<void | 'failed'>
 
 type PendingPrompt = {
   kind: BrowserPagePromptKind
   coalesceKey: string | undefined
   requester: Electron.WebContents
-  /** Null while a new tab's window has not registered it yet; the prompt shows once it does. */
+  /** Null until the tab registers its window. */
   browserPageId: string | null
   renderer: Electron.WebContents | null
   details: () => unknown
-  /** Undefined when the window's reply is not a valid answer for this kind. */
   parseAnswer: (value: unknown) => unknown
-  /** One per waiting request; each reads the validated reply with its own kind's parser. */
   settles: ((value: unknown) => ReturnType<SettlePrompt<unknown>>)[]
   timer: ReturnType<typeof setTimeout>
   unwatch: (() => void)[]
 }
 
-/**
- * `prompting`: the window is asking, or will once it registers the tab, and settle will run.
- * `refused`: the page is quiet or already prompting. `no-window`: the page has no window on this
- * machine (e.g. streamed from a server). Settle never runs for the last two.
- */
+/** Only prompting schedules settle; refused and no-window leave settlement to the caller. */
 export type BrowserPagePromptOpening = 'prompting' | 'refused' | 'no-window'
 
 const pendingPrompts = new Map<string, PendingPrompt>()
 
-/** The site a prompt names; null for opaque or unparseable pages. */
 export function browserPagePromptOrigin(rawUrl: string | null): string | null {
   if (!rawUrl) {
     return null
@@ -95,7 +83,6 @@ async function runSettles(pending: PendingPrompt, answer: unknown): Promise<'ans
   return results.includes('failed') ? 'failed' : 'answered'
 }
 
-/** Dismisses the prompt on screen and answers every waiting request with null. */
 function closePrompt(requestId: string, quiet: boolean): void {
   const pending = takePending(requestId)
   if (!pending) {
@@ -114,7 +101,6 @@ function closePrompt(requestId: string, quiet: boolean): void {
   void runSettles(pending, null)
 }
 
-/** Closes the prompt when `contents` closes or crashes, or optionally commits a new document. */
 function closeWhenGone(
   requestId: string,
   contents: Electron.WebContents,
@@ -144,7 +130,6 @@ function showPrompt(
 ): boolean {
   pending.browserPageId = context.browserPageId
   pending.renderer = context.renderer
-  // Why: no window is left to answer once the one that was asked closes or crashes.
   pending.unwatch.push(closeWhenGone(requestId, context.renderer, { orNavigates: false }))
   try {
     context.renderer.send('browser:page-prompt-requested', {
@@ -158,19 +143,13 @@ function showPrompt(
   }
 }
 
-/**
- * Asks the window showing the page or popup `requester` belongs to. One prompt per page: a request
- * from the same contents, with the same kind and `coalesceKey` as the open one, shares its answer;
- * any other is refused.
- */
+// Requests share a prompt only when requester, kind and an explicit coalescing key match.
 export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
   kind: K
   requester: Electron.WebContents
   target: BrowserPagePromptTarget | null
-  /** Built only when a new prompt opens. */
   details: () => BrowserPagePromptDetails<K>
   coalesceKey?: string
-  /** Returns the answer when the window's reply is a valid one, else undefined. */
   parseAnswer: (value: unknown) => BrowserPagePromptAnswer<K> | undefined
   settle: SettlePrompt<BrowserPagePromptAnswer<K>>
 }): BrowserPagePromptOpening {
@@ -178,7 +157,6 @@ export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
   if (!target || requester.isDestroyed()) {
     return 'no-window'
   }
-  // Why: a new tab starts loading before its window registers it; hold the question until it does.
   const context = target === 'awaiting-registration' ? null : target
   if (context?.renderer.isDestroyed()) {
     return 'no-window'
@@ -215,7 +193,6 @@ export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
     parseAnswer: args.parseAnswer,
     settles: [bindSettle(args.parseAnswer, args.settle)],
     timer: setTimeout(() => closePrompt(requestId, true), BROWSER_PAGE_PROMPT_TIMEOUT_MS),
-    // Why: a request whose page closed, crashed or was replaced by a new document no longer stands.
     unwatch: [closeWhenGone(requestId, requester, { orNavigates: true })]
   }
   pendingPrompts.set(requestId, pending)
@@ -226,7 +203,6 @@ export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
   return 'prompting'
 }
 
-/** Shows what a new tab asked before its window registered it. */
 export function showBrowserPagePromptsAwaitingRegistration(
   guestWebContentsId: number,
   context: { browserPageId: string; renderer: Electron.WebContents } | null
@@ -263,7 +239,6 @@ export async function respondToBrowserPagePrompt(
   return runSettles(pending, response.answer)
 }
 
-/** The page is gone, so nothing it asked for may be granted. */
 export function cancelBrowserPagePrompts(browserPageId: string): void {
   for (const [requestId, pending] of pendingPrompts) {
     if (pending.browserPageId === browserPageId) {

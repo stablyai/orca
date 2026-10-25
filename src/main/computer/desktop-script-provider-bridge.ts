@@ -43,7 +43,6 @@ export async function execBridge(
   }
 }
 
-/** Unwrap the raw-stream carrier back into the error callers expect. */
 async function mapped(
   run: Promise<{ stdout: string; stderr: string }>
 ): Promise<{ stdout: string; stderr: string }> {
@@ -54,21 +53,7 @@ async function mapped(
   }
 }
 
-/**
- * Only a run that produced no stdout at all may be replayed.
- *
- * What the stdout guard covers: operations are not idempotent, and the response
- * embeds window titles and element names, so a snapshot that merely contains
- * the word "SecurityError" must not be read as a policy block and replayed as a
- * second click, keystroke or paste. It closes that injection route only.
- *
- * What it does not cover: one-shot mode runs the operation to completion and
- * writes stdout only afterwards, so stdout is empty for the whole action, not
- * just before it starts. A crash after the click but before the write looks
- * identical to a helper that never started. Nothing here can tell those apart —
- * only a policy pattern that cannot match a non-policy failure keeps the replay
- * off, which is why its `\b` is load-bearing rather than cosmetic.
- */
+/** Retry policy failures with empty stdout; a post-action crash can also leave stdout empty. */
 function isPolicyBlockedStart(error: unknown): error is BridgeProcessFailure {
   return (
     error instanceof BridgeProcessFailure &&
@@ -77,7 +62,7 @@ function isPolicyBlockedStart(error: unknown): error is BridgeProcessFailure {
   )
 }
 
-/** Carries the raw streams so the retry decision does not read a mapped message. */
+/** Preserve raw streams so policy classification does not depend on a mapped error message. */
 class BridgeProcessFailure extends Error {
   constructor(
     readonly stdout: string,
@@ -125,8 +110,7 @@ function runBridgeProcess(
       resolve(result ?? { stdout: '', stderr: '' })
     }
 
-    // Why: native automation can hang inside platform APIs; reject promptly,
-    // then escalate cleanup if the bridge ignores the graceful termination.
+    // Native automation can hang; reject promptly and escalate if graceful termination fails.
     const timeout = setTimeout(() => {
       child?.kill('SIGTERM')
       forceKillTimer = setTimeout(() => {

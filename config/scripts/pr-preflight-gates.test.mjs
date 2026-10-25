@@ -52,7 +52,7 @@ it('shares one setup and overlaps the compiler only after type-aware checks fini
 })
 
 it('uses the shared Bun pin for every current-toolchain workflow', () => {
-  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.3')
+  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.4')
   for (const file of readdirSync('.github/workflows').filter((name) => /\.ya?ml$/.test(name))) {
     const current = parse(readFileSync(`.github/workflows/${file}`, 'utf8'))
     for (const job of Object.values(current.jobs)) {
@@ -249,6 +249,7 @@ it('pins every foreground and background step to its selected phase', () => {
     ['Check VM runtime rollback compatibility', staticPhase],
     ['Enforce ratchets', staticPhase],
     ['Check Node runtime pin', staticPhase],
+    ['Check every test file has a runner', staticPhase],
     ['Check root and mobile lock the same shared dependencies', staticPhase],
     ['Decide whether the orcad terminal smoke runs', staticPhase],
     ['Verify the generated RPC params catalog', staticPhase],
@@ -288,7 +289,7 @@ it.each([
     mobile_dependencies: true
   },
   {
-    changed: ['cloud/package.json'],
+    changed: ['cloud/apps/relay/Dockerfile'],
     static_analysis: false,
     typecheck: false,
     mobile_dependencies: false
@@ -400,7 +401,7 @@ it('runs the unchanged Node 18 smoke after every Node 24 step and preserves its 
     expect(joined, background.id).toBeLessThan(steps.indexOf(smoke))
   }
   expect(receipt.name).toBe('managed hooks on Node 18')
-  expect(receipt['runs-on']).toBe('ubuntu-slim')
+  expect(receipt['runs-on']).toBe('blacksmith-2vcpu-ubuntu-2404')
   expect(receipt.steps).toHaveLength(1)
   expect(receipt.steps[0].uses).toBeUndefined()
   expect(receipt.steps[0].env.MANAGED_HOOK_NODE18).toBe(

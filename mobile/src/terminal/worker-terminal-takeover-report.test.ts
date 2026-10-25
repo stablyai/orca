@@ -50,7 +50,11 @@ it.each(['throw', 'rpc refusal'])(
       sendRequest:
         failure === 'throw'
           ? vi.fn().mockRejectedValue(new Error('offline'))
-          : vi.fn().mockResolvedValue({ id: 'report', ok: false, error: { message: 'refused' } })
+          : vi.fn().mockResolvedValue({
+              id: 'report',
+              ok: false,
+              error: { code: 'permission_denied', message: 'refused' }
+            })
     }
     reportWorkerTerminalUserInput(client, 'term-1')
     await vi.advanceTimersByTimeAsync(249)

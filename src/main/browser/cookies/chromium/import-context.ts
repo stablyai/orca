@@ -4,7 +4,7 @@ import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary
 } from '../../../../shared/browser-workspace-types'
-import type { DetectedBrowser } from '../../browser-cookie-detection-types'
+import type { DetectedBrowser } from '../sources/browser-cookie-detection-types'
 import type { CookieImportOptions } from '../../browser-cookie-import-pipeline'
 import type {
   ImportedCookieFields,
@@ -12,10 +12,13 @@ import type {
   ImportWritePlanResult,
   SourceCookieToWrite
 } from '../../browser-cookie-import-write'
-import type { SourcePartitionRead } from '../../browser-cookie-source-partition'
+import type { SourcePartitionRead } from '../sources/browser-cookie-source-partition'
 import type { ImportedDomainScope } from '../../browser-cookie-import-policy'
 import type { ChromiumCookieSnapshot } from '../../chromium-cookie-snapshot'
-import type { ChromiumCookieColumnInfo, EncryptionKeyResult } from '../../browser-cookie-sqlite'
+import type {
+  ChromiumCookieColumnInfo,
+  EncryptionKeyResult
+} from '../sources/browser-cookie-sqlite'
 
 export type ChromiumSourceRow = Record<string, unknown>
 

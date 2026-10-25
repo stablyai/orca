@@ -61,7 +61,6 @@ const baseOptions = {
   version: VERSION,
   targetPlatform: 'darwin',
   targetArch: 'arm64',
-  hostPlatform: 'darwin' as const,
   env: {} as NodeJS.ProcessEnv,
   execFile: (() => '/repo/.git\n') as unknown as typeof execFileSync
 }
@@ -77,8 +76,11 @@ describe('resolveSharedElectronDistEntry', () => {
   })
 
   it('offers an entry on every platform a worktree is developed on', () => {
-    for (const hostPlatform of ['darwin', 'linux', 'win32']) {
-      expect(resolveSharedElectronDistEntry({ ...baseOptions, hostPlatform })).not.toBeNull()
+    for (const targetPlatform of ['darwin', 'linux', 'win32']) {
+      const entry = resolveSharedElectronDistEntry({ ...baseOptions, targetPlatform })
+      expect(entry?.entryPath).toBe(
+        path.join('/repo/.git', 'orca-cache', 'electron', `${VERSION}-${targetPlatform}-arm64`)
+      )
     }
   })
 

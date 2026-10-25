@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraSite } from '../../../src/shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../src/shared/jira/jira-types'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { lookupJiraIssueByUrl } from './jira-mobile-url-lookup'
 

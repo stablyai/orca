@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AppendImageUploadChunk } from '../../../src/shared/rpc-contract/clipboard-params'
 import {
   buildMobileImagePastePayload,
   buildMobileTerminalImagePastePayload,
@@ -62,6 +63,12 @@ describe('mobile clipboard image paste helpers', () => {
         connectionId: 'ssh-1'
       })
     ).resolves.toBe('/tmp/orca-paste-image.png')
+
+    for (const call of client.calls) {
+      if (call.method === 'clipboard.appendImageUploadChunk') {
+        expect(AppendImageUploadChunk.safeParse(call.params).success).toBe(true)
+      }
+    }
 
     expect(client.calls).toEqual([
       {

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import {
   BaseAgent,
   createAgent,
@@ -10,6 +9,7 @@ import {
   type SigningRequestOptions
 } from 'ssh2'
 import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
+import { readSshIdentityFileSync } from './ssh-identity-file-read'
 
 type AgentPublicKey = ParsedKey | Buffer | string | PublicKeyEntry
 
@@ -69,8 +69,12 @@ class IdentityFilteredAgent extends BaseAgent<ParsedKey | Buffer | string> {
 }
 
 function parseIdentityKeyFile(filePath: string): ParsedKey | undefined {
+  const { contents } = readSshIdentityFileSync(filePath)
+  if (!contents) {
+    return undefined
+  }
   try {
-    const parsed = utils.parseKey(readFileSync(filePath)) as ParsedKey | ParsedKey[] | Error
+    const parsed = utils.parseKey(contents) as ParsedKey | ParsedKey[] | Error
     if (parsed instanceof Error) {
       return undefined
     }

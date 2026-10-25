@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CONNECTOR_SOURCES, type ConnectorSource } from '../../shared/external-conversation-link'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
 import { hashCanonical } from '../runtime/rpc/orchestration-mutation-receipt'
@@ -16,32 +17,50 @@ const RecordedDelivery = z.discriminatedUnion('outcome', [
 
 const LOST: Delivery = { outcome: 'unknown', reason: 'replayed_after_restart' }
 
-/**
- * A connector's delivery ids on orchestration's durable mutation receipts, under one caller
- * identity per source: the same id and payload share one answer, across restarts too, and another
- * payload is refused. A duplicate of one still running waits for it; a running one a restart
- * interrupted reads `unknown`. Refusals and throws wrote nothing, so they leave no receipt.
- */
+// Reserve only part of the shared ledger for unsettled connector deliveries.
+export const CONNECTOR_PENDING_RECEIPT_LIMIT = 1_000
+
+// Headroom only cancels may use, so a full backlog can still be cancelled away.
+export const CONNECTOR_CANCEL_RECEIPT_RESERVE = 100
+
+const callerFingerprint = (source: ConnectorSource): string => `connector:${source}`
+const CONNECTOR_FINGERPRINTS = CONNECTOR_SOURCES.map(callerFingerprint)
+
+/** Deduplicate durable delivery IDs; interrupted writes remain unknown and refused deliveries leave no receipt. */
 export class DeliveryReceipts {
   private readonly inFlight = new Map<string, Promise<Delivery>>()
+  private leftoversSettled = false
 
   constructor(private readonly db: () => DeliveryReceiptDb) {}
 
   run(
     key: ConversationKey,
     deliveryId: string,
-    method: 'connector.start' | 'connector.send',
+    method: 'connector.start' | 'connector.send' | 'connector.cancel',
     payload: unknown,
     execute: () => Promise<Delivery>
   ): Promise<Delivery> {
     const identity = {
-      callerFingerprint: `connector:${key.source}`,
+      callerFingerprint: callerFingerprint(key.source),
       requestId: JSON.stringify([key.externalId, deliveryId]),
       method,
       payloadHash: hashCanonical(payload)
     }
     const flightKey = JSON.stringify([identity.callerFingerprint, identity.requestId])
     const db = this.db()
+    if (!this.leftoversSettled) {
+      // Settle old pending rows as unknown; deleting them could repeat effects they already wrote.
+      db.settlePendingMutationReceipts(CONNECTOR_FINGERPRINTS, JSON.stringify(LOST))
+      this.leftoversSettled = true
+    }
+    if (
+      !db.getMutationReceipt(identity.callerFingerprint, identity.requestId) &&
+      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) >=
+        CONNECTOR_PENDING_RECEIPT_LIMIT +
+          (method === 'connector.cancel' ? CONNECTOR_CANCEL_RECEIPT_RESERVE : 0)
+    ) {
+      return Promise.resolve(refused('delivery_backlog_full'))
+    }
     let begun: ReturnType<DeliveryReceiptDb['beginMutationReceipt']>
     try {
       begun = db.beginMutationReceipt(identity)

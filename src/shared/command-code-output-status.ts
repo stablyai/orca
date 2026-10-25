@@ -13,8 +13,6 @@ import { stripTerminalControl } from './terminal-control-stripping'
 import { escapeRegex } from './string-utils'
 import { ownRetainedString } from './own-retained-string'
 
-export { stripTerminalControl } from './terminal-control-stripping'
-
 type CommandCodeOutputStatusDetector = {
   observe: (data: string) => boolean
 }

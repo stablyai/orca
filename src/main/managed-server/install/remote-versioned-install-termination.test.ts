@@ -56,7 +56,6 @@ describe.each([
           sshChannelCloseConfirmed: true
         })
       )
-      // abandonInstall also reports that the lock was not confirmed removed.
       await expect(release(conn, remoteDir, host)).resolves.toBeFalsy()
     }
   )

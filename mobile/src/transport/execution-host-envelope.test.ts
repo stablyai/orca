@@ -35,10 +35,13 @@ describe('executionHost on the envelope', () => {
     streams.subscribe('terminal.subscribe', params, () => {})
     await vi.waitFor(() => expect(sent).toHaveLength(2))
     disposeServer()
-    expect(sent.at(-1)).toMatchObject({
+    expect(sent.at(-1)).toEqual({
+      id: 'relay-3',
       method: 'terminal.unsubscribe',
+      params: { subscriptionId: 't1:phone', client: { id: 'phone' }, requestId: 'relay-1' },
       envelope: { executionHost: SERVER }
     })
+    streams.clear()
   })
 })
 
@@ -59,13 +62,21 @@ describe('a relay stream slot', () => {
       envelope: { executionHost: SERVER, trace: 't' }
     })
     await vi.waitFor(() => expect(sent).toHaveLength(1))
-    streams.subscribe('terminal.subscribe', params, () => {}, {
+    const disposeNewer = streams.subscribe('terminal.subscribe', params, () => {}, {
       envelope: { trace: 't', executionHost: SERVER }
     })
     await vi.waitFor(() => expect(sent).toHaveLength(2))
     // The newer sibling already holds the slot on the server, so the older one sends no unsubscribe.
     disposeOlder()
     expect(sent.map((frame) => frame.method)).toEqual(['terminal.subscribe', 'terminal.subscribe'])
+    disposeNewer()
+    expect(sent.at(-1)).toEqual({
+      id: 'relay-3',
+      method: 'terminal.unsubscribe',
+      params: { subscriptionId: 't1:phone', client: { id: 'phone' }, requestId: 'relay-2' },
+      envelope: { trace: 't', executionHost: SERVER }
+    })
+    streams.clear()
   })
 })
 
@@ -81,18 +92,28 @@ describe('a server workspace call on the direct wire', () => {
         streams.subscribe(method, params, onData, options)
     }
     const server = scopeRpcClientToExecutionHost(direct, SERVER)
-    void server.sendRequest('worktree.ps', { limit: 1 })
-    await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
-    server.subscribe('terminal.subscribe', { terminal: 't1' }, () => {})
-    // What #26501 wrote with its own `executionHost` option; the desktop parses JSON, so key order is not read.
-    expect(socket.frames()).toStrictEqual([
-      JSON.parse(
-        '{"id":"rpc-1","deviceToken":"device-token","method":"worktree.ps","params":{"limit":1},"executionHost":"runtime:env-1"}'
-      ),
-      JSON.parse(
-        '{"id":"rpc-2","deviceToken":"device-token","method":"terminal.subscribe","params":{"terminal":"t1"},"executionHost":"runtime:env-1"}'
-      )
-    ])
+    const request = server.sendRequest('worktree.ps', { limit: 1 })
+    let dispose: (() => void) | undefined
+    try {
+      await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
+      dispose = server.subscribe('terminal.subscribe', { terminal: 't1' }, () => {})
+      // What #26501 wrote with its own `executionHost` option; the desktop parses JSON, so key order is not read.
+      expect(socket.frames()).toStrictEqual([
+        JSON.parse(
+          '{"id":"rpc-1","deviceToken":"device-token","method":"worktree.ps","params":{"limit":1},"executionHost":"runtime:env-1"}'
+        ),
+        JSON.parse(
+          '{"id":"rpc-2","deviceToken":"device-token","method":"terminal.subscribe","params":{"terminal":"t1"},"executionHost":"runtime:env-1"}'
+        )
+      ])
+      const reply: RpcResponse = { id: 'rpc-1', ok: true, result: { worktrees: [] } }
+      expect(requests.resolve(reply)).toBe(true)
+      await expect(request).resolves.toBe(reply)
+    } finally {
+      dispose?.()
+      requests.rejectAll('test cleanup')
+      await request.catch(() => {})
+    }
   })
 })
 
@@ -124,7 +145,11 @@ describe('scopeRpcClientToExecutionHost', () => {
     const client = fakeClient()
     const view = scopeRpcClientToExecutionHost(client, SERVER)
     void view.sendRequest('worktree.ps', { limit: 1 }, { timeoutMs: 5, envelope: { trace: 't' } })
-    view.subscribe('terminal.subscribe', { terminal: 't1' }, () => {})
+    const onBinaryFrame = vi.fn()
+    view.subscribe('terminal.subscribe', { terminal: 't1' }, () => {}, {
+      onBinaryFrame,
+      envelope: { trace: 'stream', executionHost: 'runtime:wrong' }
+    })
     view.close()
     expect(client.sendRequest).toHaveBeenCalledWith(
       'worktree.ps',
@@ -135,7 +160,7 @@ describe('scopeRpcClientToExecutionHost', () => {
       'terminal.subscribe',
       { terminal: 't1' },
       expect.any(Function),
-      { envelope: { executionHost: SERVER } }
+      { onBinaryFrame, envelope: { trace: 'stream', executionHost: SERVER } }
     )
     expect(client.close).not.toHaveBeenCalled()
     expect(scopeRpcClientToExecutionHost(client, SERVER)).toBe(view)

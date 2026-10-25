@@ -9,8 +9,6 @@ import {
   parseVaultQuery
 } from './ai-vault-session-filters'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
-import { isPathInsideOrEqual } from './cross-platform-path'
-import { parseWslUncPath } from './wsl-paths'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',
@@ -53,14 +51,30 @@ const otherSession: AiVaultSession = {
 describe('/shared ai-vault-session-filters (lifted core)', () => {
   it('filters by agent, workspace scope, and plain/repo/path query terms', () => {
     expect(
-      filterAiVaultSessions([baseSession, otherSession], {
-        query: 'vault repo:repo path:app',
-        agents: ['claude'],
-        scope: 'workspace',
-        sort: 'updated',
-        activeWorktreePaths: ['/Users/ada/repo'],
-        hideEmptySessions: true
-      }).map((session) => session.id)
+      filterAiVaultSessions(
+        [
+          baseSession,
+          otherSession,
+          { ...baseSession, id: 'wrong-agent', agent: 'codex' },
+          { ...baseSession, id: 'outside-scope', cwd: '/outside/repo/app' },
+          { ...baseSession, id: 'wrong-text', title: 'Unrelated request', branch: null },
+          { ...baseSession, id: 'wrong-repo', cwd: '/Users/ada/repo/other/app' },
+          {
+            ...baseSession,
+            id: 'wrong-path',
+            cwd: '/Users/ada/repo/lib',
+            filePath: '/transcripts/session.jsonl'
+          }
+        ],
+        {
+          query: 'vault repo:repo path:app',
+          agents: ['claude'],
+          scope: 'workspace',
+          sort: 'updated',
+          activeWorktreePaths: ['/Users/ada/repo'],
+          hideEmptySessions: true
+        }
+      ).map((session) => session.id)
     ).toEqual(['claude:1'])
   })
 
@@ -293,35 +307,31 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
     } finally {
       parse.mockRestore()
     }
+    expect(actual).toHaveLength(expected.length)
     actual.forEach((session, i) => expect(session).toBe(expected[i]))
   })
 
-  it('matches workspace scope identically to the pre-hoist path predicate', () => {
+  it('matches workspace scope across host path spellings', () => {
     // The hoisted matcher must agree with isPathInsideOrEqual on every spelling the
     // supported hosts produce: Windows case/separator folding, trailing separators,
     // both WSL UNC aliases, /mnt drive mounts and near-miss sibling directories.
-    const cases: [workspace: string, cwd: string][] = [
-      ['C:\\Users\\Ada\\repo', 'c:/users/ada/repo/app'],
-      ['C:/Users/Ada/repo/', 'C:\\Users\\Ada\\repo'],
-      ['C:\\Users\\Ada\\repo', 'C:\\Users\\Ada\\repo-other'],
-      ['C:\\', 'C:\\anything'],
-      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl$/Ubuntu/home/ada/repo/app'],
-      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/Ada/Repo/App'],
-      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/ada/repo/App'],
-      ['//wsl$/Ubuntu/home/ada/repo', '//WSL.LOCALHOST/ubuntu/home/ada/repo'],
-      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl.localhost/Debian/home/ada/repo'],
-      ['//wsl.localhost/Ubuntu/mnt/c/work', '/mnt/c/work/app'],
-      ['/Users/ada/repo', '/Users/ada/repo//app/'],
-      ['/Users/ada/repo', '/Users/Ada/repo/app'],
-      ['/Users/ada/repo', '/Users/ada/repository'],
-      ['/', '/anywhere']
+    const cases: [workspace: string, cwd: string, matched: boolean][] = [
+      ['C:\\Users\\Ada\\repo', 'c:/users/ada/repo/app', true],
+      ['C:/Users/Ada/repo/', 'C:\\Users\\Ada\\repo', true],
+      ['C:\\Users\\Ada\\repo', 'C:\\Users\\Ada\\repo-other', false],
+      ['C:\\', 'C:\\anything', true],
+      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl$/Ubuntu/home/ada/repo/app', true],
+      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/Ada/Repo/App', true],
+      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/ada/repo/App', false],
+      ['//wsl$/Ubuntu/home/ada/repo', '//WSL.LOCALHOST/ubuntu/home/ada/repo', true],
+      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl.localhost/Debian/home/ada/repo', false],
+      ['//wsl.localhost/Ubuntu/mnt/c/work', '/mnt/c/work/app', true],
+      ['/Users/ada/repo', '/Users/ada/repo//app/', true],
+      ['/Users/ada/repo', '/Users/Ada/repo/app', false],
+      ['/Users/ada/repo', '/Users/ada/repository', false],
+      ['/', '/anywhere', true]
     ]
-    for (const [workspace, cwd] of cases) {
-      const expected =
-        isPathInsideOrEqual(workspace, cwd) ||
-        (parseWslUncPath(workspace)
-          ? isPathInsideOrEqual(parseWslUncPath(workspace)!.linuxPath, cwd)
-          : false)
+    for (const [workspace, cwd, expected] of cases) {
       const actual = filterAiVaultSessions([{ ...baseSession, cwd }], {
         query: '',
         agents: ['claude'],
@@ -356,6 +366,7 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
       activeWorktreePaths: [],
       hideEmptySessions: false
     })
+    expect(actual).toHaveLength(expected.length)
     actual.forEach((session, i) => expect(session).toBe(expected[i]))
   })
 })

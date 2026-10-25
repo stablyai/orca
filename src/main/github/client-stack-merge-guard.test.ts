@@ -538,7 +538,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
     } else {
       ghExecFileAsyncMock.mockResolvedValueOnce(scenario.probeResponse)
     }
-    // Why: disabling the guard must expose the legacy merge fallthrough, not fail on an unstubbed call.
+    // Stub legacy merge fallthrough so disabling the guard cannot fail on an unrelated missing fixture.
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({

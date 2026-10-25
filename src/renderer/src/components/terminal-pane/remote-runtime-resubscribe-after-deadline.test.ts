@@ -13,7 +13,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
-import { REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE } from '../../../../shared/remote-runtime-connect-bound'
+import { REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE } from '../../../../shared/remote-runtime/remote-runtime-connect-bound'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 const FIRST_HANDLE = 'terminal-1'

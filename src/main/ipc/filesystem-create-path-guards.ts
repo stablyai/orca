@@ -2,11 +2,7 @@ import { lstat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { isENOENT } from './filesystem-path-containment'
 
-/**
- * Re-throw filesystem errors with user-friendly messages.
- * The `wx` flag on writeFile throws a raw EEXIST with no helpful message,
- * so we catch it here and provide context the renderer can display directly.
- */
+/** Translate raw filesystem errors, including exclusive-create EEXIST, into renderer-facing messages. */
 export function rethrowWithUserMessage(error: unknown, targetPath: string): never {
   const name = basename(targetPath)
   if (error instanceof Error && 'code' in error) {
@@ -21,14 +17,7 @@ export function rethrowWithUserMessage(error: unknown, targetPath: string): neve
   throw error
 }
 
-/**
- * Ensure `targetPath` does not already exist. Throws if it does.
- *
- * Note: this is a non-atomic check — a concurrent operation could create the
- * path between `lstat` and the caller's next action. Acceptable for a desktop
- * app with low concurrency; `createFile` uses the `wx` flag for an atomic
- * alternative where possible.
- */
+/** Non-atomic existence check; createFile uses wx when an atomic alternative is available. */
 export async function assertNotExists(targetPath: string): Promise<void> {
   try {
     await lstat(targetPath)

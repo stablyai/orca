@@ -5,7 +5,7 @@ import type {
   CookieImportWriteStore
 } from './browser-cookie-import-clear'
 import { registrableFamily } from './browser-cookie-import-policy'
-import type { SourcePartitionRead } from './browser-cookie-source-partition'
+import type { SourcePartitionRead } from './cookies/sources/browser-cookie-source-partition'
 
 export type ImportedCookieFields = {
   url: string
@@ -29,8 +29,7 @@ export function importedCookieIdentity(
   cookie: ImportedCookieFields,
   partitionKey: CookieClearPartitionKey | undefined
 ): CookieClearIdentity {
-  // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/; hostOnly is how
-  // the identity says "omit domain", the same contract the CDP restore params already read.
+  // __Host- cookies require path=/ and no domain attribute; hostOnly omits domain in CDP.
   const isHostPrefixed = cookie.name.startsWith(HOST_PREFIX)
   return {
     url: cookie.url,
@@ -47,13 +46,6 @@ export function importedCookieIdentity(
   }
 }
 
-/**
- * Decides how one source cookie is written.
- *
- * Why (STA-4300): a cookie whose partition identity is unreadable is skipped and counted, never
- * written unpartitioned. Downgrading it would import a cookie the site cannot see while reporting a
- * clean success — the silent-loss shape behind STA-4013/4061/4090/4170.
- */
 export function planImportedCookieWrite(
   cookie: ImportedCookieFields,
   partition: SourcePartitionRead
@@ -70,8 +62,7 @@ export function planImportedCookieWrite(
   }
 }
 
-// Why: the rollback removes by coordinate, and remove() is path-sensitive, so the key has to use
-// the identity's resolved path rather than the source cookie's.
+// Rollback removal is path-sensitive; use the resolved identity path.
 export function importedCookieRemovalKey(identity: CookieClearIdentity): {
   url: string
   name: string
@@ -104,7 +95,6 @@ export function emptyImportWritePhase(): ImportWritePhase {
   }
 }
 
-/** The only fields planning needs — path B plans over rows that have no resolved `url` yet. */
 export type PlannableCookie = { domain: string; partition: SourcePartitionRead }
 
 export type ImportWriteSkip<T extends PlannableCookie = SourceCookieToWrite> = {
@@ -115,26 +105,12 @@ export type ImportWriteSkip<T extends PlannableCookie = SourceCookieToWrite> = {
 export type ImportWritePlanResult<T extends PlannableCookie = SourceCookieToWrite> = {
   writes: T[]
   skips: ImportWriteSkip<T>[]
-  /** registrableFamily values whose partition could not be read faithfully. */
   skippedFamilies: Set<string>
-  /**
-   * True when a skipped cookie's family cannot be named (registrableFamily returned null). The
-   * caller must refuse the import before mutating anything: a family we cannot name is a family we
-   * cannot exclude from the removal plan, and clearing a family we cannot protect is the P0.
-   */
+  /** Refuse before mutation if a skipped family cannot be protected from removal. */
   hasUnrepresentableSkip: boolean
 }
 
-/**
- * Decides every source cookie's fate BEFORE any jar mutation (STA-4300 invariant I1).
- *
- * Two passes, not one, and the second is not optional. Family-atomic skip is a property of the
- * whole input: with a readable `mixed.example` row *before* an unreadable `sub.mixed.example` row,
- * a per-row guard emits the readable one before anything knows the family will be skipped. Pass 1
- * classifies and collects the skipped families; pass 2 re-filters the provisional writes.
- *
- * Pure — no I/O — so the caller cannot mutate anything before the plan exists.
- */
+/** Classify all skips before emitting writes so later unreadable rows also suppress earlier siblings. */
 export function planImportWrites<T extends PlannableCookie>(
   cookies: readonly T[]
 ): ImportWritePlanResult<T> {
@@ -143,10 +119,7 @@ export function planImportWrites<T extends PlannableCookie>(
   const skippedFamilies = new Set<string>()
   let hasUnrepresentableSkip = false
 
-  // Pass 1: classify, and learn which families cannot be written faithfully.
   for (const cookie of cookies) {
-    // Why: the skip decision is the partition read itself — the same condition
-    // planImportedCookieWrite uses — so path B can plan before it has resolved a write URL.
     if (cookie.partition.status === 'unreadable') {
       const family = registrableFamily(cookie.domain)
       if (family === null) {
@@ -160,8 +133,7 @@ export function planImportWrites<T extends PlannableCookie>(
     provisional.push(cookie)
   }
 
-  // Pass 2: a readable cookie whose family was skipped is suppressed too — otherwise its family's
-  // removal scope would be widened by a domain we then decline to write back (STA-4300 §2b).
+  // Suppress readable siblings too, or their removal scope would erase skipped sessions.
   const writes: T[] = []
   for (const cookie of provisional) {
     const family = registrableFamily(cookie.domain)
@@ -175,7 +147,6 @@ export function planImportWrites<T extends PlannableCookie>(
   return { writes, skips, skippedFamilies, hasUnrepresentableSkip }
 }
 
-// Why: cookie values are secret; only the domain is ever logged or summarized.
 function summaryDomain(domain: string): string {
   return domain.startsWith('.') ? domain.slice(1) : domain
 }
@@ -190,12 +161,7 @@ function firstNonPrintable(value: string): string {
   return 'none found'
 }
 
-/**
- * Writes one import's cookies through the CDP identity store.
- *
- * `stopOnFailure` mirrors the replace path's contract: once existing cookies have been removed, the
- * first rejection has to stop the run so the caller can roll the whole thing back.
- */
+/** Stop on the first failure after replacement so the caller can roll back the entire import. */
 export async function writeImportedCookies(
   store: Pick<CookieImportWriteStore, 'writeCookieIdentity'>,
   cookies: readonly SourceCookieToWrite[],
@@ -212,8 +178,7 @@ export async function writeImportedCookies(
       )
       continue
     }
-    // Why: a rejected CDP command can still have reached Chromium before the transport failed.
-    // Record the coordinate before dispatch so a replace rollback removes every possible write.
+    // Record before dispatch: a rejected CDP command may already have written the cookie.
     phase.attemptedKeys.push(importedCookieRemovalKey(plan.identity))
     try {
       await store.writeCookieIdentity(plan.identity)

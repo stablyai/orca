@@ -115,7 +115,7 @@ describe('agent completion polling under a host capture it cannot use', () => {
   it.each([
     ['at the ceiling', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS, 0],
     ['one step past it', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1, 1]
-  ])('counts %s as %s errors', (_label, capturedAgeMs, errors) => {
+  ])('counts a capture %s toward inspection errors', (_label, capturedAgeMs, errors) => {
     expect(inspect(liveRecord(capturedAgeMs), 0).consecutiveInspectionErrors).toBe(errors)
   })
 

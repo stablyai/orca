@@ -1,4 +1,3 @@
-// Randomized model test for local watcher listener bookkeeping across watch churn and worktree removals.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWatcherSender, fireWatcherSenderEvent } from './filesystem-watcher-test-sender'
 
@@ -25,14 +24,14 @@ import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 import {
   resetWatcherChildRegistryForTest,
   WatcherChildCapacityError
-} from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-registry'
 
 type Handler = (event: unknown, args: unknown) => unknown
 type Sender = ReturnType<typeof createWatcherSender> & { destroyed: boolean }
 type SubscribeOutcome = 'ok' | 'capacity'
-// Why 'wedged': a stuck watcher child ignores abort, so removals must fall back to their drain deadline.
+// Wedged children ignore abort; removal must still meet its deadline.
 type SubscribeDelay = 'none' | 'abortable' | 'wedged'
-// Why 'rejected': a watch refused by an active removal may still come back from that removal's restore.
+// A removal-refused watch can return through that removal's restore.
 type Intent = 'yes' | 'no' | 'rejected'
 type Removal = {
   path: string
@@ -42,7 +41,7 @@ type Removal = {
 const ROOTS = ['/repo', '/other']
 const OUTCOMES: SubscribeOutcome[] = ['ok', 'ok', 'ok', 'capacity']
 const DELAYS: SubscribeDelay[] = ['none', 'none', 'abortable', 'abortable', 'abortable', 'wedged']
-// Why: CI keeps this quick; raise ORCA_WATCH_MODEL_RUNS locally for deeper searches.
+// Increase ORCA_WATCH_MODEL_RUNS for deeper local searches.
 const RUNS = Number(process.env.ORCA_WATCH_MODEL_RUNS ?? 1000)
 const MIN_STEPS = 20
 const MAX_STEPS = 60
@@ -89,7 +88,6 @@ describe('local watcher lifecycle (randomized model)', () => {
     }
   }
 
-  // Like the watcher process, a pending subscribe rejects as soon as its install is aborted.
   function waitForRelease(signal: AbortSignal | undefined, delay: SubscribeDelay): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const done = (): void => {
@@ -170,7 +168,7 @@ describe('local watcher lifecycle (randomized model)', () => {
       return sender
     }
     const senders: Sender[] = [makeSender(), makeSender(), makeSender()]
-    // The renderer's last request per sender+root; missing = never asked.
+    // Last requested intent per sender/root; absent means never requested.
     const wanted = new Map<string, Intent>()
     const lastWatchOp = new Map<string, number>()
     const want = (senderId: number, key: string): string => `${senderId}|${key}`
@@ -181,7 +179,7 @@ describe('local watcher lifecycle (randomized model)', () => {
     const failed = (message: string): string => `${message}\n${trace.join('\n')}`
     const liveSenders = (): Sender[] => senders.filter((candidate) => !candidate.destroyed)
 
-    // Removals go through the real coordinator so the install fence and gate release order apply.
+    // Use the real coordinator to exercise install fences and removal gate ordering.
     const startRemoval = (path: string): void => {
       const removal: Removal = { path, finish: null }
       removals.push(removal)
@@ -200,12 +198,11 @@ describe('local watcher lifecycle (randomized model)', () => {
     const finishRemoval = (removal: Removal, removed: boolean): void => {
       removals.splice(removals.indexOf(removal), 1)
       trace.push(`finish removal ${removal.path} (${removed ? 'succeeds' : 'fails, restore'})`)
-      // Why not awaited: the restore re-subscribes, which may itself be a deferred install.
+      // Restore may start another deferred subscription; keep it in flight.
       inFlight.push(removal.finish!(removed))
       if (!removed) {
         return
       }
-      // The renderer drops the deleted workspace's watches.
       const key = rootKey(removal.path)
       for (const owner of liveSenders()) {
         if (wanted.has(want(owner.id, key))) {
@@ -281,7 +278,7 @@ describe('local watcher lifecycle (randomized model)', () => {
       } else if (roll < 0.91 && removals.some((removal) => removal.finish)) {
         finishRemoval(pick(removals.filter((removal) => removal.finish)), rand() < 0.5)
       } else if (roll < 0.97) {
-        // A reload keeps the WebContents id but starts a new page lifetime with no watches.
+        // Reload preserves WebContents ID but retires the page's watch lifetime.
         const closes = rand() < 0.5
         trace.push(`window s${sender.id} ${closes ? 'closes' : 'reloads'}`)
         sender.destroyed = closes
@@ -331,7 +328,6 @@ describe('local watcher lifecycle (randomized model)', () => {
       }
     }
 
-    // Unwatching everything and waiting out the grace leaves no roots or native handles.
     for (const sender of liveSenders()) {
       for (const worktreePath of ROOTS) {
         wanted.set(want(sender.id, rootKey(worktreePath)), 'no')

@@ -1,21 +1,14 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 
-// Under --include-partial-messages every stream_event frame carries its own
-// uuid, and the block's final `assistant` frame carries yet another; only
-// `message.id` ties them together. The block's first stream frame mints the
-// journal identity, and the final frame lands on it in block order instead of
-// appending a duplicate under its own uuid.
+// Stream and final frames have different UUIDs; reconcile by message.id and block order to avoid duplicate rows.
 
 export type ClaudeStreamedTextDelta = {
   identity: AgentJournalItemIdentity
   text: string
-  /** The block's own scope, which this registry already keys its map on. Streamed
-   *  prose has no message envelope when it is persisted, so the producer travels
-   *  with the delta rather than being re-read from a frame that is long gone. */
+  /** Carry producer scope with deltas because checkpoint writes have no envelope. */
   parentToolUseId: string | null
-  /** Host clock when the block began: its `content_block_start`, else its first delta. Text can
-   *  trail the start by seconds, so this, not the first write, is when the block started. */
+  /** Host time of block start, or first delta if absent; text may arrive seconds later. */
   startedAt: number
 }
 
@@ -24,20 +17,23 @@ export type StreamedBlock = { identity: AgentJournalItemIdentity; startedAt: num
 type StreamedMessage = {
   messageId: string | null
   blocks: Map<number, StreamedBlock>
-  /** Streamed text blocks whose final assistant frame has not arrived, in block order. */
+  /** Await final frames in block order for both text and thinking. */
   awaitingFinal: StreamedBlock[]
 }
 
 export type ClaudeStreamedBlockRegistry = {
-  /** Text a stream_event frame appends to its block, or null when it carries none. */
   observe: (frame: Record<string, unknown>, observedAt: number) => ClaudeStreamedTextDelta | null
-  /** The streamed block a final assistant frame reconciles onto, if its block streamed. */
   reconcile: (frame: {
     sessionId: string
     parentToolUseId: string | null
     messageId: string | null
   }) => StreamedBlock | null
   clear: () => void
+}
+
+/** A content block's transcript-stable id: what a streamed row and its saved transcript row share. */
+export function claudeSourceBlockId(messageId: string, index: number): string {
+  return `block:${messageId}:${index}`
 }
 
 function scopeKey(sessionId: string, parentToolUseId: string | null): string {
@@ -65,7 +61,11 @@ export function createClaudeStreamedBlockRegistry(
     uuid: string,
     startedAt: number
   ): StreamedBlock => {
-    const identity: AgentJournalItemIdentity = { provider: 'claude', sessionId, uuid }
+    const identity: AgentJournalItemIdentity = {
+      provider: 'claude',
+      sessionId,
+      uuid: streamed.messageId ? claudeSourceBlockId(streamed.messageId, index) : uuid
+    }
     const block = { identity, startedAt }
     streamed.blocks.set(index, block)
     streamed.awaitingFinal.push(block)

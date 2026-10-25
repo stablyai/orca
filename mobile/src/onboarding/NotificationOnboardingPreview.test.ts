@@ -87,6 +87,7 @@ describe('NotificationOnboardingPreview', () => {
   })
 
   it('does not animate the banners when the page is off-screen', async () => {
+    mocks.reducedMotion = false
     await renderPreview(false)
     expect(mocks.loop).not.toHaveBeenCalled()
   })

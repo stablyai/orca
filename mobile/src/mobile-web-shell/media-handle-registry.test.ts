@@ -218,19 +218,22 @@ describe('ending a handle', () => {
 
   it('keeps going when the device refuses to delete one staged file', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const failing = new MediaHandleRegistry({
-      now: () => 1_000,
-      discard: (uri) => {
-        if (uri.endsWith('2.png')) {
-          throw new Error('the OS reclaimed it first')
+    try {
+      const failing = new MediaHandleRegistry({
+        now: () => 1_000,
+        discard: (uri) => {
+          if (uri.endsWith('2.png')) {
+            throw new Error('the OS reclaimed it first')
+          }
+          deleted.push(uri)
         }
-        deleted.push(uri)
-      }
-    })
-    failing.mint([staged(1), staged(2), staged(3)])
-    failing.releaseAll()
-    expect(deleted).toHaveLength(2)
-    expect(failing.liveCount()).toBe(0)
-    warn.mockRestore()
+      })
+      failing.mint([staged(1), staged(2), staged(3)])
+      failing.releaseAll()
+      expect(deleted).toEqual([staged(1).uri, staged(3).uri])
+      expect(failing.liveCount()).toBe(0)
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

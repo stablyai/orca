@@ -162,7 +162,6 @@ describe('updating a managed orcad on connect', () => {
     })
     await expect(run()).resolves.toMatchObject({ outcome: 'deferred' })
 
-    // A fence another run holds briefly is retried later, never recorded as a failed update.
     mocks.runUpdate.mockResolvedValueOnce({
       outcome: 'deferred',
       code: 'orcad_activation_fence_busy',

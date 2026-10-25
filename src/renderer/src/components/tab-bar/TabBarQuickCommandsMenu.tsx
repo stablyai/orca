@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Play } from 'lucide-react'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandList,
-  CommandSeparator
-} from '@/components/ui/command'
+import { Command, CommandInput } from '@/components/ui/command'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { TabBarQuickCommandsList } from './TabBarQuickCommandsList'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
@@ -181,11 +176,26 @@ export function TabBarQuickCommandsMenu({
     onRun: runAndClose,
     selectedCommand
   })
+  // Why: cmdk only tracks mounted items; selection belongs to the full command list.
+  const attachActiveCommand = useCallback((element: HTMLDivElement | null): void => {
+    for (const target of [searchInputRef.current, commandListRef.current]) {
+      if (element) {
+        target?.setAttribute('aria-activedescendant', element.id)
+      } else {
+        target?.removeAttribute('aria-activedescendant')
+      }
+    }
+  }, [])
   const renderCommand = (entry: HostedTerminalQuickCommand): React.JSX.Element => (
     <TabBarQuickCommandItem
       key={entry.key}
       entry={entry}
       showHostLabel={addHosts.length > 1}
+      selected={entry.key === commandValue}
+      position={filteredVisibleCommands.indexOf(entry) + 1}
+      totalCount={filteredVisibleCommands.length}
+      onHighlight={() => setCommandValueOverride(entry.key)}
+      onActiveElementChange={attachActiveCommand}
       onRun={() => runAndClose(entry)}
       onEdit={() => {
         closeMenu()
@@ -306,9 +316,9 @@ export function TabBarQuickCommandsMenu({
               menuImeEnter.setComposing(true)
             }
           }}
-          onCompositionEnd={() => {
+          onCompositionEnd={(event) => {
             if (!showSearch) {
-              menuImeEnter.setComposing(false)
+              menuImeEnter.setComposing(false, event.data)
             }
           }}
           onKeyDown={(event) => {
@@ -328,13 +338,7 @@ export function TabBarQuickCommandsMenu({
           }}
           onBlur={menuImeEnter.reset}
         >
-          <Command
-            shouldFilter={false}
-            loop
-            value={commandValue}
-            onValueChange={setCommandValueOverride}
-            className="bg-transparent"
-          >
+          <Command shouldFilter={false} surface="inline">
             {showSearch ? (
               <CommandInput
                 ref={searchInputRef}
@@ -356,26 +360,16 @@ export function TabBarQuickCommandsMenu({
                 iconClassName="h-3.5 w-3.5"
               />
             ) : null}
-            <CommandList ref={commandListRef} className="max-h-72 py-1">
-              {filteredVisibleCommands.length === 0 ? (
-                <CommandEmpty className="py-4 text-center text-[11px]">
-                  {query.trim()
-                    ? translate(
-                        'auto.components.tab.bar.TabBarQuickCommandsButton.b4e7f9a2c1',
-                        'No commands match'
-                      )
-                    : translate(
-                        'auto.components.tab.bar.TabBarQuickCommandsButton.20bbd75896',
-                        'No commands'
-                      )}
-                </CommandEmpty>
-              ) : null}
-              {filteredRepoCommands.map(renderCommand)}
-              {filteredRepoCommands.length > 0 && filteredGlobalCommands.length > 0 ? (
-                <CommandSeparator className="my-1" />
-              ) : null}
-              {filteredGlobalCommands.map(renderCommand)}
-            </CommandList>
+            <TabBarQuickCommandsList
+              commands={filteredVisibleCommands}
+              firstGlobalCommand={
+                filteredRepoCommands.length > 0 ? filteredGlobalCommands[0] : undefined
+              }
+              selectedKey={commandValue}
+              query={query}
+              commandListRef={commandListRef}
+              renderCommand={renderCommand}
+            />
             {hostOwnershipPending ? (
               <TabBarQuickCommandHostLoadStatus failed={hostLoadFailed} />
             ) : (

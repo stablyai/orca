@@ -203,6 +203,7 @@ describe('closeBrowserWorkspaceTabOnHosts when the owning host cannot settle the
 
     expect(destroyWorkspaceWebviews).toHaveBeenCalledWith(expect.anything(), WORKSPACE_ID)
     expect(storeState.current.closeBrowserTab).toHaveBeenCalledWith(WORKSPACE_ID)
+    expect(storeState.current.closeBrowserTab).toHaveBeenCalledBefore(destroyWorkspaceWebviews)
     expect(storeState.current.closeUnifiedTab).toHaveBeenCalledWith('unified-a')
     // Nothing to replay: the host answered that it has no such tab, so the close is settled.
     expect(recordClientHostedBrowserCloseIntents).toHaveBeenCalledWith([])
@@ -227,6 +228,18 @@ describe('closeBrowserWorkspaceTabOnHosts when the owning host cannot settle the
     await settle()
 
     expect(closeWebRuntimeSessionTab).toHaveBeenCalledTimes(2)
+    expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
+      worktreeId: 'worktree-a',
+      tabId: 'tab-a',
+      environmentId: 'environment-a',
+      reason: 'user'
+    })
+    expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
+      worktreeId: 'worktree-a',
+      tabId: 'tab-a',
+      environmentId: 'environment-b',
+      reason: 'user'
+    })
     expect(destroyWorkspaceWebviews).not.toHaveBeenCalled()
     expect(storeState.current.closeBrowserTab).not.toHaveBeenCalled()
   })

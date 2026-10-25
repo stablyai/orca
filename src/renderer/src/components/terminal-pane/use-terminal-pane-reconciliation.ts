@@ -23,6 +23,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     closeTerminalLinkActions,
     containerRef,
     executeClosePane,
+    hostRetiredLeafIdsRef,
     isActive,
     isRendererVisible,
     isolatedPaneKey,
@@ -36,11 +37,9 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     restoredLayout,
     tabId
   } = controller
-  // Leaves the last host-authoritative layout named, and the ones it has since
-  // dropped whose panes are still mounted; a removal needs the host to have
-  // named the leaf before it dropped it, and may have to wait for the PTY exit.
+  // Leaves the last host-authoritative layout named; a removal needs the host to
+  // have named the leaf before it dropped it, and may have to wait for the PTY exit.
   const hostLayoutLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
-  const retiredLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     closeTerminalLinkActions()
@@ -51,7 +50,9 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     if (!manager || !restoredLayout.root) {
       return
     }
+    // Why the retired check: dropping a retired leaf can drop the layout's only remote PTY id.
     if (
+      hostRetiredLeafIdsRef.current.size === 0 &&
       !isHostAuthoritativeLayout({
         isWebClient: !!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__,
         ptyIdsByLeafId: restoredLayout.ptyIdsByLeafId
@@ -62,13 +63,13 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     const layoutLeafIds = new Set(collectLeafIds(restoredLayout.root))
     const mountedLeafIds = manager.getPanes().map((pane) => pane.leafId)
     const retiredLeafIds = trackRetiredLeafIds({
-      retiredLeafIds: retiredLeafIdsRef.current,
+      retiredLeafIds: hostRetiredLeafIdsRef.current,
       previousLayoutLeafIds: hostLayoutLeafIdsRef.current,
       layoutLeafIds,
       mountedLeafIds
     })
     hostLayoutLeafIdsRef.current = layoutLeafIds
-    retiredLeafIdsRef.current = retiredLeafIds
+    hostRetiredLeafIdsRef.current = retiredLeafIds
     const insertions = planTerminalLiveLayoutInsertions(restoredLayout.root, mountedLeafIds)
     const removals = planTerminalLiveLayoutRemovals(
       restoredLayout.root,

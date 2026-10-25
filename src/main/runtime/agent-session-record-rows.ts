@@ -21,7 +21,10 @@ import {
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
-import { AgentSessionTabTable, type PersistedAgentSessionTab } from './agent-session-tab-table'
+import {
+  AgentSessionTabTable,
+  type PersistedAgentSessionTab
+} from './agent-session/agent-session-tab-table'
 
 /** "Never recorded" and "recorded, now empty" differ, and #17439's legacy fallback needs the first;
  *  no row count can say which. */

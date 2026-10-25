@@ -3,7 +3,7 @@ import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent
 import { optionSession } from './codex-structured-option-session.test-fixture'
 import { resolvedCodexMessageOptions } from './codex-structured-message-options'
 import { dispatchCodexTurn, startCodexTurn } from './codex-structured-turn-start'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 import {
   acquireReadyCodexForTest,
@@ -163,7 +163,6 @@ describe('Codex captured message choices', () => {
       request.mock.calls.filter(([method]) => method === 'turn/start').map(([, params]) => params)
     ).toMatchObject([
       { model: 'model-a', effort: 'high', personality: 'friendly', serviceTier: 'priority' },
-      // Unchosen keys keep the thread's own model and effort, not the listing's defaults.
       { model: 'model-a', effort: 'high', personality: 'pragmatic', serviceTier: 'flex' },
       { model: 'model-a', effort: 'high' },
       { model: 'model-a', effort: 'low' }

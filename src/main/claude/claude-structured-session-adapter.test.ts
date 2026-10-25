@@ -45,7 +45,6 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         CLAUDE_CONFIG_DIR: '/accounts/claude'
       }
     })
-    // supportedDialogKinds is now a query() launch option, not an initialize request param.
     expect(claude.connections[0].calls.slice(0, 2)).toEqual([
       { subtype: 'initialize' },
       { subtype: 'get_settings' }
@@ -63,7 +62,6 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       mintedAtFence: 7,
       observedAt: 1_700_000_000_500
     })
-    // Live proof order: the SessionStart hook frame arrives before any init.
     expect(events[0]).toMatchObject({ type: 'message', message: { subtype: 'hook_started' } })
   })
 
@@ -151,7 +149,6 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     ).toEqual([])
   })
 
-  // The chat's permission mode is the start's, never a saved option the CLI is handed.
   it('omits an invalid persisted effort at launch and uses the explicit start mode', async () => {
     const claude = fakeClaude()
     const adapter = adapterFor(claude)
@@ -278,7 +275,6 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       session_id: 'foreign-provider-session'
     })
     await Promise.resolve()
-    // Startup hook proof + the first cycle's init are admitted; nothing foreign is.
     expect(
       events.flatMap((event) => (event.type === 'message' ? [event.message.subtype] : []))
     ).toEqual(['hook_started', 'hook_response', 'init'])
@@ -441,7 +437,6 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
 })
 
 describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
-  /** A published session whose CLI then exits first-hand, with the verdict its ladder holds. */
   async function exitedAfterPublish(
     exitVerdict: ClaudeStreamJsonConnection['exitVerdict']
   ): Promise<{ adapter: ClaudeStructuredSessionAdapter; connection: FakeConnection }> {
@@ -452,8 +447,6 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     return { adapter, connection }
   }
 
-  // The host may still be committing or proving the lease when the child dies; its cleanup must
-  // find the exit the ladder observed, not an absence.
   it.each(['unverifiable', 'live'] as const)(
     'classifies cleanup after a first-hand exit with its tree %s as a root exit, never as proven',
     async (tree) => {
@@ -484,7 +477,6 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     await expect(
       adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
     ).rejects.toThrow('not logged in')
-    // The second start's own proven close is the answer; the first exit is stale.
     await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(true)
     expect(first.closeCount).toBe(1)
   })
@@ -550,7 +542,7 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     first.close = vi.fn<FakeConnection['close']>().mockResolvedValue(false)
     first.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
-    // Before the exit publishes, the start settles it itself rather than refusing on it.
+    // Reacquire before queued exit publication to exercise synchronous settlement.
     await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
 
     expect(claude.connections).toHaveLength(2)
@@ -564,7 +556,6 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
     await adapter.drainObservedExits()
 
-    // The owner releases the lease on a root exit, so the host must hear of it now, as of a proven one.
     expect(events).toContainEqual(
       expect.objectContaining({ type: 'ended', cause: 'unexpected-exit' })
     )
@@ -638,7 +629,6 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
       fence: 7,
       commit: async () => undefined
     })
-    // The answer resolves the SDK's own callback promise; the SDK writes the wire response.
     await expect(answered.promise).resolves.toEqual({
       behavior: 'allow',
       updatedInput: { command: 'git status' },
@@ -738,10 +728,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
     adapter.bindPromptItemId('session-1', 'journal-9', 'permission-9')
 
     controller.abort()
-    // A cancelled request is forgotten and settled with null — never an authorization.
     await expect(answered.promise).resolves.toBeNull()
     expect(events.at(-1)).toMatchObject({ type: 'prompt-cancelled', promptKey: 'permission-9' })
-    // A late answer after the abort must not authorize the wrong tool.
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',

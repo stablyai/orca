@@ -19,7 +19,6 @@ function terminalVerdict(row: TerminalCounts): TerminalVerdict {
   return 'none'
 }
 
-/** `live:` and `pty:` words for one row; lost contact never reads as zero or no. */
 export function formatWorktreePsTerminalFields(row: TerminalCounts): string {
   if (terminalVerdict(row) === 'unverifiable') {
     return 'live:unverifiable  pty:unverifiable'
@@ -31,10 +30,7 @@ export function formatWorktreePsTerminalFields(row: TerminalCounts): string {
   return `live:${row.liveTerminalCount}+${unverifiable} unverifiable  pty:${row.hasAttachedPty ? 'yes' : 'unverifiable'}`
 }
 
-/**
- * JSON counterpart. The count fields keep their number/boolean types for existing scripts, so
- * `terminalVerdict` is what says a 0/false came from a host that could not be asked.
- */
+/** Preserve numeric/boolean fields for existing scripts; terminalVerdict distinguishes unknown values. */
 export function projectWorktreePsTerminalVerdict<TRow extends TerminalCounts>(
   row: TRow
 ): TRow & { terminalVerdict: TerminalVerdict } {

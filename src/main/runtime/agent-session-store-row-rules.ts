@@ -13,7 +13,7 @@ import { isAgentSessionId, isPersistedAgentSessionRecord } from '../../shared/ag
 import type { PersistedAgentSessionRecord } from '../../shared/agent-session-legacy-handoff-lease'
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
-import type { PersistedAgentSessionTab } from './agent-session-tab-table'
+import type { PersistedAgentSessionTab } from './agent-session/agent-session-tab-table'
 
 /** Valid stored identity, independent of provider availability. */
 export function isReadableAgentSessionStoreRecord(

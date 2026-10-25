@@ -4,7 +4,7 @@ import {
 } from './workspace-name-text-scanner'
 import { escapeRegex } from './string-utils'
 import type { JiraIssueKeyCasing } from './ui-chrome-types'
-import { JIRA_ISSUE_KEY_PATTERN } from './jira-issue-url'
+import { JIRA_ISSUE_KEY_PATTERN } from './jira/jira-issue-url'
 
 function normalizeApostrophes(input: string): string {
   return input.replace(/[\u2018\u2019]/g, "'")

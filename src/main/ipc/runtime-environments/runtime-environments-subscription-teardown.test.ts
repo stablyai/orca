@@ -65,7 +65,6 @@ vi.mock('./runtime-environment-request-connections', async () => {
       reconnectRemoteRuntimeSharedControlConnectionMock,
     retryRemoteRuntimeSharedControlConnectionsNow:
       retryRemoteRuntimeSharedControlConnectionsNowMock,
-    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
     ensureRemoteRuntimeSharedControlConnection: vi.fn(),
     pauseRemoteRuntimeSharedControlRetry: vi.fn(),
     closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
@@ -197,10 +196,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('tells the renderer when retiring the transport closes its streaming subscription', async () => {
-    // Why: disconnect advances the transport generation before closing sockets.
-    // Gating the terminal 'close' on that generation stranded the renderer with a
-    // handle it believed was open, so every later subscribe wrote into a socket
-    // main no longer owned — blank, wedged remote terminals after a reconnect.
+    // Disconnect advances generation before close; the retired stream must still release its renderer handle.
     registerRuntimeEnvironmentHandlers(store as never)
     let transportCallbacks: {
       onResponse: (response: Record<string, unknown>) => void
@@ -270,8 +266,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it("retires an environment's remaining subscriptions when one teardown throws", async () => {
-    // Why: the sweep exists to retire dead handles, so a single failing teardown
-    // must not strand the very sockets it was called to close.
+    // A teardown failure must not strand sibling subscriptions.
     registerRuntimeEnvironmentHandlers(store as never)
     const closeCalls: string[] = []
     let streamCount = 0
@@ -335,7 +330,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         .map((call) => (call[1] as { subscriptionId: string }).subscriptionId)
     ).toEqual(['doomed-sub', 'sibling-sub'])
 
-    // Both entries are gone, so a later unsubscribe finds nothing to release.
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
@@ -345,9 +339,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('contains a throwing renderer send on a host-initiated close', async () => {
-    // Why: this is the notifyClosed call site with no surrounding guard. A host
-    // close arriving on a disposed render frame would otherwise throw out through
-    // the transport's onClose and into the WebSocket close handler.
+    // Host close reaches notifyClosed directly, outside any retirement sweep guard.
     registerRuntimeEnvironmentHandlers(store as never)
     let transportCallbacks: {
       onResponse: (response: Record<string, unknown>) => void
@@ -399,13 +391,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       }
     )
 
-    // The host closes the stream on its own; nothing wraps this call site.
     expect(() => transportCallbacks!.onClose()).not.toThrow()
     expect(
       senderSend.mock.calls.filter((call) => (call[1] as { type?: string }).type === 'close')
     ).toHaveLength(1)
 
-    // The entry is still released, so a later unsubscribe finds nothing.
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
@@ -417,9 +407,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('retires remaining subscriptions when a liveness probe inside notifyClosed throws', async () => {
-    // Why: notifyClosed guards its own send, but the sweep must not depend on
-    // everything else inside it staying throw-free -- that is how the abandoned
-    // -siblings defect comes back the next time a line is added there.
+    // Keep sweep isolation independent of notifyClosed internals, including a throwing lifetime probe.
     registerRuntimeEnvironmentHandlers(store as never)
     const closedStreams: string[] = []
     let streamCount = 0
@@ -478,7 +466,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       params: {},
       subscriptionId: 'surviving-sub'
     })
-    // Why: arm only after subscribe, whose own isDestroyed checks must succeed.
+    // Subscription setup must pass its lifetime checks before the teardown probe starts throwing.
     probeShouldThrow = true
 
     const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
@@ -486,7 +474,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     )
     expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
 
-    // Both transports still closed even though every notifyClosed probe threw.
     expect(closedStreams).toEqual(['stream-1', 'stream-2'])
     expect(deliveredCloses).toEqual([])
   })
@@ -550,22 +537,20 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       type: 'close'
     })
     senderSend.mockClear()
-    // A late frame from the retired socket must not reach the renderer...
+    // Retired sockets must neither deliver late frames nor duplicate their terminal close.
     transportCallbacks!.onResponse({
       id: 'r1',
       ok: true,
       result: {},
       _meta: { runtimeId: 'runtime-a' }
     })
-    // ...and its late close must not re-fire after the retirement already sent one.
     transportCallbacks!.onClose()
     expect(senderSend).not.toHaveBeenCalled()
   })
 
-  // P1-C: a rollback run from the CLI re-paired the server, and nothing told the renderer.
   it('restarts status for a re-paired server so renderers see its new pairing', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
-    // As the real one: closing the transport drops the environment's status owner.
+    // Real transport invalidation also drops the status owner.
     closeRemoteRuntimeRequestConnectionMock.mockImplementation(() =>
       resetRuntimeEnvironmentStatusOwners()
     )

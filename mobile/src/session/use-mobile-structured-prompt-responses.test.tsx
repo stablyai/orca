@@ -7,7 +7,6 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   type StructuredAgentSessionState
 } from '../../../src/shared/structured-agent-session-reducer'
-import { encodeAgentSessionQuestionAnswers } from '../../../src/shared/agent-session-question-answer'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
 import {
   projectStructuredQuestion,
@@ -352,7 +351,12 @@ describe('useMobileStructuredPromptResponses', () => {
       expect(sentFields(sent)).toEqual({
         itemId: 'item-g',
         expectedRevision: 1,
-        ...(supported ? { answers } : { optionId: encodeAgentSessionQuestionAnswers(answers) })
+        ...(supported
+          ? { answers }
+          : {
+              optionId:
+                'question-group:[{"questionId":"q1","optionIds":["q1:choice-1"]},{"questionId":"q2","optionIds":["q2:choice-1"]}]'
+            })
       })
     })
 

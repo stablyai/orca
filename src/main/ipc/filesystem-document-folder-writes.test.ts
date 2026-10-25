@@ -123,7 +123,6 @@ describe('renaming a document the user opened outside every project', () => {
     expect(await readdir(docFolder)).toEqual(['note.md'])
   })
 
-  // Why each destination is undone: the Undo declares the moved file, so it must come back from anywhere.
   it('moves it into another outside folder, and Undo brings it back', async () => {
     await mkdir(join(base, 'other'))
     const moved = join(base, 'other', 'note.md')

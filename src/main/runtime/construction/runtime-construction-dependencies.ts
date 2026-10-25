@@ -17,7 +17,7 @@ import type {
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault-resume-preparation'
 import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
-import type { AgentSessionClaimSigner } from '../agent-session-claim-identity'
+import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
 import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
 import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'

@@ -3,7 +3,6 @@ import type { RpcClient } from '../transport/rpc-client'
 import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
 import {
   admitWorktreeCatalogResponse,
-  WORKTREE_PS_FULL_LIMIT,
   WorktreeCatalogSnapshotClient,
   type WorktreeCatalogFetchResult
 } from './worktree-catalog-snapshot-client'
@@ -81,6 +80,7 @@ describe('admitWorktreeCatalogResponse', () => {
 })
 
 function clientWithResults(...results: unknown[]): RpcClient {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this request-only seam intentionally supplies unchecked envelopes to snapshot admission.
   return {
     sendRequest: vi.fn(
       async () =>
@@ -121,15 +121,12 @@ describe('WorktreeCatalogSnapshotClient', () => {
     admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: null
     })
   })
 
   it('preserves the last admitted token across transport failures', async () => {
-    // The second reply is the conditional answer the host gives to the request under assertion.
-    // The fixture used to run dry and hand `fetch` an absent result, which is not a transport
-    // failure and is not a shape `worktree.ps` sends.
     const client = clientWithResults(
       { worktrees: [], snapshotId: 'snapshot-1' },
       { unchanged: true, snapshotId: 'snapshot-1' }
@@ -137,11 +134,12 @@ describe('WorktreeCatalogSnapshotClient', () => {
     const snapshots = new WorktreeCatalogSnapshotClient()
 
     admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
-    snapshots.admit(null)
+    vi.mocked(client.sendRequest).mockRejectedValueOnce(new Error('connection lost'))
+    await expect(snapshots.fetch(client, 'host-1')).rejects.toThrow('connection lost')
     await snapshots.fetch(client, 'host-1')
 
-    expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+    expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
+      limit: 10_000,
       afterSnapshotId: 'snapshot-1'
     })
   })
@@ -159,7 +157,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(client, 'host-1')
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: null
     })
   })
@@ -173,7 +171,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(secondClient, 'host-2')
 
     expect(secondClient.sendRequest).toHaveBeenCalledWith('worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: null
     })
   })
@@ -193,7 +191,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     await snapshots.fetch(secondClient, 'host-2')
     expect(secondClient.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: 'snapshot-2'
     })
   })
@@ -206,6 +204,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
       { id: 'request', ok: false, error: { code: 'forbidden', message: 'nope' } },
       { id: 'request', ok: true, result: { unchanged: true, snapshotId: 'snapshot-1' } }
     ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this request-only seam intentionally supplies unchecked envelopes to snapshot admission.
     const client = {
       sendRequest: vi.fn(async () => responses.shift())
     } as unknown as RpcClient
@@ -217,7 +216,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     await snapshots.fetch(client, 'host-1')
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
+      limit: 10_000,
       afterSnapshotId: 'snapshot-1'
     })
   })
@@ -235,6 +234,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
   })
 
   it('falls back to a generic failure code when the error carries none', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this request-only seam intentionally supplies unchecked envelopes to snapshot admission.
     const client = {
       sendRequest: vi.fn(async () => ({ id: 'request', ok: false, error: { message: 'x' } }))
     } as unknown as RpcClient

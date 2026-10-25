@@ -11,7 +11,7 @@ import { readWindowsProcessTableFresh } from '../../windows/windows-process-tabl
 import {
   PROCESS_START_TIME_TOLERANCE_MS,
   readProcessStartTimeMs
-} from '../../runtime/agent-session-process-identity-probe'
+} from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
 export type SshForwardProcessRow = {
   pid: number

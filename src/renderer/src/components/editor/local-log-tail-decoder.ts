@@ -1,4 +1,5 @@
 import type { LocalLogTailReadResult } from '../../../../shared/local-log-tail-types'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
 
 export const LOCAL_LOG_TAIL_MAX_BYTES = 50 * 1024 * 1024
 
@@ -6,15 +7,6 @@ export type LocalLogTailDecodeResult =
   | { kind: 'append'; content: string; hasMore: boolean }
   | { kind: 'reset' }
   | { kind: 'limit' }
-
-function decodeBase64(contentBase64: string): Uint8Array {
-  const binary = atob(contentBase64)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index++) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-  return bytes
-}
 
 export class LocalLogTailDecoder {
   readonly initialVisibleContent: string
@@ -50,7 +42,7 @@ export class LocalLogTailDecoder {
 
     this.byteOffset = result.nextByteOffset
     this.fileIdentity = result.fileIdentity
-    const decoded = this.decoder.decode(decodeBase64(result.contentBase64), { stream: true })
+    const decoded = this.decoder.decode(decodeBase64Bytes(result.contentBase64), { stream: true })
     const chunkLineEnd = decoded.lastIndexOf('\n') + 1
     const previousCarryLength = this.lineCarry.length
     this.lineCarry += decoded

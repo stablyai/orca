@@ -1,5 +1,5 @@
-import { chatTabChangesMatchingIndex } from '../structured-agent-session-tab-index-seed'
-import { chatTabId, type ChatTabChange } from '../agent-session-tab-layout'
+import { chatTabChangesMatchingIndex } from '../agent-session/structured-agent-session-tab-index-seed'
+import { chatTabId, type ChatTabChange } from '../agent-session/agent-session-tab-layout'
 import { structuredSessionTabRetired } from '../structured-worker-custody'
 import type { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 

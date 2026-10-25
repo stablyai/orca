@@ -3,20 +3,23 @@ import type { BrowserCookieImportResult } from '../../shared/browser-workspace-t
 import {
   detectInstalledBrowsers as detectBrowsers,
   selectBrowserProfile as selectProfile
-} from './browser-cookie-detection'
-import type { BrowserProfile, DetectedBrowser } from './browser-cookie-detection-types'
+} from './cookies/sources/browser-cookie-detection'
+import type {
+  BrowserProfile,
+  DetectedBrowser
+} from './cookies/sources/browser-cookie-detection-types'
 import {
   pickCookieFile as pickFile,
   importCookiesFromFile as importFile,
   type CookieImportOptions
 } from './browser-cookie-import-pipeline'
 import { importChromiumCookies } from './cookies/chromium/import-cookies'
-import { importCookiesFromFirefox } from './browser-cookie-firefox-import'
-import { importCookiesFromSafari } from './browser-cookie-safari-import'
+import { importCookiesFromFirefox } from './cookies/sources/browser-cookie-firefox-import'
+import { importCookiesFromSafari } from './cookies/sources/browser-cookie-safari-import'
 import {
   buildChromiumCookieInsertParams as buildInsertParams,
   type ChromiumCookieColumnInfo
-} from './browser-cookie-sqlite'
+} from './cookies/sources/browser-cookie-sqlite'
 import { summarizeCookieImportError as summarizeError } from './browser-cookie-import-diagnostics'
 
 export type { BrowserProfile, DetectedBrowser, CookieImportOptions, ChromiumCookieColumnInfo }

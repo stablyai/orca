@@ -10,7 +10,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { WORKTREE_ID_SEPARATOR } from '../../../shared/worktree/id'
 import { getLocalPreflightContext } from '../lib/local-preflight-context'
-import { getProjectRuntimeSessionSummary } from '../components/settings/repository-runtime-session-summary'
+import { getProjectRuntimeSessionSummary } from '../components/settings/repository/execution/repository-runtime-session-summary'
 import type { AppState } from './types'
 import { selectRepoByIdForActiveWorkspace } from './selectors'
 

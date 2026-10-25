@@ -1,6 +1,6 @@
 import { translateMain } from '../i18n/main-i18n'
 
-// Why an id: the label is localized, so E2E finds the item by id instead.
+// The label is localized, so E2E finds the item by id.
 const QUIT_AND_STOP_ALL_SESSIONS_MENU_ITEM_ID = 'quit-and-stop-all-sessions'
 
 export type AppMenuQuitHandlers = {
@@ -9,11 +9,7 @@ export type AppMenuQuitHandlers = {
   onQuitAndStopAllSessions?: () => void
 }
 
-/**
- * The app menu's Quit entry: "Quit <macAppName>" in the macOS app menu, else File > Exit.
- * Why a handler instead of role 'quit': a host that must not exit on a user Quit
- * (`orca serve`, #15537) supplies `onQuit`; the native-quit guard only covers macOS.
- */
+/** Use onQuit so persistent hosts can refuse user Quit; the native guard covers only macOS. */
 function createAppMenuQuitItem(
   onQuit: (() => void) | undefined,
   macAppName?: string
@@ -25,7 +21,7 @@ function createAppMenuQuitItem(
   return {
     label:
       exitLabel ?? translateMain('menu.quitApp', `Quit ${macAppName}`, { appName: macAppName }),
-    // Same accelerator Electron gives role 'quit' (none on Windows).
+    // Match Electron quit accelerators, including no accelerator on Windows.
     ...(process.platform === 'win32' ? {} : { accelerator: 'CmdOrCtrl+Q' }),
     click: () => onQuit()
   }
@@ -45,7 +41,7 @@ export function createAppMenuQuitItems(
     {
       id: QUIT_AND_STOP_ALL_SESSIONS_MENU_ITEM_ID,
       label: translateMain('menu.quitAndStopAllSessions', 'Quit and Stop All Sessions...'),
-      // Why no accelerator: macOS reserves ⌥⌘Q for "Quit and Keep Windows", the opposite intent.
+      // No accelerator: macOS reserves ⌥⌘Q for "Quit and Keep Windows", the opposite intent.
       click: () => onQuitAndStopAllSessions()
     },
     quitItem

@@ -185,10 +185,10 @@ describe('connectPanePty', () => {
         }
       }
       pane.terminal.write.mockImplementation((data, callback) => {
-        if (data.includes('\x1b[?2026h')) {
+        if (typeof data === 'string' && data.includes('\x1b[?2026h')) {
           synchronizedOutput.synchronizedOutput = true
         }
-        if (data.includes('\x1b[?2026l')) {
+        if (typeof data === 'string' && data.includes('\x1b[?2026l')) {
           synchronizedOutput.synchronizedOutput = false
         }
         callback?.()

@@ -67,6 +67,30 @@ function toolRun(id: string): NativeChatMessage {
 }
 
 describe('transcript slots', () => {
+  it('shows unresolved historical input without a timer or unanchored live attribution', () => {
+    const message = text('follow-up', 'keep this text', 'user')
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: message.id,
+        revision: 0,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: message.blocks },
+        turnScope: { kind: 'unknown' }
+      }
+    ]
+    const membership = nativeChatTurnMembership([message], { items, submissions: [] })
+    const slots = build([message], { ...membership, isWorking: true, lifecycleWorking: true })
+    expect(slots).toHaveLength(1)
+    expect(slots[0]).toMatchObject({
+      message,
+      drawsMessage: true,
+      activeTurnIsWorking: false,
+      turnFolds: false
+    })
+    expect(slots[0]?.turnKey).toBeUndefined()
+    expect(slots[0]?.status).toBeUndefined()
+  })
   // The trailing run is the one still live while the turn works. Prose or a
   // further run after it settles it; a reasoning aside leaves it live.
   it('marks the last row that speaks or acts as the trailing run', () => {

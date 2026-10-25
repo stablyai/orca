@@ -15,8 +15,6 @@ import {
 
 export const PROVIDER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
-/** Installs a host whose one record owns a conversation: by default a Codex chat on
- *  PROVIDER_SESSION, or the agent `handle` names. */
 export function installOwnership(
   overrides: Partial<StructuredProviderSessionOwnership> & {
     handle?: AgentSessionProviderHandle
@@ -61,8 +59,6 @@ export function installOwnership(
   } as never)
 }
 
-/** A host whose one chat, `chat-1`, owns `handle`'s conversation, and whose adapter copies a
- *  conversation through `copy`. */
 export function installCopyingChat(
   handle: AgentSessionProviderHandle,
   copy: StructuredAgentSessionAdapter['copyConversation'],

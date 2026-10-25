@@ -12,11 +12,9 @@ import {
   BRIDGE_MAX_ROUTE_PARAMS,
   BRIDGE_MAX_ROUTE_PATHNAME_CHARS,
   BRIDGE_MAX_VIEWPORT_COLS,
-  BRIDGE_MAX_VIEWPORT_ROWS,
-  BRIDGE_ROUTE_HREF_PATTERN,
-  BRIDGE_ROUTE_PATHNAME_PATTERN
+  BRIDGE_MAX_VIEWPORT_ROWS
 } from './bridge-caps'
-import { BRIDGE_HAPTICS_KINDS, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -130,12 +128,14 @@ describe('client messages', () => {
       }
     ],
     ['a navigate-back notify', { type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }],
-    // One per kind, spread from the list itself: a kind added to the tuple and left out of the
-    // schema's enum would otherwise be accepted here by a case nobody wrote.
-    ...BRIDGE_HAPTICS_KINDS.map(
+    ...(['mediumImpact', 'selection', 'success', 'error', 'edgeBump'] as const).map(
       (kind) =>
         [`a ${kind} haptics notify`, { type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind }] as const
     ),
+    [
+      'an escaped-name navigate notify',
+      { type: 'notify', name: 'navigate', href: '/h/a%20b/%2ex?from=list' }
+    ],
     ['close', { type: 'close' }]
   ] as const
 
@@ -210,6 +210,13 @@ describe('client messages', () => {
       client({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind: 'heavyImpact' })
     ],
     ['a haptics notify naming no kind', client({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY })],
+    ...['/h/../a', '/h/%2e%2e/a', '/h/%2E%2E/a', '/h/.%2e/a', '/h/%2e/a'].map(
+      (href) =>
+        [
+          `a navigate dot segment ${href}`,
+          client({ type: 'notify', name: 'navigate', href })
+        ] as const
+    ),
     ['a bare array', []],
     ['a bare string', 'ready']
   ] as const
@@ -227,7 +234,10 @@ describe('client messages', () => {
 
   it('keeps an absent params absent, so the host replays the arity the page used', () => {
     const read = readClient(client({ type: 'request', id: ID, method: 'status.get' }))
-    expect(read.ok && read.message.type === 'request' && 'params' in read.message).toBe(false)
+    expect(read).toEqual({
+      ok: true,
+      message: { v: BRIDGE_PROTOCOL_VERSION, type: 'request', id: ID, method: 'status.get' }
+    })
   })
 
   it('keeps an explicit null params, which is not the same call', () => {
@@ -488,6 +498,9 @@ describe('host messages', () => {
     ],
     ['an init route with a half-encoded dot segment', initRoute({ pathname: '/h/.%2e/a' })],
     ['an init route with a single encoded dot segment', initRoute({ pathname: '/h/%2e/a' })],
+    ['an init route with a literal parent segment', initRoute({ pathname: '/h/../a' })],
+    ['an init route with a lower encoded parent segment', initRoute({ pathname: '/h/%2e%2e/a' })],
+    ['an init route with an upper encoded parent segment', initRoute({ pathname: '/h/%2E%2E/a' })],
     ['an init route with an empty interior segment', initRoute({ pathname: '/h//a' })],
     ['an init route with an empty pathname', initRoute({ pathname: '' })],
     [
@@ -584,7 +597,7 @@ describe('the reply reader is the native acceptance predicate', () => {
 })
 
 describe('the screencast frame reader', () => {
-  it('refuses a screencast metadata field that is not a finite number', () => {
+  it('refuses numeric strings in screencast metadata', () => {
     const keys = [
       'offsetTop',
       'pageScaleFactor',
@@ -605,7 +618,7 @@ describe('the screencast frame reader', () => {
     }
   })
 
-  it('carries a decoded screencast frame whole, minus its bytes', () => {
+  it('preserves binary event fields and their decoded-frame type compatibility', () => {
     const read = readHost(client({ type: 'event', id: ID, seq: 1, binary: BINARY_FRAME }))
     const binary =
       read.ok && read.message.type === 'event' && 'binary' in read.message
@@ -651,14 +664,16 @@ describe('the readers bound their two directions differently', () => {
   })
 
   it('still refuses a host frame one byte over the frame cap', () => {
-    const padding = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)
-    const raw = JSON.stringify({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id: ID,
-      payload: { ...SUCCESS_PAYLOAD, result: padding }
-    })
-    expect(raw.length).toBeGreaterThan(BRIDGE_MAX_MESSAGE_BYTES)
+    const envelope = (result: string) =>
+      JSON.stringify({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'reply',
+        id: ID,
+        payload: { ...SUCCESS_PAYLOAD, result }
+      })
+    const overhead = new TextEncoder().encode(envelope('')).byteLength
+    const raw = envelope('x'.repeat(BRIDGE_MAX_MESSAGE_BYTES + 1 - overhead))
+    expect(new TextEncoder().encode(raw).byteLength).toBe(BRIDGE_MAX_MESSAGE_BYTES + 1)
     expect(readBridgeHostMessage(raw)).toEqual({ ok: false, refusal: 'oversized' })
   })
 })
@@ -669,25 +684,13 @@ describe('the readers bound their two directions differently', () => {
  * The screen the shell names and the screen a page asks for are the same vocabulary, and a spelling
  * one refuses while the other takes is a hole with a `notify` already pointed at it.
  */
-describe('the segment rule both route patterns are built from', () => {
-  it('refuses a dot segment in either position, however it is spelled', () => {
-    for (const spelling of ['/h/../a', '/h/%2e%2e/a', '/h/%2E%2E/a', '/h/.%2e/a', '/h/%2e/a']) {
-      expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(spelling), spelling).toBe(false)
-      expect(BRIDGE_ROUTE_HREF_PATTERN.test(spelling), spelling).toBe(false)
+describe('navigate query boundaries', () => {
+  it('refuses query-ended dot segments through the navigate reader', () => {
+    for (const href of ['/h/..?x', '/h/%2e%2e?x', '/h/.?x', '/h/a/..?x', '/h/..?']) {
+      expect(readClient(client({ type: 'notify', name: 'navigate', href })), href).toEqual({
+        ok: false,
+        refusal: 'unrecognised-message'
+      })
     }
-  })
-
-  it('refuses a trailing dot segment the query is what ends, not a slash', () => {
-    // The `notify` sink is `router.push`, which does not resolve these: it matches segments
-    // literally, so `..` becomes the `[hostId]` a screen is opened for. A different wrong screen
-    // from the spellings above, and the same reason one rule covers both patterns.
-    for (const spelling of ['/h/..?x', '/h/%2e%2e?x', '/h/.?x', '/h/a/..?x', '/h/..?']) {
-      expect(BRIDGE_ROUTE_HREF_PATTERN.test(spelling), spelling).toBe(false)
-    }
-  })
-
-  it('takes an escape that is part of a name, in either position', () => {
-    expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test('/h/a%20b/%2ex/a%2fb')).toBe(true)
-    expect(BRIDGE_ROUTE_HREF_PATTERN.test('/h/a%20b/%2ex?from=list')).toBe(true)
   })
 })

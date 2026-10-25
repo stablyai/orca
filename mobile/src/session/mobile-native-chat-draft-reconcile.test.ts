@@ -41,6 +41,9 @@ describe('mobile native chat image preview reconciliation', () => {
       deadline: null
     }
 
+    expect(
+      findLandedImagePreviewEchoes(messages, [{ ...preview, baselineTailMessageId: 'prompt' }])
+    ).toEqual([])
     expect(findLandedUnconfirmedSends(messages, [unconfirmed])).toEqual([unconfirmed])
     expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([
       { pendingId: 'pending', messageId: 'prompt', images: ['file:///a.jpg'] }

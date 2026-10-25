@@ -12,7 +12,7 @@ import {
 } from '../../../shared/github/links'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../shared/new-workspace/gitlab-links'
-import { parseJiraIssueUrl, type ParsedJiraIssueUrl } from '../../../shared/jira-issue-url'
+import { parseJiraIssueUrl, type ParsedJiraIssueUrl } from '../../../shared/jira/jira-issue-url'
 import { parseLinearIssueUrlIntent, type LinearIssueUrlIntent } from '../../../shared/linear/links'
 import type { Repo } from '../../../shared/repo-types'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'

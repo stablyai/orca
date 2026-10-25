@@ -1,7 +1,7 @@
 import type {
   CodexAppServerConnection,
   CodexAppServerServerRequest
-} from './codex-app-server-connection'
+} from './app-server/codex-app-server-connection-types'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,

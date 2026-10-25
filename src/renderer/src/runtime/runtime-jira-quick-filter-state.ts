@@ -3,7 +3,7 @@ import {
   JIRA_STATUS_FILTER_UPDATE_REQUIRED,
   normalizeJiraQuickFilterState,
   type JiraQuickFilterState
-} from '../../../shared/jira-quick-filters'
+} from '../../../shared/jira/jira-quick-filters'
 import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 

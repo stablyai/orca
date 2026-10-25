@@ -1,6 +1,4 @@
-// One row per transcript, so a write costs what changed and no size cap has to
-// sit below the working set (the old single JSON file needed one, and that cap
-// was the gap a restart re-parsed through). Owned by the scanner child.
+// Scanner-owned per-transcript rows persist changes without rewriting or capping the full working set.
 import { isSqliteCorruption } from '../sqlite/sqlite-read-failure'
 import { hardenSqliteDatabaseFiles } from '../sqlite/harden-database-files'
 import type SyncDatabase from '../sqlite/sync-database'
@@ -21,9 +19,8 @@ import {
 } from './session-scope-cwds-table'
 import { parsePersistedSidecar } from './session-sidecar-stat'
 
-// Bump when the row layout or cached session semantics change; a mismatched
-// database is dropped whole.
-export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 5
+// Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
+export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 6
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -77,7 +74,7 @@ export class SessionParseCacheDatabase {
     }, undefined)
   }
 
-  /** Each path's parse-row cwd and stored scope cwd, without decoding whole sessions. */
+  /** Read parse and scope cwds without decoding cached sessions. */
   readScopeCwds(paths: readonly string[]) {
     const parsed = this.run((db) => readScopeCwdRows(db, paths, 'parsed'), undefined)
     const read = this.run((db) => readScopeCwdRows(db, paths, 'read'), undefined)
@@ -92,10 +89,7 @@ export class SessionParseCacheDatabase {
     this.run((db) => writeScopeCwdRows(db, rows, seenAt), undefined)
   }
 
-  /**
-   * One transaction; a caller chunks large writes so the event loop gets turns
-   * between them. `keepExisting` leaves rows already present untouched.
-   */
+  /** One transaction; callers chunk for event-loop fairness, and keepExisting preserves stored rows. */
   write(
     rows: Iterable<[string, PersistedSessionParseCacheEntry]>,
     seenAt: number,
@@ -135,7 +129,7 @@ export class SessionParseCacheDatabase {
     }, undefined)
   }
 
-  /** Oldest first, so repeated calls work through every stale row outside `excludeGlob`. */
+  /** Return stale paths oldest first so successive batches make progress. */
   pathsSeenBefore(cutoff: number, limit: number, excludeGlob: string): string[] {
     return this.run(
       (db) =>
@@ -150,7 +144,6 @@ export class SessionParseCacheDatabase {
     )
   }
 
-  /** True when any row was deleted. */
   deleteSeenBefore(cutoff: number, glob: string): boolean {
     return this.run(
       (db) =>
@@ -173,7 +166,6 @@ export class SessionParseCacheDatabase {
     }, undefined)
   }
 
-  /** Hands freed pages back to the file system after deletes. */
   reclaimSpace(): void {
     this.run((db) => db.pragma('incremental_vacuum'), undefined)
   }
@@ -183,14 +175,10 @@ export class SessionParseCacheDatabase {
     this.db = null
     try {
       db?.close()
-    } catch {
-      // Already closed by a failed statement; nothing left to release.
-    }
+    } catch {}
   }
 
-  // Every failure is a miss, so History only ever pays a re-parse. SQLite can
-  // report a torn page at any statement, not only at open: rebuild once, then
-  // stay memory-only for this process rather than retry per lookup.
+  // Failures return misses; rebuild corruption once, then disable the database if corruption recurs.
   private run<T>(operation: (db: SyncDatabase) => T, fallback: T): T {
     const db = this.db
     if (db === null) {
@@ -229,7 +217,6 @@ function openDatabase(path: string): SyncDatabase {
   return db
 }
 
-/** Validates one `[path, entry]` row read back from disk; null when it can't be trusted. */
 export function parsePersistedSessionParseCacheRow(
   item: unknown
 ): [string, PersistedSessionParseCacheEntry] | null {

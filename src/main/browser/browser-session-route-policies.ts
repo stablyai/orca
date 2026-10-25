@@ -16,7 +16,7 @@ export function installBrowserRoutePartitionPolicies(
   }
   return installBrowserSessionPartitionPolicies(
     { ...profile, partition },
-    { applyAppWideProxy: false, sitePermissions }
+    { applyAppWideProxy: false, fileSystemAccess: false, sitePermissions }
   )
 }
 

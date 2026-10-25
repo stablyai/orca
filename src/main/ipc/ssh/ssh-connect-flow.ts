@@ -51,7 +51,7 @@ export async function connectTarget(
     throw new Error('e2e_forbidden_local_ssh_connect')
   }
   if (options.automatic) {
-    // Why before any publish: the host must keep reading "disconnected", not a failed connect.
+    // Preserve disconnected status rather than publishing an unwanted failed connect.
     if (isSshUserDisconnected(targetId)) {
       const label = getSshTargetRegistryStore()?.getTarget(targetId)?.label ?? targetId
       throw createSshUserDisconnectedError(label)
@@ -59,7 +59,7 @@ export async function connectTarget(
     return admitConnect(targetId)
   }
   clearSshCredentialDeclined(targetId)
-  // Why explicit only: an automatic connect (startup restore) must not lift the re-pair cap.
+  // Only explicit user connects may lift the re-pair cap.
   const managedEnvironmentId = getManagedOrcadFenceEnvironmentId(
     getSshTargetRegistryStore()?.getTarget(targetId)
   )
@@ -75,11 +75,11 @@ export async function connectTarget(
 }
 
 async function admitConnect(targetId: string): Promise<SshConnectionState> {
-  // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
+  // Fence requests that entered before disconnect/reset but resume after its cleanup.
   const admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
 
-  // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
+  // Coalesce concurrent connects to avoid leaking the first session.
   const existing = connectInFlight.get(targetId)
   let replacePendingTransport = false
   if (existing) {
@@ -100,8 +100,7 @@ async function admitConnect(targetId: string): Promise<SshConnectionState> {
   if (!isCurrentSshProviderAuthority(observedAuthority)) {
     throw createCancelledConnectAttemptError()
   }
-  // Why: the shutdown drain fences and snapshots synchronously, so a connect either registers in
-  // connectInFlight below (and gets joined) or fails here — it can never slip between the two.
+  // Shutdown fences and snapshots synchronously; register below or fail here without an admission gap.
   assertSshConnectsNotFenced()
 
   const promise = doConnect(targetId, replacePendingTransport)
@@ -133,11 +132,9 @@ async function doConnect(
     }
   }
 
-  // A transport the decision's census, deploy or conversion opens is attributed to this attempt,
-  // so a cancelled attempt closes exactly that one and nothing a newer owner took over.
+  // Attribute decision-created transports so cancellation closes only those not adopted by a newer owner.
   const owner = Symbol(targetId)
-  // Why after the teardown above: deploy and conversion refuse while a direct session or transport
-  // exists, and the authority rotated synchronously so concurrent connects still join this one.
+  // Deploy/conversion require teardown first; rotated authority still lets concurrent connects join.
   const server = await runAttributedToSshOwner(owner, () => decideHostServer(target)).catch(
     async (error: unknown) => {
       if (!isCurrentConnectAttempt(targetId, authority)) {
@@ -176,7 +173,7 @@ async function doConnect(
       server.serving,
       server.linked
     )
-    // Why after publishing: the check costs round trips, and only a macOS host shows a result.
+    // Publish first; the macOS-only check adds remote round trips.
     void import('./ssh-host-launch-session-note')
       .then(({ noteEndedLaunchSshSession }) =>
         noteEndedLaunchSshSession(targetId, server.environmentId)
@@ -194,7 +191,7 @@ async function doConnect(
     }
     return publishBridgedUnservedHostServer(target, server)
   }
-  // This version has no relay to fall back to: a host its managed server doesn't serve fails here.
+  // Unserved hosts have no relay fallback.
   await abandonDecisionTransport(targetId, owner, authority)
   throw publishUnservedHostServer(target, server)
 }

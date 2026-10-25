@@ -30,7 +30,7 @@ describe('attachMobileImageToTerminal', () => {
     async (agent) => {
       const client = clientWithResponses([
         ok('start', { uploadId: 'upload-1' }),
-        ok('append', { received: 4 }),
+        ok('append', { receivedBase64Length: 4 }),
         ok('commit', '/tmp/codex-shot.png'),
         ok('send', { send: { accepted: true } })
       ])
@@ -128,7 +128,7 @@ describe('attachMobileImageToTerminal', () => {
     })
   })
 
-  it('passes the active worktree connectionId to the upload', async () => {
+  it('uploads the selected image bytes with the active worktree connectionId', async () => {
     const client = clientWithResponses([
       {
         id: 'start',
@@ -150,7 +150,7 @@ describe('attachMobileImageToTerminal', () => {
     })
 
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
-    expect(saveCall?.params).toMatchObject({ connectionId: 'conn-ssh' })
+    expect(saveCall?.params).toEqual({ contentBase64: 'BBBB', connectionId: 'conn-ssh' })
   })
 
   it('does nothing and returns false when the picker is cancelled', async () => {

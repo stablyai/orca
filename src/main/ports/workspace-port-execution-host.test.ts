@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   killWorkspacePortOnExecutionHost,
   scanWorkspacePortsOnExecutionHost,
+  SSH_PORT_SCAN_UNSUPPORTED_REASON,
   type WorkspacePortExecutionHostDeps
 } from './workspace-port-execution-host'
 import type { WorkspacePortScanResult } from '../../shared/workspace-ports'
@@ -69,7 +70,8 @@ describe('scanWorkspacePortsOnExecutionHost', () => {
 
     expect(scanWorkspacePortsMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({ executionHostId: 'ssh:box', ports: [] })
-    expect(result.unavailableReason).toMatch(/Reconnect/)
+    expect(result.unavailableReason).toBe(SSH_PORT_SCAN_UNSUPPORTED_REASON)
+    expect(result.unavailableReason).not.toMatch(/dropped|Reconnect/)
   })
 
   it('refuses a workspace hosted by another server instead of scanning here', async () => {

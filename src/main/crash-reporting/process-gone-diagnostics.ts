@@ -79,9 +79,7 @@ function titleCaseBucket(bucket: ProcessMetricBucketName): string {
 export function collectProcessGoneMetricDetails(metrics: ProcessMetricLike[]): CrashReportDetails {
   const buckets = emptyBuckets()
   let largest: { pid: number; type: string; workingSetMB: number } | null = null
-  // Why peak/private only for renderers: a spike between interval samples still
-  // shows in the lifetime peak, and private-vs-shared separates real commit
-  // from mapped memory — both matter for OOM triage, not for other buckets.
+  // Renderer peaks expose between-sample spikes; private bytes distinguish committed from mapped memory.
   let rendererPeakWorkingSetMB: number | null = null
   let rendererPrivateMB: number | null = null
 
@@ -165,9 +163,7 @@ function getLiveProcessGoneMetrics(): LiveProcessGoneMetrics {
   }
 }
 
-// ─── Pre-gone metric sampling ───────────────────────────────────────
-// Why: process-gone metrics see survivors only, so retain a recent whole-app
-// snapshot for comparison without pretending it identifies the crasher.
+// Retain whole-app history: gone-time process metrics may contain only survivors.
 
 export const PROCESS_METRICS_PRE_GONE_SAMPLE_INTERVAL_MS = 60_000
 
@@ -206,7 +202,7 @@ export function samplePreGoneProcessMetrics(nowMs: number = Date.now()): void {
       sampledAtMs: nowMs
     }
   } catch {
-    // Why: a failed sweep must not erase the previous good sample.
+    // Preserve the last good sample when enumeration fails.
   }
 }
 
@@ -240,8 +236,7 @@ function preGoneSampleDetails(
 ): CrashReportDetails {
   const details: CrashReportDetails = {
     processMetricsPreGoneSampleAgeMs: Math.max(0, nowMs - sample.sampledAtMs),
-    // Why: Electron's gone events omit pid, so no snapshot row is attributable
-    // to the crasher even when only one same-type process was sampled.
+    // Gone events omit PID, so a sampled row cannot be attributed to the crasher.
     processMetricsPreGoneCrashedProcessAttributionAmbiguous: true
   }
   for (const [key, value] of Object.entries(sample.details)) {
@@ -273,8 +268,7 @@ export function buildProcessGoneCrashDetails(
   crashedProcessType: string
 ): CrashReportDetails {
   const sanitizedDetails = sanitizeCrashReportDetails(details)
-  // Why: low-JS-heap renderer kills can still be native/process memory pressure.
-  // Capture Electron process buckets at process-gone time before recovery reloads.
+  // Capture before recovery reloads; low JS heap does not rule out native memory pressure.
   const { details: liveMetricDetails, identitiesByPid: liveIdentitiesByPid } =
     getLiveProcessGoneMetrics()
   const crashDetails: CrashReportDetails = {
@@ -282,10 +276,7 @@ export function buildProcessGoneCrashDetails(
     ...liveMetricDetails,
     ...getSystemMemoryDetails()
   }
-  // Why: with the crasher gone, Largest names a survivor — flag that so the
-  // live buckets are read as "everyone else", not as the crashed process.
-  // Same-bucket survivors are common, so use Electron's (pid, creationTime)
-  // identity to distinguish a missing sampled process from a recycled pid.
+  // Compare PID, bucket and creation time to distinguish vanished processes from PID reuse.
   const crashedBucket = metricTypeBucket(crashedProcessType)
   const crashedBucketCountKey = `${PROCESS_METRICS_KEY_PREFIX}${titleCaseBucket(crashedBucket)}Count`
   const sampledSameBucketProcessVanished = Boolean(

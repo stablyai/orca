@@ -1,4 +1,4 @@
-import { latestNativeChatReplyText } from '../../../src/shared/native-chat-streaming'
+import { latestNativeChatReplyText } from '../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 /** Decides whether the live streaming preview should render as a synthetic

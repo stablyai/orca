@@ -8,7 +8,11 @@ import { _electron as electron, type ElectronApplication } from '@stablyai/playw
 import { RuntimeClient } from '../../../src/cli/runtime/client'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import {
+  cleanupE2EDaemons,
+  closeElectronAppForE2E,
+  stopServeElectronAppForE2E
+} from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
@@ -179,7 +183,7 @@ export async function launchHeadlessPairedRuntimeHost(
             'restartServeProcess requires launchHeadlessPairedRuntimeHost({ pinnedServePort: true })'
           )
         }
-        await closeElectronAppForE2E(serveProcess)
+        await stopServeElectronAppForE2E(serveProcess)
         serveProcessOpen = false
         await restartOptions.betweenProcesses?.()
         const relaunched = await launchServeProcess()

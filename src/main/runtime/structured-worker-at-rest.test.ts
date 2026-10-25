@@ -25,7 +25,8 @@ const {
 } = await import('./structured-worker-identity')
 const { listAddressableStructuredWorkers } =
   await import('./orchestration/structured-worker-group-addressing')
-const { closeStructuredAgentSessionChild } = await import('./structured-agent-session-close')
+const { closeStructuredAgentSessionChild } =
+  await import('./agent-session/structured-agent-session-close')
 const { resolveGroupAddress } = await import('./orchestration/groups')
 const { createRestTestRig, foundRestTestChat, IDLE_MS, REST_TEST_SESSION, sweepTicks } =
   await import('../native-chat/agent-session-wire/structured-agent-session-rest-test-rig')

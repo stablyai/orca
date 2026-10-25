@@ -20,7 +20,7 @@ describe('the host status decodes from every version the gate admits', () => {
       protocolVersion: 5,
       minCompatibleMobileVersion: 1,
       appVersion: '1.4.200',
-      capabilities: ['mobile.tasks.v1', 'push.v1'],
+      capabilities: ['mobile.tasks.v1', 'push.v1', 'a', 'b'],
       floatingWorkspaceEnabled: true,
       hostPlatform: 'darwin',
       machineName: 'Studio'
@@ -40,10 +40,6 @@ describe('the host status decodes from every version the gate admits', () => {
 })
 
 describe('capabilities salvage whole, not per element', () => {
-  it('keeps a list of strings', () => {
-    expect(reads(hostStatusSchema, { capabilities: ['a', 'b'] }).capabilities).toEqual(['a', 'b'])
-  })
-
   it('drops the whole list for one non-string, which is what the probe published', () => {
     // transport-capability-probe-non-string-capabilities-drop records main publishing `[]` for
     // `['push.v1', 7]`; dropping only the 7 would publish a set main never published.

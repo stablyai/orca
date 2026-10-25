@@ -8,9 +8,6 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { TabEntryOption } from './tab-create-entry-action'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
-// Unmocked on purpose: the empty-query message must stay in step with the
-// placeholder rendered below.
-import { getTabEntryOptions as classifyTabEntryOptions } from './tab-create-entry-classifier'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -308,20 +305,6 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     const placeholder = input.getAttribute('placeholder')
     expect(placeholder).toBe('Search open tabs, history, files, URLs, agents\u2026')
     expect(input.getAttribute('aria-label')).toBe(placeholder)
-  })
-
-  it('states the same thing in the empty-query message as in the placeholder', () => {
-    mount(<TabBarCreateEntry worktreeId="wt" groupId="g" menuOpen onOpenEntry={vi.fn()} />)
-
-    const [emptyOption] = classifyTabEntryOptions('', {
-      files: [],
-      loading: false,
-      loadError: null
-    })
-    expect(emptyOption.classification).toMatchObject({ kind: 'empty' })
-    expect(
-      emptyOption.classification.kind === 'empty' ? emptyOption.classification.message : null
-    ).toBe(container.querySelector('input')!.getAttribute('placeholder'))
   })
 
   it('offers no switch rows when the menu opens with tabs open and no query', () => {

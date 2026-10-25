@@ -29,10 +29,6 @@ describe('provider-independent stored records', () => {
     expect(decodePersistedAgentSessionRecord(stored).record).toEqual(grokRecord())
   })
 
-  it('reads a saved record without a provider registration', () => {
-    expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(grokRecord()))).toBe(true)
-  })
-
   it.each(['', '1grok', 'gro k', 'grok/', 'g'.repeat(65)])(
     'quarantines a malformed provider id %j even without a handle',
     (provider) => {
@@ -58,22 +54,52 @@ describe('provider-independent stored records', () => {
     const record = grokRecord()
     const [link] = record.providerHandleChain
     const foreign = { ...link!, handle: { ...link!.handle, agent: 'codex' } }
-    const mixed = { ...link!, linkId: 'second', handle: { ...link!.handle, transport: 'other' } }
+    const fork = {
+      ...link!,
+      linkId: 'second',
+      origin: 'forked' as const,
+      forkedFromKey: 'acp/grok:"grok-session-1"',
+      handle: { ...link!.handle, nativeId: 'grok-session-2' }
+    }
+    const released = { ...record, lease: { ...record.lease, claimStatus: 'released' as const } }
+    expect(
+      isPersistedAgentSessionRecord(
+        encodeAgentSessionRecord({ ...released, providerHandleChain: [link!, fork] })
+      )
+    ).toBe(true)
+    const mixed = { ...fork, handle: { ...fork.handle, transport: 'other' } }
     for (const chain of [[foreign], [link!, mixed]]) {
       expect(
         isPersistedAgentSessionRecord(
-          encodeAgentSessionRecord({ ...record, providerHandleChain: chain })
+          encodeAgentSessionRecord({ ...released, providerHandleChain: chain })
         )
       ).toBe(false)
     }
   })
 
   it('keeps reading Claude and Codex records exactly as before', () => {
-    const stored = encodeAgentSessionRecord(agentSessionRecordFixture())
-    expect(isPersistedAgentSessionRecord(stored)).toBe(true)
-    expect(JSON.stringify(stored.providerHandleChain[0]?.handle)).toBe(
+    const claude = agentSessionRecordFixture()
+    const codex = {
+      ...claude,
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/home/user/.codex' },
+      providerHandleChain: claude.providerHandleChain.map((link) => ({
+        ...link,
+        handle: { transport: 'codex-app-server', agent: 'codex', nativeId: 'codex-thread-1' }
+      }))
+    }
+    const storedClaude = encodeAgentSessionRecord(claude)
+    const storedCodex = encodeAgentSessionRecord(codex)
+    expect(isPersistedAgentSessionRecord(storedClaude)).toBe(true)
+    expect(isPersistedAgentSessionRecord(storedCodex)).toBe(true)
+    expect(JSON.stringify(storedClaude.providerHandleChain[0]?.handle)).toBe(
       '{"provider":"claude","sessionId":"provider-session-alpha-1","leafUuid":null}'
     )
+    expect(JSON.stringify(storedCodex.providerHandleChain[0]?.handle)).toBe(
+      '{"provider":"codex","threadId":"codex-thread-1"}'
+    )
+    expect(decodePersistedAgentSessionRecord(storedClaude).record).toEqual(claude)
+    expect(decodePersistedAgentSessionRecord(storedCodex).record).toEqual(codex)
   })
 
   it('refuses a Claude record whose handles another agent owns', () => {

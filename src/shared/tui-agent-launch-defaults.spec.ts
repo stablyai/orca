@@ -121,14 +121,14 @@ describe('resolveTuiAgentLaunchArgs', () => {
   it('hands the configured arguments to a terminal launch unchanged', () => {
     expect(
       resolveTuiAgentLaunchArgs('claude', {
-        claude: '--dangerously-skip-permissions --model Opus'
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions --model Opus' }
       })
     ).toBe('--dangerously-skip-permissions --model Opus')
   })
 
   it('falls back to the agent default when nothing is configured', () => {
     expect(resolveTuiAgentLaunchArgs('claude', {})).toBe('--dangerously-skip-permissions')
-    expect(resolveTuiAgentLaunchArgs('claude', { claude: '' })).toBe('')
+    expect(resolveTuiAgentLaunchArgs('claude', { agentDefaultArgs: { claude: '' } })).toBe('')
   })
 
   // Their chats run their own permission mode, so terminals get no permission argument for them.

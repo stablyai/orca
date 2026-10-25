@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { TEST_LEAF_1, TEST_LEAF_2, TEST_LEAF_LIVE } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2, TEST_LEAF_LIVE } from '../persistence-session-fixtures'
 import {
   checkWorkspaceLayoutRules,
   type WorkspaceLayoutPartition,

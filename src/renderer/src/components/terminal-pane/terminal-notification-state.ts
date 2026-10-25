@@ -190,7 +190,7 @@ function findWorktreeRowOnItsOwnHost(
  * The project for this worktree, named only when one host owns the repo id.
  *
  * A repo id is registered per host, so the same id can name two projects (see
- * `src/main/persistence-duplicate-repo-id-host-scope.test.ts`). That collision is
+ * `src/main/persistence/tracking-repos/persistence-duplicate-repo-id-host-scope.test.ts`). That collision is
  * independent of the worktree-id collision above: two hosts can hold repo `dup` at
  * different paths, giving unique worktree ids whose repo lookup is still ambiguous.
  */

@@ -1,6 +1,9 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
-import type { WorkspaceReferenceTerminalContext } from '@/lib/workspace-attachment-terminal-origin'
-import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
+import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
+import type {
+  CreateWorktreeCallOptions,
+  CreatedWorktreeResult
+} from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -11,7 +14,6 @@ import type {
 } from '../../../../shared/worktree/base-ref-drift-types'
 import type {
   CreateSparseCheckoutRequest,
-  CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   SetupDecision
 } from '../../../../shared/worktree/create-types'
@@ -162,7 +164,7 @@ export type WorktreeSlice = {
   lastVisitedAtByWorktreeId: Record<string, number>
   /**
    * Guards the one-shot hydration-time purge in `fetchAllWorktrees`. Set to
-   * `true` only after the first launch where every repo's `worktrees.list` IPC
+   * `true` only after the first launch where every repo's `worktrees.listDetected` IPC
    * call succeeded AND at least one repo returned a non-empty result — at that
    * moment the renderer has enough signal to treat the union of fetched ids as
    * authoritative and purge stale `tabsByWorktree` keys left behind by pre-fix
@@ -221,7 +223,7 @@ export type WorktreeSlice = {
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
     options?: CreateWorktreeCallOptions
-  ) => Promise<CreateWorktreeResult>
+  ) => Promise<CreatedWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
   /** Merge a status patch into an existing pending entry. */
@@ -288,7 +290,7 @@ export type WorktreeSlice = {
   observeTerminalGitHubPullRequestLink: (
     worktreeId: string,
     link: TerminalGitHubPRLink,
-    context?: WorkspaceReferenceTerminalContext
+    context?: WorkspaceReferenceObservationContext
   ) => void
   bumpWorktreeActivity: (worktreeId: string) => void
   /**

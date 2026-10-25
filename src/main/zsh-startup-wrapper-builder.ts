@@ -1,34 +1,6 @@
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../shared/managed-data-account-shell'
-/**
- * The single `.zshenv` Orca writes for every transport: local PTY, daemon/SSH,
- * and relay.
- *
- * Orca needs to run code AFTER the user's own zsh startup files. The old shape
- * bought that by keeping ZDOTDIR pointed at Orca's wrapper dir for the whole of
- * startup and sourcing each user file by hand — four generated files, and a
- * fake ZDOTDIR live while `/etc/zshrc` ran. That one decision was the root of a
- * whole bug family: `/etc/zshrc` assigns `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`
- * unconditionally, so history landed inside Orca's own dir (#11044); zsh's
- * `sourcehome()` ignores ZDOTDIR once the shell enters sh/ksh emulation, so a
- * user file ending in `emulate sh` hid every later wrapper file; and one wrapper
- * dir shared by two installed builds could mix files from both.
- *
- * This shape gives ZDOTDIR back before anything else can observe it, then defers
- * Orca's work to a `precmd` hook, with a one-shot line-editor fallback if the
- * user's config replaces its hook array. Both run at the first prompt — after
- * `.zprofile`, `/etc/zshrc`, `.zshrc` and `.zlogin`, all of which zsh now reads
- * from the user's own directory exactly as in an unwrapped shell. #11044 becomes
- * unreachable rather than repaired, and the emulation and mixed-build classes
- * stop existing.
- *
- * ORDER IS LOAD-BEARING: every function is defined ABOVE the `source` of the
- * user's `.zshenv`. A user `.zshenv` ending in `emulate sh` puts the rest of
- * this file under sh parsing rules, and zsh-only syntax then fails to parse,
- * taking the whole wrapper with it. Function bodies are parsed at definition
- * time, so defining them first makes them immune; `emulate -L zsh` inside the
- * hook restores zsh option semantics for the body at call time.
- */
+/** Restore ZDOTDIR before user startup; define functions first so .zshenv emulation cannot change their parsing. */
 import { getPosixOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from './wsl-managed-cli-path-restore'
 import { getPosixCodexShellLaunchPreflight } from '../shared/codex-shell-function'
@@ -46,27 +18,23 @@ import {
   ZSH_ZDOTDIR_HANDBACK_BLOCK
 } from './shell-templates'
 
-/** Runtime values the hook re-exports after the user's own startup files ran. */
 export type ZshWrapperRestoreSpec = {
-  /** The managed WSL CLI dir onto PATH — local wrappers only; a no-op outside WSL. */
+  /** Local-only PATH restore; inert outside WSL. */
   managedWslCli: boolean
-  /** Orca's agent-teams shim dir back onto PATH. */
   agentTeamsPath: boolean
-  /** Remote CLI bin dir onto PATH — relay hosts only. */
+  /** Relay-only CLI PATH restore. */
   remoteCliBinDir: boolean
-  /** Orca's runtime CODEX_HOME. */
   codexHome: boolean
 }
 
 export type ZshStartupHookSpec = {
-  /** First line of the generated file, e.g. `# Orca zsh shell-ready wrapper`. */
+  /** First generated line; omit the # prefix. */
   headerLabel: string
   readyMarkerEscaped: string
   /** OSC 133 command-lifecycle hooks (behind the `markers` feature). */
   osc133CommandMarkers: boolean
   /** Local-only command delivery from the first zle line editor. */
   startupCommandDelivery: boolean
-  /** Comment heading the overlay restores inside the hook. */
   overlayRestoreComment: string
   restores: ZshWrapperRestoreSpec
 }
@@ -83,13 +51,9 @@ __orca_restore_agent_teams_path`
 const OPENCODE_CONFIG_DIR_RESTORE = `[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"`
 const MIMOCODE_HOME_RESTORE = `[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"`
 const REMOTE_CLI_BIN_DIR_RESTORE = `[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac`
-const CODEX_HOME_RESTORE = `# Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
+const CODEX_HOME_RESTORE = `# Restore the runtime CODEX_HOME after user rc files.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"`
 
-/**
- * The OSC 133 hooks, defined at top level so their bodies are parsed before the
- * user's `.zshenv` can change the parsing mode.
- */
 const ZSH_OSC133_FUNCTION_BLOCK = `__orca_osc133_precmd() {
   local exit_code=$?
   if [[ -n "\${__orca_in_command:-}" ]]; then
@@ -100,8 +64,7 @@ const ZSH_OSC133_FUNCTION_BLOCK = `__orca_osc133_precmd() {
 }
 __orca_osc133_preexec() {
   builtin printf "\\033]133;C\\007"
-  # Why typeset -g: a plain assignment here creates a global inside a function,
-  # which prints a warning above every command under warn_create_global.
+  # Declare explicitly to avoid warn_create_global output above every command.
   builtin typeset -g __orca_in_command=1
 }`
 
@@ -116,7 +79,6 @@ function indentBlock(block: string, indent: string): string {
     .join('\n')
 }
 
-/** One hook feature: `if __orca_has_feature <name>; then ... fi`. */
 function featureGuard(name: string, body: (string | null)[]): string | null {
   const blocks = body.filter((block): block is string => block !== null)
   if (blocks.length === 0) {
@@ -125,7 +87,6 @@ function featureGuard(name: string, body: (string | null)[]): string | null {
   return `  if __orca_has_feature ${name}; then\n${indentBlock(joinBlocks(blocks).replace(/\n$/, ''), '    ')}\n  fi`
 }
 
-/** The env/PATH restores that must outlast the user's own startup files. */
 function getOverlayRestoreBlocks(spec: ZshStartupHookSpec): (string | null)[] {
   return [
     spec.overlayRestoreComment,
@@ -139,18 +100,8 @@ function getOverlayRestoreBlocks(spec: ZshStartupHookSpec): (string | null)[] {
   ]
 }
 
-/**
- * Everything Orca owns that must run after the user's config, in one function
- * invoked from the first prompt's precmd sweep and then retired.
- */
 function buildDeferredInit(spec: ZshStartupHookSpec): string {
-  // Why substitute in the markers case and remove otherwise: OSC 133 needs a
-  // permanent precmd, so swapping this hook for it keeps the array position the
-  // user's own hooks were registered around. With no permanent hook to leave
-  // behind, removing is what keeps a history-only pane observably identical to
-  // the unwrapped pane it was — no stray Orca name in `precmd_functions`.
-  // Verified on zsh 5.9 that self-removal mid-sweep skips no later hook, from
-  // the head, the middle and the tail of the array.
+  // Keep the existing hook position for OSC 133; otherwise remove the one-shot hook without leaving a name behind.
   const permanentPrecmd = spec.osc133CommandMarkers
     ? `  if __orca_has_feature markers; then
     precmd_functions=(\${precmd_functions:/__orca_deferred_init/__orca_osc133_precmd})
@@ -171,10 +122,7 @@ ${indentBlock(getZshShellReadyMarkerRegistrationBlock(spec.readyMarkerEscaped, t
       ])
 
   return `__orca_deferred_init() {
-  # Why first: this body runs after the user's own config, so it would otherwise
-  # inherit whatever options that config left set. Under NO_UNSET an unset
-  # precmd_functions is fatal, and KSH_ARRAYS makes the 1-based feature lookup
-  # drop whichever feature is listed first.
+  # Reset user options: NO_UNSET can abort hooks and KSH_ARRAYS breaks the feature lookup.
   builtin emulate -L zsh
   (( $+_orca_deferred_init_done )) && return 0
   builtin typeset -g _orca_deferred_init_done=1
@@ -185,13 +133,11 @@ ${joinBlocks([
   spec.restores.managedWslCli ? indentBlock(WSL_MANAGED_CLI_PATH_RESTORE, '  ') : null,
   indentBlock(ORCA_CLI_POSIX_PATH_RESTORE, '  ').replace(/\n$/, ''),
   featureGuard('overlay', getOverlayRestoreBlocks(spec)),
-  // Why outside the overlay guard: a system-default Codex home carries no overlay key.
+  // A system-default Codex home has no overlay key, but still needs the launch preflight.
   indentBlock(getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction(), '  ').replace(
     /\n$/,
     ''
   ),
-  // Why no /etc/zshrc repair branch: ZDOTDIR was handed back before that file
-  // ran, so the value it derives is the user's own path. #11044 is unreachable.
   `  if [[ -n "\${_orca_histfile:-}" ]]; then
     HISTFILE="$_orca_histfile"
   fi`,
@@ -199,8 +145,7 @@ ${joinBlocks([
 ])}
 ${
   spec.osc133CommandMarkers
-    ? `  # Why called here: we were appended during this prompt's own precmd sweep, so
-  # the permanent hook has not run yet and the first prompt would lose its mark.
+    ? `  # The permanent hook was added during this sweep; run it now so the first prompt gets its mark.
   __orca_has_feature markers && __orca_osc133_precmd\n`
     : ''
 }  builtin unset _orca_shell_features _orca_histfile

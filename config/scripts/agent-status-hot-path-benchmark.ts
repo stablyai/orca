@@ -19,6 +19,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { AgentStatusBatchUpdate } from '@/store/slices/agent-status'
+import { MAX_LIVE_AGENT_STATUSES } from '@/store/slices/agent-status'
 import {
   createTestStore,
   makeTab,
@@ -197,6 +198,16 @@ async function runCommitPass(
 describe('agent-status hot path benchmark', () => {
   it('reports routing, resolution and commit cost at 423 worktrees', async () => {
     const report: Record<string, number> = {}
+    const fixture = buildFixture(false)
+    const index = createAgentStatusPaneRoutingIndex(fixture.store.getState())
+    for (const [position, paneKey] of fixture.paneKeys.entries()) {
+      const resolved = resolvePaneKeyFromRoutingIndex(index, paneKey)
+      expect(resolved).toMatchObject({
+        exists: true,
+        owningWorktreeId: fixture.owners[position].worktreeId
+      })
+      expect(resolved).toEqual(resolvePaneKey(fixture.store.getState(), paneKey))
+    }
 
     // Routing allocations (counting pass) and routing time (clean pass), taken separately.
     {
@@ -275,7 +286,21 @@ describe('agent-status hot path benchmark', () => {
       report['commit.stagedPropertyCopiesPer1kUpdates'] = per1k(objectAssignPropertyCopies)
       report['commit.freshnessEntryVisitsPer1kUpdates'] = per1k(freshnessEntryVisits)
       report['commit.transactions'] = countedBatches.length
-      expect(Object.keys(counted.store.getState().agentStatusByPaneKey).length).toBeGreaterThan(0)
+      const committed = counted.store.getState().agentStatusByPaneKey
+      const expected = new Map(
+        countedBatches
+          .flat()
+          .slice(-MAX_LIVE_AGENT_STATUSES)
+          .map((update) => [update.paneKey, update])
+      )
+      expect(Object.keys(committed).sort()).toEqual([...expected.keys()].sort())
+      for (const [paneKey, update] of expected) {
+        expect(committed[paneKey]).toMatchObject({
+          ...update.payload,
+          ...update.timing,
+          ...update.routing
+        })
+      }
 
       const warm = buildFixture(false)
       await runCommitPass(warm.store, buildBatches(warm.owners, warm.paneKeys))
@@ -294,6 +319,5 @@ describe('agent-status hot path benchmark', () => {
       outputPath,
       `${JSON.stringify({ worktrees: WORKTREES, events: EVENTS, report }, null, 2)}\n`
     )
-    expect(report['routing.indexed.ms']).toBeGreaterThan(0)
   })
 })

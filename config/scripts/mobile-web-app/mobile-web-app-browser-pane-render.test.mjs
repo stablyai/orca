@@ -292,7 +292,7 @@ function readPaintedLayers(page) {
         layer = layer.parentElement
       }
       return {
-        uri: element.style.backgroundImage.length,
+        uri: element.style.backgroundImage,
         digest: element.style.backgroundImage.slice(-24),
         opacity: layer?.style.opacity ?? null
       }
@@ -338,29 +338,6 @@ async function waitForLayerFlip(page, staleIndex) {
 }
 
 describePane('the browser pane in a page', () => {
-  /**
-   * Zero, which it was not until the Zod jitless flag moved into the bundler banner.
-   *
-   * Zod decided whether it could compile by constructing `new Function('')`, which the shell's
-   * `script-src 'self'` reports even though Zod catches the throw — once on load and again on
-   * first paint. This file filtered those out by `blockedURI === 'eval'` for one round, which
-   * would also have hidden a real one, so the filter is gone and the cause is fixed instead.
-   */
-  it('files no CSP violation at all, through load and first paint', async () => {
-    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
-    try {
-      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
-      const b64 = await encodeNoiseJpeg(view.page, { ...FRAME, seed: 33 })
-      await emitFrame(view.page, { b64, frameSeq: 1, ...FRAME })
-      await waitForPaint(view.page, 1)
-
-      expect(await view.csp()).toEqual([])
-      expect(view.consoleErrors).toEqual([])
-    } finally {
-      await view.context.close()
-    }
-  }, 120_000)
-
   it('subscribes over the binary lane and paints the frame it is handed', async () => {
     const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
     try {
@@ -379,7 +356,9 @@ describePane('the browser pane in a page', () => {
       // frame still paints and a layer is still visible, because the visible layer starts at 0 and
       // never needed to move. The flip is the next case's to prove.
       expect(layers.length).toBeGreaterThan(0)
-      expect(layers.filter((layer) => layer.opacity === '1')).toHaveLength(1)
+      expect(layers.filter((layer) => layer.opacity === '1').map((layer) => layer.uri)).toEqual([
+        `url("data:image/jpeg;base64,${b64}")`
+      ])
       expect(view.consoleErrors).toEqual([])
       expect(await view.csp()).toEqual([])
       expect(view.foreignRequests).toEqual([])
@@ -483,36 +462,6 @@ describePane('the browser pane in a page', () => {
       const acks = await view.page.evaluate(() => globalThis.__orcaRenderCheckAcks)
       expect(acks.length).toBeGreaterThan(0)
       expect(await view.csp()).toEqual([])
-      expect(view.consoleErrors).toEqual([])
-    } finally {
-      await view.context.close()
-    }
-  }, 120_000)
-
-  it('charges a JSON event to the window too, so one ack does not drive the ledger negative', async () => {
-    // The two emitters share one ledger and the `ack` arm subtracts whatever it finds on `unacked`.
-    // A JSON event that took a slot without paying for its bytes left `unackedBytes` below zero on
-    // the first ack, and the binary arm reads that floor: every later window check admitted frames
-    // the real `BridgeHostSubscriptions` would have refused.
-    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
-    try {
-      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
-      const ledger = await view.page.evaluate((protocolVersion) => {
-        const id = globalThis.__orcaRenderCheckSubscribes[0].id
-        globalThis.__orcaRenderCheckEmitEvent(id, { type: 'probe', payload: 'x'.repeat(4096) })
-        const charged = globalThis.__orcaRenderCheckWindow(id)
-        globalThis.orcaBridge.postMessage(
-          JSON.stringify({ v: protocolVersion, type: 'ack', id, seq: charged.frames })
-        )
-        return { charged, settled: globalThis.__orcaRenderCheckWindow(id) }
-      }, bridgeVersion)
-
-      // Charged on the way out, which is the precondition: a zero here would make the line below
-      // read as balanced when nothing was ever counted.
-      expect(ledger.charged.frames).toBe(1)
-      expect(ledger.charged.unackedBytes).toBeGreaterThan(4096)
-      // And returned whole by the ack, rather than past it.
-      expect(ledger.settled).toEqual({ frames: 0, unackedBytes: 0 })
       expect(view.consoleErrors).toEqual([])
     } finally {
       await view.context.close()

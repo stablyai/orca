@@ -86,9 +86,10 @@ export function buildHeadlessMobileSessionEditorTabs(
   worktreeId: string,
   session: WorkspaceSessionState
 ): HeadlessEditorTab[] {
-  return (session.openFilesByWorktree?.[worktreeId] ?? []).map((file) =>
-    editorTab(session, worktreeId, file)
-  )
+  // A row mirrored from a paired host is that host's to publish, as in the window's publication.
+  return (session.openFilesByWorktree?.[worktreeId] ?? [])
+    .filter((file) => file.mirroredFromRuntimeSession !== true)
+    .map((file) => editorTab(session, worktreeId, file))
 }
 
 /** The record the phone's tab names: two owners can hold one path, so by the id it was listed under. */

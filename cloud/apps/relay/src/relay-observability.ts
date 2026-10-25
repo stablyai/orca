@@ -70,6 +70,8 @@ export type AssignmentUnavailableCause =
   | 'reserve-map-incomplete'
   | 'reserve-database'
   | 'reserve-paced'
+  // Intake pacing for a host re-asking off a draining cell: scheduled by the drain, like a deferral.
+  | 'reserve-paced-drained'
 
 // Row-lock waiters seen in one pg_stat_activity sample, by who waits, on which
 // table, behind whom. Roles come from each pool's application_name.
@@ -123,6 +125,12 @@ export interface RelayRuntimeObserver {
 export type HostPreAuthPath = 'beforeCheck' | 'db' | 'reserve'
 // Abandoned: the host hung up before a decision, or before the cell could act on one.
 export type HostPreAuthOutcome = 'admitted' | 'refused' | 'abandoned'
+
+// Left out of assignNonDrain503sDelta: the drain schedules these 503s.
+const DRAIN_503_CAUSES: ReadonlySet<string> = new Set<AssignmentUnavailableCause>([
+  'drain-return-deferred',
+  'reserve-paced-drained'
+])
 
 // Upper bounds in ms; the last bucket is unbounded. 450 is the step-5 t_preauth gate.
 const PRE_AUTH_BUCKET_BOUNDS_MS = [50, 100, 200, 300, 450, 700, 1_000, 2_000, 5_000] as const
@@ -704,7 +712,7 @@ export class RelayObservability implements RelayRuntimeObserver {
       ...stickySlotFields(deltas),
       assign503sByCauseDelta: deltas.assign503sByCause,
       assignNonDrain503sDelta: Object.entries(deltas.assign503sByCause)
-        .filter(([cause]) => cause !== 'drain-return-deferred')
+        .filter(([cause]) => !DRAIN_503_CAUSES.has(cause))
         .reduce((sum, [, count]) => sum + count, 0),
       // Waiters summed over samples; divided by samples it is the mean number of
       // backends waiting, i.e. lock-wait seconds per second.

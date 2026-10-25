@@ -21,7 +21,7 @@ import {
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,
   type InstalledRuntime
-} from './structured-agent-session-runtime-teardown'
+} from './agent-session/structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import {
@@ -121,8 +121,6 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Every structured-session status projection, for host-side reactions such as the first-work
    *  workspace rename that CLI agents get from their hooks. */
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
-  /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
-  statusSink?: StructuredAgentSessionHostDeps['statusSink']
   conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
@@ -136,7 +134,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
-}
+} & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'statusSink'>
 
 let installing: Promise<InstalledRuntime> | null = null
 
@@ -312,6 +310,7 @@ async function installOnJournal(
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
+    ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming ? { conversationNaming: deps.conversationNaming } : {}),

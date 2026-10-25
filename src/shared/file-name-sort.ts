@@ -3,8 +3,7 @@
 // bare localeCompare — accepted for the feature; don't "optimize" the hoist away.
 // numeric: true orders "99 - a" before "100 - b", matching Finder/Explorer.
 // Locale pinned to 'en' so local main, renderer, relay, and remote runtime hosts
-// all produce one order regardless of each process's LANG (precedent:
-// skill-freshness pins 'en' for canonical ordering).
+// all produce one order regardless of each process's LANG.
 export const fileNameCollator = new Intl.Collator('en', { numeric: true })
 
 export function compareFileNames(a: string, b: string): number {

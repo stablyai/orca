@@ -1,8 +1,4 @@
-// An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
-// session or start a new one, then return its protocol facts to the host. A saved session the
-// agent cannot reopen is replaced by a new one, with a warning row that any later start writes if
-// this one never did; while a reopened session replays history the journal already holds, nothing
-// it sends is written except context usage.
+// Suppress replayed history during reattach; preserve context usage.
 
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -57,7 +53,7 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   const initialized = await connection.initialize()
   assertStarting()
-  // Chosen here, on the machine Grok runs on, from the environment it was launched with.
+  // Choose authentication using the execution host's launch environment.
   const authMethodId = spec.authMethod?.({
     advertised: (initialized.authMethods ?? []).map((method) => method.id),
     env: launch.env
@@ -87,8 +83,6 @@ export async function initializeAcpStructuredSession(
         now: now(),
         warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
       })
-      // A new session takes the old one's place, with a new lane, so nothing of the failed
-      // attach's window outlives it.
     }
   }
   if (!started || !liveLane) {
@@ -104,7 +98,7 @@ export async function initializeAcpStructuredSession(
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig
   if (mode) {
-    // A refusal fails the start: the session would otherwise run another permission mode.
+    // Fail startup rather than silently use a different permission mode.
     const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
     const configId = options.modeConfigId()
     const { configOptions } = await connection.setConfigOption(configId, requested)
@@ -140,7 +134,7 @@ export async function initializeAcpStructuredSession(
   if (connection.exited || connection.closed) {
     throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
   }
-  // The chat says once per lost conversation that the agent forgot it, this start's loss included.
+  // Include warning rows missed by earlier failed starts.
   const lost = [
     ...(launch.resume?.unannouncedLosses() ?? []),
     ...(takeover?.replaces ? [takeover.replaces.key] : [])

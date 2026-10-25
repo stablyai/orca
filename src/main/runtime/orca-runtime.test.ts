@@ -94,6 +94,7 @@ await import('./orca-runtime-tests/mobile-session-tabs-empty-headless-snapshot.s
 await import('./orca-runtime-tests/mobile-session-tabs-duplicate-pty-repair.spec')
 await import('./orca-runtime-tests/mobile-session-tabs-headless-chat-rebuild.spec')
 await import('./orca-runtime-tests/mobile-session-tabs-shell-selection.spec')
+await import('./orca-runtime-tests/mobile-session-tabs-split-agent-tab.spec')
 await import('./orca-runtime-tests/mobile-session-tabs-windowless-sleep-resume.spec')
 await import('./orca-runtime-tests/mobile-session-tabs-targeted-agent-resume.spec')
 await import('./orca-runtime-tests/mobile-session-tabs-headless-wake-report.spec')

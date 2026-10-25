@@ -63,6 +63,10 @@ describe('the desktop’s server list', () => {
     const [first, second] = await Promise.all([feed.read(), feed.read()])
     expect(second).toBe(first)
     expect(listCalls(session)).toBe(1)
+    expect(feed.getSnapshot()).toBe(first)
+    await feed.read()
+    expect(feed.getSnapshot()).toBe(first)
+    expect(listCalls(session)).toBe(2)
   })
 
   it('keeps polling after a read slower than the poll', async () => {

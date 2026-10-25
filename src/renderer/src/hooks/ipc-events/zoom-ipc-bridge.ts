@@ -7,7 +7,7 @@ import { stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
 import { useAppStore } from '../../store'
 import { focusedBrowserPageId, resolveZoomTarget } from '../resolve-zoom-target'
 import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/browser-page-zoom'
-import { requestPdfZoom } from '@/components/editor/pdf-zoom-request'
+import { requestViewerZoom } from '@/components/editor/viewer-zoom-request'
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   // Zoom handling for menu accelerators and keyboard fallback paths.
@@ -38,8 +38,8 @@ export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
         return
       }
       if (target === 'editor') {
-        // Why: a PDF owns its page zoom; editor font zoom would change nothing visible.
-        if (requestPdfZoom(direction)) {
+        // Why: a PDF or image owns its zoom; editor font zoom would change nothing visible.
+        if (requestViewerZoom(direction)) {
           return
         }
         const next = nextEditorFontZoomLevel(editorFontZoomLevel, direction)

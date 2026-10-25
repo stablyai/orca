@@ -110,7 +110,7 @@ export type MockPaneTerminal = {
     theme: { foreground: string; background: string }
     vtExtensions: { kittyKeyboard: boolean }
   }
-  write: Mock<(data: string, callback?: () => void) => void>
+  write: Mock<(data: string | Uint8Array, callback?: () => void) => void>
   resize: Mock<(cols: number, rows: number) => void>
   clear: Mock
   scrollToBottom: Mock<() => void>
@@ -171,9 +171,11 @@ export function createPane(paneId: number): MockPane {
       },
       vtExtensions: { kittyKeyboard: true }
     },
-    write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
+    write: vi.fn<(data: string | Uint8Array, callback?: () => void) => void>(function write(
+      ...args
+    ): void {
       const [data, callback] = args
-      if (data === '' || callback?.name === 'runParsedSteps') {
+      if (data.length === 0 || callback?.name === 'runParsedSteps') {
         callback?.()
       }
     }),
@@ -215,18 +217,23 @@ export function createPane(paneId: number): MockPane {
   }
 }
 
+export function terminalWriteText(data: string | Uint8Array): string {
+  return typeof data === 'string' ? data : new TextDecoder().decode(data)
+}
+
 export function captureCallbackTerminalWrites(pane: MockPane): {
   writes: string[]
   parseCallbacks: (() => void)[]
 } {
   const writes: string[] = []
   const parseCallbacks: (() => void)[] = []
-  pane.terminal.write = function write(data: string, callback?: () => void): void {
-    writes.push(data)
+  pane.terminal.write.mockImplementation((data: string | Uint8Array, callback?: () => void) => {
+    // Parse barriers are zero-length byte writes; record what xterm would parse.
+    writes.push(terminalWriteText(data))
     if (callback) {
       parseCallbacks.push(callback)
     }
-  } as typeof pane.terminal.write
+  })
   return { writes, parseCallbacks }
 }
 

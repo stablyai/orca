@@ -279,7 +279,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     this.streams.delete(stream.streamId)
     this.sendFrame(stream.streamId, TerminalStreamOpcode.Unsubscribe)
     if (stream.callbacks.onTransportClose) {
-      stream.callbacks.onTransportClose({ recoverable: true })
+      stream.callbacks.onTransportClose({ recoverable: true, stalled: true })
     } else {
       stream.callbacks.onError?.('Remote terminal stream stopped responding.')
     }

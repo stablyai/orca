@@ -16,7 +16,7 @@ vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
-vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
+vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: mocks.activateStructuredAgentSessionTab
 }))
 vi.mock('@/lib/worktree-activation', () => ({

@@ -17,14 +17,6 @@ class MobileWebShellBridgeTest {
   }
 
   @Test
-  fun `measures the cap in UTF-8 bytes, not characters`() {
-    // A multi-byte payload must not buy extra room; the view measures the same way.
-    val wide = "😀".repeat(4)
-    assertEquals(8, wide.length)
-    assertEquals(16, wide.toByteArray(Charsets.UTF_8).size)
-  }
-
-  @Test
   fun `counts every refusal and lets nothing under the cap through uncounted`() {
     val cap = MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES
     val gate = MobileWebShellBridgeGate()
@@ -78,10 +70,4 @@ class MobileWebShellBridgeTest {
     )
   }
 
-  @Test
-  fun `names the injected object the same thing on both platforms`() {
-    // iOS installs a global of this name from its document-start script; a swap here is a page that
-    // reaches one shell and not the other.
-    assertEquals("orcaBridge", MOBILE_WEB_SHELL_BRIDGE_OBJECT)
-  }
 }

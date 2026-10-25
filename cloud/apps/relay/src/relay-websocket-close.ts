@@ -1,6 +1,6 @@
 import type WebSocket from 'ws'
 
-const RELAY_WEBSOCKET_FORCE_CLOSE_MS = 1_000
+export const RELAY_WEBSOCKET_FORCE_CLOSE_MS = 1_000
 const forceCloseTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
 
 // Delivering the rejection is best effort, and deliberately so. The close frame carrying the

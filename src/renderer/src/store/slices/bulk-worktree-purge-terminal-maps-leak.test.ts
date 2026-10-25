@@ -40,7 +40,7 @@ vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => {
 })
 
 const mockApi = {
-  worktrees: { list: vi.fn().mockResolvedValue([]), remove: vi.fn().mockResolvedValue(undefined) },
+  worktrees: { remove: vi.fn().mockResolvedValue(undefined) },
   pty: { kill: vi.fn().mockResolvedValue(undefined) }
 }
 

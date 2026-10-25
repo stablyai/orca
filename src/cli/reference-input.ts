@@ -1,11 +1,11 @@
 import type { WorkspaceAttachment } from '../shared/worktree/types'
 import type { RuntimeStatus } from '../shared/runtime-types'
-import type { JiraIssue } from '../shared/jira-types'
+import type { JiraIssue } from '../shared/jira/jira-types'
 import {
   isResolvedJiraIssueMatch,
   JIRA_ISSUE_KEY_PATTERN,
   parseJiraIssueUrl
-} from '../shared/jira-issue-url'
+} from '../shared/jira/jira-issue-url'
 import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachment-capabilities'
 import {
   getWorkspaceReferenceIdentity,

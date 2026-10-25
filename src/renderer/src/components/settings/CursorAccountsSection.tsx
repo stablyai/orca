@@ -116,7 +116,7 @@ export function CursorAccountsSection(): React.JSX.Element {
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.CursorAccountsSection.subtitle',
-              'Shows your monthly Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.'
+              'Shows your Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.'
             )}
           </p>
         </div>
@@ -217,7 +217,7 @@ export function CursorAccountsSection(): React.JSX.Element {
         <SearchableSetting
           title={translate(
             'auto.components.settings.CursorAccountsSection.usageTitle',
-            'Monthly plan usage'
+            'Plan usage'
           )}
           description={translate(
             'auto.components.settings.CursorAccountsSection.usageDescription',

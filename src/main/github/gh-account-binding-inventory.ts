@@ -1,6 +1,3 @@
-/**
- * Repo-scoped inventory + validation for Settings GitHub account binding.
- */
 import { diagnoseGhAuth } from './auth-diagnose'
 import {
   getGhMultiAccountCapability,

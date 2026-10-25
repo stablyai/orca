@@ -112,6 +112,37 @@ export function refreshManagedOrcadPairing(
   if (!offer) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'Invalid managed pairing code.')
   }
+  return rebindManagedOrcadPairing(userDataPath, environmentId, () => offer, null, now)
+}
+
+/** Moves a managed server's tunnel to a new local port, keeping its pairing and identity. */
+export function moveManagedOrcadLocalPort(
+  userDataPath: string,
+  environmentId: string,
+  localPort: number,
+  now = Date.now()
+): KnownRuntimeEnvironment {
+  return rebindManagedOrcadPairing(
+    userDataPath,
+    environmentId,
+    (current) => {
+      const offer = getPreferredPairingOffer(current)
+      const endpoint = new URL(offer.endpoint)
+      endpoint.port = String(localPort)
+      return { ...offer, endpoint: endpoint.toString() }
+    },
+    localPort,
+    now
+  )
+}
+
+function rebindManagedOrcadPairing(
+  userDataPath: string,
+  environmentId: string,
+  nextOffer: (current: KnownRuntimeEnvironment) => PairingOffer,
+  localPort: number | null,
+  now: number
+): KnownRuntimeEnvironment {
   const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
   if (!current.orcadDeployment) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not managed.')
@@ -123,6 +154,8 @@ export function refreshManagedOrcadPairing(
       'This server is not managed over SSH.'
     )
   }
+  const offer = nextOffer(current)
+  const nextDeployment = { ...deployment, localPort: localPort ?? deployment.localPort }
   // Why skip: orcad keeps its device registry across versions and callers pass the enrolled grant,
   // so an unchanged offer needs no rewrite, and every rewrite re-binds the sidecar entry.
   if (samePairing(getPreferredPairingOffer(current), offer)) {
@@ -144,7 +177,7 @@ export function refreshManagedOrcadPairing(
     pairingRevision: Math.max(now, (existing.pairingRevision ?? existing.createdAt) + 1),
     lastUsedAt: existing.lastUsedAt
   })
-  if (getPreferredLoopbackRuntimePort(next) !== deployment.localPort) {
+  if (getPreferredLoopbackRuntimePort(next) !== nextDeployment.localPort) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
       'The managed pairing does not point at its SSH tunnel.'
@@ -154,12 +187,21 @@ export function refreshManagedOrcadPairing(
     candidate.id === existing.id ? next : candidate
   )
   const { binding: _binding, ...rest } = entry ?? {}
-  const state = { ...rest, orcadDeployment: deployment }
   // Why three writes: the entry stays current for both store states, so a failed or interrupted
-  // store write can never strand the deployment link.
-  writeRuntimeEnvironmentSidecarEntry(userDataPath, store.environments, existing, state, next)
+  // store write can never strand the deployment link. In between, a moved port is read from the
+  // stored endpoint.
+  writeRuntimeEnvironmentSidecarEntry(
+    userDataPath,
+    store.environments,
+    existing,
+    { ...rest, orcadDeployment: deployment },
+    next
+  )
   writeEnvironmentStore(userDataPath, { version: 1, environments })
-  writeRuntimeEnvironmentSidecarEntry(userDataPath, environments, next, state)
+  writeRuntimeEnvironmentSidecarEntry(userDataPath, environments, next, {
+    ...rest,
+    orcadDeployment: nextDeployment
+  })
   return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
 }
 

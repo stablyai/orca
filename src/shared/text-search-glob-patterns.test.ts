@@ -36,7 +36,7 @@ describe('compound search globs', () => {
     expect(splitSearchGlobPatterns(input, 'git')).toEqual(expected)
   })
 
-  it('scans deeply nested groups without recursion or expanding alternatives', () => {
+  it('preserves 20000 nested groups without expanding alternatives', () => {
     const pattern = `${'{'.repeat(20_000)}a,b${'}'.repeat(20_000)}`
     expect(splitSearchGlobPatterns(`${pattern}, *.md`)).toEqual([pattern, '*.md'])
   })

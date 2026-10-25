@@ -57,8 +57,7 @@ import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-er
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {
     resetFilesystemIpcMocks()
-    // Reset module-level auth cache so each test starts with a fresh dirty
-    // flag — prevents stale worktree data from a prior test's cache rebuild.
+    // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
   })
 
@@ -260,9 +259,7 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
-  // Why: folder-repo instances keep `::workspace:<uuid>` on the meta key while the
-  // request path is the stripped cwd. A strip-before-lookup "cleanup" would still
-  // pass plain-id tests and silently lose enrichment on second workspaces.
+  // Folder workspace metadata retains ::workspace:<uuid>; stripping before lookup would lose enrichment.
   it('enriches local commit context when the worktree id carries a folder-repo workspace suffix', async () => {
     const context = {
       branch: 'feature/ai',
@@ -293,8 +290,7 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
-  // Why: the renderer derives worktreePath from worktreeId, so a mismatched pair
-  // models an independent caller (relay/CLI/future), not a stale renderer context.
+  // Model an independent caller's mismatched ID/path; renderer derives both from the same worktree.
   it('ignores an independently supplied id that does not own the requested worktree path', async () => {
     const context = {
       branch: 'feature/ai',
@@ -315,7 +311,7 @@ describe('registerFilesystemHandlers', () => {
     })
 
     expect(getWorktreeMeta).not.toHaveBeenCalled()
-    // Why: without this the assertion below passes vacuously on an early return.
+    // A call count prevents vacuous success on an unrelated early return.
     expect(generateCommitMessageFromContextMock.mock.calls).toHaveLength(1)
     expect(generateCommitMessageFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
       'linkedIssue'

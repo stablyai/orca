@@ -8,6 +8,8 @@ describe('the Workspace options chip', () => {
   it('badges the active-filter count as the desktop does, capped at 9+', () => {
     expect(workspaceOptionsBadgeText(0)).toBeNull()
     expect(workspaceOptionsBadgeText(2)).toBe('2')
+    expect(workspaceOptionsBadgeText(9)).toBe('9')
+    expect(workspaceOptionsBadgeText(10)).toBe('9+')
     expect(workspaceOptionsBadgeText(12)).toBe('9+')
   })
 

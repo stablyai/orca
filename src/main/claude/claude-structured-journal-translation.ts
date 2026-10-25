@@ -1,6 +1,7 @@
-import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
+import type {
+  ClaudeJournalTranslator,
+  ClaudeJournalTranslatorDeps
+} from './claude-journal-translator-contract'
 import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
@@ -36,25 +37,18 @@ import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-r
 import { ClaudeAuthenticationFailures } from './claude-authentication-failures'
 import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
-import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 
-export type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
-
-export type ClaudeJournalTranslatorDeps = {
-  sink: StructuredAgentSessionEventSink
-  bindPromptItemId?: (journalItemId: string, promptKey: string) => void
-  coalesceMs?: number
-  schedule?: AgentSessionDeltaCoalescerDeps['schedule']
-  fallbackIdPrefix?: string
-  onBackgroundTaskJournalFailure?: (error: Error) => void
-  account?: () => AgentSessionAccountKind | undefined
-  goalBackgroundWork?: () => ClaudeGoalBackgroundWork
-}
+export type {
+  ClaudeJournalTranslator,
+  ClaudeJournalTranslatorDeps
+} from './claude-journal-translator-contract'
 
 export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
+  const coverage = createClaudeFinalOutputCoverage(deps.sink)
+  deps = { ...deps, sink: coverage.sink }
   const tools = new Map<string, ClaudeToolUse>()
   // Every row joins the root turn open when it is written, whoever produced it.
   const turnScope = () => turn.turnScope
@@ -66,8 +60,7 @@ export function createClaudeJournalTranslator(
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   const turn = new ClaudeOpenTurn({
     sink: deps.sink,
-    // No announcement can come after its turn, so a correction still owed is never coming; the
-    // rows keep the stamp they already have.
+    // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
     endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
     onOpen: () => context.markActivity()
@@ -80,7 +73,6 @@ export function createClaudeJournalTranslator(
   const subagents = new ClaudeSubagentIdentities({
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     childOwnerRefOf: (toolUseId) => toolOrigins.childOwnerRef(toolUseId),
-    // A restarted provider continues what earlier runs journaled.
     journaled
   })
   const childQueries = claudeChildToolQueries({ tools, toolOrigins, linkage: subagents.linkage })
@@ -88,9 +80,7 @@ export function createClaudeJournalTranslator(
     ...subagents.linkage,
     turnScope,
     rewrite: (identity, body, options) => {
-      // The admission-returning path, so a correction the sink refuses under
-      // backpressure stays owed instead of vanishing. Sinks without it accept
-      // unconditionally, which is what the plain append already assumed.
+      // Keep refused corrections pending under backpressure; legacy sinks accept unconditionally.
       const admission = deps.sink.tryAppendItem?.(identity, body, options)
       if (admission === undefined) {
         deps.sink.appendItem(identity, body, options)
@@ -104,8 +94,7 @@ export function createClaudeJournalTranslator(
     sink: deps.sink,
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     rosteredByEarlierRun: journaled.isSubagent,
-    // A typed task row is provider output: journaling one must open a resumed
-    // turn, or the session shows the row while reading idle.
+    // Task output must open a resumed turn so the session does not appear idle while producing rows.
     openOutputTurn: (frame, observedAt) =>
       turn.ensureOpen(frame, claudeStreamTurnSource(frame), observedAt),
     turnScope,
@@ -117,9 +106,13 @@ export function createClaudeJournalTranslator(
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
-    persist: (identity, text, options) => {
+    persist: (identity, text, options, ended) => {
       const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, { ...options, turnScope: turnScope() })
+      deps.sink.appendItem(identity, body, {
+        ...options,
+        turnScope: turnScope(),
+        ...(ended ? { lifecycle: true } : {})
+      })
       deps.sink.publish()
     }
   })
@@ -147,8 +140,7 @@ export function createClaudeJournalTranslator(
   const handleStream = (message: Record<string, unknown>, observedAt: number): boolean => {
     const delta = streamedBlocks.observe(message, observedAt)
     const thinking = streamedThinking.observe(message, observedAt)
-    // `message_start` is the provider's turn boundary. Keep the first content
-    // delta as a compatibility fallback for streams that omit it.
+    // Prefer message_start; use the first content delta for older streams that omit it.
     const source =
       delta || thinking ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
     turn.ensureOpen(message, source, observedAt)
@@ -182,13 +174,6 @@ export function createClaudeJournalTranslator(
     goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable')
   }
 
-  const handleMessage = (
-    message: Record<string, unknown>,
-    startsTurn: boolean,
-    observedAt: number,
-    requestedAt?: number
-  ): boolean => journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt)
-
   return {
     handle: (event) => {
       if (event.type === 'ended') {
@@ -196,21 +181,16 @@ export function createClaudeJournalTranslator(
         flush()
         corrections.abandon()
         backgroundTasks.settleSession()
-        // The host saw the child end, so the turn's end is observed, not lost. Whether it was a
-        // person's Stop is the journal's Stop event to say (`turnEndAfterStop`), else it is news.
+        // Child exit proves the turn ended; the journal's Stop event determines whether a person ended it.
         turn.settle({ state: 'interrupted', completedAt: event.observedAt ?? Date.now() })
-        // A frame that arrives after the child is gone must not open a turn no
-        // event can close.
+        // Prevent late frames from opening a turn after the child can no longer close it.
         turn.suppressReopen()
         return
       }
       turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
       if (event.type === 'message') {
         context.observe(event.message, event.observedAt ?? Date.now())
-        // A root init is the CLI starting a new request cycle (measured per turn,
-        // per queued turn, per background wake, per /compact); a send replayed
-        // after that cycle's first root work was folded into it. Task frames are
-        // not cycle work: they arrive between cycles too.
+        // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.
         if (isRootClaudeFrame(event.message)) {
           if (event.message.type === 'system' && event.message.subtype === 'init') {
             turn.observeProviderCycleStart()
@@ -229,9 +209,7 @@ export function createClaudeJournalTranslator(
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
         return
       }
-      // Ahead of the flush: a forced checkpoint resolves attribution as it
-      // writes, so an announcement landing in this same pass has to be visible
-      // to it or the row is stamped provisionally one line too early.
+      // Observe announcements before flushing so buffered rows receive their resolved producer stamp.
       const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
       // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
       if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
@@ -254,7 +232,8 @@ export function createClaudeJournalTranslator(
         messageContext.usageLimits.observe(event.message)
         const kind = claudeProviderFrameKind(event.message)
         if (
-          !handleMessage(
+          !journalClaudeMessage(
+            messageContext,
             event.message,
             event.startsTurn === true,
             event.observedAt ?? Date.now(),
@@ -287,6 +266,7 @@ export function createClaudeJournalTranslator(
     get currentTurnId() {
       return turn.id
     },
+    currentTurnScope: turnScope,
     get commandTurnId() {
       return turn.command ? turn.id : null
     },
@@ -306,6 +286,9 @@ export function createClaudeJournalTranslator(
     },
     get contextActivity() {
       return context.activityRevision
+    },
+    get finalOutputAdmitted() {
+      return coverage.admitted
     },
     markContextActivity: () => context.markActivity(),
     subscribeContextUsageRequests: (listener) => context.subscribeReportRequests(listener),

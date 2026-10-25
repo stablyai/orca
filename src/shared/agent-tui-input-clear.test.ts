@@ -32,9 +32,7 @@ describe('buildAgentTuiClearInput', () => {
   })
 
   it('clears before the cursor before clearing the suffix after it', () => {
-    expect(buildAgentTuiClearInput(4)).toBe(
-      AGENT_TUI_CLEAR_INPUT_LINE.repeat(7) + AGENT_TUI_CLEAR_INPUT_FORWARD.repeat(7)
-    )
+    expect(buildAgentTuiClearInput(4)).toBe('\x15'.repeat(7) + '\x0b'.repeat(7))
   })
 
   it('still clears one line for a zero or negative count', () => {

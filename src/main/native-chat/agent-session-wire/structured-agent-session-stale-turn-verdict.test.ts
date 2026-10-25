@@ -52,7 +52,7 @@ function lifecycleItem(
   }
 }
 
-/** The status-form carrier an older host wrote; still read, never written back. */
+/** Read legacy status-form lifecycle carriers without writing them back. */
 function legacyLifecycleItem(turnId: string, startedAt: number): AgentJournalRenderItem {
   return {
     ...lifecycleItem(turnId, 'running', 2),
@@ -91,7 +91,6 @@ function promptItem(state: 'pending' | 'resolved', sequence: number): AgentJourn
 }
 
 describe('turn verdict from death evidence', () => {
-  /** Judges a turn the fence-1 owner wrote, by evidence naming that owner. */
   const verdictForTurn = (evidence: AgentSessionDeathEvidence | null | undefined) =>
     turnVerdictFromDeathEvidence(evidence && { ownerFence: 1, ...evidence }, 1)
 
@@ -111,10 +110,9 @@ describe('turn verdict from death evidence', () => {
         observedAt: 9_000,
         ...(lastProvenAliveAt === undefined ? {} : { lastProvenAliveAt })
       })
-      // Probed at 9000, long after the crash: the downtime is never counted as work.
+      // Last proof of life bounds completion so downtime is never counted as work.
       expect(verdictForTurn(proof(8_000))).toEqual({ state: 'interrupted', completedAt: 8_000 })
       expect(verdictForTurn(proof(9_500))).toEqual({ state: 'interrupted', completedAt: 9_000 })
-      // A proof that recorded no proof of life has only the probe.
       expect(verdictForTurn(proof())).toEqual({ state: 'interrupted', completedAt: 9_000 })
     }
   )
@@ -144,7 +142,7 @@ describe('turn verdict from death evidence', () => {
     expect(verdictForTurn(undefined)).toEqual({ state: 'unverifiable' })
   })
   it('keeps the rule an older build applied to evidence that names no owner', () => {
-    // Only a watched exit was proof then; a probe's proof stays unverifiable.
+    // Legacy ownerless evidence proves only observed exit, never probe results.
     const legacy = { detail: 'gone', observedAt: 9_000, lastProvenAliveAt: 8_000 }
     expect(turnVerdictFromDeathEvidence({ ...legacy, kind: 'exit-observed' }, 1)).toEqual({
       state: 'interrupted',
@@ -162,8 +160,7 @@ describe('turn verdict from death evidence', () => {
       observedAt: 9_000,
       lastProvenAliveAt: 8_000
     }
-    // A newer start's death, and a turn whose writer the timeline no longer knows: neither proves
-    // the turn's own owner gone.
+    // Another owner’s death or unknown turn provenance cannot prove this owner ended.
     for (const [evidence, turnFence] of [
       [{ ...proof, ownerFence: 3 }, 1],
       [{ ...proof, kind: 'exit-observed' as const, ownerFence: 3 }, 1],
@@ -178,7 +175,6 @@ describe('running turn lifecycle revisions', () => {
   it('revises only running rows in place and carries an end time only for an observed exit', () => {
     const items = [
       lifecycleItem('turn-1', 'completed', 1, { startedAt: 10, completedAt: 20 }),
-      // A stray end on a running row is never carried into the verdict.
       lifecycleItem('turn-2', 'running', 2, { startedAt: 30, completedAt: 99 })
     ]
     expect(runningTurnLifecycleRevisions(items, { state: 'interrupted', completedAt: 40 })).toEqual(
@@ -296,7 +292,6 @@ describe('running turn lifecycle revisions', () => {
   })
 })
 
-/** A probe that found the fence-1 owner gone at 9000, last proven alive at 100. */
 const PROVEN: AgentSessionDeathEvidence = {
   kind: 'pid-absent',
   detail: 'recorded pid absent on host',
@@ -393,7 +388,7 @@ describe('stale session state on a cold acquire', () => {
   })
 
   it("cancels a subagent's lost prompt as the subagent's, and the session's own as its own", async () => {
-    // The sweep names no producer, so each cancelled row keeps the one it had.
+    // Producer-free cancellation revisions must retain original attribution.
     const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
     const journals = createTrackedJournalOpener()
     try {
@@ -472,7 +467,7 @@ describe('stale session state on a cold acquire', () => {
       )
       now = 200
       await journal.appendItem(command, { ...shell, state: 'running' }, { fence: 1, turnScope })
-      // Streaming revisions prove the provider worked after its last lease renewal.
+      // Provider output can prove life after lease renewal.
       now = 700
       await journal.appendItem(
         command,
@@ -506,7 +501,6 @@ describe('stale session state on a cold acquire', () => {
         state: 'interrupted',
         completedAt: 700
       })
-      // The probe's detail is Orca's, so the row carries none.
       expect(
         items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
       ).toEqual([
@@ -553,7 +547,6 @@ describe('stale session state on a cold acquire', () => {
           acquisitionGeneration: null,
           deathEvidence
         })
-      // An hour later the relaunch opens the chat before anything proved the owner gone.
       now = 3_600_000
       await settle(null)
       const turn = () => journal.snapshot().items.map((item) => readAgentJournalTurn(item.body))[0]
@@ -611,7 +604,6 @@ describe('stale session state on a cold acquire', () => {
         { fence: 1, turnScope: turnScopeOf(RUNNING_IDENTITY) }
       )
       now = 400
-      // The open, before anything proved the fence-1 owner gone.
       const settle = (deathEvidence: AgentSessionDeathEvidence | null) =>
         settleStaleStructuredAgentSessionState({
           journal,
@@ -665,7 +657,6 @@ describe('stale session state on a cold acquire', () => {
         stateDirectory: root,
         now: () => now
       })
-      // Enough running turns to require several rows in the one settlement transaction.
       for (let index = 0; index < 399; index++) {
         const turnId = `turn-${index}`
         await journal.appendItem(

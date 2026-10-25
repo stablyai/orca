@@ -78,46 +78,69 @@ export type TwinRepoHostCase = {
   expected: ExecutionHostId
 }
 
-const PAIRS: [string, TwinRepoRow, ExecutionHostId, TwinRepoRow, ExecutionHostId][] = [
-  ['local+ssh', LOCAL_ROW, 'local', SSH_ROW, 'ssh:box'],
-  ['local+runtime', LOCAL_ROW, 'local', RUNTIME_ROW, 'runtime:env-1'],
-  ['ssh+runtime', SSH_ROW, 'ssh:box', RUNTIME_ROW, 'runtime:env-1']
+const PAIRS: [
+  string,
+  TwinRepoRow,
+  ExecutionHostId,
+  ExecutionHostId,
+  TwinRepoRow,
+  ExecutionHostId,
+  ExecutionHostId,
+  ExecutionHostId
+][] = [
+  ['local+ssh', LOCAL_ROW, 'local', 'local', SSH_ROW, 'ssh:box', 'local', 'local'],
+  [
+    'local+runtime',
+    LOCAL_ROW,
+    'local',
+    'local',
+    RUNTIME_ROW,
+    'runtime:env-1',
+    'runtime:env-1',
+    'local'
+  ],
+  [
+    'ssh+runtime',
+    SSH_ROW,
+    'ssh:box',
+    'local',
+    RUNTIME_ROW,
+    'runtime:env-1',
+    'runtime:env-1',
+    'ssh:box'
+  ]
 ]
 
-// The window: a contested id goes to the shared primary, a runtime-owned one to its runtime, and
-// any other (SSH-only, local-only, unknown) to local, because the twin repo names no single host.
-function windowFresh(hosts: ExecutionHostId[]): ExecutionHostId {
-  if (hosts.length > 1) {
-    return hosts.includes('local')
-      ? 'local'
-      : (hosts.find((h) => h.startsWith('ssh:')) ?? hosts[0]!)
+const GENERATED_CASES: TwinRepoHostCase[] = PAIRS.flatMap(
+  ([pair, rowA, hostA, expectedA, rowB, hostB, expectedB, contested]) => {
+    // Both catalog orders, so a case cannot pass by taking the first row.
+    const orders = [
+      [rowB, rowA],
+      [rowA, rowB]
+    ]
+    const holdings: [string, ExecutionHostId[], ExecutionHostId][] = [
+      ['contested', [hostA, hostB], contested],
+      [`${hostA} only`, [hostA], expectedA],
+      [`${hostB} only`, [hostB], expectedB],
+      ['unknown', [], 'local']
+    ]
+    return orders.flatMap((repos, order) =>
+      holdings.flatMap(([holding, hosts, expected]) => {
+        const catalog = hosts.map(listedOn)
+        return [
+          { name: `${pair} #${order} ${holding}, fresh`, repos, catalog, saved: [], expected },
+          {
+            name: `${pair} #${order} ${holding}, saved`,
+            repos,
+            catalog,
+            saved: [expected],
+            expected
+          }
+        ]
+      })
+    )
   }
-  return hosts[0]?.startsWith('runtime:') ? hosts[0] : 'local'
-}
-
-const GENERATED_CASES: TwinRepoHostCase[] = PAIRS.flatMap(([pair, rowA, hostA, rowB, hostB]) => {
-  // Both catalog orders, so a case cannot pass by taking the first row.
-  const orders = [
-    [rowB, rowA],
-    [rowA, rowB]
-  ]
-  const holdings: [string, ExecutionHostId[]][] = [
-    ['contested', [hostA, hostB]],
-    [`${hostA} only`, [hostA]],
-    [`${hostB} only`, [hostB]],
-    ['unknown', []]
-  ]
-  return orders.flatMap((repos, order) =>
-    holdings.flatMap(([holding, hosts]) => {
-      const expected = windowFresh(hosts)
-      const catalog = hosts.map(listedOn)
-      return [
-        { name: `${pair} #${order} ${holding}, fresh`, repos, catalog, saved: [], expected },
-        { name: `${pair} #${order} ${holding}, saved`, repos, catalog, saved: [expected], expected }
-      ]
-    })
-  )
-})
+)
 
 export const TWIN_REPO_HOST_CASES: TwinRepoHostCase[] = [
   ...GENERATED_CASES,

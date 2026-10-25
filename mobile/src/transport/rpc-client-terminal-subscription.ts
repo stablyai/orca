@@ -1,4 +1,4 @@
-import { buildNativeChatUnsubscribe } from '../../../src/shared/native-chat-stream-unsubscribe'
+import { buildNativeChatUnsubscribe } from '../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 
 type TerminalStreamParams = {
   terminal?: unknown

@@ -65,8 +65,7 @@ export function createAntigravitySessionResumeState(
   messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
   const sessionId = antigravityConversationIdFromTranscriptPath(file.path) ?? ''
-  // Why: the transcript has no cwd/model fields. Workspace enrichment is a
-  // separate, conservative history join; protobuf/SQLite blobs are unstable.
+  // Transcripts lack cwd/model; enrich cwd conservatively from history rather than unstable binary stores.
   return accumulatorFoldResumeState(
     createAccumulator({ agent: 'antigravity', file, sessionId, messages }),
     consumeAntigravityRecordLine

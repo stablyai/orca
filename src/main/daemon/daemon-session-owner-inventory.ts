@@ -3,6 +3,7 @@ import type { DaemonSessionOwnerResolution } from './daemon-session-owner-resolu
 import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import { chooseSessionOwner, type OwnerCandidate } from './daemon-session-owner-choice'
 import { randomUUID } from 'node:crypto'
+import { worktreePtyOwnership } from '../providers/worktree-pty-ownership'
 
 export type ProviderInventory<T> = {
   provider: T
@@ -34,8 +35,9 @@ export function indexDaemonOwnerInventory<T extends IPtyProvider>(
   epoch: number,
   currentEpoch: number,
   recordRoute: (id: string, provider: T, incarnationId?: string) => void,
-  forgetRoute: (id: string) => void,
-  readRoute: (id: string) => { provider: T; incarnationId?: string } | undefined
+  forgetIncarnation: (id: string) => void,
+  readRoute: (id: string) => { provider: IPtyProvider; incarnationId?: string } | undefined,
+  replaceEstablishedRoutes = false
 ): OwnerInventory<T> {
   const candidatesBySessionId = new Map<string, OwnerCandidate<T>[]>()
   let complete = true
@@ -58,11 +60,10 @@ export function indexDaemonOwnerInventory<T extends IPtyProvider>(
   }
   if (complete && epoch === currentEpoch) {
     for (const [sessionId, candidates] of candidatesBySessionId) {
+      const route = readRoute(sessionId)
       let owner = selectInventoryOwner(candidates, complete)
       if (!owner) {
-        const route = readRoute(sessionId)
-        // Why: a duplicate id cannot erase exact route authority, but neither a bare-id
-        // route nor the same incarnation reported by multiple providers proves an owner.
+        // Match the recorded incarnation to disambiguate ownership.
         const exact = route?.incarnationId
           ? selectInventoryOwner(candidates, complete, route.incarnationId, true)
           : undefined
@@ -70,10 +71,11 @@ export function indexDaemonOwnerInventory<T extends IPtyProvider>(
           owner = exact
         }
       }
-      if (owner) {
+      if (owner && (!route || route.provider === owner.provider || replaceEstablishedRoutes)) {
         recordRoute(sessionId, owner.provider, owner.process.incarnationId)
       } else {
-        forgetRoute(sessionId)
+        // Inventory ambiguity revokes generation proof, not established input authority.
+        forgetIncarnation(sessionId)
       }
     }
   }
@@ -154,20 +156,31 @@ export function selectListedDaemonProcesses<T extends IPtyProvider>(
   inventory: OwnerInventory<T>,
   routes: ReadonlyMap<string, IPtyProvider>,
   incarnations: ReadonlyMap<string, string | undefined>,
-  includeUnrouted = false
+  opts?: Parameters<IPtyProvider['listProcesses']>[0]
 ): PtyProcessInfo[] {
   if (!inventory.complete) {
     throw new TerminalSessionOwnerUnverifiedError('incomplete inventory')
   }
   const processes: PtyProcessInfo[] = []
+  const ownsWorktree = opts?.worktreeId ? worktreePtyOwnership(opts.worktreeId) : undefined
+  const ptyIds = opts?.ptyIds ? new Set(opts.ptyIds) : undefined
   for (const [sessionId, candidates] of inventory.candidatesBySessionId) {
+    if (
+      (ptyIds && !ptyIds.has(sessionId)) ||
+      (ownsWorktree && !candidates.some(({ process }) => ownsWorktree(process)))
+    ) {
+      continue
+    }
     const routed = routes.get(sessionId)
     const incarnationId = incarnations.get(sessionId)
-    const owner = candidates.find(
-      (candidate) =>
-        candidate.provider === routed && candidate.process.incarnationId === incarnationId
+    const candidate = selectInventoryOwner(
+      candidates,
+      inventory.complete,
+      incarnationId,
+      Boolean(incarnationId)
     )
-    if (includeUnrouted) {
+    const owner = candidate?.provider === routed ? candidate : undefined
+    if (opts?.includeUnrouted) {
       processes.push(
         ...candidates.map((candidate) => ({
           ...candidate.process,
@@ -178,7 +191,12 @@ export function selectListedDaemonProcesses<T extends IPtyProvider>(
       continue
     }
     // Omitting an ambiguous id is false exit proof; either candidate could misstate route authority.
-    if (!owner) {
+    if (
+      !owner ||
+      (ownsWorktree &&
+        (!ownsWorktree(owner.process) ||
+          candidates.some((candidate) => candidate !== owner && ownsWorktree(candidate.process))))
+    ) {
       throw new TerminalSessionOwnerUnverifiedError(sessionId)
     }
     processes.push(owner.process)

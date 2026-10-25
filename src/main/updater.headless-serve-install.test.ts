@@ -452,8 +452,7 @@ describe('headless serve update install handoff', () => {
       'mac-updater-app-quit'
     ]
 
-    // Models electron-updater's MacUpdater with autoInstallOnAppQuit off: each unstaged quitAndInstall adds a
-    // persistent native listener that app.quit()s and only starts Squirrel; native errors are re-emitted first.
+    // Model MacUpdater's persistent native quit listeners, including listeners left by failed attempts.
     const downloadSupervisedUpdate = async (
       lifecycle: string[]
     ): Promise<{
@@ -488,7 +487,7 @@ describe('headless serve update install handoff', () => {
       downloadUpdate()
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
-      // Why: EventEmitter semantics — listeners run in registration order and a throw stops the rest.
+      // Preserve EventEmitter ordering: a throwing listener stops later listeners.
       const emitNative = (event: string, ...args: unknown[]): void => {
         for (const [name, handler] of nativeUpdaterMock.on.mock.calls) {
           if (name === event && typeof handler === 'function') {
@@ -550,7 +549,7 @@ describe('headless serve update install handoff', () => {
       expect(requestServeUpdateHandoffMock).toHaveBeenCalledTimes(2)
       expect(armUpdateInstallExitWatchdogMock).toHaveBeenCalledOnce()
       expect(killAllPtyMock).toHaveBeenCalledOnce()
-      // Why: MacUpdater keeps the failed attempt's listener too, so both quit; Orca commits once.
+      // MacUpdater retains both listeners after failure; Orca must commit only once.
       expect(lifecycle).toEqual([
         'native-quit-and-install',
         'native-quit-and-install',

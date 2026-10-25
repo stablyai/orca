@@ -34,7 +34,7 @@ describe('launch route transcript readability', () => {
     ).toBeUndefined()
   })
 
-  it('falls back to the local repo rather than downgrading native chat to a terminal', () => {
+  it('uses the local repo for readability while unresolved ownership keeps the terminal route', () => {
     const store = storeWithAmbiguousWorktreeRows(null)
 
     expect(
@@ -51,6 +51,11 @@ describe('launch route transcript readability', () => {
     const store = storeWithAmbiguousWorktreeRows('build-box')
 
     expect(
+      buildAgentLaunchRouteInput(store, { agent: 'grok', workspace: WORKSPACE })
+        .nativeChatTranscriptIsLocalReadable
+    ).toBe(false)
+
+    expect(
       planAgentSessionLaunch(store, { requestId: 'request-2', agent: 'grok', workspace: WORKSPACE })
         .route
     ).toBe('terminal-tui')
@@ -58,6 +63,13 @@ describe('launch route transcript readability', () => {
 
   it('has no repo to fall back to when the workspace names none', () => {
     const store = storeWithAmbiguousWorktreeRows(null)
+
+    expect(
+      buildAgentLaunchRouteInput(store, {
+        agent: 'grok',
+        workspace: { kind: 'git-worktree', worktreeId: WORKTREE_ID }
+      }).nativeChatTranscriptIsLocalReadable
+    ).toBe(false)
 
     expect(
       planAgentSessionLaunch(store, {

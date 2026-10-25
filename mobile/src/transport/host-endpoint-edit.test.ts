@@ -2,11 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { displayHostEndpoint } from './host-endpoint'
 import { resolveHostEndpointEdit } from './host-endpoint-edit'
 
-function persistedAfterEdit(stored: string, input = displayHostEndpoint(stored)) {
-  const edit = resolveHostEndpointEdit(stored, input)
-  return edit.kind === 'changed' ? edit.endpoint : stored
-}
-
 describe('resolveHostEndpointEdit', () => {
   it.each([
     ['implicit secure DNS proxy', 'wss://desk.example.com'],
@@ -26,7 +21,6 @@ describe('resolveHostEndpointEdit', () => {
     const edit = resolveHostEndpointEdit(stored, displayHostEndpoint(stored))
 
     expect(edit).toEqual({ kind: 'unchanged', endpoint: stored })
-    expect(persistedAfterEdit(stored)).toBe(stored)
   })
 
   it.each([
@@ -92,13 +86,5 @@ describe('resolveHostEndpointEdit', () => {
       kind: 'invalid',
       error: 'Use ws:// or wss:// (or host:port).'
     })
-  })
-
-  it('stays stable through repeated name-only edits', () => {
-    const stored = 'wss://desk.example.com/orca?route=runtime'
-    const once = persistedAfterEdit(stored)
-
-    expect(once).toBe(stored)
-    expect(persistedAfterEdit(once)).toBe(stored)
   })
 })

@@ -88,7 +88,6 @@ export function resolveWorktreeMemoryNames(
       repoName: group?.name?.trim() || worktree.displayName
     }
   }
-  // Orca worktree ids look like `${repoId}::${absolutePath}`.
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const repoId = parsed?.repoId ?? worktreeId
   const worktreePath = parsed?.worktreePath ?? ''

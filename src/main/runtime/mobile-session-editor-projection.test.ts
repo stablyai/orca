@@ -73,6 +73,23 @@ describe('headless editor tabs under an owned id', () => {
     expect(retired?.tabGroups?.[WT]?.[0]?.tabOrder).toEqual([])
   })
 
+  it('does not list a row mirrored from a paired host', () => {
+    const session = ownedSession()
+    session.openFilesByWorktree = {
+      [WT]: [
+        {
+          filePath: FILE,
+          relativePath: 'notes.ts',
+          worktreeId: WT,
+          language: 'typescript',
+          runtimeEnvironmentId: 'peer',
+          mirroredFromRuntimeSession: true
+        }
+      ]
+    }
+    expect(buildHeadlessMobileSessionEditorTabs(WT, session)).toEqual([])
+  })
+
   it('shows it as the active file', () => {
     expect(buildHeadlessMobileSessionEditorTabs(WT, activeOwnedSession())).toEqual([
       expect.objectContaining({ id: 'tab-1', isActive: true })

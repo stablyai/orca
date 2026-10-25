@@ -8,7 +8,7 @@ import type {
   CookieImportWriteStore
 } from './browser-cookie-import-clear'
 import { restoreEveryCookieIdentity } from './browser-cookie-identity-restore'
-import { normalizeCookiePartitionSite } from './browser-cookie-source-partition'
+import { normalizeCookiePartitionSite } from './cookies/sources/browser-cookie-source-partition'
 
 type CdpCookiePartitionKey = {
   topLevelSite?: string
@@ -170,8 +170,7 @@ async function attachCookieClearSession(targetSession: Session): Promise<CookieC
     const lease = acquireElectronDebugger(existing)
     return { debugger: existing.debugger, dispose: () => lease.release() }
   } catch {
-    // Why (STA-4300): every cookie write now needs this channel, and attaching to a live tab fails
-    // outright when DevTools already owns its debugger. A hidden window of our own always can.
+    // DevTools may own the live tab’s debugger; use a separate hidden window.
     return leaseHiddenCookieDebugger(targetSession)
   }
 }
@@ -262,8 +261,7 @@ async function writeIdentityWithCdp(
     'Network.setCookie',
     cdpSetCookieParamsFromIdentity(identity)
   )
-  // Why: Network.setCookie reports rejection in the reply rather than throwing, so an unchecked
-  // call reads as a successful write of a cookie that was never stored.
+  // Network.setCookie can report failure in its reply without throwing.
   if (!cdpSetCookieSucceeded(result)) {
     throw new Error(`Could not ${failureLabel} cookie ${identity.name}`)
   }

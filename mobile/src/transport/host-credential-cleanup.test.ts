@@ -32,7 +32,7 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('host credential cleanup', () => {
   beforeEach(() => {
-    vi.useRealTimers()
+    vi.useFakeTimers()
     vi.clearAllMocks()
     resetHostCredentialCleanupForTests()
     storedPendingIds = []
@@ -75,12 +75,18 @@ describe('host credential cleanup', () => {
   })
 
   it('persists cleanup intent before a rejected delete for manual retry', async () => {
-    const deleteCredential = vi.fn().mockRejectedValue(new Error('keychain unavailable'))
+    const intentsAtDelete: string[][] = []
+    const deleteCredential = vi.fn(async (_hostId: string) => {
+      intentsAtDelete.push([...storedPendingIds])
+      throw new Error('keychain unavailable')
+    })
     const listener = vi.fn()
     const unsubscribe = subscribePendingHostCredentialCleanup(listener)
 
     await scheduleHostCredentialCleanup('host-1', deleteCredential, 20)
     await vi.waitFor(() => expect(deleteCredential).toHaveBeenCalledOnce())
+    expect(deleteCredential).toHaveBeenCalledWith('host-1')
+    expect(intentsAtDelete).toEqual([['host-1']])
     await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual(['host-1'])
     expect(listener).toHaveBeenCalled()
     unsubscribe()
@@ -271,8 +277,12 @@ describe('host credential cleanup', () => {
   })
 
   it('soft-loads empty when pending-cleanup storage is malformed', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValueOnce('{')
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('{')
 
     await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual([])
+    await expect(loadPendingHostCredentialCleanup()).resolves.toEqual({
+      ids: [],
+      storageUnreadable: true
+    })
   })
 })

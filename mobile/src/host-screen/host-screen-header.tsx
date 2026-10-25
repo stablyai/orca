@@ -16,6 +16,7 @@ import {
 } from 'lucide-react-native'
 import { StatusDot } from '../components/StatusDot'
 import { classifyConnection, type ConnectionVerdict } from '../transport/connection-health'
+import { useCalmConnectionState } from '../transport/calm-connection-state'
 import { colors } from '../theme/mobile-theme'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
@@ -39,6 +40,8 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     relayRecovery,
     state
   } = controller
+  // Why: a drop healed in a few seconds must not flash the host dot amber.
+  const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
 
   return (
     <View style={styles.topChrome}>
@@ -64,7 +67,11 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             <>
               <View style={styles.hostIdentity}>
                 <View style={styles.hostIdentityLine}>
-                  <StatusDot state={connState} verdict={headerVerdict} />
+                  {presentedConnState !== connState && !isErrorVerdict(headerVerdict) ? (
+                    <StatusDot state={presentedConnState} />
+                  ) : (
+                    <StatusDot state={connState} verdict={headerVerdict} />
+                  )}
                   <Text style={styles.hostNameText} numberOfLines={1}>
                     {hostDisplay.title}
                   </Text>

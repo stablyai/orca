@@ -51,10 +51,7 @@ export async function listQuickOpenFiles(
     { followSymlinks: options.followSymlinks }
   )
 
-  // Why: when the main worktree sits at the repo root, linked worktrees are
-  // nested subdirectories. Without excluding them, rg/git lists files from
-  // every worktree instead of just the active one. The shared helper
-  // normalizes, validates, and root-relativizes every input.
+  // Exclude nested linked worktrees so listing the main repo root cannot traverse every checkout.
   const excludePathPrefixes = [
     ...new Set([
       ...buildExcludePathPrefixes(rootPath, excludePaths),
@@ -66,23 +63,19 @@ export async function listQuickOpenFiles(
   const inventoryBudget =
     maxResults === undefined && maxSerializedBytes === undefined ? new FileInventoryBudget() : null
   const files = new Set<string>()
-  let serializedBytes = 2 // []
+  let serializedBytes = 2
   const children: {
     child: ChildProcess
     isDone: () => boolean
     finish: (error?: Error) => void
   }[] = []
-  // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
-  // their distro in the path; Windows-path repos carry it in project runtime.
+  // WSL rg may emit absolute Linux paths; distro identity comes from UNC paths or project runtime.
   const { primary, ignoredPass } = buildRgArgsForQuickOpen({
-    // Why: rg evaluates root-relative exclude globs against cwd only when the
-    // search target is cwd-relative. With an absolute target, `!packages/app`
-    // filters output after traversal but does not prune the nested worktree.
+    // Use a relative search root so root-relative exclusion globs prune traversal instead of only filtering output.
     searchRoot: '.',
     followSymlinks: options.followSymlinks,
     excludePathPrefixes,
-    // On Windows, rg outputs '\\'-separated paths; force '/'. Also force on
-    // macOS/Linux for idempotence — it's a no-op there.
+    // Normalize Windows output to forward slashes.
     forceSlashSeparator: sep === '\\'
   })
 
@@ -177,22 +170,17 @@ export async function listQuickOpenFiles(
       }
       const handleError = (error: NodeJS.ErrnoException): void => {
         processErrorObserved = true
-        // Why: treat spawn errors like an abnormal exit — discard residual
-        // buffer so a truncated final byte sequence cannot leak as a path.
+        // Discard truncated final bytes on spawn errors just as on abnormal exits.
         buf = ''
-        // Why: fd/process pressure is not a broken install; say so instead of blaming the bundled binary.
+        // Resource pressure is transient, not a broken bundled installation.
         if (isTransientRipgrepSpawnError(error)) {
           finish(new Error(`rg could not start (${error.code}); try again`))
           return
         }
         if (isRipgrepUnavailableExit(child, null, null)) {
-          // Why the cwd check: spawn reports a missing cwd as ENOENT too, and blaming the binary
-          // for it tells the user to reinstall Orca over a workspace that simply moved.
-          // Why detach close first: a failed spawn emits error THEN close(code < 0), and close
-          // settles synchronously, so this probe would otherwise race it on a sub-millisecond
-          // margin -- two measurements disagreed on which wins. Detaching makes it deterministic.
+          // ENOENT may mean missing cwd; detach close first so its synchronous failure cannot race the async probe.
           child.off('close', handleClose)
-          // Why catch: a failed probe must not strand the search; fall back to the prior verdict.
+          // A failed cwd probe must not strand the listing; preserve the prior classification.
           void isRipgrepSpawnCwdUsable(authorizedRootPath)
             .catch(() => true)
             .then((usable) => {
@@ -205,8 +193,7 @@ export async function listQuickOpenFiles(
         finish(new Error('rg failed to start'))
       }
       const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
-        // Why first: this code is above rg's own 0/1/2, so the unavailable check would otherwise
-        // read an unreachable workspace as a broken install and tell the user to reinstall Orca.
+        // WSL missing-cwd codes exceed rg's 0/1/2; classify before the generic unavailable branch.
         if (isRipgrepMissingCwdExit(code)) {
           buf = ''
           finish(ripgrepMissingCwdError(authorizedRootPath))
@@ -223,9 +210,7 @@ export async function listQuickOpenFiles(
           return
         }
         if (signal) {
-          // Why: a signal exit means timeout/OOM/external kill. Returning the
-          // already-streamed prefix would recreate the false-empty bug this
-          // path is meant to avoid.
+          // Signal exits leave incomplete prefixes; never report them as successful listings.
           buf = ''
           finish(new Error(`rg killed by ${signal}`))
           return
@@ -252,8 +237,7 @@ export async function listQuickOpenFiles(
         }
         done = true
         clearTimeout(timer)
-        // Why: child.kill() is advisory. If rg ignores it, detach our
-        // closures so repeated Quick Open attempts do not retain old scans.
+        // kill is advisory; detach closures so ignored signals cannot retain old scans.
         child.stdout?.off('data', handleStdoutData)
         child.stderr?.off('data', handleStderrData)
         child.off('error', handleError)
@@ -282,8 +266,7 @@ export async function listQuickOpenFiles(
       child.once('error', handleError)
       child.once('close', handleClose)
       timer = setTimeout(() => {
-        // Why: on timeout, the buffer is likely truncated mid-path. Discard
-        // it so Quick Open never displays a malformed entry.
+        // Discard timeout buffers that may end mid-path.
         buf = ''
         killSpawnedRipgrepProcess(child)
         finish(new Error('rg list timed out'))
@@ -295,7 +278,6 @@ export async function listQuickOpenFiles(
     })
 
   const killSurvivors = (error?: Error): void => {
-    // Failed listings must release any process still walking the tree.
     for (const entry of children) {
       if (entry.isDone()) {
         continue
@@ -317,14 +299,13 @@ export async function listQuickOpenFiles(
       // Candidate membership has no primary-first ordering, so one broader pass is enough.
       await runRg(ignoredPass)
     } else {
-      // Why: ignored-file output can be much larger and faster than the primary pass; let source
-      // files claim every bounded autocomplete budget first, including the transport byte cap.
+      // Give source files first claim on bounded result/transport budgets before large ignored-file output.
       await runRg(primary)
       if (
         (maxResults === undefined || files.size < maxResults) &&
         (maxSerializedBytes === undefined || serializedBytes < maxSerializedBytes)
       ) {
-        // Why: a filtered scan walks the whole tree; an ignored-pass timeout keeps primary matches.
+        // Keep primary matches if the full-tree ignored pass times out.
         await runRg(ignoredPass).catch((err: unknown) => {
           if (
             !pathFilter ||

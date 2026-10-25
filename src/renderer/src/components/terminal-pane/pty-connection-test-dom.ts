@@ -24,7 +24,7 @@ export async function withMockedDocumentActiveElement<T>(
 export function configureTerminalFocusMode(pane: MockPane, textarea: HTMLTextAreaElement): void {
   Object.assign(pane.terminal, { textarea })
   Object.assign(pane.terminal.modes, { sendFocusMode: true })
-  pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+  pane.terminal.write.mockImplementation((_data: string | Uint8Array, callback?: () => void) => {
     callback?.()
   })
 }

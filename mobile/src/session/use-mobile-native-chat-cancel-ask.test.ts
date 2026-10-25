@@ -72,7 +72,20 @@ describe('mobile question rejection', () => {
     expect(f.cancelPending).toHaveBeenCalledOnce()
     const sends = f.sendRequest.mock.calls.filter(([method]) => method === 'terminal.send')
     expect(sends).toHaveLength(1)
-    expect(sends[0]?.[1]).toMatchObject({ terminal: 'terminal', text: '\x1b', enter: false })
+    expect(f.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      {
+        terminal: 'terminal',
+        text: '\x1b',
+        enter: false,
+        requireWriteSettlement: true,
+        client: { id: 'device', type: 'mobile' }
+      },
+      { timeoutMs: 15_000, budgetSpansConnect: true }
+    )
+    expect(f.cancelPending.mock.invocationCallOrder[0]).toBeLessThan(
+      f.sendRequest.mock.invocationCallOrder[0]!
+    )
     expect(f.onSendError).not.toHaveBeenCalled()
   })
 

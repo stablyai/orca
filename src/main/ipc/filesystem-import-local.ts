@@ -10,10 +10,6 @@ import {
   recursiveCopyDir
 } from './filesystem-import-local-tree-copy'
 
-/**
- * Import a single top-level source into destDir, handling validation, pre-scan,
- * deconfliction, and copy.
- */
 export async function importOneSource(
   sourcePath: string,
   destDir: string,
@@ -27,9 +23,7 @@ export async function importOneSource(
   }
   const isDir = classified.stat.isDirectory()
 
-  // Why: for directories, pre-scan the entire tree for symlinks before
-  // creating any destination files. This prevents partially imported
-  // trees when a symlink is discovered halfway through recursive copy.
+  // Reject symlinks before creating destinations to avoid partially copied trees.
   if (isDir) {
     const hasSymlink = await preScanForSymlinks(resolvedSource)
     if (hasSymlink) {
@@ -37,7 +31,6 @@ export async function importOneSource(
     }
   }
 
-  // Top-level deconfliction: generate a unique name if collision exists
   const originalName = basename(resolvedSource)
   const finalName = await deconflictCopyName(originalName, (n) =>
     nameExists(destDir, n).then((exists) => exists || reservedNames.has(n))

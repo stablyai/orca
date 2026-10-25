@@ -1,5 +1,4 @@
-// A task notification that never arrives must not hold the pane working for the rest of the
-// session: no hook fires at the end of the lease, so the server restates the row itself.
+// No hook fires at lease expiry, so the server must release owed-notification holds itself.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../../shared/claude-owed-task-notifications'
 import { AgentHookServer, _internals } from './server'
@@ -16,7 +15,7 @@ vi.mock('../../shared/agent-process-presence-probe', () => ({
 
 beforeEach(() => {
   _internals.resetCachesForTests()
-  // Why shouldAdvanceTime: the hooks are real loopback POSTs, which need the clock to move.
+  // Real loopback POSTs need fake time to advance.
   vi.useFakeTimers({
     shouldAdvanceTime: true,
     toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance']
@@ -62,7 +61,6 @@ describe('Claude owed task notification expiry on the hook server', () => {
       await server.post({ hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }, OWNER)
       vi.advanceTimersByTime(CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS)
 
-      // Only resume identity is left; nothing restates the exited agent as live.
       expect(server.row()).toMatchObject({ providerSessionOnly: true })
     } finally {
       server.stop()
@@ -72,7 +70,6 @@ describe('Claude owed task notification expiry on the hook server', () => {
   it('keeps what is owed when a nested Claude in the same pane exits', async () => {
     const server = await heldByAnOwedShell()
     try {
-      // The nested process is not the pane's owner, so its exit is refused.
       await server.post({ hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }, 5151)
       expect(server.row()).toMatchObject({ state: 'working' })
       expect(server.row().providerSessionOnly).toBeUndefined()
@@ -87,7 +84,6 @@ describe('Claude owed task notification expiry on the hook server', () => {
 
 const OWNER = 4242
 
-/** A pane whose owning Claude launched a background shell that then vanished unannounced. */
 async function heldByAnOwedShell() {
   const server = new AgentHookServer()
   await server.start({ env: 'production' })

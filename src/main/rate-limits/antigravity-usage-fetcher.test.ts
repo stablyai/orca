@@ -6,6 +6,14 @@ import {
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
+const { hostShellEnvironmentMock } = vi.hoisted(() => ({
+  hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' }))
+}))
+
+vi.mock('../runtime/structured-agent-shell-environment', () => ({
+  hostShellEnvironment: hostShellEnvironmentMock
+}))
+
 const USAGE_ENVELOPE = JSON.stringify({
   conversation_id: '',
   status: 'SUCCESS',
@@ -135,6 +143,19 @@ describe('fetchAntigravityRateLimits', () => {
     expect(h.resolveCommand).toHaveBeenCalledWith('agy', { platform: 'darwin', env: probeEnv })
     // The login-shell env is a shared cache entry; the probe must not write into it.
     expect(loginShellEnv).toEqual({ PATH: '/Users/x/.local/bin:/usr/bin' })
+  })
+
+  it('looks agy up in the env agent launches use, so a Git Bash login PATH cannot hide it', async () => {
+    // Why: Git Bash's login PATH is /c/...:/usr/bin, which win32 lookup cannot read (#31459).
+    const launchEnv = { PATH: '/c/Users/x/bin:/usr/bin;C:\\Users\\x\\AppData\\Local\\agy\\bin' }
+    hostShellEnvironmentMock.mockResolvedValueOnce(launchEnv)
+    const resolveCommand = vi.fn().mockResolvedValue(null)
+    await fetchAntigravityRateLimits({ resolveCommand, platform: 'win32' })
+
+    expect(resolveCommand).toHaveBeenCalledWith('agy', {
+      platform: 'win32',
+      env: { ...launchEnv, AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+    })
   })
 
   it('reports an absent CLI as unavailable and never spawns', async () => {

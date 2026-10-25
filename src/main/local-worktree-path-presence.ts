@@ -3,7 +3,7 @@ import { mapWithConcurrency } from '../shared/map-with-concurrency'
 import { PrioritySemaphore } from '../shared/priority-semaphore'
 import { abortSignalWithTimeout } from './lib/abort-signal-with-timeout'
 
-// Why: share one bound across polling callers so slow mounts cannot multiply libuv work.
+// Share a concurrency bound across polling callers so slow mounts cannot multiply libuv work.
 const LOCAL_WORKTREE_PATH_PROBE_CONCURRENCY = 2
 export const LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS = 2_000
 const localWorktreePathProbeSemaphore = new PrioritySemaphore(LOCAL_WORKTREE_PATH_PROBE_CONCURRENCY)

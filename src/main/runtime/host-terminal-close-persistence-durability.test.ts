@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { createStore, testState } from '../persistence-test-harness'
+import { createStore, testState } from '../persistence/persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testStateDirRef.dir, getName: () => 'orca', getVersion: () => '0.0.0' },

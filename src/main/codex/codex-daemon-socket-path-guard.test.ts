@@ -140,7 +140,7 @@ describe('syncSystemConfigIntoManagedCodexHome daemon guard', () => {
   let systemHomePath: string
 
   beforeEach(() => {
-    // Why: /tmp keeps the short home under every sun_path limit on POSIX hosts.
+    // /tmp keeps the short home below POSIX socket limits.
     root = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'cx-'))
     systemHomePath = join(root, 's')
     mkdirSync(systemHomePath)
@@ -179,7 +179,7 @@ describe('syncSystemConfigIntoManagedCodexHome daemon guard', () => {
     expect(readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')).toBe(
       `[features]\n${OVERRIDE_LINE}\n`
     )
-    // A guard-only runtime config withholds no settings, so it must not raise the missing-source warning.
+    // A guard-only config has no settings to lose, so missing source does not indicate a stall.
     expect(getCodexConfigSyncStatus({ runtimeHomePath, systemHomePath }).state).toBe('synced')
   })
 

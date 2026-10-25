@@ -78,7 +78,9 @@ describe('decoding a bundle range', () => {
             vector.outputLimit - 1
           )
         ).toString('hex')
-      } catch {
+      } catch (error) {
+        expect(error, vector.name).toBeInstanceOf(MobileWebBundleFetchError)
+        expect(error, vector.name).toMatchObject({ refusal: 'range-undecodable' })
         actual = null
       }
       expect(actual, vector.name).toBe(vector.js)

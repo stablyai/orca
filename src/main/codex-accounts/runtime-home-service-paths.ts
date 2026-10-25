@@ -18,23 +18,13 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
     return getOrcaManagedCodexHomePath()
   }
 
-  /**
-   * Resolves the managed home the config mirror actually targets for the
-   * current HOST selection, or null when no mirror runs for it.
-   *
-   * Read-only on purpose: unlike the launch and quota-fetch paths this prepares
-   * nothing and creates no directories, so surfacing sync health cannot alter
-   * the state it is reporting on. Returns null for the system default on the
-   * real-home lane, which runs Codex directly against ~/.codex — there is no
-   * mirror there, so there is nothing that can fall behind.
-   */
+  /** Resolve config-mirror status without side effects; a ready null path means no mirror runs. */
   getMirroredHostHomePathForStatus(): CodexMirroredHomeStatus {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'indeterminate') {
-        // Why: `null` here is a positive claim that no mirror exists, which the
-        // status channel reports as healthy. An unreadable home is not that.
+        // An unreadable home cannot claim the healthy no-mirror status.
         return { kind: 'unavailable' }
       }
       return { kind: 'ready', homePath: resolved.kind === 'owned' ? resolved.homePath : null }

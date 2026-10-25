@@ -1,9 +1,3 @@
-// Journaling ONE Claude `result` frame: the end of the root turn it settles, and the diagnostic
-// row a failed or unrecognised result leaves.
-//
-// Split out of the translator when that file reached its line budget; the translator still owns
-// the open turn and every collaborator this writes through.
-
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import type { ClaudeContextFacts } from './claude-context-facts'
 import { claudeCommandResultEnd } from './claude-command-turn'
@@ -53,10 +47,7 @@ export function journalClaudeResult(
   message: Record<string, unknown>,
   observedAt: number
 ): void {
-  // Every turn this translator opens is root by construction, so a nested
-  // result settles the child that produced it and never the turn. The
-  // diagnostic below still runs: a child's failure is reportable even when
-  // it ends no turn.
+  // Child results can report failures but must never settle the root turn.
   const settlesTurn = isRootClaudeFrame(message)
   const endedTurnScope = turn.turnScope
   const endedTurnIdentity = turn.identity
@@ -82,6 +73,7 @@ export function journalClaudeResult(
   if (settlesTurn) {
     turn.suppressReopenOnFailure(message.is_error === true)
     corrections.abandon()
+    streamedText.finish({ completedAt: observedAt })
     context.settle(message, commandEnd ?? claudeTurnEndForResult(message, observedAt, leftToStop))
     streamedBlocks.clear()
     streamedText.settle()
@@ -111,8 +103,6 @@ export function journalClaudeResult(
       usageLimit ?? failure?.text,
       undefined,
       { reportsFailure: failure !== null },
-      // A result that settles no turn is a CHILD's result: this
-      // translator only ever opens root turns.
       settlesTurn
         ? () => ({ turnScope: endedTurnScope })
         : corrections.stampFor(claudeFrameParentRef(message))

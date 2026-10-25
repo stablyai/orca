@@ -7,10 +7,7 @@ import {
   updateTomlLineScanState
 } from './config-toml-line-scan'
 
-// Why: codex-rs types these settings AbsolutePathBuf and resolves relative
-// values against the defining config.toml's directory (= CODEX_HOME for the
-// user config). experimental_instructions_file only exists in older Codex
-// releases; keeping it is harmless since Codex ignores unknown keys.
+// Codex resolves these path settings against config.toml, including legacy instruction-file keys.
 const EXACT_PATH_CONFIG_KEYS = new Set([
   'debug.config_lockfile.export_dir',
   'debug.config_lockfile.load_path',
@@ -23,11 +20,8 @@ const EXACT_PATH_CONFIG_KEYS = new Set([
   'sqlite_home'
 ])
 
-// Why: Orca mirrors config.toml into a managed CODEX_HOME, but Codex resolves
-// path-valued config settings from the file it read. Keep user-owned assets in
-// ~/.codex reachable after the mirror moves the TOML. Best-effort by design:
-// values spelled as inline tables, quoted keys, or triple-quoted strings pass
-// through unchanged rather than risk corrupting them.
+// Preserve original path targets when moving config.toml to a managed home.
+// Inline tables, quoted keys and multiline strings pass through unchanged.
 export function rewriteRelativePathConfigValues(config: string, sourceConfigDir: string): string {
   const lines = config.split('\n')
   let tablePath = ''
@@ -69,8 +63,7 @@ function rewriteRelativePathConfigLine(
     return line
   }
 
-  // Why: WSL configs are read over UNC paths but consumed inside Linux, so
-  // join semantics must follow the source home's path style, not the host's.
+  // WSL reads config over UNC but consumes it in Linux; join using the source home's path style.
   const path = sourceConfigDir.startsWith('/') ? pathPosix : pathWin32
   const absolutePath = path.join(sourceConfigDir, parsed.value)
   return `${line.slice(0, parsed.start)}${quoteTomlPath(absolutePath)}${line.slice(parsed.end)}`
@@ -87,8 +80,7 @@ function isPathConfigKey(tablePath: string, key: string): boolean {
   return (
     /^agents\..+\.config_file$/.test(fullPath) ||
     /^model_providers\..+\.auth\.cwd$/.test(fullPath) ||
-    // Why: profiles mirror the top-level file settings that Codex reads (and
-    // can abort on) during config load.
+    // Profile file settings also load during Codex startup.
     /^profiles\..+\.(?:experimental_compact_prompt_file|model_catalog_json|model_instructions_file)$/.test(
       fullPath
     )
@@ -114,8 +106,7 @@ function quoteTomlPath(value: string): string {
   return canUseTomlLiteralString(value) ? `'${value}'` : quoteTomlBasicString(value)
 }
 
-// Why: TOML literal strings allow tab but no other control chars and no
-// single quote; anything else must go through an escaped basic string.
+// TOML literal strings forbid single quotes and control characters except tab.
 function canUseTomlLiteralString(value: string): boolean {
   for (const char of value) {
     if (char === "'") {

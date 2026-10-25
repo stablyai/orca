@@ -48,6 +48,20 @@ describe('sort comparator performance', () => {
         (finding) => finding.code === 'sort-comparator-performance(no-repeated-collator)'
       )
     ).toBe(true)
+    const reportedSources = findings.map(({ labels }) => {
+      const { offset, length } = labels[0].span
+      return Buffer.from(sources.repeatedCollation)
+        .subarray(offset, offset + length)
+        .toString('utf8')
+    })
+    expect(reportedSources.sort()).toEqual(
+      [
+        "a.name.localeCompare(b.name, locale, { sensitivity: 'base' })",
+        "new Intl.Collator('sv')",
+        "Intl.Collator('en', { numeric: true })",
+        "a['localeCompare'](b, undefined, options)"
+      ].sort()
+    )
   })
 
   it('allows one collator per sort, bare comparisons, and unrelated callbacks', () => {

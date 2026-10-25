@@ -34,13 +34,13 @@ describe('file tab doc reply schemas', () => {
   })
 
   it('reads a text diff only when both sides are strings', () => {
-    expect(
-      fileTabTextDiffSchema.safeParse({ kind: 'text', originalContent: 'a', modifiedContent: 'b' })
-        .success
-    ).toBe(true)
-    expect(fileTabTextDiffSchema.safeParse({ kind: 'text', originalContent: 'a' }).success).toBe(
-      false
-    )
+    const ready = { kind: 'text', originalContent: 'a', modifiedContent: 'b' }
+    expect(fileTabTextDiffSchema.safeParse(ready).success).toBe(true)
+    for (const member of ['originalContent', 'modifiedContent'] as const) {
+      const { [member]: _dropped, ...without } = ready
+      expect(fileTabTextDiffSchema.safeParse(without).success).toBe(false)
+      expect(fileTabTextDiffSchema.safeParse({ ...ready, [member]: 7 }).success).toBe(false)
+    }
   })
 
   it('routes an unknown diff arm to the binary reader and never the text one', () => {

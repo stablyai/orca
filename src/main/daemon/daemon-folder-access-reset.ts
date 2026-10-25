@@ -1,6 +1,4 @@
-// The remedy for the third of affected users whom a freshly forked daemon is still denied
-// (STA-7948) even though Orca itself is allowed: clear Orca's TCC row for that folder class so
-// macOS asks again, have the app touch the folder so the prompt names Orca, then re-probe.
+// Reset the folder-class TCC grant, prompt from Orca, then probe whether a fresh daemon can read it.
 
 import { app } from 'electron'
 import { dirname, resolve } from 'node:path'
@@ -22,11 +20,6 @@ import {
 } from './daemon-folder-access-mismatch'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 
-/**
- * `unsupported` covers every reason the remedy does not apply — no stored evidence, a folder class
- * TCC has no service for, another platform, or a bundle id we cannot read — because the dialog
- * says the same thing to the user for all of them.
- */
 export type DaemonFolderAccessResetResult =
   | { outcome: 'unsupported' }
   | { outcome: 'reset_failed' }
@@ -38,7 +31,7 @@ const TCC_SERVICE_BY_CWD_CLASS: Record<MacTccFolderClass, string> = {
   downloads: 'SystemPolicyDownloadsFolder'
 }
 
-/** `Orca.app/Contents/MacOS/Orca` → `Orca.app`, the bundle whose id owns every TCC row. */
+/** Orca.app/Contents/MacOS/Orca → Orca.app, whose bundle ID identifies its TCC grants. */
 function runningAppBundlePath(): string {
   return resolve(dirname(app.getPath('exe')), '..', '..')
 }
@@ -46,20 +39,13 @@ function runningAppBundlePath(): string {
 /** An unanswered macOS sheet must not keep the fix dialog busy for the rest of the session. */
 const PROMPT_DEADLINE_MS = 60_000
 
-/**
- * Why the app reads the folder itself: TCC raises its prompt against the process that made the
- * syscall, so a daemon-side read would put the daemon on screen, or nothing at all. Async
- * throughout — the prompt blocks the calling syscall until the user answers it, and the sync
- * variant would take main's event loop down with it for the whole time the dialog is up.
- *
- * Returns false once the deadline passes with the read still blocked, which means the sheet is up
- * and unanswered. The read itself cannot be cancelled; it is simply no longer awaited.
- */
+/** Read from the app to attribute the TCC prompt to Orca; async I/O keeps main responsive.
+ * A deadline stops waiting but cannot cancel an unanswered prompt's read. */
 async function promptByReadingFolder(path: string): Promise<boolean> {
   let deadline: NodeJS.Timeout | undefined
   try {
     return await Promise.race([
-      // The outcome is the re-probe's job; this read exists only to raise the prompt.
+      // This read triggers the prompt; the fresh-daemon probe judges access.
       enumerateDirectoryOnce(path).then(() => true),
       new Promise<false>((resolve) => {
         deadline = setTimeout(() => resolve(false), PROMPT_DEADLINE_MS)
@@ -76,10 +62,6 @@ const RESET_OUTCOME_ACTION = {
   unknown: 'reset_outcome_unknown'
 } as const satisfies Record<FreshDaemonAccess, EventProps<'daemon_folder_access_notice'>['action']>
 
-/**
- * Emitted from main, not the renderer: nobody has verified this remedy on an affected machine, so
- * the verdict the re-probe returns is the only evidence the feature works.
- */
 function emitResetOutcome(cwdClass: DaemonPtyCwdClass, access: FreshDaemonAccess): void {
   try {
     track('daemon_folder_access_notice', {
@@ -87,7 +69,7 @@ function emitResetOutcome(cwdClass: DaemonPtyCwdClass, access: FreshDaemonAccess
       cwd_class: cwdClass
     })
   } catch {
-    // Best-effort: a dropped event must not turn a completed reset into a failure.
+    // Telemetry failure must not change the reset outcome.
   }
 }
 
@@ -109,14 +91,12 @@ export async function resetFolderAccessForDaemon(
     return { outcome: 'reset_failed' }
   }
   const prompted = await promptByReadingFolder(target.canonicalPath)
-  // Why no probe once the deadline passes: the sheet is still up, and a probe under it would read
-  // as denied — a verdict about the unanswered prompt, not about the permission.
+  // An unanswered prompt cannot yield a post-reset access verdict.
   if (prompted) {
     await refreshDaemonFolderAccessProbe(identity, { force: true })
   }
   const mismatch = getDaemonFolderAccessMismatch(identity)
-  // One access for the event and the dialog: with the prompt unanswered the stored verdict predates
-  // the reset, so reporting it as the reset's would claim a denial nothing has re-read.
+  // The stored verdict predates an unanswered reset, so both event and dialog must report unknown.
   const access = prompted ? (mismatch?.freshDaemonAccess ?? 'unknown') : 'unknown'
   emitResetOutcome(target.cwdClass, access)
   return { outcome: 'probed', mismatch: mismatch && { ...mismatch, freshDaemonAccess: access } }

@@ -1,6 +1,5 @@
 import { LEAF_1, LEAF_2, unboundSplitLayout } from './terminal-pane-tab-detach-fixture'
 import type { AppState } from '@/store/types'
-import type { TerminalPaneController } from './use-terminal-pane-controller'
 import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -320,26 +319,13 @@ describe('remote runtime pane binding ownership', () => {
         if (contactLoss) {
           expect(await connecting).toBeUndefined()
           await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1)
-          vi.doMock('react-dom', () => ({ createPortal: (element: unknown) => element }))
-          vi.doMock('./use-wsl-host-unavailable-reason', () => ({
-            useWslHostUnavailableReason: () => null
-          }))
-          const { TerminalPaneRecoveryPortals } = await import('./TerminalPaneRuntimePortals')
-          const portals = TerminalPaneRecoveryPortals({
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only recovery fields are read; the portal and WSL hook are inert rendering dependencies.
-            controller: {
-              managedPanes: [{ id: 1 }],
-              ptyRecoveryStatesByPaneId: { 1: transport.getRecoveryState?.() },
-              paneTransportsRef: { current: new Map([[1, transport]]) }
-            } as unknown as TerminalPaneController
-          })
-          const banner = portals?.props.children[0]
-          expect(banner?.props.phase).toBe('disconnected')
+          expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+          const { createPaneRecoveryReconnect } = await import('./TerminalPaneRecoveryPortals')
           reachable = true
           const retryRecovery = transport.retryRecovery
           let accepted: boolean | undefined
           transport.retryRecovery = () => (accepted = retryRecovery?.() ?? false)
-          banner?.props.onReconnect()
+          createPaneRecoveryReconnect(() => transport, null)()
           expect(accepted).toBe(true)
         }
         await vi.waitFor(() => expect(latestSubscribePayload().terminal).toBe('terminal-1'))

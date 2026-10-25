@@ -3,7 +3,7 @@ import {
   createSqliteTestStore,
   readPersistedStateJson,
   writePersistedStateJson
-} from '../../persistence-test-harness'
+} from '../persistence-test-harness'
 /**
  * The write path now hands the file a Buffer it built in one pass instead of a string it rebuilt
  * per secret. Drives the real `Store` end to end — encrypted settings, a local session and a remote

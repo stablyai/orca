@@ -15,7 +15,7 @@ import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   structuredLaunchOwner
-} from '@/lib/structured-agent-session-provisional-tab'
+} from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { admitStructuredLaunchOnHost } from '@/lib/structured-agent-session-host-admission'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'

@@ -568,10 +568,7 @@ describe('OrcaRuntimeService', () => {
   it('reports recoverable post-stop liveness failure after exact terminal stop', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
-    const processLists = [
-      [{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }],
-      new Error('daemon unavailable')
-    ]
+    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }]]
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -581,12 +578,13 @@ describe('OrcaRuntimeService', () => {
         return true
       },
       getForegroundProcess: async () => null,
+      // Why: the daemon stays unavailable through every bounded post-stop retry.
       listProcesses: async () => {
         const next = processLists.shift()
-        if (next instanceof Error) {
-          throw next
+        if (!next) {
+          throw new Error('daemon unavailable')
         }
-        return next ?? []
+        return next
       }
     })
 

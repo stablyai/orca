@@ -181,7 +181,15 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
+    const currentHeadOid = options?.currentHeadOid ?? null
     const inflightRequest = inflightHostedReviewRequests.get(requestKey)
+    // A lookup started at another HEAD may return a merged PR this worktree has moved past.
+    const joinableInflightRequest =
+      currentHeadOid !== null &&
+      inflightRequest?.currentHeadOid != null &&
+      inflightRequest.currentHeadOid !== currentHeadOid
+        ? undefined
+        : inflightRequest
     const startRequest = (): Promise<HostedReviewInfo | null> => {
       const generation = nextLookupGeneration()
       const requestStartedAt = Date.now()
@@ -287,6 +295,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       registerInflightHostedReviewRequest(requestKey, {
         promise: request,
         force: Boolean(options?.force),
+        currentHeadOid,
         generation,
         startedAt: requestStartedAt
       })
@@ -297,6 +306,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       !options?.force &&
       !linkedRefetch &&
       !scopedResultRefetch &&
+      !staleMergedHeadRefetch &&
       options?.staleWhileRevalidate &&
       cached !== undefined &&
       cached.data !== null
@@ -307,8 +317,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
-    if (inflightRequest && (!options?.force || inflightRequest.force)) {
-      return inflightRequest.promise
+    if (joinableInflightRequest && (!options?.force || joinableInflightRequest.force)) {
+      return joinableInflightRequest.promise
     }
 
     return startRequest()

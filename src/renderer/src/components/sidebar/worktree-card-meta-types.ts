@@ -68,9 +68,9 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
   onOpenIssueInBrowser?: (url: string) => void
   onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
-  onOpenReviewInOrca?: (event: React.MouseEvent) => void
+  onOpenReviewInOrca?: (event: React.MouseEvent, review?: WorktreeCardPrDisplay) => void
   onOpenReviewInBrowser?: (url: string) => void
-  onUnlinkReview?: () => void
+  onUnlinkReview?: (item?: WorkspaceAttachment) => void
   onOpenAutomation?: (event: React.MouseEvent) => void
   onOpenAutomationRun?: (event: React.MouseEvent) => void
   hoverControl?: WorktreeCardDetailsHoverControl

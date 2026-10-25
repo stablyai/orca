@@ -7,7 +7,7 @@ vi.mock('../storage/preferences', () => ({
 }))
 
 describe('notification opt-in gate', () => {
-  it('asks for push-service consent when no choice is saved, regardless of OS permission', async () => {
+  it('asks for push-service consent when no choice is saved', async () => {
     vi.mocked(readPushNotificationsPreference).mockResolvedValue({ value: null, loaded: true })
     await expect(shouldPresentNotificationOptIn()).resolves.toBe(true)
   })

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { z } from 'zod'
@@ -67,7 +68,13 @@ describe('undeclared dependency resolution', () => {
     }
   )
 
-  it('aliases the DOM-free decode-named-character-reference entry', () => {
-    expect(markdownParserAliases['decode-named-character-reference']).toMatch(/[\\/]index\.js$/)
+  it('decodes named references through the DOM-free parser alias', async () => {
+    const decoder = await import(
+      pathToFileURL(markdownParserAliases['decode-named-character-reference']).href
+    )
+    expect(typeof decoder.decodeNamedCharacterReference).toBe('function')
+    expect(decoder.decodeNamedCharacterReference('amp')).toBe('&')
+    expect(decoder.decodeNamedCharacterReference('NotEqualTilde')).toBe('≂̸')
+    expect(decoder.decodeNamedCharacterReference('not-an-entity')).toBe(false)
   })
 })

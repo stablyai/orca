@@ -1,10 +1,20 @@
 import { createElement } from 'react'
-import TestRenderer from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildOmpPlanReviewAnswer } from '../../../src/shared/omp-plan-review-prompt'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
+
+const renderers: ReactTestRenderer[] = []
+afterEach(() => {
+  TestRenderer.act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.length = 0
+})
 
 const APPROVAL = JSON.stringify({
   approval: { tool: 'Bash', summary: 'pnpm build > build.log 2>&1' }
@@ -30,7 +40,7 @@ function promptsFor(
     return null
   }
   TestRenderer.act(() => {
-    TestRenderer.create(createElement(Probe))
+    renderers.push(TestRenderer.create(createElement(Probe)))
   })
   return captured!
 }
@@ -216,37 +226,47 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
 })
 
 describe('useMobileNativeChatPrompts in a structured chat', () => {
-  it('shows a Codex async question and answers it with an ordinary send', async () => {
-    const sendWithOutcome = vi.fn(async () => 'accepted' as const)
-    const questions = [{ title: 'Which color?', options: ['Red', 'Blue'] }]
-    const message: NativeChatMessage = {
-      id: 'ask',
-      role: 'assistant',
-      blocks: [
-        { type: 'text', text: 'Which color?\n- Red\n- Blue' },
-        { type: 'tool-call', name: 'request_user_input_async', input: { questions } }
-      ],
-      timestamp: null,
-      source: 'transcript'
-    }
-    let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
-    function Probe(): null {
-      captured = useMobileNativeChatPrompts({
-        enabled: true,
-        structured: { permission: null, question: null, sendWithOutcome },
-        status: null,
-        messages: [message],
-        transcriptLoading: false
+  it.each([
+    ['accepted', true],
+    ['queued', true],
+    ['unknown', true],
+    ['rejected', false]
+  ] as const)(
+    'answers a Codex async question through an ordinary %s send',
+    async (outcome, accepted) => {
+      const sendWithOutcome = vi.fn(async () => outcome)
+      const questions = [{ title: 'Which color?', options: ['Red', 'Blue'] }]
+      const message: NativeChatMessage = {
+        id: 'ask',
+        role: 'assistant',
+        blocks: [
+          { type: 'text', text: 'Which color?\n- Red\n- Blue' },
+          { type: 'tool-call', name: 'request_user_input_async', input: { questions } }
+        ],
+        timestamp: null,
+        source: 'transcript'
+      }
+      let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
+      function Probe(): null {
+        captured = useMobileNativeChatPrompts({
+          enabled: true,
+          structured: { permission: null, question: null, sendWithOutcome },
+          status: null,
+          messages: [message],
+          transcriptLoading: false
+        })
+        return null
+      }
+      TestRenderer.act(() => {
+        renderers.push(TestRenderer.create(createElement(Probe)))
       })
-      return null
-    }
-    TestRenderer.act(() => {
-      TestRenderer.create(createElement(Probe))
-    })
 
-    const ask = captured?.ask
-    expect(ask?.questions[0]?.question).toBe('Which color?')
-    await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(true)
-    expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
-  })
+      const ask = captured?.ask
+      expect(ask?.questions[0]?.question).toBe('Which color?')
+      await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
+        accepted
+      )
+      expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+    }
+  )
 })

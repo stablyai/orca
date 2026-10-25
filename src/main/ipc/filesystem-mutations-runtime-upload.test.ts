@@ -168,8 +168,7 @@ describe('fs:uploadExternalFileToRuntime', () => {
         })
     )
 
-    // Why: the sweep contract is "never rejects"; if it ever did, this documents
-    // that the handler would surface the sweep error instead of the upload's.
+    // A broken never-rejects sweep would mask the original upload failure.
     await expect(invoke(sender)).rejects.toThrow('sweep exploded')
     expect(listenerCount(sender)).toBe(0)
   })

@@ -46,7 +46,6 @@ afterEach(async () => {
   closeTestJournalHostDatabases()
 })
 
-/** Drops the old host without an exit callback or graceful turn settlement. */
 async function restartAfterCrash(): Promise<void> {
   const old = rig.host
   old.stopDelivery()

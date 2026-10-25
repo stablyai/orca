@@ -1,5 +1,5 @@
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * Drives the real `Store`, because the value of the prune gate is entirely in whether the shipping
  * write paths signal it. A mutation that unwires the call site survives any test that pokes the gate

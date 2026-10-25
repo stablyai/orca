@@ -2,14 +2,13 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session-jou
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
-import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
+import { readProcessStartTimeMs } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
 export function claudeProviderHandleLink(input: {
   sessionId: string
   leafUuid: string | null
   resumed: boolean
   origin?: 'adopted'
-  /** Set when this session is a rewind's fork of the head it replaces. */
   forkedFromKey?: string
   fence: number
   linkId?: string
@@ -41,8 +40,7 @@ export async function claudeProcessIdentity(
   if (input.pid === undefined) {
     throw new Error('claude app-server started without a pid')
   }
-  // Best-effort: without it a later owner probe is indeterminate, and recovery releases such an
-  // owner without signalling it, so an unreadable start time must not refuse the session.
+  // An unreadable start time leaves recovery unverifiable; it must not prevent startup.
   let processStartTimeMs: number | null = null
   for (
     let attempt = 0;

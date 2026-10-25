@@ -1,4 +1,4 @@
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 /**
  * A definition change must name the host it affected, and a change that moves a
  * record between hosts must name both — a subscriber that never hears about the

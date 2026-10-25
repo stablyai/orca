@@ -14,7 +14,7 @@ import { closeTestJournalHostDatabases } from '../native-chat/agent-session-jour
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
-import { withChatTabChanges } from './agent-session-tab-layout'
+import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import {
   chatTabCommandsSettled as settled,
   layoutApplyOn

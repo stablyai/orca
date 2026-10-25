@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
@@ -21,9 +20,9 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
-vi.mock('./host-screen-header', () => ({ HostScreenHeader: () => null }))
-vi.mock('./host-workspace-list', () => ({ HostWorkspaceList: () => null }))
-vi.mock('./host-screen-overlays', () => ({ HostScreenOverlays: () => null }))
+vi.mock('./host-screen-header', () => ({ HostScreenHeader: 'HostScreenHeader' }))
+vi.mock('./host-workspace-list', () => ({ HostWorkspaceList: 'HostWorkspaceList' }))
+vi.mock('./host-screen-overlays', () => ({ HostScreenOverlays: 'HostScreenOverlays' }))
 vi.mock('../transport/host-removal-lifecycle', () => ({
   removeHostAndCloseClient: () => Promise.reject(doubles.removalRejection)
 }))
@@ -107,6 +106,9 @@ describe('a removal that failed', () => {
     // would be asking the user to confirm against a view that is not rendering it.
     const tree = render({ error: '', actionError: 'Could not remove host. Please try again.' })
     expect(byName(tree, 'SafeAreaView')).toHaveLength(1)
+    expect(byName(tree, 'HostScreenHeader')).toHaveLength(1)
+    expect(byName(tree, 'HostWorkspaceList')).toHaveLength(1)
+    expect(byName(tree, 'HostScreenOverlays')).toHaveLength(1)
     expect(byName(tree, 'Text')).toEqual([])
   })
 
@@ -132,13 +134,5 @@ describe('a removal that failed', () => {
     expect(writes.action).toEqual(['Remove this host from the host list in the Orca app.'])
     expect(writes.confirm).toEqual([])
     expect(writes.identity).toEqual([])
-  })
-
-  it('renders from the same module on both platforms, so one check covers each', () => {
-    // No `.web.tsx` sibling for either file: the page and the app run this exact tree, which is
-    // what makes the two render assertions above true of both.
-    for (const module of ['host-screen-view', 'host-workspace-list']) {
-      expect(existsSync(new URL(`./${module}.web.tsx`, import.meta.url)), module).toBe(false)
-    }
   })
 })

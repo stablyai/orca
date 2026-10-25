@@ -28,7 +28,6 @@ function worktree(repoId: string, id: string, repo = repoId): Worktree {
     path: `/tmp/orca/${repoId}/${id}`,
     liveTerminalCount: 0,
     hasAttachedPty: false,
-    preview: '',
     unread: false,
     isPinned: false,
     linkedPR: null,
@@ -94,7 +93,10 @@ describe('every worktree stays visible regardless of repo.list contents', () => 
 
   it("narrows to the desktop's shown hosts, and its legacy scope alone narrows too", () => {
     // The phone's host filter is the desktop's: rows on hosts it hides are hidden here as well.
-    const worktrees = [worktree('local-repo', 'x'), worktree('runtime-repo', 'y')]
+    const worktrees = [
+      { ...worktree('local-repo', 'x'), hostId: 'local' as const },
+      { ...worktree('runtime-repo', 'y'), hostId: 'runtime:devbox' as const }
+    ]
     const catalogRepos = [
       ['local-repo', 'local-repo'],
       ['runtime-repo', 'runtime-repo']
@@ -102,13 +104,13 @@ describe('every worktree stays visible regardless of repo.list contents', () => 
 
     expect(
       visibleWorktreeIds(worktrees, catalogRepos, { visibleWorkspaceHostIds: ['runtime:devbox'] })
-    ).toEqual([])
+    ).toEqual(['y'])
     expect(
       visibleWorktreeIds(worktrees, catalogRepos, {
         visibleWorkspaceHostIds: null,
         workspaceHostScope: 'local'
       })
-    ).toEqual(['x', 'y'])
+    ).toEqual(['x'])
     expect(visibleWorktreeIds(worktrees, catalogRepos, { workspaceHostScope: 'all' })).toEqual([
       'x',
       'y'
