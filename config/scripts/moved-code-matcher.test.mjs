@@ -86,13 +86,18 @@ describe('moved-code matcher and changed-line gate', () => {
       if (command === 'git') {
         return { status: 0, stdout: args[0] === 'show' ? baseline.join('\n') : '' }
       }
+      if (args[0] === 'scan') {
+        return { status: 0, stdout: '', stderr: '' }
+      }
       return { status: 1, stdout: JSON.stringify({ diagnostics }), stderr: '' }
     })
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
       expect(quality.main(root, 'baseline')).toBe(1)
-      const scans = processCalls.spawnSync.mock.calls.filter(([command]) => command !== 'git')
+      const scans = processCalls.spawnSync.mock.calls.filter(
+        ([command, args]) => command !== 'git' && args[0] !== 'scan'
+      )
       expect(scans).toHaveLength(quality.OXLINT_SCANS.length)
       const annotations = error.mock.calls
         .map(([message]) => message)
