@@ -13,6 +13,7 @@ import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_TYPECHECK_PROJECTS,
   TYPECHECK_PROJECTS,
   admissibleHeapGib,
   planTypecheckBatches,
@@ -194,6 +195,10 @@ describe('local and CI compiler selection', () => {
       TYPECHECK_PROJECTS[0]
     ])
     expect(parseTypecheckOptions([]).projects).toEqual(TYPECHECK_PROJECTS)
+    expect(parseTypecheckOptions(['--project=mobile/tsconfig.test.json']).projects).toEqual([
+      MOBILE_TYPECHECK_PROJECTS[1]
+    ])
+    expect(TYPECHECK_PROJECTS).not.toContainEqual(MOBILE_TYPECHECK_PROJECTS[0])
     expect(() => parseTypecheckOptions(['--project=config/tsconfig.json'])).toThrow()
   })
 

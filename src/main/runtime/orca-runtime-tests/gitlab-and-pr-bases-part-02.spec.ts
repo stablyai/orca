@@ -161,7 +161,7 @@ describe('OrcaRuntimeService', () => {
           'origin',
           '+refs/heads/feature/add-feature:refs/remotes/origin/feature/add-feature'
         ],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
       )
       expect(gitSpy).toHaveBeenCalledWith(['rev-parse', '--verify', 'origin/feature/add-feature'], {
         cwd: TEST_REPO_PATH,
@@ -266,7 +266,7 @@ describe('OrcaRuntimeService', () => {
       )
       expect(gitSpy).toHaveBeenCalledWith(
         ['fetch', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        { cwd: TEST_REPO_PATH }
+        { cwd: TEST_REPO_PATH, timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
       )
       expect(gitSpy).toHaveBeenCalledWith(
         ['rev-parse', '--verify', `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`],

@@ -2,8 +2,8 @@ import type { ChildProcess } from 'node:child_process'
 import {
   type PendingWatcherUnsubscribe,
   resolvePendingWatcherUnsubscribes
-} from '../../parcel-watcher-host-subscriptions'
-import { WatcherProcessFailure } from '../../parcel-watcher-process-failure'
+} from './parcel-watcher-host-subscriptions'
+import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import { RUNTIME_FILE_WATCH_EXIT_DEADLINE_MS } from '../../../../shared/runtime-file-watch-limits'
 
 export const WATCHER_PROCESS_HARD_KILL_DELAY_MS = 5_000

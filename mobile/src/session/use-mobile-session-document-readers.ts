@@ -155,6 +155,10 @@ function documentReadErrorMessage(err: unknown, fallback: string): string {
   if (message === 'file_too_large') {
     return 'File too large for mobile preview'
   }
+  // Why: the host only serves workspace-relative paths; a desktop tab of an external file has none.
+  if (message === 'invalid_relative_path') {
+    return 'This file is outside the workspace. Open it on desktop to view it.'
+  }
   return fallback
 }
 

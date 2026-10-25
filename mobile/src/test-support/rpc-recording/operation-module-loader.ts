@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
 import { observeSalvagedReads } from './salvage-observation'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'

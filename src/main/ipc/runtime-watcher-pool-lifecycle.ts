@@ -1,4 +1,4 @@
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 
 export class RuntimeWatcherPoolLifecycle {
   readonly isolatedRoots = new Set<string>()

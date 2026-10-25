@@ -28,6 +28,7 @@ import {
   sessionRootDirs,
   wslHomeSessionDirs
 } from './session-scanner-roots'
+import { getHermesHome } from '../hermes/hermes-default-home'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
@@ -40,7 +41,6 @@ const COPILOT_SESSIONS_DIR = join(
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
-const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 export function piSessionHistorySessionsDir(): string {
   return normalizeAgentSessionsDir(
@@ -182,7 +182,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   hermes: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.hermesSessionsDir ?? HERMES_SESSIONS_DIR, wslHomeDirs, [
+      sessionRootDirs(options.hermesSessionsDir ?? join(getHermesHome(), 'sessions'), wslHomeDirs, [
         '.hermes',
         'sessions'
       ]),

@@ -1,9 +1,9 @@
 import { realpathSync, statSync, type BigIntStats } from 'node:fs'
 import { realpath, stat } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
-import { subscribeViaWatcherProcess } from '../ipc/parcel-watcher-process'
-import type { WatcherProcessSubscribeOptions } from '../ipc/parcel-watcher-process-protocol'
-import type { WatcherProcessSubscription } from '../ipc/parcel-watcher-process-subscription'
+import { subscribeViaWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
+import type { WatcherProcessSubscribeOptions } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
+import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import { resolveWatcherRootPaths } from '../ipc/watcher-event-root-path-rewrite'
 import { watcherDirectoryIdentity } from '../ipc/watcher-directory-identity'
 

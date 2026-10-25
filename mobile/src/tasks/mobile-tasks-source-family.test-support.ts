@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript-api'
 
 const TASKS_DIRECTORY = __dirname
 const SOURCE_PATTERN = /^(?:MobileTasks.*\.tsx|mobile-tasks-.*\.tsx?|use-mobile-tasks-.*\.tsx?)$/

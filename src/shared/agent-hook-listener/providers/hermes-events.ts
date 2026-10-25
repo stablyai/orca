@@ -25,6 +25,34 @@ const HERMES_EVENT_STATES: Record<string, 'working' | 'waiting' | 'done'> = {
   post_approval_response: 'working'
 }
 
+// Why: Hermes' post-turn memory/skill review fires tool hooks with no turn of its own.
+function admitsHermesEvent(
+  state: HookListenerState,
+  paneKey: string,
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): boolean {
+  const sessionId = typeof hookPayload.session_id === 'string' ? hookPayload.session_id : ''
+  const turn = state.hermesTurnByPaneKey.get(paneKey)
+  if (eventName === 'pre_llm_call') {
+    // `delegate_task` children run as platform "subagent" under their own session ids.
+    if (turn && hookPayload.platform === 'subagent') {
+      turn.childSessionIds.add(sessionId)
+    } else {
+      state.hermesTurnByPaneKey.set(paneKey, { ended: false, childSessionIds: new Set() })
+    }
+    return true
+  }
+  if (eventName === 'post_llm_call' || eventName === 'on_session_end') {
+    if (turn && !turn.childSessionIds.has(sessionId)) {
+      turn.ended = true
+    }
+    return true
+  }
+  const isToolEvent = eventName === 'pre_tool_call' || eventName === 'post_tool_call'
+  return !(isToolEvent && turn?.ended)
+}
+
 export function normalizeHermesEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -35,6 +63,10 @@ export function normalizeHermesEvent(
   const stateName = typeof eventName === 'string' ? HERMES_EVENT_STATES[eventName] : undefined
 
   if (!stateName) {
+    return null
+  }
+
+  if (!admitsHermesEvent(state, paneKey, eventName, hookPayload)) {
     return null
   }
 

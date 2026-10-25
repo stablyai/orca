@@ -1147,6 +1147,11 @@
         "openInChat": "この {{value0}} の会話はチャットで開かれています。開くにはセッション履歴を更新してください。",
         "ownershipUnknown": "Orca はこの {{value0}} の会話の所有者を確認できませんでした。セッション履歴を更新して、再試行してください。"
       },
+      "composerCreateHandoff": {
+        "reopen": "再度開く",
+        "preparationTimedOut": "ワークツリーの準備がタイムアウトしました。",
+        "needsInput": "追加の入力が必要なため、ワークツリーは作成されませんでした。"
+      },
       "pendingWorktreeCreation": {
         "checkingOutFiles": "ファイルをチェックアウト中… {{percent}}%",
         "provisioningVm": "VMをプロビジョニング中…",
@@ -11905,7 +11910,8 @@
           "failed": "更新に失敗しました",
           "serviceManagerHelp": "このサーバーを開始するサービスマネージャーを通じて Orca を更新してください。",
           "unpackedHelp": "開発ビルドはソースチェックアウトから更新する必要があります。",
-          "legacyHelp": "このサーバーではリモート更新を利用できません。サーバー上で Orca を更新してください。"
+          "legacyHelp": "このサーバーではリモート更新を利用できません。サーバー上で Orca を更新してください。",
+          "managedOverSshHelp": "このサーバーはこのデスクトップから SSH で更新されます。リモート Orca サーバーの行にある「更新」を使ってください。"
         },
         "BrowserLinkRoutingSetting": {
           "description": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。{{shortcut}} は常にシステムブラウザを使用します。",
@@ -12679,7 +12685,10 @@
             "forgetDescription": "ホストに接続せずに、このサーバーのリンクをここで解除します。ホストが復帰した場合、サーバーはまだそこで動作している可能性があります。",
             "orcaVersion": "このホストの Orca: {{version}}",
             "stopOrcaDescription": "SSH ホスト上の Orca を停止し、この一覧から削除します。",
-            "updateOrcaOnHost": "このホストの Orca を更新"
+            "updateOrcaOnHost": "このホストの Orca を更新",
+            "updateAnyway": "それでも更新",
+            "notNow": "後で",
+            "forceUpdate": "このホストでターミナルが実行中です。更新中も実行は続き、Orca のサーバーが再起動するとペインが再接続されます。"
           },
           "title": "SSH ホスト上の Orca",
           "description": "Orca は空の SSH ホストに自身をインストールし、常に最新の状態を保ちます。",

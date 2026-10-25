@@ -12,7 +12,7 @@
     "src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts",
     "src/main/ports/port-scan-command-worker-entry.ts",
     "src/main/worker-thread-child-process/worker-thread-child-process-entry.ts",
-    "src/main/ipc/parcel-watcher-process-entry.ts",
+    "src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts",
     "src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts",
     "src/main/agent-hooks/managed-agent-hook-controls.ts",
     "src/main/claude-accounts/keychain.ts",

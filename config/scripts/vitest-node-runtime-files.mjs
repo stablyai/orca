@@ -197,6 +197,7 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/vitest-node-runtime-pool.test.ts'
 ]
 
-export function getNodeRuntimeInclude() {
-  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests()]
+/** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */
+export function getNodeRuntimeInclude({ filters } = {}) {
+  return [...NODE_RUNTIME_INCLUDE, ...findSqliteRuntimeTests({ filters })]
 }

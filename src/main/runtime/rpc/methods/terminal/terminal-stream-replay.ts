@@ -166,7 +166,7 @@ export function* iterateTerminalStreamTextPayloads(
   if (!data) {
     return
   }
-  for (const chunk of iterateTerminalOutputFrameChunks(data)) {
+  for (const chunk of iterateTerminalOutputFrameChunks(data, undefined, 'text')) {
     yield chunk.bytes
   }
 }

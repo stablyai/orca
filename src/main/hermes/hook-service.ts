@@ -16,9 +16,9 @@ import {
   removeOrcaStatusContent,
   updateConfigContent
 } from './hermes-config-yaml'
+import { getHermesHome } from './hermes-default-home'
 import {
   getConfigPath,
-  getHermesHome,
   getPluginDir,
   getPluginFilesState,
   readConfigFile,

@@ -1147,6 +1147,11 @@
         "openInChat": "此 {{value0}} 会话已在聊天中打开。请刷新会话历史以打开它。",
         "ownershipUnknown": "Orca 无法确认此 {{value0}} 会话的归属。请刷新会话历史并重试。"
       },
+      "composerCreateHandoff": {
+        "reopen": "重新打开",
+        "preparationTimedOut": "工作树准备超时。",
+        "needsInput": "需要更多输入，因此未创建工作树。"
+      },
       "pendingWorktreeCreation": {
         "checkingOutFiles": "正在检出文件… {{percent}}%",
         "provisioningVm": "正在预配虚拟机…",
@@ -11905,7 +11910,8 @@
           "failed": "更新失败",
           "serviceManagerHelp": "通过启动此服务器的服务管理器更新 Orca。",
           "unpackedHelp": "开发版本必须从其源代码检出进行更新。",
-          "legacyHelp": "此服务器无法远程更新。请在服务器主机上更新 Orca。"
+          "legacyHelp": "此服务器无法远程更新。请在服务器主机上更新 Orca。",
+          "managedOverSshHelp": "此桌面通过 SSH 更新此服务器。请在远程 Orca 服务器中该服务器所在行使用“更新”。"
         },
         "BrowserLinkRoutingSetting": {
           "description": "在 Orca 内置浏览器中打开来自终端、Markdown 和编辑器的 http(s) 链接。{{shortcut}} 始终使用系统浏览器。",
@@ -12693,7 +12699,10 @@
             "forgetDescription": "在此处取消关联此服务器，而不联系其主机。如果主机恢复，服务器可能仍在那里运行。",
             "orcaVersion": "此主机上的 Orca：{{version}}",
             "stopOrcaDescription": "停止 SSH 主机上的 Orca，并将其从此列表中移除。",
-            "updateOrcaOnHost": "更新此主机上的 Orca"
+            "updateOrcaOnHost": "更新此主机上的 Orca",
+            "updateAnyway": "仍然更新",
+            "notNow": "暂不",
+            "forceUpdate": "此主机上有终端正在运行。更新期间它们会继续运行，Orca 服务器重启后其窗格会重新连接。"
           },
           "title": "SSH 主机上的 Orca",
           "description": "Orca 会将自身安装到空的 SSH 主机上，并自动保持最新。",

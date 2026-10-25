@@ -53,14 +53,26 @@ function isEqualToOrInside(candidate: string, parent: string): boolean {
 function knownOrcaUserDataDirs(): string[] {
   if (process.platform === 'darwin') {
     const appSupport = path.join(homedir(), 'Library', 'Application Support')
-    return [path.join(appSupport, 'orca'), path.join(appSupport, 'orca-dev')]
+    return [
+      path.join(appSupport, 'orca'),
+      path.join(appSupport, 'orca-dev'),
+      path.join(appSupport, 'orca-dev-wt')
+    ]
   }
   if (process.platform === 'win32') {
     const roaming = process.env.APPDATA ?? path.join(homedir(), 'AppData', 'Roaming')
-    return [path.join(roaming, 'orca'), path.join(roaming, 'orca-dev')]
+    return [
+      path.join(roaming, 'orca'),
+      path.join(roaming, 'orca-dev'),
+      path.join(roaming, 'orca-dev-wt')
+    ]
   }
   const config = process.env.XDG_CONFIG_HOME ?? path.join(homedir(), '.config')
-  return [path.join(config, 'orca'), path.join(config, 'orca-dev')]
+  return [
+    path.join(config, 'orca'),
+    path.join(config, 'orca-dev'),
+    path.join(config, 'orca-dev-wt')
+  ]
 }
 
 function assertDisposableRoot(rootDir: string): void {

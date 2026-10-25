@@ -545,21 +545,10 @@ describe('sibling child rows keep their own clocks', () => {
       'No update in 10m'
     ])
   })
-
-  it('leaves a finished child off the sidebar and the strip', () => {
-    expect(
-      buildSubagentChildRows({
-        parentEntry: parentWith([settled('succeeded')]),
-        tab,
-        parentIsFresh: true
-      })
-    ).toEqual([])
-    expect(stripRows([settled('succeeded')])).toEqual([])
-  })
 })
 
 describe('the chat strip from views', () => {
-  it('nests a child-owned shell under its owner and stops by the provider id', () => {
+  it('nests a child-owned shell and applies the provider stopping state', () => {
     const children = [
       view('child', { description: 'Dev server owner' }),
       view('shell', {

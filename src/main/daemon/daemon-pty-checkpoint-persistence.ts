@@ -103,7 +103,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     if (take?.snapshot && this.historyManager) {
       // Missing drainedRecords on older daemons cannot mean empty: snapshotting still drained their queue.
       // Teardown records repeat held bytes already emitted; use drainedRecords to avoid replaying them twice.
-      const snapshot =
+      const durable =
         take.drainedRecords === undefined || opts.forceLiveSnapshot === true || take.overflowed
           ? take.snapshot
           : await this.buildDurableHistorySnapshot(sessionId, take.snapshot, take.drainedRecords, {
@@ -112,6 +112,8 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
                 ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
                 : {})
             })
+      const sleepCwd = opts.teardown ? this.sleepShellCwds.get(sessionId) : undefined
+      const snapshot = sleepCwd ? { ...durable, cwd: sleepCwd } : durable
       const checkpoint = await this.historyManager.checkpoint(sessionId, snapshot, {
         pendingOutputSeq: take.seq
       })

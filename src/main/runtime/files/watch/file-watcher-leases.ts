@@ -1,5 +1,5 @@
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { isWatcherProcessFailure } from '../../../ipc/parcel-watcher-process-failure'
+import { isWatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
 

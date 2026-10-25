@@ -3,11 +3,12 @@ import WebSocket from 'ws'
 import { requirePort } from './relay-bench-invocation.mjs'
 
 const USAGE = 'node cdp-eval.mjs <port> <js-expression-returning-promise>'
-const RENDERER_ORIGIN = 'http://localhost:5173'
+// Why any port: `pnpm dev` picks a per-worktree renderer port (see the ORCA_DEV_INSTANCE line).
+const RENDERER_ORIGIN = /^http:\/\/localhost:\d+\//
 const OPEN_TIMEOUT_MS = 5_000
 
 function findRendererPage(list) {
-  return list.find((p) => p.type === 'page' && p.url.startsWith(RENDERER_ORIGIN))
+  return list.find((p) => p.type === 'page' && RENDERER_ORIGIN.test(p.url))
 }
 
 function describePages(list) {
@@ -21,7 +22,7 @@ const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
 const page = findRendererPage(list)
 if (!page) {
   console.error(
-    `no renderer page at ${RENDERER_ORIGIN} on devtools port ${port}; pages: ${describePages(list)}`
+    `no localhost renderer page on devtools port ${port}; pages: ${describePages(list)}`
   )
   process.exit(1)
 }
