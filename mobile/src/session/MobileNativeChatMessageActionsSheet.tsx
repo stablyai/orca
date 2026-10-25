@@ -10,7 +10,6 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 import { nativeChatMessagePlainText } from './mobile-native-chat-message-plain-text'
 
 type Props = {
-  /** The long-pressed message. The owner mounts this only while the sheet is open. */
   message: NativeChatMessage
   onClose: () => void
 }

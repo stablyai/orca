@@ -141,10 +141,7 @@ export function revertWorkerTerminalReleaseToRetained(
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
-/**
- * The one retain rule; the caller holds the transaction. A committed release (releasing, unknown)
- * may already have closed the tab, so it keeps its state and the archive that preserved the output.
- */
+/** Caller owns the transaction; retain must preserve committed release state and its output archive. */
 export function retainTerminalResourceInTransaction(
   database: OrchestrationDb,
   resourceId: string,

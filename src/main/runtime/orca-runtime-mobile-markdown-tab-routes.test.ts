@@ -21,7 +21,7 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { FILE_METHODS } from './rpc/methods/files'
 import { SESSION_TAB_MARKDOWN_METHODS } from './rpc/methods/session-tab-markdown-methods'
 
-// Why: authorization is not under test; both runtimes read a temp workspace the store never registered.
+// Authorization is out of scope; both runtimes use unregistered temporary workspaces.
 vi.mock('./files/chat-scratch-file-root', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   resolveRuntimeAuthorizedPath: async (path: string) => path
@@ -100,11 +100,10 @@ const CURRENT_SERVER = [
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
 ]
-/** A server from before #30605: it advertises no disk check and serves no `files.writeIfUnchanged`. */
+// Pre-#30605 servers lack disk-check capability and files.writeIfUnchanged.
 const PRE_DISK_CHECK_SERVER = [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY]
 const PAIRING_REVISION = 7
 
-/** A desktop whose workspace runs on `env-a`, wired to that server's runtime the way the transport is. */
 async function desktopOnServer(
   serverHost: ExecutionHostId = 'local',
   capabilities: string[] = CURRENT_SERVER
@@ -136,7 +135,7 @@ async function desktopOnServer(
       serverCalls.push(method)
       const pin = internal?.expectedEnvironmentPairingRevision
       pins.push(pin)
-      // As `callRuntimeEnvironment` refuses a call pinned to a pairing that has since changed.
+      // Match transport rejection of calls pinned before re-pairing.
       if (pin !== undefined && pin !== pairing.revision) {
         throw new OrchestrationError(
           'runtime_environment_changed',
@@ -351,7 +350,6 @@ describe("a phone's Markdown tab on a paired server's workspace", () => {
   })
 })
 
-/** The workspace moves to `to` right after the save's first route lookup. */
 function moveWorkspaceAfterFirstLookup(runtime: Runtime, to: ExecutionHostId): void {
   const resolve = vi.mocked(runtime.resolveRuntimeFileTarget)
   const before = resolve.getMockImplementation()!
@@ -365,7 +363,7 @@ describe("a phone's Markdown save whose workspace moves host mid-save", () => {
   it('still writes on the server it started on, pinned, never on local disk', async () => {
     const { desktop, call, serverCalls, pins } = await desktopOnServer()
     const forward = call.getMockImplementation()!
-    // The server accepts the write without touching the shared temp disk, so any change there is local.
+    // Server stub never touches shared temp disk; any disk change exposes a local write.
     call.mockImplementation(async (environmentId, method, params, timeout, envelope, internal) => {
       if (method !== FILE_WRITE_IF_UNCHANGED_METHOD) {
         return forward(environmentId, method, params, timeout, envelope, internal)
@@ -470,7 +468,6 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
     }
   }
 
-  /** As the window saves it: each open editor also holds its unified tab (id = path) and group. */
   function withSavedEditorTabs(session: WorkspaceSessionState): WorkspaceSessionState {
     const files = session.openFilesByWorktree?.[TEST_WORKTREE_ID] ?? []
     const tabs = files.map((file, sortOrder) => ({
@@ -502,7 +499,7 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
     }
   }
 
-  // Why the host ids: like the real Store, the fixture lists its partitions, which main's layout reads.
+  // Main-owned layout reads host partitions, so fixtures must list them like Store.
   function runtimeWithWindowTabs(
     tabs: RuntimeMobileSessionMarkdownTab[],
     session = sessionWithReadme(),
@@ -601,7 +598,6 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
 
   it('reads an untitled tab read-only and never saves it', async () => {
     const runtime = runtimeWithWindowTabs([windowTab({ isUntitled: true, isDirty: true })])
-    // The phone lists the workspace before it reads a tab.
     await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
     await expect(

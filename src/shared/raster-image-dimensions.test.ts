@@ -94,8 +94,7 @@ describe('readRasterImageDimensions', () => {
   })
 
   it('reads a JPEG whose frame header sits behind large chained metadata', () => {
-    // Cameras and editors emit ICC/MPF profiles split across many 64 KiB segments, pushing SOF0 far
-    // into the file. Both shapes below decode everywhere, so neither may read as an unknown size.
+    // Real ICC/MPF profiles span chained 64KiB segments before SOF; these valid images must still yield dimensions.
     expect(readRasterImageDimensions(jpegWithMetadata(1_400 * 1024, 4_000, 3_000))).toEqual({
       width: 4_000,
       height: 3_000

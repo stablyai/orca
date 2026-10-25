@@ -5,8 +5,7 @@ import {
   requestFullViewportPresent
 } from './terminal-render-pause-release'
 
-// Why a separate file: the parked-resize contract is one hazard shared by all
-// three helpers, and the main spec is already at the max-lines budget.
+// Cover the parked-resize hazard shared by all three release helpers separately from the full main spec.
 
 type FakeRenderService = {
   _isPaused: boolean
@@ -53,8 +52,7 @@ const helpers = [
 
 describe.each(helpers)('%s parked renderer resize', (_name, present) => {
   it('flushes the resize xterm parked while paused before presenting', () => {
-    // A resize that lands under _isPaused only parks WebglRenderer.handleResize;
-    // xterm flushes it solely from the observer callback we are pre-empting.
+    // Paused resize parks WebGL geometry; only the observer callback we preempt would normally flush it.
     const { terminal, service, order } = createPausedTerminal({})
 
     expect(present(terminal)).toBe(true)

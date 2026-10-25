@@ -19,8 +19,7 @@ function doneEntry(outcome: Verdict): AgentStatusEntry {
   }
 }
 
-// A crash nobody asked for and an end Orca cannot prove are news the user has not seen; only the
-// user's own stop is demoted.
+// Unrequested crashes/unprovable ends remain news; only the user’s own stop is demoted.
 describe('attention for a turn end the host observed', () => {
   it.each(['interruption', 'unconfirmed'] as const)(
     'ranks an %s done in Class 2 at its end time, like a completion, where a stop is demoted',

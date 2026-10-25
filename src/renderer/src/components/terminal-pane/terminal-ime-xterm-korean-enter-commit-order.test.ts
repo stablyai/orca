@@ -1,30 +1,5 @@
 // @vitest-environment happy-dom
-// STA-3132 — Windows 11 / Microsoft Korean: compose a syllable, then press Enter.
-//
-// The event sequence replayed here is a recorded first-party trace, captured on awin
-// (Windows 11 build 26200) against the defect-era v1.4.164 build with the Microsoft Korean
-// IME (HKL 0412) driven by SendInput, with the bytes read back on the far side of the PTY by
-// a raw-stdin reader. The two facts that shape this test, and that a synthesized trace would
-// have gotten wrong, are:
-//
-//   * the physical Enter does NOT arrive during the composition. The IME finalizes first, so
-//     Enter lands as a plain `Enter`/13 keydown with isComposing false, strictly after
-//     compositionend; and
-//   * there are three compositionupdates for two jamo keys — the IME re-reports the assembled
-//     syllable once more as it finalizes.
-//
-// The PTY received `ea b0 80 0d` — 가 then CR, in that order, in a single write. This test
-// pins that ordering: the committed syllable must reach the terminal before the newline, so a
-// submitted line can never lose its last syllable to the next line.
-//
-// The capture did NOT reproduce the suspected defect, and that null is the useful part. The
-// deferred-newline route could only invert this ordering via a session end carrying
-// dataPendingReconciliation, which the vendored xterm patch dispatches from exactly one
-// site — a compositionstart force-ending a still-pending prior session. Plain compose-then-Enter
-// cannot reach it: the IME finalizes first, so Enter arrives with isComposing false and the
-// newline was never held. Back-to-back arms at 25/60/120 ms attacked that precondition directly
-// and still read `가\r나` every time. So the route is a real code-level hazard that this gesture
-// does not reach on Windows + MS Korean.
+// Recorded Windows 11/MS Korean Enter arrives after compositionend as plain Enter; repeated final updates still produced 가 then CR (STA-3132). This gesture did not reproduce the suspected deferred force-end inversion; test that path separately.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -151,8 +126,7 @@ describe('STA-3132 — Korean commit reaches the PTY before the physical Enter',
     const stream = emitted.join('')
     expect(stream).toContain('가')
     expect(stream).toContain('\r')
-    // The recorded PTY bytes were `ea b0 80 0d`. Anything that releases the newline first
-    // submits a line whose last syllable has not been written yet.
+    // Recorded PTY bytes ea b0 80 0d require the syllable before CR; reversing them loses the submitted line’s last syllable.
     expect(stream.indexOf('가')).toBeLessThan(stream.indexOf('\r'))
     expect(stream).toBe('가\r')
   })
@@ -175,9 +149,7 @@ describe('STA-3132 — Korean commit reaches the PTY before the physical Enter',
     expect(emitted.join('')).toBe('abc\r')
   })
 
-  // Restores coverage deleted with terminal-ime-hangul-syllable-flush.test.ts: #12278 fixed a
-  // syllable that was not flushed before the next composition began, which is the force-end path
-  // and the one that leaves stale glyphs behind. Recorded b2b arms read `가\r나` at 25/60/120 ms.
+  // Back-to-back compositions exercise the pending-session force-end path (#12278); recorded 25/60/120 ms arms read 가 then CR then 나.
   it('keeps the first syllable when the next composition starts immediately', async () => {
     const { emitted, textarea } = openTerminal()
     await composeGa(textarea)

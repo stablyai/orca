@@ -129,7 +129,6 @@ async function codexChatAtRestWithATurn(child: ReturnType<typeof codexScriptedCh
   }
 }
 
-/** Resolves to whether `pending` settled within a short wait. */
 async function settlesSoon(pending: Promise<unknown>): Promise<boolean> {
   let settled = false
   void pending.finally(() => (settled = true))
@@ -149,7 +148,6 @@ it('settles a rewind that goes in doubt while a send waits in the queue, by wait
   const queueHeld = Promise.withResolvers<void>()
   void host.collaboratorsForTests().serialize(SESSION, () => queueHeld.promise)
 
-  // Nothing is in doubt when the send arrives; it waits in the queue.
   const sent = send(host, 'after the rewind')
   expect(await settlesSoon(sent)).toBe(false)
   const request = envelope(host, 'agentSession.rewind', { itemId, expectedEpoch })
@@ -173,7 +171,6 @@ it('settles a rewind that goes in doubt while a send waits in the queue, by wait
   }))
   queueHeld.resolve()
 
-  // The send starts the agent to settle the rewind, and waits that start out.
   await eventually(() => expect(child.spawns()).toBe(2))
   expect(await settlesSoon(sent)).toBe(false)
   child.releaseHandshake()
@@ -202,7 +199,6 @@ it('answers a rewind asked of a resting Codex chat from the thread it opens, lea
   expect(await settlesSoon(rewound)).toBe(false)
   child.releaseHandshake()
 
-  // Only the opened thread says its history cannot be rewound.
   expect(await rewound).toMatchObject({
     ok: false,
     refusal: { rewindReason: 'history-not-paginated' }

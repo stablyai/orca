@@ -13,6 +13,7 @@ import {
 import { NORMAL_BUFFER_PROLOGUE } from './pty-connection-test-constants'
 import { createRect } from './pty-connection-test-dom'
 import {
+  terminalWriteText,
   createMockTransport,
   createPane,
   createManager,
@@ -34,7 +35,7 @@ const {
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
   notifyCodexPaneBoundForStaleSweep,
-  presentPaneViewportPreservingSynchronizedOutput
+  presentPaneViewport
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
   scheduleTerminalWebglAtlasRecovery: vi.fn(),
@@ -42,7 +43,7 @@ const {
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
   notifyCodexPaneBoundForStaleSweep: vi.fn(),
-  presentPaneViewportPreservingSynchronizedOutput: vi.fn()
+  presentPaneViewport: vi.fn()
 }))
 
 let mockStoreState: StoreState
@@ -61,7 +62,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
 
 vi.mock('@/lib/pane-manager/pane-webgl-renderer', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  presentPaneViewportPreservingSynchronizedOutput
+  presentPaneViewport
 }))
 
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
@@ -99,7 +100,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
-// Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
+// Pass useCallback through because this suite invokes notification hooks without rendering React.
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return {
@@ -132,7 +133,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -211,7 +212,7 @@ describe('connectPanePty', () => {
       expect.stringContaining('remote snapshot with hidden remote output'),
       expect.any(Function)
     )
-    expect(presentPaneViewportPreservingSynchronizedOutput).toHaveBeenCalledWith(pane)
+    expect(presentPaneViewport).toHaveBeenCalledWith(pane)
     disposable.dispose()
   })
 
@@ -267,9 +268,7 @@ describe('connectPanePty', () => {
       4
     )
     expect(actual).toEqual(expected)
-    // The imageless snapshot skips the repaint, but the gap still happened — so
-    // the pen is grounded anyway, with the live-path constant since nothing
-    // repaints over whatever is still running here.
+    // Ground the pen despite an imageless snapshot: the gap still occurred and no repaint will reset the live terminal.
     expect(restoreWrites).toContain(RESET_AFTER_BYTE_GAP)
     expect(transport.serializeBufferOutcome).toHaveBeenCalledTimes(1)
     expect(transport.serializeBuffer).not.toHaveBeenCalled()
@@ -457,10 +456,7 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
-  // The conditional buffer switch is the riskiest logic in the replay prologue,
-  // and the pane mock is on the normal buffer everywhere else — so a stubbed
-  // `() => false` would pass the whole suite. Put the pane on the alt screen and
-  // pin that a normal-buffer snapshot really does emit the `?1049l` unstick.
+  // Use a real alt-screen pane so a stubbed normal-buffer check cannot pass without emitting the missing ?1049l reset.
   it('emits the alt-screen unstick when the pane is on alt and the model is not', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
@@ -653,7 +649,8 @@ describe('connectPanePty', () => {
     pane.terminal.cols = 80
     pane.terminal.rows = 24
     const writes: string[] = []
-    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+    pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+      data = terminalWriteText(data)
       writes.push(data)
       callback?.()
     })
@@ -776,7 +773,7 @@ describe('connectPanePty', () => {
 
     const heldCallbacks: (() => void)[] = []
     pane.terminal.write.mockImplementation(function write(
-      data: string,
+      data: string | Uint8Array,
       callback?: () => void
     ): void {
       if (callback) {

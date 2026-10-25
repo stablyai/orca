@@ -7,7 +7,6 @@ import { bindTerminalTextFieldSubmit as bindOnWeb } from './terminal-text-field-
 
 vi.mock('../platform/host-os', () => ({ hostOs: vi.fn(() => 'android') }))
 
-/** A ref holding whatever the platform hands back, which on RN Web is the DOM node. */
 const asField = (node: unknown): TextInput | null =>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the point of these cases is that a DOM node is what the native signature receives on RN Web, which is the mismatch this sibling exists for.
   node as TextInput | null
@@ -49,7 +48,6 @@ describe('the web sibling', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
-  // RN Web renders a multiline field as a textarea, where the same keystroke is a paragraph.
   it('submits a multiline field on its paragraph break', () => {
     const onSubmit = vi.fn()
     const field = document.createElement('textarea')
@@ -61,10 +59,7 @@ describe('the web sibling', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1)
   })
 
-  /**
-   * The case the brief guards: an IME still choosing a candidate reports its commit as
-   * `insertCompositionText`, and Enter there belongs to the keyboard, not to the terminal.
-   */
+  // IME candidate acceptance emits insertCompositionText, so it must not submit terminal input.
   it('leaves a composition commit alone', () => {
     const onSubmit = vi.fn()
     const field = mountField()
@@ -100,8 +95,6 @@ describe('the web sibling', () => {
     expect(() => bindOnWeb(asField(null), vi.fn())()).not.toThrow()
   })
 
-  // A release that wrapped the field in something other than a form control is left alone rather
-  // than given a listener that could never see a line break.
   it('leaves a node that is not a field alone', () => {
     const onSubmit = vi.fn()
     const div = document.createElement('div')
@@ -126,7 +119,7 @@ describe('live terminal keyboard chords', () => {
         key: name,
         ...options
       })
-      // happy-dom treats every Alt as AltGraph; browsers report them separately.
+      // Happy DOM conflates Alt with AltGraph; browsers distinguish them.
       vi.spyOn(event, 'getModifierState').mockReturnValue(false)
       field.dispatchEvent(event)
       return event

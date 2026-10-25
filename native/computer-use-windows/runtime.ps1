@@ -1,14 +1,12 @@
 param(
     [Parameter(Position = 0)]
     [string]$OperationPath,
-    # Serve mode keeps one process alive so the Add-Type P/Invoke assembly below
-    # is emitted once per session instead of once per operation.
+    # Serve mode emits the Add-Type P/Invoke assembly once per session, avoiding per-operation compilation.
     [switch]$Serve
 )
 
 $ErrorActionPreference = "Stop"
-# Progress records render to the host, which in serve mode is a pipe carrying
-# one JSON response per line; a stray record would desynchronise the stream.
+# Progress records would corrupt the one-JSON-response-per-line serve pipe.
 $ProgressPreference = "SilentlyContinue"
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [Console]::InputEncoding = $utf8NoBom
@@ -1320,15 +1318,11 @@ function Invoke-OrcaOperation($Operation) {
 }
 
 function Invoke-OrcaServeLoop {
-    # Announced before the first read, and after every Add-Type above: a caller
-    # that never sees this line knows the helper cannot have read a request, let
-    # alone synthesized a click, so replaying it is provably safe. Inferring that
-    # from a missing response instead would replay operations that did run.
+    # Announce readiness after Add-Type and before reading: absence proves no request ran and permits safe replay.
+    # A missing response cannot prove that; replay could duplicate input.
     [Console]::Out.WriteLine('{"ready":true}')
     [Console]::Out.Flush()
-    # One NDJSON request per line in, one response per line out, until stdin closes.
-    # Responses carry base64 screenshots and routinely exceed a megabyte; ReadLine
-    # and the console writer are both length-bounded only by memory.
+    # NDJSON request/response lines may exceed 1 MiB with screenshots; console line IO is memory-bounded.
     while ($true) {
         $line = [Console]::In.ReadLine()
         if ($null -eq $line) { break }
@@ -1340,18 +1334,13 @@ function Invoke-OrcaServeLoop {
             $response = Invoke-OrcaOperation $operation
         } catch {
             $response = [pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message }
-            # ConvertFrom-Json throws before the id is read, so recover it from the
-            # raw line. An error the caller can match is delivered to the request
-            # that caused it; an unmatched one only trips the caller's desync
-            # guard, which kills this helper, charges a failure toward its cooldown
-            # and discards the message below - so a malformed request would be
-            # reported as a broken stream and its real cause never surface.
+            # ConvertFrom-Json can fail before reading id; recover it from raw input so the error reaches its request
+            # instead of tripping desync cleanup/cooldown and hiding the parse failure.
             if ($null -eq $requestId -and $line -match '"requestId"\s*:\s*(\d+)') {
                 $requestId = [long]$Matches[1]
             }
         }
-        # Echoed so the caller can prove which request a line answers; a reply it
-        # cannot match is a desynchronised stream, not a usable response.
+        # Echo id to bind the response; unmatched replies indicate stream desynchronization.
         if ($null -ne $requestId) {
             $response | Add-Member -NotePropertyName requestId -NotePropertyValue $requestId -Force
         }

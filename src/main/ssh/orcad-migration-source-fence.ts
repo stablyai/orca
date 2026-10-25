@@ -1,11 +1,4 @@
-/**
- * Fencing a relay-hosted SSH target for a dormant migration into a managed orcad.
- *
- * Two durable records describe a fence: the journal sidecar and the target's `orcadFence`.
- * Write order is journal, then fence, then the profile flush, all before any remote call, so a
- * crash leaves either nothing, a journal without a fence (stale, never authority), or both.
- * A fence without a journal is never released here: only the destination can say what happened.
- */
+/** Persist journal, fence, then profile flush before remote calls. Crashes may leave a non-authoritative stale journal; a fence without a journal requires destination evidence before release. */
 import { randomUUID } from 'node:crypto'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import type { OrcadMigrationBlocker } from '../../shared/orcad-migration/orcad-migration-preflight'
@@ -34,6 +27,10 @@ import {
   type OrcadMigrationPreflightStore
 } from './targets/ssh-target-orcad-preflight'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
+import {
+  preservesOrcadMigrationBridgedPanes,
+  type OrcadMigrationPaneLeasePredicate
+} from './orcad-migration-bridged-panes'
 
 export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS = 'orcad_migration_leave_behind_terminals'
 export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON =
@@ -41,13 +38,12 @@ export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON =
 
 export type OrcadMigrationFenceState =
   | { state: 'none' }
-  /** Owner and journal agree: the migration can resume. */
   | { state: 'fenced'; cutover: OrcadMigrationSourceCutover }
-  /** Owned by an empty-host deploy, which records itself as a provisioning intent instead. */
+  /** Empty-host deploys record provisioning intent instead of a migration journal. */
   | { state: 'owned-by-deploy'; environmentId: string }
-  /** Owner with no journal (a downgrade dropped it, or it never landed): recover, never release. */
+  /** Unexplained ownership requires recovery, never automatic release. */
   | { state: 'fenced-unverifiable'; environmentId: string }
-  /** Journal whose fence is gone or changed: it can never authorize staging. */
+  /** Stale journals grant no staging authority. */
   | { state: 'stale-journal'; cutover: OrcadMigrationSourceCutover }
 
 /** Throws when the journal cannot be read: an unreadable record keeps the host fenced. */
@@ -88,8 +84,8 @@ export async function fenceOrcadMigrationSource(args: {
   targetId: string
   destinationEnvironmentId: string
   destinationName: string
-  /** Taken by the caller while the relay could still answer; see orcad-migration-terminal-gate. */
   terminalProof: OrcadMigrationTerminalVerdict
+  isBridgedPaneLease?: OrcadMigrationPaneLeasePredicate
   now?: () => Date
   signal?: AbortSignal
 }): Promise<OrcadMigrationFenceResult> {
@@ -113,14 +109,6 @@ export async function fenceOrcadMigrationSource(args: {
   const proof = args.terminalProof
   if (proof.verdict !== 'exited' && proof.verdict !== 'bridged') {
     return refuse(proof.verdict, 'orcad_migration_terminals', proof.reason)
-  }
-  if (proof.verdict === 'bridged' && target.managedServerLeaveBehind) {
-    // Why: leaving the saved tabs behind drops the identities the relay bridge reattaches through.
-    return refuse(
-      proof.relayVerdict,
-      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS,
-      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON
-    )
   }
   const preflight = preflightOrcadMigrationExport(
     args.store,
@@ -150,7 +138,23 @@ export async function fenceOrcadMigrationSource(args: {
     { ...target, generation },
     { migrationId: randomUUID(), destinationEnvironmentId: args.destinationEnvironmentId }
   )
-  // Before the journal: a fence on a manifest no request can carry could never be released.
+  if (
+    proof.verdict === 'bridged' &&
+    target.managedServerLeaveBehind &&
+    !preservesOrcadMigrationBridgedPanes(
+      manifest.payload,
+      args.store.getSshRemotePtyLeases(target.id),
+      proof.bridgedPtyIds,
+      args.isBridgedPaneLease
+    )
+  ) {
+    return refuse(
+      proof.relayVerdict,
+      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS,
+      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON
+    )
+  }
+  // Reject before journaling so an unsendable manifest cannot pin the fence.
   assertOrcadMigrationRequestFits({ manifest })
   const cutover: OrcadMigrationSourceCutover = {
     version: ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION,
@@ -165,13 +169,13 @@ export async function fenceOrcadMigrationSource(args: {
     manifestSha256: manifest.manifestSha256,
     provenPtyIds: proof.verdict === 'exited' ? proof.provenPtyIds : [],
     ...(proof.verdict === 'bridged' ? { bridgedPtyIds: proof.bridgedPtyIds } : {}),
-    // Taken with the export, before any commit is possible: the only proof of what the server holds.
+    // Capture before commit; this journaled export is the evidence of what the destination receives.
     manifest
   }
   writeOrcadMigrationSourceCutover(args.userDataPath, cutover)
   args.claims.fenceForMigration(target.id, args.destinationEnvironmentId, generation)
   await args.claims.flush(args.signal)
-  // Why again: a terminal may have started between the proof and the fence.
+  // Recheck under fence for terminals started after the original proof.
   const underFence = confirmOrcadMigrationTerminalsUnderFence(
     args.store,
     target.id,
@@ -186,7 +190,6 @@ export async function fenceOrcadMigrationSource(args: {
 
 type FenceReleaseArgs = { userDataPath: string; claims: SshTargetOrcadClaims; signal?: AbortSignal }
 
-/** Undoes a fence nothing remote has seen. */
 async function releaseUnstagedFence(
   args: FenceReleaseArgs,
   cutover: OrcadMigrationSourceCutover
@@ -197,10 +200,7 @@ async function releaseUnstagedFence(
   await releaseOrcadMigrationFence(args, cutover)
 }
 
-/**
- * Owner first, then the journal: a crash between them leaves a stale journal, which grants
- * nothing, rather than an owner nothing explains.
- */
+/** Drop owner before journal so an interrupted release leaves a harmless stale journal, never unexplained ownership. */
 export async function releaseOrcadMigrationFence(
   args: FenceReleaseArgs,
   cutover: OrcadMigrationSourceCutover
@@ -210,10 +210,7 @@ export async function releaseOrcadMigrationFence(
   removeOrcadMigrationSourceCutover(args.userDataPath, cutover.migrationId)
 }
 
-/**
- * Releases a migration fence whose destination server was never registered: no deploy finished,
- * so nothing could have been staged there. A registered destination must answer an abort instead.
- */
+/** Unregistered destinations could stage nothing; registered destinations must prove durable abort instead. */
 export async function releaseUndeployedMigrationFence(args: {
   userDataPath: string
   claims: SshTargetOrcadClaims

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { tabOrderMoves } from './tab-order'
 
-/** Main's same-group moveTab: take the tab out, put it back at the index. */
 function replay(from: string[], moves: ReturnType<typeof tabOrderMoves>): string[] {
   let order = [...from]
   for (const { tabId, index } of moves) {

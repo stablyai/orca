@@ -7,7 +7,6 @@ import {
   NativeChatDisclosureContext
 } from './native-chat-disclosure-store'
 
-/** The height of every detail a reader has opened in a member, each marked by its owner. */
 function openDetailHeight(content: HTMLElement): number {
   let height = 0
   for (const detail of content.querySelectorAll<HTMLElement>('[data-native-chat-member-detail]')) {
@@ -16,8 +15,7 @@ function openDetailHeight(content: HTMLElement): number {
   return height
 }
 
-/** Scrolls a member to the top of its run's box. Returns the box for the transcript to
- *  align to: a member's own offset ignores the box's scroll. */
+/** Scroll inside the run, then return its box for transcript alignment; member offsets omit internal scroll. */
 export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement {
   const scroller = member.closest<HTMLElement>('[data-native-chat-tool-run-members]')
   if (!scroller) {
@@ -44,7 +42,6 @@ export function NativeChatToolRunMembers({
 }): React.JSX.Element {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  // An edge fades while members lie past it, so a full box reads as scrollable.
   const [fades, setFades] = useState({ top: false, bottom: false })
   const runScroll = useContext(NativeChatDisclosureContext)?.runScroll
   const [remembered] = useState(() =>
@@ -111,7 +108,6 @@ export function NativeChatToolRunMembers({
   }, [readPosition])
 
   return (
-    // Indented under the header: nothing else marks where the run's rows end.
     <div
       ref={scrollerRef}
       onScroll={readPosition}

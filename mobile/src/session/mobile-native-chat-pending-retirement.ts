@@ -2,31 +2,24 @@ import { nativeChatContinuationSendText } from '../../../src/shared/native-chat-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countImageSourceTurnsAfter,
-  normalizeReconcileText,
   normalizedUserText
 } from './mobile-native-chat-draft-reconcile'
+import { normalizeNativeChatUserText as normalizeReconcileText } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
 const SPACE = ' '
 const NO_PENDING_IDS: ReadonlySet<string> = new Set()
-// Slack the cursor slide may spend re-trying later start positions, on top of
-// one free pass over the run. Nothing bounds how many sends accumulate on the
-// agent's input line — that ends when the agent accepts input again — so the
-// budget must never truncate a genuine glue: the first attempt covers the whole
-// run and always fits. It only stops a run of identical prefix-matching sends
-// from making the scan quadratic.
+// Allow one full run plus retry slack so prefix collisions stay linear without truncating a genuine long concatenation.
 export const GLUE_SLIDE_BUDGET = 8
 
 type UserTurn = { index: number; text: string }
 type GlueSegment = { text: string; literal: string; tail: number; continuation: boolean } | null
 
-/** Pending ids represented by post-send transcript rows that glued adjacent sends. */
 export function selectGluedPendingIds(
   messages: readonly NativeChatMessage[],
   pending: readonly MobileNativeChatPendingMessage[],
   excludedPendingIds: ReadonlySet<string> = NO_PENDING_IDS,
-  /** Image echoes whose local preview has been rebound onto its transcript row.
-   *  Until that happens an image echo must stay put, so it is not a glue segment. */
+  // Only rebound image previews may retire; otherwise their local photos would disappear.
   reboundImagePendingIds: ReadonlySet<string> = NO_PENDING_IDS
 ): ReadonlySet<string> {
   const retired = new Set<string>()
@@ -49,10 +42,7 @@ export function selectGluedPendingIds(
       item.baselineTailMessageId === null
         ? -1
         : (messageIndexById.get(item.baselineTailMessageId) ?? null)
-    // An image send glues onto the input line like any other, so once its preview is
-    // rebound its text is a real segment of the resulting row. While it is still
-    // unbound it stays a barrier: retiring it early would drop the phone-local photo,
-    // which the transcript's host path cannot render.
+    // Unbound image echoes remain barriers because the phone cannot display the host path after losing its local preview.
     const unboundImage = Boolean(item.images?.length) && !reboundImagePendingIds.has(item.id)
     return excludedPendingIds.has(item.id) ||
       !item.baselineResolved ||
@@ -83,12 +73,7 @@ export function selectGluedPendingIds(
       if (cursor >= runEnd) {
         break
       }
-      // A send that can never match must not freeze the run behind it. One
-      // permanently unretirable head — a pair whose own glued row arrived with
-      // the read, or a send the count pass claimed against an older row — would
-      // otherwise disable glue retirement for every later pair, for the rest of
-      // the session. Slide past it; the cursor stays monotonic, so a later turn
-      // can never claim a send an earlier one already took.
+      // Slide past unmatchable heads so later sends can retire; keep the cursor monotonic so turns cannot reclaim sends.
       let budget = runEnd - runStart + GLUE_SLIDE_BUDGET
       let start = cursor
       let matched = 0
@@ -113,7 +98,6 @@ export function selectGluedPendingIds(
   return retired
 }
 
-/** Length of the exact glued run at `start`, plus the segments it had to read. */
 function matchGluedRun(
   turn: UserTurn,
   segments: readonly GlueSegment[],
@@ -127,8 +111,7 @@ function matchGluedRun(
   for (let index = start; index < end; index++) {
     const segment = segments[index]!
     inspected += 1
-    // Every send carries its OWN boundary: a row that already existed when this
-    // send was issued can never be part of its echo, however well it reads.
+    // Enforce each send’s captured tail even when an older row’s text matches exactly.
     if (turn.index <= segment.tail) {
       return { matched: opened, inspected }
     }
@@ -146,14 +129,13 @@ function matchGluedRun(
       opened = matched
     }
     if (at === turn.text.length) {
-      // A lone exact match is an ordinary landing, which the count pass owns.
+      // The count pass owns ordinary single-send matches.
       return { matched: matched > 1 ? matched : opened, inspected }
     }
   }
   return { matched: opened, inspected }
 }
 
-/** Retires exact and glued transcript landings while preserving pending order. */
 export function retireLandedMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[],
@@ -167,18 +149,14 @@ export function retireLandedMobileNativeChatPending(
     }
   }
   const landedPendingIds = new Set<string>()
-  // Why a separate set: a barrier preserves adjacency after a landing consumed a whole
-  // row. An image landing can share its row with the send glued after it, so treating it
-  // as a barrier would strand that send in a run of one and keep its echo forever.
+  // Only exact whole-row landings break adjacency; rebound image rows may also contain the following glued send.
   const exactLandedIds = new Set<string>()
   for (const item of current) {
     if (landedImagePendingIds.has(item.id)) {
       landedPendingIds.add(item.id)
       continue
     }
-    // Keep image echoes until their local preview reaches the authoritative message.
-    // An unresolved baseline has nothing to count against yet — `messages` is not
-    // known to be the transcript this send was issued into.
+    // Keep local-image echoes until previews bind, and unresolved sends until their transcript baseline is known.
     if (item.images?.length || !item.baselineResolved) {
       continue
     }

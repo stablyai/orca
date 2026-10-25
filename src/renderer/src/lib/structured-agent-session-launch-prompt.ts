@@ -1,5 +1,5 @@
 import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 import { agentSessionThrownFailure } from '../../../shared/agent-session-write-failure'
@@ -39,9 +39,7 @@ export type StructuredLaunchPromptOptions = {
 
 type LaunchReceipt = StructuredAgentLaunchReceipt
 
-/** A launch's text, held in memory from the click until its chat exists, then sent once: every
- *  caller waiting on it shares the one send. From the click it holds the chat's one send slot, drawn
- *  as sending, so nothing typed meanwhile goes out ahead of it. */
+/** Share one staged-text send across launch callers; reserve the chat send slot at click so typed messages cannot overtake it before create. */
 export type StagedStructuredLaunchPrompt = {
   sessionId: string
   text: string
@@ -113,7 +111,6 @@ function unstage(prompt: StagedStructuredLaunchPrompt): void {
   }
 }
 
-/** The launch was cancelled: what it staged is dropped with its chat. */
 export function discardStructuredLaunchPrompts(sessionId: string): void {
   for (const prompt of staged.get(sessionId) ?? []) {
     prompt.slot?.release()
@@ -129,8 +126,7 @@ export function discardStructuredAgentSessionChatSends(sessionId: string): void 
   dropStructuredAgentSessionSends(sessionId)
 }
 
-/** A Stop before the chat is published: text its launch has not sent goes back to the composer,
- *  never sent. The start itself goes on. */
+// Prepublication Stop returns unsent text to the composer while allowing chat startup to continue.
 export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
   for (const prompt of staged.get(sessionId) ?? []) {
     if (prompt.delivery || prompt.createOwned) {
@@ -181,13 +177,11 @@ export function prepareStructuredLaunchPromptForCreate(
   return sent?.message
 }
 
-/** Whether a launch still holds text for this chat that has not reached its host. */
 export function hasStagedStructuredLaunchPrompt(sessionId: string): boolean {
   return (staged.get(sessionId)?.size ?? 0) > 0
 }
 
-/** Puts a launch's text in its chat's composer, unless its sender keeps it. True when it did; a
- *  draft write that throws is reported in the chat instead, and never stops its caller. */
+/** Return launch text to the composer unless the sender retains it. Report draft-write failure in chat without blocking the caller; true means adopted. */
 function handBackStagedPrompt(prompt: StagedStructuredLaunchPrompt): boolean {
   if (prompt.callerKeepsText) {
     return false
@@ -247,8 +241,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
   options: StructuredLaunchPromptOptions
   stagedPrompt: StagedStructuredLaunchPrompt | null
 }): Promise<StructuredPromptDeliveryResult> | undefined {
-  // Why: a draft has no delivery event — the composer adopts it and the user sends it — so
-  // `onPromptDelivered` never fires and no result is reported.
+  // Drafts transfer ownership to composer/user, not delivery; emit neither onPromptDelivered nor a result.
   if (args.options.promptDelivery === 'draft' || !args.options.prompt?.trim()) {
     return undefined
   }

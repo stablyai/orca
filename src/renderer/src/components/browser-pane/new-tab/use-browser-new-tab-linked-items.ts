@@ -9,7 +9,6 @@ import {
   type WorkspaceLinkedItemRow
 } from '../../sidebar/workspace-hover-attachments'
 
-/** The worktree's linked reviews and tasks, fetched and resolved the way its sidebar card does. */
 export function useBrowserNewTabLinkedItems(
   worktree: Worktree,
   repo: Repo | undefined

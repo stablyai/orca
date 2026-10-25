@@ -83,9 +83,7 @@ describe('agent status cleanup for a lost SSH connection', () => {
   })
 
   it('clears worktree-attributed orphans on the connection even when their connectionId stamp is missing', () => {
-    // Why: #9030 — after a relay/daemon restart main drops the rows but renderer entries whose
-    // connectionId never matched (unstamped over SSH) stayed "fresh" 30 min and un-clickable;
-    // the host is proven via the owning worktree's repo so those orphans clear too.
+    // Resolve unstamped SSH status by owning worktree or relay restart leaves unclickable rows fresh for 30m (#9030).
     vi.useFakeTimers()
     const store = createTestStore()
     store.setState({
@@ -155,8 +153,7 @@ describe('agent status cleanup for a lost SSH connection', () => {
   })
 
   it('does not clear a live row on another host that shares a repo id', () => {
-    // Why: a repo id can live on multiple hosts and share one worktreesByRepo bucket; scoping by bare
-    // repo id would clear the other host's live rows, so ownership must come from the worktree (#9030).
+    // Repo IDs/buckets collide across hosts; resolve worktree ownership before clearing (#9030).
     vi.useFakeTimers()
     const store = createTestStore()
     store.setState({
@@ -214,9 +211,7 @@ describe('agent status cleanup for a lost SSH connection', () => {
   })
 
   it('does not clear a live row whose worktree id collides across hosts', () => {
-    // Why: worktree id is `${repoId}::${path}` with no host component, so the same project mirrored at
-    // the same path on two hosts shares one id. An explicit stamp for the other host must win, and an
-    // unstamped row on a collided id is ambiguous — left alone rather than hiding a live row (#9030).
+    // repoId::path collides across hosts: explicit other-host stamps win, unstamped collided rows stay ambiguous and must survive (#9030).
     vi.useFakeTimers()
     const store = createTestStore()
     store.setState({

@@ -5,10 +5,7 @@ import { getWorktreeStatus, getWorktreeStatusLabel, resolveWorktreeStatus } from
 const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
 
-// Why: build a live-pty map from tab ids so each test can declare which
-// tabs are alive without manually tracking parallel `tab.ptyId` values.
-// `tab.ptyId` is the wake-hint sessionId preserved across sleep, not a
-// liveness signal — slept-tab tests below pin the gap.
+// Tests declare live tab IDs; tab.ptyId survives sleep as a wake hint and must not imply liveness.
 function livePtyMap(...tabIds: string[]): Record<string, string[]> {
   return Object.fromEntries(tabIds.map((id, i) => [id, [`pty-${i}`]]))
 }
@@ -64,10 +61,7 @@ describe('getWorktreeStatus', () => {
   })
 
   it('reports working when any pane in a split-pane tab is working even if tab.title is idle', () => {
-    // Regression: clicking between split panes rewrites tab.title to the
-    // focused pane's title (see onActivePaneChange in
-    // use-terminal-pane-lifecycle.ts). If the focused pane is idle while
-    // another pane is still working, the sidebar spinner must stay spinning.
+    // Focused-pane changes rewrite tab.title; idle focus must not hide another working pane’s spinner.
     const status = getWorktreeStatus(
       [{ id: 'tab-1', title: 'claude [done]' }],
       [],
@@ -89,9 +83,7 @@ describe('getWorktreeStatus', () => {
     expect(status).toBe('permission')
   })
 
-  // Why: sleep clears ptyIdsByTabId[tab.id] to [] but preserves tab.ptyId
-  // as a wake-hint sessionId. Reading tab.ptyId for liveness was the bug —
-  // pin the new behavior so it can't regress.
+  // Sleep clears live ptyIdsByTabId but retains tab.ptyId as a wake hint; only the former proves liveness.
   it('returns inactive for a slept tab (ptyIdsByTabId empty even if heuristic title matches working)', () => {
     const status = getWorktreeStatus([{ id: 'tab-1', title: 'claude [working]' }], [], {
       'tab-1': []
@@ -106,11 +98,7 @@ describe('getWorktreeStatus', () => {
     expect(status).toBe('active')
   })
 
-  // Why: an exited agent can leave a frozen braille-spinner frame in the
-  // title forever (reproduced live: '⠐ Review branch for regressions' over a
-  // plain shell prompt). The row builder rejects that title as a Claude row
-  // (no explicit "claude" token), so the sidebar shows 0 agents — the worktree
-  // dot must agree instead of spinning on the unattributable title alone.
+  // Exited agents can leave frozen spinner titles. Without attributable Claude identity the row builder shows no agent; the dot must agree.
   it('does not spin on a bare braille-spinner tab title that yields no agent row', () => {
     const status = getWorktreeStatus(
       [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
@@ -377,11 +365,7 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('working')
   })
 
-  // Why: title-heuristic permission must beat hasLiveDone/hasRetainedDone —
-  // the priority "permission > working > done > heuristic" applies to BOTH
-  // sources of permission (the args.hasPermission overlay AND the heuristic
-  // 'permission' return). Otherwise a tab title scraping "permission" would
-  // be silently downgraded to 'done' whenever a separate done overlay exists.
+  // Permission outranks working/done for both explicit hooks and title heuristics; done overlays must not suppress a scraped permission question.
   it('honors heuristic permission over hasLiveDone (priority: permission > done)', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'claude [permission]' }],
@@ -411,8 +395,7 @@ describe('resolveWorktreeStatus', () => {
   })
 
   it('keeps a hook-backed working agent spinning despite an unattributable stale title', () => {
-    // Why: hook-managed agents drive the dot via hasLiveWorking, not the title
-    // heuristic — the attribution gate must not regress them.
+    // Hook-managed working rows must survive the title-attribution gate.
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
       browserTabs: [],

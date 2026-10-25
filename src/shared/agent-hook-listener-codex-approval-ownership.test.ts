@@ -9,11 +9,7 @@ import {
 import { normalizeHookPayload } from './agent-hook-listener'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
-/**
- * Codex runs its `PermissionRequest` hook as decider #1, ahead of its own review agent and ahead
- * of the user, so the event alone never means a human is blocked. These pin which approvals stay
- * "Needs You" and which read as ongoing work (STA-7698).
- */
+/** Codex PermissionRequest precedes its reviewer/user decisions; the event alone cannot claim a human is blocked (STA-7698). */
 describe('Codex approval ownership', () => {
   let state: HookListenerState
   const dirs: string[] = []
@@ -100,7 +96,10 @@ describe('Codex approval ownership', () => {
   it('reconciles reviewer ownership before a child-first auto-reviewed approval', () => {
     const transcriptPath = writeRollout({ reviewer: 'auto_review' })
 
-    expect(childPermissionRequest(transcriptPath)?.payload.state).toBe('working')
+    expect(childPermissionRequest(transcriptPath)?.payload).toMatchObject({
+      state: 'working',
+      subagents: [{ id: 'child-after-relay-restart', agentType: 'worker', state: 'working' }]
+    })
   })
 
   it('keeps a child-first manual approval waiting after reviewer reconciliation', () => {

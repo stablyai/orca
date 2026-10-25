@@ -33,8 +33,6 @@ import {
   installClaudeProfileRouter
 } from './claude-profile-installed-router'
 
-// Why: removal deletes macOS Keychain items; the test must never reach the real Keychain.
-// The login shell exports what a Dock launch's own env lacks.
 const shell = vi.hoisted(() => ({ hang: false }))
 vi.mock('../startup/login-shell-environment', () => ({
   resolveLoginShellEnvironment: () =>
@@ -42,6 +40,7 @@ vi.mock('../startup/login-shell-environment', () => ({
       ? new Promise(() => {})
       : Promise.resolve({ CLAUDE_CONFIG_DIR: resolve('/shell/own') })
 }))
+// Account removal must never reach the real Keychain.
 vi.mock('../macos-keychain/generic-password', () => ({
   execSecurityCommand: async () => {
     throw new Error('The specified item could not be found in the keychain.')
@@ -75,11 +74,10 @@ function fixture(env: NodeJS.ProcessEnv = {}) {
     claudeManagedAccounts: [account('a'), account('b')],
     activeClaudeManagedAccountId: 'a',
     activeClaudeManagedAccountIdsByRuntime: undefined,
-    // Hooks off: setup must not probe a real Claude here.
+    // Avoid probing an installed Claude binary.
     agentStatusHooksEnabled: false,
     disabledTuiAgents: []
   }
-  // Stands in for the worker; like it, stays pending until settled and marks the folder last.
   const setup: { calls: number; outcome: ClaudeProfileSetupReport['outcome']; settle: () => void } =
     { calls: 0, outcome: 'prepared', settle: () => {} }
   const runSetup = ({ profile }: { profile: ClaudeProfileDescriptor }) => {
@@ -140,7 +138,6 @@ async function advanceRefreshDeadline(launch: Promise<unknown>, waitMs: number):
   await vi.advanceTimersByTimeAsync(1)
 }
 
-/** Runs the POSIX claude function under bash (after `rc`); prints the folder Claude would use. */
 function claudeShellProbe(root: string): (env: Record<string, string>, rc?: string) => string {
   const bin = join(root, 'bin')
   mkdirSync(bin)
@@ -160,7 +157,6 @@ describe('ClaudeProfileRouter', () => {
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
     writeFileSync(join(f.home('a'), '..', 'profile.json'), '{}')
-    // ~/.claude's state file sits in the home folder; the email matches case-insensitively.
     signIn(f.userHome, 'A@Example.test')
     await expect(f.router.prepareLaunch()).resolves.toMatchObject({
       configDir: join(f.userHome, '.claude'),
@@ -169,11 +165,9 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.preparation().envPatch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
     expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
     expect(f.router.routedHome()).toBeNull()
-    // The pointer names the folder actually chosen, so a typed claude agrees with Orca's launches.
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe('')
     expect(f.router.coveredBySystemDefault('a')).toBe(true)
 
-    // After the account signs in to its own folder, the next launch uses it.
     signIn(f.home('a'), 'a@example.test')
     const ownFolderLaunch = f.router.prepareLaunch()
     await advanceRefreshDeadline(ownFolderLaunch, 500)
@@ -189,7 +183,6 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.systemDefaultRunsAnotherAccount()).toBe(true)
     signIn(f.userHome, 'a@example.test')
     expect(f.router.systemDefaultRunsAnotherAccount()).toBe(false)
-    // The account's own login names it once it has one.
     const other = fixture()
     signIn(other.userHome, 'a@example.test')
     signIn(other.home('a'), 'someone-else@example.test')
@@ -224,7 +217,6 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.systemDefaultRunsAnotherAccount()).toBe(true)
     signIn(f.userHome, 'a@example.test', 'org-a')
     expect(f.router.coveredBySystemDefault('a')).toBe(true)
-    // Either side naming no organization compares by email alone.
     signIn(f.userHome, 'b@example.test', 'org-b')
     expect(f.router.coveredBySystemDefault('b')).toBe(true)
   })
@@ -236,7 +228,6 @@ describe('ClaudeProfileRouter', () => {
     signIn(f.userHome, 'b@example.test')
     signIn(own, 'a@example.test')
     await expect(f.router.prepareLaunch()).resolves.toMatchObject({ configDir: own })
-    // A covered account's folder is neither needed nor refreshed for the launch.
     expect(f.setup.calls).toBe(0)
   })
 
@@ -268,7 +259,6 @@ describe('ClaudeProfileRouter', () => {
     mkdirSync(f.home('a'), { recursive: true })
     f.router.publish()
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('a'))
-    // publish returned while its setup is still running in the background.
     await vi.waitFor(() => expect(f.setup.calls).toBe(1))
 
     f.settings.activeClaudeManagedAccountId = null
@@ -308,7 +298,6 @@ describe('ClaudeProfileRouter', () => {
     f.setup.settle()
     await expect(first).resolves.toMatchObject({ configDir: f.home('a') })
 
-    // The next launch waits for its refresh.
     let launched = false
     const second = f.router.prepareLaunch().then((prepared) => {
       launched = true
@@ -319,7 +308,6 @@ describe('ClaudeProfileRouter', () => {
     f.setup.settle()
     await expect(second).resolves.toMatchObject({ configDir: f.home('a') })
 
-    // A refresh that hangs, then fails, only delays a launch briefly.
     f.setup.outcome = 'refused'
     const hungRefreshLaunch = f.router.prepareLaunch()
     await advanceRefreshDeadline(hungRefreshLaunch, 500)
@@ -340,7 +328,6 @@ describe('ClaudeProfileRouter', () => {
       executionHostId: 'local',
       runtime: 'host'
     })
-    // The worker timed out, or the app quit, after the gate ran.
     const cutOff = new ClaudeProfileRouter({
       getSettings: () => f.settings,
       dataRoot: f.dataRoot,
@@ -380,14 +367,12 @@ describe('ClaudeProfileRouter', () => {
   it("sets up a pre-update account's missing folder without a login, for Claude's own first run", async () => {
     const f = fixture()
     f.settings.activeClaudeManagedAccountId = 'b'
-    // Before its setup, a terminal still opens; its claude function creates the folder itself.
     expect(() => f.router.preparation()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
     expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
     f.router.publish()
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('b'))
     await vi.waitFor(() => expect(f.setup.calls).toBe(1))
     expect(existsSync(f.home('b'))).toBe(true)
-    // Claude's first run is clean only without an onboarding-done state file.
     expect(existsSync(join(f.home('b'), '.claude.json'))).toBe(false)
     const launch = f.router.prepareLaunch()
     f.setup.settle()
@@ -450,7 +435,7 @@ describe('ClaudeProfileRouter', () => {
     expect(none.router.terminalEnv()).not.toHaveProperty('ORCA_CLAUDE_USER_CONFIG_DIR')
   })
 
-  // Why not win32: runs the POSIX claude function under bash.
+  // These probes run the POSIX shell function under Bash.
   it.skipIf(process.platform === 'win32')(
     'gives an account terminal back the inherited CLAUDE_CONFIG_DIR, or none, on System default',
     () => {
@@ -458,7 +443,6 @@ describe('ClaudeProfileRouter', () => {
         const f = fixture(inherited)
         mkdirSync(f.home('a'), { recursive: true })
         const claude = claudeShellProbe(f.root)
-        // The pane opens while account A is selected, so Orca replaces the inherited value.
         f.router.publish()
         const pane = { ...inherited, ...f.router.terminalEnv() }
         expect(claude(pane)).toBe(f.home('a'))
@@ -469,7 +453,6 @@ describe('ClaudeProfileRouter', () => {
     }
   )
 
-  // Why not win32: runs the POSIX claude function under bash.
   it.skipIf(process.platform === 'win32')(
     'moves a System default terminal whose rc exports the user’s own value to a later selection',
     () => {
@@ -484,7 +467,7 @@ describe('ClaudeProfileRouter', () => {
       f.settings.activeClaudeManagedAccountId = 'a'
       f.router.publish()
       expect(claude(pane)).toBe(f.home('a'))
-      // An rc export lands after Orca's injected value, and a pane's own folder still wins.
+      // RC exports run after environment injection.
       const injected = { ...f.router.terminalEnv() }
       expect(claude(injected, `export CLAUDE_CONFIG_DIR='${own}'\n`)).toBe(f.home('a'))
       expect(claude(injected, "export CLAUDE_CONFIG_DIR='/somewhere/else'\n")).toBe(
@@ -500,7 +483,6 @@ describe('ClaudeProfileRouter', () => {
     await vi.waitFor(() => expect(f.setup.calls).toBe(1))
     const removal = f.router.removeAccount('a')
     await new Promise((resolve) => setTimeout(resolve, 10))
-    // Setup writes into the folder before it settles, as the worker does.
     mkdirSync(f.home('a'), { recursive: true })
     writeFileSync(join(f.home('a'), 'settings.json'), '{}')
     f.setup.settle()
@@ -551,7 +533,7 @@ describe('ClaudeProfileRouter', () => {
     expect(carried.router.systemDefaultHome()).toBe(resolve('/user/own'))
   })
 
-  // Why not win32: creating the link needs privileges there.
+  // Creating real symlinks requires additional Windows privileges.
   it.skipIf(process.platform === 'win32')(
     'lists account history the System default cannot see, skipping linked folders',
     () => {
@@ -561,9 +543,16 @@ describe('ClaudeProfileRouter', () => {
       mkdirSync(join(f.home('a'), 'projects'), { recursive: true })
       mkdirSync(f.home('b'), { recursive: true })
       symlinkSync(join(f.userHome, '.claude'), join(f.home('b'), 'projects'))
-      // The pointer file sits among the account folders and must not read as one.
       writeFileSync(join(f.dataRoot, 'claude-profiles', 'selected-host'), '')
       expect(claudeProfileHistoryDirs('projects')).toEqual([join(f.home('a'), 'projects')])
     }
   )
+
+  it('lists history under the CLAUDE_CONFIG_DIR only the login shell exports', () => {
+    const configDir = join(tmpdir(), `claude-router-own-${process.pid}`)
+    roots.push(configDir)
+    mkdirSync(join(configDir, 'projects'), { recursive: true })
+    installClaudeProfileRouter(fixture({ CLAUDE_CONFIG_DIR: configDir }).router)
+    expect(claudeProfileHistoryDirs('projects')).toEqual([join(configDir, 'projects')])
+  })
 })

@@ -36,9 +36,7 @@ describe('RPC main recordings', () => {
           expect(visibleState(recording)).toEqual({ files: ['third.ts'] })
         }
         if (id === 'b2') {
-          // The null result is still the seed, and the screen still reports an error the
-          // user can see. What moved in step 7 is the sentence: the checked reader names the reply
-          // and the method, where main read `.ok` off null and showed V8's property-read text.
+          // The checked reader must name the null reply and method instead of exposing a property-read exception.
           expect(visibleState(recording)).toMatchObject({
             error:
               'The host sent a reply this app could not read (github.project.updateIssueBySlug)'

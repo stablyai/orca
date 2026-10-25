@@ -1,4 +1,5 @@
 import type React from 'react'
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 
@@ -23,7 +24,7 @@ const hookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {

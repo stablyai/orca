@@ -98,7 +98,7 @@ describe('editor saves guarded by the disk precondition', () => {
     const disk = stubGuardedDisk({ [PATH]: 'original' })
     const store = createEditorStore()
     openFile(store, { baseline: 'original', draft: 'user edit' })
-    // An agent rewrites the file; no watcher event reaches the editor (workspace not watched).
+    // Simulate an external write without a watcher notification.
     disk.files.set(PATH, 'agent rewrite')
 
     const cleanup = attachEditorAutosaveController(store)
@@ -161,7 +161,7 @@ describe('editor saves guarded by the disk precondition', () => {
   })
 
   it('rebaselines to what the write left on disk, so the next save passes', async () => {
-    // A lone surrogate is written as U+FFFD, so the baseline must describe that, not the buffer.
+    // UTF-8 encodes lone surrogates as U+FFFD; the baseline must match those written bytes.
     const draft = 'a\uD800b'
     const disk = stubGuardedDisk({ [PATH]: 'original' })
     const store = createEditorStore()
@@ -179,11 +179,12 @@ describe('editor saves guarded by the disk precondition', () => {
       store.getState().markFileDirty(PATH, true)
       await vi.advanceTimersByTimeAsync(1500)
 
-      // Why: this host only sees decoded text, so a U+FFFD on disk pauses autosave conservatively.
+      // Decoded-text-only hosts conservatively pause autosave on U+FFFD.
       expect(disk.writeFile).toHaveBeenCalledTimes(2)
       expect(disk.files.get(PATH)).toBe('a�b')
       expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
-      await requestEditorFileSave({ fileId: PATH })
+      await expect(requestEditorFileSave({ fileId: PATH })).rejects.toThrow(/isn't UTF-8/)
+      await requestEditorFileSave({ fileId: PATH, convertToUtf8: true })
       expect(disk.files.get(PATH)).toBe('second edit')
     } finally {
       cleanup()
@@ -205,7 +206,6 @@ describe('editor saves guarded by the disk precondition', () => {
       expect(disk.files.get(PATH)).toBe('someone else')
       expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
 
-      // The banner's Overwrite is the way out.
       expect(await overwriteDiskWithTabEdits(store.getState().openFiles[0])).toBe(true)
       expect(disk.files.get(PATH)).toBe('mine')
     } finally {
@@ -222,7 +222,7 @@ describe('editor saves guarded by the disk precondition', () => {
 
     const cleanup = attachEditorAutosaveController(store)
     try {
-      // e.g. a Markdown save that only trims trailing whitespace, sent from a clean tab.
+      // Clean-tab fallback saves, such as Markdown whitespace normalization, still require a matching baseline.
       await expect(
         requestEditorFileSave({ fileId: PATH, fallbackContent: 'original' })
       ).rejects.toThrow(/changed on disk/)
@@ -332,7 +332,6 @@ describe('editor saves guarded by the disk precondition', () => {
       for (let tick = 0; tick < 20 && disk.writeFile.mock.calls.length === 0; tick += 1) {
         await vi.advanceTimersByTimeAsync(0)
       }
-      // The other tab types into the shared model while the write is in flight.
       store.getState().setEditorDraft(typer.id, 'X and more')
       store.getState().markFileDirty(typer.id, true)
       release()
@@ -395,7 +394,6 @@ describe('editor saves guarded by the disk precondition', () => {
   it('guards a restored draft whose editor never mounted, for autosave and explicit save', async () => {
     const disk = stubGuardedDisk({ [PATH]: 'agent rewrite' })
     const store = createEditorStore()
-    // Restored from the session: draft and its persisted baseline, no Monaco model.
     openFile(store, { baseline: 'original', draft: 'restored edit' })
 
     const cleanup = attachEditorAutosaveController(store)
@@ -417,7 +415,7 @@ describe('editor saves guarded by the disk precondition', () => {
     }
   })
 
-  it('blocks the second of two independently viewed tabs of one file that both save', async () => {
+  it('two workspaces saving one record write it once; the second save finds it clean', async () => {
     const md = '/repo/notes.md'
     const disk = stubGuardedDisk({ [md]: 'original' })
     const store = createEditorStore()
@@ -449,15 +447,19 @@ describe('editor saves guarded by the disk precondition', () => {
       store.getState().markFileDirty(tab.id, true)
     }
 
+    expect(store.getState().editorDrafts[code.id]).toBe('second tab')
+
     const cleanup = attachEditorAutosaveController(store)
     try {
       await requestEditorFileSave({ fileId: code.id })
-      await expect(requestEditorFileSave({ fileId: rich.id })).rejects.toThrow(/changed on disk/)
+      await requestEditorFileSave({ fileId: rich.id })
 
-      expect(disk.files.get(md)).toBe('first tab')
-      const second = store.getState().openFiles.find((f) => f.id === rich.id)
-      expect(second?.externalMutation).toBe('changed')
-      expect(second?.isDirty).toBe(true)
+      expect(disk.writeFile).toHaveBeenCalledTimes(1)
+      expect(disk.files.get(md)).toBe('second tab')
+      for (const tab of store.getState().openFiles) {
+        expect(tab.externalMutation).toBeUndefined()
+        expect(tab.isDirty).toBe(false)
+      }
     } finally {
       cleanup()
     }
@@ -489,7 +491,8 @@ describe('editor saves guarded by the disk precondition', () => {
         expect.objectContaining({
           diskPrecondition: {
             expectedSignature: getDiskBaselineSignature('agent rewrite'),
-            allowMissing: true
+            allowMissing: true,
+            requireLosslessUtf8: true
           }
         })
       )
@@ -525,7 +528,6 @@ describe('editor saves through a remote host without the guarded write (client c
       )
       const olderStatus = { ...status, result: { ...status.result, capabilities } }
       const meta = { _meta: { runtimeId: 'runtime-env-1' } }
-      // The client-side compare reads the host's current text.
       mocks.readRuntimeFileContent.mockResolvedValue({ content: disk, isBinary: false })
       const runtimeCall = vi.fn((args: RuntimeEnvironmentCallRequest) =>
         Promise.resolve(

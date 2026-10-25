@@ -97,9 +97,10 @@ export function buildAgentStatusLiveEntry(
           worktreeId: routing?.worktreeId ?? existing.worktreeId
         }
       )
-        ? existing
+        ? { ...existing, agentPresence: metadata?.paneOwner }
         : undefined,
     incoming: payload.agentType,
+    incomingSession: metadata?.providerSession?.id,
     now: updatedAt
   })
   const commandCodeNewTurn =
@@ -123,8 +124,7 @@ export function buildAgentStatusLiveEntry(
       : existing && existing.state === payload.state
         ? existing.stateStartedAt
         : updatedAt)
-  // Why: a writer with no turn clock (an OSC repaint) keeps the host's stamp only within one state;
-  // a state change it cannot date must not inherit another turn's start.
+  // Clockless OSC repaints retain host turn start only within the same state; undated transitions must not inherit another turn.
   const turnStartedAt =
     timing?.turnStartedAt ??
     (existing && existing.state === payload.state ? existing.turnStartedAt : undefined)
@@ -215,8 +215,7 @@ export function buildAgentStatusLiveEntry(
     workingMode: payload.workingMode,
     prompt: payload.prompt,
     updatedAt,
-    // Why: a writer that carries no observation clock (OSC bytes, launch seeds) is itself
-    // fresh evidence, so it must not inherit the previous row's older observation time.
+    // Clockless OSC/launch writes are fresh evidence; never inherit prior observation time.
     ...(timing?.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: timing.evidenceObservedAt }
       : {}),

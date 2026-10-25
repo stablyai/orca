@@ -7,8 +7,7 @@ import {
   writeFileDurable
 } from '../durable-file-write'
 
-// Why: per-source records are most of a usage cache (43 of 56 MB on one real Claude history) and
-// only a scan reads them, so they live in this worker-owned sidecar and never touch main.
+// Only scans need bulky per-source records; worker-owned sidecars keep them off main.
 
 /** Where one provider's per-source scan cache lives, and whether this scan may start from it. */
 export type UsageSourceCacheRef = {
@@ -74,7 +73,7 @@ export async function writeUsageSourceCacheData(
   data: string | Uint8Array
 ): Promise<void> {
   await mkdir(dirname(ref.path), { recursive: true }).catch(() => {})
-  // Why: a worker terminated mid-write orphans a multi-MB temp file; reclaim earlier launches' ones.
+  // Reclaim old durable-write temps left by workers terminated mid-write.
   await removeStaleDurableWriteTempFiles(ref.path)
   await writeFileDurable(
     durableWriteTempPath(ref.path, threadId > 0 ? String(threadId) : undefined),
@@ -83,10 +82,7 @@ export async function writeUsageSourceCacheData(
   )
 }
 
-/**
- * Caches written before the sidecar existed carry the per-source records inline. Move them into
- * the sidecar and hand back only the report, so main parses a few MB instead of the whole file.
- */
+/** Move legacy inline source records to the sidecar so main parses only the compact report. */
 export async function splitUsageCacheFile(
   request: UsageCacheSplitRequest
 ): Promise<UsageCacheSplitResult> {

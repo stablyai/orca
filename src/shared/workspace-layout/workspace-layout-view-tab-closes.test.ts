@@ -4,7 +4,6 @@ import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { followTabClosesInView } from './workspace-layout-view-tab-closes'
 import { emptyLayoutViewRecord, type LayoutViewRecord } from './workspace-layout-views'
 
-/** One group of content tabs in this order. */
 function model(tabOrder: string[]): WorkspaceLayoutModel {
   return {
     ...emptyModel(),

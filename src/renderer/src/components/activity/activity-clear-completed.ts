@@ -18,11 +18,10 @@ export type ClearCompletedActivityPlan = {
   clearedThreadCount: number
 }
 
-/** A thread is clearable when it needs nothing from the user: any finished outcome, with no fresh
- *  live working/monitoring/blocked/waiting state. */
+/** Finished outcomes are clearable only without fresh live work/monitoring/attention. */
 export function isClearableActivityThread(thread: AgentPaneThread): boolean {
   const id = activityThreadStatusId(thread)
-  // Why: a failed main agent reads failed while its subagents still run; that thread is still live.
+  // A failed main agent can still own running subagents; retain that live thread.
   if (thread.currentAgentState) {
     return false
   }
@@ -49,16 +48,14 @@ export function planClearCompletedActivity(
     clearedThreadCount += 1
     const previousCutoff = state.activityClearedAtByPaneKey[thread.paneKey] ?? null
     const latestCutoff = Math.max(previousCutoff ?? 0, thread.latestTimestamp)
-    // Why `now` for an unstamped thread: the hydrate sanitizer drops non-positive cutoffs, so a
-    // zero cutoff would replay the cleared thread after restart.
+    // Hydration drops non-positive cutoffs; use now for unstamped threads so clears survive restart.
     cutoffPatch[thread.paneKey] = latestCutoff > 0 ? latestCutoff : now
     restorePatch[thread.paneKey] = previousCutoff
     const retained = state.retainedAgentsByPaneKey[thread.paneKey]
     if (retained) {
       retainedSnapshots.push(retained)
       const entry = retained.entry
-      // updatedAt mirrors the wire receivedAt; renderer-enriched fields (connectionId,
-      // worktreeId) diverge from main's cache and are deliberately excluded.
+      // Match wire receivedAt through updatedAt; exclude renderer-only owner/connection enrichment from cache identity.
       cacheIdentities.push({
         paneKey: thread.paneKey,
         receivedAt: entry.updatedAt,
@@ -69,8 +66,7 @@ export function planClearCompletedActivity(
   return { cutoffPatch, restorePatch, retainedSnapshots, cacheIdentities, clearedThreadCount }
 }
 
-// Deferred evictions whose undo toast is still open; flushed on pagehide because the toast's
-// close callbacks never fire on quit/reload, which would let cleared rows replay next launch.
+// Flush deferred evictions on pagehide because quit/reload skips toast close callbacks and would replay cleared rows.
 const pendingDiskEvictions = new Set<() => void>()
 let evictionListenerRetired = false
 export function flushPendingClearCompletedEvictions(): void {
@@ -95,13 +91,11 @@ if (typeof window !== 'undefined') {
 }
 
 if (import.meta !== undefined && import.meta.hot) {
-  // Vite can replace this module without a full renderer reload. Remove the
-  // pagehide hook so dev sessions do not retain stale eviction closures.
+  // HMR must remove the pagehide listener and its stale eviction closures.
   import.meta.hot.dispose(disposePendingClearCompletedEvictionListener)
 }
 
-// Why a fallback: sonner only fires onDismiss/onAutoClose for the toast's own close paths; a
-// `toast.dismiss()` from another caller leaves the eviction pending until pagehide.
+// Sonner’s external dismiss skips close callbacks; bound pending eviction even without pagehide.
 export const CLEAR_COMPLETED_EVICTION_FALLBACK_MS = 60_000
 
 function evictPersistedStatuses(identities: readonly AgentStatusCacheIdentity[]): void {
@@ -131,14 +125,7 @@ export function clearActivityThread(thread: AgentPaneThread): boolean {
   return true
 }
 
-/**
- * Clear completed/interrupted activity threads with an undo window.
- *
- * Live agent status, resume identity, and attention/working rows are untouched:
- * clearing stamps per-pane cutoffs (persisted UI) and removes retained completed
- * snapshots. The identity-checked main-process cache eviction is deferred until
- * the undo toast closes so Undo can restore everything losslessly.
- */
+/** Persist per-pane cutoffs and remove retained snapshots without altering live status/resume identity. Defer identity-checked disk eviction until the undo window closes for lossless restoration. */
 export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boolean {
   const state = useAppStore.getState()
   const plan = planClearCompletedActivity(threads, state)
@@ -146,9 +133,7 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
     return false
   }
   state.applyActivityClearedAt(plan.cutoffPatch)
-  // Why turn timestamps, not entry identity: a runtime orchestration merge replaces the live
-  // entry object without a state change (setRuntimeAgentOrchestrationByPaneKey), and an
-  // identity check would then strand the clear-planted suppressor past Undo, losing the run.
+  // Match suppressors by turn: orchestration merges replace live objects without a new turn, and object-identity Undo would lose the run.
   const introducedSuppressorLiveTurns = new Map<string, number>()
   for (const retained of plan.retainedSnapshots) {
     const paneKey = retained.entry.paneKey

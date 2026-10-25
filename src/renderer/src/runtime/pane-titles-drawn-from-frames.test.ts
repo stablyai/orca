@@ -1,6 +1,4 @@
-// A pane rename in a layout-owner build: main applies it and its frame draws the title; the window
-// does not write it again. Main's frames run through the shared transport, whose apply check
-// fails any flush that differs from the full build.
+// Main applies renames and frames draw titles without a second window write. Shared transport checks each flush against full-build behavior.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'

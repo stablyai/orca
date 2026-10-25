@@ -255,9 +255,7 @@ export function findActiveVisibleTabId(
       return active.activeTabType === 'simulator' && item.id === active.activeSimulatorTabId
     }
     if (item.type === 'agent-session') {
-      // Reachable only from TabGroupPanel, which passes the structured tab's own id; the store's
-      // `activeTabId` names a background terminal here (cf. TerminalTitlebarTabs, which resolves
-      // `getActiveTab(...)?.id` for 'simulator' and never renders agent-session items).
+      // Structured-chat callers pass their unified tab ID; the background terminal’s activeTabId cannot identify this item.
       return active.activeTabType === 'agent-session' && item.id === active.activeTabId
     }
     return (

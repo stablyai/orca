@@ -477,8 +477,7 @@ describe('launchWorkItemDirect', () => {
       })
     ).resolves.toBe(true)
 
-    // The issue link prefills only the TUI input (argv `--prefill`); the seeded
-    // draft is what makes the same context visible in the chat view.
+    // Mirror argv prefill into chat because no paste callback can expose that TUI-only context.
     expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
       tabId: 'tab-1',
       agent: 'claude',
@@ -486,14 +485,12 @@ describe('launchWorkItemDirect', () => {
       createdAt: expect.any(Number)
     })
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
-    // Why: the draft is inside `--prefill`, so the plan sets no draftPrompt.
     const startup = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]?.startup
     expect(startup?.draftPrompt).toBeUndefined()
   })
 
   it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
-    // A Linear draft is always `Linked Linear issue: ENG-42\n<url>\n`, so withholding
-    // multi-line drafts made every Linear launch invisible in the chat view.
+    // Linear drafts always contain newlines; rejecting multiline mirrors would hide every linked issue in chat.
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
     const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
@@ -570,9 +567,7 @@ describe('launchWorkItemDirect', () => {
 
   it('reports a failed structured settlement instead of pasting into the pre-launch tab', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    // Why: activation seeded a plain shell (`tab-1`); a failed structured launch hands back no tab,
-    // so the PR body must not reach that shell where the Claude readiness heuristic would submit it
-    // — and callers hang irreversible follow-up work off a `true`, so this must not report success.
+    // A failed chat must not paste PR text into the seeded shell or report success that callers use to authorize follow-up work.
     vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
       completed: false,
       structuredLaunch: true,
@@ -605,8 +600,7 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
-  // A paired server that declines the chat opens this launch's terminal, which must keep the
-  // recipe's saved CLI arguments the terminal route applied.
+  // A paired chat decline must preserve the recipe’s CLI arguments in its terminal fallback.
   it("hands a server's decline terminal the caller's own CLI arguments", async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
     vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({

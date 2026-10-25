@@ -27,10 +27,7 @@ describe('createDraftPasteReadyScanner', () => {
 
     it('does not fire on bracketed paste alone, then fires once show-cursor arrives', () => {
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
-      // Why: opencode enables bracketed paste ~1.5-2s before its composer mounts
-      // and stays SILENT in between. The cursor gates delivery and must NOT arm
-      // the quiet window, which would otherwise fire during that silent gap and
-      // paste before the composer exists.
+      // OpenCode is silent 1.5–2s after enabling paste before composer mount; cursor gating must not arm an early quiet timer.
       expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({
         ready: false,
         armQuietTimer: false
@@ -43,9 +40,7 @@ describe('createDraftPasteReadyScanner', () => {
     })
 
     it('resolves from a single replayed buffer holding both markers (SSH/remote replay path)', () => {
-      // Why: the runtime waiter feeds recentPtyOutputById as one observe() call
-      // when the agent emitted 2004 + show-cursor before the subscription
-      // attached; a single combined buffer must still resolve.
+      // Remote waiters replay cached paste/cursor markers in one observe call; combined buffers must resolve.
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
       expect(
         scanner.observe(`banner\n${DECSET_BRACKETED_PASTE}composer\n${SHOW_CURSOR}rest`)
@@ -53,9 +48,7 @@ describe('createDraftPasteReadyScanner', () => {
     })
 
     it('detects a bracketed-paste handshake split across a chunk boundary', () => {
-      // Why: the pre-handshake `recent` ring must reassemble a \x1b[?2004h that
-      // straddles two PTY packets, or cursor-gated readiness breaks for
-      // fragmented startup output.
+      // Rejoin handshake bytes split across PTY packets before cursor gating.
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
       expect(scanner.observe('\x1b[?20')).toEqual({ ready: false, armQuietTimer: false })
       expect(scanner.observe('04h')).toEqual({ ready: false, armQuietTimer: false })
@@ -65,7 +58,6 @@ describe('createDraftPasteReadyScanner', () => {
     it('detects show-cursor split across a later chunk boundary', () => {
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
       scanner.observe(DECSET_BRACKETED_PASTE)
-      // The escape sequence is split mid-bytes across two separate chunks.
       expect(scanner.observe('render noise \x1b[?')).toEqual({ ready: false, armQuietTimer: false })
       expect(scanner.observe('25h')).toEqual({ ready: true, armQuietTimer: false })
     })
@@ -73,9 +65,7 @@ describe('createDraftPasteReadyScanner', () => {
     it('never arms the quiet window during the silent pre-composer gap', () => {
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
       scanner.observe(DECSET_BRACKETED_PASTE)
-      // Why: opencode is silent here; arming the quiet window would fire before
-      // the composer mounts and pre-empt the cursor signal (the original bug).
-      // Delivery waits for show-cursor, bounded by the caller's hard timeout.
+      // Wait for show-cursor within hard timeout; startup silence must not pre-empt composer mount.
       for (let i = 0; i < 5; i += 1) {
         expect(scanner.observe(`setup output ${i}`)).toEqual({ ready: false, armQuietTimer: false })
       }
@@ -99,8 +89,7 @@ describe('createDraftPasteReadyScanner', () => {
     })
 
     it('ignores a show-cursor after the shell turns bracketed paste back off to run a command', () => {
-      // zsh's prompt enables bracketed paste and disables it on accept-line, before the launcher
-      // runs; the launcher's cursor toggle stands in for any spinner (synthetic).
+      // zsh disables paste on accept-line before launcher spinner cursor toggles (synthetic).
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
       expect(scanner.observe(`${DECSET_BRACKETED_PASTE}% opencode`).ready).toBe(false)
       expect(scanner.observe(`${DECRST_BRACKETED_PASTE}\r\n`).ready).toBe(false)
@@ -113,7 +102,6 @@ describe('createDraftPasteReadyScanner', () => {
 
     it('ignores show-cursor that appears before bracketed paste is enabled', () => {
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
-      // A pre-handshake cursor toggle must not trip readiness.
       expect(scanner.observe(SHOW_CURSOR)).toEqual({ ready: false, armQuietTimer: false })
       expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({
         ready: false,
@@ -123,8 +111,7 @@ describe('createDraftPasteReadyScanner', () => {
   })
 
   describe('opencode-agent-row', () => {
-    // Frame shapes from the OpenCode 2.0.21 cold-start capture: the box with its bottom-left
-    // corner `╹` on row 25, then a later frame painting `<agent> · <model>` on row 24 above it.
+    // OpenCode 2.0.21 cold-start shape: row-25 box corner, then row-24 agent/model text.
     const frame = (body: string): string =>
       `\x1b[?2026h${HIDE_CURSOR}${body}\x1b[22;27H${SHOW_CURSOR}\x1b[?2026l`
     const BOX = `${ALT_SCREEN_ENTER}${DECSET_BRACKETED_PASTE}${frame(
@@ -197,8 +184,7 @@ describe('createDraftPasteReadyScanner', () => {
     })
 
     it('does not latch a part an earlier session established and then revoked', () => {
-      // The review probe's shapes: another alternate-screen app drew a separator and left; a shell
-      // showed its cursor under bracketed paste and turned it off.
+      // Probe preceding sessions: an alt-screen app leaves after a separator; a shell toggles paste/cursor off.
       const leftApp = createDraftPasteReadyScanner('opencode-agent-row')
       leftApp.observe(`${ALT_SCREEN_ENTER}x \u00b7 y${ALT_SCREEN_LEAVE}`)
       expect(leftApp.observe(BOX)).toEqual(GRACE)
@@ -218,7 +204,6 @@ describe('createDraftPasteReadyScanner', () => {
         armQuietTimer: false,
         readyAfterMs: null
       })
-      // A later OpenCode start in the same pane gets the grace again.
       expect(scanner.observe(BOX)).toEqual(GRACE)
     })
 
@@ -319,11 +304,7 @@ describe('createDraftPasteReadyScanner', () => {
     })
 
     it('ignores a shell prompt glyph emitted before grok takes the screen', () => {
-      // Why: `❯` is starship's / pure's default prompt too, and that prompt —
-      // with its own DECSET 2004 — renders in the normal buffer while the shell
-      // still owns the PTY. Firing there would paste the draft into the shell.
-      // The shell's 2004 still arms the quiet floor, exactly as it does today
-      // for every agent on the default signal.
+      // Shells also draw ❯ under paste mode; require alt-screen ownership to avoid pasting into shell. Keep the default quiet floor.
       const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
       expect(scanner.observe(`${DECSET_BRACKETED_PASTE}\x1b[32m❯\x1b[0m grok\r\n`)).toEqual({
         ready: false,
@@ -342,26 +323,21 @@ describe('createDraftPasteReadyScanner', () => {
     })
 
     it('keeps arming the quiet window so a missed composer frame still delivers', () => {
-      // Why: grok renders differentially — the glyph is painted once, so a
-      // scanner that attached after that frame would otherwise wait out the
-      // caller's hard timeout. Output only goes quiet once startup settles.
+      // Differential rendering paints the glyph once; late observers need quiet fallback after startup settles.
       const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
       scanner.observe(GROK_ALT_SCREEN_ENTER)
       expect(scanner.observe('logo shimmer frame')).toEqual({ ready: false, armQuietTimer: true })
     })
 
     it('arms the quiet window from DECSET 2004 when grok renders inline', () => {
-      // Why: `--no-alt-screen` / `[ui] screen_mode = "minimal"` emits no 1049h,
-      // so the glyph never anchors. The quiet window must still arm off 2004 or
-      // readiness never resolves and the main-process caller drops the draft.
+      // Inline/minimal grok lacks 1049h; arm quiet from 2004 or main drops the draft.
       const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
       expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({ ready: false, armQuietTimer: true })
       expect(scanner.observe(GROK_COMPOSER_FRAME)).toEqual({ ready: false, armQuietTimer: true })
     })
 
     it('does not treat a legacy-console `> ` prompt as the glyph', () => {
-      // grok draws `> ` instead of `❯` on legacy Windows consoles; it is too
-      // generic to match, so those launches ride the quiet window.
+      // Legacy Windows grok uses generic > instead of ❯, so rely on quiet fallback.
       const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
       scanner.observe(GROK_ALT_SCREEN_ENTER)
       expect(scanner.observe('\x1b[38;2;80;80;88m│\x1b[0m> ')).toEqual({
@@ -371,9 +347,7 @@ describe('createDraftPasteReadyScanner', () => {
     })
 
     it('disarms when grok leaves the alternate screen before painting a composer', () => {
-      // Why: grok entering the alt screen and then dying hands the terminal back to
-      // the shell. A latched anchor would treat the shell's `❯` prompt as grok's
-      // composer and paste the draft into the shell.
+      // An exited grok returns alt-screen ownership to shell; revoke the glyph anchor before shell draws ❯.
       const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
       scanner.observe(GROK_ALT_SCREEN_ENTER)
       expect(scanner.observe(GROK_ALT_SCREEN_LEAVE)).toEqual({
@@ -384,9 +358,7 @@ describe('createDraftPasteReadyScanner', () => {
     })
 
     it('ignores a shell prompt after an rc-file program used the alternate screen', () => {
-      // Why: a pager/editor launched from the user's shell rc enters and leaves the
-      // alt screen before grok is even launched; the prompt that follows is the
-      // shell's, so the anchor must not survive the leave.
+      // rc-file pagers may use/leave alt screen before grok starts; their anchor cannot authorize shell prompts.
       const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
       expect(
         scanner.observe(`rc pager${GROK_ALT_SCREEN_ENTER}paged${GROK_ALT_SCREEN_LEAVE}`)
@@ -395,7 +367,6 @@ describe('createDraftPasteReadyScanner', () => {
         ready: false,
         armQuietTimer: true
       })
-      // grok's own launch still resolves normally afterwards.
       expect(scanner.observe(GROK_ALT_SCREEN_ENTER)).toEqual({ ready: false, armQuietTimer: true })
       expect(scanner.observe(GROK_COMPOSER_FRAME)).toEqual({ ready: true, armQuietTimer: false })
     })
@@ -426,9 +397,7 @@ describe('createDraftPasteReadyScanner', () => {
   })
 
   describe('a stream that never carries DECSET 2004', () => {
-    // Why: every signal below is anchored on `\x1b[?2004h`, so without it readiness cannot resolve
-    // and delivery falls through to the caller's hard timeout. A transport that loses the sequence
-    // lands here; terminal-agent-paste-bracketing.ts names remote replay and ConPTY as possible.
+    // These signals require 2004; lost remote replay/ConPTY handshakes reach hard timeout (terminal-agent-paste-bracketing.ts).
     const ANCHORLESS_OPENCODE_FRAME = `${HIDE_CURSOR}\x1b[2J\x1b[H opencode ${SHOW_CURSOR}`
 
     it('never reports opencode ready from show-cursor frames alone', () => {

@@ -57,9 +57,7 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
   ]) {
     const normalized = normalizeProcessName(candidate)
     if (normalized) {
-      // Why: claude-agent-teams is an Orca wrapper whose child process is the
-      // real `claude` binary. Do not let wrapper configs overwrite canonical
-      // CLI ownership for the same foreground process name.
+      // claude-agent-teams wraps real claude; wrapper config must not overwrite its canonical foreground ownership.
       if (!PROCESS_TO_AGENT.has(normalized)) {
         PROCESS_TO_AGENT.set(normalized, agent)
       }
@@ -72,8 +70,7 @@ function agentForNormalizedProcess(normalized: string): TerminalAgent | undefine
   if (exact) {
     return exact
   }
-  // Why: node-pty can report Codex's packaged platform binary
-  // (for example codex-aarch64-ap) instead of the launch command.
+  // node-pty may report Codex's packaged platform binary rather than its launch command.
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
   }
@@ -87,9 +84,7 @@ function agentForNormalizedProcess(normalized: string): TerminalAgent | undefine
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
-  // Why: the `muse` launcher script execs a versioned `muse-bin-<version>` binary, so
-  // the foreground name never equals `muse` itself. The `muse-bin-` prefix also covers
-  // comm-truncated rows (`muse-bin-1.0.3-R`) without matching unrelated `muse-*` tools.
+  // Muse execs a versioned muse-bin binary; this prefix also covers truncated comm without matching unrelated muse-* tools.
   if (normalized.startsWith('muse-bin-')) {
     return PROCESS_TO_AGENT.get('muse')
   }
@@ -153,10 +148,26 @@ function recognizePythonEntrypoint(
   return recognizeAgentProcess(entrypoint) ?? recognizePythonScriptEntrypoint(entrypoint)
 }
 
-// Why: `muse` execs a versioned `muse-bin-<version>` binary (see above), so the
-// exact-name check never matches and readiness/follow-up delivery would stall.
-// Scoped to muse: a generic `-suffix` rule would misclassify short agent names
-// (see the ante-obsidian test).
+// Hermes' installed launcher execs `python -I -c '<bootstrap>'` (hermes_cli/_launchers.py), so argv names no hermes entrypoint.
+function isHermesInlineBootstrap(tokens: readonly string[], firstNormalized: string): boolean {
+  if (!PYTHON_PROCESS_RE.test(firstNormalized)) {
+    return false
+  }
+  let index = 1
+  while (index < tokens.length && tokens[index] !== '-c') {
+    if (tokens[index] === '-X' || tokens[index] === '-W') {
+      index += 2
+    } else if (/^-[bBdEiIOqRsSuvx]+$/.test(tokens[index])) {
+      index += 1
+    } else {
+      return false
+    }
+  }
+  // ps flattens argv, so the -c program runs to the end of the line there.
+  return /\bimport hermes_bootstrap\b/.test(tokens.slice(index + 1).join(' '))
+}
+
+// Muse's versioned binary needs a scoped prefix match; generic suffix matching would misclassify names such as ante-obsidian.
 export function isExpectedAgentProcess(
   processName: string | null | undefined,
   expectedProcess: string
@@ -177,6 +188,14 @@ export function isExpectedAgentProcess(
   )
 }
 
+/** Agents whose process names (orca, acli, cn, vibe) also belong to ordinary tools. */
+export const GENERIC_PROCESS_NAME_AGENTS: ReadonlySet<TerminalAgent> = new Set([
+  'claude-agent-teams',
+  'rovo',
+  'continue',
+  'mistral-vibe'
+])
+
 export function recognizeAgentProcess(
   processName: string | null | undefined
 ): RecognizedAgentProcess | null {
@@ -186,9 +205,7 @@ export function recognizeAgentProcess(
 
 export function recognizeAgentProcessFromCommandLine(
   commandLine: string | null | undefined,
-  // Why: TUI consumers (status hooks, shell shadows) filter out headless
-  // one-shots (`claude -p …`); non-interactivity guards include them — a
-  // one-shot agent can't answer a prompt either.
+  // TUI status/shadows exclude headless one-shots; non-interactivity guards include them because they cannot answer prompts.
   options?: { includeHeadlessOneShot?: boolean }
 ): RecognizedAgentProcess | null {
   if (!commandLine) {
@@ -212,6 +229,9 @@ export function recognizeAgentProcessFromCommandLine(
   const directRecognition = keep ? direct : filterHeadlessOneShotAgentCommand(direct, tokens)
   if (directRecognition) {
     return directRecognition
+  }
+  if (isHermesInlineBootstrap(tokens, firstNormalized)) {
+    return recognizedAgentForProcess('hermes')
   }
   const entrypoint = findInterpreterEntrypointToken(tokens, firstNormalized)
   if (!entrypoint) {

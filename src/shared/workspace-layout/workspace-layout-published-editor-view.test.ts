@@ -24,7 +24,6 @@ const diffView = (diffSource: 'unstaged' | 'staged'): LayoutEditorView => ({
   }
 })
 
-/** A diff tab the window drew under its file's id, with its view. */
 function withDiffTab(view: LayoutEditorView = diffView('unstaged')): WorkspaceLayoutModel {
   return build(testContext(), [
     { type: 'createTerminalTab', workspace: WS },

@@ -8,8 +8,7 @@ const ROW_STATES: readonly AgentRowState[] = [...AGENT_STATUS_STATES, 'idle', 'u
 
 describe('showsAgentToolPreview', () => {
   it('covers exactly the two states whose tool fields describe live work', () => {
-    // Why: enumerate every row state so a new one has to make this decision explicitly
-    // rather than defaulting into showing a stale tool.
+    // Enumerate every state so a new state cannot silently inherit stale tool fields.
     const showing = ROW_STATES.filter((state) => showsAgentToolPreview(state))
 
     expect(showing).toEqual(['working', 'waiting'])

@@ -1,5 +1,4 @@
-// A layout-owner build: main keeps the resume record of a pane it holds from the hook status it
-// accepts, so an agent in a tab no window holds still resumes after a quit.
+// Main-owned panes retain hook resume identity even when no window holds their tabs.
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -7,7 +6,7 @@ import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
@@ -38,11 +37,7 @@ function makeRuntime() {
       return { ok: true, result: {} }
     }
   )
-  const runtime = new OrcaRuntimeService(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-    Object.assign(runtimeStore, { applyLayoutCommand }) as never
-  )
-  // No window holds any tab.
+  const runtime = new OrcaRuntimeService(Object.assign(runtimeStore, { applyLayoutCommand }))
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, getSession, applyLayoutCommand }
 }
@@ -145,8 +140,7 @@ describe('main records a held pane’s resume record from its hook status', () =
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+    const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
       getAgentProviderSessionSnapshot: () => rows
     })
 

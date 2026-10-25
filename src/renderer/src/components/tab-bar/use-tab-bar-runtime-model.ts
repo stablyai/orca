@@ -168,8 +168,7 @@ export function useTabBarRuntimeModel({
     isWindowsClient: isWindows,
     worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
   })
-  // Why: `projects`/`repos`/`worktreesByRepo` feed nothing but the local runtime context below, and
-  // `worktreesByRepo` churns on every worktree write; ungated, each write re-renders every tab strip.
+  // Subscribe to project/worktree maps only for the local shell menu; their routine writes otherwise repaint every retained strip.
   const needsLocalProjectRuntime =
     showWindowsShellMenu && !activeRuntimeEnvironmentId?.trim() && !worktreeConnectionId
   const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))

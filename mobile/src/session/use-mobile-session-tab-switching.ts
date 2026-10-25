@@ -58,7 +58,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       if (prev && prev !== handle) {
         unsubscribeTerminal(prev)
       }
-      // Force a fresh subscribe even if eagerly subscribed without viewport
       if (terminalUnsubsRef.current.has(handle)) {
         unsubscribeTerminal(handle)
       }
@@ -159,7 +158,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       if (cached?.status === 'ready' && cached.isDirty) {
         return
       }
-      // Why: tab list lacks a reliable version for desktop clean saves; re-read on revisit unless the phone has a draft.
+      // Revisit rereads clean desktop saves because tab snapshots lack a reliable document version; preserve phone drafts.
       void readMarkdownTab(tab)
     },
     [
@@ -175,7 +174,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       worktreeId
     ]
   )
-  // Ref to latest switchSessionTab so fetchSessionTabs can activate a synced browser tab without a dependency cycle.
   switchSessionTabRef.current = switchSessionTab
   return {
     switchTab,

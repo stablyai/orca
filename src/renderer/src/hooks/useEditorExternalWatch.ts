@@ -33,7 +33,6 @@ function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknow
   })
 }
 
-/** Keeps editor filesystem subscriptions alive beyond any individual editor surface. */
 export function useEditorExternalWatch(): void {
   const snapshot = useAppStore(selectEditorExternalWatchTargets)
   const targetsRef = useRef<EditorExternalWatchTarget[]>([])
@@ -61,8 +60,7 @@ export function useEditorExternalWatch(): void {
     targetsRef.current = nextTargets
     // Why: acquire before release so a root shared by an added and a removed target is never dropped in between.
     for (const target of added) {
-      // Why: writes made while it was unwatched (background trim) were never reported. Resync like a
-      // reconnect does — one overflow through the normal pipeline — once the watch is in place.
+      // After reacquiring trimmed background watches, overflow-resync missed changes through the normal pipeline.
       const resync = previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))
         ? () =>
             fsChangedHandlerRef.current?.(
@@ -82,7 +80,7 @@ export function useEditorExternalWatch(): void {
         continue
       }
       const installed = acquireWatchRoot(heldWatchRootsRef.current, target, (err) => {
-        // Why: SSH providers can disappear while tabs still reference the worktree; report the failure without an uncaught renderer promise.
+        // Provider disappearance must report watch failure without uncaught renderer rejection.
         warnExternalWatchFailure(target, err)
       })
       if (resync) {

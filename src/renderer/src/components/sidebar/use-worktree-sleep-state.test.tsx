@@ -89,8 +89,7 @@ function SleepProbe({ worktreeId }: { worktreeId: string }) {
 describe('useIsSleepingWorktree', () => {
   beforeEach(() => {
     resetWorktreeSleepStateCacheForTests()
-    // Why: the epoch clock samples wall time once per epoch, so a suite that keeps
-    // epoch 0 would otherwise reuse the previous test's timestamp.
+    // Reset epoch-clock samples so tests using epoch zero do not inherit prior timestamps.
     resetAgentStatusEpochClockForTests()
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     mockState = {
@@ -137,8 +136,7 @@ describe('useIsSleepingWorktree', () => {
   })
 
   it('keeps a structured chat awake once its turn has finished', () => {
-    // The reported bug: an idle structured session reports state 'done', which is exactly what
-    // isFreshNonDoneAgentStatus refuses, so the live-agent term cannot hold this workspace open.
+    // A completed structured chat has no fresh non-done agent; the chat itself must keep its workspace awake.
     const worktreeId = 'repo1::/path/wt1'
     const paneKey = makePaneKey('chat-1', LEAF_ID)
     mockState = {
@@ -162,7 +160,6 @@ describe('useIsSleepingWorktree', () => {
   })
 
   it('does not treat a non-chat unified tab as activity', () => {
-    // Negative control: the term keys on a structured chat, not on any unified tab existing.
     const worktreeId = 'repo1::/path/wt1'
     mockState = {
       ...mockState,
@@ -266,8 +263,7 @@ describe('useIsSleepingWorktree', () => {
     resetAgentStatusEpochClockForTests()
     mockState = {
       ...mockState,
-      // Why: the filter's freshness window is the shared predicate, so an agent row
-      // this old must stop holding the workspace awake for the moon too.
+      // The sleeping glyph must use the filter’s shared agent-freshness boundary.
       agentStatusByPaneKey: { [paneKey]: { ...entry, updatedAt: 0 } },
       agentStatusEpoch: 1
     }

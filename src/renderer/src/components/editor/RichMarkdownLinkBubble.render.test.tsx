@@ -56,7 +56,7 @@ describe('RichMarkdownLinkBubble viewport dismissal', () => {
   it('stays open when a resize reports the same viewport size', () => {
     const { onDismiss } = renderBubble()
 
-    // Why: the reveal reflow fires a real resize event without changing any dimension.
+    // Reveal reflow emits resize even when dimensions are unchanged.
     fireEvent(window, new Event('resize'))
 
     expect(onDismiss).not.toHaveBeenCalled()

@@ -8,7 +8,6 @@ it('asks the host to queue only a host that queues, with queueing on', () => {
   expect(structuredAgentSessionQueueRequest({ capability: 'supported', enabled: true })).toBe(
     'queue-if-active'
   )
-  // Queueing off, or a host that does not queue or has not said yet: a plain send.
   for (const queue of [
     { capability: 'supported' as const, enabled: false },
     { capability: 'unsupported' as const, enabled: true },

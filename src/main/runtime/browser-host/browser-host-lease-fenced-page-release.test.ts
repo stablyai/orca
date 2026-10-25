@@ -23,7 +23,7 @@ describe('fenced client page retention', () => {
 
     host.release()
 
-    // The tab outlives the desktop that placed it; only the placement it can no longer serve goes.
+    // Retain the tab record while retiring its unreachable placement.
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-a')?.placement).toEqual(placement)
     expect(leases.getPlacement('page-a')).toBeUndefined()
     expect(runtime.retireRuntimeOwnedBrowserSessionTab).not.toHaveBeenCalled()
@@ -50,8 +50,7 @@ describe('fenced client page retention', () => {
     await expect(host.whenFenced).resolves.toBe('released')
   })
 
-  // Why the fixture has to publish a loading page: every other case here publishes a settled one,
-  // so the republish that settles it reads the same as no republish at all.
+  // Start loading so settlement requires an observable republish.
   it('settles a retained page that was still loading when its host quit', () => {
     const runtime = createRuntime()
     const host = attachHost(runtime, 'host-a')
@@ -60,7 +59,6 @@ describe('fenced client page retention', () => {
 
     host.release()
 
-    // Nothing can drive the page any more, so a spinner left standing would never resolve.
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-a')?.loading).toBe(false)
   })
 
@@ -89,7 +87,6 @@ describe('fenced client page retention', () => {
     const placement = placeClientPage(runtime, 'page-a', 'host-a')
     publishPage(runtime, 'page-a', placement)
 
-    // Why: the replacement is the same desktop returning, and recovery re-places the page onto it.
     attachHost(runtime, 'host-a', { connectionId: 'connection-b' })
 
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-a')?.placement).toEqual(placement)
@@ -106,7 +103,6 @@ describe('fenced client page retention', () => {
     })
     publishPage(runtime, 'page-a', { ...stale, browserHostGeneration: 2 })
 
-    // Why: a fence never authorizes touching a record another generation now owns.
     expect(retainRuntimeBrowserClientPageRecord(runtime, 'page-a', stale)).toBe(false)
     expect(releaseRuntimeBrowserClientPageRecord(runtime, 'page-a', stale)).toBe(false)
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-a')).toBeDefined()
@@ -120,7 +116,6 @@ describe('fenced client page retention', () => {
     const placement = placeClientPage(runtime, 'page-a', 'host-a')
     publishPage(runtime, 'page-a', placement)
 
-    // Worktree removal and unrecoverable recovery must keep dropping the record outright.
     expect(releaseRuntimeBrowserClientPageRecord(runtime, 'page-a', placement)).toBe(true)
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-a')).toBeUndefined()
     expect(runtime.retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith(
@@ -140,7 +135,6 @@ describe('fenced client page retention', () => {
       throw new Error('session tab republish failed')
     })
 
-    // A lease past the point of return must not strand pages behind one failing retention.
     expect(() => host.release()).not.toThrow()
 
     expect(runtime.notifyMobileSessionTabsChanged).toHaveBeenCalledTimes(2)

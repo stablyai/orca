@@ -22,6 +22,11 @@
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
 }
 
+.native-chat-markdown :is(th, td) {
+  min-width: calc(var(--spacing) * 18);
+  overflow-wrap: break-word;
+}
+
 .native-chat-markdown code {
   border: 1px solid var(--chat-inline-code-border);
   border-radius: var(--radius-sm, 0.375rem);
@@ -53,8 +58,7 @@
   color: inherit;
 }
 
-/* A reply being written: each new word, and each block that is not made of words,
-   fades in as it is drawn. Opacity only, so the line it joins never shifts. */
+/* Fade new words/blocks with opacity only, preserving line geometry. */
 @media (prefers-reduced-motion: no-preference) {
   .native-chat-markdown[data-word-fade] :is([data-word], a, :not(pre) > code),
   .native-chat-markdown[data-block-fade] > :is(pre, div, table, hr) {

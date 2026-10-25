@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 
 const mocks = vi.hoisted(() => ({
   useLiveDashboardSnapshot: vi.fn(() => ({ generatedAt: 1, cards: [] })),
+  useAgentDashboardTelemetry: vi.fn(),
   blockingOverlay: false,
   boardProps: null as Record<string, unknown> | null,
   activateTabAndFocusPane: vi.fn(),
@@ -22,6 +23,10 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('./useLiveDashboardSnapshot', () => ({
   useLiveDashboardSnapshot: mocks.useLiveDashboardSnapshot
+}))
+
+vi.mock('../dashboard-popout/use-agent-dashboard-telemetry', () => ({
+  useAgentDashboardTelemetry: mocks.useAgentDashboardTelemetry
 }))
 
 vi.mock('../dashboard-popout/AgentKanbanBoard', () => ({
@@ -54,6 +59,7 @@ beforeEach(() => {
     false
   )
   mocks.useLiveDashboardSnapshot.mockClear()
+  mocks.useAgentDashboardTelemetry.mockClear()
   mocks.activateTabAndFocusPane.mockClear()
   mocks.activateAndRevealWorkspace.mockClear()
   mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
@@ -74,9 +80,11 @@ describe('AgentDashboardDrawer', () => {
     render(<AgentDashboardDrawer statusBarVisible />)
 
     expect(mocks.useLiveDashboardSnapshot).not.toHaveBeenCalled()
+    expect(mocks.useAgentDashboardTelemetry).not.toHaveBeenCalled()
 
     act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
     expect(mocks.useLiveDashboardSnapshot).toHaveBeenCalledTimes(1)
+    expect(mocks.useAgentDashboardTelemetry).toHaveBeenCalledWith('in_window')
   })
 
   it('leaves Escape to an open terminal panel before dismissing the drawer', () => {
@@ -122,8 +130,7 @@ describe('AgentDashboardDrawer', () => {
 
     revealFromBoard('runtime:env-1')
 
-    // Bare setActiveWorktree skips the terminal view switch, initial-terminal seeding and
-    // sleeping-session resume the shared dispatcher runs.
+    // Use the shared dispatcher to switch terminal view, seed initial terminals and resume sleeping workspaces.
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
       executionHostId: 'runtime:env-1'
     })

@@ -1,9 +1,5 @@
-/**
- * The host-local signal that says a paired client is streaming this page. The host renderer needs
- * it because Chromium stops painting a display:none guest, and scoping the mobile stamp to phones
- * left a desktop/web/CLI viewer with nothing keeping its own stream alive.
- * The renderer half of the chain lives in tests/e2e/host-guest-paint-retention-remote-viewer.
- */
+/** Chromium stops painting display:none guests; every remote viewer needs host paint retention.
+ * Renderer coverage: tests/e2e/host-guest-paint-retention-remote-viewer. */
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from './orca-runtime'
 import {

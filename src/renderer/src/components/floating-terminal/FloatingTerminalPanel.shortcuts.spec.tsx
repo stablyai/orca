@@ -27,7 +27,6 @@ import {
   runEffects
 } from './floating-terminal-panel-render-probe'
 
-/** Tab ids the panel asked to rename, in dispatch order. */
 function dispatchedRenameTabIds(): string[] {
   return vi
     .mocked(window.dispatchEvent)
@@ -440,8 +439,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.activateTab).toHaveBeenCalledWith('simulator-tab')
   })
 
-  // F4: an out-of-range index chord in app context must still be CONSUMED (never leak a raw key to
-  // the shell once L1 yields it), and simply skip activation when no tab exists at that index.
+  // Consume out-of-range chords so raw keys cannot leak into the shell after terminal dispatch yields.
   it('consumes but does not activate a focused floating tab index shortcut past the visible tab count', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
     const element = await renderPanel(true)

@@ -45,9 +45,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     ...args: Parameters<OwnedMobileTerminalCreate['createRuntimeOwnedMobileSessionTerminal']>
   ): ReturnType<OwnedMobileTerminalCreate['createRuntimeOwnedMobileSessionTerminal']>
 
-  // Why: keep an existing snapshot's browser tabs in sync with the live bridge
-  // without rebuilding stable terminal state. Replaces browser entries with the
-  // current live set and rewrites the browser portion of the primary group order.
+  // Refresh browser rows/order from the live bridge without rebuilding stable terminal state.
   protected reconcileHeadlessMobileSessionBrowserTabs(
     worktreeId: string,
     existing: RuntimeMobileSessionTabsSnapshot
@@ -61,13 +59,11 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
       this.getAvailableAuthoritativeWindow() && !this.offscreenBrowserBackend
         ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
         : []
-    // Keyed by id so no row can publish twice whatever the two sources overlap on; a freshly
-    // built row wins over the retained one it replaces.
+    // Deduplicate overlapping sources by id; newly built rows replace retained rows.
     const liveById = new Map(
       [...rendererBrowserTabs, ...publishedBrowserTabs].map((tab) => [tab.id, tab])
     )
-    // Emit in the order the snapshot already had, because the equality check below compares by
-    // index: rebuilding renderer-first would read a pure reordering as a change and republish.
+    // Preserve snapshot order so index-based equality does not republish a pure reordering.
     const retainedInOrder = existingBrowserTabs.flatMap((tab) => {
       const live = liveById.get(tab.id)
       return live && liveById.delete(tab.id) ? [live] : []
@@ -125,9 +121,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     worktreeId: string,
     tabs: WorkspaceSessionState['tabsByWorktree'][string]
   ): boolean {
-    // Why resolved lazily and reused: the per-tab question is the same lease sweep with a
-    // different tabId, so asking it once per worktree answers every tab. Kept lazy so a
-    // worktree whose first tab already owns a serve/SSH pty never sweeps at all.
+    // Sweep leases lazily once per workspace for all tabs; serve/SSH-owned tabs may need no sweep.
     let recoverableTabIds: ReadonlySet<string | undefined> | undefined
     return tabs.some((tab) => {
       if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
@@ -146,17 +140,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     })
   }
 
-  /**
-   * The tab this leaf sits in NOW. Only the leaf half of a pane key is remint-stable: a lease
-   * freezes its tabId at write time and `detachTerminalPaneToTab` moves a live pane, so the stored
-   * tabId names the tab the pane LEFT. Matching a lease on it is wrong in both directions - it
-   * accepts the coordinates the pane abandoned (recovering a pane that already moved on, which
-   * binds one leaf in two tabs and orphans the PTY under the new one) and refuses the correct ones.
-   * Same resolution `restoreReattachedPtyRuntime` already does for its own reattach fence.
-   *
-   * Both workspace partitions are read because older builds' relay reattach left SSH panes in
-   * `local`; consulting one would report "nowhere" for a pane the other holds.
-   */
+  /** Resolve the leaf's current tab, not a lease's frozen pre-detach tabId, or recovery may duplicate/miss a moved pane. Read both host/local partitions for legacy SSH reattach records. */
   protected findCurrentTerminalTabIdForLeaf(targetId: string, leafId: string): string | undefined {
     for (const leaf of this.leaves.values()) {
       if (leaf.leafId === leafId) {
@@ -164,7 +148,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
       }
     }
     for (const pty of this.ptysById.values()) {
-      const parsed = parsePaneKey(pty.paneKey ?? '')
+      const parsed = parsePaneKey(this.paneOfPty(pty).paneKey ?? '')
       if (parsed?.leafId === leafId) {
         return parsed.tabId
       }
@@ -178,15 +162,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     )
   }
 
-  /**
-   * Why eligibility belongs in the selection, not after it: a pane accumulates leases as it
-   * re-leases under new relay ids, so `(worktreeId, tabId, leafId)` names several. A superseded or
-   * relay-id-recycled predecessor is `expired` for a reason that already names its successor, and
-   * the unqualified callers use this answer to decide a pane is still recoverable — reporting one
-   * would offer paired viewers a recovery `recoverTerminalPane` then refuses. Picking the first
-   * ELIGIBLE orphan also keeps a predecessor from shadowing the successor that is genuinely
-   * reattachable.
-   */
+  /** Choose the first eligible orphan: superseded/recycled leases name a successor and must neither offer refused recovery nor shadow a reattachable lease. */
   private isRecentExpiredSshLeaseForWorktree(
     lease: ReturnType<NonNullable<RuntimeStore['getSshRemotePtyLeases']>>[number],
     worktreeId: string,
@@ -242,9 +218,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
         }
         return (
           this.resolveExpiredSshLeaseTabId(lease) === tabId &&
-          // Leases store RELAY form (`toStoredPtyId` -> `toRelaySshPtyId`); the runtime hands us
-          // the APP form (`ssh:<target>@@pty-3`). A raw `===` therefore never held for an SSH
-          // pane, which is what kept this reader's only ptyId-qualified caller inert.
+          // Compare normalized ids: leases store relay form while callers supply ssh:<target>@@<pty> app form.
           (ptyId === undefined ||
             lease.ptyId === toComparableRelaySshPtyId(lease.targetId, ptyId)) &&
           (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId)
@@ -260,12 +234,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     return this.getRecentExpiredSshLease(worktreeId, tab.parentTabId, tab.leafId) !== null
   }
 
-  // Why: serve-* (local serve) and ssh:<conn>@@<relay> (SSH relay) ids are minted
-  // ONLY for runtime-owned terminals and are preserved/re-hydrated, so tear them
-  // down even if the renderer adopted a view (else they resurrect). The daemon
-  // session form <worktreeId>@@<shortUuid> is deliberately NOT here: the daemon
-  // mints it for ordinary renderer-owned local terminals too, so id shape can't
-  // classify ownership for that form — renderer-graph membership does (below).
+  // Serve/SSH ids prove runtime ownership even with renderer views; ordinary daemon @@ ids also name renderer-owned terminals and require graph membership.
   protected isServeOrSshOwnedPtyId(ptyId: string | null | undefined): boolean {
     return this.isServeOwnedPtyId(ptyId) || this.isSshOwnedPtyId(ptyId)
   }

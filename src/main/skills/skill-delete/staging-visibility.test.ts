@@ -57,7 +57,6 @@ describe('native walker', () => {
 
 describe('WSL guest scan', () => {
   it('prunes the same staging shapes the native walker skips', () => {
-    // The runner receives the script directly, so assert on its find expression.
     const command = buildWslSkillDiscoveryCommand([
       {
         id: 'home-agents',

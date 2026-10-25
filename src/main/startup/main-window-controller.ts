@@ -39,6 +39,8 @@ import {
 import { requireMainWindowServices } from './main-window-service-readiness'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
 
+import { isResourceWindowVisible } from '../window/resource-view-admission'
+
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
@@ -70,8 +72,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         }
       }
     })
-    // Why here: read-only, and the install DACL is the one thing a 0x80000003
-    // child death cannot tell us about itself. See electron/electron#51761.
+    // Probe DACL read-only: 0x80000003 child deaths cannot identify install permissions themselves (electron/electron#51761).
     const probeDispatched = probeWindowsInstallDirAcl({
       isServeMode: state.isServeMode,
       onDone: (data) =>
@@ -81,9 +82,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
           appVersion: app.getVersion()
         })
     })
-    // Why gated on the dispatch: the probe is once-per-process while openMainWindow
-    // re-runs on every reopen, so arming this again would wait on a verdict that
-    // already landed — and drop every GPU crash for the grace window.
+    // Arm only when the once-per-process probe dispatches; reopened windows must not wait on an already-settled verdict.
     if (probeDispatched) {
       noteWindowsInstallDirAclProbePending()
     }
@@ -103,7 +102,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         { processType: 'renderer', ...liveness },
         webContentsId
       )
-      // Why: launch-failed only says a spawn failed; the probe's errno (EAGAIN = process limit) names the cause.
+      // launch-failed hides cause; errno can prove process exhaustion such as EAGAIN.
       if (details.reason === 'launch-failed' && !state.isQuitting) {
         void recordRendererLaunchFailureProbe(details)
       }
@@ -114,7 +113,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         expectedTeardown: getExpectedTeardownScope(webContentsId, false)
       }),
     onRendererRecoveryExhausted: ({ details, recentRecoveryCount, cause, lowCommit, retry }) => {
-      // Why distinct names: a stalled reload or a low-commit hold never opened the breaker, and a bundle that says it did misreads the failure.
+      // Name non-breaker failures separately so diagnostics do not misreport an opened breaker.
       recordDurableCrashBreadcrumb(
         cause === 'reload-stalled'
           ? 'renderer_recovery_reload_exhausted'
@@ -177,8 +176,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
     logStartupMilestone('did-finish-load')
-    // Why cleared here: a reload drops the old ui:openMarkdownFiles listener, and the fresh
-    // renderer re-attaches by pulling. Pushing into the gap between would be silently lost.
+    // Reload removes the listener; hold pushes until the fresh renderer pulls to prove readiness.
     state.osDocumentOpenListenerReady = false
     const currentStore = state.store
     if (currentStore && resolveConsent(currentStore.getSettings()).effective === 'enabled') {
@@ -192,6 +190,15 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
   })
   state.mainWindow = window
+  const publishResourceVisibility = (): void => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))
+    }
+  }
+  window.on('show', publishResourceVisibility)
+  window.on('restore', publishResourceVisibility)
+  window.on('hide', publishResourceVisibility)
+  window.on('minimize', publishResourceVisibility)
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)

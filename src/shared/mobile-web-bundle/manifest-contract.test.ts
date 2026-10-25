@@ -134,8 +134,7 @@ describe('the page routes a manifest declares', () => {
   })
 
   it('refuses a pathname a phone could not write into its own history', () => {
-    // Each of these reaches `history.replaceState` on the phone, where `//host` throws a
-    // cross-origin SecurityError and a query or a fragment is a second field pasted into the first.
+    // Phone history rejects cross-origin //host paths; query/fragment belong in separate fields.
     for (const pathname of [
       'h/[hostId]',
       '//evil.example/h',
@@ -148,8 +147,7 @@ describe('the page routes a manifest declares', () => {
   })
 
   it('refuses a grant name that is not one', () => {
-    // One segment under `native` is not a verb: the namespace is `native.<domain>.<action>`, and
-    // anything shorter is a plain name wearing a dot.
+    // Native verbs require native.<domain>.<action>; native.navigate is incomplete.
     expect(withRoutes([{ pathname: '/h', grants: ['native.navigate'] }])).toBe(false)
     expect(withRoutes([{ pathname: '/h', grants: [''] }])).toBe(false)
     for (const grant of ['navigate.', '.native', 'native..read', 'Native.Clipboard.Read', 'a.b']) {
@@ -158,8 +156,7 @@ describe('the page routes a manifest declares', () => {
   })
 
   it('takes a native verb, which a route must be able to declare to ever be granted one', () => {
-    // Without this no manifest can name a verb, and with per-route grants that leaves every native
-    // verb unreachable for every route.
+    // Every native verb must be representable in per-route grants to remain reachable.
     for (const grant of [
       'native.clipboard.write',
       'native.clipboard.read',
@@ -170,9 +167,7 @@ describe('the page routes a manifest declares', () => {
     }
   })
 
-  /** The first plain grant added since this pattern was written, and the reason its name has no
-   *  dot: one segment under `native` is refused as a malformed verb, so a capability that is not a
-   *  verb has to be a single token. */
+  /** Non-verb capabilities use a plain token; a single native segment would be rejected as a malformed verb. */
   it('takes the binary screencast lane, and refuses the spelling that looks like a verb', () => {
     expect(withRoutes([{ pathname: '/h', grants: ['screencastBinary'] }])).toBe(true)
     expect(withRoutes([{ pathname: '/h', grants: ['native.screencast'] }])).toBe(false)
@@ -183,14 +178,7 @@ describe('the page routes a manifest declares', () => {
     expect(withRoutes([{ pathname: '/h', grants: [], screen: 'x' }])).toBe(false)
   })
 
-  /**
-   * The optional lane (ruling 37), held to the required lane's own rules.
-   *
-   * One grammar, because the shell filters both lists against one implemented set and the page reads
-   * one `grants.native`: a name only one lane could carry would be a second vocabulary, which is
-   * what candidate A was rejected for. One ceiling over the union, because the union is what a
-   * session's granted list is built from.
-   */
+  /** Required and optional grants share grammar and a union ceiling because one session granted-list combines them (ruling 37). */
   it('takes an optional grant list, absent or empty, under the same grammar', () => {
     expect(withRoutes([{ pathname: '/h', grants: ['navigate'], optionalGrants: [] }])).toBe(true)
     expect(
@@ -218,14 +206,12 @@ describe('the page routes a manifest declares', () => {
         { pathname: '/h', grants: names(half, 'req'), optionalGrants: names(half, 'opt') }
       ])
     ).toBe(true)
-    // One past it, with neither lane over the ceiling on its own: this is the case a per-array
-    // ceiling passes and a page would be handed twice what the cap bounds.
+    // Individually valid arrays can exceed the combined session grant cap.
     expect(
       withRoutes([
         { pathname: '/h', grants: names(half + 1, 'req'), optionalGrants: names(half, 'opt') }
       ])
     ).toBe(false)
-    // And the per-array ceiling still holds on its own, so the union check is not the only fence.
     expect(
       withRoutes([
         {
@@ -418,8 +404,7 @@ describe('asset paths', () => {
         manifestOf([{ ...ENTRY, contentType: 'text/html; charset=utf-8' }])
       ).success
     ).toBe(true)
-    // A2's builder emits the single-space form; the other spellings are the same bytes under a
-    // different build id.
+    // Builder emits the single-space MIME spelling; variants would hash identical bytes under different ids.
     for (const contentType of ['text/html;charset=utf-8', 'text/html;  charset=utf-8']) {
       expect(
         MobileWebBundleManifestSchema.safeParse(manifestOf([{ ...ENTRY, contentType }])).success

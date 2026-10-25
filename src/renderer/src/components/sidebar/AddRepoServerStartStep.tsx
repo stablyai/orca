@@ -33,7 +33,7 @@ export function AddRepoServerPathStartStep({
   onOpenCreateStep
 }: AddRepoServerPathStartStepProps): React.JSX.Element {
   const [browsing, setBrowsing] = useState(initialBrowsing)
-  // Why the path too: a folder picked in Windows' picker or dropped from Explorer arrives filled in.
+  // Windows picks/Explorer drops arrive prefilled; expose their path immediately.
   const [pathEntryOpen, setPathEntryOpen] = useState(initialBrowsing || serverPath.trim() !== '')
 
   if (browsing && runtimeEnvironmentId) {

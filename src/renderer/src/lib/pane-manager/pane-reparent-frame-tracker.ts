@@ -1,5 +1,4 @@
-/** Tracks the animation frames issued for drag-reparent work so destroy() can
- *  cancel every still-pending one, and skips the callback once the owner died. */
+/** Track drag-reparent frames for destroy-time cancellation and skip callbacks after owner death. */
 export class PaneReparentFrameTracker {
   private pendingPaneReparentFrameIds = new Set<number>()
 

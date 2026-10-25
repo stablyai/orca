@@ -47,8 +47,6 @@ const IOS_TOKEN: MobilePushToken = {
   apnsEnvironment: 'production'
 }
 
-// Every await in the module resolves immediately, so one macrotask drains the whole
-// per-host reconcile chain no matter how many hops deep it happens to be.
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0))
 }
@@ -202,7 +200,6 @@ describe('push registration capability gating', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(sent).toEqual(['status.get'])
 
-    // A failed probe retries while the same connection remains active.
     probeFails = false
     await vi.advanceTimersByTimeAsync(1_000)
     await Promise.resolve()
@@ -220,7 +217,6 @@ describe('push registration capability gating', () => {
     await flush()
     expect(methodsIn(sent)).toEqual(['status.get'])
 
-    // A token can be missing only for now — APNs registration still in flight.
     await setRemotePushEnabled(true)
     await flush()
 
@@ -230,18 +226,21 @@ describe('push registration capability gating', () => {
 
 describe('push registration token changes', () => {
   it('re-registers every connected host when the provider rolls the token', async () => {
-    let onTokenChange: ((token: MobilePushToken) => void) | null = null
+    const tokenListener: { onChange?: (token: MobilePushToken) => void } = {}
     vi.mocked(addPushTokenListener).mockImplementation((listener) => {
-      onTokenChange = listener
+      tokenListener.onChange = listener
       return () => {}
     })
     const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
     await setRemotePushEnabled(true)
     attachPushRegistration('host-1', client)
     await flush()
+    const second = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
+    attachPushRegistration('host-2', second.client)
+    await flush()
     const stop = startPushTokenSync()
 
-    onTokenChange?.({ platform: 'ios', token: 'b'.repeat(64), apnsEnvironment: 'sandbox' })
+    tokenListener.onChange?.({ platform: 'ios', token: 'b'.repeat(64), apnsEnvironment: 'sandbox' })
     await flush()
 
     const registers = sent.filter((request) => request.method === 'notifications.registerPush')
@@ -250,6 +249,15 @@ describe('push registration token changes', () => {
       token: 'b'.repeat(64),
       apnsEnvironment: 'sandbox'
     })
+    const secondRegisters = second.sent.filter(
+      (request) => request.method === 'notifications.registerPush'
+    )
+    expect(secondRegisters).toHaveLength(2)
+    expect(secondRegisters[1]?.params).toMatchObject({
+      token: 'b'.repeat(64),
+      apnsEnvironment: 'sandbox'
+    })
+    expect(stored.registeredHostIds).toEqual(['host-1', 'host-2'])
     stop()
   })
 })
@@ -281,15 +289,13 @@ describe('push unregistration', () => {
     expect(methodsIn(first.sent)).not.toContain('notifications.unregisterPush')
     expect(stored.pendingUnregisterHostIds).toEqual(['host-1'])
 
-    // A fresh process: only the persisted intent survives the restart.
     AppState.currentState = 'active'
     resetPushRegistrationForTests()
     const reconnected = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
     attachPushRegistration('host-1', reconnected.client)
     await flush()
 
-    // No probe first: a pending entry is a switch-off the user already performed, so
-    // it must not wait on a status.get that may never answer.
+    // Persisted unregister intent must proceed before a capability probe that may never answer.
     expect(methodsIn(reconnected.sent)).toEqual(['notifications.unregisterPush'])
     expect(stored.pendingUnregisterHostIds).toEqual([])
   })
@@ -328,6 +334,12 @@ describe('push unregistration', () => {
     attachPushRegistration('host-1', client)
     await flush()
 
+    expect(client.sendRequest).toHaveBeenCalledExactlyOnceWith(
+      'notifications.unregisterPush',
+      null,
+      { timeoutMs: 5_000, failWhenDisconnected: true }
+    )
+    expect(stored.registeredHostIds).toEqual(['host-1'])
     expect(stored.pendingUnregisterHostIds).toEqual(['host-1'])
   })
 
@@ -368,14 +380,13 @@ describe('push unregistration', () => {
     attachPushRegistration('host-1', client)
     await flush()
 
-    // Gating this on the probe leaves the gateway pushing while the switch reads off.
     expect(sent).toEqual(['notifications.unregisterPush'])
     expect(stored.pendingUnregisterHostIds).toEqual([])
   })
 
   it('re-arms the unregister when the switch goes off while a register is in flight', async () => {
     const sent: string[] = []
-    let releaseRegister: (() => void) | null = null
+    const register: { release?: () => void } = {}
     const client = {
       sendRequest: vi.fn(async (method: string) => {
         sent.push(method)
@@ -384,7 +395,7 @@ describe('push unregistration', () => {
         }
         if (method === 'notifications.registerPush') {
           await new Promise<void>((resolve) => {
-            releaseRegister = resolve
+            register.release = resolve
           })
           return ok({ registered: true, registrationId: 'registration-1' })
         }
@@ -395,21 +406,19 @@ describe('push unregistration', () => {
     attachPushRegistration('host-1', client)
     await flush()
 
-    // The sweep snapshots `registered` while this host is still only in flight.
     const switchedOff = setRemotePushEnabled(false)
     await flush()
-    releaseRegister?.()
+    register.release?.()
     await switchedOff
     await flush()
 
-    // Recording the late success would leave a live gateway registration behind a
-    // switch that reads off, with nothing pending to ever retract it.
+    // Do not record late register success after disable; it would leave a live gateway route with no pending unregister.
     expect(sent).toContain('notifications.unregisterPush')
     expect(stored).toEqual({ registeredHostIds: [], pendingUnregisterHostIds: [] })
   })
 })
 
-it('does not register or renew when a connected phone is in the background', async () => {
+it('registers only after a connected phone becomes active', async () => {
   AppState.currentState = 'background'
   const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
   await setRemotePushEnabled(true)

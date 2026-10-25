@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { pluginConsentRequestSchema } from './plugin-consent-request'
 
 describe('pluginConsentRequestSchema', () => {
-  it('requires the exact reviewed consent fingerprint', () => {
+  it('requires a nonempty reviewed consent fingerprint', () => {
     expect(
       pluginConsentRequestSchema.safeParse({
         pluginKey: 'orca-samples.demo',

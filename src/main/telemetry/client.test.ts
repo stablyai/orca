@@ -1,6 +1,3 @@
-// End-to-end behavior of the track() wrapper against a mock PostHog. These
-// tests pin capture payload drift, shutdown gating, burst caps, consent order,
-// and the per-session event ceiling.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import { _setShuttingDownForTests, track, trackAppOpenedOnce } from './client'
@@ -35,13 +32,12 @@ describe('track()', () => {
     expect(call.distinctId).toBe(BASE_COMMON.install_id)
     expect(call.properties).toEqual({
       ...BASE_COMMON,
+      agent_dashboard_enabled: false,
       $process_person_profile: false
     })
   })
 
-  // Drift-check: the full set of keys on the capture payload is bounded by
-  // CommonProps, EventProps, and {$process_person_profile}. A future SDK
-  // upgrade widening `properties` should fail loudly for review.
+  // Bound outgoing property keys to the declared schemas plus process-person flag so SDK upgrades cannot silently widen payloads.
   it('serialized property set is exactly CommonProps plus EventProps plus $process_person_profile', () => {
     track('workspace_created', { source: 'command_palette', from_existing_branch: true })
     const call = mock.capture.mock.calls[0]![0]
@@ -62,9 +58,7 @@ describe('track()', () => {
     expect(mock.capture).not.toHaveBeenCalled()
   })
 
-  // Core security-ordering invariant: a compromised renderer of an opted-out
-  // user should not be able to burn consent-resolve CPU. The observable signal
-  // is store.getSettings(), which resolveConsent calls once per evaluation.
+  // Burst-cap before consent reads settings so opted-out renderer floods cannot burn consent-resolution CPU.
   it('burst cap runs BEFORE consent resolve', () => {
     ;(store.getSettings as ReturnType<typeof vi.fn>).mockReturnValue({
       telemetry: {
@@ -94,8 +88,7 @@ describe('track()', () => {
   it('enforces the per-session 1000-event global ceiling across event names', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-03T00:00:00Z'))
-    // Advance time between calls so the per-event token buckets refill; the
-    // only remaining cap is the session ceiling.
+    // Refill per-event caps to isolate the session ceiling.
     for (let i = 0; i < 1500; i++) {
       vi.advanceTimersByTime(10_000)
       track('app_opened', {})

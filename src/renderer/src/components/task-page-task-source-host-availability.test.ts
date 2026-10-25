@@ -6,7 +6,6 @@ import {
   getTaskSourceHostAvailabilityForHost
 } from './task-page-source-context'
 
-// Why: a complete typed entry keeps these cases honest when the registry shape changes.
 function hostEntry(
   overrides: Partial<ExecutionHostRegistryEntry> = {}
 ): ExecutionHostRegistryEntry {

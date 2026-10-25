@@ -1,7 +1,6 @@
 import type { Worktree } from '../../../shared/worktree/types'
 
-// Why: displayName is typed non-optional but arrives undefined at runtime for
-// persisted/discovered worktrees (crash 99657ab1); coalesce so it can't throw.
+// Persisted/discovered rows can lack required displayName (crash 99657ab1); coalesce before comparing.
 export function compareWorktreeDisplayName(a: Worktree, b: Worktree): number {
   return (a.displayName ?? '').localeCompare(b.displayName ?? '')
 }

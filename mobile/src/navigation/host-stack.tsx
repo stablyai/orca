@@ -8,9 +8,7 @@ export function HostStack({ animation }: { animation: HostStackAnimation }) {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.bgBase },
-        // In the tablet split view the detail pane should swap instantly like
-        // a desktop master-detail; the default slide animates the outgoing
-        // screen and briefly reveals the one beneath it. Phones keep the slide.
+        // Swap tablet detail panes instantly so slides cannot reveal the outgoing pane’s underlying screen; phones retain native slides.
         animation
       }}
     >

@@ -7,22 +7,8 @@ import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-pr
 import type { RpcResponse } from '../transport/types'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 
-/**
- * The three writes a resume makes, answered by the shell's own RPC client instead of the page's.
- *
- * These are the modes no golden replays: the corpus scripts a refusal and a locked terminal, and
- * nothing in it loses a reply or closes the door mid-flight. The claim under test is not that the
- * page has its own handling — it has none, and should have none — but that the descriptor's
- * handling survives the extra hop, so the native screen and the page fail identically.
- *
- * Each case is run twice, once on a client the page holds through the bridge and once on the same
- * fake directly, and the two verdicts are compared rather than written down. A change that moved
- * the native behaviour would move both and pass a written-down expectation.
- *
- * One case has no second leg and cannot have one: a shell that goes away mid-write is something
- * only the bridged transport can do, so there is no native run to compare it against. It asserts
- * the property directly instead, and says so where it is.
- */
+// Compare bridged and direct RPC verdicts for resume writes when replies fail/disappear; corpus covers only refusal/locked terminal.
+// Assert shell-loss ambiguity separately because direct client has no bridge door to close.
 
 const LAUNCH = { command: 'codex resume abc' }
 
@@ -75,14 +61,7 @@ async function firstRequest(
   return nthRequest(rpc, flush, 0)
 }
 
-/**
- * The nth request, waited for rather than read once.
- *
- * A resume is two writes and the second is only made after the first settles, so on the bridged
- * leg it is two more lane round trips away: reading `requests[1]` straight after settling the
- * create finds nothing, and a test that treated that as "the send never happened" would pass while
- * proving the opposite of what it says.
- */
+// Await nth request: second write crosses bridge only after create settles, so an immediate absent requests[1] cannot prove it never sent.
 async function nthRequest(
   rpc: FakeRpcClient,
   flush: () => Promise<void>,
@@ -106,12 +85,7 @@ const CREATED_TERMINAL: RpcResponse = {
   _meta: { runtimeId: 'runtime-a' }
 }
 
-/**
- * Drives both writes on one transport and returns what the caller was left with.
- *
- * `caller` is what the screen holds and `rpc` is what the shell holds; on the direct leg they are
- * the same object, which is the point — the only difference between the two runs is the bridge.
- */
+// Drive writes on caller transport with observed shell rpc; direct leg uses same object, isolating bridge difference.
 async function resumeVerdict(args: {
   caller: Parameters<typeof resumeAiVaultSessionInTerminal>[0]
   rpc: FakeRpcClient
@@ -147,8 +121,7 @@ async function bothLegs(sendReply: RpcResponse): Promise<{ bridged: Verdict; dir
 
 describe('a resume write through the bridge answers the caller as the native client does', () => {
   it('raises the host message on a refused create, on both transports', async () => {
-    // `id`, because the page reads the reply with `isRpcResponse` where the native client does
-    // not: a real host always sends one, and a double without one is not the reply under test.
+    // Include id: page isRpcResponse checks it while direct client does not; real host always sends it.
     const refusal: RpcResponse = {
       id: 'reply-1',
       ok: false,
@@ -187,14 +160,12 @@ describe('a resume write through the bridge answers the caller as the native cli
     const direct = verdictOf(resumeAiVaultSessionInTerminal(native, 'wt-1', LAUNCH))
     ;(await firstRequest(native, async () => {})).reject(lost())
 
-    // The mark is a schema field on the captured error, so it crosses; without that the page would
-    // read a timed-out create as a definite failure and offer a retry that duplicates a terminal.
+    // Capture ambiguity as schema field so page cannot treat create timeout as definite failure and offer duplicate-terminal retry.
     expect((await bridged).deliveryUnknown).toBe(true)
     expect(await bridged).toEqual(await direct)
   })
 
-  // The one case with no direct leg: a fake RPC client has no door to shut, so there is no native
-  // run to compare against. The property is asserted rather than differenced.
+  // No direct comparison for shell-loss: direct fake has no bridge door, so assert property explicitly.
   it('leaves a write in flight when the shell goes ambiguous, not failed', async () => {
     const pair = createFakeBridgePortPair()
     await pair.flush()
@@ -207,8 +178,7 @@ describe('a resume write through the bridge answers the caller as the native cli
   })
 
   it('raises the host message on a refused send, which no earlier case reached', async () => {
-    // Every case above settles the create, so `terminal.send` had never crossed the bridge at all
-    // and the second half of the resume was uncompared.
+    // Earlier cases stop at create; settle it here to compare terminal.send too.
     const { bridged, direct } = await bothLegs({
       id: 'reply-send',
       ok: false,
@@ -220,8 +190,7 @@ describe('a resume write through the bridge answers the caller as the native cli
   })
 
   it('says the terminal is locked when the send is accepted and refuses in-band', async () => {
-    // An accepted envelope reporting `accepted: false` is a different failure from a refused send,
-    // and it is the branch the caller words itself; the reader answers that one question.
+    // Distinguish accepted:false payload from refusal; caller owns that message branch.
     const { bridged, direct } = await bothLegs({
       id: 'reply-send',
       ok: true,
@@ -233,8 +202,7 @@ describe('a resume write through the bridge answers the caller as the native cli
   })
 
   it('resolves through both writes when the host takes them, on both transports', async () => {
-    // The presence precondition for the two above: a run that failed at the create would give the
-    // same shape of verdict, and this is what says the send is reached at all.
+    // Prove send was reached: failing create could produce same verdict shape.
     const { bridged, direct } = await bothLegs({
       id: 'reply-send',
       ok: true,
@@ -263,8 +231,7 @@ describe('a resume write through the bridge answers the caller as the native cli
     const direct = prepareMobileAiVaultSessionResume(native, SESSION)
     ;(await firstRequest(native, async () => {})).resolve(unavailable)
 
-    // Read raw at the call site rather than through the acceptance policy, which is what makes an
-    // older host a fallback instead of the failure `require-result-or-throw-message` would give.
+    // Read raw at call site to preserve old-host fallback instead of require-result-or-throw-message failure.
     expect(await bridged).toEqual(await direct)
     expect((await bridged).codexHome).toBe(LEGACY_CODEX_HOME)
   })

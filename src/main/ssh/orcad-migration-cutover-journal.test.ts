@@ -93,8 +93,7 @@ describe('migration cutover journal sidecar', () => {
     )
   })
 
-  // Older desktops read these files: the shared store must keep the path and bytes the SSH
-  // journal has always written (the exact call it made before the store existed).
+  // Keep legacy SSH journal paths/bytes readable by downgraded desktops.
   it('writes the same path and bytes the SSH journal always wrote', () => {
     writeOrcadMigrationSourceCutover(userDataPath, cutover())
     expect(orcadMigrationCutoverJournalDirectory(userDataPath)).toBe(

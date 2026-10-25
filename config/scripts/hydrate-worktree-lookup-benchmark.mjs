@@ -1,17 +1,6 @@
 #!/usr/bin/env node
-// Benchmark: the per-id worktree/tab lookups in session hydration and terminal reconnect.
-//
-// Four sites in store/slices/terminals.ts re-flattened worktreesByRepo (or tabsByWorktree)
-// and linearly searched it once per loop iteration -- O(rows x ids) for O(rows + ids)
-// distinct work. The fix builds one first-wins index per loop.
-//
-// This runs on the renderer's synchronous cold-start path and gates workspaceSessionReady,
-// which blocks terminal pane mounting, so the cost is paid before the first frame.
-//
-// Both arms produce the resolved rows and are compared for equality before timing, so an
-// index that resolved differently could not be reported as a win.
-//
-// Run with:  node config/scripts/hydrate-worktree-lookup-benchmark.mjs
+// Compare repeated flatten/find O(rows×ids) against one first-wins index O(rows+ids) on synchronous hydration/reconnect path before first frame.
+// Require identical resolved rows before timing. Run: node config/scripts/hydrate-worktree-lookup-benchmark.mjs
 import { performance } from 'node:perf_hooks'
 
 const ITERATIONS = Number(process.env.ORCA_HYDRATE_BENCH_ITERATIONS ?? '60')
@@ -27,7 +16,6 @@ for (const [name, value] of [
   }
 }
 
-// Pre-fix: re-flatten and linear-search per id.
 function resolveByFlatten(worktreesByRepo, ids) {
   const resolved = []
   for (const id of ids) {
@@ -68,9 +56,7 @@ function makeStore(repoCount, worktreesPerRepo) {
       branch: `feature/branch-${index}`
     }))
   }
-  // Why a deliberate duplicate: `.find()` is first-wins, so an index that overwrote on
-  // collision would resolve a different repo. Without a collision in the fixture that
-  // difference is unobservable and the equality check below would pass a broken index.
+  // Inject duplicate ID: find is first-wins, so overwrite-on-collision indexes must fail equality check.
   if (repoCount > 1) {
     const [firstRepo, secondRepo] = Object.keys(worktreesByRepo)
     worktreesByRepo[secondRepo] = [
@@ -81,9 +67,7 @@ function makeStore(repoCount, worktreesPerRepo) {
   return worktreesByRepo
 }
 
-// Why a miss fraction: SSH worktrees are absent from worktreesByRepo at cold start, so
-// the real workload includes ids that scan the whole list without matching -- the worst
-// case for the linear arm, and the one the code comments call out explicitly.
+// Cold-start SSH IDs can be absent; misses exercise linear arm’s full-list worst case.
 function makeIds(worktreesByRepo, count) {
   const all = Object.values(worktreesByRepo).flat()
   const ids = Array.from({ length: count }, (_value, index) =>
@@ -141,10 +125,7 @@ console.log(
   `${pad('repos', 6)} ${pad('worktrees', 10)} ${pad('ids', 5)} ${pad('flatten', 11)} ${pad('indexed', 11)} ${pad('speedup', 9)}`
 )
 
-// Row shapes are synthetic, sized against a real orca-data.json on a heavy machine
-// (10 repos / 423 worktrees / 188 pending reconnect). They are not that dataset: the
-// generator spreads worktrees evenly and injects one duplicate id, so treat the counts
-// as "about this scale", not a replay.
+// Synthetic shapes approximate heavy-machine scale (10 repos/423 worktrees/188 reconnects); uniform distribution plus duplicate is not a dataset replay.
 for (const [repoCount, worktreesPerRepo, idCount] of [
   [1, 5, 5],
   [3, 20, 20],
@@ -164,8 +145,7 @@ for (const [repoCount, worktreesPerRepo, idCount] of [
   if (!flattenResult.some((value) => value === null)) {
     throw new Error(`fixture had no absent ids at ${repoCount} repos`)
   }
-  // Count the generated rows rather than multiplying: makeStore injects a duplicate
-  // id for multi-repo cases, so the product would misreport the fixture by one.
+  // Count actual rows: injected multi-repo duplicate makes the product off by one.
   const worktreeCount = Object.values(worktreesByRepo).reduce((sum, rows) => sum + rows.length, 0)
   const { flattenMs, indexMs } = measure(worktreesByRepo, ids)
   console.log(

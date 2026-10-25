@@ -1,6 +1,4 @@
-// A reply being written is drawn at a reading pace: every surface that draws one steps it here.
-
-/** Scripts written without spaces, where each character is its own word. */
+/** Whitespace-free script ranges used as character-sized reveal units. */
 export const SPACELESS_SCRIPT_RANGES = String.raw`\u2e80-\ud7ff\uf900-\uffef`
 const SPACELESS_SCRIPT_CHAR = new RegExp(`[${SPACELESS_SCRIPT_RANGES}]`, 'u')
 
@@ -91,8 +89,7 @@ export function advanceNativeChatText(
   }
 }
 
-/** Where a row's reveal starts when it mounts. `remembered` is how far it had got when it last
- *  left view; `begun` says the reply began while the reader was watching. */
+/** Resume remembered reveal position on remount; begun marks replies first seen while the reader watched. */
 export function startNativeChatTextReveal(
   text: string,
   streaming: boolean,
@@ -130,8 +127,7 @@ export function receiveNativeChatText(
     : advanceNativeChatText(arriveNativeChatText(previous, text, now), now)
 }
 
-/** Steps the reveal every frame until all its text shows, and returns the cancel. A timer at the
- *  earliest deadline keeps it on time when frames stop, as they do in a hidden window. */
+/** Step each frame until complete and return cancellation. Deadline timers keep hidden windows on time when animation frames stop. */
 export function playNativeChatTextReveal(
   current: () => NativeChatTextReveal,
   step: (next: NativeChatTextReveal) => void,

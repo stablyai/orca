@@ -1,16 +1,5 @@
-// Identify and inspect the Orca terminal daemon on Windows.
-//
-// The daemon is forked with ELECTRON_RUN_AS_NODE=1, so on Windows its process
-// image is Orca.exe (the Electron binary running as plain Node) — it CANNOT be
-// matched by executable name. The only reliable discriminators are the
-// command-line markers the fork always passes: the daemon entry script
-// (daemon-entry.js) and its --socket / --token arguments. See
-// src/main/daemon/daemon-out-of-process-launcher.ts (createOutOfProcessLauncher).
-//
-// The daemon also writes a PID file at <userData>/daemon/daemon-v<N>.pid whose
-// JSON carries { pid, startedAtMs, entryPath, appVersion } — the appVersion
-// field lets the harness prove whether a post-update daemon was re-forked by
-// the new build (cold-restore) or is the same process (survival).
+// Identify run-as-node daemons by daemon-entry.js/--socket/--token, never Orca.exe image name.
+// Versioned PID files carry startedAtMs/entryPath/appVersion for cold-restore versus same-process survival evidence.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
@@ -26,24 +15,11 @@ export function defaultUserDataDir() {
   return path.join(appData, 'Orca')
 }
 
-/**
- * Find live daemon processes by scanning Win32_Process command lines for the
- * daemon-entry.js marker. Returns [{ pid, ppid, name, commandLine }].
- *
- * A developer box (and a busy CI runner) can host many unrelated daemons — one
- * per worktree/profile, plus lingering hosts from reverted builds. Pass
- * `scope` (a substring of the harness's own userData/token/socket path) to
- * match ONLY the daemon this harness's app instance owns. Omit it for a
- * machine-wide listing.
- */
+// Scan command-line daemon markers; scope to this harness’s userData/token/socket substring to exclude unrelated profiles.
+// Omitting scope intentionally lists machine-wide daemons.
 export function findDaemonProcesses(scope = '') {
   assertWin32('daemon-processes')
-  // Match by command-line marker only, never by exe name: with
-  // ELECTRON_RUN_AS_NODE the daemon's image is Orca.exe today but a relocated
-  // Phase 1 host may run from a differently-named copied binary. @() around the
-  // filtered result guards the PS 5.1 single-item unwrap — one match must still
-  // serialize as an array or the JS side sees an object and .length explodes.
-  // This exact class caused a production incident.
+  // Match entry marker across copied exe names; @() prevents PS 5.1 single-match object unwrapping, a prior production incident.
   const command = [
     `$procs = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |`,
     `  Where-Object { $_.CommandLine -and $_.CommandLine -match 'daemon-entry\\.js' })`,
@@ -62,11 +38,7 @@ export function findDaemonProcesses(scope = '') {
   )
 }
 
-/**
- * Read all daemon PID files under <userData>/daemon (daemon-v*.pid). Globbing
- * the protocol-versioned name keeps this correct across PROTOCOL_VERSION bumps.
- * Returns [{ file, pid, startedAtMs, entryPath, appVersion }].
- */
+// Read daemon-v*.pid across protocol bumps; return file/pid/start/entry/version metadata.
 export function readDaemonPidFiles(userDataDir = defaultUserDataDir()) {
   const daemonDir = path.join(userDataDir, 'daemon')
   if (!existsSync(daemonDir)) {
@@ -78,8 +50,7 @@ export function readDaemonPidFiles(userDataDir = defaultUserDataDir()) {
       continue
     }
     const filePath = path.join(daemonDir, entry)
-    // Read once: a PID file can vanish between readdir and here, and re-reading
-    // it in the catch path would crash discovery on a single stale file.
+    // Read once: PID files can disappear during discovery, including catch paths.
     let raw = ''
     try {
       raw = readFileSync(filePath, 'utf8').trim()
@@ -112,8 +83,7 @@ export function isPidAlive(pid, runCommand = runCommandSync) {
   }
   const state = stdout.trim()
   if (state !== 'alive' && state !== 'dead') {
-    // Why: blank or unexpected output is unavailable evidence, not proof that
-    // a process died; crash-survival assertions must fail closed.
+    // Treat blank/unexpected process evidence as unavailable, not proof of death.
     throw new Error(`PID liveness probe returned an invalid state: ${JSON.stringify(state)}`)
   }
   return state === 'alive'

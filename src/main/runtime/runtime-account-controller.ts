@@ -103,7 +103,7 @@ export class RuntimeAccountController {
     try {
       this.persistHostLaunchEnv?.(launchEnv)
     } catch (error) {
-      // Why not refuse: the env already applies; only a restart before the next push loses it.
+      // Environment already applies; persistence failure loses it only on restart before the next push.
       console.warn('[accounts] Could not save the host account env:', error)
     }
   }

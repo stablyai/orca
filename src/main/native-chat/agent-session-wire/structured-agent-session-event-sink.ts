@@ -47,12 +47,9 @@ export type StructuredAgentSessionSinkState = {
 
 export type StructuredAgentSessionSinkBarrier = { ok: true } | { ok: false; error: unknown }
 
-/** Linkage a producer stamps on the rows it writes. Absent on every append the
- *  session's own agent makes, which is what makes absence mean root. */
+/** Omitted producer linkage means session/root agent. */
 export type StructuredAgentSessionAppendOptions = AgentJournalProducerLinkage & {
-  /** Marks a critical lifecycle operation for lifecycle barriers and diagnostics. */
   lifecycle?: boolean
-  /** Host clock to stamp on the row instead of its append time. */
   observedAt?: number
 }
 
@@ -60,16 +57,14 @@ export type StructuredAgentSessionPublishOptions = Pick<
   StructuredAgentSessionAppendOptions,
   'lifecycle'
 > & {
-  /** A publication still waiting with this key is replaced by this one. */
   coalescingKey?: string
 }
 
-/** An item write states which turn its row belongs to; the write that creates the row decides. */
+/** Creation fixes turn scope; revisions keep it. */
 export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppendOptions & {
   echoOf?: JournalItemEcho['echoOf']
   turnScope: AgentJournalTurnScope
-  /** A reusable child's row a later run can resume: this child now executes it
-   *  (`JournalItemRow.executionOwner`). */
+  /** A later child execution assumes this reusable row. */
   executes?: true
 }
 
@@ -91,8 +86,7 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   publish(options?: StructuredAgentSessionPublishOptions): void
-  /** Resolves `ok` once every write admitted so far has landed in the journal; not `ok` when one
-   *  failed or a close dropped it unwritten. */
+  /** Not ok if any admitted write failed or close dropped it unwritten. */
   written?(): Promise<StructuredAgentSessionSinkBarrier>
   setActivity?(activity: AgentSessionTurnActivity | null): void
   tryAppendItem?(
@@ -100,47 +94,40 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     body: AgentJournalItemBody,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues an ordinary append whose identity is resolved after journal bind. */
   tryAppendResolvedItem?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues one resolved append and its publication as a single admitted operation. */
   tryAppendResolvedItemAndPublish?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues a read-modify-write of one row; `reservedBytes` must bound the resolved write. */
+  /** Reserved bytes must bound the eventual resolved revision. */
   tryReviseResolvedItem?(
     reservedBytes: number,
     resolve: StructuredAgentSessionRevisionResolver,
     options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues one revision and its publication as a single admitted operation. */
   tryReviseResolvedItemAndPublish?(
     reservedBytes: number,
     resolve: StructuredAgentSessionRevisionResolver,
     options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
+  /** Resolve on the journal lane; null appends nothing. */
   tryAppendLifecycleTransition?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Current durable epoch, when this deferred sink is bound to its journal. */
   journalEpoch?(): string | null
-  /** The bound journal's producer linkage; null until bound. */
   journalLinkage?(): StructuredAgentSessionLinkageJournal | null
-  /** The bound journal's rows and current epoch; null until bound. */
   journalHistory?(): StructuredAgentSessionHistoryJournal | null
-  /** Whether the bound journal's Stop rule makes turn `turnId`, ending at `endedAt` with no verdict
-   *  of its own, a person's cancellation (`personStopDecidesTurn`); false until bound. */
+  /** Apply the journal’s personal-Stop cancellation rule; false until bound. */
   journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
   appendLifecycleBatch?(
     settlementId: string,
@@ -202,10 +189,9 @@ const DEFAULT_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
 }
 
 export function createDeferredStructuredAgentSessionEventSink(deps: {
-  /** The session this sink writes for, named in every failure it logs. */
   sessionId: string
   logger: StructuredAgentSessionLogger
-  /** The sink failed for good; the owner decides what that costs the provider. */
+  /** Permanent failure; owner decides whether the provider can continue. */
   onFailed?: (error: unknown) => void
   watermarks?: Partial<StructuredAgentSessionSinkWatermarks>
   readingControl?: StructuredAgentSessionReadingControl
@@ -241,9 +227,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
           bound.journal.appendLifecycleBatch({
             settlementId,
             mutations,
-            // No row-level linkage: each mutation names its own (see the batch row builder).
+            // Preserve per-mutation linkage instead of stamping the whole row.
             fence: bound.fence,
-            // The provider's own observation: its child's generation produced every item it creates.
+            // Provider observations use the bound child’s execution fence.
             ownerFence: bound.fence
           })
       },

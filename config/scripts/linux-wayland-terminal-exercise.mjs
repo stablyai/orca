@@ -36,8 +36,7 @@ process.stdin.on('data', (chunk) => {
 async function pollWithTimeout(label, read) {
   const readPromise = Promise.resolve().then(read)
   readPromise.catch(() => undefined)
-  // Why: the unfixed Wayland GPU stall can freeze renderer protocol calls, so
-  // each poll needs its own deadline instead of relying only on waitFor's loop.
+  // Bound each renderer poll independently; a wedged protocol call outlives waitFor’s loop deadline.
   const result = await Promise.race([
     readPromise.then((value) => ({ timedOut: false, value })),
     delay(pollTimeoutMs).then(() => ({ timedOut: true, value: null }))
@@ -151,8 +150,7 @@ export async function setupTerminal(page, repoPath, logPhase) {
     rendererSetupTimeoutMs
   )
 
-  // Why: startup hydration can reset activeWorktreeId; after it completes, set
-  // worktree, tab, and visible type in one renderer transaction for CI setup.
+  // Wait for hydration before atomically setting worktree/tab/type or startup resets CI selection.
   logPhase('setup.activate-worktree')
   await waitFor('active terminal workspace setup', () =>
     page.evaluate((id) => {
@@ -265,8 +263,7 @@ export async function assertScrollbackBufferWorks(page, ptyId, runId, logPhase) 
     })
   )
   logPhase('scroll.buffer-ready', `baseY=${before.baseY} viewportY=${before.viewportY}`)
-  // Why: headless Wayland does not provide a reliable native wheel path in CI,
-  // so verify xterm's scrollback buffer can move without bypassing the renderer.
+  // Headless Wayland wheel input is unreliable; verify xterm scrollback through renderer instead.
   await runWithTimeout(
     'terminal scrollback API scroll',
     () =>

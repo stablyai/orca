@@ -15,7 +15,6 @@ export type PaletteAtom = {
   end: number
   components: PaletteComponent[]
   compact: string
-  /** compact index -> normalized index of the source character */
   compactOffsets: Int32Array
 }
 
@@ -93,7 +92,6 @@ export type PaletteTextSegments = {
   words: PaletteWord[]
 }
 
-/** Splits folded text into atoms, components, and words once per document build. */
 export function segmentPaletteText(text: NormalizedText): PaletteTextSegments {
   const normalized = text.normalized
   const atoms: PaletteAtom[] = []

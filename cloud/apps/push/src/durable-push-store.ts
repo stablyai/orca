@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { PUSH_LIMITS, type PushNotification } from '@orca-cloud/push-contract'
 import { WORKER_DRAINS } from './push-worker-concurrency.js'
 import type { PushDatabase, SqlRow } from './push-database.js'
+import { limitPushDatabaseConcurrency } from './push-background-database.js'
 
 const RETENTION_MS = 24 * 60 * 60_000
 // accept() caps expires_at at due_at + TTL, so older due_at is expired: scans skip an unpruned backlog.
@@ -26,12 +27,17 @@ export type QueuedPushDelivery = {
 }
 
 export class DurablePushStore {
+  private readonly claims: PushDatabase
+
   constructor(
     private readonly database: PushDatabase,
     private readonly now = Date.now,
     // Claim, finish and prune traffic; accept() and renew() stay on the request-path database.
     private readonly background = database
-  ) {}
+  ) {
+    // Wait outside the background pool so competing claims leave room for lease completion.
+    this.claims = limitPushDatabaseConcurrency(background, 3)
+  }
 
   async accept(
     host: string,
@@ -100,10 +106,10 @@ export class DurablePushStore {
     })
   }
 
-  async claim(): Promise<QueuedPushDelivery | null> {
-    return this.background.transaction(async (tx) => {
-      // The previous revision's claim holds this key exclusively; sharing it makes that claim snapshot
-      // only after our leases commit. Drop one release after every worker runs this revision.
+  async claim(canClaim?: () => boolean): Promise<QueuedPushDelivery | null> {
+    return this.claims.transaction(async (tx) => {
+      if (canClaim && !canClaim()) return null
+      // Share the previous revision’s exclusive claim key so it snapshots after our leases commit; drop one release after all workers upgrade.
       if (!(await tx.tryLockSharedScope('push-worker-claim'))) return null
       const now = this.now()
       // SQLite already serializes the whole transaction.
@@ -127,8 +133,7 @@ export class DurablePushStore {
     })
   }
 
-  // The row lock alone lets a second claimer skip this device's head and lease the row behind it.
-  // Under the device lock, a fresh read sees every committed lease and every uncommitted head.
+  // Row locks alone allow leasing behind a skipped device head; device locking plus reread sees committed leases and uncommitted heads.
   private async ownsDeviceHead(tx: PushDatabase, row: SqlRow, now: number): Promise<boolean> {
     const registrationId = String(row.registration_id)
     if (!(await tx.tryLockScope(`push-device:${registrationId}`))) return false

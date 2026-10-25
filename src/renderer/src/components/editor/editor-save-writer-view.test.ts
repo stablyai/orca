@@ -32,7 +32,7 @@ function view(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-/** Two views of one record, as the sharing switch will produce: `old` predates a reconnect. */
+/** Use the real shared-record shape with old representing a pre-reconnect view. */
 function sharedState(views: OpenFile[]): AppState {
   const ids = views.map((file) => file.id)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial state; the writer view reads only open files and the view index.
@@ -55,6 +55,17 @@ describe('editorSaveWriterView', () => {
     const readOnly = view('ro', { readOnly: true })
     expect(editorSaveWriterView(sharedState([readOnly, fresh]), 'ro', 'autosave')?.id).toBe('fresh')
   })
+
+  it.each(['autosave', 'restart'] as const)(
+    '%s skips a CSV preview or read-only view listed first',
+    (trigger) => {
+      const csv = view('csv', { csvPreviewOnly: true })
+      const readOnly = view('ro', { readOnly: true })
+      expect(editorSaveWriterView(sharedState([csv, readOnly, fresh]), 'csv', trigger)?.id).toBe(
+        'fresh'
+      )
+    }
+  )
 
   it('autosave has no writer when every view is stale', () => {
     expect(editorSaveWriterView(sharedState([old]), 'old', 'autosave')).toBeNull()

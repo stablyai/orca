@@ -153,7 +153,6 @@ describe('standalone runtime artifacts', () => {
     }
   })
 
-  // Phones paired to orcad get the page only when the slot carries it (mobileWeb.bundle.v1).
   it.each(SERVER_TARGETS)(
     'requires the mobile web page in every %s slot, shared by all',
     (target) => {

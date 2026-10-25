@@ -1,5 +1,4 @@
-// Real-binary coverage for the create-verification fallback (#16520): the mocked-runner suite cannot
-// prove that the row rebuilt from `rev-parse`/`symbolic-ref` is the row `git worktree list` reports.
+// Real Git verifies that fallback description matches worktree list output.
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -102,8 +101,7 @@ describe('describeCreatedWorktree against the real Git binary', () => {
       const linkedRepo = join(scratchDir, 'repo-link')
       await execFileAsync('ln', ['-s', repoPath, linkedRepo])
 
-      // Why this case: comparing a single common-dir reading rejected every symlinked root, leaving
-      // the recovery inert exactly where the listing is most likely to have been the only witness.
+      // Canonicalize both common dirs so symlinked repo roots can confirm ownership.
       await expect(
         describeCreatedWorktree(linkedRepo, worktreePath, 'feature')
       ).resolves.toMatchObject({ branch: 'refs/heads/feature' })
@@ -119,8 +117,7 @@ describe('describeCreatedWorktree against the real Git binary', () => {
       const stalledDotGit = join(stalledRepo, '.git')
       await execFileAsync('mkfifo', [stalledDotGit])
       try {
-        // Rejecting, not resolving undefined: undefined becomes a bare "created worktree not found",
-        // which claims Git put the worktree somewhere else. A stalled mount proves no such thing.
+        // Unread witnesses prove neither a foreign repo nor an absent worktree; retain the diagnostic.
         const settledBy = Date.now() + 5_000
         await expect(
           describeCreatedWorktree(stalledRepo, worktreePath, 'feature', { timeout: 250 })
@@ -139,16 +136,14 @@ describe('describeCreatedWorktree against the real Git binary', () => {
     const bareWorktree = join(scratchDir, 'workspaces', 'from-bare')
     await git(['worktree', 'add', '-q', bareWorktree, '-b', 'from-bare'], bareRepo)
 
-    // Why this case: a bare repo has no `.git` file to walk, so the filesystem reading is absent
-    // and only Git's own `--git-common-dir` can confirm the worktree belongs to this repo.
+    // Bare repos lack .git markers, so only Git can confirm common-dir ownership.
     await expect(
       describeCreatedWorktree(bareRepo, bareWorktree, 'from-bare')
     ).resolves.toMatchObject({ branch: 'refs/heads/from-bare', isMainWorktree: false })
   })
 
   it('recovers on the Git 2.25 baseline, which ignores --path-format=absolute', async () => {
-    // Forces the no-`--path-format` fallback against the real binary: it answers with paths Git has
-    // not made absolute, so the readings only agree once they are canonicalized.
+    // Force relative-path capability fallback against the real binary.
     getLocalGitCapabilityCache({ cwd: repoPath }).rememberUnsupported('rev-parse-path-format')
     const listed = (await listWorktreesStrict(repoPath)).find(
       (worktree) => worktree.branch === 'refs/heads/feature'
@@ -167,9 +162,7 @@ describe('describeCreatedWorktree against the real Git binary', () => {
       await execFileAsync('ln', ['-s', repoPath, linkedRepo])
       getLocalGitCapabilityCache({ cwd: linkedRepo }).rememberUnsupported('rev-parse-path-format')
 
-      // Why this pair: without `--path-format=absolute` Git answers `.git`, which resolves against the
-      // symlink spelling the caller passed, while the worktree answers with the real root. Only
-      // canonicalizing both makes them the same object store.
+      // Canonicalize caller symlink and real-root spellings before comparing object stores.
       await expect(
         describeCreatedWorktree(linkedRepo, worktreePath, 'feature')
       ).resolves.toMatchObject({ branch: 'refs/heads/feature' })

@@ -15,22 +15,10 @@ type RuntimeOrchestrationState = Pick<
   | 'tabsByWorktree'
 >
 
-/**
- * No-op: the batch has no cache of its own. Kept because the dashboard's singleton and
- * zero-worktree branches still announce that they are done with the batch view, and the shared
- * index behind it must survive that — mounted sidebar cards are reading the same records.
- */
+/** No-op for existing dashboard callers: mounted sidebar cards still need the shared index. */
 export function releaseRuntimeAgentOrchestrationBatchCache(): void {}
 
-/**
- * The dashboard's multi-worktree orchestration view.
- *
- * Why this is the shared index verbatim: the batch used to build its own worktree-keyed records
- * from the same four slices, restricted to the requested ids. Callers only ever `.get(id)`, so
- * the extra keys are unobservable, and one builder means one cache to keep honest and one
- * correctness oracle to satisfy. `worktreeIds` survives only as the empty-dashboard
- * short-circuit, which keeps the runtime map unread when nothing is on screen.
- */
+/** Share the full index; callers only look up requested IDs, and an empty request avoids reading runtime data. */
 export function selectRuntimeAgentOrchestrationBatch(
   state: RuntimeOrchestrationState,
   worktreeIds: readonly string[]

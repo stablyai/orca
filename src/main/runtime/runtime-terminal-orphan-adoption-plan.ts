@@ -13,6 +13,7 @@ import { buildRuntimeTerminalOrphanSession } from './runtime-terminal-orphan-ses
 import { validateRuntimeTerminalOrphanTopology } from './runtime-terminal-orphan-topology-validation'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
+import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
 /** The host session an adoption is checked against, read where the adoption is written. */
 export type RuntimeTerminalOrphanAdoptionSession = {
@@ -23,6 +24,7 @@ export type RuntimeTerminalOrphanAdoptionSession = {
 
 export type RuntimeTerminalOrphanAdoptionPlanPorts = {
   getPty: (handle: string) => RuntimePtyWorktreeRecord | null
+  paneOf: PtyPaneOf
   getLeaves: (ptyId: string) => readonly RuntimeLeafRecord[]
   getLeaf: (tabId: string, leafId: string) => RuntimeLeafRecord | undefined
   /** The title display surfaces show for the PTY, which an adopted tab persists. */
@@ -114,7 +116,11 @@ export function planRuntimeTerminalOrphanAdoption(
     ) {
       throw new Error('terminal_orphan_already_visual')
     }
-    if ((pty.tabId && pty.tabId !== claim.tabId) || (pty.paneKey && pty.paneKey !== paneKey)) {
+    const recorded = ports.paneOf(pty)
+    if (
+      (recorded.tabId && recorded.tabId !== claim.tabId) ||
+      (recorded.paneKey && recorded.paneKey !== paneKey)
+    ) {
       throw new Error('terminal_orphan_competing_owner')
     }
     return { claim, pty, paneKey }
@@ -196,7 +202,7 @@ export function planRuntimeTerminalOrphanAdoption(
     ) {
       throw new Error('terminal_orphan_surface_occupied')
     }
-    // Why the close record too: it outlives a host restart, which the client's retirement proofs do not.
+    // Durable close records survive host restart; client retirement proofs do not.
     if (
       session.terminalSurfaceTombstonesByPaneKey?.[paneKey] ||
       hasClosedTerminalTabRecord(session.closedTerminalTabTombstonesByTabId, claim.tabId)

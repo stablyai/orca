@@ -244,7 +244,6 @@ describe('chat appearance settings controls', () => {
       expect(trigger).not.toBeNull()
       fireEvent.pointerMove(trigger!, { pointerType: 'mouse' })
       expect((await screen.findByRole('tooltip')).textContent).toBe(terminalTooltip)
-      // Width stays editable and unexplained.
       expect(
         screen.getByRole('radio', { name: 'Wide' }).closest('[data-slot="tooltip-trigger"]')
       ).toBeNull()

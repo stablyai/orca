@@ -1,8 +1,6 @@
 import { isWebClientLocation } from '@/lib/web-client-location'
 
-// Why: navigator.clipboard only exists in secure contexts. The web client served
-// over plain HTTP (e.g. a LAN address) can reach the clipboard only through the
-// chord's native ClipboardEvent, so Ctrl/Cmd+V must not be preventDefault-ed there.
+// Insecure web origins lack navigator.clipboard; preserve the native paste gesture as their only clipboard path.
 export function shouldUseClipboardEventPaste(args: {
   isWebClient: boolean
   clipboardReadTextAvailable: boolean
@@ -23,10 +21,7 @@ export function getClipboardEventText(event: ClipboardEvent): string {
 
 type PasteChordEvent = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
 
-// Why: only these chords make the browser dispatch a native `paste` ClipboardEvent,
-// the sole clipboard path on insecure web. A remapped terminal.paste chord (e.g. Ctrl+Y)
-// fires no paste event, so it must still be consumed rather than encoded to the PTY as
-// raw control chars.
+// Only native paste chords can use ClipboardEvent on insecure web; consume remapped chords to avoid sending control characters.
 export function firesNativePasteEvent(event: PasteChordEvent, isMac: boolean): boolean {
   const key = event.key.toLowerCase()
   if (isMac) {

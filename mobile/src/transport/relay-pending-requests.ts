@@ -8,7 +8,6 @@ type PendingRequest = {
   written: boolean
 }
 
-/** In-flight relay RPC requests awaiting their response frame, keyed by request id. */
 export class RelayPendingRequests {
   private readonly pending = new Map<string, PendingRequest>()
   private requestCounter = 0
@@ -32,7 +31,6 @@ export class RelayPendingRequests {
     }
   }
 
-  /** Settle the waiter for this response; false when no request owns it. */
   settle(response: RpcResponse): boolean {
     const request = this.pending.get(response.id)
     if (!request) {

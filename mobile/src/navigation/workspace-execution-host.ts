@@ -2,31 +2,26 @@ import { createContext, useContext } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RouterHref } from './route-href'
 
-// Provided by `WorkspaceRoute`; apart from it so readers need not load expo-router.
+// Keep context separate from WorkspaceRoute so readers need not import Expo.
 export const WorkspaceExecutionHostContext = createContext<ExecutionHostId | undefined>(undefined)
 
 export function useWorkspaceExecutionHost(): ExecutionHostId | undefined {
   return useContext(WorkspaceExecutionHostContext)
 }
 
-/**
- * Whether this workspace runs on the paired desktop itself. Gates actions whose only result is an
- * editor tab; for everything else the host's reply decides where it goes.
- * A phone paired directly with a headless host still reads true, matching main's behaviour there.
- */
+// Gate editor-tab-only actions by route execution host; direct headless pairings still count as the paired desktop, matching main.
 export function useWorkspaceOnPairedHost(): boolean {
-  // Why the route, not a host signal: no host advertises a desktop window, and a server workspace's calls go to its own host.
+  // No host advertises window availability; routed workspace calls already target their execution host.
   return useWorkspaceExecutionHost() === undefined
 }
 
-/** The params a push into another screen of this workspace carries, so it stays on the server. */
+// Carry executionHost on pushed workspace params so navigation stays on the same server.
 export function workspaceRouteParams(executionHost: ExecutionHostId | undefined): {
   executionHost?: ExecutionHostId
 } {
   return executionHost ? { executionHost } : {}
 }
 
-/** The same, for a pushed href string. */
 export function workspaceRouteHref(
   href: string,
   executionHost: ExecutionHostId | undefined
@@ -37,7 +32,6 @@ export function workspaceRouteHref(
   return `${href}${href.includes('?') ? '&' : '?'}executionHost=${encodeURIComponent(executionHost)}`
 }
 
-/** The same, for any router target. */
 export function workspaceHref(href: RouterHref, executionHost: ExecutionHostId): RouterHref {
   return typeof href === 'string'
     ? workspaceRouteHref(href, executionHost)

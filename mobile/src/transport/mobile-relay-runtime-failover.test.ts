@@ -17,9 +17,7 @@ import {
 } from './mobile-endpoint-supervisor'
 import type { ConnectionState, HostProfile, RpcResponse } from './types'
 
-// Regression suite for the 2026-08 field failure: a phone paired over the
-// relay whose direct LAN endpoint is unreachable (Tailscale off) dialed the
-// LAN endpoint forever and never recovered a relay runtime session.
+// Exercise relay-paired phones with unreachable direct endpoints so LAN retry cannot starve relay recovery.
 
 vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
 vi.mock('expo-secure-store', () => ({
@@ -80,8 +78,7 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
   ) {
     super(state)
   }
-  // Why: production-realistic constants — fictional fake values hid three
-  // live defects in this subsystem (latch, churn, int32 timer overflow).
+  // Use realistic lease deadlines; fake values concealed latch, churn and timer-overflow defects.
   getAttachDeadlineAt = () => Date.now() + 10_000
   readonly dialStage = new RelayDialStageTracker()
   getDialStage = () => this.dialStage.getDialStage()
@@ -114,7 +111,6 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     this.recoveryPath = null
     this.recoveryAttempt = 0
     this.generation += 1
-    // Connected-state publication carries the migration cleanup.
     this.publishState('connected')
   })
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
@@ -158,7 +154,6 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     }
   })
   getRelayHostReachability = () => this.relayHostReachability
-  // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {
       this.pairingRejected = false
@@ -264,12 +259,11 @@ describe('relay runtime recovery without direct connectivity', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(openRelay).toHaveBeenCalledOnce()
 
-    // Pre-fix, the fresh-credential gate latched here with no timer and no exit.
     await vi.advanceTimersByTimeAsync(60_000)
     expect(openRelay).toHaveBeenCalledTimes(2)
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
-      expect.objectContaining({ version: 3 }),
+      expect.objectContaining({ token: 'token-v3'.padEnd(43, 'A'), version: 3 }),
       expect.any(String),
       expect.any(Function)
     )
@@ -280,12 +274,13 @@ describe('relay runtime recovery without direct connectivity', () => {
   it('recovers when the credential bundle was unreadable at supervisor start', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const readBundle = vi
-      .fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER))
+      .fn(async (): Promise<MobileRelayCredentialBundle | null> =>
+        bundleWith(2, Number.MAX_SAFE_INTEGER)
+      )
       .mockResolvedValueOnce(null)
     const deps = dependencies({ readBundle })
     const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
-    // Pre-fix, a null first read killed relay recovery for the process lifetime.
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
 
@@ -308,7 +303,6 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(logical.getPendingPath()).toBeNull()
 
     readBundle.mockImplementation(async () => bundleWith(3, Number.MAX_SAFE_INTEGER))
-    // Pre-fix, an expired bundle produced a silent no-op with nothing scheduled.
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(deps.openRelay).toHaveBeenCalledOnce()
@@ -332,7 +326,6 @@ describe('relay runtime recovery without direct connectivity', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(openRelay).toHaveBeenCalledOnce()
 
-    // Pre-fix, this state waited indefinitely for a foreground/navigation event.
     await vi.advanceTimersByTimeAsync(60_000)
     expect(openRelay).toHaveBeenCalledTimes(2)
     expect(logical.getActivePath()).toBe('relay')
@@ -340,8 +333,7 @@ describe('relay runtime recovery without direct connectivity', () => {
   })
 
   it('adopts a durable renewal that extends expiry without bumping the version', async () => {
-    // Why: resume confirmations and pairing recovery renew expiresAt while
-    // keeping current.version — version comparison cannot see this freshness.
+    // Renewal can extend expiry without changing version; select credentials by dialability.
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const expired = bundleWith(2, Date.now() - 1)
     const readBundle = vi
@@ -359,7 +351,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(deps.openRelay).toHaveBeenCalledOnce()
     expect(deps.openRelay).toHaveBeenLastCalledWith(
       relay,
-      expect.objectContaining({ version: 2 }),
+      expect.objectContaining({ token: 'token-v2'.padEnd(43, 'A'), version: 2 }),
       expect.any(String),
       expect.any(Function)
     )
@@ -368,8 +360,7 @@ describe('relay runtime recovery without direct connectivity', () => {
   })
 
   it('adopts a re-paired credential whose version counter restarted', async () => {
-    // Why: re-pairing overwrites the same keychain slot with a NEW credential
-    // record whose counter restarts at 1 — lower than the rejected version.
+    // Re-pairing resets version to one, so lower version can still be the fresh credential.
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi
       .fn()
@@ -389,7 +380,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenCalledTimes(2)
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
-      expect.objectContaining({ version: 1 }),
+      expect.objectContaining({ token: 'token-v1'.padEnd(43, 'A'), version: 1 }),
       expect.any(String),
       expect.any(Function)
     )
@@ -398,13 +389,10 @@ describe('relay runtime recovery without direct connectivity', () => {
   })
 
   it('does not churn relay sessions off the cell attach-reservation deadline', async () => {
-    // Why: the relay-hello's leaseExpiresAt is a ~10s attach deadline. Keying
-    // rotation off it replaced the session every second, killing any RPC
-    // slower than the cycle (the field symptom: "Worktree list unavailable").
+    // Rotate against resume expiry; the short attach deadline would churn sessions and kill slower RPCs.
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi.fn(() => new FakeRelaySession('connected'))
-    // Direct stays unreachable, as in the field — return probes must not
-    // confuse the churn measurement by migrating back to direct.
+    // Keep direct unreachable so return probes cannot distort the relay churn measurement.
     const openDirect = vi.fn(() => new FakeSession('disconnected'))
     const deps = dependencies({ openRelay, openDirect })
     const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
@@ -487,8 +475,7 @@ describe('relay runtime recovery without direct connectivity', () => {
   })
 })
 
-// The field failure's first symptom: a real direct rpc-client dialing an
-// unroutable LAN endpoint (instant 1006) while relay credentials sit unused.
+// Use the real direct client against a dead LAN to ensure stored relay credentials drive recovery.
 class DeadSocket {
   static constructed: string[] = []
   onopen: (() => void) | null = null
@@ -537,6 +524,7 @@ describe('failover with a real direct rpc-client', () => {
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(3_000)
 
+    expect(DeadSocket.constructed).toContain(DIRECT_ENDPOINT)
     expect(deps.openRelay).toHaveBeenCalled()
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -561,6 +549,7 @@ describe('failover with a real direct rpc-client', () => {
     await started
     await vi.advanceTimersByTimeAsync(3_000)
 
+    expect(DeadSocket.constructed).toContain(DIRECT_ENDPOINT)
     expect(deps.openRelay).toHaveBeenCalled()
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()

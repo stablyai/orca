@@ -40,10 +40,10 @@ export type SidebarHostOption = {
   kind: 'local' | 'ssh' | 'runtime'
   health: ExecutionHostHealth
   presence: 'local' | 'configured' | 'project' | 'active'
-  // Why: surfaced to the sidebar host-header menu so it can warn on version skew.
+  // Host menus need the compatibility verdict to explain version skew.
   compatibility?: RuntimeCompatVerdict
   blockedReason?: RuntimeHostBlockedReason
-  // Why: lets host headers spell out auth-needed SSH states, not just an icon.
+  // Host headers use this status to describe authentication requirements.
   connectionStatus?: SshConnectionStatus
   aliasHostIds?: readonly ExecutionHostId[]
   mergedIntoHostId?: ExecutionHostId
@@ -65,15 +65,13 @@ export function buildSidebarHostOptions(args: {
   sshTargetLabels: ReadonlyMap<string, string>
   sshConnectionStates?: ReadonlyMap<string, SshConnectionState>
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-  // Why: live per-environment runtime status lets the registry surface compat
-  // verdicts and blocked health in the sidebar without re-probing servers.
+  // Reuse live server status for compatibility and health without re-probing.
   runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeEnvironmentStatus>
   runtimeEnvironments?: readonly Pick<
     PublicKnownRuntimeEnvironment,
     'id' | 'name' | 'source' | 'orcadDeployment'
   >[]
-  // Why: per-host display-label overrides rename hosts everywhere the sidebar
-  // options feed (host headers, scope picker, focus menu).
+  // Apply display-label overrides consistently across sidebar host controls.
   hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
   wslHostStatuses?: Readonly<Record<string, WslHostStatus>>
   /** False keeps WSL hosts' rows but marks them turned off. */
@@ -117,8 +115,7 @@ export function buildSidebarHostOptions(args: {
     }
     if (host.kind === 'ssh') {
       const targetId = decodeURIComponent(host.id.slice('ssh:'.length))
-      // Why: configured hosts explain why a disconnected target remains
-      // visible; project-only hosts remain because workspaces still point at it.
+      // Disconnected hosts remain listed when configured or still referenced by projects.
       return {
         ...host,
         presence: configuredSshTargetIds.has(targetId)

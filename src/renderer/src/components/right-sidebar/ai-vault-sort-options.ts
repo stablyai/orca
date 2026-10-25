@@ -3,7 +3,6 @@ import type { AiVaultSearchSort, AiVaultSort } from '../../../../shared/ai-vault
 
 export type AiVaultSortOption<Value extends string> = { value: Value; label: string }
 
-/** One mode's sort menu: its choices, and the accessible name of the trigger showing one. */
 export type AiVaultSortMenu<Value extends string> = {
   options: readonly AiVaultSortOption<Value>[]
   ariaLabel: (selectedLabel: string) => string

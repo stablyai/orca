@@ -1,4 +1,3 @@
-/** Retired worktree names (the name registry, not migration retirement) the target carries. */
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   OrcadMigrationCatalogPayload,

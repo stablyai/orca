@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import {
   findPaneCodexOnSharedServer,
@@ -19,8 +19,7 @@ import { ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, hasPtyProviderForInspection } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
-// Why per shell: a new terminal fixes Codex only where this build's daemon gives that shell Orca's
-// codex function; cmd.exe and unrecognized shells never get one.
+// Wrapper availability depends on shell and daemon version; cmd.exe and unknown shells have none.
 const CODEX_SHELL_FUNCTION_PROTOCOL_BY_SHELL: ReadonlyMap<string, number> = new Map([
   ['zsh', CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION],
   ['bash', CODEX_NO_DAEMON_SHELL_LAUNCH_DAEMON_PROTOCOL_VERSION],
@@ -31,9 +30,8 @@ const CODEX_SHELL_FUNCTION_PROTOCOL_BY_SHELL: ReadonlyMap<string, number> = new 
 
 type Deps = { getLocalPtyProviderStartupPromise: () => Promise<void> | undefined }
 
-/** The pane's root pid when it is a local, non-WSL pane; otherwise null. */
 async function findLocalPaneRootPid(deps: Deps, id: unknown): Promise<number | null> {
-  // Why local only: SSH and WSL panes run Codex on another host, which must answer for itself.
+  // WSL/SSH Codex state belongs to the execution host.
   if (
     typeof id !== 'string' ||
     isRemoteRuntimePtyId(id) ||
@@ -42,7 +40,7 @@ async function findLocalPaneRootPid(deps: Deps, id: unknown): Promise<number | n
   ) {
     return null
   }
-  // Why: the pre-swap provider does not own restored daemon ids.
+  // Restored daemon IDs are not owned by the pre-swap provider.
   await deps.getLocalPtyProviderStartupPromise()
   if (!hasPtyProviderForInspection(id)) {
     return null
@@ -77,7 +75,6 @@ async function readPaneSharedServerStatus(
   if (!codex) {
     return { joined: false }
   }
-  // Why: the pane's own daemon predates its shell's codex function, which a new terminal has.
   const shellFunctionProtocol = CODEX_SHELL_FUNCTION_PROTOCOL_BY_SHELL.get(codex.shell ?? '')
   const openedBeforeWrapper =
     shellFunctionProtocol !== undefined &&
@@ -95,7 +92,7 @@ function runForPaneHome(fix: (codexHome: string) => Promise<boolean>) {
   }
 }
 
-// Why its own read: only a pane already showing Codex asks, so no cadence poll pays for argv.
+// Only visible Codex panes request this argv read; keep it off cadence polling.
 export function installPtyCodexSharedServerIpcHandler(deps: Deps): void {
   handleLocalPane(deps, 'pty:isCodexOnSharedServer', readPaneSharedServerStatus, { joined: false })
   handleLocalPane(

@@ -1,6 +1,6 @@
 import type { KnownRuntimeEnvironment, PublicKnownRuntimeEnvironment } from './runtime-environments'
 
-/** Everything an SSH access operation was authorized against; any change invalidates the operation. */
+/** Bind SSH access to authorized environment state, excluding runtimeId because orcad changes it on restart (#32957). */
 export function runtimeEnvironmentSshAccessBinding(
   environment: KnownRuntimeEnvironment | PublicKnownRuntimeEnvironment,
   ignoreIntent = false
@@ -8,7 +8,6 @@ export function runtimeEnvironmentSshAccessBinding(
   return {
     createdAt: environment.createdAt,
     pairingRevision: environment.pairingRevision ?? environment.createdAt,
-    runtimeId: environment.runtimeId,
     pairedDeviceId: environment.pairedDeviceId,
     preferredEndpointId: environment.preferredEndpointId,
     endpoints: environment.endpoints,

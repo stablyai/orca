@@ -19,8 +19,7 @@ export function closeMobileSessionTabInStore(
     (file) => file.worktreeId === worktreeId && file.id === tabId
   )
   if (fallbackFile) {
-    // Why: mobile may receive fallback file-id tabs from openFiles after the
-    // unified tab wrapper has already closed; close the source file too.
+    // Fallback openFiles tabs can outlive unified wrappers; mobile must close the source file too.
     store.closeFile(fallbackFile.id)
     return true
   }

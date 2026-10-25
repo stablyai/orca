@@ -1,13 +1,10 @@
-/**
- * One `active` telemetry row per target per UTC day while it bridges relay terminals, so the
- * relay's retirement can see who still uses it. COMPAT(legacy-relay-bridge): revisit 2027-01-15.
- */
+/** Report active bridging once per target per UTC day to measure relay retirement. COMPAT(legacy-relay-bridge): revisit 2027-01-15. */
 import type { EventProps } from '../../../shared/telemetry-events'
 
 type TerminalsBucket = EventProps<'ssh_host_server_legacy_relay_bridge'>['terminals']
 type ActivityReport = (targetId: string, phase: 'active', terminals: number) => void
 
-/** Why a timer: a terminal left attached across midnight changes no pane and attaches nothing. */
+/** An attached terminal can cross midnight without pane or attach events. */
 const CHECK_INTERVAL_MS = 60 * 60 * 1000
 
 const reportedDayByTarget = new Map<string, string>()
@@ -26,7 +23,6 @@ export function reportDailyRelayActivity(
   report(targetId, 'active', liveTerminals)
 }
 
-/** Replaces the previous watch; `null` stops it, as uninstalling the bridge does. */
 export function watchDailyRelayActivity(
   host: { report: ActivityReport } | null,
   liveByTarget: () => Iterable<readonly [string, number]>

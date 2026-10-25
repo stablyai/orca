@@ -83,7 +83,7 @@ export function setupGuestMouseWheelZoomForwarding(args: {
   const handler = (event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
     const direction = resolveGuestMouseWheelZoomDirection(mouse)
     if (direction) {
-      // Why: wheel input over a focused webview never reaches renderer DOM handlers, so consume and forward here.
+      // Focused guest wheel events do not reach renderer DOM handlers.
       event.preventDefault()
       markGuestWheelZoom(guest, direction)
       resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', {
@@ -105,7 +105,7 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     if (safeDeltaX === 0 && safeDeltaY === 0) {
       return
     }
-    // Why: the host owns panning once emulation makes the guest viewport larger than the pane.
+    // The host pans emulated viewports larger than the pane.
     event.preventDefault()
     onViewportWheelConsumed?.(safeDeltaX, safeDeltaY)
     resolveRenderer(browserTabId)?.send('ui:scrollBrowserPage', {
@@ -120,7 +120,7 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     try {
       guest.off('before-mouse-event', handler)
     } catch {
-      // Why: best-effort — guest may already be destroyed during teardown.
+      // The guest may already be destroyed.
     }
   }
 }

@@ -189,7 +189,6 @@ export async function getFolderWorkspacePathStatus(
   })
 }
 
-/** The code a folder workspace refuses this path with, or null when the path is usable. */
 export function folderWorkspacePathRefusal(status: FolderWorkspacePathStatus): string | null {
   if (status.exists) {
     return null

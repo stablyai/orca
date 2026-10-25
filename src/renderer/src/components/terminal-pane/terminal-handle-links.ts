@@ -259,8 +259,7 @@ async function activateParsedLink(
       }
       return
     }
-    // Why: a task can be retried onto a new dispatch; runtime DB is the
-    // authority for the latest terminal assigned to a stable task ID.
+    // Retries change dispatches; runtime DB owns the latest terminal for a stable task ID.
     await focusRuntimeOrchestrationTask(parsed.text, runtimeEnvironmentId, (handle) =>
       focusRendererTerminalHandle(handle, runtimeEnvironmentId)
     )
@@ -304,7 +303,6 @@ export async function focusRuntimeTerminalHandle(
   const target = environmentId
     ? ({ kind: 'environment', environmentId } as const)
     : ({ kind: 'local' } as const)
-  // Why: main owns the `term_*` mapping. Defer to terminal.focus on click
-  // instead of mirroring that state in renderer hover parsing.
+  // Main owns term_* mapping; resolve through terminal.focus on click instead of mirroring hover state.
   await callRuntimeRpc(target, 'terminal.focus', { terminal: handle, navigation: 'host' })
 }

@@ -73,7 +73,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     taskUiReady,
     tasksSupported
   } = model
-  // Desktop connection changes need an explicit status refresh on mobile.
+  // Mobile needs explicit status refreshes to observe desktop connection changes.
   const refreshJiraConnection = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
@@ -120,11 +120,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
-      // Fire-and-forget: the reply is never interpreted, so no acceptance policy applies here.
       void taskSettingsWrite
         .request(client, { defaultLinearTeamSelection: selection })
         .catch(() => {
-          // Best-effort preference persistence; the local picker state already changed.
+          // Preference persistence is best-effort; the local picker already changed.
         })
     },
     [client, taskUiReady]
@@ -152,7 +151,6 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            // Same paging as desktop's task page: numbered pages, the display budget split per repo.
             const reply = await githubWorkItemSearchRead.request(requestClient, {
               repo: `id:${repo.id}`,
               limit: perRepoLimit,
@@ -206,8 +204,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
 
       return {
-        // Why: the host pages by issue number, so the merge must order the same way
-        // (desktop's sortWorkItemsByNumber) or rows reshuffle across page boundaries.
+        // Host pagination orders by issue number; merge in that order so rows cannot reshuffle between pages.
         items: results
           .flatMap((result) => result.items)
           .sort((a, b) => b.source.number - a.source.number),
@@ -235,9 +232,6 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
               },
               { timeoutMs: 30_000 }
             )
-            // The reader answers the number, so the `typeof` fallback this call site kept is gone:
-            // a reply that is not one reaches the catch below, which already counts a failed repo
-            // as zero and now says which repo and why.
             return githubWorkItemCountRead.interpret(reply)
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)

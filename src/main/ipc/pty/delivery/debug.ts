@@ -1,4 +1,4 @@
-import { getPtyPower } from '../../pty-host-bindings'
+import { getPtyPower } from '../pty-host-bindings'
 import {
   type PtyMainDeliveryDiagnostics,
   EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
@@ -20,30 +20,29 @@ export type PtyRendererDeliveryDebugSnapshot = {
   peakMaxRendererInFlightCharsByPty: number
   ackGatedFlushSkipCount: number
   hiddenDeliveryGatedPtyCount: number
-  /** Hidden-gated ptys the renderer ALSO reports visible/active — a contradiction that should be zero (v1.4.124-rc.2.perf field lead). */
+  /** Hidden gating contradicting renderer-visible/active state should remain zero. */
   hiddenDeliveryGatedVisiblePtyCount: number
   hiddenDeliveryGatedActivePtyCount: number
   deliveryInterestPtyCount: number
   hiddenDeliveryDroppedChars: number
   hiddenDeliveryDroppedChunks: number
   pendingDroppedChars: number
-  /** One-paste freeze diagnostics: per-pty delivery table + event history. */
   diagnostics: PtyMainDeliveryDiagnostics
-  // Why: a nonzero lastLifecycleResetClearedChars is the exact signature of the leaked-accounting freeze this reset fixes.
+  // Cleared debt reveals whether lifecycle reset recovered leaked accounting.
   rendererLifecycleResetCount: number
   lastLifecycleResetClearedChars: number
-  // Why: the boot-window hold early-returns before ackGatedFlushSkipCount++, so these expose an otherwise-invisible held gate; forcedCount > 0 flags a watchdog self-heal.
+  // Boot holds precede flush-skip accounting; expose readiness and forced watchdog recovery separately.
   rendererPtyDispatcherReady: boolean
   rendererDispatcherReadyForcedCount: number
 }
 
-// Why module scope: breadcrumb writers live both inside registerPtyHandlers and outside it (renderer lifecycle resets).
+// Lifecycle-reset and registration code both write delivery breadcrumbs.
 export const mainDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()
 export let lastPowerSuspendAtMs: number | null = null
 export let lastPowerResumeAtMs: number | null = null
 let powerSignalBreadcrumbsInstalled = false
 
-// Why: both field freeze variants correlate with display sleep; suspend/resume timestamps let breadcrumbs line up against the wake.
+// Suspend/resume timestamps correlate freeze reports with display wake.
 export function installPowerSignalBreadcrumbs(): void {
   if (powerSignalBreadcrumbsInstalled) {
     return
@@ -88,13 +87,12 @@ export const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebu
   rendererDispatcherReadyForcedCount: 0
 }
 
-// Why null-init + wrapper fns (not `export let fn = noop`): rolldown const-folds the noop into
-// call sites and drops the setter's reassignment, so bridged closures never run in the built app (STA-5661).
+// Use null-initialized wrapper bridges: Rolldown can fold exported no-op functions and discard later replacements (STA-5661).
 let readPtyRendererDeliveryDebugSnapshotImpl: (() => PtyRendererDeliveryDebugSnapshot) | null = null
 let resetPtyRendererDeliveryDebugSnapshotImpl: (() => void) | null = null
-// Bridged into the registerPtyHandlers closure so the module-scope lifecycle-reset handler can zero closure-owned delivery accounting on renderer reload/crash.
+// Module-scope lifecycle reset must reach registration-owned delivery accounting.
 let resetRendererDeliveryAccountingForLifecycleResetImpl: (() => void) | null = null
-// Bridged so a re-registration can cancel the prior closure's dispatcher-ready watchdog before wiring its own.
+// Re-registration must cancel the outgoing closure's readiness watchdog.
 let clearRendererDispatcherReadyWatchdogImpl: (() => void) | null = null
 
 export function readPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {

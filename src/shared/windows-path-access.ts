@@ -1,9 +1,4 @@
-/**
- * How Windows reaches the paths of a resource's OWNER host (WSL-via-orcad D5). Only a WSL host
- * qualifies: its files are on `\\wsl.localhost\<distro>\...`. Every other host gets null, so SSH,
- * paired servers and this computer keep their behavior. Translation is pure string work on the
- * desktop side; nothing runs inside the distro.
- */
+/** Translate Windows access only for the resource owner’s WSL host, using its registered distro. Pure desktop-side path work; SSH/paired/local hosts have no translation. */
 import { parseRoutableExecutionHostId } from './execution-host'
 import { parseWslUncPath, toWindowsWslUncPath } from './wsl-paths'
 
@@ -22,7 +17,7 @@ export type WindowsPathAccessContext = {
   wslDistroForEnvironment: (environmentId: string) => string | null | undefined
 }
 
-/** The one capability every Windows path guard asks, keyed on the owner host, never on focus. */
+/** Use resource ownership, never focused-host state, for Windows path guards. */
 export function windowsPathAccess(
   ownerHostId: string | null | undefined,
   context: WindowsPathAccessContext
@@ -75,7 +70,6 @@ export function classifyRejectedWindowsPath(windowsPath: string): WindowsPathRej
   return parsed ? { kind: 'other-distro', distro: parsed.distro } : { kind: 'not-wsl' }
 }
 
-/** `\\?\UNC\wsl.localhost\...` and `\\?\C:\...` are the same paths Explorer may hand over. */
 function stripWin32LongPathPrefix(path: string): string {
   if (/^\\\\\?\\UNC\\/i.test(path)) {
     return `\\\\${path.slice('\\\\?\\UNC\\'.length)}`

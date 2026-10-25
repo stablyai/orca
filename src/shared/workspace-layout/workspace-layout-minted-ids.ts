@@ -1,6 +1,4 @@
-// Ids the Loader invents for what stored data lacks or repeats, derived from what each stands in
-// for: reloading the same data, or data that changed elsewhere, mints the same ids, so a view
-// never remounts a pane, tab or group nothing touched.
+// Derive missing/repeated IDs from stable seeds so reloading data, including unrelated changes, never remounts untouched entities.
 
 import type { WorkspaceLayoutLoadContext } from './workspace-layout-load-types'
 
@@ -29,12 +27,11 @@ export function nameBasedLoadContext(): WorkspaceLayoutLoadContext {
   return { mintId: nameBasedUuid, mintLeafId: nameBasedUuid }
 }
 
-/** Seed of the group the Loader mints for a workspace's tabs when none was stored. */
 export function rootGroupSeed(workspaceKey: string): string {
   return `group:${workspaceKey}`
 }
 
-/** The id the Loader mints for that group, so a window minting a root group picks the same one. */
+/** Match the Loader’s root group ID when a window creates the group. */
 export function workspaceRootGroupId(workspaceKey: string): string {
   return nameBasedUuid(rootGroupSeed(workspaceKey))
 }

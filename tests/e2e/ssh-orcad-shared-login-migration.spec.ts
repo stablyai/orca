@@ -1,12 +1,5 @@
-/**
- * Two desktops on one Unix login, on a real Docker SSH host:
- *
- * Desktop A runs another Orca version's managed server there, has added the host's repository to
- * it, and leaves a terminal running in it. Desktop B still has that repository from its relay-era
- * profile. B connects: it pairs with A's server as it runs (no upload, no restart), links its
- * project to the one A added instead of being refused, moves the rest, and A's terminal keeps
- * running.
- */
+// On one real Docker SSH login, desktop B converts relay-era projects by pairing to desktop A’s different-version running server.
+// Link existing repositories without duplicate import, upload or restart; preserve A’s live terminal.
 import { createHash } from 'node:crypto'
 import { appendFileSync, cpSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

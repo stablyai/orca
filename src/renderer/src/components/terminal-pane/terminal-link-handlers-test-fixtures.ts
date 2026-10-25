@@ -1,7 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 
 export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean
@@ -36,17 +35,6 @@ export type TerminalLinkStoreState = {
     }[]
   >
   folderWorkspaces: []
-  repos: {
-    id: string
-    displayName: string
-    connectionId?: string | null
-    executionHostId?: ExecutionHostId
-  }[]
-  browserTabsByWorktree: Record<string, { id: string }[]>
-  browserPagesByWorkspace: Record<string, BrowserPage[]>
-  getKnownWorktreeById: (
-    id: string
-  ) => TerminalLinkStoreState['worktreesByRepo'][string][number] | undefined
 }
 
 export type TerminalLinkTestDoubles = {
@@ -83,8 +71,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const setMarkdownViewModeMock = vi.fn()
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
-  // Why: specs assert the legacy openFile(file, options) shape; the link entry point delegates to it
-  // and records the view it "opened" so the guarded reveal can find it.
+  // Adapt legacy openFile assertions while recording the opened view for guarded reveal.
   const openFileForLinkMock = vi.fn(
     (
       file: { filePath: string; worktreeId: string },
@@ -117,18 +104,11 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     setPendingEditorReveal: setPendingEditorRevealMock,
     setMarkdownViewMode: setMarkdownViewModeMock,
     activeFileIdByWorktree: {} as Record<string, string | null>,
-    openFiles: [] as { filePath: string; worktreeId: string }[],
+    openFiles: [],
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     worktreesByRepo: {},
-    folderWorkspaces: [],
-    repos: [],
-    browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    getKnownWorktreeById: (id) =>
-      Object.values(storeState.worktreesByRepo)
-        .flat()
-        .find((worktree) => worktree.id === id)
+    folderWorkspaces: []
   }
 
   return {

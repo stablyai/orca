@@ -149,10 +149,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
         if (orphanOrFolderResult) {
           return orphanOrFolderResult
         }
-        // One host for the whole removal. Listing on a different host from the one the prune and
-        // the delete use is how an `executionHostId: 'ssh:*'`-only row got listed remotely and
-        // deleted here; the route refuses rather than falling back to this machine.
-        // The helper returns for missing/folder repos; this path has a tracked repo and its host.
+        // Use one host for list/prune/delete; executionHostId-only SSH rows must never fall back to this client. Missing/folder repos returned earlier.
         const route = resolveWorktreeRemovalRoute(removalHostId!)
         const { localWorktreeGitOptions, registeredWorktrees } = await listWorktreesOnRemovalRoute(
           route,

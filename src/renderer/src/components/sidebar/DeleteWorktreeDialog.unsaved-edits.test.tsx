@@ -9,7 +9,6 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 const mocks = vi.hoisted(() => {
-  // Typed up here so the empty initialisers need no assertions.
   const modalData: Record<string, unknown> = {}
   const allWorktrees: Worktree[] = []
   const repos: Repo[] = []

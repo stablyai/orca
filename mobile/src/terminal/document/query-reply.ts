@@ -2,12 +2,6 @@ import { enqueueWriteBoundary } from './write-queue'
 import { notify } from './host-notify'
 import type { TerminalDocumentDisposable, TerminalDocumentScope } from './document-scope'
 
-/**
- * The gate deciding when xterm's parser replies may reach the native host.
- *
- * One unit so the tests exercise the same replay and generation gate the document runs rather than
- * a re-implementation of it — which was already the reason this was one injected string.
- */
 export type QueryReplyTerminal = {
   attachCustomKeyEventHandler: (handler: () => boolean) => void
   textarea?: {
@@ -45,8 +39,7 @@ export function attachTerminalQueryReplyBridge(
   term: QueryReplyTerminal,
   gen: number
 ) {
-  // Why: parser replies require stdin enabled, but mobile input is owned by
-  // native controls. Keep xterm's textarea inert for touch/hardware keys.
+  // Parser replies need stdin enabled; keep xterm’s textarea inert because native controls own keyboard input.
   try {
     term.attachCustomKeyEventHandler(function () {
       return false
@@ -64,7 +57,6 @@ export function attachTerminalQueryReplyBridge(
       })
     )
   } catch {}
-  // Why: live output can queue before initial replay finishes. Enable replies
-  // at the replay boundary so those live queries are answered, never replayed ones.
+  // Live queries may queue behind replay; grant authority at the boundary so only fresh queries receive replies.
   enqueueTerminalDataReplyBoundary(scope, gen)
 }

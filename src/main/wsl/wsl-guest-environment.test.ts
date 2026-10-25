@@ -45,8 +45,7 @@ describe('probing', () => {
   })
 
   it('collapses a concurrent burst into one probe', async () => {
-    // Teardown and detection both fan out; 32 login shells per burst is the
-    // cost this cache exists to avoid.
+    // Collapse teardown/detection bursts instead of launching 32 login shells.
     respondWithPayload(GOOD)
     await Promise.all(Array.from({ length: 32 }, () => getWslGuestEnvironment('Ubuntu')))
     expect(runProcessMock).toHaveBeenCalledTimes(1)
@@ -113,8 +112,7 @@ describe('bad answers are not cached as good ones', () => {
 
 describe('transient versus permanent failure', () => {
   it('does not retry a distro that cannot produce env', async () => {
-    // 127 is the probe's own "no usable env". Retrying that forever turns a
-    // probe into a poller.
+    // Exit 127 is explicit no-usable-env evidence; do not turn retries into polling.
     runProcessMock.mockResolvedValue({
       code: 127,
       signal: null,
@@ -139,8 +137,7 @@ describe('transient versus permanent failure', () => {
       })
       expect(await getWslGuestEnvironment('Ubuntu')).toBeNull()
       expect(await getWslGuestEnvironment('Ubuntu')).toBeNull()
-      // Still one probe inside the window: the retry timer gates it now that
-      // the in-flight entry is dropped.
+      // After dropping in-flight failure, the cooldown must still prevent another probe.
       expect(runProcessMock).toHaveBeenCalledTimes(1)
 
       vi.setSystemTime(Date.now() + 6_000)
@@ -155,8 +152,7 @@ describe('transient versus permanent failure', () => {
 
 describe('a failed verdict does not outlive its usefulness', () => {
   it('retries an unparseable payload rather than caching it forever', async () => {
-    // Before: any unparseable payload was permanent, so one fence lost to a
-    // truncated rc disabled every WSL feature on the distro until restart.
+    // A truncated rc/fence must not disable distro features until restart.
     vi.useFakeTimers()
     try {
       respondWithPayload('garbage')
@@ -184,8 +180,7 @@ describe('a failed verdict does not outlive its usefulness', () => {
   })
 
   it("bounds a joiner by its own budget, not the starter's", async () => {
-    // Joining used to mean waiting out the starter's probe, so a joiner could
-    // reach its own command with 1ms left.
+    // Joiners need their own deadline or the starter can consume all their command budget.
     let release: (v: unknown) => void = () => {}
     runProcessMock.mockImplementation(() => new Promise((r) => (release = r)))
     const slow = getWslGuestEnvironment('Ubuntu', 60_000)
@@ -198,9 +193,7 @@ describe('a failed verdict does not outlive its usefulness', () => {
 
 describe('invalidation', () => {
   it('re-probes after the caller invalidates, so a newly installed tool appears', async () => {
-    // A user who installs nvm inside a running distro would otherwise keep the
-    // pre-install PATH until Orca restarts, and read that as the detection bug
-    // this cache exists to fix.
+    // Invalidate after tool installation so new PATH entries appear without restart.
     respondWithPayload(GOOD)
     await getWslGuestEnvironment('Ubuntu')
     invalidateWslGuestEnvironment('Ubuntu')

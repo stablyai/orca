@@ -26,8 +26,7 @@ export function PendingCredentialCleanupCard() {
           if (active && generation === credentialRefreshGenerationRef.current) {
             setPendingCredentialIds(state.ids)
             setCredentialStorageUnreadable(state.storageUnreadable)
-            // Why: neutral copy once the queue is confirmed empty so a later
-            // pending set does not inherit a previous Retry failure message.
+            // Clear the old retry failure when the queue empties so later entries start with neutral copy.
             if (state.ids.length === 0 && !state.storageUnreadable) {
               setCredentialRetryFailed(false)
             }
@@ -63,9 +62,7 @@ export function PendingCredentialCleanupCard() {
   }, [retryingCredentialCleanup])
 
   const pendingCredentialCount = pendingCredentialIds.length
-  // Why: show the cleanup card whenever cleanup is pending OR the durable queue
-  // is unreadable — an unreadable queue can hide an orphaned token, so keep a
-  // retry affordance rather than a silently-empty (hidden) section.
+  // Unreadable durable queues may hide orphaned tokens; keep cleanup and Retry visible.
   if (pendingCredentialCount === 0 && !credentialStorageUnreadable) {
     return null
   }

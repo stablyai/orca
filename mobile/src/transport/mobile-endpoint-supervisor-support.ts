@@ -5,8 +5,7 @@ import type { RelayReconnectController } from './mobile-relay-reconnect-controll
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 
-// Why: a suspect session that survived a failed replacement dial must come down,
-// else the armed unforced retry dead-ends on needsRecovery seeing stale 'connected'.
+// Retire a suspect session after failed replacement or stale connected state blocks the armed recovery retry.
 export function suspendRelayIfStillConnected(
   controller: RelayReconnectController,
   logical: StableLogicalRpcClient
@@ -28,16 +27,14 @@ export function liveRelayLeaseExpiry(
 
 type RelayDialResult = { ok: true } | { ok: false; error: Error }
 
-// Why: a locally-aborted dial (background/stop/missing state) proves nothing about the
-// cell assignment, so the director fallback must not burn a resolution round on it.
+// Local aborts provide no cell-assignment evidence, so do not consume a director resolution attempt.
 export class RelayDialAbortedError extends Error {
   constructor() {
     super('relay dial aborted before opening a session')
   }
 }
 
-// One credential attempt: dial, and on a director-class failure re-resolve the
-// cell assignment, persist it durably, then dial once more.
+// After a director-class failure, resolve/persist the assignment and retry this credential once.
 export async function dialRelayThroughDirectorFallback(args: {
   resumeToken: string
   relay: () => MobileRelayEndpoint
@@ -67,8 +64,7 @@ export async function dialRelayThroughDirectorFallback(args: {
 }
 
 export function isDirectorResolutionFailure(error: Error): boolean {
-  // Why: a cell that took relay-auth and went quiet is the right cell working slowly;
-  // re-resolving it just doubles the wait against the same contended window.
+  // Quiet after relay-auth means the assigned cell is slow; resolving it again only doubles the wait.
   if (error instanceof ReplacementAuthenticationTimeoutError) {
     return error.stage === null || error.stage === 'opening'
   }

@@ -512,10 +512,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 })
 
-// A headless host, a relay gap, or a replay can leave the pane with no live
-// `interactivePrompt` while the transcript still holds the unresolved call (#11761).
-// Which asks the transcript still counts as pending (orphaned calls, turn boundaries)
-// is the shared parser's contract — covered in `src/shared/native-chat-ask.test.ts`.
+// Transcript fallback covers missing live prompts; native-chat-ask.test.ts owns pending-call parsing.
 describe('NativeChatInteractiveCard transcript fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -549,8 +546,7 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
   })
 
   it('still renders while the mirrored status says the agent is working', () => {
-    // Why no state gate: the mirrored status channel is exactly what fails in the
-    // reported topology, so keying the fallback on it would suppress the card.
+    // Mirrored status can fail independently of the transcript, so it cannot gate fallback prompts.
     storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = 'working'
     render(cardElement(true, [askCallMessage('Tabs or spaces?')]))
 
@@ -582,8 +578,6 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
   })
 
-  // The view passes the command-boundary-trimmed messages, so an ask abandoned via
-  // `/clear` cannot come back as a permanent card sitting over the composer.
   it('drops an ask abandoned by /clear', () => {
     const abandoned = { ...askCallMessage('Tabs or spaces?'), timestamp: 100 }
     const trimmed = applyCommandMarkerBoundaries(

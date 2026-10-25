@@ -1,4 +1,4 @@
-import type { TaskPageLinearIssueCreationModel } from './use-task-page-linear-issue-creation'
+import type { TaskPageLinearIssueCreationModel } from './task-page/linear/use-task-page-linear-issue-creation'
 import { useCallback } from 'react'
 import {
   buildJiraCreateSubmission,
@@ -47,8 +47,7 @@ export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationM
     const { customFields, userFieldKeys } = buildJiraCreateSubmission(
       visibleJiraCreateFields,
       newJiraIssueCustomFieldValues,
-      // Why: Jira rejects creates that set a field absent from the create
-      // screen, so a picked assignee only ships when the screen accepts one.
+      // Send assignee only when Jira’s create screen accepts that field.
       hasJiraAssigneeCreateField(jiraCreateFields) ? newJiraIssueAssignee?.accountId : undefined
     )
     setNewJiraIssueSubmitting(true)

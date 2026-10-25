@@ -15,7 +15,6 @@ import {
 
 type DivProps = ComponentPropsWithoutRef<'div'> & ExtraProps
 
-/** The placeholder's attributes, as react-markdown passed them (absent on an ordinary div). */
 function placeholderAttributes(props: DivProps): { nonce: unknown; file: unknown; title: unknown } {
   return {
     nonce: 'data-orca-visual' in props ? props['data-orca-visual'] : undefined,
@@ -61,10 +60,7 @@ function createVisualExtension(
   }
 }
 
-/**
- * The visual extension for one assistant message, or undefined outside a structured chat. Stable
- * for the message's lifetime, so a mounted visual keeps its frame while the reply streams.
- */
+/** Keep the structured message’s extension stable so streaming preserves its mounted visual frame. */
 export function useNativeChatVisualMarkdownExtension(
   messageId: string | undefined
 ): CommentMarkdownExtension | undefined {

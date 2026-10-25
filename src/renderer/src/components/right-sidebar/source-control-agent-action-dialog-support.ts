@@ -16,6 +16,34 @@ export function isSourceControlAgentDetectedAndEnabled(
   )
 }
 
+export function buildSourceControlAgentAvailability({
+  detectedAgents,
+  disabledAgents,
+  selectedAgent
+}: {
+  detectedAgents: TuiAgent[]
+  disabledAgents: TuiAgent[] | undefined
+  selectedAgent: TuiAgent | null
+}): {
+  agentOptions: ReturnType<typeof getAgentCatalog>
+  selectedAgentUnavailable: boolean
+  hasEnabledAgents: boolean
+} {
+  const enabledDetectedAgents = detectedAgents.filter((agent) =>
+    isTuiAgentEnabled(agent, disabledAgents)
+  )
+  return {
+    agentOptions: getAgentCatalog().filter(
+      (entry) => enabledDetectedAgents.includes(entry.id) || entry.id === selectedAgent
+    ),
+    selectedAgentUnavailable: Boolean(
+      selectedAgent &&
+      !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
+    ),
+    hasEnabledAgents: enabledDetectedAgents.length > 0
+  }
+}
+
 export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
   value: string
   label: string

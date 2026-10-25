@@ -181,7 +181,15 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
+    const currentHeadOid = options?.currentHeadOid ?? null
     const inflightRequest = inflightHostedReviewRequests.get(requestKey)
+    // A lookup started at another HEAD may return a merged PR this worktree has moved past.
+    const joinableInflightRequest =
+      currentHeadOid !== null &&
+      inflightRequest?.currentHeadOid != null &&
+      inflightRequest.currentHeadOid !== currentHeadOid
+        ? undefined
+        : inflightRequest
     const startRequest = (): Promise<HostedReviewInfo | null> => {
       const generation = nextLookupGeneration()
       const requestStartedAt = Date.now()
@@ -204,10 +212,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   target,
                   'hostedReview.forBranch',
                   { repo: repo?.id ?? options?.repoId ?? repoPath, repoPath, ...args },
-                  // Why: remote dev boxes can be slower at `git`/`gh` lookups
-                  // than local desktop repos, especially on Windows filesystem
-                  // paths. The main-process queue caps concurrency, so a longer
-                  // timeout no longer risks a background socket stampede.
+                  // Remote git/gh, especially Windows paths, can be slow; main queue bounds concurrency so longer timeout cannot cause stampedes.
                   { timeoutMs: 30_000 }
                 )
               : await window.api.hostedReview.forBranch({
@@ -260,15 +265,10 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           }
           return review
         } catch (error) {
-          // Why: a transient lookup failure (timeout, rate limit, gh/git error)
-          // must not be cached as a definitive "no review" miss — that blanks
-          // the sidebar card to branch-only and suppresses retry for the full
-          // cache TTL. Preserve the last known review and let the next visible
-          // poll retry instead.
+          // Transient timeout/rate-limit/git failures are not definitive misses: preserve last review and retry next visible poll instead of hiding for TTL.
           console.error('Failed to fetch hosted review:', error)
           const preserved = get().hostedReviewCache[cacheKey]
-          // Why: don't preserve a merged GitHub review the worktree has moved
-          // off of; that PR is only valid while checked out at its head.
+          // Never preserve merged review after worktree leaves its valid head/contained line.
           if (isStaleMergedGitHubReviewForHead(preserved, options?.currentHeadOid)) {
             return null
           }
@@ -287,6 +287,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       registerInflightHostedReviewRequest(requestKey, {
         promise: request,
         force: Boolean(options?.force),
+        currentHeadOid,
         generation,
         startedAt: requestStartedAt
       })
@@ -297,18 +298,18 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       !options?.force &&
       !linkedRefetch &&
       !scopedResultRefetch &&
+      !staleMergedHeadRefetch &&
       options?.staleWhileRevalidate &&
       cached !== undefined &&
       cached.data !== null
     ) {
-      // Why: sidebar PR metadata can stay visible while a quiet refresh updates
-      // it; don't block card rendering on a quota-bound GitHub round trip.
+      // Render cached PR metadata during quiet quota-bound refreshes.
       queueHostedReviewRevalidation(requestKey, startRequest, inflightRequest)
       return cached.data
     }
 
-    if (inflightRequest && (!options?.force || inflightRequest.force)) {
-      return inflightRequest.promise
+    if (joinableInflightRequest && (!options?.force || joinableInflightRequest.force)) {
+      return joinableInflightRequest.promise
     }
 
     return startRequest()

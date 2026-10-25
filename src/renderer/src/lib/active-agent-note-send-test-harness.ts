@@ -26,7 +26,6 @@ export type NoteSendAppState = {
   settings: Record<string, unknown>
 }
 
-/** Renderer state for one worktree with a single focused terminal pane on `LEAF_ID`. */
 export function createNoteSendAppState(): NoteSendAppState {
   return {
     activeWorktreeId: 'wt-1',

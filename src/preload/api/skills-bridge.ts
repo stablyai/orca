@@ -33,22 +33,20 @@ import type {
   SkillShareResolvedOperation
 } from '../../shared/skill-sharing-contract'
 import type {
-  SkillFreshnessInventory,
-  SkillUpdateRun,
-  SkillUpdateStartResult
-} from '../../shared/skill-freshness'
+  BundledSkillExecuteRequest,
+  BundledSkillInstallResult,
+  BundledSkillPlan,
+  BundledSkillPlanRequest
+} from '../../shared/bundled-skill-plan'
 import type { PreloadApi } from '../api-types'
 
 export const skillsApi = {
   discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
     ipcRenderer.invoke('skills:discover', target),
-  freshnessInventory: (): Promise<SkillFreshnessInventory> =>
-    ipcRenderer.invoke('skills:freshnessInventory'),
-  startUpdateRun: (names: string[]): Promise<SkillUpdateStartResult> =>
-    ipcRenderer.invoke('skills:startUpdateRun', names),
-  cancelUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:cancelUpdateRun'),
-  acknowledgeUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:acknowledgeUpdateRun'),
-  getUpdateRun: (): Promise<SkillUpdateRun> => ipcRenderer.invoke('skills:getUpdateRun'),
+  bundledPlan: (request?: BundledSkillPlanRequest): Promise<BundledSkillPlan> =>
+    ipcRenderer.invoke('skills:bundledPlan', request ?? {}),
+  bundledExecute: (request: BundledSkillExecuteRequest): Promise<BundledSkillInstallResult> =>
+    ipcRenderer.invoke('skills:bundledExecute', request),
   prepareShare: (input: {
     skillIds: string[]
     bundleName: string
@@ -87,7 +85,6 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:previewBundleInstall', input),
   removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
     ipcRenderer.invoke('skills:removeInstall', input),
-  // Desktop always registers the delete IPC handlers in its own main process.
   deleteSupported: (): Promise<boolean> => Promise.resolve(true),
   previewDelete: (request: SkillDeleteRequest): Promise<SkillDeletePlan> =>
     ipcRenderer.invoke('skills:previewDelete', request),
@@ -101,11 +98,6 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:listOwnedShares'),
   revokeShare: (shareId: string): Promise<SkillCloudOperation<void>> =>
     ipcRenderer.invoke('skills:revokeShare', shareId),
-  deletePackageVersion: (input: {
-    packageId: string
-    versionId: string
-  }): Promise<SkillCloudOperation<void>> =>
-    ipcRenderer.invoke('skills:deletePackageVersion', input),
   deletePackage: (packageId: string): Promise<SkillCloudOperation<void>> =>
     ipcRenderer.invoke('skills:deletePackage', packageId),
   listWslDistros: (environmentId?: string): Promise<string[]> =>
@@ -121,10 +113,5 @@ export const skillsApi = {
       callback(progress)
     ipcRenderer.on('skills:shareProgress', listener)
     return () => ipcRenderer.removeListener('skills:shareProgress', listener)
-  },
-  onUpdateRun: (callback: (run: SkillUpdateRun) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, run: SkillUpdateRun): void => callback(run)
-    ipcRenderer.on('skills:updateRun', listener)
-    return () => ipcRenderer.removeListener('skills:updateRun', listener)
   }
 } satisfies PreloadApi['skills']

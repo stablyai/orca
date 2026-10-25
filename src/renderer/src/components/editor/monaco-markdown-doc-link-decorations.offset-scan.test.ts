@@ -4,9 +4,7 @@ import { getMarkdownDocLinkTarget } from './markdown-doc-links'
 import { createMarkdownFenceTracker } from './markdown-fence-scanner'
 import { getMarkdownDocLinkDecorationRanges } from './monaco-markdown-doc-link-decorations'
 
-// Why: the pre-offset implementation, kept as the equivalence oracle for the
-// allocation-free scan that replaced it. Fence detection is the shared
-// scanner's contract, not this file's, so the oracle calls into it.
+// Keep the pre-offset scan as an independent oracle; fence detection remains the shared scanner’s contract.
 function referenceDecorationRanges(content: string): IRange[] {
   const getInlineCodeSpans = (line: string): { start: number; end: number }[] => {
     const spans: { start: number; end: number }[] = []
@@ -157,9 +155,7 @@ describe('getMarkdownDocLinkDecorationRanges offset scan', () => {
       String.prototype.indexOf = realIndexOf
     }
 
-    // Why: the delimiter cursors are seeded once and never re-armed while they
-    // hold -1, so a link-free document costs a fixed number of searches rather
-    // than one tail scan per line.
+    // Exhausted delimiter cursors must stay exhausted so link-free inputs do not rescan each line’s tail.
     expect(indexOfCalls).toBeLessThanOrEqual(8)
   })
 

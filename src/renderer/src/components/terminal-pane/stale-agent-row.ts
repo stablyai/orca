@@ -20,7 +20,6 @@ export function dismissStaleAgentRowByKey(paneKey: string): void {
   }
 }
 
-/** The one notice for a click that reaches an agent whose pane is gone. */
 export function showAgentPaneUnavailable(id?: string): void {
   toast.info(
     translate(

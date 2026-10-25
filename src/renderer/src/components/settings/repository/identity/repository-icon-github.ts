@@ -64,11 +64,9 @@ export async function resolveRepositoryGitHubAvatar(
     !options.forceLive && repo.upstream !== undefined
       ? repo.upstream
       : await resolveRepositoryUpstreamLive(runtimeTarget, repo).catch(() => null)
-  // Why: a null live upstream is ambiguous (offline/unauthed vs. not-a-fork). Keep
-  // the last-known parent so a transient failure can't clobber fork identity.
+  // Null live upstream is ambiguous; retain the known parent through offline/auth failures.
   const upstream = liveUpstream ?? repo.upstream ?? null
-  // Why: a rejected origin probe is also ambiguous, so it propagates — callers keep
-  // the stored icon rather than flipping a renamed fork back to the parent avatar.
+  // Propagate ambiguous origin failures so renamed forks retain stored icons rather than reverting to parents.
   const slug = githubAvatarSlug(await resolveRepositorySlugLive(runtimeTarget, repo), upstream)
   return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream }
 }

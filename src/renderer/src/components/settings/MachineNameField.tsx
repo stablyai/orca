@@ -13,10 +13,7 @@ type MachineNameFieldProps = {
   className?: string
 }
 
-/**
- * The name other devices and hosts list this computer under, with the detected name as the blank
- * default. One machine-wide setting, mounted only where other devices join this computer.
- */
+/** Machine-wide peer-visible name; blank uses detection, and only this computer’s pairing surfaces edit it. */
 export function MachineNameField({
   id = 'machine-name',
   className
@@ -26,8 +23,7 @@ export function MachineNameField({
   const publishedMachineName = usePublishedMachineName(machineName)
   const descriptionId = `${id}-description`
 
-  // Why: a browser client has no machine of its own to name, and its settings mirror cannot
-  // persist one. The host's name is edited on the host.
+  // Web mirrors cannot persist machine names; edit the name on its owning host.
   if (isWebClientLocation()) {
     return null
   }

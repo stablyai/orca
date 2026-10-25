@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
-import type * as RecoveryModule from '@/lib/structured-agent-session-launch-recovery'
+import type * as RecoveryModule from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
@@ -28,21 +29,35 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: mocks.retryIntent,
     restoreStructuredAgentSessionLaunchIntent: mocks.restoreIntent,
     abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
-vi.mock('@/lib/structured-agent-session-launch-recovery', async () => {
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-recovery', async () => {
   const actual = await vi.importActual<typeof RecoveryModule>(
-    '@/lib/structured-agent-session-launch-recovery'
+    '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
   )
   return { ...actual, launchAndReconcile: vi.fn(actual.launchAndReconcile) }
 })
@@ -102,8 +117,8 @@ import {
 } from '@/components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
 
 function launchIntent(
   worktreeId: string,
@@ -240,8 +255,7 @@ describe('a close that races a structured launch', () => {
     resolveRefresh([])
     await flushLaunchSettlement()
 
-    // Neither sent nor given back to the closed chat's composer; a layout-owner build's only call
-    // retires the chat on this machine's main.
+    // Closed-chat text is neither sent nor returned; layout-owner cancellation only retires it on main.
     expect(mocks.callRuntimeRpc.mock.calls.map(([, method]) => method)).toEqual(
       ORCA_LAYOUT_OWNER_IS_MAIN ? ['session.tabs.close'] : []
     )

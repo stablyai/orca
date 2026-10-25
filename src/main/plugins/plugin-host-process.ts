@@ -13,16 +13,12 @@ import type { PluginPanelActionOutcome } from '../../shared/plugins/plugin-panel
 import { buildPluginWorkerEnv } from './plugin-worker-env'
 import { pipePluginWorkerOutput } from './plugin-worker-output-buffer'
 
-// Grace between the shutdown message and SIGKILL: long enough for plugin
-// cleanup, short enough that disable/quit never feels stuck.
 const PLUGIN_WORKER_SHUTDOWN_GRACE_MS = 2_000
 const PLUGIN_WORKER_EVENT_TIMEOUT_MS = 5 * 60_000
 const PLUGIN_WORKER_MAX_PENDING_EVENTS = 64
 
 export type PluginWorkerLogSink = (level: 'info' | 'warn' | 'error', line: string) => void
 
-/** Executes a worker-originated host API call; the outcome is relayed back
- *  over the fork channel as a hostResult message. */
 export type PluginWorkerHostCallExecutor = (
   method: string,
   params: unknown
@@ -33,7 +29,7 @@ export type PluginWorkerHandle = {
   commands: readonly string[]
   invokeCommand(commandId: string, args?: unknown): Promise<unknown>
   deliverEvent(event: PluginEventName, payload: unknown): void
-  /** Milliseconds timestamp of the last completed work (for idle reap). */
+  /** Last completed work timestamp, in milliseconds, for idle reaping. */
   lastActivityAt(): number
   inFlightCount(): number
   dispose(): Promise<void>
@@ -45,7 +41,7 @@ export type StartPluginWorkerOptions = {
   pluginId: string
   rootDir: string
   mainEntry: string
-  /** Absolute path to the compiled plugin-host-entry.js, resolved by caller. */
+  /** Caller-resolved compiled entry path. */
   entryPath: string
   grantedCapabilities: readonly PluginCapabilityKind[]
   executeHostCall: PluginWorkerHostCallExecutor
@@ -56,11 +52,7 @@ export type StartPluginWorkerOptions = {
   signal?: AbortSignal
 }
 
-/**
- * Resolves the compiled child entry from the app path. Mirrors
- * getDaemonEntryPath(): packaged apps must fork the asar-unpacked copy
- * because fork() cannot execute scripts from inside app.asar.
- */
+/** Fork the unpacked entry because Node cannot execute inside app.asar. */
 export function resolvePluginHostEntryPath(appPath: string, isPackaged: boolean): string {
   const basePath = isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
   const directEntryPath = join(basePath, 'plugin-host-entry.js')
@@ -86,15 +78,11 @@ export async function startPluginWorker(
   const tag = `[plugin:${pluginId}]`
 
   const child: ChildProcess = fork(entryPath, [], {
-    // Why: ELECTRON_RUN_AS_NODE makes the forked Electron binary behave as
-    // plain Node. The env is a scrubbed allowlist — never ...process.env,
-    // which can carry shell-exported secrets into third-party code.
+    // Scrub shell-exported secrets; ELECTRON_RUN_AS_NODE runs the Electron binary as Node.
     env: buildPluginWorkerEnv(),
-    // Why: inspector/loader flags from Orca's own launch must never execute
-    // inside third-party plugin workers.
+    // Parent inspector/loader flags must not execute inside third-party workers.
     execArgv: [],
-    // Why: the protocol permits structured-clone values. Node's default JSON
-    // fork serialization rejects BigInt, cycles, maps, and typed arrays.
+    // Default JSON serialization rejects supported structured-clone payloads (BigInt, cycles, maps).
     serialization: 'advanced',
     stdio: ['ignore', 'pipe', 'pipe', 'ipc']
   })
@@ -138,8 +126,7 @@ export async function startPluginWorker(
     }
   })
   child.on('disconnect', () => {
-    // Why: a worker can drop fork IPC while its event loop stays alive. Kill
-    // it so the ensuing exit enters the normal supervision/backoff path.
+    // IPC may close while the worker remains alive; kill it to enter normal supervision.
     rejectAllPending(`${tag} worker disconnected before responding`)
     if (!exited) {
       child.kill('SIGKILL')
@@ -169,8 +156,7 @@ export async function startPluginWorker(
       const failure = new Error(`${tag} worker process error: ${error.message}`)
       fail(failure)
       child.kill('SIGKILL')
-      // Why: fail() no-ops once ready; a post-ready channel fault must still
-      // reject in-flight calls instead of letting each hit its own timeout.
+      // fail() stops acting after readiness; reject post-ready in-flight calls here too.
       rejectAllPending(failure.message)
     })
     child.on('exit', (code) => fail(new Error(`${tag} worker exited before ready (code ${code})`)))
@@ -217,8 +203,6 @@ export async function startPluginWorker(
         }
         case 'hostCall': {
           lastActivityAt = Date.now()
-          // Host API calls from the worker: gate + execute in main, then
-          // relay the outcome. Never throws — errors become outcomes.
           void options.executeHostCall(message.method, message.params).then((outcome) => {
             lastActivityAt = Date.now()
             sendToChild(

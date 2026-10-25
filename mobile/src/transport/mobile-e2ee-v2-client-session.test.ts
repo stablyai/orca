@@ -74,7 +74,7 @@ describe('mobile E2EE v2 client session', () => {
   it('pins the desktop key and accepts the exact transcript', () => {
     const { session, ready } = setup()
     expect(session.acceptReady(ready)).toBe(true)
-    expect(session.transcriptHashB64).toHaveLength(44)
+    expect(session.transcriptHashB64).toBe('0MsOjvXsuyjwleiCNSASug/uFkz8+rYlIfG2h2p5OPk=')
     expect(
       session.acceptReady({
         ...ready,

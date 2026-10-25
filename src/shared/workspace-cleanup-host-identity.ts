@@ -22,18 +22,12 @@ export function getWorkspaceCleanupCandidateHostId(
 ): ExecutionHostId {
   return (
     resolveWorkspaceCleanupRemovalHostId(candidate) ??
-    // Why: display/index surfaces still need a bucket for a pre-host row; only
-    // the destructive path may not guess (see resolveWorkspaceCleanupRemovalHostId).
+    // Legacy display/index rows need a bucket; destructive removal must never use this fallback.
     LOCAL_EXECUTION_HOST_ID
   )
 }
 
-/**
- * The owner a destructive removal is allowed to target, or null when the row
- * carries no host evidence at all (a snapshot or publisher that predates
- * host-qualified candidates). Callers must fail closed on null instead of
- * guessing — a wrong guess deletes another host's uncommitted work (STA-4343).
- */
+/** Require proven host ownership for removal. Old unqualified rows return null and must fail closed; guessing can delete another host’s uncommitted work (STA-4343). */
 export function resolveWorkspaceCleanupRemovalHostId(
   candidate: WorkspaceCleanupHostFacts
 ): ExecutionHostId | null {

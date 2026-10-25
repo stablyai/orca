@@ -1,7 +1,6 @@
 import { vi } from 'vitest'
 
-// Mirrors the browser rule for WebIDL global operations: an explicit non-global
-// receiver is rejected, while an absent one resolves to the global.
+// Mirror WebIDL timer receivers: omitted means global; explicit nonglobal receivers throw.
 function assertGlobalReceiver(receiver: unknown): void {
   if (receiver !== undefined && receiver !== globalThis) {
     throw new TypeError('Illegal invocation')
@@ -13,8 +12,7 @@ export type GuardedTimerHandles = {
   cleared: ReturnType<typeof setTimeout>[]
 }
 
-// Wraps whatever timers are currently installed (real or vitest's fakes), so callers
-// keep using vi.advanceTimersByTime. Undo with vi.unstubAllGlobals().
+// Wrap current real/fake timers so virtual time still works; restore with vi.unstubAllGlobals().
 export function installIllegalInvocationTimerGuards(): GuardedTimerHandles {
   const scheduleTimer = globalThis.setTimeout
   const cancelTimer = globalThis.clearTimeout

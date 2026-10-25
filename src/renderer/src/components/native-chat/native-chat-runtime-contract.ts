@@ -30,8 +30,7 @@ export function parseRuntimeNativeChatTurnLifecycle(
   return {
     state: record.state,
     turnId: record.turnId.trim(),
-    // Why: an omitted timestamp is a valid payload; normalize it to null rather
-    // than dropping the whole lifecycle record.
+    // Missing timestamps are valid; normalize them without dropping the lifecycle record.
     timestamp: record.timestamp ?? null
   }
 }

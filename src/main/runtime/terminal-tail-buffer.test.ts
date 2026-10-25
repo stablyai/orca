@@ -4,10 +4,7 @@ import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 import { MAX_TAIL_LINES } from './terminal-tail-limits'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 
-// Guards the per-chunk prefix work in appendNormalizedToTailBuffer: the retained char total is
-// carried across appends and the redraw prefix is not re-scanned, so a saturated tail must not be
-// walked once per chunk. Correctness is pinned by the cold/warm differential below — a "cold" run
-// hands every append a fresh array so the memo always misses and every total is summed in full.
+// Guard per-chunk retained-tail work; compare warm cached appends with fresh-array cold appends that recompute every total.
 
 type TailSim = {
   lines: string[]
@@ -46,11 +43,7 @@ function mulberry32(seed: number): () => number {
 
 const ESC = String.fromCharCode(27)
 
-/**
- * `short` fills the 2000-line cap and mixes in TUI redraws; `long` streams lines wide enough to
- * hit the 256 KiB character cap first. Both eviction paths adjust the carried character total, so
- * both need differential coverage, and a redraw's row truncation would keep `long` off its cap.
- */
+/** Short streams hit the 2,000-line cap with redraws; wide newline streams hit the 256KiB cap, covering both carried-total eviction paths. */
 function randomChunk(random: () => number, profile: 'short' | 'long'): string {
   const roll = random()
   if (profile === 'long') {
@@ -151,8 +144,7 @@ describe('retained tail buffer prefix reuse', () => {
     } finally {
       spy.mockRestore()
     }
-    // Before this change the prefix trailing-space scan alone cost one charCodeAt per retained
-    // row (~1990); the chunk itself accounts for well under a hundred.
+    // A full-prefix trim cost about 1,990 charCodeAt calls; the chunk itself needs under 100.
     expect(prefixTouches).toBeLessThan(300)
   })
 })

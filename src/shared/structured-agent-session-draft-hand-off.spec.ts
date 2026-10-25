@@ -1,5 +1,4 @@
-// The link from a submission to the queued draft it hands off (`queuedMessageId`) decides every
-// question about who owns a queued send; a draft id is never compared with a submission id.
+// Match queued drafts through queuedMessageId, never by comparing draft and submission IDs.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from './agent-session-journal-types'

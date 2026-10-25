@@ -23,8 +23,7 @@ type Props = {
   bare?: boolean
 }
 
-// Compact identity: state + # + author on one meta row, title, head→base.
-// # lives only in the meta row (not also after the title) to avoid repetition.
+// Keep state/#/author on one meta row, then title and head→base; print number only once.
 export function PRSidebarHeader({
   pr,
   details,
@@ -128,8 +127,7 @@ function PRTitle({
     setEditing(false)
   }
   const save = async () => {
-    // setTitle trims + short-circuits empty/unchanged to a successful no-op; on a
-    // real edit it refetches, so on success we just collapse the editor.
+    // setTitle handles trim/empty/unchanged/refetch; collapse editor on successful result.
     const ok = await titleAction.setTitle(draft, title)
     if (ok) {
       setEditing(false)

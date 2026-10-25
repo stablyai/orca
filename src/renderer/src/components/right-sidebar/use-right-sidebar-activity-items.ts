@@ -40,8 +40,7 @@ export function useRightSidebarActivityItems({
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
-  // Why: source control and checks are meaningless for non-git folders.
-  // Hide those tabs so the activity bar only shows relevant actions.
+  // Hide Git-only tabs for folder workspaces.
   const activeWorktree = useAppStore((s) =>
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
@@ -122,8 +121,7 @@ export function useRightSidebarActivityItems({
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
       },
-      // Why: plugin panels append after the built-in tabs so core navigation
-      // keeps stable positions regardless of which plugins are installed.
+      // Append plugin tabs to preserve built-in navigation positions.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
     ],
     [

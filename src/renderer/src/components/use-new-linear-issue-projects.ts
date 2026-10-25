@@ -5,7 +5,6 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 import { linearListProjects } from '@/runtime/runtime-linear-project-client'
 
-/** Projects offered by the new Linear issue dialog for its target team. */
 export function useNewLinearIssueProjects(args: {
   open: boolean
   targetTeam: { workspaceId?: string | null } | null

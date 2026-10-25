@@ -41,6 +41,8 @@ type GuestFake = {
   windowOpenHandler: ((details: { url: string; frameName: string }) => unknown) | null
   webRtcPolicy: string | null
   isDestroyed: () => boolean
+  isCurrentlyAudible: () => boolean
+  send: ReturnType<typeof vi.fn>
   isFocused: () => boolean
   getURL: () => string
   getType: () => string
@@ -68,6 +70,8 @@ function createGuest(id: number, url: string): GuestFake {
     windowOpenHandler: null,
     webRtcPolicy: null,
     isDestroyed: () => false,
+    isCurrentlyAudible: () => false,
+    send: vi.fn(),
     isFocused: () => true,
     getURL: () => guest.url,
     getType: () => 'webview',
@@ -105,7 +109,6 @@ function listenerCount(guest: GuestFake, event: string): number {
   return guest.listeners.get(event)?.length ?? 0
 }
 
-/** Drives the guest's own will-navigate listeners and reports whether they refused. */
 function navigateTo(guest: GuestFake, url: string): boolean {
   let prevented = false
   const event = { preventDefault: () => (prevented = true) } as never
@@ -142,9 +145,6 @@ describe('guest policy profiles', () => {
     return { guest, grantId: grant.id, browserPageId }
   }
 
-  // The presence half of every absence below: a browsing guest observably takes all of it through
-  // the same method, so a profile that fenced nothing — or an attach path that stopped installing
-  // anything at all — cannot pass these by being uniformly empty.
   it('gives a browsing guest popups, link gestures and auth-identity detach tracking', () => {
     const guest = createGuest(300, 'https://example.com/')
 
@@ -153,7 +153,6 @@ describe('guest policy profiles', () => {
     expect(listenerCount(guest, 'input-event')).toBe(1)
     expect(listenerCount(guest, 'did-create-window')).toBe(1)
     expect(guest.debugger.on).toHaveBeenCalledWith('detach', expect.any(Function))
-    // Why: a plain browsing tab must never attach a debugger; Cloudflare treats CDP as a bot signal.
     expect(guest.debugger.attach).not.toHaveBeenCalled()
     expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
     expect(navigateTo(guest, 'https://elsewhere.example/')).toBe(false)
@@ -184,9 +183,6 @@ describe('guest policy profiles', () => {
     })
   })
 
-  // Why teardown and not just install: registration and teardown both key on the guest having been
-  // policy-attached, so a profile that installs outside that bookkeeping leaves the id marked
-  // attached forever and stays answerable to tools after the surface is gone.
   it('tears a workspace-document guest down through the same policy cleanup', () => {
     const { guest, browserPageId } = attachPreviewGuest(302)
     expect(getWorkspaceDocPageGuest(browserPageId, host.id)).toBe(guest as never)
@@ -196,15 +192,11 @@ describe('guest policy profiles', () => {
     }
 
     expect(getWorkspaceDocPageGuest(browserPageId, host.id)).toBeNull()
-    // The manager's own bookkeeping was reached too: a second attach is refused while the id is
-    // still marked policy-attached, and accepted once its teardown has run.
+    // Reattaching succeeds only after cleanup clears the policy-attached ID.
     browserManager.attachGuestPolicies(guest as never)
     expect(listenerCount(guest, 'did-create-window')).toBe(1)
   })
 
-  // The seam the whole split rests on: one public door answers for both halves, and each page id
-  // resolves in exactly one of them. Asserted against the real manager, because the IPC census
-  // test has to mock it.
   describe('the one door across both halves of the registry', () => {
     const BROWSING_PAGE_ID = 'browser-page-1'
 
@@ -230,9 +222,7 @@ describe('guest policy profiles', () => {
       expect(browserManager.getAuthorizedGuest(browserPageId, host.id)).toBe(document as never)
     })
 
-    // Why this is the containment claim and not a lookup detail: page management, agent commands,
-    // download routing and certificate attribution all read the browsing map directly, so a
-    // document page being absent from it is what fences them without a guard of their own.
+    // Browsing-only features read this map directly; document guests must stay outside it.
     it('keeps a document page out of the browsing map entirely', () => {
       registerBrowsingGuest()
       const { browserPageId } = attachPreviewGuest()

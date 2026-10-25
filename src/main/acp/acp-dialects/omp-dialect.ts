@@ -1,16 +1,14 @@
 import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { AcpAgentError } from '../acp-errors'
 import type { AcpCompactionReply, AcpDialect } from './acp-dialect'
 
-// OMP sends a tool's result as `rawOutput: {content: [{type: 'text', text}], details}`, with a
-// command's non-zero exit at `details.exitCode`, and repeats the text as content behind a
-// `$ <command>` echo. The shared reader takes content text first, so that echo became the output.
-// A zero exit is left out; completed foreground results carry wall time, while service and
-// background launch results do not establish a process exit.
+// Read raw result text instead of the repeated command echo in content.
+// Only timed foreground completion implies exit zero; service/background launches prove no exit.
 const textBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() })
 const promptErrorDataSchema = z.looseObject({ details: z.string() })
-// OMP's prompt check: no usable model (nothing signed in), or the selected model's provider has no key.
 const SIGNED_OUT_DETAIL_PREFIXES = ['No model selected.\n\nUse /login', 'No API key found for ']
+const CANCEL_CLEANUP_TIMED_OUT = 'ACP cancel cleanup timed out'
 const toolResultSchema = z.looseObject({
   content: z.array(z.unknown()),
   details: z
@@ -30,7 +28,7 @@ function contentText(block: ToolCallContent | undefined): string | undefined {
   return block?.type === 'content' && block.content.type === 'text' ? block.content.text : undefined
 }
 
-/** OMP appends these notice lines to a command's output; the row shows exit and timing itself. */
+// Exit and timing notices already have dedicated row presentation.
 function commandOutput(text: string, exitCode: number | undefined, timed: boolean): string {
   let output = text
   const exitNotice = `\n\nCommand exited with code ${exitCode}`
@@ -62,7 +60,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   if (texts.includes(echo)) {
     return update
   }
-  // The result's own text moves to `stdout`; content keeps anything else it carried.
+  // Retain non-output content while moving the raw result text to stdout.
   const content = (update.content ?? []).slice(1).filter((block) => {
     const text = contentText(block)
     return text === undefined || !texts.includes(text)
@@ -94,8 +92,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
-// OMP ends a `/compact` it could not do as a normal turn whose reply says `Compaction failed`;
-// "Nothing to compact" and "Already compacted" are its no-ops (its RPC errors say the same).
+// OMP reports compaction failure and no-ops in a normally completed turn's reply.
 const COMPACTION_FAILED = /\bcompaction failed\b/i
 const COMPACTION_NOOP = /\b(?:nothing to compact|already compacted)\b/i
 
@@ -109,15 +106,27 @@ function compactionReply(text: string): AcpCompactionReply | undefined {
     : { outcome: 'failed', detail: reply }
 }
 
+function errorDetails(error: AcpAgentError): string | undefined {
+  return error.code === -32603
+    ? promptErrorDataSchema.safeParse(error.data).data?.details
+    : undefined
+}
+
 export const OMP_ACP_DIALECT: AcpDialect = {
   normalizeToolUpdate,
   compactionReply,
   authenticationRequired: (error) => {
-    const details = promptErrorDataSchema.safeParse(error.data).data?.details
+    const details = errorDetails(error)
     return (
-      error.code === -32603 &&
       details !== undefined &&
       SIGNED_OUT_DETAIL_PREFIXES.some((prefix) => details.startsWith(prefix))
+    )
+  },
+  // A timed-out cancel cleanup closes the session; later prompts get "Unsupported ACP session".
+  sessionLost: (error, sessionId) => {
+    const details = errorDetails(error)
+    return (
+      details === CANCEL_CLEANUP_TIMED_OUT || details === `Unsupported ACP session: ${sessionId}`
     )
   }
 }

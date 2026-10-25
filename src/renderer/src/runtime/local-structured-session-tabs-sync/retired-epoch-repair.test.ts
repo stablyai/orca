@@ -1,8 +1,4 @@
-/**
- * The repair lane must not become worse than the bug it fixes: a publisher that keeps re-sending a
- * retired epoch would otherwise drive an unbounded refetch loop, and a cap that never decays would
- * hide a chat tab for the renderer's lifetime after a run of transient RPC failures.
- */
+// Bound repeated retired-epoch refetches without permanent lockout: transient failures need a decaying budget or chats stay hidden for the renderer’s lifetime.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { localStructuredSessionEpochHistoryByWorktree } from './inventory-generation-fence'

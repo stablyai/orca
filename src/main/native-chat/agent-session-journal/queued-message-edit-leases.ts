@@ -1,7 +1,4 @@
-// In-memory edit leases for queued cards: while a person edits a card in place, automatic
-// delivery stops at it (`nextSendableQueuedCard`). Nothing here is durable. Each lease dies on
-// its own deadline, and every read re-derives validity from the card it holds, so a lost
-// release, a send, a delete or another client's save never leaves a card held.
+// Ephemeral edit leases block automatic delivery; reads revalidate against deadlines and current cards.
 
 import type { AgentSessionQueuedMessageEditHoldResult } from '../../../shared/agent-session-wire'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
@@ -14,7 +11,7 @@ type EditLease = Pick<QueuedMessageRow, 'messageId' | 'fingerprint' | 'state' | 
   until: number
 }
 
-/** One per journal handle: closing the conversation drops every lease with it. */
+/** Closing the journal handle drops its leases. */
 export class QueuedMessageEditLeases {
   private readonly leases = new Map<string, EditLease>()
   private timer: ReturnType<typeof setTimeout> | undefined
@@ -27,12 +24,12 @@ export class QueuedMessageEditLeases {
     private readonly now: () => number = () => performance.now()
   ) {}
 
-  /** Called once a deadline passes, so the queue re-derives with no other journal activity. */
+  /** Wake the queue even when no journal activity follows expiry. */
   onDeadline(wake: () => void): void {
     this.wake = wake
   }
 
-  /** Cards a live lease holds. `rows` is the caller's own read inside a transaction. */
+  /** Transaction callers supply their own card snapshot. */
   heldIds(rows: readonly QueuedMessageRow[] = this.rows()): ReadonlySet<string> {
     if (this.leases.size === 0) {
       return new Set()
@@ -48,14 +45,14 @@ export class QueuedMessageEditLeases {
       }
     }
     this.schedule()
-    // A deadline pruned here before its timer ran: that timer is gone, so this wakes in its place.
+    // A pruned deadline cancels its timer; wake in that timer's place.
     if (lapsed) {
       this.wake?.()
     }
     return new Set([...this.leases.values()].map((lease) => lease.messageId))
   }
 
-  /** Idempotent per caller and edit: a repeat answers the same lease without extending it. */
+  /** Repeated acquisition returns the same lease without extending it. */
   acquire(
     key: EditLeaseKey,
     input: { messageId: string; fingerprint: string }
@@ -86,7 +83,7 @@ export class QueuedMessageEditLeases {
     return this.answer(lease)
   }
 
-  /** A lease that lapsed or lost its card is not revived: the editor acquires again. */
+  /** Expired/invalidated editors must acquire a new lease. */
   renew(key: EditLeaseKey, messageId: string): AgentSessionQueuedMessageEditHoldResult {
     this.heldIds()
     const lease = this.leases.get(leaseKey(key))
@@ -98,7 +95,7 @@ export class QueuedMessageEditLeases {
     return this.answer(lease)
   }
 
-  /** Only the exact caller and edit release: never another editor's lease on the same card. */
+  /** Release only the exact caller/edit pair. */
   release(key: EditLeaseKey, messageId: string): void {
     if (this.leases.get(leaseKey(key))?.messageId === messageId) {
       this.leases.delete(leaseKey(key))
@@ -106,7 +103,6 @@ export class QueuedMessageEditLeases {
     }
   }
 
-  /** A save changed the card: every lease on its old text is spent. */
   retire(messageId: string): void {
     for (const [key, lease] of this.leases) {
       if (lease.messageId === messageId) {
@@ -131,7 +127,6 @@ export class QueuedMessageEditLeases {
     }
   }
 
-  /** One timer, at the nearest deadline; unchanged when that deadline is. */
   private schedule(): void {
     const next =
       this.leases.size === 0 ? null : Math.min(...[...this.leases.values()].map((l) => l.until))
@@ -159,7 +154,7 @@ export class QueuedMessageEditLeases {
       },
       Math.max(1, next - this.now())
     )
-    // Read untyped: this module also compiles into the phone's tests, where a timer is a number.
+    // Mobile test builds use numeric timers.
     const timer: unknown = this.timer
     if (
       typeof timer === 'object' &&
@@ -176,7 +171,7 @@ function leaseKey(key: EditLeaseKey): string {
   return JSON.stringify([key.callerKey, key.editId])
 }
 
-/** A hand-off or a return in between re-scopes the card even when its text is unchanged. */
+/** Handoffs/returns invalidate leases even when text is unchanged. */
 function leaseMatchesRow(lease: EditLease, row: QueuedMessageRow): boolean {
   return (
     isUnsettledQueuedMessage(row) &&

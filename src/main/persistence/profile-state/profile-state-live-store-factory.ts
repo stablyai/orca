@@ -6,7 +6,7 @@ import {
 } from './profile-state-store-factory'
 import { ProfileStateWorkerAuthority } from './profile-state-worker-authority'
 
-/** Publish live state only after its exact bootstrap revision has a worker owner. */
+/** Publish state only after a worker owns its exact bootstrap revision. */
 export async function createLiveProfileStateStore(
   options: ProfileStateStoreFactoryOptions,
   workerOptions: {
@@ -18,7 +18,7 @@ export async function createLiveProfileStateStore(
 ): Promise<ProfileStateStoreFactoryResult> {
   const { initialState: initial, ...prepared } = prepareProfileStateStore(options)
 
-  // Consume before retirement: the bootstrap snapshot carries the original revision fence.
+  // Consume before retirement to preserve the bootstrap revision fence.
   const parsed = initial.takeParsedState?.()
   const serializedState = initial.serializedState
   const authority = new ProfileStateWorkerAuthority(

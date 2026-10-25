@@ -17,7 +17,7 @@ import {
 type SerializedBuffer = { data: string; cols: number; rows: number } | null
 type SnapshotStartPayload = Record<string, unknown>
 
-// Why: 256 KiB is the pending-output budget, so this many 1 KiB chunks always trips the overflow guard.
+// Exceed the 256-KiB pending budget with 1-KiB chunks to force overflow.
 const OVERFLOW_CHUNKS = 400
 
 function makeRequest(method: string, params?: unknown): RpcRequest {

@@ -125,9 +125,7 @@ export async function openHostClientEntry(
         detachPushRegistration = null
       }
     }
-    // Why here: the connection layer owns descriptor recording for every host client — home rows
-    // and host screens alike — so no screen has to re-ask, and the probe's cutover retry means a
-    // relay<->direct switch cannot lose the read. One extra status.get per connect is the cost.
+    // Probe descriptors per connection, with cutover retry, so every host surface shares the same read without screen-owned requests.
     let stopDescriptorProbe: (() => void) | null = null
     const syncDescriptorProbe = (next: ConnectionState): void => {
       if (next === 'connected') {

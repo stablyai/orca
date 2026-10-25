@@ -39,7 +39,7 @@ it('cancels setup using the preselected id and unsubscribes a late handle', asyn
 
 it('keeps the response deadline while setup is pending', async () => {
   vi.useFakeTimers()
-  const subscribe = vi.fn(() => new Promise(() => {}))
+  const subscribe = vi.fn((_args: { subscriptionId?: string }) => new Promise(() => {}))
   const cancelSubscription = vi.fn().mockResolvedValue(undefined)
   stubRuntimeEnvironmentBridge({ subscribe, cancelSubscription })
   const pending = callAbortableRuntimeEnvironment(
@@ -50,7 +50,12 @@ it('keeps the response deadline while setup is pending', async () => {
     new AbortController().signal
   )
   const rejection = expect(pending).rejects.toThrow('timed out')
-  await vi.advanceTimersByTimeAsync(15_000)
+  await vi.advanceTimersByTimeAsync(14_999)
+  expect(cancelSubscription).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
   await rejection
   expect(cancelSubscription).toHaveBeenCalledOnce()
+  expect(cancelSubscription).toHaveBeenCalledWith({
+    subscriptionId: subscribe.mock.calls[0]?.[0].subscriptionId
+  })
 })

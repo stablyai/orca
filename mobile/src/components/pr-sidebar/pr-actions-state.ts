@@ -1,9 +1,6 @@
 import type { GitHubPRMergeMethod, PRState } from '../../../../src/shared/github/pull-request-types'
 
-// Which actions the PR actions section may offer for a given PR state. Merged PRs
-// expose only unlink (+ open-on-host elsewhere); closed PRs add reopen; open/draft
-// keep the full set. Mirrors desktop, which hides merge/auto-merge once a PR is no
-// longer open. Pure + unit-tested.
+// Match desktop: merged PR only unlinks, closed adds reopen, open/draft retain full actions; hide merge once no longer open.
 export type PrActionAvailability = {
   canMerge: boolean
   canAutoMerge: boolean

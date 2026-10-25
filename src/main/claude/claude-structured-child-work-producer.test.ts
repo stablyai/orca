@@ -1,6 +1,3 @@
-// A Claude session's frames, through the real adapter, into the host's child records: the order
-// the host receives them in, and the record each child ends up with.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   frame,
@@ -30,7 +27,6 @@ describe('Claude structured child-work producer', () => {
       })
     )
     const kinds = [...spawnCall, ...announced].map((delivery) => delivery.kind)
-    // The spawn call's own row, then the parent's republished row, and only then its child.
     expect(kinds.filter((kind) => kind === 'journal').length).toBeGreaterThan(0)
     expect(kinds.lastIndexOf('publish')).toBeGreaterThan(kinds.lastIndexOf('journal'))
     expect(kinds.at(-1)).toBe('evidence')
@@ -54,7 +50,6 @@ describe('Claude structured child-work producer', () => {
           is_backgrounded: false
         })
       },
-      // The foreground child starts a background shell of its own.
       {
         message: toolUse(
           'toolu_bash',
@@ -62,7 +57,6 @@ describe('Claude structured child-work producer', () => {
           { command: 'npm test', run_in_background: true },
           'toolu_fg'
         ),
-        // Its own call is what it is doing, previewed as a CLI row previews Bash.
         check: () =>
           expect(byDescription('Find flaky tests')?.operation).toMatchObject({
             toolName: 'Bash',
@@ -105,7 +99,6 @@ describe('Claude structured child-work producer', () => {
             totalTokens: 1_200
           })
       },
-      // The spawn call returning is the parent's view; the child's own frame ends it.
       {
         message: toolResult('toolu_fg', 'Two tests flake on CI'),
         check: () => expect(byDescription('Find flaky tests')?.membership).toBe('live')
@@ -143,7 +136,7 @@ describe('Claude structured child-work producer', () => {
         })
       },
       { message: frame({ type: 'result', subtype: 'success', is_error: false }) },
-      // Claude drops a finished task from the roster BEFORE its outcome frame arrives.
+      // The provider can drop a roster entry before sending its terminal frame.
       {
         message: system('background_tasks_changed', {
           tasks: [{ task_id: 'shell-1', task_type: 'local_bash', description: 'npm test' }]
@@ -172,7 +165,6 @@ describe('Claude structured child-work producer', () => {
         message: system('task_updated', { task_id: 'shell-1', patch: { status: 'killed' } }),
         check: () => expect(byDescription('npm test')).toMatchObject({ outcome: 'cancelled' })
       },
-      // Messaging a finished background agent starts it again under the message call.
       { message: toolUse('toolu_msg', 'SendMessage', { to: 'agent-bg', message: 'Again' }) },
       {
         message: system('task_started', {
@@ -195,8 +187,6 @@ describe('Claude structured child-work producer', () => {
       step.check?.()
     }
     await adapter.closeSession('session-1')
-    // Orca ended the session: what still ran ends unknown, as any lost contact does, and every
-    // record stays.
     const summary = records().map((record) => ({
       description: record.description,
       membership: record.membership,
@@ -232,7 +222,7 @@ describe('Claude structured child-work producer', () => {
         parent_tool_use_id: toolUseId,
         message: { id: `msg-${text}`, role: 'assistant', content: [{ type: 'text', text }] }
       })
-    // The journal stamps a child row with its roster attempt only once it is past the first.
+    // Journal attempt 1 is implicit.
     const runs = (toolUseId: string) => ({
       generation: byDescription('Find flaky tests')?.invocation.generation,
       attempt: stamps.findLast((stamp) => stamp.providerParentRef === toolUseId)?.attempt ?? 1
@@ -244,11 +234,10 @@ describe('Claude structured child-work producer', () => {
     send(toolResult('toolu_1', 'Found it'))
     send(system('task_notification', { task_id: 'agent-fg', status: 'completed' }))
 
-    // The provider runs the finished child again under a new spawn call.
     send(toolUse('toolu_2', 'Agent', { description: 'Find flaky tests' }))
     const legacy = adapter.backgroundTaskState('session-1')
     send(start('toolu_2'))
-    // The legacy row still waits for a roster; the record hears the new run now.
+    // Legacy rows require a roster update; child-work evidence uses the start frame.
     expect(adapter.backgroundTaskState('session-1')).toEqual(legacy)
     send(childSays('toolu_2', 'second run'))
     expect(runs('toolu_2')).toEqual({ generation: 2, attempt: 2 })
@@ -264,7 +253,6 @@ describe('Claude structured child-work producer', () => {
       operation: { toolName: 'Grep', basis: 'reported' },
       totalTokens: 300
     })
-    // An errored spawn result says nothing about how the child ended.
     send(toolResult('toolu_2', 'Could not reproduce', null, true))
     expect(byDescription('Find flaky tests')?.membership).toBe('live')
     send(system('task_notification', { task_id: 'agent-fg', status: 'failed' }))
@@ -310,7 +298,6 @@ describe('Claude structured child-work producer', () => {
 
     it('keeps a definite outcome through an unclassified ending and lands its evidence', async () => {
       const { send, byDescription } = await settledForegroundChild()
-      // A notification with no status the host can classify still carries the final summary.
       send(
         system('task_notification', {
           task_id: 'agent-fg',
@@ -340,7 +327,6 @@ describe('Claude structured child-work producer', () => {
         outcome: 'succeeded',
         lastMessage: 'Two tests flake on CI'
       })
-      // Admission refuses it; the host counts that refusal as the fence doing its job.
       expect(ingested.at(-1)).toMatchObject({
         settled: 0,
         rejected: [{ handleId: 'agent-fg', reason: 'stale-invocation' }]

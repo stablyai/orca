@@ -23,9 +23,7 @@ import {
 describe('readShellStartupEnvVar', () => {
   const originalPlatform = process.platform
   const originalShell = process.env.SHELL
-  // Why pinned: the fish branch defaults configHome to process.env.XDG_CONFIG_HOME, which CI
-  // runners set and dev machines usually do not — leaving it ambient makes these mocked paths
-  // resolve differently per host.
+  // CI may export XDG_CONFIG_HOME; pin it so fish mock paths do not depend on the host.
   const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
 
   beforeEach(() => {
@@ -33,7 +31,6 @@ describe('readShellStartupEnvVar', () => {
     existsSyncMock.mockReset()
     readFileSyncMock.mockReset()
     readdirSyncMock.mockReset()
-    // Why: only the fish branch lists a directory; every other case must see ENOENT.
     readdirSyncMock.mockImplementation(() => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
@@ -74,11 +71,7 @@ describe('readShellStartupEnvVar', () => {
     })
   }
 
-  // Issue #1534 / PR description: GUI-launched Orca does not inherit
-  // OPENCODE_CONFIG_DIR; the user's .zshrc exports it. The fallback must
-  // pick up that export so the overlay mirrors the user's real config.
-  // Scope: this intentionally covers direct static exports; sourced files,
-  // conditionals, and full shell evaluation remain out of scope.
+  // #1534: GUI env lacks rc-only exports; static discovery must preserve the user overlay source.
   it('mirrors the user scenario: GUI-launched Orca discovers .zshrc-only export', () => {
     mockStartupFiles({
       '.zshrc': 'export OPENCODE_CONFIG_DIR="$HOME/.config/opencode"\n'
@@ -179,17 +172,13 @@ describe('readShellStartupEnvVar', () => {
   })
 
   it('ignores bare assignments without the export keyword', () => {
-    // Why: POSIX `FOO=bar` (no export) creates a shell-local variable that
-    // is NOT inherited by child processes. The PTY child shell would never
-    // see this value, so we should not mirror it as a "source" for overlay
-    // construction.
+    // Unexported assignments never reach child processes and cannot be overlay sources.
     mockStartupFiles({ '.zshrc': 'OPENCODE_CONFIG_DIR=/no/export\n' })
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBeUndefined()
   })
 
   it('preserves a # inside a double-quoted value', () => {
-    // Why: shells treat # as a comment delimiter only when it begins a word
-    // (preceded by whitespace). Inside quotes it's literal.
+    // Unquoted # begins a comment only at a word boundary.
     mockStartupFiles({ '.zshrc': 'export OPENCODE_CONFIG_DIR="/path/with#hash"\n' })
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBe('/path/with#hash')
   })
@@ -221,21 +210,18 @@ describe('readShellStartupEnvVar', () => {
   })
 
   it('does not expand $HOME inside single quotes', () => {
-    // Why: POSIX shells do not perform parameter expansion in single quotes.
     mockStartupFiles({ '.zshrc': "export OPENCODE_CONFIG_DIR='$HOME/.opencode'\n" })
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBe('$HOME/.opencode')
   })
 
   it('does not partially expand $HOMER / $HOMEPATH', () => {
-    // Why: real shells require a word boundary; $HOMER is the var HOMER,
-    // not $HOME + R.
+    // HOME expansion must not partially rewrite a different variable name.
     mockStartupFiles({ '.zshrc': 'export OPENCODE_CONFIG_DIR="$HOMER/agent"\n' })
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBe('$HOMER/agent')
   })
 
   it('only scans zsh startup files when SHELL is zsh', () => {
-    // Why: a stale .bash_profile on a zsh user must NOT clobber the value
-    // from .zshrc, since the live shell would never source .bash_profile.
+    // Startup discovery must follow only the active shell family.
     process.env.SHELL = '/bin/zsh'
     mockStartupFiles({
       '.zshrc': 'export OPENCODE_CONFIG_DIR=/from/zshrc\n',
@@ -263,9 +249,7 @@ describe('readShellStartupEnvVar', () => {
   })
 
   it('does not scan .bashrc for bash shells', () => {
-    // Why: Orca launches bash as a login shell and the shell-ready wrappers
-    // intentionally do NOT source .bashrc, so a value present only in .bashrc
-    // would never be set in the live Orca bash shell.
+    // Orca's login Bash wrapper does not force .bashrc; discovery must match.
     process.env.SHELL = '/bin/bash'
     mockStartupFiles({ '.bashrc': 'export OPENCODE_CONFIG_DIR=/from/bashrc\n' })
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBeUndefined()
@@ -282,8 +266,7 @@ describe('readShellStartupEnvVar', () => {
   })
 
   it('honors an explicit shell argument over process.env.SHELL', () => {
-    // Why: callers (pty.ts) may know the per-spawn SHELL from baseEnv that
-    // differs from the Orca process's own $SHELL.
+    // Per-spawn SHELL can differ from main's inherited SHELL.
     process.env.SHELL = '/bin/zsh'
     mockStartupFiles({
       '.zshrc': 'export OPENCODE_CONFIG_DIR=/from/zshrc\n',
@@ -398,8 +381,7 @@ describe('readShellStartupEnvVar', () => {
       expect(readShellStartupEnvVar('CODEX_HOME', '/home/alice', FISH, '/cfg')).toBe('/from/xdg')
     })
 
-    // Why also via the env: the argument defaults to process.env.XDG_CONFIG_HOME, so without
-    // this every other fish case here silently depends on the host not exporting it.
+    // Cover the env-default path too so fish cases cannot silently depend on host configuration.
     it('defaults configHome to XDG_CONFIG_HOME from the environment', () => {
       process.env.XDG_CONFIG_HOME = '/cfg'
       __resetShellStartupEnvCache()
@@ -465,9 +447,7 @@ describe('readShellStartupEnvVar', () => {
     })
   })
 
-  // Why these matter: a caller that plumbs HOME/SHELL but forgets XDG_CONFIG_HOME
-  // reads a different fish config than the shell will, so the same user gets one
-  // answer locally and another over relay.
+  // Session XDG_CONFIG_HOME must match the fish config path used locally and over relay.
   describe('readSessionShellStartupEnvVar', () => {
     const FISH = '/opt/homebrew/bin/fish'
     const savedConfigHome = process.env.XDG_CONFIG_HOME

@@ -46,9 +46,7 @@ function BaseRefButton({
 }
 
 function ContextStat({ stat }: { stat: SourceControlBranchContextStat }): React.JSX.Element {
-  // Why: aria-label on an unfocusable span is never announced, so the ref this
-  // count measures against would exist only for sighted hover users. tabIndex also
-  // lets keyboard users open the tooltip, like HeadIdentity.
+  // Make stats focusable so screen readers announce their base and keyboard users can open the tooltip.
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -120,10 +118,7 @@ function HeadIdentity({ display }: { display: WorktreeGitIdentityDisplay }): Rea
     { value0: display.branchName }
   )
 
-  // Why: focusable + tooltip so truncated long branch names stay discoverable.
-  // Native title omitted — Radix Tooltip already surfaces the full name on hover.
-  // `block` is load-bearing: `truncate` clips nothing on an inline box, so an
-  // inline span here let long names run under the line-total chip.
+  // Keep full refs keyboard-discoverable; block layout lets truncate clip long names before they overlap totals.
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -208,8 +203,7 @@ function BaseLine({
   )
 }
 
-// Why: stacked head / → base (option B) so long branch names fit narrow sidebars
-// without truncating both sides of a single-line head→base pair.
+// Stack head and base so narrow sidebars do not truncate both refs on one line.
 function StackedCompareFlow({
   headDisplay,
   baseRef,
@@ -238,8 +232,7 @@ function StackedCompareFlow({
         changeBaseTitle={changeBaseTitle}
         showArrow={false}
         leading={leading}
-        // Why: no head line exists to host it, so fold it onto the base line
-        // rather than dropping it.
+        // Without a head line, retain its trailing content on the base line.
         trailing={
           <>
             {headTrailing}
@@ -252,10 +245,8 @@ function StackedCompareFlow({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-      {/* Why: the line total belongs beside HEAD — it measures this branch's work.
-          The base line keeps the commit count, which measures the comparison. */}
-      {/* Why: gap-2 (not gap-1.5) — an ellipsis butting against the colored
-          counts reads as part of the branch name. */}
+      {/* Place branch line totals beside HEAD; base-line commit counts measure comparison state. */}
+      {/* Use gap-2 so colored counts do not read as part of an ellipsized branch name. */}
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex min-w-0 flex-1 items-center">
           <HeadIdentity display={headDisplay} />
@@ -295,8 +286,7 @@ export function SourceControlBranchContextRow({
 }): React.JSX.Element | null {
   const displayedBaseRef = resolveSourceControlDisplayedBaseRef(summary, compareBaseRef)
 
-  // Why: no base → still show HEAD identity so branch/detached never vanish when
-  // compare isn't configured (replaces the separate identity row from #10215).
+  // Retain head/detached identity without a compare base, replacing the separate identity row (#10215).
   if (!displayedBaseRef) {
     if (!headDisplay) {
       return null

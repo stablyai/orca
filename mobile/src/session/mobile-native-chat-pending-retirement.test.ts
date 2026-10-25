@@ -23,7 +23,6 @@ function assistantTurn(id: string, text: string, timestamp: number): NativeChatM
   }
 }
 
-/** A send captured with `tail` as the last transcript message it could see. */
 function pendingSend(
   id: string,
   text: string,
@@ -60,9 +59,7 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
 
-  // `first\` + Enter is a newline request to the agent TUI, not a submit, so the
-  // next send lands in the SAME turn with the backslash dropped. The echo keeps
-  // a character the transcript row never has.
+  // Some TUIs interpret trailing backslash plus Enter as continuation and drop the slash; others retain it.
   it('still retires literal-backslash sends glued by agents that retain it', () => {
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'run\\ again', 5000)]
     const pending = [pendingSend('p1', 'run\\', 'm1'), pendingSend('p2', 'again', 'm1')]
@@ -188,7 +185,6 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2', 'p3', 'p4'])
   })
 
-  // FP1: the concatenation already exists in history, older than the sends.
   it('never lets a transcript row that predates the sends retire them', () => {
     const messages = [
       userTurn('m1', 'run the tests again', 1),
@@ -199,7 +195,6 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, pending)).toEqual([])
   })
 
-  // FP2: an old turn reads like the concatenation of two much later sends.
   it('never lets an older turn retire sends captured after it', () => {
     const messages = [userTurn('m1', 'fix the bug', 1000), assistantTurn('m2', 'fixed', 1100)]
     const pending = [pendingSend('p1', 'fix the', 'm2'), pendingSend('p2', 'bug', 'm2')]
@@ -218,7 +213,6 @@ describe('selectGluedPendingIds', () => {
   it('rejects a run that only partly spells the row', () => {
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'run the tests', 5000)]
     const pending = [pendingSend('p1', 'run the tests', 'm1'), pendingSend('p2', 'again', 'm1')]
-    // A lone exact match is an ordinary landing, not glue.
     expect(retiredIds(messages, pending)).toEqual([])
   })
 
@@ -234,8 +228,6 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
 
-  // Unresolved baselines are held out of matching until the drafts hook rebases
-  // them onto the first authoritative read — see mobile-native-chat-pending-baseline.
   it('holds out sends whose baseline has not been rebased onto a real transcript', () => {
     const messages = [userTurn('m1', 'one two', 1000)]
     const pending = [
@@ -245,8 +237,6 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, pending)).toEqual([])
   })
 
-  // A head that can never match must not freeze the run behind it: one stuck
-  // bubble would otherwise disable glue retirement for the rest of the session.
   it('glues a later pair even when the head of the run can never match', () => {
     const messages = [
       userTurn('m0', 'unrelated', 1000),
@@ -258,8 +248,6 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, [stuckHead, ...pair])).toEqual(['p1', 'p2'])
   })
 
-  // Nothing bounds how many sends pile onto the agent's input line, so the
-  // slide's budget must never truncate a genuine glue.
   it('retires a glued run far longer than the slide budget', () => {
     const words = Array.from({ length: 12 }, (_, index) => `w${index}`)
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', words.join(' '), 5000)]
@@ -290,12 +278,7 @@ describe('selectGluedPendingIds', () => {
   })
 
   it('retires an image send glued with the text send beside it once its preview rebinds', () => {
-    // Regression: one message typed, images attached, then a second send glued onto the
-    // same input line. The image echo could not match the glued row (its matcher wanted
-    // the whole row to equal the echo), and because an image echo was excluded from the
-    // glue pass it also acted as a barrier — stranding the text send in a run of one,
-    // which `matchGluedRun` rejects. Neither echo could ever retire, so the message
-    // rendered twice over, with the image copy sorting below the reply it preceded.
+    // A rebound image echo must join following glued text or both stay duplicated forever.
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two', 5000)]
     const pending = [
       { ...pendingSend('p1', 'one', 'm1'), images: ['file:///a.png'] },
@@ -312,7 +295,6 @@ describe('selectGluedPendingIds', () => {
   })
 
   it('still strands nothing when the glued row belongs to an older baseline', () => {
-    // The per-send boundary still applies to a rebound image echo.
     const messages = [userTurn('m1', 'one two', 1000), assistantTurn('m2', 'ready', 5000)]
     const pending = [
       { ...pendingSend('p1', 'one', 'm2'), images: ['file:///a.png'] },
@@ -326,11 +308,7 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, [pendingSend('p1', 'one', 'm1')])).toEqual([])
   })
 
-  // The cursor slides past a head that cannot match, so a turn may try several
-  // start positions — but one inspection budget covers the whole slide, keeping
-  // the work linear in the run length rather than quadratic. The attempt already
-  // in flight is allowed to overshoot the remaining budget, deliberately: that is
-  // what guarantees a genuine long glue is never truncated.
+  // One inspection budget covers all starts, keeping scans linear; let the current attempt finish so long real concatenations are never truncated.
   it('keeps segment inspection linear in the run length per transcript turn', () => {
     const pendingCount = 96
     const turnCount = 12
@@ -369,8 +347,7 @@ describe('retireLandedMobileNativeChatPending', () => {
     expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual([])
   })
 
-  // The drafts effect early-outs on `next === current`; a fresh array on the
-  // no-op path would re-enter it on every transcript frame.
+  // Preserve no-op array identity so the drafts effect does not retrigger on every transcript frame.
   it('returns the input array itself when nothing retires', () => {
     const messages = [assistantTurn('m1', 'ready', 1000)]
     const pending = [pendingSend('p1', 'one', 'm1'), pendingSend('p2', 'two', 'm1')]

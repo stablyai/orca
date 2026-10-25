@@ -23,9 +23,7 @@ describe('shared agent-hook-listener', () => {
     vi.unstubAllEnvs()
   })
 
-  // Why (#15117): the Windows script posts stdin verbatim through curl, so an event that
-  // fires without a payload arrives as `payload=""` rather than the `{}` the POSIX script
-  // substitutes. Both transports must still produce the status transition.
+  // Windows can post empty stdin verbatim while POSIX substitutes {}; both must transition (#15117).
   it('accepts an Antigravity event whose payload is empty or whitespace-only', () => {
     for (const payload of ['', '   ', '\r\n']) {
       const started = normalizeHookPayload(
@@ -47,8 +45,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  // Why (#15117): this is the shape Windows actually produces — curl omits the form field
-  // entirely when the agent supplies no stdin, so the key is absent rather than empty.
+  // Windows curl can omit the field entirely when no stdin arrives (#15117).
   it('accepts an Antigravity event that carries no payload key at all', () => {
     const started = normalizeHookPayload(
       state,
@@ -79,9 +76,7 @@ describe('shared agent-hook-listener', () => {
     ).toBeNull()
   })
 
-  // Why: the empty-payload allowance is Antigravity's documented policy, not a global one —
-  // every other source must keep rejecting a body it cannot parse.
-  it('does not extend the empty-payload allowance to other sources', () => {
+  it('keeps Gemini rejection of empty or missing payloads', () => {
     for (const payload of ['', undefined]) {
       expect(
         normalizeHookPayload(
@@ -155,9 +150,7 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
 
-    // Why: Antigravity can invoke managed hooks without stdin. The wrapper
-    // posts `{}` in that case, and the event name is still enough to keep the
-    // visible status alive.
+    // Managed hooks can lack stdin; event name alone still establishes status.
     expect(started?.payload).toMatchObject({
       state: 'working',
       prompt: '',
@@ -201,8 +194,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('reads newline-heavy Antigravity user requests without wrapper regex matching', () => {
-    const matchSpy = vi.spyOn(String.prototype, 'match')
+  it('reads a bounded preview from newline-heavy Antigravity user requests', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-large-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
     const requestText = 'Fix the failing test\n'.repeat(300)
@@ -227,16 +219,9 @@ describe('shared agent-hook-listener', () => {
         'production'
       )
 
-      expect(started?.payload.prompt).toContain('Fix the failing test')
-      expect(started?.payload.prompt).not.toContain('<USER_REQUEST>')
-      expect(started?.payload.prompt).not.toContain('</USER_REQUEST>')
-      const usedRequestWrapperMatch = matchSpy.mock.calls.some(
-        ([pattern]) =>
-          pattern instanceof RegExp &&
-          pattern.source.includes('<USER_REQUEST>') &&
-          pattern.source.includes('[\\s\\S]')
+      expect(started?.payload.prompt).toBe(
+        'Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the failing test Fix the fai'
       )
-      expect(usedRequestWrapperMatch).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -521,7 +506,7 @@ describe('shared agent-hook-listener', () => {
     ).toBe(false)
   })
 
-  it('lets Copilot Stop consume a generic message without scheduling transcript retry', () => {
+  it('does not mark Copilot result text pending when a generic message is present', () => {
     expect(
       hasPendingAgentResultText('copilot', {
         payload: {

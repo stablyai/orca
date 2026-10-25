@@ -1,13 +1,6 @@
 import type { RemoteForegroundEvidence } from './foreground-process-evidence'
 
-/**
- * What the execution host observed about processes running under a PTY's shell.
- *
- * Separate from `hasChildProcesses` because a boolean cannot hold the third answer. The host that
- * could not read its own process table and the host that read it and found nothing both had to
- * spell themselves `false`, and every close guard reads `false` as "nothing is running here".
- * Windows relays spelled it `false` unconditionally.
- */
+/** Keep unverifiable distinct from no-children; legacy booleans collapsed failed inspection and Windows relay defaults into false, bypassing close guards. */
 export type PtyChildProcessVerdict = 'children' | 'no-children' | 'unverifiable'
 
 /** Reasons the renderer could not observe the execution host. */
@@ -17,10 +10,7 @@ export type ClientOnlyUnverifiableReason =
   | 'terminal_gone'
   | 'old_host'
 
-/**
- * A renderer-only verdict. Host identity fields are explicitly forbidden so a
- * transport failure cannot be promoted into a synthetic host observation.
- */
+/** Forbid host identity on renderer-only verdicts so transport failures cannot masquerade as host observations. */
 export type ClientOnlyUnverifiableInspection = {
   foregroundProcess: null
   hasChildProcesses: false
@@ -68,10 +58,7 @@ export function isClientOnlyUnverifiableInspection(
   )
 }
 
-/**
- * Classify only failures that mean the execution host could not be observed.
- * Unexpected programming errors deliberately return null and remain throws.
- */
+/** Classify host-observation failures only; unexpected programming errors remain throws. */
 export function classifyTerminalProcessInspectionFailure(
   error: unknown
 ): ClientOnlyUnverifiableReason | null {

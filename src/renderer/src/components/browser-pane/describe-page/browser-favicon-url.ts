@@ -1,6 +1,4 @@
-// Why this lives apart from the <img>: Chromium only emits `page-favicon-updated` when a document's
-// icon URL list *changes*, so both the chrome that renders an icon and the guest listeners that
-// decide when to drop one have to agree on what counts as a usable icon and as a new site.
+// Chromium emits icon updates only when the URL list changes; rendering and navigation listeners must share origin/icon rules.
 
 export function displayableFaviconUrl(faviconUrl: string | null | undefined): string | null {
   const trimmed = faviconUrl?.trim()
@@ -20,8 +18,7 @@ export function displayableFaviconUrl(faviconUrl: string | null | undefined): st
 }
 
 export function pickDisplayableFaviconUrl(favicons: readonly string[] | undefined): string | null {
-  // Why not favicons[0]: the first entry can be a `data:,` sentinel or a non-web scheme while a
-  // later entry is a real icon.
+  // Skip sentinel/non-web entries even when a later favicon is usable.
   for (const candidate of favicons ?? []) {
     const displayable = displayableFaviconUrl(candidate)
     if (displayable) {
@@ -43,10 +40,7 @@ function faviconOrigin(rawUrl: string | null | undefined): string | null {
   }
 }
 
-// Why the two sides are treated asymmetrically: a destination with no icon of its own (about:blank,
-// file://, a doc preview) must drop the previous site's icon, but an unknown *origin* — a freshly
-// attached guest that hasn't committed a document yet — is not evidence the icon is stale, and
-// clearing there would strand a restored tab on the globe until its first paint.
+// Clear icons for non-site destinations, but keep restored icons when the attached guest’s origin is still unknown.
 export function browserNavigationLeavesFaviconOrigin(
   fromUrl: string | null | undefined,
   toUrl: string | null | undefined

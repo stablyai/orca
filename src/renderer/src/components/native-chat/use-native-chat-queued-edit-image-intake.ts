@@ -1,4 +1,4 @@
-// The edit reuses the chat intake with its own images so paste never changes the chat draft.
+// Reuse chat intake with edit-owned images so paste cannot modify the chat draft.
 
 import {
   useCallback,
@@ -27,7 +27,7 @@ import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attac
 import { registerNestedWorkspaceDropSink } from './native-chat-pane-file-drop'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 
-/** The chat a queued list sits in, which its edits attach files to as its chat box does. */
+/** The queued edit’s owning chat and attachment transport. */
 export type QueuedEditAttachTarget = {
   terminalTabId: string
   transport: Pick<
@@ -43,7 +43,7 @@ export function useNativeChatQueuedEditImageIntake(
   attachTo: QueuedEditAttachTarget | undefined,
   field: RefObject<HTMLTextAreaElement | null>
 ): {
-  /** The host replaces images and the agent reads them: Attach, paste and drop add to the edit. */
+  /** The host can replace images and the agent can read them, enabling Attach/paste/drop. */
   editable: boolean
   attach: () => void
   /** On the whole card, so a paste with focus on its buttons lands in the edit too. */
@@ -55,7 +55,7 @@ export function useNativeChatQueuedEditImageIntake(
   const transport = attachTo?.transport
   const editable = Boolean(intake && transport && transport.acceptsImages !== false)
   const { change, saving, acquiring } = editor
-  // Nothing joins an edit until its lease is held, nor while a Save sends the images it read.
+  // Require the edit lease and freeze intake while Save sends its image snapshot.
   const busy = saving || acquiring
   const [isDragActive, setIsDragActive] = useState(false)
   const liveIntake = useRef(intake)
@@ -67,7 +67,7 @@ export function useNativeChatQueuedEditImageIntake(
       toast.error(notice)
     }
   }, [])
-  // At the caret, as the chat box inserts; never into an edit that replaced this one.
+  // Insert at this edit’s caret; never modify a replacement edit.
   const insertText = useCallback(
     (insertion: string): boolean => {
       const input = field.current
@@ -93,7 +93,6 @@ export function useNativeChatQueuedEditImageIntake(
       begin: (previewUrl, pendingName) => intake?.begin(previewUrl, pendingName) ?? null,
       resolve: (id, path, connectionId) => intake?.resolve(id, path, connectionId) ?? false,
       drop: (id) => intake?.drop(id) ?? false,
-      // A stored file that is not an image is referenced in the text, as the chat box does.
       attachReferences: (references) => {
         const kept = references.filter(({ id }) => intake?.drop(id))
         insertReferences(kept.map(({ path }) => path))
@@ -161,7 +160,6 @@ export function useNativeChatQueuedEditImageIntake(
   })
   const onPasteCapture = useCallback(
     (event: ClipboardEventLike & { target: EventTarget | null }) => {
-      // Only text already aimed at the writable field keeps the browser's native insertion.
       if (
         editable &&
         (Array.from(event.clipboardData?.items ?? []).some((item) => item.kind === 'file') ||
@@ -173,11 +171,12 @@ export function useNativeChatQueuedEditImageIntake(
     },
     [busy, editable, field, handlePaste]
   )
-  // The editing card is the nearest drop owner, so a drop on it never reaches the chat box's.
   const ownerRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
   const attachOwner = useOsFileDropOwner(ownerRef, {
     consumer: (destination) => destination?.preparationConsumer ?? 'agent',
+    // Paired-host chats upload bytes; other owners refuse with a notice.
+    acceptsBrowserFiles: true,
     sequence,
     canAccept: () => !disabled,
     captureDestination: () => captureExternalDrop(),
@@ -205,7 +204,7 @@ export function useNativeChatQueuedEditImageIntake(
     }
     const input = owner ? field.current : null
     input?.addEventListener(NATIVE_CHAT_PASTE_REQUEST_EVENT, paste)
-    // A file dragged from Orca's own tree: the chat box's claim checks it, then hands it here.
+    // Internal tree drags arrive here after the chat’s workspace claim checks them.
     const hover = (active: boolean): void => setIsDragActive(active && !disabled)
     const unregister = owner
       ? registerNestedWorkspaceDropSink(owner, attachResolvedPaths, hover)

@@ -3,7 +3,7 @@ import { BrowserWindow } from 'electron'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
 import type { WorkspaceAttachment } from '../../../shared/worktree/types'
 import { registerFolderWorkspaceHandlers } from './folder-workspace-handlers'
 

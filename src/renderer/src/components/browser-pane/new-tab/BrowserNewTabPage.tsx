@@ -14,6 +14,7 @@ import { BrowserNewTabTile } from './browser-new-tab-tile'
 import { useBrowserNewTabLinkedItems } from './use-browser-new-tab-linked-items'
 import { useBrowserNewTabServers, type BrowserNewTabServers } from './use-browser-new-tab-servers'
 import { BrowserNewTabWorkspaceCard } from './browser-new-tab-workspace-card'
+import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
@@ -27,7 +28,6 @@ type BrowserNewTabServerContext = {
   openInPlace: boolean
 }
 
-/** The page a blank browser tab shows: this workspace's servers and links, then the sites you visit most. */
 export function BrowserNewTabPage({
   worktreeId,
   onOpenUrl,
@@ -75,22 +75,29 @@ function BrowserNewTabWorktreePage({
 }): React.JSX.Element {
   const linkedItems = useBrowserNewTabLinkedItems(worktree, repo)
   return (
-    <BrowserNewTabPageLayout linkedItems={linkedItems} servers={servers} onOpenUrl={onOpenUrl} />
+    <BrowserNewTabPageLayout
+      workspaceName={resolveWorktreeDisplayName(worktree)}
+      linkedItems={linkedItems}
+      servers={servers}
+      onOpenUrl={onOpenUrl}
+    />
   )
 }
 
 function BrowserNewTabPageLayout({
+  workspaceName,
   linkedItems,
   servers: { servers, runtimeTarget, openInPlace },
   onOpenUrl
 }: {
+  workspaceName?: string
   linkedItems: WorkspaceLinkedItemRow[]
   servers: BrowserNewTabServerContext
   onOpenUrl: (url: string) => void
 }): React.JSX.Element {
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const removeBrowserHistoryEntry = useAppStore((s) => s.removeBrowserHistoryEntry)
-  const restoreBrowserHistoryEntry = useAppStore((s) => s.restoreBrowserHistoryEntry)
+  const restoreBrowserHistory = useAppStore((s) => s.restoreBrowserHistory)
   const suggested = useMemo(
     () =>
       rankBrowserTopSites({
@@ -116,7 +123,8 @@ function BrowserNewTabPageLayout({
       {
         action: {
           label: translate('browser.newTab.undo', 'Undo'),
-          onClick: () => restoreBrowserHistoryEntry(removed)
+          onClick: () =>
+            restoreBrowserHistory({ browserUrlHistory: [removed], workspaceDocHistory: [] })
         }
       }
     )
@@ -146,7 +154,10 @@ function BrowserNewTabPageLayout({
   return (
     <BrowserNewTabScroller>
       {hasWorkspaceRows ? (
-        <BrowserNewTabSection label={translate('browser.newTab.thisWorkspace', 'This workspace')}>
+        <BrowserNewTabSection
+          label={translate('browser.newTab.thisWorkspace', 'This workspace')}
+          detail={workspaceName}
+        >
           <BrowserNewTabWorkspaceCard
             servers={servers}
             linkedItems={openableLinkedItems}
@@ -165,8 +176,8 @@ function BrowserNewTabPageLayout({
                 icon={
                   <BrowserFavicon
                     faviconUrl={entry.faviconUrl}
-                    className="size-6"
-                    fallbackClassName="size-5 text-muted-foreground"
+                    className="size-8"
+                    fallbackClassName="text-muted-foreground"
                   />
                 }
                 label={suggestionLabel(entry)}
@@ -195,15 +206,23 @@ function BrowserNewTabScroller({ children }: { children: React.ReactNode }): Rea
 
 function BrowserNewTabSection({
   label,
+  detail,
   children
 }: {
   label: string
+  detail?: string
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="px-2 text-2xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-        {label}
+      <h2 className="flex min-w-0 gap-1.5 px-2 text-2xs text-muted-foreground">
+        <span className="shrink-0 font-semibold tracking-[0.05em] uppercase">{label}</span>
+        {detail ? (
+          <>
+            <span aria-hidden>·</span>
+            <span className="truncate">{detail}</span>
+          </>
+        ) : null}
       </h2>
       {children}
     </section>
@@ -211,12 +230,7 @@ function BrowserNewTabSection({
 }
 
 function BrowserNewTabTileGrid({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return (
-    // Why steps above the smallest panes: eight tiles land in full rows of 4 or 8.
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1 @[20rem]:grid-cols-4 @[39rem]:grid-cols-8">
-      {children}
-    </div>
-  )
+  return <div className="grid grid-cols-2 gap-2 @md:grid-cols-4">{children}</div>
 }
 
 function suggestionLabel(entry: BrowserHistoryEntry): string {

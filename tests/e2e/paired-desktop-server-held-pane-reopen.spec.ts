@@ -1,12 +1,4 @@
-/**
- * A switch-on desktop paired to a switch-on `orca serve` shows the server's held pane (a newer
- * build's terminal service may still run it) on the desktop's existing newer-build banner, and its
- * Reopen goes to the server's main: the server stops that service and starts the pane, which binds.
- *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
- *   pnpm exec playwright test tests/e2e/paired-desktop-server-held-pane-reopen.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=2
- */
+// With ORCA_LAYOUT_OWNER=main, show the server’s newer-build held-pane banner on its paired desktop; Reopen must stop the server service and rebind its pane.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'

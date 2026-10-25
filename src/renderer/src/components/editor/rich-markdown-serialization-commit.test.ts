@@ -7,10 +7,7 @@ import {
 import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
 import type { KeyHandlerContext } from './rich-markdown-key-handler'
 
-// Style-only canonicalizer mirroring the #6080 rewrites; stands in for the live
-// editor's getMarkdown so these tests need no DOM. Strips the trailing newline
-// like the real getMarkdown, so the branch-6 exact re-parse comparison behaves as
-// in production (the reconcile roundTrip and the edited getMarkdown agree on EOF).
+// Mirror style rewrites and production EOF normalization so the injected safety reparse agrees with the editor without a DOM.
 function fakeCanonicalize(md: string): string {
   return md
     .replace(/__([^_]+)__/g, '**$1**')
@@ -34,7 +31,7 @@ function fakeEditor(getMarkdown: () => string): Editor {
 describe('commitRichMarkdownSerialization (shared disk-bound serialize chokepoint)', () => {
   it('persists SOURCE-PRESERVING bytes, not raw getMarkdown (regression gate for #6080)', () => {
     const r = refs('# Title\n\n_word_\n', '# Title\n\n*word*')
-    const editor = fakeEditor(() => '# Title!\n\n*word*') // canonical edit
+    const editor = fakeEditor(() => '# Title!\n\n*word*')
 
     const { markdown, didSerialize } = commitRichMarkdownSerialization(editor, r, roundTrip)
 
@@ -49,9 +46,9 @@ describe('commitRichMarkdownSerialization (shared disk-bound serialize chokepoin
 
     commitRichMarkdownSerialization(editor, r, roundTrip)
 
-    expect(r.originalSourceRef.current).toBe('# Title!\n\n_word_\n') // reconciled bytes
-    expect(r.baseCanonicalRef.current).toBe('# Title!\n\n*word*') // canonical of reconciled
-    expect(r.lastCommittedMarkdownRef.current).toBe('# Title!\n\n_word_\n') // exact disk bytes
+    expect(r.originalSourceRef.current).toBe('# Title!\n\n_word_\n')
+    expect(r.baseCanonicalRef.current).toBe('# Title!\n\n*word*')
+    expect(r.lastCommittedMarkdownRef.current).toBe('# Title!\n\n_word_\n')
   })
 
   it('falls back to the last committed bytes when the editor is torn down (null)', () => {
@@ -62,7 +59,6 @@ describe('commitRichMarkdownSerialization (shared disk-bound serialize chokepoin
 
     expect(didSerialize).toBe(false)
     expect(markdown).toBe('# Title\n\n_word_\n')
-    // Refs untouched on a torn-down editor.
     expect(r.originalSourceRef.current).toBe('# Title\n\n_word_\n')
   })
 
@@ -156,7 +152,6 @@ describe('handleRichMarkdownSaveShortcut (Cmd/Ctrl+S persistence site)', () => {
     expect(handleRichMarkdownSaveShortcut(ctx, event)).toBe(true)
     expect(event.preventDefault).toHaveBeenCalled()
     expect(flush).toHaveBeenCalledTimes(1)
-    // onSave/onContentChange receive reconciled bytes, not raw *word*.
     expect(onSave).toHaveBeenCalledWith('# Title!\n\n_word_\n')
     expect(onContentChange).toHaveBeenCalledWith('# Title!\n\n_word_\n')
   })

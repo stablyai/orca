@@ -722,8 +722,7 @@ describe('worktree lineage state', () => {
     })
   })
 
-  // An unresolvable owner route must reach the caller so the sidebar can toast it, rather than
-  // becoming a silent no-op. Both callers catch; see WorktreeContextMenu.handleRemoveParentLink.
+  // Reject unresolved lineage routes so sidebar callers can toast them (WorktreeContextMenu.handleRemoveParentLink).
   it('rejects the lineage update when the owner route cannot be resolved', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/same/path'

@@ -60,10 +60,9 @@ export function useAddRepoCloneFlow({
   const hostToken = activeRuntimeEnvironmentId?.trim() ?? ''
   const hostTokenRef = useRef(hostToken)
   hostTokenRef.current = hostToken
-  // Why: monotonic ID so stale clone callbacks can detect they were superseded.
+  // Reject stale callbacks after a clone flow is reset or superseded.
   const cloneGenRef = useRef(0)
-  // Why: track whether we've already auto-filled for this entry into the clone step,
-  // so a late settings hydration still gets a chance to set the default.
+  // Allow late settings hydration to fill the default once per clone-step entry.
   const cloneStepAutoFilledRef = useRef(false)
 
   useEffect(() => {
@@ -83,8 +82,7 @@ export function useAddRepoCloneFlow({
   if (step !== 'clone') {
     cloneStepAutoFilledRef.current = false
   } else if (cloneDestinationAutoFill) {
-    // Why: late settings hydration should still seed the local clone path,
-    // but runtime/server clone flows must keep their destination user-entered.
+    // Late defaults may seed local destinations; remote clone paths remain user-entered.
     cloneStepAutoFilledRef.current = true
     setCloneDestination(cloneDestinationAutoFill.destination)
   }
@@ -100,8 +98,7 @@ export function useAddRepoCloneFlow({
 
   const handlePickDestination = useCallback(async (): Promise<void> => {
     if (activeRuntimeEnvironmentId?.trim()) {
-      // Why: the native folder picker returns a client-local path. Runtime
-      // clone destinations must be typed as paths on that host.
+      // Native folder pickers return client-local paths; remote clone destinations must name paths on their host.
       toast.error(
         translate(
           'auto.components.sidebar.useAddRepoCloneFlow.0dc4d1b657',
@@ -160,8 +157,7 @@ export function useAddRepoCloneFlow({
         translate('auto.components.sidebar.useAddRepoCloneFlow.4d0013cc93', 'Repository cloned'),
         { description: ownedRepo.displayName }
       )
-      // Why: once the repo exists, a transient non-authoritative refresh
-      // should fall through to project reveal instead of leaving the add flow open.
+      // A persisted repo should still reveal after a transient non-authoritative refresh.
       const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId)
       await fetchWorktrees(ownedRepo.id, ownerOptions)
       if (!isCurrent()) {

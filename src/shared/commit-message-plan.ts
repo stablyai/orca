@@ -11,17 +11,11 @@ import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-messa
 import type { TuiAgent } from './tui-agent'
 import { mergeOpenCodeGenerationArgs } from './opencode-generation-command'
 
-// Why: planning is a pure transformation from "user request + prompt text"
-// into "spawn-ready binary + argv". Keeping it in shared lets both the local
-// generator (main process) and the SSH provider (which delegates to the
-// relay over JSON-RPC) reuse the exact same validation and arg-building
-// logic without duplicating the spec/model/thinking checks.
+// Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
 export type CommitMessagePlanInput = {
   agentId: TuiAgent | 'custom'
-  /** How to read `\` in the user's command override / args / custom command.
-   *  Defaults to POSIX escaping; pass `'literal'` only when the command is known
-   *  to run on native Windows, where `\` is the path separator (#11375). */
+  /** Default POSIX escapes; use literal backslashes only for known native-Windows execution, where they separate paths (#11375). */
   backslash?: CommandTemplateBackslash
   model: string
   thinkingLevel?: string
@@ -102,8 +96,7 @@ function removeAllOptionOccurrences(tokens: string[], aliases: readonly string[]
   }
 }
 
-/** Drops every occurrence after the first, so a user who types the same singleton
- *  twice in one field still gets a single flag rather than a rejected argv. */
+/** Keep the first user singleton occurrence so repeated flags cannot create rejected argv. */
 function keepFirstOptionOccurrence(tokens: string[], aliases: readonly string[]): string[] {
   let result = tokens
   while (true) {
@@ -124,8 +117,7 @@ function keepFirstOptionOccurrence(tokens: string[], aliases: readonly string[])
   }
 }
 
-/** Removes generated singleton options shadowed by user input. Recipe args
- *  outrank a command-override prefix, which outranks Orca's generated value. */
+/** User recipe args outrank override prefixes, which outrank generated singleton values. */
 function applySingletonOptionOverrides(args: {
   generatedArgs: string[]
   prefixArgs: string[]
@@ -219,8 +211,7 @@ export function planCommitMessageGeneration(
           prompt
         }),
         stdinPayload: planned.stdinPayload,
-        // Why: a custom command has no friendly name, so the binary doubles
-        // as the label in error prefixes ("ollama failed: ...").
+        // Custom commands lack friendly names; use the binary in error labels.
         label: planned.binary,
         ...(planned.env ? { env: planned.env } : {})
       }
@@ -266,8 +257,7 @@ export function planCommitMessageGeneration(
     strictMcp: options.strictMcp,
     userArgs: [...command.prefixArgs, ...agentArgs.args]
   })
-  // Why: repeating a singleton flag makes yargs-based CLIs parse it as an array and
-  // crash (OpenCode's `model.split('/')`). User values replace Orca's, never stack.
+  // Replace singleton values rather than stack them: yargs arrays crash CLIs such as OpenCode model.split.
   const merged = applySingletonOptionOverrides({
     generatedArgs: baseArgs,
     prefixArgs: command.prefixArgs,

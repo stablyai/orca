@@ -17,11 +17,7 @@ type Args = {
   onDone: () => void
 }
 
-// Why: builds the per-worktree "navigate to a screen" action-sheet actions
-// (Source Control + Agent Session History). The Agent Session History action is
-// included only on hosts advertising the aiVault.v1 capability, so we never
-// navigate to a screen that would call a missing RPC method. Extracted from the
-// host index action sheet to keep that file under its max-lines budget.
+// Gate history action on aiVault.v1 so navigation cannot call a missing RPC; actions also include Source Control.
 export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] {
   if (args.executionHost === null) {
     return []

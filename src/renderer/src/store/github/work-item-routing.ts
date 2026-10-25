@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
@@ -44,7 +45,7 @@ export type GitHubWorkItemsListArgs = {
 export function settingsForGitHubRepoOwner(
   settings: AppState['settings'],
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (!repo) {
     return settings
   }
@@ -59,18 +60,15 @@ export function settingsForGitHubRepoOwner(
 function withActiveRuntimeEnvironmentId(
   settings: AppState['settings'],
   activeRuntimeEnvironmentId: string | null
-): AppState['settings'] {
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId }
-    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing readers only consume activeRuntimeEnvironmentId before settings hydrate.
-      ({ activeRuntimeEnvironmentId } as AppState['settings'])
+): RuntimeFocusSettings {
+  return settings ? { ...settings, activeRuntimeEnvironmentId } : { activeRuntimeEnvironmentId }
 }
 
 function settingsForGitHubTaskSource(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id'> | undefined,
   sourceContext: TaskSourceContext
-): AppState['settings'] {
+): RuntimeFocusSettings {
   const sourceHost = parseExecutionHostId(sourceContext.hostId)
   return withActiveRuntimeEnvironmentId(
     state.settings,
@@ -133,18 +131,14 @@ export function getGitHubRepoSourceSettings(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
-): AppState['settings'] {
+): RuntimeFocusSettings {
   if (sourceContext?.provider === 'github') {
     return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
   return settingsForGitHubRepoOwner(state.settings, repo)
 }
 
-/**
- * Transport for a repo's GitHub request: a row-less task source's host, else the repo's owner.
- * Local and SSH repos use this app's credentials; an unknown repo stays here too (main refuses
- * repos it does not own) instead of following the focused server.
- */
+/** Use row-less task source host, else repo owner. Local/SSH/unknown repos use desktop credentials; never follow focused runtime (main refuses unowned repos). */
 export function getGitHubSourceTarget(
   state: Pick<AppState, 'repos'>,
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
@@ -184,7 +178,7 @@ export function getGitHubWorkItemRequestContext(
       }
     }
   }
-  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, requestTarget)
+  const runtimeRepo = getRuntimeRepoTarget(state, { repoId, repoPath }, requestTarget)
   return {
     repoId,
     repoPath,
@@ -243,7 +237,7 @@ export function countGitHubWorkItemsForRepo(
 }
 
 export function isGitHubUnavailableWorkItemsError(error: unknown): boolean {
-  // Why: only `runtime_error` came from the GitHub method; other RPC transport failures ("timed out"/"unavailable") must not be blamed on GitHub.
+  // Only runtime_error came from the GitHub method; transport timeouts/unavailability are not GitHub faults.
   if (error instanceof RuntimeRpcCallError && error.code !== 'runtime_error') {
     return false
   }

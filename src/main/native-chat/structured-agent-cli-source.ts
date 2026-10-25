@@ -32,7 +32,6 @@ export function captureStructuredAgentCliSource(
       )
     })
   } catch (error) {
-    // Capture cannot override an existing owner or committed replay.
     return Object.freeze({ error })
   }
 }
@@ -53,7 +52,7 @@ export function structuredAgentCliSourcePathFromEvidence(input: {
   })
 }
 
-/** A client names a pane; only this host supplies its provider path. */
+/** Derive provider paths from host evidence; clients may name only panes. */
 export function structuredAgentCliSourcePath(input: {
   agent: StructuredAgentId
   resumeFrom: StructuredAgentSessionResumeSource
@@ -72,7 +71,7 @@ export function structuredAgentCliSourcePath(input: {
       !candidate.connectionId &&
       !candidate.structuredHost &&
       adoptsCliConversations(candidate.agentType) &&
-      // A 2.x pane started as `opencode` reports `opencode`; the OpenCode 2 chat opens its conversation.
+      // OpenCode 2 may report the legacy opencode name for the same conversation.
       CLI_CONVERSATION_ADOPTING_AGENTS[candidate.agentType].some((agent) =>
         chatAgentsShareConversations(agent, input.agent)
       ) &&

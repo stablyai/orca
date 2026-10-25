@@ -1,9 +1,4 @@
-/**
- * Twins: one repo (or folder workspace) registered on two execution hosts. They share the repo
- * id, the worktree id and every raw-id-keyed store bucket, so an action aimed at one twin can
- * silently reach the other. The fixture seeds both twins with live shells, a dormant tab, dirty
- * documents, drafts and sleeping-agent records; `host-twin-state-projection.test-fixture.ts` reads one host back.
- */
+/** Seed same-ID repo/folder twins on two hosts with live/dormant shells, dirty drafts and sleeping agents. Raw-ID buckets are shared; host-twin-state-projection.test-fixture.ts attributes survivors. */
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'

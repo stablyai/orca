@@ -60,7 +60,6 @@ function close() {
   child.emit('exit', 0, null)
   child.emit('close', 0, null)
 }
-/** How a supervisor ends: its stop signal re-raised once the group is gone, or an exit code. */
 function supervisorExits(code: number | null, signal: NodeJS.Signals | null) {
   child.exitCode = code
   child.signalCode = signal
@@ -165,10 +164,10 @@ describe('OpenCode model probe termination evidence', () => {
       '--port',
       '0'
     ])
-    // Its stdin ends at once, so a session lifetime would stop the server a second later.
+    // Session lifetime would stop this probe after its stdin closes.
     expect(decodedSupervisorSpec(spec.env)).toMatchObject({ lifetime: 'one-shot', cwd: directory })
     expect(child.kill.mock.calls).toEqual([['SIGTERM']])
-    // Signalling the supervisor's own group, or SIGKILLing it, would orphan the server's group.
+    // Killing the supervisor’s group can orphan the server’s detached group.
     expect(signalProcessTree).not.toHaveBeenCalled()
     expect(forceTerminateProcessTree).not.toHaveBeenCalled()
     expect(terminateProviderProcessTree).not.toHaveBeenCalled()
@@ -177,7 +176,7 @@ describe('OpenCode model probe termination evidence', () => {
   it('forces a POSIX supervisor tree only after its full stop time, and trusts no forced stop', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     child.kill.mockReturnValue(true)
-    // A teardown that found no descendants to check proves nothing about the server's group.
+    // Supervisor teardown alone cannot prove the detached server group is gone.
     vi.mocked(terminateProviderProcessTree).mockImplementation(async () => {
       supervisorExits(null, 'SIGKILL')
       return null
@@ -198,7 +197,6 @@ describe('OpenCode model probe termination evidence', () => {
   it('trusts no forced POSIX stop, even one whose teardown reports the tree gone', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     child.kill.mockReturnValue(true)
-    // 'exited' covers the supervisor's tree only; the server leads its own detached group.
     vi.mocked(terminateProviderProcessTree).mockImplementation(async () => {
       supervisorExits(null, 'SIGKILL')
       return 'exited'

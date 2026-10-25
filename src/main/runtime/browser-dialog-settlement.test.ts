@@ -1,11 +1,4 @@
-/**
- * Where `browser.dialogAccept` and `browser.dialogDismiss` send their answer.
- *
- * The answer has to reach the CDP session that reported the dialog. The agent-browser path cannot
- * be that session: it runs a fresh client whose bootstrap is renderer-bound, and a page sitting in
- * a modal dialog answers no renderer-bound command until the dialog is gone. So with a stream live
- * on the page, the stream settles it; with no stream, nothing changes.
- */
+/** Modal replies must use the reporting CDP session; a fresh renderer-bound client blocks behind the dialog. */
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -127,7 +120,6 @@ describe('a dialog reply goes to the stream that reported it', () => {
     expect(await streamed.commands.browserDialogDismiss({ page: PAGE_ID })).toEqual(
       await bridged.commands.browserDialogDismiss({ page: PAGE_ID })
     )
-    // The bridge answered on the second of each pair, so the bodies above came from both paths.
     expect(bridged.bridge.dialogAccept).toHaveBeenCalledTimes(1)
     expect(bridged.bridge.dialogDismiss).toHaveBeenCalledTimes(1)
     expect(streamed.bridge.dialogAccept).not.toHaveBeenCalled()

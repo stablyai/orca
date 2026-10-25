@@ -6,6 +6,7 @@ import {
   isFolderWorkspacePathError
 } from '@/lib/folder-workspace-path-status'
 import { Button } from '@/components/ui/button'
+import { agentLaunchErrorText, isAgentLaunchOnlyError } from './agent-launch-pane-notice-text'
 import {
   hasClientEnvironmentFooter,
   stripClientEnvironmentFooter
@@ -36,9 +37,7 @@ const STALE_DAEMON_CWD_MARKERS = [
 const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
 // Main lost the pane to another connection twice in one attach, or an older host never retries.
 const PANE_OWNER_CHANGED_MARKER = 'terminal_pane_owner_changed'
-// remote-runtime-pty-transport.ts surfaces this English literal as a wire-level marker, so it is
-// translated here rather than at the source -- otherwise the banner mixes English with the
-// localized chrome around it (#9194).
+// Keep the English transport literal as a wire marker; localize it here with the surrounding banner.
 const REMOTE_TERMINAL_CLOSED_MARKER = 'Remote terminal was closed.'
 // Why: a lone /g regex carries lastIndex across .test() calls, so each token gets a stateless test form and a /g replace form.
 function tokenPattern(source: string): { match: RegExp; replaceAll: RegExp } {
@@ -48,18 +47,13 @@ function tokenPattern(source: string): { match: RegExp; replaceAll: RegExp } {
 const TERMINAL_HOST_GONE = tokenPattern('(^|[^a-z0-9_])terminal_host_gone(?=$|[^a-z0-9_])')
 const LEGACY_TERMINAL_HOST_GONE_PATTERN =
   /(^|[^a-z])connect (?:ENOENT|ECONNREFUSED) [^\r\n]*orca-terminal-host-v[^\r\n]*/i
-// A reattach the host answered "no such session" for: the SSH provider's expiry token, the relay's
-// raw not-found string when nothing mapped it, or a daemon generation old enough to still refuse a
-// pane respawning onto an id it is tearing down (#18046). None proves the shell died — the copy
-// says only that this pane lost its session.
+// Session-absence responses from SSH, relay and older daemons prove only that this pane lost its session, not that the shell died.
 const UNREATTACHABLE_SESSIONS = [
   'SSH_SESSION_EXPIRED:[ \\t]*\\S*(?:[ \\t]+SSH_PTY_IDENTITY_MISMATCH)?',
   'PTY "[^"\\r\\n]*" not found(?: \\(identity mismatch\\))?',
   '(?:SessionNotFoundError: )?Session not found: \\S+'
 ].map(tokenPattern)
-// The relay answered and proved the shell is still running — only its output delivery was retired.
-// Deliberately NOT one of the sources above: that copy says to open a new terminal, which here
-// abandons a live agent.
+// Retired delivery proves the shell is alive; separate it from missing sessions so the copy cannot tell users to abandon a running agent.
 const SOURCE_RESTORE_REQUIRED = tokenPattern(
   'SSH_PTY_SOURCE_RESTORE_REQUIRED(?::[ \\t]*\\S*(?:[ \\t]+\\S+)?)?'
 )
@@ -153,11 +147,13 @@ function isSshHostStateTerminalError(error: string): boolean {
 }
 
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
-export function humanizeTerminalError(error: string): string {
+export function humanizeTerminalError(error: string, agentId?: string | null): string {
   if (isSshSignInRequiredTerminalError(error)) {
     return describeSshSignInRequiredTerminalError(error)
   }
-  let humanized = humanizeFolderWorkspacePathErrors(localizeTerminalSpawnHints(error))
+  let humanized = humanizeFolderWorkspacePathErrors(
+    localizeTerminalSpawnHints(agentLaunchErrorText(error, agentId) ?? error)
+  )
   if (humanized.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
     const explanation = isPaneOwnerUnverifiedError(humanized)
       ? translate(
@@ -220,6 +216,7 @@ export function humanizeTerminalError(error: string): string {
 
 export function TerminalErrorToast({
   error,
+  agentId,
   paneOnClient = true,
   onDismiss,
   onRestartDaemon,
@@ -227,6 +224,7 @@ export function TerminalErrorToast({
   onOpenNewTerminal
 }: {
   error: string
+  agentId?: string | null
   /** False for a pane on an SSH or remote host, or one whose host is not yet known. */
   paneOnClient?: boolean
   onDismiss: () => void
@@ -245,9 +243,10 @@ export function TerminalErrorToast({
     !ssh &&
     !paneOwnerUnverified &&
     !showDaemonRestart &&
+    !isAgentLaunchOnlyError(error) &&
     !isExplainedTerminalError(error) &&
     !isFolderWorkspacePathOnlyError(error)
-  const humanizedError = humanizeTerminalError(error)
+  const humanizedError = humanizeTerminalError(error, agentId)
   // Why: the toast appends its own linked request, so the host's plain-text one would repeat it.
   const displayError = showIssueLink
     ? withoutTerminalSpawnIssueRequest(humanizedError)

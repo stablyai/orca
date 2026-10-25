@@ -31,7 +31,7 @@ function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-// The cases whose old answers differ: one model shared across workspaces, a clean tab, a non-edit tab.
+// Cover shared workspace models, clean tabs and non-edit surfaces where the old entry points differ.
 const FIXTURE: OpenFile[] = [
   tab('/repo/a.ts', { isDirty: true }),
   tab('editor:wt-2:local:/repo/a.ts', { worktreeId: 'wt-2', isDirty: true }),
@@ -45,7 +45,6 @@ function seed(): AppState {
   return useAppStore.getState()
 }
 
-/** Two views of one record, as the sharing switch will produce. */
 const SHARED: EditorBufferViewIndex = {
   editorBufferIdOf: { a: 'rec', b: 'rec', c: 'c' },
   editorBufferViews: { rec: ['a', 'b'], c: ['c'] }
@@ -105,7 +104,6 @@ describe('editor buffer entry points return the per-tab answer', () => {
     const state = useAppStore.getState()
     expect(state.openFiles.some((file) => file.id === '/repo/a.ts')).toBe(false)
     expect(state.editorDrafts['/repo/a.ts']).toBeUndefined()
-    // The same path in another workspace keeps its own dirty flag.
     expect(state.editorBuffers['editor:wt-2:local:/repo/a.ts']?.isDirty).toBe(true)
   })
 })

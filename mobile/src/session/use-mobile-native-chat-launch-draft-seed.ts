@@ -8,24 +8,16 @@ export type MobileNativeChatLaunchDraftSeed = {
   createdAt: number | null
 }
 
-/**
- * Adopting the host's launch-context prefill as the mobile composer draft, and
- * retiring it again once it is resolved elsewhere. Split out of the drafts hook
- * so the general draft/pending accounting stays separate from this one concern.
- */
 export function useMobileNativeChatLaunchDraftSeed(args: {
   draftKey: string | null
   messages: readonly NativeChatMessage[]
-  /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string | null
   launchDraftCreatedAt?: number | null
   chatActive: boolean
   transcriptLoading?: boolean
   setDraftText: (draftKey: string, update: SetStateAction<string>) => void
 }): {
-  /** Text still believed to be parked on the agent's TUI input line, or null
-   *  once declined or retired. Send paths size their pre-clear from it, since
-   *  one Ctrl+U clears only one logical line. */
+  // Retain unresolved parked TUI text for pre-clear sizing; Ctrl+U clears only one logical line.
   readSeededLaunchDraft: () => string | null
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
 } {
@@ -39,8 +31,6 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     setDraftText
   } = args
 
-  // Why: launch context delivered as a TUI-input prefill is invisible in chat;
-  // adopt it once as the composer draft so mobile shows the same context.
   useEffect(() => {
     if (
       !draftKey ||
@@ -50,14 +40,10 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     ) {
       return
     }
-    // Why: `session.tabs` carries launchDraft before the transcript read settles,
-    // and an empty (or previous tab's) list would let the decline below misjudge
-    // an already-submitted prefill — long enough for a send to duplicate it.
+    // Wait for own settled history: early/previous-tab rows can misjudge an already-submitted prefill and cause duplicate sends.
     if (transcriptLoading) {
       return
     }
-    // A user turn already in the transcript means the TUI prefill was submitted
-    // or deliberately cleared; decline instead of resurrecting it.
     if (messages.some((message) => normalizedUserText(message) !== null)) {
       mobileNativeChatLaunchDraftSeeds.set(draftKey, null)
       return
@@ -77,13 +63,9 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     transcriptLoading
   ])
 
-  // Drop an untouched adopted copy once the prefill is resolved elsewhere — a
-  // user turn landed (sent or cleared TUI-side) or the host stopped publishing
-  // it (desktop sent or reconciled it). User edits are always kept.
+  // Retire only untouched adopted text when the host resolves prefill; user edits always survive.
   useEffect(() => {
-    // Same gates as the seed: off-chat there is no retraction to read (the tab
-    // publishes no draft to us), and an untrusted transcript would wipe an
-    // untouched copy on the strength of another tab's user turns.
+    // Off-chat omissions are not retractions, and another tab’s history must not retire this seed.
     if (!draftKey || !chatActive || transcriptLoading) {
       return
     }
@@ -99,7 +81,6 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     setDraftText(draftKey, (current) => (current === seeded.text ? '' : current))
   }, [chatActive, draftKey, launchDraft, messages, setDraftText, transcriptLoading])
 
-  // A missing or declined entry means there is nothing of ours on the TUI line.
   const readSeededLaunchDraft = useCallback(
     () => (draftKey ? (mobileNativeChatLaunchDraftSeeds.get(draftKey)?.text ?? null) : null),
     [draftKey]

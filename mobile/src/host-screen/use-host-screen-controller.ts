@@ -31,9 +31,8 @@ import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 import { useHostDisplay } from '../transport/use-host-display'
 
 export type HostScreenProps = {
-  // When true, rendered as the persistent tablet sidebar by the host layout, not as its own routed screen.
   embedded?: boolean
-  // Route params aren't in scope when rendered from the layout, so the caller passes these explicitly.
+  // Layout-mounted sidebars lack route params; receive them explicitly.
   hostId?: string
   onHideSidebar?: () => void
 }
@@ -48,22 +47,17 @@ export function useHostScreenController({
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
   const noticeParam = params.notice?.trim()
   const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
-  // Not `useRouter` directly: the list is the one screen that also runs inside the shell's page,
-  // where a route it does not render is handed back to the app rather than pushed into this
-  // document. On a phone this is the router and nothing else.
+  // Use route handoff so the shell opens routes absent from the page instead of pushing them into this document.
   const router = useRouteHandoff()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
-  // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
-  // Shared client per host owned by RpcClientProvider. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const relayRecovery = useRelayRecoveryStatus(hostId)
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
-  // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
   const state = useHostScreenState(hostId)
@@ -155,7 +149,6 @@ export function useHostScreenController({
     catalog,
     collapsedGroups,
     feed,
-    // Resolved: the desktop's value once read; the served catalog's (or the default) before.
     projectOrderBy,
     client,
     connState,

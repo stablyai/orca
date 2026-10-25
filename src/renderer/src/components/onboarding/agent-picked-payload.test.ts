@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 
-// Why: this test guards the renderer-end attachment of `path_source` and
-// `path_failure_reason` to `onboarding_agent_picked`. Without it the entire
-// instrument-first plan in docs/agent-on-path-detection.md can ship dark for
-// two weeks before a dashboard read shows the fields are null-only.
-
 describe('buildAgentPickedPayload', () => {
   it('attaches path_source and path_failure_reason from the store snapshot', () => {
     const payload = buildAgentPickedPayload({
@@ -29,9 +24,6 @@ describe('buildAgentPickedPayload', () => {
   })
 
   it('reports on_path:false and the seed-only source for the headline triage case', () => {
-    // Why: this is the dominant row the instrumentation exists to interpret —
-    // a claude-code pick that read on_path:false because hydration failed,
-    // not because the user is missing the binary.
     const payload = buildAgentPickedPayload({
       agent: 'claude',
       detectedAgentIds: [],
@@ -47,9 +39,7 @@ describe('buildAgentPickedPayload', () => {
   })
 
   it('omits the path fields when the store snapshot has not resolved yet', () => {
-    // Why: pre-refresh clicks must NOT emit `path_source: null`. The schema
-    // declares both fields as `.optional()`, so a literal `null` would fail
-    // `.strict()` validation and drop the entire event.
+    // Optional strict-schema fields reject null and would drop the event; omit unresolved path evidence.
     const payload = buildAgentPickedPayload({
       agent: 'codex',
       detectedAgentIds: ['codex'],

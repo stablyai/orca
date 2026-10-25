@@ -34,8 +34,7 @@ function getProjectWorktreesForHost<T extends Worktree>(
       if (worktree.runtimeOwnerEnvironmentId) {
         return worktree.runtimeOwnerEnvironmentId === parsedHost.environmentId
       }
-      // Reachable: a colliding repo id can carry a runtime-qualified hostId with
-      // no runtimeOwnerEnvironmentId, so match it against the execution host.
+      // Colliding repo IDs may carry only hostId, so match runtime-qualified hosts too.
       return worktree.hostId === executionHostId
     }
     if (worktree.runtimeOwnerEnvironmentId) {
@@ -82,8 +81,7 @@ function hasDetectedHiddenLinkedExternalWorktrees(
       !worktree.selectedCheckout &&
       !worktree.visible &&
       worktree.ownership !== 'orca-managed' &&
-      // Why: a repo whose only externals are agent scratch must not get
-      // flipped to repo-wide 'show' by the add handoff (#9388).
+      // Agent scratch alone must not enable repo-wide external visibility.
       worktree.ownership !== 'agent-scratch'
   )
 }
@@ -102,8 +100,7 @@ async function revealDetectedHiddenLinkedExternalWorktrees(
     return null
   }
 
-  // Why: the removed setup step's existing-worktree path made linked external
-  // worktrees visible; the automatic handoff must preserve that import result.
+  // Preserve external-worktree visibility formerly set by the explicit import step.
   const updated = executionHostId
     ? await state.updateRepo(
         repoId,
@@ -138,8 +135,7 @@ async function findDetectedDefaultCheckout(
     }
   }
   if (!detectedDefaultCheckout.visible) {
-    // Why: a freshly cloned primary checkout can be detected as a hidden
-    // external worktree; adding a project should make that checkout usable.
+    // Freshly cloned primary checkouts may be hidden externals; expose them when adding the project.
     const updated = executionHostId
       ? await state.updateRepo(
           repoId,
@@ -220,8 +216,7 @@ export async function openProjectDefaultCheckout({
       finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
       return
     }
-    // Why: the onboarding handoff should land on the default checkout even
-    // when the user normally hides default-branch workspaces in the sidebar.
+    // Onboarding must reveal its default checkout even when the normal sidebar preference hides it.
     const state = useAppStore.getState()
     if (state.hideDefaultBranchWorkspace) {
       setHideDefaultBranchWorkspace(false)

@@ -77,10 +77,7 @@ export function useRemoteBrowserPageNavigation({
         loading: false,
         loadError: null
       })
-      // Why: the address bar's suggestions read the client's shared URL history, so pages this
-      // client drove on the runtime have to file their navigations there like a local guest does.
-      // Only on a change, though: settled scrolls, clicks and keystrokes all re-read tab info,
-      // and filing each one rewrites the store — re-rendering every address bar in the app.
+      // File remote navigations in client suggestion history only when URL/title changes; post-input tab reads must not rewrite the store.
       const filing = `${normalizeBrowserHistoryUrl(safeUrl)}\n${title}`
       if (filing !== lastFiledHistoryRef.current) {
         lastFiledHistoryRef.current = filing
@@ -108,10 +105,7 @@ export function useRemoteBrowserPageNavigation({
         return
       }
       if (stagedPage) {
-        // Why: the runtime has no page under this id yet, so ensureRemotePage's browser.tabShow
-        // answers browser_tab_not_found — which reads as "the page is gone" and closes the tab the
-        // user is typing in. A goto is parked for whichever pane owns the page once it lands;
-        // history and reload have nothing to replay against a page with no history yet.
+        // No staged host page exists yet: park goto until adoption; history/reload cannot replay against an uncreated page.
         if (method === 'browser.goto' && url) {
           deferBrowserPageNavigation(browserTab.id, url)
           onUpdatePageState(browserTab.id, { loading: true, loadError: null })
@@ -132,7 +126,8 @@ export function useRemoteBrowserPageNavigation({
       }
       setPaneBusy(true)
       setPaneNotice(null)
-      onUpdatePageState(browserTab.id, { loading: true, loadError: null })
+      // Why: a standing failure (and its auto-retry) stays up until a load succeeds or fails anew.
+      onUpdatePageState(browserTab.id, { loading: true })
       try {
         const params =
           method === 'browser.goto'
@@ -154,12 +149,14 @@ export function useRemoteBrowserPageNavigation({
         }
         const message = error instanceof Error ? error.message : 'Remote browser command failed.'
         setPaneNotice({ kind: 'consequence', text: message })
+        // Why: goto results carry no load error, but the rejection keeps Electron's "ERR_NAME (-code)" text.
+        const netError = /\b(ERR_[A-Z_]+) \((-\d+)\)/.exec(message)
         onUpdatePageState(browserTab.id, {
           loading: false,
           // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
           loadError: {
-            code: 0,
-            description: message,
+            code: netError ? Number(netError[2]) : 0,
+            description: netError ? netError[1] : message,
             validatedUrl: redactKagiSessionToken(url ?? browserTab.url)
           }
         })
@@ -194,8 +191,7 @@ export function useRemoteBrowserPageNavigation({
   )
 
   const submitAddressBar = (): void => {
-    // A typed workspace path converts this page to its client-local document preview instead of
-    // navigating the remote guest — a runtime-owned tab is where a paired reader actually types.
+    // Typed workspace paths convert the local preview rather than navigating the runtime guest.
     const consumedAsWorkspaceDoc = routeWorkspaceDocAddressSubmission({
       worktreeId: browserTab.worktreeId,
       pageId: browserTab.id,
@@ -210,8 +206,7 @@ export function useRemoteBrowserPageNavigation({
     }
     const submission = resolveBrowserAddressBarSubmission(addressBarValue, { allowFileUrls: false })
     if (submission.status === 'invalid') {
-      // 'direct': the only response to what the user just typed. With an empty address bar no
-      // load-error overlay renders either, so outranking this would make Enter do nothing visible.
+      // Direct validation is the only visible response to an empty submission, so it must outrank stream failures.
       setPaneNotice({ kind: 'direct', text: submission.loadError.description })
       onUpdatePageState(browserTab.id, { loadError: submission.loadError })
       return

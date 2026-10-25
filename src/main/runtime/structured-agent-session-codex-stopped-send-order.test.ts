@@ -1,7 +1,4 @@
-// Where a send a Stop took back is drawn: after the turn it waited on, never above that turn's own
-// rows, and never below a later exchange, a restart included. Codex's resume rewrites every
-// finished turn's start time to its own whole seconds, so the order is decided by the journal alone.
-// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake.
+// Codex resume rounds turn starts to seconds; only journal order can place withdrawn sends between exchanges, including after restart.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,9 +6,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
 import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
@@ -97,7 +94,7 @@ let turns: ReturnType<typeof codexTurnLifecycleFake>
 let interruptEndHeld: boolean
 let operations = 0
 
-/** The durable ledger stamps its own clock and refuses an id far from it. */
+/** Use the ledger clock; far-future operation ids are refused. */
 const operationId = (): string => `${Date.now()}-${(++operations).toString(16).padStart(32, '0')}`
 
 function envelope(method: string, fields: Record<string, unknown>) {
@@ -123,9 +120,14 @@ async function send(text: string): Promise<string> {
 }
 
 /** The chat's Stop; `turnId` names the turn it stops, as the phone does. */
-function stop(turnId?: string): Promise<unknown> {
+async function stop(turnId?: string): Promise<unknown> {
   const fields = turnId === undefined ? {} : { turnId }
-  return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
+  const result = await host.cancel(CALLER, {
+    envelope: envelope('agentSession.cancel', fields),
+    ...fields
+  })
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
+  return result
 }
 
 function verdictOf(submissions: readonly AgentJournalSubmission[], clientMessageId: string) {
@@ -314,7 +316,7 @@ describe('a send a Stop took back, then a send made while it read Stopping', () 
     turns.end('completed')
     await vi.waitFor(async () => expect(verdictOf(await submissions(), second)).toBe('accepted'))
     const live = await drawn()
-    expect(live).toEqual([
+    expect(live.filter((text) => text !== 'Cancellation requested.')).toEqual([
       'look around',
       NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
       'sent while stopping'
@@ -358,8 +360,7 @@ describe('a send a Stop took back before Codex echoed it', () => {
     await stop('turn-1')
     await vi.waitFor(async () => expect(verdictOf(await submissions(), sent)).toBe('withdrawn'))
 
-    // Codex opened its turn before echoing it, so that turn, ended interrupted, is the send's: it
-    // carries the stop, and no row of its own follows the send.
+    // The opened turn belongs to this send and carries its Stop; none of its rows may follow the withdrawn send.
     const snapshot = await host.journalSnapshot(SESSION)
     const turnRecord = snapshot.items.find(
       (item) => readAgentJournalTurn(item.body)?.turnId === 'turn-1'
@@ -418,6 +419,12 @@ describe('a send a Stop took back before Codex echoed it', () => {
       ['user', [{ type: 'text', text: 'look around' }]],
       ['system', [expect.objectContaining({ text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT })]]
     ])
-    expect(await drawn()).toEqual(['warm up', 'look around', NATIVE_CHAT_STOPPED_BEFORE_START_TEXT])
+    const rows = await drawn()
+    expect(rows.filter((text) => text === 'Cancellation requested.')).toHaveLength(1)
+    expect(rows.filter((text) => text !== 'Cancellation requested.')).toEqual([
+      'warm up',
+      'look around',
+      NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
+    ])
   })
 })

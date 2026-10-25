@@ -46,8 +46,7 @@ describe('worktree jump navigation', () => {
   })
 
   it('does not blame filters for a worktree that no longer exists', () => {
-    // A retained agent row can outlive its (deleted) worktree; every filter check fails for
-    // an unknown id, so without the existence guard any active filter would toast.
+    // Retained agents can outlive deleted worktrees; missing identity must not falsely blame active filters.
     const state = mocks.getState()
     state.getKnownWorktreeById.mockReturnValue(undefined)
 
@@ -116,8 +115,7 @@ describe('worktree jump navigation', () => {
   })
 
   it('does not let a hostless legacy target vouch for a host-scoped one', () => {
-    // Legacy rows publish without executionHostId; treating that as a match would clear the
-    // user's filters instead of preserving them and warning.
+    // Legacy hostless rows cannot vouch for remote targets or navigation clears filters instead of warning.
     mocks.getVisibleWorktreeShortcutTargets.mockReturnValue([{ id: 'repo::/target' }])
     mocks.worktreePassesSidebarFilters.mockReturnValue(false)
 

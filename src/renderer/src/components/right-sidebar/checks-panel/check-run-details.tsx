@@ -50,7 +50,7 @@ export function CheckRunDetails({
   checkDetailsContextKey: string
   worktreeId: string | null
   detailsStickySurface?: CheckDetailsStickySurface
-  /** Why: a getter, not a value — the source ref is filled by an async fetch and would read stale during render. */
+  /** Read the asynchronously filled ref on demand; a render-time value can be stale. */
   getGitLabProjectRef?: () => GitLabProjectRef | null
   githubRepository?: GitHubRepositoryIdentity | null
   onRetry: () => void
@@ -97,8 +97,7 @@ export function CheckRunDetails({
   return (
     <div className="mb-1 ml-[26px] mr-3 min-w-0 border-l border-border pl-3">
       {worktreeId && (
-        // Why: inline check details can be long; pinning the affordance keeps it
-        // visible while scrolling through annotations and job output.
+        // Keep the action reachable while scrolling long annotations and output.
         <div
           className={cn(
             'sticky top-0 z-10 -ml-3 flex min-w-0 items-center gap-2 border-b border-border/60 py-1 pl-3 backdrop-blur-sm',

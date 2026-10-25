@@ -14,6 +14,8 @@ import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
+  frameDrawnServerOfSimulatorTab,
+  noteSimulatorTabCreatedHere,
   openingSimulatorTabId,
   openSimulatorTabThroughLayoutOwner
 } from './simulator-tab-layout-owner'
@@ -22,7 +24,6 @@ import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 type EnsureSimulatorTabOptions = {
   targetGroupId?: string
   placement?: 'activeGroup' | 'rightSplit'
-  /** When true, activate the tab and focus the owning group (default true). */
   surfacePane?: boolean
   executionHostId?: ExecutionHostId
 }
@@ -93,7 +94,6 @@ export function getSimulatorTabForWorktree(
   )
 }
 
-/** One simulator tab per worktree; focuses existing tab instead of creating duplicates. */
 export function ensureSimulatorTab(
   worktreeId: string,
   options?: EnsureSimulatorTabOptions
@@ -134,11 +134,18 @@ export function ensureSimulatorTab(
     options?.placement === 'rightSplit' && shouldSurface
       ? findReusableRightSplitGroupId(store.layoutByWorktree[worktreeId], sourceGroupId)
       : null
-  const rightSplit = options?.placement === 'rightSplit' && shouldSurface && !reusableRightGroupId
+  // Paired-server frame groups belong to another host; use the group beside which this desktop would split.
+  const serverEnvironmentId = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? frameDrawnServerOfSimulatorTab(store, worktreeId)
+    : null
+  const rightSplit =
+    options?.placement === 'rightSplit' &&
+    shouldSurface &&
+    !reusableRightGroupId &&
+    !serverEnvironmentId
   const groupId = reusableRightGroupId ?? sourceGroupId
   const drawHere = (tabId?: string): string | null => {
-    // Why: publish the simulator directly in its split group. A two-step
-    // create-then-move can persist the midpoint during dev reload/HMR.
+    // Create directly in the split group; create-then-move can persist an intermediate state during HMR.
     const splitTab = rightSplit
       ? store.createUnifiedTabInSplit(
           worktreeId,
@@ -163,7 +170,6 @@ export function ensureSimulatorTab(
     }
     return id
   }
-  // Switch point: main opens the tab and its frame draws it; the window surfaces it after.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     const opening = openingSimulatorTabId(worktreeId)
     if (opening) {
@@ -185,7 +191,11 @@ export function ensureSimulatorTab(
       return sent
     }
   }
-  return drawHere()
+  const drawnId = drawHere()
+  if (drawnId && serverEnvironmentId) {
+    noteSimulatorTabCreatedHere(serverEnvironmentId, worktreeId, drawnId)
+  }
+  return drawnId
 }
 
 function hostOf(executionHostId: ExecutionHostId | undefined): {

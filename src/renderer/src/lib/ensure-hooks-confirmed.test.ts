@@ -108,8 +108,7 @@ describe('ensureHooksConfirmed', () => {
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptContent).toBe('new script')
-    // The dialog uses this flag to tell the user we're re-prompting *because*
-    // orca.yaml changed, not because they've never approved this hook.
+    // Explain re-prompting as changed orca.yaml, distinct from first-time approval.
     expect(pending[0].data.previouslyApproved).toBe(true)
 
     pending[0].resolve('run')

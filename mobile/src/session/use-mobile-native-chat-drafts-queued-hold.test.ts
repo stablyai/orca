@@ -1,5 +1,3 @@
-// A queued card's Edit copies its text into the composer through the drafts hook.
-
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'

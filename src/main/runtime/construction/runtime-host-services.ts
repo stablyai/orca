@@ -122,7 +122,6 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     | HostBindings['getAgentProviderSessionRowsForPane']
     | null
 
-  /** See run-terminal-client-use.ts. */
   readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown' {
     return readRunTerminalClientUse(this, ptyId)
   }
@@ -131,17 +130,15 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     return confirmRunTerminalShellAlone(this.ptyController, ptyId)
   }
 
-  /** The PTY a terminal handle drives now; a restarted pane answers with its new PTY. */
   getTerminalPtyIdForHandle(handle: string): string | null {
     return this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
   }
 
-  /** Every provider-session row this host holds, resume-identity-only rows included. */
+  /** Includes resume-identity-only provider rows. */
   getAgentProviderSessionRows(): AgentStatusIpcPayload[] {
     return this.getAgentProviderSessionSnapshotFn?.() ?? []
   }
 
-  /** Agent status rows this host holds for a pane, from hooks, OSC and titles alike. */
   getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
     return this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
   }
@@ -299,23 +296,23 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     resolveRepo: (...args) => this.managedWorktreeQueries.resolveRepoForConnection(...args),
     notifyReposChanged: () => this.notifyReposChanged(),
     resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
-    teardownFolderWorkspacePtys: (worktreeId, connectionId) =>
+    teardownFolderWorkspacePtys: (...target) =>
       teardownFolderWorkspacePtys(
         {
           runtime: this,
           getLocalProvider: () => this.getLocalProvider(),
           onPtyStopped: this.onPtyStopped
         },
-        worktreeId,
-        connectionId
+        ...target
       ),
     cleanupRemovedFolderWorkspaceState: (worktreeId) => {
       if (this.store) {
         this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
       }
-      // Why every host after the local-only hub: this store mints folder ids, so none is shared.
+      // Folder ids are minted by this store and shared with no other host.
       this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
-    }
+    },
+    emitWorktreeLifecycle: (event) => this.worktreeLifecycleEvents.emit(event)
   })
 
   private readonly repositoryCatalogDeps = {

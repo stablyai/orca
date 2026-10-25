@@ -230,8 +230,7 @@ describe('detectRemoteHostPlatform failure reporting', () => {
   })
 
   it('does not call an unmappable uname unsupported when the PowerShell probe timed out', async () => {
-    // The timed-out channel is the better explanation, and it is identified by execCommand's typed
-    // code — matching "timed out after Ns" in the message let any look-alike claim the branch.
+    // Prefer typed exec timeout evidence; matching wording could misclassify unrelated errors.
     execCommandMock
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
       .mockRejectedValueOnce(

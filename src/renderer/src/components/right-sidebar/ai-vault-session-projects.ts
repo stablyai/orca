@@ -23,7 +23,6 @@ import {
   type AiVaultSessionProject
 } from '../../../../shared/ai-vault-session-filters'
 
-// Preserve renderer imports of the renderer-free descriptor.
 export type { AiVaultSessionProject } from '../../../../shared/ai-vault-session-filters'
 
 export type AiVaultProjectContext = {
@@ -75,10 +74,7 @@ export function buildAiVaultProjectContext({
   }
 }
 
-/**
- * Session→project attribution never reads the active repo/worktree — exposed
- * separately so memoizing callers don't rebuild the map on worktree switches.
- */
+/** Separate attribution from active workspace state so memoized maps survive workspace switches. */
 export function buildAiVaultSessionProjectById({
   repos,
   worktrees,
@@ -274,8 +270,7 @@ function resolveSessionProject(
     ? matches.filter((candidate) => candidate.hostKey === sessionHostId)
     : matches
   if (sessionHostId && matches.length > 0 && hostMatches.length === 0) {
-    // Why: same-path projects can exist on several hosts; a tagged transcript
-    // should never be attributed to a project on a different machine.
+    // Identical paths can belong to different hosts; never attribute a tagged transcript to another machine.
     return folderProject(cwd)
   }
 

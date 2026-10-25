@@ -30,8 +30,7 @@ function createHarness(startUrl: string) {
     invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
     recoveryNavigationValidationRef: ref(null),
     activeLoadFailureRef: ref(null),
-    // Why the destination, not the current document: Orca-driven navigations set this ref before
-    // assigning src, which is exactly the case the origin check must not read it for.
+    // Point the ref at the destination as Orca navigation does; it must not be mistaken for the departing origin.
     lastKnownWebviewUrlRef: ref<string | null>(startUrl),
     addressBarInputRef: ref(null),
     onSetUrlRef: ref(vi.fn()),

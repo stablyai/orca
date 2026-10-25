@@ -75,7 +75,7 @@ export class RpcDispatcher {
       return admission.rejected
     }
 
-    // Why: only the request/response transport probes emulator calls; streaming-unary never did.
+    // Only request/response dispatch probes emulator calls; streaming-unary retains its existing behavior.
     const probeEmulator = request.method.startsWith('emulator.')
     if (probeEmulator) {
       emulatorProbe(`rpc ${request.method}`, request.params)
@@ -92,7 +92,6 @@ export class RpcDispatcher {
     }
   }
 
-  // Why: streaming dispatch sends multiple responses through the reply callback instead of a Promise.
   async dispatchStreaming(
     rawRequest: RpcRequest,
     reply: (response: string) => void,
@@ -172,7 +171,7 @@ export class RpcDispatcher {
   ): Promise<unknown> {
     const { runtime, orchestrationMutations, legacyOrchestration } = this
     const context = rpcContextFromTransport(runtime, request, options, caller)
-    // Why: test fakes of the runtime omit the client-hosted browser route.
+    // Runtime test fakes may omit client-hosted browser routing.
     const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
       request.method,
       params
@@ -205,7 +204,7 @@ export class RpcDispatcher {
       request,
       compatibility.legacyCoordinatorAuthority
     )
-    // Why: a legacy coordinator's fingerprint outranks the transport's, so skip minting a local one.
+    // A legacy coordinator fingerprint outranks the transport identity; mint a fallback only when absent.
     const fallbackCallerFingerprint =
       context.authenticatedCallerFingerprint ??
       (!legacyCoordinator &&

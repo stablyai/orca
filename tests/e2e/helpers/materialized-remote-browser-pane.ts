@@ -14,15 +14,7 @@ type RemoteBrowserPaneTarget = {
   worktreeId: string
 }
 
-/**
- * Waits for the browser tab a paired client mirrors for a page the runtime created.
- *
- * Why wait for one instead of building one: the client materializes the host's browser tabs on its
- * own — workspace, page and remote handle included — so a locally created second row for the same
- * remote page is not a state a user can reach. It also breaks the stream, because the runtime keeps
- * exactly one screencast per connection: whichever pane subscribes last cancels the other's, and
- * the loser then strands on its own reconnect control.
- */
+// Wait for production tab materialization; duplicating the remote page creates impossible state and competing single-screencast subscriptions.
 export async function waitForMaterializedRemoteBrowserPane(
   page: Page,
   target: RemoteBrowserPaneTarget

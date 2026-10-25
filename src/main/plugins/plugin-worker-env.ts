@@ -1,9 +1,4 @@
-/**
- * Scrubbed environment for plugin workers. Deliberately an allowlist — the
- * app's own environment can carry secrets (tokens exported in the user's
- * shell, CI credentials); plugins must not inherit it. This intentionally
- * diverges from the sidecar precedent, which spreads the full process.env.
- */
+// Allowlist worker environment to exclude shell/CI credentials from third-party code.
 
 const WORKER_ENV_ALLOWLIST = [
   'PATH',
@@ -16,7 +11,7 @@ const WORKER_ENV_ALLOWLIST = [
   'TMPDIR',
   'TEMP',
   'TMP',
-  // Why: Windows Node/libuv need these to resolve DLLs and the machine root.
+  // Windows Node/libuv need DLL and system-root lookup variables.
   'SYSTEMROOT',
   'SYSTEMDRIVE',
   'WINDIR',
@@ -33,8 +28,7 @@ export function buildPluginWorkerEnv(
   const env: Record<string, string> = {}
   const windowsLookup = new Map<string, string>()
   if (platform === 'win32') {
-    // Why: Windows environment keys are case-insensitive, while POSIX keys
-    // are not; folding on every platform could promote an attacker-set `path`.
+    // Fold keys only on Windows; POSIX folding could promote an attacker-set lowercase path.
     for (const [key, value] of Object.entries(baseEnv)) {
       if (typeof value === 'string') {
         windowsLookup.set(key.toUpperCase(), value)

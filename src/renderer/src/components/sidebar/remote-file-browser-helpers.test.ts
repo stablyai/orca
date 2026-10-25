@@ -235,8 +235,7 @@ describe('parsePathInput', () => {
   })
 
   it('preserves leading/trailing spaces in the full input', () => {
-    // Leading space keeps it in filter mode unless a `/` or base marker
-    // appears; once path mode is triggered, spaces must not be trimmed.
+    // Path mode preserves spaces even though filter mode trims them for matching.
     const parsed = parsePathInput(' foo /bar ')
     expect(parsed).toEqual({
       mode: 'path',
@@ -283,8 +282,6 @@ describe('resolveSegmentStep', () => {
   })
 
   it('exact file match reports not-a-directory instead of prefix-descending', () => {
-    // `notes.txt` matches exactly as a file; must not fall through to a
-    // prefix-match heuristic that picks the first folder starting with "n".
     const r = resolveSegmentStep('notes.txt', '/home/neil', listing)
     expect(r.type).toBe('error')
     if (r.type === 'error') {

@@ -9,9 +9,7 @@ import {
 import { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail-redraw-buffer'
 import { appendPerCharacterRedrawReference } from './terminal-tail-per-character-redraw.test-fixture'
 
-// Differential guard: the cached string/cell row must match the original one-character-at-a-time
-// string row on every write, erase, and newline snapshot, including identical rewrites and
-// trailing spaces/tabs.
+// Compare cached rows with per-character reference writes/erase/newline snapshots, including unchanged rewrites and trailing whitespace.
 
 /** The pre-cache row semantics: per-character string writes. */
 class ReferenceRow {

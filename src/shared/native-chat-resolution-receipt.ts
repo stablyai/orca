@@ -67,8 +67,7 @@ export function nativeChatReceiptSubject(
   if (body.questions && body.questions.length > 1) {
     return { kind: 'questions', questions: body.questions.map((entry) => entry.question) }
   }
-  // Claude keeps a generic grouped label for a single multi-select question. Use it after
-  // resolution so the answer's question line is not repeated in the heading.
+  // After resolution keep Claude’s grouped heading for a lone multi-select to avoid repeating the question above its answer.
   return {
     kind: 'question',
     text:

@@ -278,8 +278,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollRef
   })
 
-  // Why: a callback ref that changes identity is re-invoked with null on every render, which
-  // would run the teardown below mid-drag; depend only on the stable teardown callbacks.
+  // Keep the ref callback stable so React cannot invoke null teardown mid-drag on ordinary renders.
   const { cancelPendingRevealFrames, clearRevealHighlightFrame, clearRevealHighlightTimeout } =
     reveal
   const { clearWorktreeDrag } = runtime

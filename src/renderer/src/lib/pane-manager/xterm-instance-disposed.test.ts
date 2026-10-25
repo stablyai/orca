@@ -4,9 +4,7 @@ import { isXtermInstanceDisposed } from './xterm-instance-disposed'
 
 describe('isXtermInstanceDisposed', () => {
   it('tracks dispose on the real vendored xterm build', () => {
-    // Pinned against the vendored build on purpose: if an xterm upgrade moves
-    // the private field, this must fail loudly — the probe silently returning
-    // false would blind the zombie-pane instrumentation.
+    // Pin the private disposed field to vendored xterm; silent false after an upgrade would blind zombie-pane diagnostics.
     const terminal = new Terminal({ allowProposedApi: true })
     expect(isXtermInstanceDisposed(terminal)).toBe(false)
     terminal.dispose()

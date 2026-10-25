@@ -18,7 +18,7 @@ async function collect(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-// Why: a loaded CI worker can defer weak-target clearing past one fixed round of full GCs.
+// Loaded CI may defer weak-reference clearing beyond one GC round.
 async function collectUntil(released: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 20 && !released(); attempt++) {
     await collect()

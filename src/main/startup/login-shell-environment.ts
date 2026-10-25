@@ -11,7 +11,6 @@ const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
 const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
 const SPAWN_TIMEOUT_MS = 5000
 
-/** Whether a profile-loading shell produced the env, or Orca fell back to its own. */
 export type LoginShellEnvironmentCapture = {
   status: 'captured' | 'fallback'
   env: NodeJS.ProcessEnv
@@ -22,7 +21,6 @@ type CachedEnvironment = {
   last?: LoginShellEnvironmentCapture
   /** When the newest finished run started; an older run finishing later is ignored. */
   attemptedAt: number
-  /** The newest run still going. */
   running?: { capture: Promise<LoginShellEnvironmentCapture>; startedAt: number }
 }
 
@@ -174,9 +172,7 @@ export type ResolveLoginShellEnvironmentOptions = {
   spawner?: (shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>
 }
 
-/** Captures the environment seen by commands launched from Orca's profile-loading terminal
- *  shell, saying whether the shell produced it or it is Orca's own env as a fallback. One cache
- *  per shell and env owns the result, the run in progress and which run's result wins. */
+/** Capture terminal-shell environment or process fallback; cache by shell/environment and let newest-started completed runs win. */
 export function captureLoginShellEnvironment(
   options: ResolveLoginShellEnvironmentOptions = {}
 ): Promise<LoginShellEnvironmentCapture> {
@@ -242,7 +238,6 @@ export function captureLoginShellEnvironment(
   return Promise.resolve(last)
 }
 
-/** Resolves the environment seen by commands launched from Orca's profile-loading terminal shell. */
 export function resolveLoginShellEnvironment(
   options: ResolveLoginShellEnvironmentOptions = {}
 ): Promise<NodeJS.ProcessEnv> {

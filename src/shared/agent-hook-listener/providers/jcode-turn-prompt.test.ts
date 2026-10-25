@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { JcodeUserPromptEvidence } from '../../jcode-session-files'
 
 const { readMock } = vi.hoisted(() => ({
-  readMock: vi.fn(() => ({ text: 'ship it', interactionKey: 'k1' }))
+  readMock: vi.fn<() => JcodeUserPromptEvidence | null>()
 }))
 vi.mock('../../jcode-session-files', () => ({
   readLastJcodeUserPromptFromHookPayload: readMock
@@ -12,14 +13,14 @@ import { readJcodeTurnPrompt } from './jcode-turn-prompt'
 
 const PAYLOAD = { session_id: 'session_jc_9' }
 
-// Why this is worth a test: the read is a synchronous file scan and jcode blocks on
-// pre_tool, so one repeated per tool call is latency the user pays on every tool.
+// jcode blocks on pre_tool; repeated synchronous transcript scans add latency to every tool.
 describe('jcode turn prompt cache', () => {
   let state: HookListenerState
 
   beforeEach(() => {
     state = createHookListenerState()
-    readMock.mockClear()
+    readMock.mockReset()
+    readMock.mockReturnValue({ text: 'ship it', interactionKey: 'k1' })
   })
 
   it('reads the journal once per turn, not once per tool', () => {
@@ -36,20 +37,29 @@ describe('jcode turn prompt cache', () => {
   })
 
   it('re-reads on the next turn, so a new prompt is not served from the old turn', () => {
-    readJcodeTurnPrompt(state, 'turn_start', 'pane-a', PAYLOAD)
-    readJcodeTurnPrompt(state, 'pre_tool', 'pane-a', PAYLOAD)
-    readJcodeTurnPrompt(state, 'turn_start', 'pane-a', PAYLOAD)
+    const first = readJcodeTurnPrompt(state, 'turn_start', 'pane-a', PAYLOAD)
+    expect(first).toEqual({ text: 'ship it', interactionKey: 'k1' })
+    const next = { text: 'review the release', interactionKey: 'k2' }
+    readMock.mockReturnValue(next)
+    expect(readJcodeTurnPrompt(state, 'pre_tool', 'pane-a', PAYLOAD)).toEqual(first)
+    expect(readJcodeTurnPrompt(state, 'turn_start', 'pane-a', PAYLOAD)).toEqual(next)
+    expect(readJcodeTurnPrompt(state, 'post_tool', 'pane-a', PAYLOAD)).toEqual(next)
     expect(readMock).toHaveBeenCalledTimes(2)
   })
 
   it('caches per pane, so one pane cannot answer for another', () => {
-    readJcodeTurnPrompt(state, 'pre_tool', 'pane-a', PAYLOAD)
-    readJcodeTurnPrompt(state, 'pre_tool', 'pane-b', PAYLOAD)
+    const paneA = { text: 'ship it', interactionKey: 'k1' }
+    const paneB = { text: 'review the release', interactionKey: 'k2' }
+    const payloadB = { session_id: 'session_jc_10' }
+    readMock.mockReturnValueOnce(paneA).mockReturnValueOnce(paneB)
+    expect(readJcodeTurnPrompt(state, 'pre_tool', 'pane-a', PAYLOAD)).toEqual(paneA)
+    expect(readJcodeTurnPrompt(state, 'pre_tool', 'pane-b', payloadB)).toEqual(paneB)
+    expect(readJcodeTurnPrompt(state, 'post_tool', 'pane-a', PAYLOAD)).toEqual(paneA)
+    expect(readJcodeTurnPrompt(state, 'post_tool', 'pane-b', payloadB)).toEqual(paneB)
     expect(readMock).toHaveBeenCalledTimes(2)
   })
 
   it('caches a miss, so a session with no recoverable prompt is not rescanned', () => {
-    // @ts-expect-error -- the reader returns null when no journal prompt exists.
     readMock.mockReturnValue(null)
     expect(readJcodeTurnPrompt(state, 'pre_tool', 'pane-a', PAYLOAD)).toBeNull()
     expect(readJcodeTurnPrompt(state, 'post_tool', 'pane-a', PAYLOAD)).toBeNull()

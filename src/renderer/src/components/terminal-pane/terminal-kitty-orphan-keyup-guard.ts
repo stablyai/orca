@@ -7,11 +7,7 @@ export type TerminalKittyOrphanKeyupGuard = {
   filter: (event: GuardedKeyEvent, reachesXterm: boolean, kittyKeyboardFlags: number) => boolean
 }
 
-/**
- * Keeps a keyup away from xterm unless xterm encoded that key's press. IME-consumed keys (fcitx4
- * letters arriving as keyups only, Hangul's Process/229 presses, a key held across a focus change)
- * otherwise become kitty release reports for presses the app never received.
- */
+/** Suppress keyup unless xterm encoded its press; IME-consumed keys and focus changes otherwise create orphan Kitty release reports. */
 export function createTerminalKittyOrphanKeyupGuard(): TerminalKittyOrphanKeyupGuard {
   const encodedPressCodes = new Set<string>()
   return {

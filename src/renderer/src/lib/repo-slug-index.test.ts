@@ -29,15 +29,12 @@ function setRepos(repos: Repo[]): void {
 beforeEach(() => {
   clearRepoSlugCacheValues()
   repoSlug.mockReset()
-  // Why: origin resolution goes through the preload bridge; the index under
-  // test only reads `repo.upstream` from the store for the fork alias.
+  // Resolve origin through preload; fork aliases read only existing repo.upstream metadata.
   Object.assign(window, { api: { gh: { repoSlug } } })
 })
 
 afterEach(() => {
-  // Why: React schedules work outside the test tick, so a hook left mounted
-  // flushes after the DOM environment is torn down and throws "window is not
-  // defined" as an unhandled error.
+  // Unmount hooks before DOM teardown or deferred React work throws window-is-undefined errors.
   cleanup()
   setRepos([])
 })
@@ -155,8 +152,7 @@ describe('useRepoSlugIndex failure retry', () => {
     vi.useFakeTimers()
     const repo = makeRepo({ id: 'flaky' })
     setRepos([repo])
-    // Why: a null result is the negative-cached "not a GitHub repo" answer that
-    // arms the bounded retry.
+    // Negative-cached non-GitHub results must arm bounded retries.
     repoSlug.mockResolvedValueOnce(null)
 
     const { result } = renderHook(() => useRepoSlugIndex())
@@ -174,9 +170,7 @@ describe('useRepoSlugIndex failure retry', () => {
   it('clears the pending retry timer on unmount', async () => {
     vi.useFakeTimers()
     setRepos([makeRepo({ id: 'flaky' })])
-    // Why: a permanently failing resolution keeps a retry armed, so an
-    // uncleaned timer is observable after teardown. The hook mounts once per
-    // project row, so such a timer would leak per row.
+    // Permanent failures keep retries armed; assert cleanup because one leaked timer per project row would accumulate.
     repoSlug.mockResolvedValue(null)
 
     const { unmount } = renderHook(() => useRepoSlugIndex())

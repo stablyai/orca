@@ -6,7 +6,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
-import type { JiraIssue } from '../../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { TaskProvider } from '../../../../../shared/task-providers'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
@@ -106,8 +106,7 @@ export type NewWorkspaceDraft = {
   linkedGitLabMR?: number | null
   // Why: repo-scoped start ref from the "Start from" picker; absent means "use the repo's effective base ref".
   baseBranch?: string
-  // Why: false when `baseBranch` came from the base-ref picker rather than a branch pick, so restoring the
-  // draft doesn't turn it back into a name-field pill. Absent on pre-flag drafts, which restore as a pick.
+  // False keeps a restored base-ref choice out of the name pill; legacy drafts omit this and restore as a branch pick.
   baseBranchNamesWorkspace?: boolean
   // Why: review worktrees start from a head ref/SHA while Source Control compares against the provider target branch.
   compareBaseRef?: string
@@ -134,12 +133,12 @@ export type UISliceCore = {
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
   sendPromptToSidebarAgentTarget: (paneKey: string) => Promise<boolean>
-  /** Bumped to ask the active worktree's Source Control notes send menu to open (keyboard shortcut). `issuedAt` bounds staleness so a request the menu never consumed can't reopen it much later. */
+  /** Shortcut request for the active notes menu; issuedAt expires requests the menu never consumed. */
   diffNotesSendMenuOpenRequest: { worktreeId: string; nonce: number; issuedAt: number } | null
   /** Reveal Source Control and request its notes send menu open; returns false (no-op) when the active worktree has no unsent notes. */
   openDiffNotesSendMenuForActiveWorktree: () => boolean
   consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
-  /** Per-agent "I've looked at this" timestamps (paneKey → ts). A row is unvisited when no ack exists or stateStartedAt is newer than the last ack. Persisted so visited rows don't return bold on relaunch. */
+  /** Persisted read timestamps by pane; absent ack or newer stateStartedAt makes the row unvisited. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   /** `explicit` only from a user action on the row (Mark read, a jump, a dashboard ack). */
   acknowledgeAgents: (

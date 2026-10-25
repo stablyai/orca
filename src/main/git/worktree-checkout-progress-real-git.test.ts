@@ -49,7 +49,7 @@ async function captureFailure(
 
 describe('checkout progress from a real `git worktree add`', () => {
   it('reports rising progress through 100% and then the end of the checkout', async () => {
-    // Why: without it git waits ~1 s before its first record, longer than this checkout.
+    // Emit progress before this small checkout finishes, bypassing Git's initial delay.
     vi.stubEnv('GIT_PROGRESS_DELAY', '0')
     const reports: (WorktreeCheckoutProgress | null)[] = []
 
@@ -78,7 +78,6 @@ describe('checkout progress from a real `git worktree add`', () => {
     const unobserved = await captureFailure(() =>
       addWorktree(repo, occupied, 'blocked', 'main', false, false)
     )
-    // Same branch name both times, so the texts are comparable byte for byte.
     await gitExecFileAsync(['branch', '-D', 'blocked'], { cwd: repo }).catch(() => {})
     const observed = await captureFailure(() =>
       addWorktree(repo, occupied, 'blocked', 'main', false, false, { onCheckoutProgress })
@@ -101,7 +100,6 @@ describe('checkout progress from a real `git worktree add`', () => {
       onCheckoutProgress
     })
 
-    // The first throw detaches the observer; git's checkout is unaffected.
     expect(onCheckoutProgress).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(
       'git stderr observer failed; detaching it',

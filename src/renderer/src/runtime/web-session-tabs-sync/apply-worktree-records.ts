@@ -5,7 +5,6 @@ import { sameBrowserTabs as sameBrowserWorkspaces, sameTerminalTabs } from './st
 
 type WorktreeRecordContext = ReturnType<typeof applyBrowserRecordUpdates>
 
-/** Commit worktree-scoped tab collections and retain client-owned placement metadata. */
 export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
   const {
     state,

@@ -93,9 +93,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   }
 
   const openShortcutsSettings = (): void => {
-    // Why: dismiss the tip when navigating away — the tip's job is done once
-    // the user clicks through to rebind, and leaving it mounted behind the
-    // settings page would re-appear on close.
+    // Dismiss before opening Settings so closing Settings cannot resurrect the tip.
     markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'shortcuts', repoId: null })
@@ -161,8 +159,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
         break
       }
       case 'learn-cmd-j-palette': {
-        // Why: passive education tip — acknowledging just dismisses; the rebind
-        // path lives in Settings and is reachable from the palette itself.
         trackCmdJPaletteFeatureTipAcknowledged(
           getOrcaCliFeatureTipTelemetrySource(modalData.source)
         )
@@ -199,8 +195,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
       case 'setup-cli': {
         const setupRequestId = setupRequestIdRef.current + 1
         setupRequestIdRef.current = setupRequestId
-        // Why: this modal is lazily mounted; closing it does not unmount the
-        // component, so async install results must not reopen UI after dismissal.
+        // Closing this lazily mounted modal does not unmount it; ignore dismissed installs’ async results.
         const canApplySetupResult = (): boolean =>
           mountedRef.current &&
           activeModalRef.current === 'feature-tips' &&

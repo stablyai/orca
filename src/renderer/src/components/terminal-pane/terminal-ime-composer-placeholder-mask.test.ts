@@ -183,23 +183,19 @@ describe('terminal IME composer placeholder mask', () => {
     expect(rig.terminal.buffer.active.cursorX).toBe(6)
     rig.compose()
 
-    // Masking here would hide the row the user's own committed text sits on.
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
   })
 
   it('drops a latched owner on blur even when no session end follows', async () => {
     const rig = openTerminal()
     await rig.write(codexPlaceholderFrame())
-    // Synthetic start, and blur dispatched on the terminal element rather than the textarea:
-    // a real textarea blur also ends the composition session, so ownership would clear through
-    // handleSessionEnd and this would pass whether or not the blur listener does anything.
+    // Blur the terminal element: textarea blur also ends the session and would hide a broken ownership listener.
     dispatchSession(rig, XTERM_COMPOSITION_SESSION_START_EVENT, 7)
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
 
     rig.element.dispatchEvent(new FocusEvent('blur'))
 
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
-    // The dropped session must not re-acquire ownership on the next repaint either.
     await rig.writeAwaitingRender(codexPlaceholderFrame())
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
   })

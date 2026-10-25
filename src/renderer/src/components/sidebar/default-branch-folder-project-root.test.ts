@@ -32,8 +32,7 @@ function makeRow(repo: Repo, overrides: Partial<Worktree> & { id: string }): Wor
   }
 }
 
-// Mirrors mergeFolderWorkspace: every row of a folder project has no head or branch,
-// and only the root (id `${repoId}::${path}`) is the main worktree.
+// Mirror folder projection: rows lack Git head/branch and only repoId::path identifies the main root.
 function folderProjectRows(repo: Repo): { root: Worktree; instance: Worktree } {
   const rootId = `${repo.id}::${repo.path}`
   return {

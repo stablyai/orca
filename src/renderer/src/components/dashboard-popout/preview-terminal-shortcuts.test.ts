@@ -184,9 +184,7 @@ describe('resolvePreviewShortcutAction', () => {
     ).toBeNull()
   })
 
-  // Why: a terminal-first user remapped terminal.closePane away, so only the
-  // tab.close alias still matches Ctrl+W — which the shell owns as a word-kill.
-  // The pane yields it; the preview must not swallow it.
+  // Terminal-first policy may remap pane close while tab.close remains Ctrl+W; preserve its shell word-kill as the pane does.
   it('follows the terminal shortcut policy for the tab.close pane-close alias', () => {
     const keybindings = {
       'terminal.closePane': ['Mod+Shift+W'],

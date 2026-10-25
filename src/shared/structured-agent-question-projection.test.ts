@@ -23,8 +23,7 @@ function item(itemId: string, body: AgentJournalRenderItem['body']): AgentJourna
 
 describe('structured agent session ask-row projection', () => {
   it('gives a pending question a row instead of dropping it from the transcript', () => {
-    // Codex only ever journals the question, so without this the reader sees
-    // nothing in the log while the agent is blocked on them.
+    // Codex journals only the question; without this row a blocked agent’s log looks empty.
     const projected = projectQuestion(
       item('q', {
         kind: 'question',

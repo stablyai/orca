@@ -155,8 +155,7 @@ function buildCandidateFromStart(
   }
 
   if (rows.length > 1 && (rows.length < MIN_HARD_WRAPPED_HTTP_ROWS || !startRowFilled)) {
-    // Why: a short complete URL can legitimately end in `/`; one adjacent
-    // framed token is not enough evidence that the URL continued onto it.
+    // A complete URL may end in /; one adjacent framed token alone cannot prove continuation.
     rows.splice(1)
     text = rows[0]?.text ?? ''
   }
@@ -177,8 +176,7 @@ export function buildHardWrappedHttpLogicalLineCandidates(
   const currentY = bufferLineNumber - 1
   const currentLine = buffer.getLine(currentY)
   if (!currentLine || !VERTICAL_LAYOUT_FRAME_PATTERN.test(currentLine.translateToString(false))) {
-    // Why: cursor-positioned hard wraps require a stable vertical frame; most
-    // terminal clicks can avoid the bounded backward scan entirely.
+    // Skip backward scanning without the stable vertical frame required for cursor-positioned hard wraps.
     return []
   }
   const candidates: WrappedLogicalLine[] = []

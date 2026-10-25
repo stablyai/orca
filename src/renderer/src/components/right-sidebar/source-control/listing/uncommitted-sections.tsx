@@ -81,7 +81,7 @@ export function SourceControlUncommittedSections(props: {
   handleContextMenu: (key: string) => void
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
-  openUncommittedFile: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
   handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
@@ -92,8 +92,7 @@ export function SourceControlUncommittedSections(props: {
       {props.displaySections.map((section) => {
         const { area, id, items } = section
         const isCollapsed = props.collapsedSections.has(id)
-        // Why: bulk stage/unstage act on the *unfiltered* group; the +/- hides while filtering to avoid acting on more than what's shown.
-        // Why: visibility and execution resolve paths via the same eligibility rules, so the button never shows for a set the handler would filter to empty.
+        // Bulk actions use unfiltered groups; hide them while filtering and share execution eligibility to avoid empty actions.
         const actionSection = props.unfilteredDisplaySectionsById.get(id) ?? section
         const actionItems = actionSection.items
         const stageAllPaths = actionItems.filter(isStageableStatusEntry).map((entry) => entry.path)
@@ -199,7 +198,7 @@ export function SourceControlUncommittedSections(props: {
                 handleContextMenu={props.handleContextMenu}
                 revealInExplorer={props.revealInExplorer}
                 activeConnectionId={props.activeConnectionId}
-                openUncommittedFile={props.openUncommittedFile}
+                handleOpenDiff={props.handleOpenDiff}
                 handleStage={props.handleStage}
                 handleUnstage={props.handleUnstage}
                 requestDiscardEntry={props.requestDiscardEntry}

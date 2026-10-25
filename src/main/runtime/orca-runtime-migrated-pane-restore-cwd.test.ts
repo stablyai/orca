@@ -1,4 +1,3 @@
-// A pane moved to this host reopens in the folder it last used on the source, until it spawns.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

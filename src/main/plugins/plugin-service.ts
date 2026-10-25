@@ -118,14 +118,12 @@ export class PluginService {
 
   async whenReady(): Promise<void> {
     await (this.initPromise ?? Promise.resolve()).catch(() => undefined)
-    // Client reads wait for the complete transaction so rollback-based content
-    // validation cannot expose a partially activated plugin between passes.
+    // Wait through rollback validation so clients never observe partial activation.
     await waitForPluginRefreshSettlement(() => this.refreshChain)
   }
 
   refresh(): Promise<void> {
-    // Snapshot settings at request time so a quick off→on sequence still
-    // processes the off transition and revokes old workers/panel sessions.
+    // Snapshot off→on transitions so reconciliation cannot miss worker/panel revocation.
     const enabled = this.options.isPluginSystemEnabled()
     const devPaths = this.options.getDevPluginPaths()
     const consentLists = snapshotPluginConsentLists(this.options)
@@ -196,8 +194,7 @@ export class PluginService {
   }
 
   activationState(plugin: ValidDiscoveredPlugin): ReturnType<typeof getPluginActivationState> {
-    // The feature flag is an authority boundary, not only a discovery hint:
-    // callers fail closed immediately even before async reconciliation ends.
+    // Feature-off revokes authority immediately, before asynchronous reconciliation.
     if (!this.options.isPluginSystemEnabled()) {
       return 'disabled'
     }
@@ -233,8 +230,7 @@ export class PluginService {
     )
   }
 
-  /** Consented capability kinds for an approved plugin; null otherwise so
-   *  callers deny uniformly (no probe-able distinction). */
+  /** Null uniformly denies unapproved plugins without exposing why. */
   getGrantedCapabilities(pluginKey: string): PluginCapabilityKind[] | null {
     const plugin = this.findValidPlugin(pluginKey)
     return plugin && this.isRuntimeApproved(plugin)
@@ -242,8 +238,6 @@ export class PluginService {
       : null
   }
 
-  /** Host API chokepoint for both transports (worker fork IPC + panel
-   *  bridge); serve RPC reuses it through the same entry points. */
   async executeHostCall(
     pluginKey: string,
     method: string,
@@ -307,8 +301,7 @@ export class PluginService {
     this.notifyChanged(false)
   }
 
-  /** Reconciles live workers and client projections after consent or
-   * enablement changes without re-reading plugin files or starting workers. */
+  /** Reconcile consent/enablement without rereading files or starting workers. */
   async reconcileActivationState(): Promise<void> {
     const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
     this.refreshChain = reconcile.catch(() => undefined)

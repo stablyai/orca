@@ -36,8 +36,6 @@ describe('StatusIndicator', () => {
   it('renders working as a yellow spinner ring', () => {
     const markup = renderMarkup('working')
 
-    // The spinner's own classes and animation contract belong to AgentWorkingSpinner.test.tsx;
-    // this pins only that 'working' reaches for it.
     expect(markup).toContain('data-agent-spinner')
   })
 

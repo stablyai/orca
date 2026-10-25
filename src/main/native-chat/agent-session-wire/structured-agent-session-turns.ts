@@ -1,10 +1,5 @@
-// The effects behind send / cancel / respond / setOption.
-//
-// Admission (writer lease, idempotency) has already passed by the time anything
-// here runs; these functions own only the journal writes and the adapter call,
-// in that order. Journal first is deliberate: a crash between the two leaves a
-// row the next attach settles as `unknown`, whereas the reverse would lose a
-// turn the provider already accepted.
+// Admission already passed; journal before adapter effects so a crash leaves recoverable unknown work.
+// Calling the adapter first could lose a turn it accepted.
 
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
@@ -12,7 +7,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   refuse,
   type AgentSessionRefusalReason,
@@ -40,34 +35,27 @@ export type AgentSessionTurnContext = {
   sessionId: string
   journal: AgentSessionJournal
   fence: number
-  /** The host's projection of what work is current (`structuredAgentSessionCurrentWork`), read
-   *  fresh per call: a child's end can move it mid-operation. */
+  /** Read fresh: child exit may change current work mid-operation. */
   currentWork?: () => StructuredAgentSessionCurrentWork | null
   adapter: StructuredAgentSessionAdapter
-  /** What each agent declares; the session's own answer is `agents.capabilities(agent)`. */
+  /** Registry declarations; agents.capabilities(agent) is this session’s answer. */
   agents: StructuredAgentRegistry
-  /** The session's agent. */
   agent: string
   logger: StructuredAgentSessionLogger
   persistedOptions?: Readonly<Record<string, string>>
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
-  /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string
-  /** Republishes state kept outside the journal, such as the record's options or rewind phase.
-   *  Journal appends reach readers on their own. */
+  /** Publish non-journal state; appends publish themselves. */
   publish: () => void
-  /** Who a Stop's refusal row names. */
   failureTextContext?: AgentSessionFailureWordsContext
-  /** The operation's success, committed with the row that accepts it (`settlesWithWrite` or `commandReceipt`). */
+  /** Commit success alongside its accepting write or standalone receipt. */
   operationReceipt?: AgentSessionOperationReceipt
   now: () => number
 }
 
-/** What accepts an operation: written with the row that accepts it, or committed alone. */
 export type AgentSessionOperationReceipt = JournalOperationReceipt & {
-  /** Whether it has committed, with a row or alone. */
   isCommitted: () => boolean
-  /** Commits it naming no row; nothing once it has committed. */
+  /** No-op once committed. */
   commitAlone: () => Promise<void>
 }
 
@@ -82,7 +70,6 @@ function invalid(
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-/** A message naming an attachment this host no longer stores is refused whole, before delivery. */
 export function agentSessionAttachmentExpiredRefusal(): {
   ok: false
   refusal: AgentSessionWireRefusal
@@ -93,27 +80,18 @@ export function agentSessionAttachmentExpiredRefusal(): {
   )
 }
 
-/**
- * One id, one delivery. A submission that already exists replays its recorded
- * outcome and NEVER goes back on the wire, whatever state it is in and whatever
- * `retryUnknown` the client sent: `unknown` cannot prove non-delivery — that is
- * the whole content of the word — and one message reached the model five times
- * when this was a judgement call instead of an invariant. A distinct send after
- * a terminal rejection uses a fresh id, which is a first delivery.
- *
- * Accepting only records the message; the session's delivery loop hands it over.
- */
+/** Accept once per ID; existing submissions replay without redelivery because unknown cannot prove non-delivery.
+ * Delivery runs separately; a fresh send after terminal rejection needs a fresh ID. */
 export async function performSend(
   ctx: AgentSessionTurnContext,
   input: {
     clientMessageId: string
     payloadFingerprint: string
     body: AgentJournalMessageItem
-    /** Who asked for the turn; absent on callers that predate it. */
+    /** Absent on older callers. */
     origin?: 'client' | 'host'
-    /** Who it is from; the submission keeps the kind only. */
+    /** Persist only source kind in the submission. */
     source?: AgentSessionMessageSource
-    /** The send's `options` record, read once here into the choices the message keeps. */
     options?: Readonly<Record<string, string>>
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
@@ -154,9 +132,7 @@ export async function performSend(
     if (isAgentSessionAttachmentExpiredError(error)) {
       return agentSessionAttachmentExpiredRefusal()
     }
-    // Damage SQLite proves is the chat's, and no retry writes past it: say so, as an open does. So
-    // does a chat holding a newer Orca's rows, which only an update writes past, and a refusal the
-    // journal already classified (a failed transaction that will not roll back).
+    // Preserve typed refusals, corrupt-database errors and newer-version guards; never retry writes past them.
     if (
       isAgentSessionRefusalError(error) ||
       classifyJournalOpenFailure(error) === 'journalCorrupt' ||
@@ -185,6 +161,6 @@ function requireSubmission(
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
-  // The answer as of this step: the journal settles its own row in place afterwards.
+  // Return this step’s answer; later journal settlement must not mutate it.
   return { ...submission }
 }

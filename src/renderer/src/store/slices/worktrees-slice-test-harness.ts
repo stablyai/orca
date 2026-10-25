@@ -71,7 +71,6 @@ export const mockApi = {
     create: stubMock(),
     adoptProvisionedRoot: stubMock(),
     prefetchCreateBase: stubMock().mockResolvedValue(undefined),
-    list: worktreeListMock,
     listDetected: listDetectedMock,
     listKnownForExecutionHost: listKnownForExecutionHostMock,
     forgetRemovedForExecutionHost: forgetRemovedForExecutionHostMock,
@@ -158,6 +157,7 @@ export function createTestStore() {
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
         shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
+        deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
         ptyIdsByTabId: {},
         tabsByWorktree: {},
         tabBarOrderByWorktree: {},
@@ -221,8 +221,7 @@ export function createLocalLineageTestStore(lineage: WorktreeLineage) {
   return store
 }
 
-// Why: both the metadata fallback and removeWorktree write this module-level memory, so a leaked entry from an
-// earlier describe would silently suppress a row here. Reset for every case, not just the fetch suites.
+// Reset removal memory per case: both metadata fallback and removeWorktree write it, so leaked entries silently suppress rows.
 export function resetWorktreeSliceModuleMemory() {
   resetAuthoritativelyRemovedWorktreeMemoryForTests()
   mockApi.worktrees.create.mockReset()

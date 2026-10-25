@@ -32,15 +32,11 @@ export function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean 
   if (typeof document === 'undefined') {
     return true
   }
-  // Why: Electron can keep visible panes mounted while the whole app is
-  // backgrounded. Treat hidden documents like background tabs so Chromium
-  // timer throttling cannot pin terminal writes on the renderer foreground path.
+  // Background documents need background scheduling even with visible mounted panes, or Chromium throttling can pin foreground writes.
   if (document.visibilityState === 'visible') {
     return true
   }
-  // Why: macOS occlusion tracking can wedge visibilityState at 'hidden' after
-  // display sleep; proven-stale means real user input contradicted it, so the
-  // hidden-delivery gate must not keep dropping a watched pane's bytes.
+  // Real input can disprove stale macOS occlusion after sleep; hidden gating must then resume watched output.
   return isDocumentVisibilityProvenStale()
 }
 

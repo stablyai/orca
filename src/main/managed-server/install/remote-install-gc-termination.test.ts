@@ -6,14 +6,13 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { gcOldRemoteInstallVersions } from './remote-install-gc'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all connection access is replaced by execCommand's mock.
-const conn = {} as SshConnection
+const conn = unusedSshConnection()
 const host = getRemoteHostPlatform('linux-x64')
 const home = '/home/u'
 const currentDir = `${home}/.orca-remote/orcad-0.1.0+bbb`
@@ -35,7 +34,6 @@ function failAfter(replies: readonly string[], confirmed = false): Error {
   return error
 }
 
-// The liveness probe runs through the same exec, so its termination is covered like any other step.
 function collectVersions(): Promise<void> {
   return gcOldRemoteInstallVersions(conn, ORCAD_INSTALL_MODEL, home, currentDir, host, {
     isDirLive: async (dir) => (await execCommand(conn, `liveness ${dir}`)).trim() !== 'DEAD'

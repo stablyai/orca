@@ -24,10 +24,7 @@ export function hostSettingsApplyChatPermissionModes(settings: unknown): boolean
   )
 }
 
-/**
- * The mode a host predating per-chat modes runs this agent's chats in: Full access when its Agent
- * Permissions carry the bypass flag, else Ask. Null for an agent with no chat modes.
- */
+/** Older hosts use Full access if any startup shell parses a bypass flag, otherwise Ask; null for agents without chat modes. */
 export function legacyHostChatPermissionMode(
   agent: string,
   settings: unknown
@@ -43,7 +40,9 @@ export function legacyHostChatPermissionMode(
     typeof configured === 'object' && configured !== null && agent in configured
       ? Object.getOwnPropertyDescriptor(configured, agent)?.value
       : undefined
-  const args = resolveTuiAgentLaunchArgs(agent, typeof raw === 'string' ? { [agent]: raw } : {})
+  const args = resolveTuiAgentLaunchArgs(agent, {
+    agentDefaultArgs: typeof raw === 'string' ? { [agent]: raw } : {}
+  })
   return HOST_STARTUP_SHELLS.some((shell) => tuiAgentArgsBypassPermissions(agent, args, shell))
     ? 'full-access'
     : 'ask'
@@ -58,11 +57,7 @@ export type ChatPermissionHostVerdict =
   | { kind: 'allowed' }
   | { kind: 'refused'; hostMode: AgentChatPermissionMode | null }
 
-/**
- * Whether a chat may start or take a turn on its host. A host that predates per-chat modes is
- * allowed only where it is known to grant no more access than `requested`: an unreadable host
- * (`legacyMode` undefined) is refused, never assumed strict.
- */
+/** Older hosts may grant no more access than requested; unknown legacyMode refuses rather than assuming strict permissions. */
 export function chatPermissionHostVerdict(args: {
   agent: string
   hostAppliesModes: boolean

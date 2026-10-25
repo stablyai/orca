@@ -1,16 +1,4 @@
-/**
- * End-to-end agent-status-over-SSH integration test.
- *
- * Wires Orca's main-side SshChannelMultiplexer to the relay-side
- * RelayDispatcher through an in-memory pipe and starts a real
- * RelayAgentHookServer. POSTs a hook event to the relay's loopback HTTP
- * receiver and asserts the parsed payload arrives in `agentHookServer`'s
- * onAgentStatus listener through the `agent.hook` JSON-RPC notification path.
- *
- * This is the test the design doc (§9 step 5/6) calls "the SSH provider gets
- * at least one integration test that round-trips a hook event from a remote
- * PTY back to AgentStatus state."
- */
+// Round-trip real relay HTTP hooks through the in-memory SSH dispatcher/multiplexer to main’s agent-status listener.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -53,9 +41,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       onData: (cb) => {
         clientDataCallbacks.push(cb)
       },
-      // Why: MultiplexerTransport.onClose is a required field; the test never
-      // simulates a transport close, so register a no-op rather than tracking
-      // callbacks that nothing invokes.
+      // No transport close is simulated; satisfy the required callback registration without retaining listeners.
       onClose: () => {}
     }
 
@@ -90,13 +76,9 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     mux = new SshChannelMultiplexer(clientTransport)
 
     orcaServer = new AgentHookServer()
-    // Why: Orca-side never starts an HTTP server in this test — `ingestRemote`
-    // is the entry point we exercise. setListener registers the IPC fanout
-    // sink we assert against. Server is otherwise inert.
+    // Main receives through ingestRemote; only the relay starts an HTTP listener.
     mux.onNotification((method, params) => {
       if (method === AGENT_HOOK_NOTIFICATION_METHOD) {
-        // Why: `connectionId` is normally derived from the mux identity at
-        // the call site. For the in-memory test we use a fixed string.
         orcaServer.ingestRemote(
           params as unknown as {
             paneKey: string
@@ -150,7 +132,11 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         connectionId: 'conn-test',
         mainAgent: { state: 'done', outcome: 'cancellation' }
       })
+    const replayOutcomes: (string | undefined)[] = []
+    orcaServer.setListener((event) => replayOutcomes.push(event.payload.mainAgent?.outcome))
+    replayOutcomes.length = 0
     expect(hookServer.replayCachedPayloadsForPanes()).toBe(1)
+    await expect.poll(() => replayOutcomes).toEqual(['cancellation'])
     await expect
       .poll(() => orcaServer.getStatusSnapshotForPane(paneKey)[0]?.mainAgent?.outcome)
       .toBe('cancellation')
@@ -190,9 +176,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     })
     expect(res.status).toBe(204)
 
-    // Why: dispatcher → transport setImmediate → mux feed → handler all run
-    // on the next tick(s); spin until our sink captures the event or we
-    // hit a generous timeout.
+    // Dispatch, transport and mux delivery span ticks; await the observed event rather than a fixed delay.
     const start = Date.now()
     while (events.length === 0 && Date.now() - start < 1500) {
       await new Promise((r) => setImmediate(r))
@@ -341,6 +325,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         tool_input: { command: 'pnpm test' }
       })
     ).resolves.toMatchObject({ status: 204 })
+    await expect.poll(() => orcaServer.getStatusSnapshot()[0]?.state).toBe('waiting')
     await expect(
       postClaude({
         hook_event_name: 'PreToolUse',
@@ -394,6 +379,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       tool_name: 'Bash',
       tool_input: { command: 'false' }
     })
+    await expect.poll(() => orcaServer.getStatusSnapshot()[0]?.state).toBe('waiting')
     await postClaude({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
 
     const start = Date.now()
@@ -444,6 +430,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         tool_input: { command: 'rm -rf /tmp/orca-2824-permission-target' }
       })
     ).resolves.toMatchObject({ status: 204 })
+    await expect.poll(() => orcaServer.getStatusSnapshot()[0]?.state).toBe('waiting')
     await expect(
       postClaude({
         hook_event_name: 'PostToolUse',
@@ -470,10 +457,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
   })
 
   it('replays the cached last-status on agent_hook.requestReplay', async () => {
-    // Why: register the listener BEFORE the initial POST so live notifications
-    // are observed. setListener on a non-empty cache replays cached entries
-    // synchronously; if we set it AFTER the POST drains, the assertion below
-    // would pass without the relay's replay actually crossing the wire.
+    // Listen before POST so synchronous cache replay cannot masquerade as an SSH round-trip.
     const events: { paneKey: string; payload: unknown }[] = []
     orcaServer.setListener((event) => {
       events.push({ paneKey: event.paneKey, payload: event.payload })
@@ -492,8 +476,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       })
     })
 
-    // Why: spin until the live notification arrives so the replay request
-    // below produces a strictly-second event in `events`.
+    // Await live delivery before requesting replay so the next event proves a second notification.
     const liveStart = Date.now()
     while (events.length === 0 && Date.now() - liveStart < 1500) {
       await new Promise((r) => setImmediate(r))
@@ -505,9 +488,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     }
     expect(result.replayed).toBe(1)
 
-    // Why: relay-side replay produces a fresh notification; spin until it
-    // arrives so the assertion below proves the round-trip (relay → wire →
-    // mux → ingestRemote → listener) rather than just the relay-side count.
+    // Await the replayed event at the listener, proving it crossed SSH rather than only incrementing relay state.
     const replayStart = Date.now()
     while (events.length < 2 && Date.now() - replayStart < 1500) {
       await new Promise((r) => setImmediate(r))

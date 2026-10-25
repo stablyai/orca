@@ -19,8 +19,8 @@ describe('a new phone send after an acknowledgement was lost', () => {
   })
 
   it.each([false, true])(
-    'delivers identical text as a new action while the old host entry stays unknown (relaunch %s)',
-    async (relaunch) => {
+    'delivers identical text as a new action while the old host entry stays unknown (client rebound %s)',
+    async (rebound) => {
       const ids: string[] = []
       const delivered: string[] = []
       const ledger = new Set<string>()
@@ -81,7 +81,6 @@ describe('a new phone send after an acknowledgement was lost', () => {
         attachments: [],
         onError
       }
-      // Each Send makes its own id, as the session's send seam does.
       const send = () =>
         sendMobileStructuredAgentSessionMessage({
           ...message,
@@ -90,7 +89,7 @@ describe('a new phone send after an acknowledgement was lost', () => {
         })
 
       expect(await send()).toBe('unknown')
-      if (relaunch) {
+      if (rebound) {
         client = clientFor()
       }
       expect(await send()).toBe('accepted')

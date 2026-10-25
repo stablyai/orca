@@ -1,8 +1,4 @@
-/**
- * Decides, on orcad, whether a browser RPC from this host's own `orca` CLI goes to an attached
- * desktop. Only the local CLI is forwarded: a paired client calling orcad is never bounced back
- * to a desktop.
- */
+/** Only orcad-local CLI browser calls forward to desktops; paired clients must never bounce back. */
 import { BrowserError } from '../../browser/browser-error'
 import {
   DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
@@ -26,7 +22,6 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   caller: RpcCallerIdentity | undefined
   hostEnabled: boolean
   registry: DesktopBrowserBridgeRegistry
-  /** This host serves browser commands itself: its own engine, or a desktop hosting its pages. */
   localBrowserAvailable: boolean
   resolveWorkspace(selector: string): Promise<{ id: string }>
   signal?: AbortSignal
@@ -39,8 +34,7 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   ) {
     return { handled: false }
   }
-  // Why tabCreate: open-url is `tab create --url` to the desktop, so it adds no new desktop surface
-  // and an older bridged desktop already runs it under the same scope, URL and focus rules.
+  // Map open-url to older desktops' tabCreate surface, preserving scope/URL/focus rules.
   const forwardedMethod = method === 'browser.openUrl' ? 'browser.tabCreate' : method
   const forwarded = isDesktopBrowserBridgeMethod(forwardedMethod)
   if (!options.registry.hasAttachment()) {
@@ -66,7 +60,7 @@ export async function routeDesktopBrowserBridgeRpc(options: {
     assertClientOpenableUrl(String(params.url))
   }
   let workspaceId: string | undefined
-  // Why resolve here: only orcad knows this host's selectors (path:, branch:, active).
+  // Only orcad can resolve its host's path/branch/active selectors.
   if (typeof params.worktree === 'string' && params.worktree.length > 0) {
     workspaceId = (await options.resolveWorkspace(params.worktree)).id
     params.worktree = `id:${workspaceId}`

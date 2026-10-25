@@ -13,8 +13,7 @@ describe('useIpcEvents browser tab close routing', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
-    // Undo a partial mock of this module leaked by an earlier describe so the real
-    // resolveFloatingWorkspaceBrowserWorkspaceId (source validation) is used here.
+    // Clear leaked partial mocks so floating browser source validation uses the real resolver.
     vi.doUnmock('@/lib/floating-workspace-terminal-actions')
     closeTerminalTabMock.mockReset()
   })
@@ -66,6 +65,7 @@ describe('useIpcEvents browser tab close routing', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
+          setUnrestoredPortForwards: vi.fn(),
           clearPortForwards: vi.fn(),
           setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
@@ -155,7 +155,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -200,6 +200,7 @@ describe('useIpcEvents browser tab close routing', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -211,6 +212,7 @@ describe('useIpcEvents browser tab close routing', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
@@ -295,6 +297,7 @@ describe('useIpcEvents browser tab close routing', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
+          setUnrestoredPortForwards: vi.fn(),
           clearPortForwards: vi.fn(),
           setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
@@ -385,7 +388,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -430,6 +433,7 @@ describe('useIpcEvents browser tab close routing', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -441,6 +445,7 @@ describe('useIpcEvents browser tab close routing', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
@@ -523,6 +528,7 @@ describe('useIpcEvents browser tab close routing', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
+          setUnrestoredPortForwards: vi.fn(),
           clearPortForwards: vi.fn(),
           setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
@@ -610,7 +616,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -655,6 +661,7 @@ describe('useIpcEvents browser tab close routing', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -666,6 +673,7 @@ describe('useIpcEvents browser tab close routing', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},

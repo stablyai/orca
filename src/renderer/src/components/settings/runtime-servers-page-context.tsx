@@ -9,10 +9,7 @@ type RuntimeServersPageState = {
 
 const RuntimeServersPageContext = createContext<RuntimeServersPageState | null>(null)
 
-/**
- * Why: the add/install actions sit in the settings section header, outside the pane that owns
- * the dialogs, so both read one shared open state.
- */
+/** Share dialog state with add/install actions rendered outside the owning pane in section headers. */
 export function RuntimeServersPageProvider({
   children
 }: {

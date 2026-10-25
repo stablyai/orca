@@ -69,7 +69,6 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  // Why: no host picker; the focused workspace's owner, else the default scope host.
   const { target: runtimeTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
@@ -116,8 +115,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   }, [accountsExpanded])
 
   useEffect(() => {
-    // Why: the roster mounts this switcher on demand, while the sync key covers
-    // account mutations without refetching again when its submenu opens.
+    // Load on demand at mount and resync account mutations without fetching again on submenu expansion.
     void loadAccounts().catch((error) => {
       console.error('Failed to load Codex accounts for status bar:', error)
     })
@@ -157,12 +155,10 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
             next.accounts,
             nextActiveAccountId
           ),
-          // Why: two accounts can share an email, so the labels alone cannot
-          // tell the store whether this switch lands back on the launch account.
+          // Emails can coincide; IDs determine whether switching returns to the launch account.
           previousAccountId: previousActiveAccountId ?? null,
           nextAccountId: nextActiveAccountId ?? null,
-          // Why: the mutation wrote this row's slot only, so panes on any other
-          // lane still launch under the account they already had.
+          // Only this owner/runtime slot changed; other lanes keep their current launch accounts.
           owner: runtimeTarget,
           target,
           // Why: clearing a distro-less WSL row nulls every distro slot at once.

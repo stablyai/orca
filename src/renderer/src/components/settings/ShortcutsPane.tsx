@@ -79,9 +79,7 @@ export function ShortcutsPane(): React.JSX.Element {
   const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
-  // The effective length targets a new appended binding.
   const [recordingBindingIndex, setRecordingBindingIndex] = useState<number | null>(null)
-  // Preserve disabled bindings so Enable can restore them.
   const [disableMemory, setDisableMemory] = useState<Partial<Record<KeybindingActionId, string[]>>>(
     {}
   )
@@ -93,7 +91,7 @@ export function ShortcutsPane(): React.JSX.Element {
     'Blocked by Mission Control. Remap here or change it in System Settings.'
   )
 
-  // Why: suspend global dispatch so a captured chord reaches the editor.
+  // Suspend global shortcuts so recorded chords reach the editor.
   useEffect(() => {
     window.api.ui.setShortcutRecorderFocused(recordingActionId !== null)
     return () => window.api.ui.setShortcutRecorderFocused(false)
@@ -231,7 +229,6 @@ export function ShortcutsPane(): React.JSX.Element {
       return
     }
 
-    // Preserve sibling bindings when editing or appending one chord.
     const current = effectiveBindingsForAction(actionId)
     const next =
       recordingBindingIndex === null || recordingBindingIndex >= current.length
@@ -284,7 +281,6 @@ export function ShortcutsPane(): React.JSX.Element {
   }
 
   const clearRecordingForAction = (actionId: KeybindingActionId): void => {
-    // Why: final edits must not leave the recorder armed.
     if (recordingActionId === actionId) {
       setRecordingBindingIndex(null)
     }
@@ -345,9 +341,7 @@ export function ShortcutsPane(): React.JSX.Element {
           </div>
         ) : null}
 
-        {/* Below xl the rail stacks above the list in one column; pin the rail
-            row to its content (auto) and let the list row take the rest, so the
-            rail can't spill over the list the way two equal auto rows would. */}
+        {/* Below xl, give the rail only content height and the list the remaining space; equal auto rows can overlap. */}
         <div className="grid min-h-0 flex-1 gap-6 max-xl:grid-rows-[auto_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
           <ShortcutFilterRail
             query={shortcutQuery}
@@ -360,7 +354,7 @@ export function ShortcutsPane(): React.JSX.Element {
           />
 
           <ShortcutRowsList
-            // Why: overflow-y-auto otherwise creates a phantom horizontal scrollbar.
+            // Hide overflow-x to avoid a phantom horizontal scrollbar from overflow-y-auto.
             className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 scrollbar-sleek"
             groups={visibleShortcutGroups}
             platform={platform}
@@ -386,8 +380,7 @@ export function ShortcutsPane(): React.JSX.Element {
             onCapture={(actionId, input) => void captureBinding(actionId, input)}
             onClearError={clearError}
             onRemoveBindingAt={(actionId, index) => {
-              // Keep a pending capture aimed at the right row after the removal
-              // shifts indices (or clear it if the recorded row itself is gone).
+              // Adjust pending capture after removal shifts slots, or clear it if its row was removed.
               if (recordingActionId === actionId) {
                 const nextIndex = adjustRecordingIndexAfterRemove(recordingBindingIndex, index)
                 setRecordingBindingIndex(nextIndex)
@@ -402,7 +395,6 @@ export function ShortcutsPane(): React.JSX.Element {
               void resetBinding(actionId)
             }}
             onDisableAction={(actionId) => {
-              // Remember the current bindings first so "Enable" can restore them.
               const current = effectiveBindingsForAction(actionId)
               setDisableMemory((memory) => ({ ...memory, [actionId]: current }))
               clearRecordingForAction(actionId)

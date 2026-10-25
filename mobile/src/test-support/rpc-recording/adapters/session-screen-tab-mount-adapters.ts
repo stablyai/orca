@@ -8,14 +8,7 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const WORKSPACE = 'workspace-1'
 const HANDLE = 'terminal-1'
 
-/**
- * Adding and removing session tabs: the markdown note and browser tab a user creates, and the
- * rename/close writes the tab strip makes.
- *
- * Each of these keeps local tab state only on an accepted reply, so the state projection is the tab
- * list itself — a golden that showed the same list after a refusal would be recording the erasure
- * these call sites exist to avoid.
- */
+// Project the real tab list so refused rename/close writes cannot masquerade as successful local erasure.
 export function sessionScreenTabMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

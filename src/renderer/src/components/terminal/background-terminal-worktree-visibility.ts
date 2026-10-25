@@ -32,9 +32,7 @@ export function scheduleBackgroundTerminalWorktreeMeasure({
     clearTimeoutFn(existingTimer)
   }
 
-  // Why: background renderer-backed terminal creation must be measurable for the
-  // first xterm fit (the fit flushes the eager PTY buffer), but it must not keep
-  // hidden worktrees laid out indefinitely after the PTY has started.
+  // Retain layout only through the first xterm fit, which flushes eager PTY bytes; hidden worktrees need no lasting layout.
   const timer = setTimeoutFn(() => {
     measurableBackgroundWorktreeIds.delete(worktreeId)
     timers.delete(worktreeId)

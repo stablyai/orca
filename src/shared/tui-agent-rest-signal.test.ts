@@ -3,8 +3,7 @@ import type { TuiAgent } from './tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { getTuiAgentRestSignal, type TuiAgentRestSignal } from './tui-agent-rest-signal'
 
-// Why a full Record: adding a TuiAgent fails to compile here until someone decides what its
-// rest signal is, and a title-table change that moves an agent shows up in review.
+// Exhaustive Record forces each new agent’s evidence choice into review.
 const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   dsh: 'hook-done',
   codex: 'synthetic-title',
@@ -23,9 +22,7 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   'mimo-code': 'title',
   gemini: 'title',
   antigravity: 'title',
-  // Why 'title' and not 'hook-done': jcode paints a title naming itself, which the status
-  // classifier already reads, and this table deliberately trusts a first-party hook `done`
-  // only from DSH. Derived, not chosen — getTuiAgentRestSignal('jcode') returns this.
+  // Jcode has a classified identity title; hook-done is trusted only for DSH’s enabled profile.
   jcode: 'title',
   aider: 'title',
   openclaw: 'title',

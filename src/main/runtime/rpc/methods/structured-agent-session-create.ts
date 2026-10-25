@@ -34,6 +34,7 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import { structuredLaunchSeedOnSavedListing } from '../../session-tabs/structured-launch-seed-listing'
+import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -70,8 +71,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   })
 }
 
-/** The pre-commit half. Throws; the caller is expected to run it inside
- *  `resolveUncommittedStructuredCreate` so a failure reaches the client as a refusal. */
+/** Run throwing pre-commit work inside resolveUncommittedStructuredCreate so clients receive a no-effects refusal. */
 export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   runtime: OrcaRuntimeService
   /** Installs the host lazily; called at the same point the RPC handler always installed it. */
@@ -84,8 +84,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   options?: Readonly<Record<string, string>>
-  /** The tab id the caller reserved for this chat, taken when its tab is published; absent, the tab
-   *  gets the id clients derive. Beside `options`, after the fingerprint, likewise. */
+  /** Use the caller-reserved tab id at publication; absent, derive the legacy id. Keep it outside launch fingerprints. */
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
@@ -141,22 +140,19 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     hostLaunchDirectory,
     ...resolvedAttach
   } = resolved
-  // The ledger covers explicit overrides, never defaults that settings can change on replay.
-  // Explicit picks replace the saved selection; the permission default is the chat's own.
+  // Fingerprint explicit picks, never replay-varying defaults; explicit options replace saved seeds, while permission default stays chat-owned.
   const picked = args.options
     ? atRest
       ? { ...resolved.options, ...args.options }
       : { ...seededPermissionMode(resolved.options), ...args.options }
     : resolved.options
-  // The folder the new-chat picker read its list for, resolved once: the seed and the host's
-  // admission read the same list.
+  // Resolve picker cwd once so seed selection and host admission read the same catalog.
   let folder: Promise<string | null> | undefined
   const catalogFolder = () =>
     (folder ??= args.runtime
       .resolveStructuredAgentSessionLocalWorkspacePath(args.worktree)
       .catch(() => null))
-  // After the fingerprints: a remembered model the saved listing no longer names moves, with the
-  // effort the create runs under it. A model the create names itself is never moved.
+  // After fingerprinting, remap stale remembered model/effort against saved listing; never remap an explicit model.
   const options = args.options?.model
     ? picked
     : await structuredLaunchSeedOnSavedListing(host, args.agent, picked, catalogFolder)
@@ -197,10 +193,15 @@ export async function commitStructuredAgentSessionCreate(args: {
   activate: boolean
   /** This machine's window made the create and opens the chat's tab where it reserved it. */
   placedByWindow?: boolean
+  /** Where the creating client opens the chat, in this host's ids. */
+  tabPlacement?: ChatTabPlacement
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
   const tab = prepared.tab
-  const placedByWindow = args.placedByWindow ? { placedByWindow: true } : {}
+  const tabPlace = {
+    ...(args.placedByWindow ? { placedByWindow: true } : {}),
+    ...(args.tabPlacement ? { placement: args.tabPlacement } : {})
+  }
   if (prepared.atRest) {
     return prepared.host.create(args.caller, prepared.attachParams, {
       ...prepared.atRest,
@@ -220,7 +221,7 @@ export async function commitStructuredAgentSessionCreate(args: {
                     sessionId: prepared.attachParams.envelope.sessionId,
                     agent: tab.agent,
                     activate: args.activate,
-                    ...placedByWindow,
+                    ...tabPlace,
                     ...(prepared.attachParams.surfaceTabId
                       ? { tabId: prepared.attachParams.surfaceTabId }
                       : {})
@@ -250,7 +251,7 @@ export async function commitStructuredAgentSessionCreate(args: {
       sessionId: result.value.sessionId,
       agent: prepared.tab.agent,
       activate: args.activate,
-      ...placedByWindow,
+      ...tabPlace,
       ...(surfaceTabId ? { tabId: surfaceTabId } : {})
     })
   } catch (error) {

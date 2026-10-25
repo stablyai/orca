@@ -38,11 +38,7 @@ export function mobileHostedReviewBranchStillMatches(
   return Boolean(branch && (branch === inputBranch || branch === `refs/heads/${inputBranch}`))
 }
 
-/**
- * One settle shape for the preparation mutations. Two catches because main had two paths: a
- * refusal with no message falls back to the step's copy, while a transport drop surfaces its own
- * message verbatim and keeps its delivery-unknown mark on the way out.
- */
+// Refusal without a message uses step copy; transport errors retain their own message and delivery-unknown mark.
 async function settleMobileHostedReviewMutation(
   send: () => Promise<RpcResponse>,
   interpret: (reply: RpcResponse) => unknown,
@@ -103,7 +99,7 @@ export async function commitMobileHostedReviewStagedChanges(
   } catch (error) {
     return { ok: false, error: refusedRpcMessageOrFallback(error, 'Commit failed') }
   }
-  // An accepted reply still reports in-band, so `success: false` is a failed commit.
+  // Acceptance can still carry an in-band commit failure.
   return outcome.success === true
     ? { ok: true }
     : { ok: false, error: hostReplyErrorTextOrFallback(outcome.error, 'Commit failed') }

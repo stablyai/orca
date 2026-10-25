@@ -10,22 +10,22 @@ import {
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
 import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
+import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 
-// 3: Codex models carry `serviceTiers`; an older file would offer Fast with no tier to send.
+// Older catalogs lack serviceTiers and cannot safely construct Fast requests.
 const SCHEMA_VERSION = 3
 const SAVE_COALESCE_MS = 500
 
 export type AgentModelCatalogPersistence = {
   load: () => Promise<AgentModelCatalogEntry[]>
-  /** Fire-and-forget, coalesced; a failed write never surfaces to a caller. */
+  /** Coalesce saves; failures leave the in-memory store authoritative. */
   save: (entries: readonly AgentModelCatalogEntry[]) => void
-  /** Writes a coalesced save now; the delay timer is unref'd, so quit must not rely on it. */
+  /** Flush at quit because the delayed-save timer is unref'd. */
   flush: () => Promise<void>
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a non-null `typeof === 'object'` value is indexable by string key.
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+  return isRecord(value) ? value : null
 }
 
 function text(value: unknown): string | null {
@@ -115,8 +115,7 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
   }
 }
 
-/** Checked reconstruction rather than trust: a field a future schema drops or
- *  reshapes loads as "no entry", never as a corrupt catalog. */
+/** Reject incompatible rows rather than trusting persisted schema shapes. */
 function parseEntry(value: unknown): AgentModelCatalogEntry | null {
   const row = asRecord(value)
   if (!row || !isStructuredAgentId(row.agent) || typeof row.fingerprint !== 'string') {
@@ -148,7 +147,7 @@ function parseEntry(value: unknown): AgentModelCatalogEntry | null {
   )
 }
 
-/** Only the two listings and the configured default are written; the merged view is derived again on load. */
+// Persist source listings/default facts; derive the merged view on load.
 function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   return {
     agent: entry.agent,
@@ -159,8 +158,6 @@ function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   }
 }
 
-/** One JSON file of last-good entries. Success-only by construction: failures
- *  are never handed to `save`, and a malformed file loads as empty. */
 export function createAgentModelCatalogFilePersistence(
   directory: string
 ): AgentModelCatalogPersistence {
@@ -193,7 +190,7 @@ export function createAgentModelCatalogFilePersistence(
         )
         await rename(tmpPath, filePath)
       } catch {
-        // Bookkeeping only; the in-memory store stays authoritative this run.
+        // Persistence is optional bookkeeping; preserve the current in-memory catalog.
       }
     })
     return writing

@@ -21,8 +21,7 @@ export type ImportedWorktreeVisibilityPreview = {
 
 type ImportedWorktreesVisibilityLineProps = {
   repoDisplayName: string
-  /** Host this checkout lives on. Set only when the project is checked out on
-   *  more than one host, where the line alone cannot identify the row. */
+  /** Disambiguates checkouts when the project appears on multiple hosts. */
   hostContextLabel?: string
   hostContextHostId?: ExecutionHostId
   hiddenWorktrees: readonly ImportedWorktreeVisibilityPreview[]
@@ -97,7 +96,7 @@ export default function ImportedWorktreesVisibilityLine({
   const worktreeGroups = groupWorktreesByParentPath(hiddenWorktrees)
   const visibleWorktreeGroups = worktreeGroups.slice(0, GROUP_LIMIT)
   const remainingGroupCount = Math.max(0, worktreeGroups.length - visibleWorktreeGroups.length)
-  // Why: two hosts checking out one project render two identical lines.
+  // Host labels distinguish otherwise identical project notice rows.
   const repoScopeLabel = hostContextLabel
     ? `${repoDisplayName} on ${hostContextLabel}`
     : repoDisplayName

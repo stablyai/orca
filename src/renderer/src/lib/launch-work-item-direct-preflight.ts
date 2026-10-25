@@ -45,8 +45,7 @@ export async function resolveDirectSetupDecision(
   }
   const setupConfig = getSetupConfig(repo, yamlHooks)
   if (!setupConfig) {
-    // Why: no setup script configured, so this path should behave like callers
-    // that omit a setup decision entirely.
+    // No configured setup means no setup decision, matching callers that omit it.
     return { kind: 'decided', decision: 'inherit' }
   }
   const policy = repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
@@ -65,11 +64,7 @@ export type DirectLaunchOwnerRow = {
   target: RuntimeClientTarget
 }
 
-/**
- * The one repo row a direct launch runs on: setup preflight, the PR start point, hook trust and
- * createWorktree all take its host. `null` when no row or several hosts share the id, which the
- * caller sends to the create modal instead of breaking the tie by focus.
- */
+/** Share one repo owner across setup, PR start, trust and creation; null/ambiguous owner goes to the modal rather than focus-based guessing. */
 export function resolveDirectLaunchOwnerRow(
   repos: readonly Repo[],
   repoId: string

@@ -28,7 +28,6 @@ function requestSignal(options: RequestInit | undefined): AbortSignal {
   return options.signal
 }
 
-/** A body that delivers its first half, then fails as Chromium does when the network drops. */
 function droppedMidway(): Response {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -111,7 +110,6 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     expect(signals[0]?.aborted).toBe(true)
   })
 
-  // QA: a refused proxy was blamed on the release instead of the network.
   it('blames the release only for a proven mismatch', async () => {
     const failure = (response: () => Promise<Response>) =>
       downloadVerifiedArchive(

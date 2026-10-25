@@ -1,7 +1,4 @@
-// Where a tab the window asks main to open goes, resolved as today's create resolves it: the
-// requested live group, else the anchor's, else the active one, else the workspace's first (a
-// workspace with none gets its root group). An open to the side names a new group beside its
-// source, and an empty group only the window holds names the split that made it.
+// Resolve placement like create: requested live group, anchor, active, then first/root; side opens carry their split, including window-only empty groups.
 
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'

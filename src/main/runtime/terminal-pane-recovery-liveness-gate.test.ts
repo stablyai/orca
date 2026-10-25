@@ -8,27 +8,18 @@ import {
 } from './orca-runtime-test-fixtures.spec'
 import { makePaneKey } from './orca-runtime-test-mocks.spec'
 import { OrcaRuntimeService } from './orca-runtime'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 import type {
   RuntimeTerminalCreate,
   RuntimeTerminalResolvePane
 } from '../../shared/runtime-terminal-contracts'
 
-// What `terminal.recoverPane` may and may not treat as authority to spawn a replacement shell over
-// a remote pane. Lives in a `.test.ts` rather than beside the other recoverPane cases in
-// orca-runtime-tests/*.spec.ts because config/vitest.config.ts — the config CI runs — includes only
-// `*.test.ts`, so a ratchet placed there would never execute.
+// Keep these gates in the CI-discovered .test.ts lane; sibling orca-runtime-tests/*.spec.ts fragments are not standalone tests.
 
 describe('terminal.recoverPane liveness gate', () => {
   it('recreates a shell for an SSH pane the relay disowned, the only evidence this gate ever gets', async () => {
-    // The whole production route into recoverPane, end to end. A reachable relay answered for this
-    // exact id and did not name it — via pty.attach in handlePtyReattachFailure, or the identical
-    // answer in the inventory listing below — and that answer is a union: pty.attach throws
-    // not-found for an unknown id with no liveness check, and pty.listProcesses returns only
-    // the CURRENT session map, which after a relay restart omits every previously minted id. So no
-    // `exited` certificate exists to demand here, and no writer of one co-occurs with a
-    // reattachable `expired` lease: a host-delivered exit frame tombstones the lease `terminated`
-    // instead. Requiring `exited` therefore closes this gate permanently
-    // (docs/reference/ssh-execution-boundary.md).
+    // A reachable relay omitting an id may have restarted; attach not-found/list absence provides no exit certificate.
+    // Real exit frames terminate the lease instead of leaving it reattachably expired (docs/reference/ssh-execution-boundary.md).
     const tabId = 'tab-relay-disowned'
     const ptyId = 'ssh:ssh-target@@pty-10'
     const runtime = createRuntimeWithSshLease(ptyId, tabId)
@@ -43,10 +34,12 @@ describe('terminal.recoverPane liveness gate', () => {
       ],
       getForegroundProcess: async () => null
     } as never)
-    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', { tabId, leafId: HEADLESS_LEAF_ID })
+    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+      tabId,
+      leafId: HEADLESS_LEAF_ID
+    })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    // The sweep is what disconnects the pane: handlePtyReattachFailure tells only the renderer and
-    // the reattach spawn path only expires the lease, so nothing else reaches the runtime record.
+    // Inventory sweep disconnects runtime records; reattach failure only notifies renderer/expires leases.
     await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     expect(runtime.getPtyLivenessVerdict(ptyId)).toBeNull()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
@@ -66,15 +59,15 @@ describe('terminal.recoverPane liveness gate', () => {
   })
 
   it('refuses to recreate a shell for an expired lease the host proved is still live', async () => {
-    // The production writer: reattach SUCCEEDED and then persistPtyBinding refused the surface, so
-    // ssh-relay-session records `live` before writing `expired`. `expired` alone would read as
-    // "reattach gave up", and spawning here would put a second agent on a transcript the host just
-    // proved is still running.
+    // Successful relay reattach followed by binding refusal records live then expired; another spawn would duplicate a proven-live agent.
     const tabId = 'tab-proved-live'
     const ptyId = 'ssh:ssh-target@@pty-11'
     const runtime = createRuntimeWithSshLease(ptyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', { tabId, leafId: HEADLESS_LEAF_ID })
+    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+      tabId,
+      leafId: HEADLESS_LEAF_ID
+    })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(ptyId, -1)
     runtime.markPtyLivenessLive(ptyId)
@@ -87,14 +80,15 @@ describe('terminal.recoverPane liveness gate', () => {
   })
 
   it('refuses to recreate a shell for an expired lease whose PTY liveness is unverifiable', async () => {
-    // The relay delivers an exit frame carrying code -1 for an SSH pane with no host confirmation
-    // (`preservesAbnormalSshSurface`) while the lease is already 'expired'. Neither observed the
-    // process, and spawning here rebinds the pane away from a shell still running on the host.
+    // An unconfirmed SSH -1 exit plus expired lease proves no process exit and cannot authorize replacement.
     const tabId = 'tab-unverifiable-gate'
     const ptyId = 'ssh:ssh-target@@pty-12'
     const runtime = createRuntimeWithSshLease(ptyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', { tabId, leafId: HEADLESS_LEAF_ID })
+    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+      tabId,
+      leafId: HEADLESS_LEAF_ID
+    })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(ptyId, -1)
     expect(runtime.getPtyLivenessVerdict(ptyId)?.status).toBe('unverifiable')
@@ -113,7 +107,10 @@ describe('terminal.recoverPane liveness gate', () => {
     const ptyId = 'ssh:ssh-target@@pty-13'
     const runtime = createRuntimeWithSshLease(ptyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', { tabId, leafId: HEADLESS_LEAF_ID })
+    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+      tabId,
+      leafId: HEADLESS_LEAF_ID
+    })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(ptyId, -1, undefined, { hostExitConfirmed: true })
     expect(runtime.getPtyLivenessVerdict(ptyId)?.status).toBe('exited')
@@ -163,7 +160,10 @@ function createRecoveryPane(tabId: string) {
     ]
   })
   const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-  runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', { tabId, leafId: HEADLESS_LEAF_ID })
+  registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+    tabId,
+    leafId: HEADLESS_LEAF_ID
+  })
   const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
   return { runtime, paneKey, ptyId, handle, recoveryKey: `${TEST_WORKTREE_ID}\0${paneKey}` }
 }

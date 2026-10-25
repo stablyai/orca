@@ -22,9 +22,7 @@ module IosReleaseVersion
     "#{parts[0]}.#{parts[1]}.#{parts[2] + 1}"
   end
 
-  # Highest semver in `versions`, skipping entries App Store Connect reports in
-  # a non-semver shape. Compares numerically: "0.0.10" beats "0.0.9", which a
-  # string sort gets backwards.
+  # Highest numeric semver; skip App Store Connect’s non-semver entries.
   def max_version(versions)
     Array(versions)
       .map { |version| version.to_s.strip }
@@ -32,10 +30,7 @@ module IosReleaseVersion
       .max_by { |version| parse(version) }
   end
 
-  # Apple rejects an upload whose CFBundleShortVersionString is not higher than
-  # the last approved version (90062) and reports that version's train as closed
-  # (90186). So every version at or below `highest_closed` is unusable, not just
-  # the ones whose own App Store record sits in a closed state.
+  # Apple errors 90062/90186 close every version <= highest_closed, including versions without their own record.
   def closed_train?(version, highest_closed)
     candidate = parse(version)
     ceiling = parse(highest_closed)

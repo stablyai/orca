@@ -186,7 +186,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ]),
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
-    // STA-2376: the launcher is the sole emitter for a resolver replace, and fires exactly once.
     expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
     expect(trackDaemonReplacedMock).toHaveBeenCalledWith('unhealthy_resolver', 0)
   })
@@ -231,7 +230,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
     expect(killStaleDaemonMock).not.toHaveBeenCalled()
     expect(forkMock).not.toHaveBeenCalled()
-    // STA-2376: preserving a daemon is not a lifecycle transition — no event.
     expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
   })
 

@@ -12,10 +12,7 @@ export type PaletteEvidencePart = {
 
 export type PaletteComposedEvidence = PaletteDocumentInput['evidence'][number]
 
-/**
- * Joins the parts of one evidence unit into the text the row renders and records
- * each part's offset, so match ranges land on the rendered string.
- */
+/** Compose rendered proof text with part offsets so highlights use the row’s actual string. */
 export function composePaletteEvidence(args: {
   id: string
   kind: string

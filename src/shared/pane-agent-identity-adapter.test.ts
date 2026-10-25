@@ -39,8 +39,7 @@ describe('per-pane coverage gate', () => {
   })
 
   it('is computed from evidence, never from a platform or remote flag', () => {
-    // The input deliberately has no platform/isRemote field to branch on; this pins that a
-    // hook-covered pane resolves identically regardless of any caller-side host knowledge.
+    // No platform/isRemote input: host-proven hooks must resolve identically on every execution host.
     const identity = resolveCanonicalPaneAgentIdentity({ hookAgent: 'claude', hookIsLive: true })
     expect(identity).toMatchObject({ agent: 'claude', source: 'live-hook', coverage: 'covered' })
   })

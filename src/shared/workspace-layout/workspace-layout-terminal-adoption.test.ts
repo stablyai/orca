@@ -6,7 +6,6 @@ import { saveWorkspaceLayout } from './workspace-layout-save'
 
 const PTY = `${WS}@@cli00001`
 
-/** A tab main made for a CLI terminal: bound to it, or still unbound (its spawn not yet bound). */
 function withCliTab(bound: boolean) {
   const context = testContext()
   const { model, results } = build(context, [{ type: 'createTerminalTab', workspace: WS }])

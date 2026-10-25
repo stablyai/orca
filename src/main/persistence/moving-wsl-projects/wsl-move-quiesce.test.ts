@@ -126,14 +126,20 @@ describe('quiesceWslMove', () => {
 
   it('refuses a second quiesce of the same distro while the first runs', async () => {
     let releaseSleep: () => void = () => undefined
+    let signalSleepStarted: () => void = () => undefined
+    const sleepStarted = new Promise<void>((resolve) => {
+      signalSleepStarted = resolve
+    })
     const first = harness({
       sleepWorkspaces: () =>
         new Promise((resolve) => {
           releaseSleep = () => resolve({ failedWorktreeIds: [] })
+          signalSleepStarted()
         })
     })
     const running = quiesceWslMove(cutover(), scope, first.deps)
-    await vi.waitFor(() => expect(first.journal).toEqual(['source-fenced']))
+    await sleepStarted
+    expect(first.journal).toEqual(['source-fenced'])
 
     const second = harness()
     await expect(quiesceWslMove(cutover('move-2'), scope, second.deps)).resolves.toEqual({

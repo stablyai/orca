@@ -75,8 +75,6 @@ vi.mock('./git-status-refresh', () => ({
 }))
 
 const VIEWPORT_HEIGHT_PX = 600
-// Rows the viewport can show plus overscan on both edges plus the partial
-// rows clipped at each edge of the window.
 const MAX_MOUNTED_ROWS =
   Math.ceil(VIEWPORT_HEIGHT_PX / VIRTUALIZED_LIST_ROW_HEIGHT_PX) + 2 * VIRTUALIZED_LIST_OVERSCAN + 2
 
@@ -199,9 +197,7 @@ beforeEach(() => {
   document.body.appendChild(container)
   root = createRoot(container)
 
-  // Why: happy-dom has no layout. Give the virtualizer a 600px scroll viewport
-  // and 24px rows (both rect + row measurement read offsetHeight), and keep
-  // the observer path inert so measurements stay deterministic.
+  // happy-dom has no layout; supply fixed viewport/row sizes and disable observer measurements.
   vi.stubGlobal('ResizeObserver', NoopResizeObserver)
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
     this: HTMLElement
@@ -211,9 +207,7 @@ beforeEach(() => {
       : VIRTUALIZED_LIST_ROW_HEIGHT_PX
   })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-    // The panel scroller acts as the fixed viewport; everything inside it
-    // shifts up by scrollTop, which is what the list's scroll-margin math
-    // reads. Leaf rows only ever contribute their 24px height.
+    // Only the viewport stays at zero; child tops follow scrollTop for scroll-margin calculations.
     const isScroller = this.classList.contains('overflow-auto')
     const scroller = isScroller ? null : this.closest('.overflow-auto')
     const top = isScroller ? 0 : -(scroller?.scrollTop ?? 0)
@@ -248,8 +242,7 @@ function scroller(): HTMLDivElement {
 
 function scrollTo(offset: number): void {
   const element = scroller()
-  // Why: happy-dom clamps scrollTop against its zero-height layout; pin the
-  // property so the virtualizer's scroll handler reads the intended offset.
+  // Bypass happy-dom clamping scrollTop against its zero-height layout.
   Object.defineProperty(element, 'scrollTop', {
     configurable: true,
     writable: true,
@@ -319,7 +312,6 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(row('src/file-000.ts')?.className).toContain('bg-accent/60')
     expect(container.textContent).toContain('1 selected')
 
-    // The selected row scrolls out of the mounted window but stays selected.
     scrollTo(240 * VIRTUALIZED_LIST_ROW_HEIGHT_PX)
     expect(row('src/file-000.ts')).toBeNull()
     expect(container.textContent).toContain('1 selected')
@@ -328,7 +320,7 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(row('src/file-000.ts')?.className).toContain('bg-accent/60')
   })
 
-  it('collapses and re-expands a virtualized section', () => {
+  it('retains a collapsed virtualized section across panel remount', () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: manyEntries(500) }
     })
@@ -346,8 +338,17 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(mountedRows().length).toBe(0)
     expect(virtualList()).toBeNull()
 
+    act(() => root.unmount())
+    root = createRoot(container)
+    renderSourceControl()
+    expect(mountedRows().length).toBe(0)
+    expect(virtualList()).toBeNull()
+
+    const remountedHeader = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Changes')
+    )
     act(() => {
-      changesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      remountedHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(mountedRows().length).toBeGreaterThan(0)
     expect(mountedRows().length).toBeLessThanOrEqual(MAX_MOUNTED_ROWS)
@@ -363,7 +364,7 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(row('src/file-100.ts')).toBeTruthy()
     const heightBefore = virtualList()?.style.height
 
-    // A status refresh rebuilds every entry object with identical content.
+    // Rebuild every entry with identical content to simulate a status refresh.
     mocks.state = {
       ...mocks.state,
       gitStatusByWorktree: {

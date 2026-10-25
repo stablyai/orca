@@ -1,11 +1,4 @@
-/**
- * Every structured-worker settlement has to retire the chat tab the worker start published.
- *
- * `setSessionTabVisibility(false)` only clears the DURABLE restore index. Without the snapshot
- * prune, a coordinator that dispatches and releases five structured workers leaves five dead
- * "Claude Chat" tabs in the worktree's tab bar, and opening one re-attaches the released session
- * outside orchestration's hold and eviction accounting.
- */
+/** Every settlement must clear durable restore and prune live worker chat tabs; leftover tabs can reattach released sessions outside orchestration accounting. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -229,9 +222,7 @@ describe('structured worker release retires the chat tab', () => {
   })
 
   it('settles rather than wedging when the user already closed the worker chat tab', async () => {
-    // Closing the tab evicts the child and detaches the journal for good. Throwing archive_failed
-    // there retained the worker forever on evidence that could never arrive, and `worker-abandon`
-    // was the only way out of a release the coordinator had every right to complete.
+    // User-closed chats cannot provide more journal evidence; archive_failed must not wedge their release forever.
     installHost({
       lease: {
         runtimeKind: 'native',
@@ -261,7 +252,6 @@ describe('structured worker release retires the chat tab', () => {
         args.paneKey === identity.paneKey &&
         args.processIncarnation === identity.processIncarnation,
       workerTerminalResourceHasIdentityConflict: () => false,
-      // No archive yet: the capture is what release has to get past.
       getWorkerTerminalArchive: () => undefined,
       commitWorkerTerminalArchiveForRelease: (args: { kind?: string; content?: string }) => {
         stored = args
@@ -301,8 +291,7 @@ describe('structured worker discard retires the chat tab', () => {
     internal.ensureStructuredAgentSessionHost = async () => undefined
     let createdSessionId = ''
     createSpy.mockImplementation(async (args: { envelope: { sessionId: string } }) => {
-      // The create is what publishes the background tab, and it publishes BEFORE the start can
-      // fail — which is exactly the tab the discard has to take back.
+      // Create publishes before start can fail; failed-start discard must withdraw that existing background tab.
       createdSessionId = args.envelope.sessionId
       await runtime.publishStructuredAgentSessionTab({
         workspaceId: WORKTREE,

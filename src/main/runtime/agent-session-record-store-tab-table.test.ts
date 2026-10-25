@@ -1,8 +1,3 @@
-/**
- * The persisted table from chat tab id to the conversation it shows, as the record store keeps it.
- * Separate from the store's main suite only because that file is at its line cap.
- */
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,7 +10,7 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
-import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
 const NATIVE: AgentSessionExecutionLocation = {
@@ -73,7 +68,6 @@ describe('chat tab table', () => {
   it('takes a reserved id only when the tab is shown, and refuses it to a second chat', async () => {
     const store = await open()
     await store.reserveOwner(reserveRequest({ surfaceTabId: 'tab-alpha' }))
-    // A create that dies before its tab is shown leaves nothing to restore or release.
     expect(store.getSessionTabId('session-alpha')).toBeNull()
     expect((await readPersistedTestAgentSessionStore(directory)).sessionTabs).toBeUndefined()
 
@@ -81,7 +75,7 @@ describe('chat tab table', () => {
     expect(store.getSessionTabId('session-alpha')).toBe('tab-alpha')
     const persisted = await readPersistedTestAgentSessionStore(directory)
     expect(persisted.sessionTabs).toEqual([{ tabId: 'tab-alpha', sessionId: 'session-alpha' }])
-    // Not copied onto the record: the table is the one place the id lives.
+    // The tab table is authoritative; never duplicate its id onto session records.
     expect(persisted.records['session-alpha']).not.toHaveProperty('surfaceTabId')
 
     await expect(
@@ -107,7 +101,7 @@ describe('chat tab table', () => {
       })
     )
 
-    // The message stays the code: readers of a thrown refusal treat it as one.
+    // Refusal consumers key on the error code in message.
     await expect(
       store.setSessionTabVisibility('session-beta', true, 'tab-alpha')
     ).rejects.toSatisfy(

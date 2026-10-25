@@ -35,8 +35,7 @@ export function MobileDiffReviewHeader({
   onOpenPRSidebar,
   onSelectFilter
 }: Props) {
-  // The dedicated PR icon appears on any GitHub repo in narrow/overlay mode; in wide
-  // mode the sidebar is docked, so it is hidden (not disabled).
+  // Show PR icon on narrow/overlay GitHub repos; wide docked sidebar needs no trigger.
   const showPRTrigger = shouldShowTrigger({
     isGithubRepo: prSidebarIsGithubRepo,
     isWideLayout,

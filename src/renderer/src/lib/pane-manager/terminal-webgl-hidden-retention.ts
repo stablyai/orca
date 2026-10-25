@@ -1,9 +1,7 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { disposeWebgl } from './pane-webgl-renderer'
 
-// Orca raises Blink's active-context ceiling to 128, but retained contexts
-// still consume GPU memory. Six keeps recent switch-backs on WebGL without
-// letting hidden worktrees grow that cost with the mounted-pane population.
+// Even with Blink’s context ceiling raised to 128, cap hidden retention at six to bound GPU memory as mounted worktrees accumulate.
 const MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = 6
 
 /** Identity of the surface whose hidden panes are retained; compared by reference only. */
@@ -40,11 +38,7 @@ function removeEntry(owner: HiddenWebglRetentionOwner): void {
   }
 }
 
-/**
- * Try to keep the owner's live WebGL addons across a hide. Returns true when
- * retained — the caller must then skip its dispose pass. Evicts (disposes)
- * least-recently-hidden owners to stay under the context cap.
- */
+/** Retain live addons on hide, evicting least-recently-hidden owners under the cap. True tells callers to skip disposal. */
 export function tryRetainHiddenPanesWebgl(
   owner: HiddenWebglRetentionOwner,
   livePanes: () => Iterable<ManagedPaneInternal>
@@ -52,8 +46,7 @@ export function tryRetainHiddenPanesWebgl(
   removeEntry(owner)
   const entry: RetainedHiddenEntry = { owner, livePanes }
   const ownCount = liveContextCount(entry)
-  // Nothing to retain (GPU off / first-mount hidden), or a single tab too wide
-  // for the cap — normal dispose keeps eviction from thrashing every other tab.
+  // Dispose empty/oversized owners normally so one tab cannot thrash all retained siblings.
   if (ownCount === 0 || ownCount > MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS) {
     return false
   }

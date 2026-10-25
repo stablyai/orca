@@ -6,8 +6,7 @@ import {
 
 type DetectedPrompt = { sessionKey: string | null; promptKey: string | null }
 
-/** Presentation only: retain one answered or collapsed occurrence per tab until observations
- *  supersede it. */
+// Keep terminal-card dismissals per tab until observed prompts supersede them.
 export function useMobileNativeChatPromptDismiss({
   kind,
   promptKey,
@@ -44,7 +43,6 @@ export function useMobileNativeChatPromptDismiss({
       detectedByScopeRef.current.set(scopeKey, observation)
     }
   }, [observing, detectedPromptKey, scopeKey, sessionKey, observation])
-  // A cleared or genuinely different detected prompt retires the old dismissal.
   useEffect(() => {
     if (
       observing &&

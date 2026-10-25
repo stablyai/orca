@@ -13,12 +13,7 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-// Reproduces the orphaned-descendant battery-drain incident (STA-1800): an
-// agent CLI spawns a tool child in a detached process group, the session is
-// killed, and the child must not survive. The stand-in agent's first command
-// token is literally `claude` so PTY spawn recognition marks the session as an
-// agent; tab close → pty.kill routing is already covered by
-// terminal-parked-close-retirement.spec.ts, so this spec drives pty.kill.
+// Reproduce detached tool-child leakage after agent PTY kill (STA-1800); name the stand-in claude for agent recognition.
 test('killing an agent PTY terminates its detached-pgid descendants', async ({ orcaPage }) => {
   test.skip(process.platform === 'win32', 'descendant tree-kill is POSIX-only for now')
 
@@ -29,14 +24,11 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
     spawnerPath,
     [
       "const { spawn } = require('node:child_process')",
-      // detached:true → setsid → own pgid/session, exactly the topology of an
-      // agent CLI's tool subprocess that a dying shell's SIGHUP cannot reach.
+      // setsid creates the detached process group a dying shell’s SIGHUP cannot reach.
       "const child = spawn('sleep', ['31337'], { detached: true, stdio: 'ignore' })",
       'child.unref()',
       "require('node:fs').writeFileSync(process.argv[2], String(child.pid))",
-      // Stay alive like a real agent at its prompt: the detached child's ppid
-      // must remain intact at kill time — a pre-orphaned child is the separate
-      // crash-path scenario that only the PR-2 sweep can catch.
+      // Keep the parent alive until kill so this tests descendants, not a child already orphaned by a crash.
       'setInterval(() => {}, 1000)',
       ''
     ].join('\n')

@@ -35,7 +35,6 @@ describe('ai-vault-view-defaults', () => {
   })
 
   it('counts an equal-length agent swap as an adjustment', () => {
-    // A swap keeps the array length but drops a default agent (here the first) for a duplicate.
     const swapped = [...AI_VAULT_AGENTS.slice(1), AI_VAULT_AGENTS[1]]
     expect(swapped).toHaveLength(AI_VAULT_AGENTS.length)
     expect(

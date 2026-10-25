@@ -8,9 +8,7 @@ import {
 } from './monarch-tokenizer-test-harness'
 import { registerVueLanguage, vueLanguageConfiguration, vueMonarchLanguage } from './register-vue'
 
-// Driven through the real `MonarchTokenizer`: a rule-table walk cannot tell a
-// working grammar from one that throws on every `{{ }}`, which is how broken
-// Vue highlighting shipped green.
+// Use real Monarch tokenization; valid rule tables previously hid throws on every interpolation.
 function tokenizeVue(source: string) {
   return tokenizeMonarchDocument('vue', vueMonarchLanguage, source)
 }
@@ -21,8 +19,7 @@ function languagesPerLine(source: string): string[][] {
 }
 
 describe('registerVueLanguage registration', () => {
-  // Structural by necessity: covers the registration call itself (ids,
-  // extensions, idempotence), which tokenizing cannot observe.
+  // Registration IDs/extensions/idempotence need structural checks; tokenizing cannot observe them.
   it('registers the vue language, Monarch tokenizer, and configuration once', () => {
     const languages: { id: string }[] = [{ id: 'typescript' }]
     const register = vi.fn((entry: { id: string }) => {
@@ -87,8 +84,7 @@ p { color: rebeccapurple; }
     `)
   })
 
-  // Regression: every `{{ }}` threw "cannot pop embedded language if not inside
-  // one" once the template body lost its html embed.
+  // Template body must retain HTML before each interpolation or its pop rule throws.
   it('highlights every interpolation in a template line', () => {
     const [, line] = tokenizeVue('<template>\n  <p>{{ a }} and {{ b }}</p>\n</template>')
 
@@ -123,8 +119,7 @@ p { color: rebeccapurple; }
   })
 
   it('does not enter typescript for an empty interpolation', () => {
-    // `{{}}` pops html on entry but never pushes typescript; the close must
-    // unwind only the state, or it pops an embed that is not there.
+    // Empty interpolation pushes no TypeScript; unwind state without popping a nonexistent embed.
     const [, line] = tokenizeVue('<template>\n  <p>{{}}</p>\n</template>')
 
     expect(tokenLanguages(line)).toEqual(['html', 'vue', 'html'])
@@ -164,9 +159,7 @@ describe('vue embedded language attributes', () => {
 })
 
 describe('vue root state invariant', () => {
-  // Structural on purpose: behaviour can only reach the root rules some fixture
-  // happens to exercise, and a root rule that pops an embed throws on the very
-  // first character of a file. Guard every root rule, exercised or not.
+  // Check every root rule for illegal embed pops, including paths absent from current tokenization fixtures.
   it('has no root rule that pops an embedded language', () => {
     const rootRules = (vueMonarchLanguage.tokenizer as Record<string, unknown[]>).root
     const popRules = rootRules.filter(

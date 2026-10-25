@@ -80,7 +80,6 @@ describe('a paired client tab move in a layout-owner build', () => {
       tabOrder: ['b', 'a', 'c']
     })
 
-    // The store's reorder records the order in main as moves (tabs-layout-owner-groups-order).
     expect(mocks.drop).not.toHaveBeenCalled()
     expect(mocks.store.reorderUnifiedTabs).toHaveBeenCalledWith('g1', ['b', 'a', 'c'], {
       projectedMoveTabId: 'c'

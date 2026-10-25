@@ -1,5 +1,4 @@
-// The update's last census closes the incumbent's terminal admission; it stays closed through the
-// stop, and reopens whenever the update leaves the incumbent serving.
+// Final census holds admission closed through stop and reopens it if incumbent keeps serving.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import type * as RecordFile from '../managed-server/install/orcad-remote-record-file'
@@ -53,7 +52,6 @@ import {
 
 let host = FakeOrcadHost.deployedOld()
 let clockMs = Date.parse('2026-02-02T00:00:00.000Z')
-/** The incumbent server's own admission, as its census handler drives it. */
 let admission = new TerminalUpdateAdmission(async () => [])
 
 const IDLE = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }

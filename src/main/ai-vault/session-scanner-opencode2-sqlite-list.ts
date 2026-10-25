@@ -1,4 +1,4 @@
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
@@ -9,11 +9,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { scopedSessionRows } from './session-scanner-sqlite-scope-rows'
 
-// Why: the opencode2 beta stores sessions in a channel-scoped SQLite DB
-// (opencode-next.db / opencode-local.db) with its own schema — `session_v2`
-// rows plus `session_message` parts, no `part` table. Its schema is explicitly
-// unstable during beta, so every read is column-guarded and any drift fails
-// soft to "no sessions". Electron-free so the worker entry can import it.
+// V2 uses session_v2/session_message tables; guard evolving schemas in shared and channel databases.
 
 const OPENCODE2_SESSION_TABLE = 'session_v2'
 
@@ -39,8 +35,6 @@ function canReadOpenCode2Sessions(db: SyncDatabase): boolean {
 }
 
 function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
-  // Why: v2 tracks parent/fork relations and archived sessions; only list
-  // top-level, non-archived rows, mirroring the v1 list predicate.
   const parentIdPredicate = columnExists(db, OPENCODE2_SESSION_TABLE, 'parent_id')
     ? 'AND parent_id IS NULL'
     : ''
@@ -63,8 +57,7 @@ function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
       ? row.time_updated
       : row.time_created
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime validation or the local test fixture establishes the asserted shape.
-    agent: 'opencode2' as AiVaultAgent,
+    agent: 'opencode2',
     file: {
       path: buildOpenCodeSqliteCandidatePath(dbPath, row.id),
       mtimeMs,
@@ -91,12 +84,7 @@ function dedupeAndSortCandidates(candidates: SessionFileCandidate[]): SessionFil
   })
 }
 
-/**
- * List opencode2 sessions from one or more channel-scoped SQLite databases as
- * synthetic `SessionFileCandidate` entries, mirroring the v1 SQLite list leg.
- * Databases that lack the `session_v2` table are silently skipped; errors are
- * recorded as scan issues.
- */
+/** Skip databases without readable v2 session tables; report query failures as scan issues. */
 export async function listOpenCode2SqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number

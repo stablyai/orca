@@ -1,6 +1,8 @@
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { sessionLayoutApply } from './__fixtures__/main-layout-close-fixture'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
@@ -9,13 +11,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 
 export function registerPairedCloseRetirementProofPublicationOrderTests(): void {
-  /**
-   * A paired client may only drop a mirrored terminal on host evidence: a `retiredTerminalSurfaces`
-   * proof naming the handle, or two authoritative `terminal.list` inventories that omit it. The
-   * second needs two host publications, and a quiet workspace produces one — so the proof is the
-   * only evidence that rides the frame carrying the retraction, and it has to be published whichever
-   * order the close's two halves (renderer republication, PTY exit) land in.
-   */
+  /** Mirrors need a retirement proof or two omitting inventories; quiet closes must publish proof regardless of renderer/exit ordering. */
 
   const WORKTREE_ID = 'repo::/worktree'
   const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -79,25 +75,30 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
           expandedLeafId: null,
           ptyIdsByLeafId: { [LEAF_ID]: 'pty-left' }
         }
-      }
+      },
+      terminalPtyIncarnationsByPaneKey: { [`tab:${LEAF_ID}`]: 'incarnation-a' }
     }
   }
 
   function createHost(): {
     runtime: OrcaRuntimeService
     handle: string
-    retirePersistedSurface: () => void
+    retirePersistedSurface: () => Promise<void>
   } {
     let session = makePersistedSession()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store stub carries the four members this publication-order suite drives; the rest of Store is unreached.
     const runtime = new OrcaRuntimeService(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
       withDurableRuntimeStore({
         getRepos: () => [LIVE_REPO],
         getWorkspaceSession: () => session,
+        getWorkspaceSessionHostIds: () => ['local'],
         setWorkspaceSession: (next: WorkspaceSessionState) => {
           session = next
         },
+        applyLayoutCommand: sessionLayoutApply({
+          get: () => session,
+          set: (next) => (session = next)
+        }),
         flushOrThrow: vi.fn()
       }) as never
     )
@@ -134,8 +135,17 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     return {
       runtime,
       handle,
-      // The renderer's close transaction de-persists the tab and flushes before it republishes.
-      retirePersistedSurface: () => {
+      // De-persist before renderer publication through whichever side owns the layout.
+      retirePersistedSurface: async () => {
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await runtime.applyLayoutCommand({
+            type: 'closeTabs',
+            workspace: WORKTREE_ID,
+            tabIds: ['tab'],
+            recordClose: 'user'
+          })
+          return
+        }
         session = { ...session, tabsByWorktree: {}, terminalLayoutsByTabId: {} }
       }
     }
@@ -177,7 +187,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     it('publishes the proof when the renderer drops the surface before the exit lands', async () => {
       const { runtime, handle, retirePersistedSurface } = createHost()
 
-      retirePersistedSurface()
+      await retirePersistedSurface()
       republishWithoutTheSurface(runtime)
       await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
@@ -188,8 +198,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       ])
     })
 
-    // Why a subscriber and not just the stored snapshot: a mirror only ever sees frames. A proof
-    // that lands in state without a frame to carry it is the same silence from the client's side.
+    // Assert subscriber frames: a proof stored without publication is invisible to the mirror.
     it('fans the proof out to a paired subscriber, not just into stored state', async () => {
       const { runtime, handle, retirePersistedSurface } = createHost()
       const frames: RuntimeMobileSessionTabsResult[] = []
@@ -199,7 +208,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       )
 
       try {
-        retirePersistedSurface()
+        await retirePersistedSurface()
         republishWithoutTheSurface(runtime)
         await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
       } finally {

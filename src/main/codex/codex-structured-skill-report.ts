@@ -1,25 +1,20 @@
 import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { isCodexSkillsListUnsupported, requestCodexSkillReport } from './codex-skill-list'
 
 type CodexSkillReportDeps = {
   connection: Pick<CodexAppServerConnection, 'request'>
   cwd: string
   sessionId: string
-  /** False once this child is no longer the session's, so a late answer is dropped. */
+  /** Drop late answers from superseded children. */
   isCurrent: () => boolean
-  /** Re-sends the session's `/` surface to its subscribers. */
   publish: () => void
   timeoutMs?: number
   logger?: StructuredAgentSessionLogger
 }
 
-/**
- * A running Codex chat's `/` surface, as its own app-server lists it: read once the thread is
- * open and again whenever Codex says its skills changed. Until the first answer, and forever on a
- * Codex without `skills/list`, there is none, so the client keeps the folder scan.
- */
+/** Undefined until skills/list succeeds; clients retain their folder scan meanwhile. */
 export class CodexSkillReport {
   private commands: AgentSessionSlashCommand[] | undefined
   private inFlight = false
@@ -28,10 +23,10 @@ export class CodexSkillReport {
 
   constructor(private readonly deps: CodexSkillReportDeps) {}
 
-  /** The same array until the list changes, since subscribers republish on identity. */
+  /** Preserve array identity until the list changes so subscribers avoid republishing. */
   read = (): AgentSessionSlashCommand[] | undefined => this.commands
 
-  /** The skill files this child loaded, which alone may be sent as a picked skill. */
+  /** Only files loaded by this child may be sent as picked skills. */
   hasSkillPath = (path: string): boolean | undefined =>
     this.commands?.some((command) => command.kind === 'skill' && command.path === path)
 
@@ -71,7 +66,7 @@ export class CodexSkillReport {
         this.unsupported = true
         return
       }
-      // A failed refresh keeps the last list Codex gave; it is still the best answer.
+      // Keep the last successful list on refresh failure.
       try {
         this.deps.logger?.warn('Codex skill list failed', {
           scope: 'codex-skill-report',

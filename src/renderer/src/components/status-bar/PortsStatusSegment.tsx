@@ -21,7 +21,6 @@ type PortsStatusSegmentProps = {
   iconOnly: boolean
 }
 
-/** Status-bar plug icon with the workspace port count and a per-host ports popover. */
 export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React.JSX.Element {
   const scan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
@@ -40,8 +39,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const hostLabel = useCallback(
     (host: WorkspacePortHostRef, hostScanKey: string, platform: NodeJS.Platform | null) => {
       if (host.kind === 'local') {
-        // Why: a paired web client's own userAgent is not the Orca host's
-        // platform, so name the machine the scan actually ran on.
+        // Name the scanned host’s OS, not the paired web client’s userAgent.
         return getLocalExecutionHostLabel(platform)
       }
       if (host.kind === 'unknown') {
@@ -69,10 +67,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       ? [{ id: 'projection', host: scan.platform, reason: scan.unavailableReason }]
       : []
   }, [hostLabel, scan?.platform, scan?.unavailableReason, unavailableHosts])
-  // Why: a failed scan keeps the host's last-good ports, and those ports are
-  // counted in the badge and header — replacing the list with the notice would
-  // leave the popover claiming N ports over an empty body. Only take over the
-  // body when there is genuinely nothing left to list.
+  // Only replace an empty list with failure copy; retained last-good ports must remain visible beside their counts.
   const noticeReplacesList = Boolean(scan?.unavailableReason) && totalCount === 0
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -84,8 +79,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       if (!runtimeTarget) {
         return
       }
-      // Why: the 30s background poll is intentionally quiet; opening the
-      // popover should still collapse that stale window without flashing icons.
+      // Refresh on open to close the quiet 30-second poll window without flashing icons.
       void refreshWorkspacePortScanForTarget({
         runtimeTarget,
         replaceWorkspacePortScans,

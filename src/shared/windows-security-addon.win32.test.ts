@@ -17,10 +17,7 @@ import {
 const INHERITED_ACE = 0x10
 import { removeTreeSync } from './windows-transient-lock-removal'
 
-/**
- * The addon is Orca's own C++, so nothing upstream proves it moves DACLs the way the secure-file
- * policy assumes. These read every result back off a real NTFS volume.
- */
+/** Verify Orca’s native addon against real NTFS DACLs; upstream tests cannot establish our secure-file assumptions. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 describeOnWindows('native windows-security addon against a real filesystem', () => {
@@ -86,8 +83,7 @@ describeOnWindows('native windows-security addon against a real filesystem', () 
     expect(() => addon.setDaclSddl(path, 'O:BA')).toThrow('Win32 error 1338')
   })
 
-  // Structure, not policy: anything but a plain allow or deny comes back without a SID, so the
-  // caller can refuse what it cannot evaluate.
+  // Unsupported ACEs return no SID so policy can refuse rules it cannot evaluate.
   it('reads a conditional ACE back as an unsupported type with no SID', () => {
     const path = join(root, 'conditional.txt')
     writeFileSync(path, '')
@@ -99,8 +95,7 @@ describeOnWindows('native windows-security addon against a real filesystem', () 
     expect([ACCESS_ALLOWED_ACE_TYPE, ACCESS_DENIED_ACE_TYPE]).not.toContain(aces[1]?.type)
   })
 
-  // Why it matters: hardening passes only explicit rules, and must never smuggle in a
-  // parent's broader grant by echoing an inherited ACE back.
+  // Hardening must not turn a parent’s broader inherited grant into an explicit rule.
   it('drops inherited ACEs supplied to setDaclSddl and recomputes them from the parent', () => {
     const child = join(root, 'inheriting')
     mkdirSync(child)

@@ -4,9 +4,6 @@ import type { BranchCompareOutcome } from './mobile-branch-compare-outcome'
 import type { MobileGitBranchCompareReply } from './git-compare-reply-schema'
 import type { MobileBranchCompareState } from './mobile-source-control-screen-state'
 
-// The screen mapping on its own. Which attempt reaches it is the owner's question, pinned by the
-// schedules in use-mobile-source-control-loaders.test.ts; this is only what each ending renders.
-
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mapping passes the reply through untouched and reads no member of it.
 const REPLY = { summary: { baseRef: 'origin/main' } } as MobileGitBranchCompareReply
 

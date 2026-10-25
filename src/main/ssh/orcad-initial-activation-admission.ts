@@ -1,10 +1,4 @@
-/**
- * Before the first managed activation, prove no unmanaged Orca runtime owns the data root.
- *
- * With no active record there is no incumbent to stop, but a hand-started orcad or headless
- * Orca may still hold the shared root. Its owner records name a PID; a live, unreadable or
- * unexpected record defers rather than starting a second owner beside it.
- */
+/** Before first activation, rule out hand-started orcad/headless owners of the data root. Live, unreadable or unexpected PID records defer to avoid concurrent owners. */
 import { ORCAD_LOCK_FILE_NAME } from '../orcad/orcad-instance-lock'
 import { PRIMARY_RUNTIME_METADATA_FILE } from '../../shared/runtime-bootstrap'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
@@ -18,7 +12,7 @@ type OrcadInitialActivationAdmission =
   | { decision: 'proceed' }
   | { decision: 'defer'; code: string; reason: string }
 
-/** Runs on the candidate slot's own runtime, so the probe needs no host Node. */
+/** Use the candidate's runtime so the host need not supply Node. */
 export function initialOrcadActivationAdmissionCommand(
   host: RemoteHostPlatform,
   userDataDir: string,

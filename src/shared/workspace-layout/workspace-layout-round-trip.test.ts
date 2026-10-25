@@ -91,8 +91,7 @@ describe('workspace layout Loader and Serializer', () => {
       ['agent-session-1', 'agent-session'],
       ['tab-unbound', 'terminal']
     ])
-    // tab-agent's terminal id is term-agent: its pane's data is keyed by leaf alone, and the
-    // round trip above saved its pane records under the terminal id.
+    // Pane records use the terminal entity ID term-agent rather than tab-agent; in-memory data is keyed by leaf.
     expect(workspace.leaves?.[leaf(3)]).toMatchObject({
       incarnationId: 'inc-3',
       // The fixture's record is a quit capture: a running agent's resume record, not a sleep.

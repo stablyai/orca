@@ -14,14 +14,11 @@ export type AiVaultSessionDragPayload = {
   structuredSession?: { sessionId: string; workspaceId: string }
   title: string
   command: string
-  // Why: drop targets must know where the session file lives (host vs local
-  // WSL) to reject SSH panes that cannot reach it.
+  // Name the session filesystem so drop targets reject SSH panes that cannot reach it.
   sessionFilePath?: string
   sessionExecutionHostId?: ExecutionHostId
   codexHome?: string | null
-  // Why: a per-account repin at drop time rebuilds the startup from the session
-  // cwd. Explicit null means the session genuinely has no cwd (rebuild without a
-  // cd prefix); an ABSENT key means an older serializer built the payload.
+  // Repinning rebuilds from cwd: null means no cd, absent means an older payload lacks recoverable cwd.
   sessionCwd?: string | null
   // Why: drag/drop resume must preserve planned env mutations/default args, not just the command.
   env?: Record<string, string>
@@ -143,8 +140,7 @@ export function writeAiVaultSessionDragData(
   }
   activeAiVaultSessionDragPayload = { ...payload }
   dataTransfer.effectAllowed = 'copy'
-  // Why: avoid text/plain so terminal/native drop targets cannot paste the
-  // resume command instead of letting Orca's pane drop layer handle it.
+  // Avoid text/plain so native terminal drops cannot paste the resume command before Orca handles it.
   dataTransfer.setData(AI_VAULT_SESSION_DRAG_TYPE, serialized)
 }
 

@@ -123,9 +123,7 @@ describe('structured agent session create params', () => {
   })
 
   it('leaves a blank create byte-identical to the pre-resume digest', () => {
-    // Pinned literal: a create with no `resumeFrom` must keep the digest older clients and hosts
-    // already compute, so adding a field to the create fingerprint fails here rather than in the
-    // field on a mixed-version pair.
+    // Pin the legacy no-resume digest; new fields must not break mixed-version create fingerprints.
     expect(createParams().envelope.payloadFingerprint).toBe(
       structuredAgentSessionPayloadFingerprint({
         method: 'agentSession.create',

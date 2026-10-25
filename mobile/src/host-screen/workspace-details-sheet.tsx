@@ -26,7 +26,6 @@ import {
 } from '../worktree/workspace-details-model'
 import type { Worktree } from '../worktree/workspace-list-types'
 
-// The action rows' icon and gap, so both groups share one text column.
 const ICON_SIZE = 16
 
 const PROVIDER_LABELS: Record<WorkspaceDetailLink['provider'], string> = {
@@ -44,18 +43,12 @@ const STATE_LABELS: Record<string, string> = {
   closed: 'Closed',
   draft: 'Draft'
 }
-// The desktop hover card's checks badge wording.
 const CHECK_LABELS: Record<string, string> = {
   success: 'Checks: Passing',
   failure: 'Checks: Failing',
   pending: 'Checks: Pending'
 }
 
-/**
- * The long-press sheet's top, the phone's take on the desktop sidebar card's hover card: the
- * workspace, its branch and who created it, then its linked reviews and tasks (tap to open) and
- * notes. Everything comes from the row; the group is left out when there is nothing in it.
- */
 export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: string) => void }) {
   const { row, onOpenLink } = props
   const identity = getWorktreeGitIdentityDisplay({ branch: row.branch })
@@ -224,7 +217,6 @@ const styles = StyleSheet.create({
     gap: 5,
     marginTop: 3
   },
-  // Sits on the first line of the 12/16 text beside it.
   originIcon: {
     marginTop: 2
   },

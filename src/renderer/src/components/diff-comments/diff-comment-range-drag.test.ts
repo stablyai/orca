@@ -13,8 +13,7 @@ import type { DiffCommentLineRange } from './diff-comment-line-range'
 
 vi.mock('monaco-editor', () => import('monaco-editor/esm/vs/editor/editor.api.js'))
 
-// Frames are pumped by hand so "one hit-test per frame, whatever the OS delivered" is an
-// assertion rather than a hope.
+// Pump frames manually to assert one hit-test per frame despite pointer-event bursts.
 const frameCallbacks: FrameRequestCallback[] = []
 let nextFrameHandle = 0
 let frameTimestampMs = 0
@@ -58,8 +57,6 @@ type PointerEventInit = {
   target?: EventTarget
 }
 
-// The position the last dispatched pointer event carried, so a release lands where the pointer
-// actually is — the browser puts real coordinates on pointerup too.
 let lastPointerClientY = 0
 
 // happy-dom has no PointerEvent constructor, so the fields the controller reads are grafted on.
@@ -155,7 +152,6 @@ describe('diff comment gutter range drag', () => {
 
     drag.release()
     expect(drag.commits).toEqual([{ startLine: 12, endLine: 17 }])
-    // The focus stream is what moves the "+" to the growing end of the selection.
     expect(drag.dragStates).toEqual([true, true, false])
     expect(drag.focusLines).toEqual([12, 17, null])
     drag.handle.dispose()
@@ -186,8 +182,7 @@ describe('diff comment gutter range drag', () => {
     const drag = mountDrag()
 
     drag.pressLine(12)
-    // A press, then a release several lines down with nothing in between: the browser can deliver
-    // pointerup at a position no pointermove ever carried.
+    // Browsers can deliver pointerup at coordinates no pointermove reported.
     drag.release(17)
 
     expect(drag.commits).toEqual([{ startLine: 12, endLine: 17 }])
@@ -287,7 +282,6 @@ describe('diff comment gutter range drag', () => {
     drag.moveToLine(15)
     pumpFrame()
     drag.release()
-    // The composer opens with the committed range, as the decorator wires it.
     drag.handle.setPendingRange({ startLine: 12, endLine: 15 })
     expect(paintedRange(drag.fake)).toEqual({ startLine: 12, endLine: 15 })
 
@@ -310,11 +304,8 @@ describe('diff comment gutter range drag', () => {
     drag.handle.dispose()
   })
 
-  // The bug this replaces: the range was hit-tested under the pointer, and Monaco reports no
-  // position for a point over the overlay's own "+" button, so every move was discarded and a
-  // drag collapsed back to a single-line note.
+  // Monaco cannot hit-test the add button’s external DOM; probing under it used to discard every move.
   it('extends even while the pointer sits in a column Monaco will not resolve', () => {
-    // Exactly the real gesture: press the "+" (a node Monaco does not own) and drag down its column.
     const drag = mountDrag({ deadColumn: { fromX: 0, toX: 60 }, resolvePressLine: () => 5 })
 
     firePointerEvent(drag.fake.domNode, 'pointerdown', {
@@ -338,7 +329,6 @@ describe('diff comment gutter range drag', () => {
     document.body.appendChild(plus)
     const drag = mountDrag({ resolvePressLine: () => 7 })
 
-    // A press on the button has no gutter target; the overlay supplies the hovered line.
     firePointerEvent(drag.fake.domNode, 'pointerdown', { clientY: 0 })
     drag.moveToLine(9)
     pumpFrame()
@@ -348,7 +338,7 @@ describe('diff comment gutter range drag', () => {
     drag.handle.dispose()
   })
 
-  // Keyboard paths read this to stand aside; the drag range isn't committed until release.
+  // Keyboard paths must yield until release commits the drag range.
   it('reports the drag as owning the band from press to release', () => {
     const drag = mountDrag()
     expect(drag.handle.isDragging()).toBe(false)
@@ -366,9 +356,7 @@ describe('diff comment gutter range drag', () => {
 })
 
 describe('diff comment gutter range drag target types', () => {
-  // Monaco's folding controller toggles chevrons from its own mousedown on GUTTER_LINE_DECORATIONS,
-  // and the markdown annotations editor installs this drag with no commentable-line set — so
-  // claiming anything but the line numbers would eat the fold press on every line there.
+  // Only line-number presses belong to the drag; claiming decoration presses would swallow Monaco’s fold toggles.
   function pressGutter(drag: DragHarness): Event {
     return firePointerEvent(drag.fake.domNode, 'pointerdown', {
       clientY: drag.fake.clientYForLine(11)
@@ -412,7 +400,7 @@ describe('diff comment gutter range drag performance', () => {
     drag.pressLine(2)
     const writesAfterPress = drag.fake.decorationWrites()
     hitTest.mockClear()
-    // Every line here is on screen, so the burst is measured without auto-scroll in the way.
+    // Keep lines onscreen to measure coalescing without auto-scroll.
     for (let line = 3; line <= 19; line += 1) {
       drag.moveToLine(line)
     }
@@ -462,7 +450,6 @@ describe('diff comment gutter range drag auto-scroll', () => {
     pumpFrame()
     const firstScrollTop = drag.fake.scrollTop()
     expect(firstScrollTop).toBeGreaterThan(0)
-    // The pull continues without another pointer event.
     expect(pendingFrameCount()).toBe(1)
     pumpFrame()
     expect(drag.fake.scrollTop()).toBeGreaterThan(firstScrollTop)
@@ -501,7 +488,6 @@ describe('diff comment gutter range drag auto-scroll', () => {
     pumpFrame()
 
     expect(drag.fake.scrollTop()).toBe(0)
-    // Nothing left to pull, so the loop stops instead of spinning.
     expect(pendingFrameCount()).toBe(0)
     drag.handle.dispose()
   })

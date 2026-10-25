@@ -33,7 +33,6 @@ describe('muted notification machines', () => {
   })
 
   it('does not count an unchanged list as a repair', () => {
-    // Why: a fresh array never equals the stored one by reference; a false repair rewrites settings on every launch.
     const persisted = {
       ...getDefaultNotificationSettings(),
       mutedNotificationSourceIds: ['runtime:m4air']

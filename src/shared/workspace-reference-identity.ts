@@ -1,4 +1,4 @@
-import { parseJiraIssueUrl, JIRA_ISSUE_KEY_PATTERN } from './jira-issue-url'
+import { parseJiraIssueUrl, JIRA_ISSUE_KEY_PATTERN } from './jira/jira-issue-url'
 import { parseLinearIssueInput, parseLinearIssueUrlIntent } from './linear/links'
 import { getTaskSourceCacheScope } from './task-source-context'
 import type { WorkspaceAttachment } from './worktree/types'

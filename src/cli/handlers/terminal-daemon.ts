@@ -57,7 +57,7 @@ function formatDaemonLiveness(daemon: DaemonLiveness | undefined): string[] {
 export function formatSeveredDaemonStatus(result: SeveredStatusResult): string {
   const severed = result.severed
   const liveness = formatDaemonLiveness(result.daemon)
-  // Why: a severed daemon that has since died hosts nothing; the liveness line says so.
+  // An exited daemon hosts nothing; do not print stale severed-state details.
   if (!severed || result.daemon?.verdict === 'exited') {
     return liveness.join('\n')
   }

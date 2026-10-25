@@ -120,8 +120,7 @@ describe('filesystem auth worktree roots', () => {
   })
 
   it("keeps a repo's roots when its listing fails mid-rebuild", async () => {
-    // Why: the rebuild runs while Git is still broken, and dropping the roots would revoke
-    // a worktree a create just recovered without a listing (#16520).
+    // Broken Git listings must not revoke independently recovered roots (#16520).
     const store = makeStore()
     registerCreatedWorktreeRoot(store, repo.id, '/linked/recovered')
     vi.mocked(listRepoWorktreeGraph).mockRejectedValue(new Error('git worktree list failed.'))
@@ -134,8 +133,7 @@ describe('filesystem auth worktree roots', () => {
   })
 
   it('keeps a recovered root when a healthy rebuild still cannot list it', async () => {
-    // Why: the rebuild recomputes from the very listing that omitted the row, so replacing the cache
-    // would re-deny the worktree the create just recovered (#16520).
+    // A rebuild from the incomplete listing must not re-deny the recovered worktree (#16520).
     const scratch = await mkdtemp(join(await realpath(tmpdir()), 'orca-recovered-'))
     const recovered = join(scratch, 'feature')
     await mkdir(recovered)
@@ -180,7 +178,6 @@ describe('filesystem auth worktree roots', () => {
     ])
 
     await rebuildAuthorizedRootsCache(store)
-    // Still authorized, but now from the listing itself; a later listing that drops it is authoritative.
     await expect(resolveRegisteredWorktreePath('/linked/feature', store)).resolves.toBe(
       resolve('/linked/feature')
     )

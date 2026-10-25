@@ -10,12 +10,7 @@ const {
   daemonProtocolVersion
 } = require('../../src/shared/local-build-compatibility-contract.json')
 
-// Why: `asarUnpack` in config/electron-builder.config.cjs lists
-// out/main/daemon-entry.js on every platform, and the packaged daemon fork
-// (src/main/daemon/daemon-launch-paths.ts) resolves exactly this unpacked path. A
-// missing entry means the package layout regressed, so the check throws
-// instead of skipping — a silent skip false-passed exactly the layout bug
-// this gate exists to catch.
+// Require exact asar-unpacked daemon entry on every platform; missing path indicates layout regression and must not silently skip.
 function assertPackagedDaemonEntryExists(resourcesDir) {
   const entryPath = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
   if (!existsSync(entryPath)) {
@@ -28,16 +23,8 @@ function assertPackagedDaemonEntryExists(resourcesDir) {
   return entryPath
 }
 
-// Why: v1.4.129-rc.1 shipped a terminal daemon that could not load (an electron
-// `require` leaked into its bundle) while every build check passed. This boots
-// the PACKAGED daemon-entry under plain Node against the asar-unpacked layout,
-// so a bundling / asar-unpack regression fails packaging instead of reaching
-// users. Module-load proof only: with no args the entry must reach argv parsing
-// and print its "Usage: daemon-entry" error — a MODULE_NOT_FOUND or a missing
-// usage line means the packaged graph does not load and the build must fail.
-//
-// resourcesDir is the packaged Resources dir (Contents/Resources on macOS,
-// <appOutDir>/resources elsewhere). execPath defaults to the packaging Node.
+// Boot packaged daemon graph under plain Node: argv Usage proves module loading, not PTYs; missing usage/module fails packaging (rc.1 incident).
+// resourcesDir is packaged Resources; default execPath is packaging Node.
 function verifyPackagedDaemonEntryBoots(resourcesDir, options = {}) {
   const execPath = options.execPath || process.execPath
   const entryPath = assertPackagedDaemonEntryExists(resourcesDir)
@@ -92,10 +79,7 @@ function beforeDeadline(promise, deadline, what) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
-/**
- * One NDJSON daemon connection. `ready` settles on the hello reply; `broken` rejects when the
- * connection errors, closes or sends a line that is not JSON, at any point.
- */
+// NDJSON ready settles on hello; broken rejects any later error/close/non-JSON response.
 function openDaemonConnection(socketPath, hello) {
   const socket = connect(socketPath)
   const listeners = []
@@ -265,9 +249,7 @@ async function runTerminalHostRoundTrip({
   }
 }
 
-// Why: the helper's own Node must load node-pty and serve a PTY; a `Usage:` boot never loads
-// node-pty. Release builds run it under hardened runtime, so allow-jit and same-team library
-// validation are exercised before notarization.
+// Probe helper’s own Node/node-pty round trip under release hardened runtime to exercise allow-jit and same-team library validation before notarization.
 async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
   const paths = macTerminalHostPaths(appPath)
   const prefix = macCommandPrefixForArch(arch)
@@ -280,8 +262,7 @@ async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
     return
   }
   const stderr = []
-  // Boot a clone outside the build tree, as installs do, so no ancestor node_modules can
-  // satisfy a require the helper lacks.
+  // Boot clone outside build tree so ancestor node_modules cannot satisfy missing packaged dependency.
   const isolated = mkdtempSync(join(tmpdir(), 'orca-terminal-host-boot-'))
   const clone = join(isolated, 'Orca Terminal Host.app')
   try {

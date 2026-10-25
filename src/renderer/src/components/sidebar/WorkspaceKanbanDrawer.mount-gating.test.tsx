@@ -23,7 +23,7 @@ const { contentProbe, contextualTourMock } = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }))
 
 vi.mock('@/components/ui/sheet', () => ({
-  // Why: keep children mounted while closed so this measures Orca's gate, not Radix's portal.
+  // Keep the sheet mounted while closed to measure Orca’s gate independently of Radix.
   Sheet: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
     <div data-sheet-open={open ? 'true' : 'false'}>{children}</div>
   ),

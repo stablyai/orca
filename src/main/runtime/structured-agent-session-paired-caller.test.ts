@@ -1,6 +1,4 @@
-// A paired device's socket carries its bearer credential as `clientId`. Native chat keys
-// operations, records and prompt answers by caller, and keeps them on disk, so the credential
-// must never become that key.
+// Paired sockets carry bearer credentials as clientId; persist a device caller key instead of the credential.
 
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'

@@ -1,7 +1,4 @@
-/**
- * A browser page running on the server reaches a phone paired with the desktop: the phone opens it
- * in the server's workspace, sees its tab, and gets its screencast frames through the desktop relay.
- */
+// Relay the server browser’s tab and real screencast frames through a desktop to its paired phone.
 import { expect, test } from './helpers/orca-app'
 import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import type { PairedMobileSocket } from './helpers/paired-mobile-client'

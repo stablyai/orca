@@ -18,10 +18,6 @@ export type PageDocumentLifecycleEvent = Extract<
   | { type: 'document-load-deadline' }
 >
 
-/**
- * The view's own document, from start to the page's first word. `failDocument` is the reducer's
- * `document-load-failed` recovery, which drops the generation and fetches once.
- */
 export function reducePageDocumentLifecycle(
   session: MobileWebShellSession,
   event: PageDocumentLifecycleEvent,
@@ -29,10 +25,7 @@ export function reducePageDocumentLifecycle(
 ): MobileWebShellStep {
   switch (event.type) {
     case 'remounted':
-      // Only the session id changes, so the view remounts against the same verified bytes. A new
-      // key is a new document, so whatever the last one said is no longer evidence about this one.
-      // The flow goes with it: the wait the retired document armed would otherwise expire onto a
-      // healthy page that is still inside its own, and take a working workspace off screen.
+      // Remount the same verified bytes with a fresh session; reset document facts and advance flow so retired deadlines cannot expire onto the replacement.
       return session.state.kind === 'ready'
         ? step(
             session,
@@ -45,18 +38,14 @@ export function reducePageDocumentLifecycle(
           )
         : step(session, {})
     case 'document-started':
-      // A replacement document inherits nothing: what the last one declared and painted says
-      // nothing about this one, and leaving its paint latched uncovers the view over a blank tree.
-      // The flow goes with it for the same reason `remounted` moves it — the retired document's
-      // waits would otherwise expire onto a replacement that is still loading.
+      // Reset paint/claims and advance flow: the new document inherits neither proof of rendering nor the previous document’s deadlines.
       return session.state.kind === 'ready'
         ? step(session, { ...CLEAR_PAGE_DOCUMENT_STATE, flow: session.flow + 1 }, [
             AWAIT_DOCUMENT_LOAD
           ])
         : step(session, {})
     case 'document-loaded':
-      // Nothing to wait on outside `ready`, and nothing to wait for once the page has spoken: the
-      // two orders this can arrive in are a race, and the latch is what makes either one fine.
+      // Ready and document-loaded can arrive in either order; arm the ready wait only if still needed.
       if (session.state.kind !== 'ready') {
         return step(session, {})
       }
@@ -64,12 +53,10 @@ export function reducePageDocumentLifecycle(
         ? step(session, { documentLoaded: true })
         : step(session, { documentLoaded: true }, [{ kind: 'await-page-ready' }])
     case 'page-ready-deadline':
-      // A document that finished and never said a word is a document that did not load, whatever
-      // the WebView reported.
+      // Finished WebView load without page ready is still a startup failure.
       return session.pageReady ? step(session, {}) : failDocument(session)
     case 'document-load-deadline':
-      // A refused or never-committed load reports nothing (iOS 18 cancelled its own document,
-      // #28626), so without this the cover spins forever over a blank view.
+      // iOS 18 can cancel its own document without reporting load failure (#28626); bound the otherwise endless blank cover.
       return session.state.kind !== 'ready' || session.documentLoaded || session.pageReady
         ? step(session, {})
         : failDocument(session)

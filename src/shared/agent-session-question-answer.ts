@@ -65,10 +65,7 @@ function decodeLegacyFreeTextAnswer(
   }
 }
 
-/**
- * The answer packed into one option-id string, the only form older peers read: hosts that
- * predate structured answers take it as `optionId`, and older clients render receipts from it.
- */
+/** Pack into optionId for older hosts' answers and older clients' receipts. */
 export function legacyAgentSessionSelectedOptionId(
   body: Pick<AgentJournalQuestionItem, 'questions' | 'freeTextInput'>,
   answers: readonly AgentSessionQuestionAnswer[]

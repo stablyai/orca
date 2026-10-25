@@ -1,7 +1,3 @@
-// Split out of protocol-version.ts; listed in AGENT_SESSION_RUNTIME_CAPABILITIES. Import it from here.
-
-// Why: a client may call `agentSession.continueInterrupted` (Continue on a reply an Orca stop cut
-// off) only on a host that has it; an older host also writes no row naming that stop, so a client
-// never offers Continue there.
+// Offer Continue only when the host advertises it; older hosts also lack the row identifying an Orca stop.
 export const AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY =
   'agent-session.continue-interrupted.v1' as const

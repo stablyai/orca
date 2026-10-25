@@ -6,7 +6,7 @@ import {
   getHookSettingsDraft,
   type HookSettingsPolicyDraft,
   type LocalHookName
-} from './repository-hook-settings-draft'
+} from './repository/execution/repository-hook-settings-draft'
 
 export function useRepositoryHookSettingsDraft({
   repo,
@@ -66,7 +66,7 @@ export function useRepositoryHookSettingsDraft({
   const queueScriptDraftPersist = useCallback(() => {
     localCommandsDraftDirtyRef.current = true
     clearLocalCommandsAutosaveTimer()
-    // Why: repo persistence may be an SSH RPC; coalesce typing bursts.
+    // Coalesce typing bursts because repository persistence may cross SSH.
     localCommandsAutosaveTimerRef.current = window.setTimeout(flushScriptDraft, 700)
   }, [clearLocalCommandsAutosaveTimer, flushScriptDraft])
 

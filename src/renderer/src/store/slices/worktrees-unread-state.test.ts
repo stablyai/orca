@@ -140,8 +140,7 @@ describe('worktree unread (show-until-interact)', () => {
   })
 
   it('never throws from any passive path for a genuinely ambiguous owner (#10634)', () => {
-    // Why every passive path, not just marking: each one runs from a background
-    // notification, so any that still throws reproduces the uncaught renderer error.
+    // Exercise every passive notification path; any unresolved-host throw recreates the uncaught renderer error.
     const worktreeId = 'repo-shared::/same/path'
     const ambiguousState = (): Partial<AppState> =>
       ({

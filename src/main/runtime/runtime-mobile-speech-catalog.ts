@@ -30,7 +30,7 @@ export class RuntimeMobileSpeechCatalog {
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
-    // Why omit, not mark: a status arm older phones don't know would read as a model they can pick.
+    // Omit unsupported status variants; older phones could treat them as pickable models.
     const runnable = hasLocalSpeechRecognizer()
       ? SPEECH_MODEL_CATALOG
       : SPEECH_MODEL_CATALOG.filter((manifest) => !isLocalSpeechModel(manifest))
@@ -106,10 +106,7 @@ export class RuntimeMobileSpeechCatalog {
     return this.list()
   }
 
-  /**
-   * The cloud models' key, set on the host that transcribes. Why over RPC: desktop Settings is the
-   * only other way in, and a headless host has no desktop. Sealed by this host's own secret store.
-   */
+  /** Set cloud dictation keys over RPC for headless hosts without Settings; seal with the transcribing host's secret store. */
   openAiKeyStatus(): OpenAiSpeechKeyStatus {
     return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
   }

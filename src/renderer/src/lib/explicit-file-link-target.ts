@@ -22,8 +22,7 @@ type ParseExplicitFileLinkTargetOptions = {
 }
 
 function canKeepTrailingSeparator(pathText: string): boolean {
-  // Why: bare roots ("/", "~/", "C:/") are ambiguous link targets, while
-  // absolute/tilde paths with a real segment are unambiguous directories.
+  // Bare roots are ambiguous link targets; absolute/tilde paths need a real segment to identify directories.
   if (/^[\\/]+$/.test(pathText) || /^~[\\/]$/.test(pathText) || /^[A-Za-z]:[\\/]$/.test(pathText)) {
     return false
   }

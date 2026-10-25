@@ -1,15 +1,18 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
-import { defaultExclude, defineConfig } from 'vitest/config'
-import { UNIT_INCLUDE, UNIT_EXCLUDE } from './scripts/ci-unit-files.mjs'
+import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
+import { UNIT_INCLUDE, UNIT_EXCLUDE, UNIT_SETUP_FILES } from './scripts/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
+import { readRunFilters } from './scripts/vitest-run-filters.mjs'
 import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
 
-const nodeRuntimeInclude = process.versions.bun ? getNodeRuntimeInclude() : []
+const nodeRuntimeInclude = process.versions.bun
+  ? getNodeRuntimeInclude({ filters: readRunFilters() })
+  : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
 const paletteMeasurementFile =
@@ -39,6 +42,9 @@ const transforms = {
   },
   resolve: {
     alias: [
+      ...(process.env.ORCA_UNIT_ZOD_BUNDLE
+        ? [{ find: /^zod$/, replacement: process.env.ORCA_UNIT_ZOD_BUNDLE }]
+        : []),
       ...createWorkspaceSourceResolver().aliases,
       { find: '@renderer', replacement: resolve('src/renderer/src') },
       { find: '@', replacement: resolve('src/renderer/src') },
@@ -61,13 +67,7 @@ const testOptions = {
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
   execArgv: ['--no-experimental-webstorage', '--expose-gc'],
-  setupFiles: [
-    resolve('config/scripts/vitest-real-agent-home-write-guard.ts'),
-    resolve('config/scripts/vitest-bun-node-builtins.ts'),
-    resolve('config/scripts/vitest-dom-setup.ts'),
-    resolve('config/scripts/vitest-host-ports-setup.ts'),
-    resolve('config/scripts/vitest-caller-identity-env-setup.ts')
-  ],
+  setupFiles: UNIT_SETUP_FILES.map((file) => resolve(file)),
   include: UNIT_INCLUDE,
   exclude: balancedShards ? UNIT_EXCLUDE : defaultExclude,
   hookTimeout: 60_000,
@@ -134,6 +134,15 @@ export default defineConfig({
   ...transforms,
   test: {
     ...testOptions,
+    experimental: { recordDependencies: !process.env.CI },
+    forceRerunTriggers: [
+      ...configDefaults.forceRerunTriggers,
+      '**/pnpm-lock.yaml',
+      '**/pnpm-workspace.yaml',
+      '**/config/**',
+      '**/patches/**',
+      '**/src/packages/**'
+    ],
     sequence: { sequencer: balancedShards ? TimingSequencer : RuntimeSequencer },
     ...(balancedShards
       ? {

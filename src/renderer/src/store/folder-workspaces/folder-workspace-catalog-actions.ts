@@ -98,9 +98,7 @@ export function createFolderWorkspaceCatalogActions(
       })
       if (!failed) {
         set((s) => {
-          // Why reuseEqualRecordMap: the cleanup rebuilds the record every refresh, and
-          // reference-equality readers (live dashboard selector, popout bridge) re-run on a
-          // fresh-but-equal identity, so the equal case must keep the previous one.
+          // Retain equal map identity across refresh cleanup or dashboard/popout selectors rerun unnecessarily.
           const restoredRuntimeHostIdByWorkspaceSessionKey = reuseEqualRecordMap(
             s.restoredRuntimeHostIdByWorkspaceSessionKey,
             clearRestoredFolderWorkspaceSessionOwners(

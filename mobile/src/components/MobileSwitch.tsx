@@ -9,8 +9,7 @@ export type MobileSwitchProps = {
   testID?: string
 }
 
-// react-native-web paints an "on" thumb with its own teal unless given activeThumbColor, a prop
-// React Native's types do not declare.
+// RN Web defaults active thumb to teal; override via activeThumbColor absent from native types.
 const ON_THUMB = { activeThumbColor: colors.textPrimary }
 
 /** The app's switch: neutral track and thumb, no platform accent. */

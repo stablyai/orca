@@ -1,5 +1,4 @@
-// A prompt hook that blocked or stopped the user's message: one row in the hook's own reason,
-// written the same way for every agent, which the fold never hides.
+// Keep blocked/stopped prompt hooks as visible rows using the hook's reason, consistently across agents.
 
 import type { AgentJournalPlainStatusItem } from './agent-session-journal-types'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from './agent-session-turn-notice'

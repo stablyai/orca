@@ -45,7 +45,7 @@ beforeEach(() => {
   mainProcessState.runtime = {} as typeof mainProcessState.runtime
 })
 
-// Why: the rename used to hang off the window's hook listener, which headless serve never installs.
+// Headless serve has no window hook listener; the subscription must stand alone.
 describe('first-work rename hook subscription', () => {
   it('arms rename from the hook store with no window', () => {
     installFirstWorkRenameHookSubscription()

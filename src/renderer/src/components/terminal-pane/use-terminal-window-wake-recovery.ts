@@ -65,19 +65,11 @@ export function useTerminalWindowWakeRecovery({
       clearGlyphAtlases: boolean,
       source: 'focus' | 'visibilitychange' | 'system-resumed'
     ): void => {
-      // Why: the decisive crumb for a post-wake garble report — which trigger
-      // fired and whether it wiped the atlas. If the report shows a stale pane
-      // but NO wake crumb near the unlock time, the trigger never fired (the
-      // unlock-screen gap); a crumb with clearGlyphAtlases=false means the light
-      // path ran but may not have healed a corrupted atlas. Silent (memory ring).
-      // Source is in the kind so distinct triggers don't coalesce into one
-      // entry (focus and resume often fire together); repeats of the same
-      // source still fold, which is the noise control we want.
+      // Record trigger and atlas-clear evidence for wake diagnosis; source-specific kinds prevent focus/resume coalescing while same-source repeats fold.
       recordTerminalFreezeBreadcrumb(`wake-recovery:${source}`, { clearGlyphAtlases })
       // Focus and visibility often fire together; keep one immediate recovery and one settled RAF pass.
       if (wakeRecoveryFrameId !== null) {
-        // Why: a pending settled pass may only upgrade in strength — a plain
-        // focus that lands after a genuine wake must not skip its atlas clear.
+        // A coalesced settled pass may only strengthen: later focus must not cancel a genuine wake’s atlas clear.
         settledClearGlyphAtlases ||= clearGlyphAtlases
         return
       }
@@ -113,10 +105,7 @@ export function useTerminalWindowWakeRecovery({
         reassertPanePtySizes()
       })
     }
-    // Why: plain refocus (alt-tab, devtools) is frequent and often lands while
-    // an agent streams; wiping the shared glyph atlas then provokes xterm's
-    // page-merge race and paints garbled glyphs. Focus recovery keeps the warm
-    // atlas: it only retries WebGL attach, refits, and repaints pane-scoped.
+    // Frequent refocus atlas clears race xterm page merging; retry WebGL/refit with pane-scoped repaint instead.
     const onFocus = (): void => recoverVisibleWake(false, 'focus')
     const onVisibilityChange = (): void => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
@@ -167,9 +156,7 @@ export function useTerminalWindowWakeRecovery({
       dprRecoveryFrameId = requestAnimationFrame(retry)
     }
     const onWindowResize = (): void => {
-      // Why: Chromium emits window resize on devicePixelRatio changes even when
-      // the CSS box is unchanged (monitor move / undock). xterm's own observer
-      // misses that while the canvas had no box (laptop lid closed).
+      // Device-pixel-ratio changes emit resize without CSS size changes; xterm’s observer can miss them while hidden.
       const devicePixelRatio = window.devicePixelRatio
       if (devicePixelRatio === observedDevicePixelRatio) {
         return
@@ -186,10 +173,7 @@ export function useTerminalWindowWakeRecovery({
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('visibilitychange', onVisibilityChange)
     }
-    // Why: a focus-preserving display wake fires neither focus nor
-    // visibilitychange, so main relays powerMonitor resume over IPC. Genuine
-    // wake clears the WebGL glyph atlas (clearGlyphAtlases=true via
-    // onSystemResumed) — the latch-clearing recovery — unlike plain refocus.
+    // Focus-preserving wake emits no focus/visibility event; main’s resume IPC requests full atlas recovery.
     const unsubscribeSystemResumed =
       typeof window.api?.ui?.onSystemResumed === 'function'
         ? window.api.ui.onSystemResumed(onSystemResumed)

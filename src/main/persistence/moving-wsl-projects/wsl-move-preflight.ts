@@ -1,24 +1,16 @@
-/**
- * Before anything is fenced: proof that every path a move rewrites names the same object on the
- * host, and that the host can take a WSL move at all (mover design, D1b-4). No files move, so a
- * path that resolves to something else in the distro would silently re-point the project.
- */
+// No files move: prove rewritten paths identify the same objects before fencing anything.
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
 import { isDrvfsLinuxPath } from '../../../shared/wsl-paths'
 import { wslUncPathToLinux } from './wsl-move-path-rewriter'
 
-/** What git says about a folder, read once through the desktop's UNC path and once on the host. */
+/** Read once through desktop UNC paths and once on the host. */
 export type WslMovePathFacts = {
-  /** The repository's common git dir, in the reader's own path form. */
+  /** Reader-native path spelling. */
   gitCommonDir: string | null
   head: string | null
-  /** Worktree paths `git worktree list` reports, in the reader's own path form. */
+  /** Reader-native git worktree list paths. */
   worktrees: readonly string[]
-  /**
-   * The contents of a one-off marker the desktop wrote into the folder for this preflight, as each
-   * side reads it back; null when it could not be written or read. The only identity evidence a
-   * folder outside git has.
-   */
+  /** Matching marker bytes are the only non-git folder identity proof; null means unreadable/unwritable. */
   marker: string | null
 }
 
@@ -39,7 +31,6 @@ export type WslMovePreflightResult = {
   refused: { path: string; reason: WslMovePreflightRefusal }[]
 }
 
-/** Each path is checked on both sides; the move goes ahead only when nothing is refused. */
 export async function preflightWslMovePaths(
   uncPaths: readonly string[],
   distro: string,
@@ -52,7 +43,7 @@ export async function preflightWslMovePaths(
       refused.push({ path, reason: 'not-in-distro' })
       continue
     }
-    // Windows folds the `/mnt/<drive>` tail of a UNC path case-insensitively (wsl-paths.ts).
+    // Windows also folds the /mnt/<drive> tail case-insensitively.
     if (isDrvfsLinuxPath(linux.toLowerCase())) {
       refused.push({ path, reason: 'windows-drive' })
       continue
@@ -71,7 +62,6 @@ export async function preflightWslMovePaths(
   return { refused }
 }
 
-/** Both readers must agree once the desktop's UNC answers are read as Linux paths. */
 function identityVerdict(
   desktop: WslMovePathFacts,
   host: WslMovePathFacts,
@@ -81,7 +71,7 @@ function identityVerdict(
     return 'different-object'
   }
   if (desktop.gitCommonDir === null && host.gitCommonDir === null) {
-    // Matching emptiness proves nothing: outside git, only the marker shows it is one folder.
+    // Outside git, matching absence proves nothing; require the marker.
     return desktop.marker !== null && desktop.marker === host.marker ? null : 'identity-unproven'
   }
   const asLinux = (value: string | null): string | null =>
@@ -98,7 +88,7 @@ function identityVerdict(
 
 export type WslMoveHostReadiness = 'ready' | 'update-host'
 
-/** A host without the WSL source kind runs an older template: relaunch it first (E1), never drop data. */
+/** Older host templates must update before accepting WSL-source moves. */
 export function wslMoveHostReadiness(capabilities: readonly string[]): WslMoveHostReadiness {
   return capabilities.includes(ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY)
     ? 'ready'

@@ -9,17 +9,18 @@ import { Session } from './session'
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasZsh = process.platform !== 'win32' && spawnSync('/bin/zsh', ['--version']).status === 0
 const hasBash = process.platform !== 'win32' && spawnSync('/bin/bash', ['--version']).status === 0
+// script(1) relays to a shell on an inner pty, like kiro-cli-term (#25586).
+const hasScript =
+  process.platform !== 'win32' &&
+  (existsSync('/usr/bin/script') || spawnSync('script', ['--version']).status === 0)
 const COMMAND_OUTPUT = 'ORCA_STARTUP_COMMAND_RAN'
-// A second Bash install with its own canonical path -- the shape a login profile
-// switches to (`exec /opt/homebrew/bin/bash`) and the one #18768 stalled on. A
-// symlink cannot stand in: both sides are realpath'd before they are compared.
+// Shell identity compares realpaths, so a symlink cannot represent a distinct Bash installation.
 const alternateBashPath = ['/opt/homebrew/bin/bash', '/usr/local/bin/bash', '/usr/bin/bash'].find(
   (candidate) =>
     hasBash && existsSync(candidate) && realpathSync(candidate) !== realpathSync('/bin/bash')
 )
 if (process.platform !== 'win32' && !alternateBashPath) {
-  // Why announced: usrmerge hosts resolve /usr/bin/bash back to /bin/bash, so these
-  // two skip on most Linux CI. A silent skip reads as coverage that does not exist.
+  // usrmerge commonly leaves Linux without a distinct second Bash; make that coverage gap visible.
   console.warn(
     '[repro-13767] no second Bash install with a distinct realpath; skipping the alternate-install recovery tests'
   )
@@ -134,10 +135,11 @@ type RunningFixture = {
 }
 
 async function startFixture(
-  fixture: ShellFixture,
+  fixture: Pick<ShellFixture, 'name' | 'shellPath' | 'command' | 'startupFile'>,
   startupContent: string,
   extraFiles: Record<string, string> = {},
-  pathEnv: string = process.env.PATH ?? '/usr/bin:/bin'
+  pathEnv: string = process.env.PATH ?? '/usr/bin:/bin',
+  onReadinessEvent?: (event: string) => void
 ): Promise<RunningFixture> {
   const tempHome = mkdtempSync(join(tmpdir(), 'orca-shell-ready-exec-'))
   const previousHome = process.env.HOME
@@ -176,7 +178,8 @@ async function startFixture(
       cols: 80,
       rows: 24,
       subprocess,
-      shellReadySupported: true
+      shellReadySupported: true,
+      ...(onReadinessEvent ? { reportReadinessEvent: onReadinessEvent } : {})
     })
     let output = ''
     let onOutput = (): void => {}
@@ -439,6 +442,45 @@ fi
   exec ${alternateBashPath ?? '/bin/bash'} --noprofile --norc -l -i
 fi
 `
+
+  const relayTest = hasScript && hasZsh ? it : it.skip
+  relayTest(
+    'releases the queued command behind a pty relay the exec left in front of the shell',
+    async () => {
+      const readinessEvents: string[] = []
+      // Drop the wrapper env so the inner shell cannot emit the marker, as with kiro-cli-term.
+      const scriptRelay =
+        process.platform === 'darwin'
+          ? 'script -q /dev/null /bin/zsh -o noglobalrcs -l -i'
+          : `script -q -c '/bin/zsh -o noglobalrcs -l -i' /dev/null`
+      const running = await startFixture(
+        {
+          name: 'zsh relay',
+          shellPath: '/bin/zsh',
+          startupFile: '.zprofile',
+          command: zshFixture.command
+        },
+        `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
+  export ORCA_EXEC_REPRO_DONE=1
+  exec env -u ZDOTDIR -u ORCA_SHELL_FEATURES ${scriptRelay}
+fi
+`,
+        {},
+        process.env.PATH ?? '/usr/bin:/bin',
+        (event) => readinessEvents.push(event)
+      )
+      try {
+        await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
+        expect(running.session.shellState).toBe('ready')
+        expect(count(running.output(), COMMAND_OUTPUT)).toBe(1)
+        expect(readinessEvents).toContain('shell-ready-wrapper-replaced')
+        expect(readinessEvents).not.toContain('shell-ready-timeout')
+      } finally {
+        await running.cleanup()
+      }
+    },
+    10_000
+  )
 
   alternateBashTest(
     'releases at the prompt of a second Bash install the pane PATH resolves',

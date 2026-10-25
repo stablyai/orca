@@ -33,8 +33,7 @@ function okEnvelope(result: unknown): { ok: true; result: unknown } {
   return { ok: true, result }
 }
 
-/** Flush pending microtasks and a macrotask turn — enough for the compat-gate
- *  await chain inside callRuntimeRpc to reach window.api.runtimeEnvironments.call. */
+/** Let the compatibility-gate await chain reach the runtime bridge. */
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve))
 }
@@ -99,7 +98,6 @@ describe('getNativeChatSessionTransport — selection', () => {
       messages: [message('valid')],
       lifecycle
     })
-    // An invalid lifecycle payload is dropped, leaving prose recovery to settle.
     await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
       messages: [message('invalid')]
     })
@@ -191,9 +189,9 @@ describe('runtime subscribe', () => {
     deliver({ type: 'appended', messages: [message('m-1')] })
     deliver({ type: 'snapshot', messages: [message('m-snapshot')] })
     deliver({ type: 'replacement', messages: [message('m-replacement')], hasMore: true })
-    deliver({ type: 'ready' }) // non-appended, ignored
-    deliver({ type: 'appended', messages: undefined }) // no array, ignored
-    deliver({ type: 'appended', messages: [message('m-2')] }, false) // !ok, ignored
+    deliver({ type: 'ready' })
+    deliver({ type: 'appended', messages: undefined })
+    deliver({ type: 'appended', messages: [message('m-2')] }, false)
 
     expect(onFrame).toHaveBeenCalledTimes(3)
     expect(onFrame).toHaveBeenNthCalledWith(1, {
@@ -280,8 +278,7 @@ describe('runtime subscribe', () => {
     transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
     await Promise.resolve()
 
-    // An ok response we can't parse must still un-stick the view exactly once,
-    // carrying any error the runtime sent.
+    // Settle unrecognized successful payloads once, carrying any host error.
     deliver({ type: 'ready', error: 'boom' })
     deliver({ type: 'ready' })
 
@@ -306,7 +303,6 @@ describe('runtime subscribe', () => {
     )
     await Promise.resolve()
 
-    // The host's unflushed-transcript frame, then the flush that follows it.
     deliver({ type: 'snapshot', messages: [], hasMore: false, pending: true })
     deliver({ type: 'snapshot', messages: [message('m-1')] })
 
@@ -316,10 +312,7 @@ describe('runtime subscribe', () => {
       hasMore: false,
       pending: true
     })
-    // Dropping `pending` would settle an empty read; carrying it onto the real
-    // snapshot would keep the view unsettled over real history. hasMore proves the
-    // pending frame did not consume the initial slot — only the initial branch
-    // infers a filled window from the limit.
+    // Pending frames must not consume the initial slot or keep later real snapshots unsettled.
     expect(onFrame).toHaveBeenNthCalledWith(2, {
       type: 'snapshot',
       messages: [message('m-1')],
@@ -361,9 +354,7 @@ describe('runtime subscribe', () => {
     await flush()
 
     expect(unsubscribe).toHaveBeenCalledOnce()
-    // The runtime reaps the fs-watcher when the dedicated stream socket closes, so
-    // no nativeChat.unsubscribe RPC is sent — one would ride a different connection
-    // and never match the watcher's cleanup key.
+    // Socket closure reaps its watcher; an unsubscribe RPC uses a different connection and cleanup key.
     expect(runtimeEnvironmentsCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'nativeChat.unsubscribe' })
     )

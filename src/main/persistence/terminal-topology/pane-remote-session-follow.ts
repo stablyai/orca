@@ -1,11 +1,7 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 
-/**
- * A tab's remote session id is carried data the layout model does not hold, so a pane close moves
- * it here: one naming the closed pane's terminal follows the tab's remaining pane, as the legacy
- * pane close (`retireTerminalSurfaceFromPersistence`) does.
- */
+/** Remote session IDs live outside the layout model and must follow the remaining pane after close. */
 export function followRemoteSessionAfterPaneClose(
   command: LayoutCommand,
   stored: WorkspaceSessionState,
@@ -32,7 +28,7 @@ export function followRemoteSessionAfterPaneClose(
   return { ...written, remoteSessionIdsByTabId: next }
 }
 
-/** A window's drag-out: the source tab's remote session id follows the moved pane's terminal. */
+/** Detached panes carry their remote session ID to the new tab. */
 export function followRemoteSessionAfterPaneDetach(
   command: LayoutCommand,
   written: WorkspaceSessionState

@@ -1,5 +1,4 @@
-// Why: the invariant every transition must keep: a tab that is not dirty holds no draft of the disk
-// text, so no stale draft can later be restored into a shared model.
+// Clean tabs must not retain disk-text drafts that could later overwrite a shared model.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { requestEditorFileSave } from './editor-autosave'
@@ -90,11 +89,11 @@ it('reload leaves no draft', () => {
   expectNoCleanDraft(store)
 })
 
-it("never restores a clean tab's leftover draft into the model", () => {
+it("lets a clean record's draft reach its model, since every view shares that draft", () => {
   const { store, id } = openCleanTab('disk')
-  // A Markdown-whitespace draft may stay on a clean tab; it still never enters the model.
+  // A Markdown-whitespace draft may stay on a clean tab; it is the record's text, so views show it.
   store.setState({ editorDrafts: { ...store.getState().editorDrafts, [id]: 'disk ' } })
-  expect(mayPushTabTextIntoModel(id)).toBe(false)
+  expect(mayPushTabTextIntoModel(id)).toBe(true)
   store.getState().markFileDirty(id, true)
   expect(mayPushTabTextIntoModel(id)).toBe(true)
 })

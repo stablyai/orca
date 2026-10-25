@@ -1,7 +1,4 @@
-// Throwaway interactive preview (untracked): opens Settings → Browser scrolled
-// to the new Remote browsing section and holds the app open for review.
-// Run: ORCA_SETTINGS_PREVIEW=1 pnpm exec playwright test --config tests/playwright.config.ts \
-//   --project electron-headless --workers=1 tests/e2e/browser-settings-preview.spec.ts
+// Opt-in Settings → Browser preview; enable with ORCA_SETTINGS_PREVIEW=1.
 import { expect, test } from './helpers/orca-app'
 
 test.skip(

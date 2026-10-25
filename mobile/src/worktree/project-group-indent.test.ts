@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { projectGroupHeaderIndent, projectGroupRowIndent } from './project-group-indent'
 
-const DEPTHS = [0, 1, 2, 6, 9, undefined]
+const DEPTHS = [-2, 0, 1, 1.9, 2, 6, 9, undefined]
 
 describe('project-group indent', () => {
   it('steps headers 10 px a level, up to six levels', () => {
-    expect(DEPTHS.map(projectGroupHeaderIndent)).toEqual([0, 10, 20, 60, 60, 0])
+    expect(DEPTHS.map(projectGroupHeaderIndent)).toEqual([0, 0, 10, 10, 20, 60, 60, 0])
   })
 
   it('steps a hand-made group’s rows, folder workspaces too, a full tree step a level', () => {
@@ -14,7 +14,7 @@ describe('project-group indent', () => {
         DEPTHS.map((projectGroupDepth) =>
           projectGroupRowIndent({ workspaceKind, projectGroupDepth })
         )
-      ).toEqual([0, 18, 36, 108, 108, 0])
+      ).toEqual([0, 0, 18, 18, 36, 108, 108, 0])
     }
   })
 

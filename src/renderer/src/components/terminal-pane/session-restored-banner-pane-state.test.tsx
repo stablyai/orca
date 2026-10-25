@@ -153,8 +153,7 @@ describe('session restored banner pane state', () => {
   })
 
   it('upgrades a restored pane to resume-unavailable and keeps identity otherwise', () => {
-    // Why: the reason must win over the earlier one — a pane that turned out to be a fresh
-    // session cannot keep claiming a restore. Identity is what stops a needless re-render.
+    // Fresh-session failure reasons replace restored claims; stable identity prevents unnecessary rerender.
     const restored = new Map<number, 'restored'>([[1, 'restored']])
 
     expect(addSessionRestoredBannerPaneId(restored, 1, 'resume-unavailable')).toEqual(

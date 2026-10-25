@@ -40,12 +40,10 @@ export function getMobileSessionSnapshotTabIdentityKeys(
   tab: RuntimeMobileSessionSnapshotTab
 ): string[] {
   if (tab.type === 'terminal') {
-    // Why: split terminal leaves share one parent tab; merge dedup must stay
-    // leaf-scoped or preserved siblings collapse into a single surface.
+    // Dedup split terminals by leaf or preserved siblings collapse into one surface.
     const keys = [tab.id, `${tab.parentTabId}::${tab.leafId}`]
     if (typeof tab.ptyId === 'string' && tab.ptyId.length > 0) {
-      // Why: renderer and headless sources can derive different leafIds for the same
-      // terminal; real PTYs collapse those duplicates without merging pending splits.
+      // PTY identity merges differing renderer/headless leaf ids without collapsing pending splits.
       keys.push(`${tab.parentTabId}::pty:${tab.ptyId}`)
     }
     return keys
@@ -56,7 +54,6 @@ export function getMobileSessionSnapshotTabIdentityKeys(
   return [tab.id]
 }
 
-/** The ids a group tab order may name this tab by. */
 export function getMobileSessionTabOrderIds(tab: RuntimeMobileSessionSnapshotTab): string[] {
   if (tab.type === 'terminal') {
     return [tab.id, tab.parentTabId]
@@ -67,10 +64,7 @@ export function getMobileSessionTabOrderIds(tab: RuntimeMobileSessionSnapshotTab
   return [tab.id]
 }
 
-/**
- * The tab strip in the order a desktop client draws it: groups left to right, each in its tab
- * order. Stable, so split panes keep their order and tabs no group lists stay last.
- */
+/** Stable desktop strip order: groups left-to-right, then ungrouped tabs; retain split-pane order. */
 export function orderMobileSessionTabsByGroups<T extends RuntimeMobileSessionSnapshotTab>(
   tabs: readonly T[],
   groups: readonly RuntimeMobileSessionTabGroup[],
@@ -98,7 +92,7 @@ export function orderMobileSessionTabsByGroups<T extends RuntimeMobileSessionSna
     .map(({ tab }) => tab)
 }
 
-// Why not subtraction: unranked entries are Infinity, and Infinity - Infinity is NaN.
+// Unranked Infinity - Infinity is NaN.
 function compareRanks(a: number, b: number): number {
   return a === b ? 0 : a < b ? -1 : 1
 }
@@ -126,19 +120,14 @@ export function mergeMobileSessionTabGroups(
             tabOrder: []
           }
         ]
-  // Why: keep each tab in the group that already owns it (a multi-group split
-  // must survive the merge), drop tabs no longer present, and route only
-  // genuinely-new tabs into the active group — never funnel everything into
-  // group[0], which duplicated/coalesced tabs that lived in other groups.
+  // Preserve existing group ownership; assign only new tabs to the active group.
   const ownerGroupId = new Map<string, string>()
   for (const group of nextGroups) {
     for (const tabId of group.tabOrder) {
       ownerGroupId.set(tabId, group.id)
     }
   }
-  // Why: chats, editors and browsers keep the place the publisher gave them; only terminals are
-  // placed here. A window lists a chat before main restores its row, and closing one removes its
-  // id, so a listed chat id holds its place even without a row.
+  // Publishers place chats/editors/browsers; preserve listed chat positions before their rows restore.
   const liveTabIds = new Set([
     ...tabs.flatMap(getMobileSessionTabOrderIds),
     ...groups.flatMap((group) => group.tabOrder.filter(isStructuredAgentSessionHostTabId))
@@ -147,9 +136,7 @@ export function mergeMobileSessionTabGroups(
   const activeGroupId =
     (activeParentId ? ownerGroupId.get(activeParentId) : undefined) ?? nextGroups[0]!.id
   const retainedOrder = new Map<string, string[]>(nextGroups.map((group) => [group.id, []]))
-  // Why: tabOrder is the canonical user-visible order, so it must survive a republish.
-  // A materialized idle surface can move to the end of terminalTabs; retaining the
-  // stored order prevents activation from rotating the tab bar.
+  // Retain canonical tabOrder; materializing idle terminals can reorder incoming arrays.
   const placed = new Set<string>()
   for (const group of nextGroups) {
     for (const tabId of group.tabOrder) {
@@ -188,10 +175,7 @@ export function mergeMobileSessionTabGroups(
     .filter((group) => group.tabOrder.length > 0)
 }
 
-/**
- * A tab list rebuilt from persisted state, plus the chat tabs only `prior` holds. Chat tabs exist
- * only in the runtime's snapshot, so no persisted terminal or layout state can recreate them.
- */
+/** Chats exist only in prior snapshots, so persisted terminal/layout rebuilds cannot recreate them. */
 export function keepSnapshotChatTabs(
   rebuilt: readonly RuntimeMobileSessionSnapshotTab[],
   prior:
@@ -202,7 +186,7 @@ export function keepSnapshotChatTabs(
   if (chatTabs.length === 0) {
     return [...rebuilt]
   }
-  // One active tab: a rebuilt terminal's own flag must not outrank the chat the snapshot showed.
+  // Snapshot-selected chat outranks a rebuilt terminal's active flag.
   const activeChatId = chatTabs.find((tab) => tab.id === prior?.activeTabId)?.id ?? null
   return [
     ...rebuilt.map((tab) => (activeChatId && tab.isActive ? { ...tab, isActive: false } : tab)),
@@ -210,10 +194,7 @@ export function keepSnapshotChatTabs(
   ]
 }
 
-/**
- * Puts chat tabs back into the group order a terminal-only merge rebuilt without them: each in the
- * group that listed it before (else the first), after the tab it followed there.
- */
+/** Restore chats to their prior group/preceding-tab position, falling back to the first group. */
 export function appendChatTabOrder(
   groups: readonly RuntimeMobileSessionTabGroup[],
   priorGroups: readonly RuntimeMobileSessionTabGroup[] | undefined,

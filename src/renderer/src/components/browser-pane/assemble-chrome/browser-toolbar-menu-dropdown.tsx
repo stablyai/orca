@@ -1,4 +1,4 @@
-import { Check, Ellipsis, FileCode2, Import, Monitor, Plus, Settings } from 'lucide-react'
+import { Check, Ellipsis, FileCode2, History, Import, Monitor, Plus, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -8,6 +8,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -16,6 +17,7 @@ import {
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import { useAppStore } from '@/store'
+import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { BROWSER_FAMILY_LABELS } from '../../../../../shared/constants'
 import type {
   BrowserSessionProfile,
@@ -87,6 +89,8 @@ export function BrowserToolbarMenuDropdown({
   onOpenSourceFile = null,
   overflow
 }: BrowserToolbarMenuDropdownProps): React.JSX.Element {
+  const keybindings = useAppStore((s) => s.keybindings)
+  const historyShortcut = formatOptionalShortcutLabel('browser.showHistory', keybindings)
   return (
     <DropdownMenu modal={false} open={menuOpen} onOpenChange={onMenuOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -158,8 +162,7 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSub
           onOpenChange={(open) => {
             if (open) {
-              // Why: macOS treats other browsers' profile folders as app
-              // data. Only probe them when the user opens the import menu.
+              // Defer macOS app-data profile probes until the user opens Import.
               onFetchDetectedBrowsers()
             }
           }}
@@ -246,11 +249,7 @@ export function BrowserToolbarMenuDropdown({
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
             <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
-              {/* Why: Viewport is a "pick one of N" control, so use a radio group
-                  for proper a11y semantics (role="menuitemradio", aria-checked).
-                  The "Default" option represents a null preset (no override),
-                  encoded as the sentinel string 'default' because
-                  DropdownMenuRadioGroup values must be strings. */}
+              {/* Use radio semantics for viewport selection; encode null as default because Radix values must be strings. */}
               <DropdownMenuRadioGroup
                 value={viewportPresetId ?? 'default'}
                 onValueChange={(v) =>
@@ -276,6 +275,18 @@ export function BrowserToolbarMenuDropdown({
 
         <DropdownMenuSeparator />
 
+        <DropdownMenuItem
+          // Why deferred: focus returning to the ⋯ trigger would otherwise close the dialog at once.
+          onSelect={() =>
+            overflow.deferUntilClose(() =>
+              useAppStore.getState().setBrowserHistoryPageId(browserPageId)
+            )
+          }
+        >
+          <History className="mr-2 size-3.5" />
+          {translate('browser.history.menuItem', 'History')}
+          {historyShortcut ? <DropdownMenuShortcut>{historyShortcut}</DropdownMenuShortcut> : null}
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
             useAppStore.getState().openSettingsTarget({ pane: 'browser', repoId: null })

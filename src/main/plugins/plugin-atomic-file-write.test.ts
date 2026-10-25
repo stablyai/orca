@@ -150,7 +150,6 @@ describe('renamePluginFileWithWindowsRetry', () => {
 
     it('gives up after the last delay rather than looping forever', async () => {
       await writePluginFileAtomically(join(dir, 'from'), 'payload')
-      // One more lock than there are delays, so the loop must exit on the bound.
       locks.codes = Array.from({ length: 6 }, () => 'EBUSY')
       await expect(
         renamePluginFileWithWindowsRetry(join(dir, 'from'), join(dir, 'to'))

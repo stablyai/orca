@@ -7,12 +7,7 @@ import {
   type InteractivePromptCard
 } from './native-chat-interactive-prompt'
 
-/**
- * The prompt a terminal-backed pane can draw as a card: a tool approval from the
- * live status, else a question from the live status or, failing that, from the
- * transcript's unresolved ask (headless host, relay gap, replay, reconnect — a
- * pane parked on a selector must not take the next message as its answer, #11761).
- */
+/** Prefer live approvals/questions, then unresolved transcript asks, so a parked selector cannot consume the next message as its answer. */
 export function useNativeChatInteractivePromptCard({
   paneKey,
   messages,
@@ -26,9 +21,7 @@ export function useNativeChatInteractivePromptCard({
   const interactivePrompt = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.interactivePrompt ?? null
   )
-  // The sibling `toolName` lets the question parser dispatch through the tool's
-  // registered parser (mobile parity). Read only beside a prompt: it changes on
-  // every tool call, and this hook re-renders the whole pane.
+  // Read toolName only beside a prompt for parser dispatch; ordinary tool changes would rerender the whole pane.
   const interactiveToolName = useAppStore((s) => {
     const entry = s.agentStatusByPaneKey[paneKey]
     return entry?.interactivePrompt ? (entry.toolName ?? null) : null

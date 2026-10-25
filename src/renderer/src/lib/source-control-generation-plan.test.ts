@@ -65,8 +65,7 @@ describe('planSourceControlCommitMessageGeneration', () => {
   })
 
   it('accepts a bare {linkedIssue} recipe, which is only empty per workspace', () => {
-    // Why: the recipe is saved repo- or globally scoped, so validation must not depend on
-    // whichever workspace happens to be active — an unlinked one must not fail the plan.
+    // Saved repo/global recipes must validate independently of active-workspace linkage.
     const result = planSourceControlTextGeneration('commitMessage', {
       agentId: 'custom',
       model: '',

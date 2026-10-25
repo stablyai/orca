@@ -46,14 +46,9 @@ export class DaemonClient {
   private streamSocket: Socket | null = null
   private connected = false
   private disconnectArmed = false
-  // Why: after a disconnect + reconnect (daemon respawn), a stale 'close'
-  // event from the old sockets can fire. Without a generation check, that
-  // event would tear down the fresh connection. Each doConnect() increments
-  // the generation; handleDisconnect ignores events from old generations.
+  // Ignore old-socket close events after reconnect so they cannot tear down the new connection.
   private connectionGeneration = 0
-  // Why: multiple concurrent spawn() calls from simultaneous pane mounts
-  // all call ensureConnected(). Without a lock, each starts a separate
-  // connection attempt, overwriting sockets and triggering "Connection lost".
+  // Share connection attempts across concurrent pane spawns.
   private connectingPromise: Promise<void> | null = null
   private connectionAttemptGeneration = 0
   private daemonIdentity: DaemonEndpointIdentity | null = null
@@ -99,8 +94,7 @@ export class DaemonClient {
       return
     }
     if (this.connectingPromise) {
-      // Why: a normal connection may legitimately consume one timeout for each
-      // socket and hello; bounded teardown calls instead keep their one shared budget.
+      // Teardown shares one deadline; normal connects allow separate socket and handshake budgets.
       const waiterTimeoutMs = sharedBudget ? timeoutMs : CONNECTION_ATTEMPT_WAIT_MS
       return waitForDaemonConnectionAttempt(this.connectingPromise, waiterTimeoutMs)
     }
@@ -114,7 +108,7 @@ export class DaemonClient {
     }
   }
 
-  // Why: a missing token must not preempt the connect that proves whether the endpoint is gone.
+  // Probe the endpoint even when its token is missing.
   private readToken(): string {
     try {
       return readFileSync(this.tokenPath, 'utf-8').trim()
@@ -143,7 +137,6 @@ export class DaemonClient {
     }
 
     try {
-      // Sequential: control first, then stream
       const pendingControlSocket = await connectDaemonSocket(this.socketPath, remainingMs())
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingControlSocket)
       this.controlSocket = pendingControlSocket
@@ -208,8 +201,7 @@ export class DaemonClient {
     signal?: AbortSignal
   ): Promise<T> {
     if (!this.connected || !this.controlSocket) {
-      // Why: there is no socket to talk on, so this is a transport failure, not a
-      // refusal by the daemon — see settleCreateCancellation's caller.
+      // No socket is a transport failure, distinct from a daemon refusing the request.
       throw new DaemonConnectionLostError('Not connected')
     }
     const generation = this.connectionGeneration

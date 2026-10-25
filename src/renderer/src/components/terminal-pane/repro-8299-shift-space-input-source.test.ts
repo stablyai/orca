@@ -1,14 +1,4 @@
-/**
- * Issue #8299 — macOS Shift+Space input-source switch also sent a literal space.
- *
- * Regression: with terminal.switchInputSource bound to Shift+Space, the chord
- * resolves to the native-only action (no PTY bytes) while unbound Shift+Space
- * stays ordinary terminal input. Companion keypress/keyup are suppressible.
- *
- * Re-run:
- *   pnpm exec vitest run --config config/vitest.config.ts \
- *     src/renderer/src/components/terminal-pane/repro-8299-shift-space-input-source.test.ts
- */
+/** Bound macOS Shift+Space switches input source without PTY bytes, including companion key events; unbound chords retain ordinary space input (#8299). */
 import { describe, expect, it } from 'vitest'
 import {
   createTerminalNativeOnlyShortcutTracker,

@@ -38,7 +38,6 @@ function definedEnvironment(
   return defined
 }
 
-/** Resolve the current selection on the execution host when creating a chat. */
 export function resolveStructuredOpenCodeAccountHome(input: {
   managedAccounts: AccountReader
 }): OpenCodeAgentSessionAccountHome {
@@ -50,7 +49,7 @@ export function resolveStructuredOpenCodeAccountHome(input: {
   return { kind: 'opencode', locator: { kind: 'unmanaged' } }
 }
 
-/** Resolve a saved binding against the current host, then apply it after inherited overlays. */
+/** Resolve on the current host and apply after inherited overlays. */
 export function environmentForStructuredOpenCodeAccountHome(
   binding: OpenCodeAgentSessionAccountHome,
   input: {
@@ -60,7 +59,6 @@ export function environmentForStructuredOpenCodeAccountHome(
 ): Record<string, string> {
   const environment = restoredEnvironment(input.baseEnvironment, input.managedAccounts)
   const locator = binding.locator
-  // Unmanaged: the user's own environment reaches OpenCode as-is.
   if (locator.kind === 'unmanaged') {
     return definedEnvironment(environment)
   }
@@ -74,7 +72,6 @@ export function environmentForStructuredOpenCodeAccountHome(
   }
 }
 
-/** OpenCode's account over ACP: a managed profile, or the user's own environment. */
 export function openCodeAcpAccountBinding(
   managedAccounts: () => AccountReader = getManagedDataAccountService
 ): AcpAccountBinding {

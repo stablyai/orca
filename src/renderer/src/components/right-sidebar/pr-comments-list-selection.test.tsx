@@ -294,7 +294,6 @@ describe('PRCommentsList comment resolution selection', () => {
   it('lets a user queue one eligible comment thread for the agent from the visible row action', () => {
     const onResolveSelectedCommentsWithAI = vi.fn()
     renderList({
-      // Why: distinct timestamps pin thread-1 to the first row under the newest-first grouped order.
       comments: [
         comment({
           id: 1,
@@ -528,7 +527,7 @@ describe('PRCommentsList comment resolution selection', () => {
       seedContext(`review:stale-${i}`)
     }
 
-    // Why: committed remount must refresh LRU recency for the restored context.
+    // Refresh LRU recency only after the restored context commits.
     renderList({ comments, contextKey: 'review:keep' })
     expect(hasButton('Send 1 queued comments to AI')).toBe(true)
 
@@ -598,7 +597,7 @@ describe('PRCommentsList comment ordering', () => {
 
     expect(renderedGroupOrder(threadLabels)).toEqual(['Replied thread.', 'Quiet thread.'])
 
-    // Why: timeline ranks by when a thread started, so the quiet older root leads again.
+    // Timeline orders by thread start, so the quieter older root leads again.
     selectDisplayMode('Timeline')
 
     expect(renderedGroupOrder(threadLabels)).toEqual(['Quiet thread.', 'Replied thread.'])

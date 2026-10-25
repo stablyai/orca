@@ -1,5 +1,4 @@
-// The words of the background-tasks strip, in English. Desktop translates each piece whole with
-// this as its fallback; mobile says it as is, so the two never word one roster differently.
+// Share whole English translation pieces for desktop/mobile roster wording.
 
 export const BACKGROUND_TASK_COPY = {
   monitoring: 'Monitoring background tasks',

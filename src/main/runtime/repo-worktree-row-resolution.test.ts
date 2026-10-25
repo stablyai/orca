@@ -321,12 +321,7 @@ describe('host-qualified scoped worktree resolution', () => {
   })
 })
 
-/**
- * #16243: the renderer can only address a workspace by `id:<repoId>::<path>`, and this scoped
- * lookup is what a host-qualified removal resolves through. It matched the id byte for byte while a
- * `path:` selector has always compared through `normalizeRuntimePathForComparison`, so a stored id
- * spelling its path differently from `git worktree list` resolved for the CLI and not for the UI.
- */
+/** Normalize id-selector paths like path selectors so UI removal resolves the same host-qualified row as CLI (#16243). */
 describe('scoped worktree id resolution across path spellings (#16243)', () => {
   it.each([
     ['a trailing slash', '/same/worktree', 'shared::/same/worktree/'],

@@ -69,8 +69,7 @@ export async function drainRelayHookSpool(
       ingest
     })
   } catch (err) {
-    // Why: a downstream relay failure must not prevent the loopback listener from starting;
-    // the untruncated spool file remains available for retry on the next restart.
+    // Keep the listener starting on downstream failure; the intact spool can retry next restart.
     process.stderr.write(
       `[relay-hook-server] spool replay failed: ${err instanceof Error ? err.message : String(err)}\n`
     )

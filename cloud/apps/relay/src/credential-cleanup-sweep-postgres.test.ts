@@ -8,10 +8,7 @@ import {
 } from './credential-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 
-// The outage this guards against: the credential cleanup ran every 30s in all 23 cells and both
-// sweeps over relay_invites had no usable index, so each one seq-scanned the whole table inside the
-// maintenance transaction. Only a real planner can show the partial indexes take that away, and
-// only a real server has ctid.
+// Real planner/ctid coverage: 23 cells’ 30s invite sweeps once scanned the whole table; partial indexes must remove those scans.
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 const schema = 'relay_credential_sweep_test'
@@ -89,6 +86,28 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     }
   }
 
+  async function cleanupPlan(prefix: string, occurrence = 0): Promise<string> {
+    const statements: { sql: string; params: unknown[] }[] = []
+    const probe: RelayDatabase = {
+      dialect: 'postgres',
+      query: async (sql, params = []) => {
+        statements.push({ sql, params })
+        return []
+      },
+      queryLocked: async () => {
+        throw new Error('unexpected cleanup lock')
+      },
+      transaction: async (operation) => await operation(probe),
+      close: async () => undefined
+    }
+    await new RelayCredentialStore(probe, () => NOW).cleanup()
+    const statement = statements.filter((item) => item.sql.startsWith(prefix))[occurrence]
+    if (!statement) {
+      throw new Error(`missing production cleanup statement: ${prefix}`)
+    }
+    return await plan(statement.sql, statement.params)
+  }
+
   it('plans both invite sweeps as index scans instead of scanning the whole table', async () => {
     // Production's shape: terminal invites outnumber live ones by orders of magnitude, which is
     // what makes the partial predicates worth having.
@@ -104,20 +123,10 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     // a seq scan wins on any index.
     await database.query(`ANALYZE relay_invites`)
 
-    const expiry = await plan(
-      `UPDATE relay_invites SET state = 'expired'
-       WHERE expires_at <= ? AND state IN ('available', 'reserved', 'cooldown')`,
-      [NOW]
-    )
-    const reservation = await plan(
-      `UPDATE relay_invites SET state = 'cooldown'
-       WHERE state = 'reserved' AND reservation_expires_at <= ? AND expires_at > ?`,
-      [NOW, NOW]
-    )
+    const expiry = await cleanupPlan('UPDATE relay_invites', 0)
+    const reservation = await cleanupPlan('UPDATE relay_invites', 1)
 
-    // Which of the two partial indexes serves the reservation pass is the planner's call: both
-    // predicates hold only live invites, so either one reads a handful of rows. The invariant is
-    // that neither pass reads the whole table any more.
+    // Either partial index may win; both restrict to live invites, and neither sweep may scan the whole table.
     for (const sweep of [expiry, reservation]) {
       expect(sweep).not.toContain('Seq Scan on relay_invites')
       expect(sweep).toMatch(/using relay_invites_sweep_(expiry|reservation)/)
@@ -126,10 +135,7 @@ describePostgres('credential cleanup against PostgreSQL', () => {
   })
 
   it('plans the basis sweep off the composite index rather than the 1.5 GB heap', async () => {
-    // The shape that made this the most expensive statement in the sweep: 20,000 settled bases to
-    // 50 live ones. A partial index on active = 1 looks like the answer to that ratio and is not:
-    // a basis is inserted active and flipped to 0, so it accumulates the same dead entries, and
-    // the planner picks the composite index anyway. See the schema comment beside it.
+    // Active→inactive basis flips leave dead partial-index entries; with 20k settled/50 live the planner still picks the composite index (see schema).
     await database.query(
       `INSERT INTO relay_connection_bases
        (basis_conn_id, user_id, relay_host_id, relay_device_id, owning_control_generation,
@@ -148,21 +154,14 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     )
     await database.query(`ANALYZE relay_connection_bases`)
 
-    const sweep = await plan(
-      `UPDATE relay_connection_bases SET active = 0 WHERE active = 1 AND deadline <= ?`,
-      [NOW]
-    )
+    const sweep = await cleanupPlan('UPDATE relay_connection_bases')
 
     expect(sweep).not.toContain('Seq Scan on relay_connection_bases')
     expect(sweep).toContain('using relay_connection_bases_active_deadline')
   })
 
   it('plans the drained basis reaper off the composite index, not the heap', async () => {
-    // Why the composite index stays for now: it is the only one covering active = 0, and the case
-    // that needs it is the steady state, where every row is inside retention and the reaper must
-    // learn there is nothing to do. While the backlog drains the planner rightly prefers a bounded
-    // sequential scan, because it finds its 5,000 rows and stops; measured at 200k rows, the
-    // drained batch costs 5 buffers with this index and 1,274 without it.
+    // Keep composite index for drained active=0 retention checks (5 vs 1,274 buffers at 200k rows); backlog batches correctly favor bounded seq scans.
     await database.query(
       `INSERT INTO relay_connection_bases
        (basis_conn_id, user_id, relay_host_id, relay_device_id, owning_control_generation,
@@ -173,12 +172,7 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     )
     await database.query(`ANALYZE relay_connection_bases`)
 
-    const reaper = await plan(
-      `DELETE FROM relay_connection_bases WHERE ctid = ANY(ARRAY(
-         SELECT ctid FROM relay_connection_bases WHERE active = ? AND deadline <= ? LIMIT 5000
-       ))`,
-      [0, NOW - DAY_MS]
-    )
+    const reaper = await cleanupPlan('DELETE FROM relay_connection_bases')
 
     expect(reaper).toContain('relay_connection_bases_active_deadline')
     expect(reaper).not.toContain('Seq Scan on relay_connection_bases')
@@ -201,14 +195,8 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     await database.query(`ANALYZE relay_direct_authorizations`)
     await database.query(`ANALYZE relay_rate_windows`)
 
-    const pending = await plan(
-      `UPDATE relay_direct_authorizations SET consumed_at = ?
-       WHERE consumed_at IS NULL AND deadline <= ?`,
-      [NOW, NOW]
-    )
-    const windows = await plan(`DELETE FROM relay_rate_windows WHERE window_started_at < ?`, [
-      NOW - DAY_MS
-    ])
+    const pending = await cleanupPlan('UPDATE relay_direct_authorizations')
+    const windows = await cleanupPlan('DELETE FROM relay_rate_windows')
 
     expect(pending).toContain('relay_direct_authorizations_pending_deadline')
     expect(pending).not.toContain('Seq Scan on relay_direct_authorizations')
@@ -296,12 +284,7 @@ describePostgres('credential cleanup against PostgreSQL', () => {
     )
     await database.query(`ANALYZE relay_audit_events`)
 
-    const reaper = await plan(
-      `DELETE FROM relay_audit_events WHERE ctid = ANY(ARRAY(
-         SELECT ctid FROM relay_audit_events WHERE at <= ? ORDER BY at LIMIT 5000
-       ))`,
-      [NOW - AUDIT_EVENT_RETENTION_MS]
-    )
+    const reaper = await cleanupPlan('DELETE FROM relay_audit_events')
 
     expect(reaper).toContain('relay_audit_events_at')
     expect(reaper).not.toContain('Seq Scan on relay_audit_events')

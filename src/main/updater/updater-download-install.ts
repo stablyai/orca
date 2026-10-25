@@ -11,7 +11,6 @@ import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
 import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
 
-/** Coordinates renderer-facing download/install actions and their duplicate guards. */
 export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
   protected quitAndInstall(): void {
     if (
@@ -45,7 +44,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (process.platform === 'darwin') {
       setMacInstallPreflightInProgress(true)
     }
-    // Why: defer the quit a tick so the renderer can flush dismissals/state before windows start closing.
+    // Defer quit one tick so the renderer can flush state before windows close.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
       void this.performQuitAndInstall()
     }, QUIT_AND_INSTALL_DELAY_MS)
@@ -62,7 +61,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     ) {
       return
     }
-    // Why: allow retry from 'error' (availableVersion stays cached) so the error card's Retry Download button works.
+    // Retain availableVersion after errors so Retry Download still works.
     const canStart =
       this.currentStatus.state === 'available' ||
       (this.currentStatus.state === 'error' && this.hasInstallableDownloadedVersion())
@@ -74,15 +73,12 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (!version) {
       return
     }
-    // Why: main owns this verdict, not the card — an older renderer or a direct IPC call must not be
-    // able to spend a package download that this host could never install.
+    // Enforce host installability in main for older renderers and direct IPC callers.
     if (isExternallyManagedLinuxInstall()) {
       recordUpdaterLifecycle('linux_package_externally_managed_download_blocked', {
         version
       })
-      // Why: a pinned jump resolves to 'release' on Linux (no dev-channel artifact is built for it),
-      // so refusing without unwinding would strand isPinnedBuildActive and silently kill every
-      // background check for the rest of the process. A no-op on the ordinary release path.
+      // A refused Linux pin still owns the release feed; unwind it or background checks remain disabled.
       this.clearAvailableUpdateContext()
       this.restoreReleaseUpdateSource()
       this.sendStatus({
@@ -99,7 +95,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'
     beginMacUpdateDownload()
-    // Why: setup can take seconds before progress emits; surface acceptance now so the action never looks inert.
+    // Acknowledge acceptance before setup delays progress events so the card responds immediately.
     this.sendStatus({ state: 'downloading', percent: 0, version })
     const startDownload = (): void => {
       this.getAutoUpdater()
@@ -114,7 +110,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
           }
         })
     }
-    // Why before the download: Squirrel stages as soon as it ends, unless staging waits for install.
+    // Prepare before download because Squirrel stages on completion unless staging is deferred to install.
     const preparingStaging = this.isMacStagingDeferredToInstall()
       ? null
       : prepareThisProcessShipItStaging()

@@ -7,28 +7,9 @@ import {
   terminalPathResolutionSchema
 } from './file-preview-reply-schema'
 
-/**
- * The preview screen's reads and writes.
- *
- * Every one of them is a skip rather than a throw, because a refused preview is not an error the
- * screen raises: it is a result the screen renders. The refusal itself stays at the call site,
- * which maps the host's code and message into display copy (`previewError`) and decides whether
- * the failure is a stale terminal-artifact grant worth refreshing. No acceptance policy exposes a
- * refusal code, and only these two consumers want one.
- *
- * What a *malformed* accepted reply does is what changes here. A skip's reader is consulted only
- * after the policy has already admitted the reply, so an unreadable payload throws
- * `RpcIncompatibleReplyError` naming the method; the preview screen's own try/catch runs it back
- * through `previewError`, which lands on 'Unable to load preview' — the copy main already showed
- * for an unreadable text payload, and a truer one than the 'Binary preview unavailable' main gave
- * an unreadable image payload.
- *
- * The text and image readers are split by method rather than by path: `createMobileFilePreviewRequest`
- * picks the method from `classifyMobileArtifact`, and `loadMobileFilePreview` normalizes with the
- * same predicate over the same path, so each method has exactly one projection behind it.
- */
+// Skip refusals so the screen can map host code/message to copy and refresh stale artifact grants; acceptance policies expose no refusal code.
+// Malformed accepted replies throw into previewError. Split text/image readers by the same classifyMobileArtifact predicate used by request and response.
 
-/** files.read for a preview. The tab doc asks the same method under a throwing policy. */
 export const filePreviewTextRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'files.preview-text-or-skip',
@@ -39,7 +20,6 @@ export const filePreviewTextRead = bindDeferredRpcOperation(
   })
 )
 
-/** files.readPreview for a preview; the tab doc's image read is the other policy on it. */
 export const filePreviewImageRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'files.preview-image-or-skip',
@@ -70,7 +50,6 @@ export const terminalArtifactImageRead = bindDeferredRpcOperation(
   })
 )
 
-/** The save. Its reply body is never read: a success is the whole answer. */
 export const terminalArtifactWrite = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'files.write-terminal-artifact-or-skip',
@@ -81,7 +60,7 @@ export const terminalArtifactWrite = bindDeferredRpcOperation(
   })
 )
 
-/** Re-resolves a terminal path to mint a fresh grant. A refusal leaves the stale grant in place. */
+// Refusal leaves the stale grant in place.
 export const terminalArtifactPathResolve = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'files.resolve-terminal-path-or-skip',
@@ -92,5 +71,4 @@ export const terminalArtifactPathResolve = bindDeferredRpcOperation(
   })
 )
 
-/** What a preview send takes, named from an operation so no module names the raw port. */
 export type MobileFilePreviewRpcSender = Parameters<typeof filePreviewTextRead.request>[0]

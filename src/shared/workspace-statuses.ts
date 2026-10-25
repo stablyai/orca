@@ -213,9 +213,7 @@ export function normalizePersistedWorkspaceStatuses(
   ) {
     return cloneDefaultWorkspaceStatuses()
   }
-  // Why: a previous build briefly wrote the default columns in reverse order.
-  // The repair is one-shot and checks the raw payload, because normalized
-  // IDs/labels are indistinguishable from a user-authored column reorder.
+  // Repair only the raw known reversed default payload once; normalized values cannot distinguish it from a user reorder.
   if (
     options.repairReorderedDefaultStatuses === true &&
     isKnownBadPRReorderedDefaultStatusPayload(value)

@@ -8,11 +8,7 @@ import {
   ORCAD_COMPLETE_MANAGED_STOP_FLAG
 } from '../../shared/orcad-stop-request'
 
-/**
- * The precondition is only worth anything if it runs first. A loader failure is not
- * catchable, so a preflight that lands after `main()` has already imported
- * the PTY runtime prevents nothing.
- */
+// Preflight must precede PTY imports because native loader failures may be uncatchable.
 const { order, profileProbe, reserveStdout } = vi.hoisted(() => {
   const order: string[] = []
   return { order, profileProbe: vi.fn(async () => {}), reserveStdout: vi.fn() }

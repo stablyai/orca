@@ -48,8 +48,6 @@ describe('resolveOrcadPath', () => {
     for (const [name, answer] of answers) {
       expect(answer, `${name} answered nothing`).toBeTruthy()
       if (name !== 'userData') {
-        // The catch-all this replaced returned the data directory for four of seven
-        // names, 'exe' included — a data directory is not an executable.
         expect(answer, `${name} answered the userData directory`).not.toBe(
           join(sep, 'srv', 'orca-state')
         )
@@ -110,7 +108,7 @@ describe('resolveOrcadInstallRoot', () => {
     )
   })
 
-  // STA-5495: siblings such as the watcher entry ship beside the bundle, not beside the link.
+  // Bundle siblings live beside symlink targets, not the link.
   it.skipIf(process.platform === 'win32')('follows a symlinked script to the real bundle', () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'orcad-install-root-')))
     try {
@@ -128,7 +126,7 @@ describe('resolveOrcadInstallRoot', () => {
 
   it('refuses instead of guessing when the process has no main script', () => {
     const originalArgv = process.argv
-    // `node -e` leaves argv[1] unset; cwd would be a guess, not an answer.
+    // node -e omits argv[1]; cwd cannot establish the install root.
     process.argv = [process.execPath]
     try {
       expect(() => resolveOrcadInstallRoot()).toThrow(/orcad_install_root_unavailable/)

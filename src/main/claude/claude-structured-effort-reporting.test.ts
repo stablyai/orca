@@ -35,7 +35,7 @@ function sessionWith(
           calls.push(`set_model:${model}`)
         },
         applyFlagSettings: async (settings: { effortLevel?: string }) => {
-          // The measured behaviour: an unknown effort is accepted and ignored.
+          // The CLI accepts and ignores unknown effort values.
           calls.push(`apply:${settings.effortLevel}`)
         },
         getSettings: async () => {
@@ -64,8 +64,6 @@ describe('Claude effort reporting', () => {
     ['the payload carries no effective block', { applied: { effort: 'high' } }],
     ['the request failed outright', null]
   ])('reports no effort when %s', (_case, settings) => {
-    // Never defaulted: an effort nothing measured would be worse than a blank
-    // pill, and this is the assertion that goes red if the key is renamed.
     expect(readClaudeSettingsEffort(settings)).toBeNull()
   })
 
@@ -106,8 +104,6 @@ describe('Claude effort reporting', () => {
 
     expect(init).toHaveLength(1)
     expect(init[0]).toHaveProperty('model')
-    // The regression that hid this defect: a fixture inventing `effortLevel`
-    // kept every gate green over a value that is always empty in production.
     expect(Object.keys(init[0])).not.toContain('effortLevel')
   })
 })
@@ -116,14 +112,10 @@ describe('Claude effort readback', () => {
   it('records an effort the child did not adopt without vouching for it', async () => {
     const { session, calls } = sessionWith('high')
 
-    // The disagreement stops the confirmation, not the write: no other client
-    // vetoes here, and the pre-flight catalog guard already refuses the levels
-    // the model cannot run.
     await expect(
       setClaudeStructuredOption(session, { key: 'effort', value: 'bogus-effort-xyz' }, undefined)
     ).resolves.toEqual({ effort: 'bogus-effort-xyz' })
     expect(session.confirmedOptions.has('effort')).toBe(false)
-    // The child's own answer is kept rather than discarded with the refusal.
     expect(session.reportedOptions.effort).toBe('high')
     expect(calls).toEqual(['apply:bogus-effort-xyz', 'get_settings'])
   })
@@ -137,7 +129,6 @@ describe('Claude effort readback', () => {
   })
 
   it('records the request when the readback is unavailable', async () => {
-    // No evidence of a refusal is not evidence of one; the apply itself succeeded.
     const { session } = sessionWith(null)
 
     await expect(

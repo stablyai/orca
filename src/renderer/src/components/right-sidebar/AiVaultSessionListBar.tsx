@@ -31,10 +31,7 @@ export function aiVaultSessionCountLabel(shown: number, loaded: number): string 
     : translate('sessionSearch.panel.sessionsOther', '{{count}} sessions', { count: shown })
 }
 
-/**
- * The bar above the session list: what the list is showing on the left, the order that
- * produced it on the right — the one place sort is both reported and changed.
- */
+/** Report the visible count and current sort together, with one sort control. */
 export function AiVaultSessionListBar<Value extends string>({
   label,
   value,

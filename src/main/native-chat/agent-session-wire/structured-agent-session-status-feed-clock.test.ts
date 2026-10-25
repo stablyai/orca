@@ -1,6 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Which journal changes republish a session's status now that the summary carries its own state
-// clock: a moved clock always does, and row activity alone does not once the clock dates the state.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -99,7 +97,6 @@ describe('status republication and the state clock', () => {
     const settled = published.length
     expect(published.at(-1)).toMatchObject({ status: 'idle', statusStartedAt: 1_150 })
 
-    // A roster-style revision: new journal activity, same words, same clock.
     await write(codexItem(5), { kind: 'status', text: 'Subagent running' })
     await write(codexItem(5), { kind: 'status', text: 'Subagent running' })
     expect(published).toHaveLength(settled)

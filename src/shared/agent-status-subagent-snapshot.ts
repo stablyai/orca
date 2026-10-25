@@ -1,5 +1,4 @@
-// A pane's in-process subagents as the hook lane publishes them on a status row: the snapshot
-// shape, its normalization at every admission point, and the equality stores reuse arrays by.
+// Share hook-child snapshot normalization/equality so status stores can reuse unchanged arrays.
 
 import {
   AGENT_MODEL_MAX_LENGTH,
@@ -10,8 +9,7 @@ import {
 
 export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle' | 'unverifiable'
 
-/** A live in-process child of the pane's provider session. Rendered as an
- *  indented child row with no PTY of its own. */
+/** Live in-process provider child shown as an indented row without its own PTY. */
 export type AgentSubagentSnapshot = {
   /** Provider-assigned lifecycle id. */
   id: string
@@ -83,8 +81,7 @@ function readAgentSubagents(
   return normalized.length > 0 ? normalized : undefined
 }
 
-/** Structural equality for subagent lists so stores can reuse the previous
- *  array reference (and skip fanout) when nothing actually changed. */
+/** Reuse unchanged list references to skip store fanout. */
 export function agentSubagentsEqual(
   a: AgentSubagentSnapshot[] | undefined,
   b: AgentSubagentSnapshot[] | undefined

@@ -77,9 +77,7 @@ describe('reading a structured worker through the terminal-read path', () => {
   })
 
   it('serves the journal as terminal lines, with no dispatch and no capability', async () => {
-    // The defect this pins: a peer has no dispatch id and no coordinator standing, so `worker-read`
-    // is closed to it, and `terminal read` threw `terminal_handle_stale` for a perfectly live
-    // worker. A peer could not see a structured agent's recent output at all.
+    // Peers lack the coordinator/Dispatch authority worker-read requires; terminal read must still serve structured worker output.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'first line\nsecond line'), message('i2', 'done')] })
     const read = await readStructuredWorkerTerminal({ handle, db: null })
@@ -93,19 +91,14 @@ describe('reading a structured worker through the terminal-read path', () => {
     installHost({ items: [message('i1', 'a'), message('i2', 'b'), message('i3', 'c')] })
     const read = await readStructuredWorkerTerminal({ handle, db: null, limit: 2 })
     expect(read?.tail).toEqual(['[assistant] b', '[assistant] c'])
-    // No index is advertised: the next read re-projects a sliding window, so 0/length would name
-    // positions that address different lines by then.
+    // A sliding mutable tail cannot advertise stable cursor positions.
     expect(read?.nextCursor).toBeNull()
     expect(read?.oldestCursor).toBeUndefined()
     expect(read?.latestCursor).toBeUndefined()
   })
 
   it('refuses a cursor read rather than silently misdelivering lines', async () => {
-    // The PTY cursor indexes an append-only completed-line buffer with a monotone count. This
-    // window is a bounded tail re-projected every read, so a saved index addresses different lines
-    // as the journal grows — and `truncated` could never fire to say so, because it tests
-    // `cursor < oldestCursor` and `oldestCursor` was always 0. A poller would get wrong or
-    // duplicated lines with `truncated:false`.
+    // PTY cursors index append-only lines; reprojected mutable windows could return different lines at the same index without truncated.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'a')] })
     const refusal = await readStructuredWorkerTerminal({ handle, db: null, cursor: 0 }).then(
@@ -113,12 +106,9 @@ describe('reading a structured worker through the terminal-read path', () => {
       (error: unknown) => (error instanceof Error ? error.message : String(error))
     )
     expect(refusal).toMatch(/not line-addressable/)
-    // Tells the caller what DOES work here. Polling a bounded newest-last tail and diffing fails
-    // safe — a harmless re-read — where a broken cursor fails unsafe, as a silent hole.
+    // Polling and diffing the bounded tail permits harmless rereads instead of silent cursor holes.
     expect(refusal).toMatch(/poll it and diff/)
-    // And names no paging alternative, because there is none. It must never send a peer to
-    // `worker-read`: that verb needs a dispatch id and coordinator standing this caller does not
-    // have, and it is a window index over the same bounded page rather than an append-only anchor.
+    // Do not redirect peers to worker-read: it requires coordinator authority and offers no stable cursor either.
     expect(refusal).not.toContain('worker-read')
   })
 
@@ -138,8 +128,7 @@ describe('reading a structured worker through the terminal-read path', () => {
   })
 
   it('refuses when the session is not attached rather than answering an empty tail', async () => {
-    // An empty tail is the claim "this worker has produced no output", which is a different and
-    // false statement — and the one a caller cannot tell apart from a real silence.
+    // Unreadable history must refuse; an empty tail would falsely report silence.
     const handle = registerWorker()
     installHost({ items: 'unreadable' })
     await expect(readStructuredWorkerTerminal({ handle, db: null })).rejects.toThrow(
@@ -154,8 +143,7 @@ describe('reading a structured worker through the terminal-read path', () => {
   })
 
   it('is what `terminal read` answers with, ahead of the PTY lookup', async () => {
-    // The real method through the real prototype, because the wiring IS the fix: the module below
-    // could be perfect and a peer would still get `terminal_handle_stale` if nothing called it.
+    // Exercise the production runtime method so missing routing cannot hide behind a correct standalone reader.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'hello')] })
     const runtime: {
@@ -173,7 +161,6 @@ describe('reading a structured worker through the terminal-read path', () => {
       tail: ['[assistant] hello'],
       source: 'stream'
     })
-    // There is no rendered grid to screenshot, and saying so beats inventing one.
     await expect(runtime.readTerminal(handle, { screen: true })).resolves.toMatchObject({
       source: 'screen-unavailable'
     })

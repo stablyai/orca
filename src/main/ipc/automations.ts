@@ -21,11 +21,7 @@ import type {
   ScopedExternalManagerListRequest
 } from '../../shared/external-automation-scope'
 
-/**
- * Fail closed: an external request with no captured owner is refused rather than
- * resolved against whichever host happens to be active. Malformed input keeps
- * the engine's plain-Error convention; it is not an ownership *conflict*.
- */
+/** Refuse uncaptured owners instead of using the active host; malformed input remains a plain Error, not an ownership conflict. */
 function requireCapturedOwner<T extends { owner?: AutomationOwnerRef | null }>(
   request: T | null | undefined
 ): T {
@@ -36,11 +32,7 @@ function requireCapturedOwner<T extends { owner?: AutomationOwnerRef | null }>(
   return request
 }
 
-/**
- * Holds the probe pool's priority lease for the duration of Orca's own automation
- * work. Without this, a queued external probe competes with the list and mutation
- * traffic the user is actually waiting on.
- */
+/** Prioritize Orca work over queued external probes for the full operation lifetime. */
 function underOrcaPriority<T>(scheduler: ExternalAutomationProbeScheduler, run: () => T): T {
   const release = scheduler.beginPriorityWork()
   let pending = false
@@ -59,22 +51,18 @@ function underOrcaPriority<T>(scheduler: ExternalAutomationProbeScheduler, run: 
 }
 
 export function registerAutomationHandlers(store: Store, service: AutomationService): void {
-  // One long-lived pair per registration: the cache TTL and the probe pool's
-  // concurrency ceiling only mean anything if they outlive a single request.
+  // Cache TTL and probe concurrency need registration-long state, not per-request instances.
   const probeScheduler = new ExternalAutomationProbeScheduler()
   const managerCache = new ExternalAutomationManagerCache()
   const scopedExternal = createScopedExternalAutomations({
-    // Hidden runtime-owned targets are passed through on purpose: the guard
-    // rejects them itself, so pre-filtering here would leak a different error.
+    // Let the guard reject hidden targets so filtering cannot change its error contract.
     registry: { getSshTargets: () => store.getSshTargets() },
     scheduler: probeScheduler,
     cache: managerCache
   })
-  // Why: Orca automation CRUD now arrives over the local runtime RPC surface,
-  // so the runtime methods take the lease through this hook instead of an arm here.
+  // Runtime RPC CRUD takes the service-installed priority lease.
   service.externalProbePriority = (run) => underOrcaPriority(probeScheduler, run)
-  // Scoped external-manager surface: one captured desktop owner in, one host's
-  // managers out. The target and manager ID are derived inside the guard.
+  // Guard derives one host and manager ID from the captured owner.
   ipcMain.handle(
     'automations:listExternalManagerForOwner',
     (
@@ -88,9 +76,7 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     (_event, request: ScopedExternalManagerActionRequest): Promise<void> =>
       scopedExternal.runAction(requireCapturedOwner(request))
   )
-  // Why: probes for hosts the user is no longer viewing are cancelled, not left
-  // to finish. An empty list retains nothing, which is the correct fail-closed
-  // state for a renderer with no desktop scope selected.
+  // Cancel scopes no longer viewed; an empty retained set cancels all.
   ipcMain.handle(
     'automations:retainExternalScopes',
     (_event, request?: { owners?: readonly AutomationOwnerRef[] } | null): void => {

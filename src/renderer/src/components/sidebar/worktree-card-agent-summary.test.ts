@@ -50,7 +50,6 @@ function renderCompactAgentRow(props: React.ComponentProps<typeof CompactAgentRo
 }
 
 describe('worktree card agent summary', () => {
-  // The sidebar lists running children only, so a child row it counts is one that runs.
   it("counts a running child by its own row's state", () => {
     const running: DashboardAgentRowData = {
       ...monitoringAgent(),

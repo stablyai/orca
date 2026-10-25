@@ -1,15 +1,10 @@
 import { statSync } from 'node:fs'
 import { readOpenCodeDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-open'
 import { columnExists, tableExists } from '../../opencode-usage/schema-helpers'
+import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 import type { BinderSessionRow, OpenCodeSessionCursor } from '../opencode-binder-sessions-result'
 
-/**
- * Sessions newer than `cursor`, oldest first. The composite `(time_created, id)`
- * position re-lists rows sharing a millisecond with the cursor, including rows
- * the LIMIT cut off last round. Unknown shapes read as empty so an OpenCode
- * schema move degrades to unbound sessions. An absent store is empty (#24577);
- * any other failed open throws, so the client logs it.
- */
+/** Composite cursor pagination preserves same-millisecond rows; unknown schemas or absent stores return empty. */
 export function readOpenCodeBinderSessions(
   dbPath: string,
   cursor: OpenCodeSessionCursor
@@ -20,8 +15,7 @@ export function readOpenCodeBinderSessions(
   return readOpenCodeDatabase({
     dbPath,
     read: (db) => {
-      // Why `session` only: OpenCode 1 writes it; OpenCode 2 writes `session_v2`, and its
-      // posts name their own pane, so its sessions must never bind.
+      // Exclude OpenCode 2 session_v2 rows: its posts already identify the pane and must not bind again.
       const table = 'session'
       if (
         !tableExists(db, table) ||
@@ -38,23 +32,21 @@ export function readOpenCodeBinderSessions(
         .all(cursor.ms, cursor.ms, cursor.id)
       const sessions: BinderSessionRow[] = []
       for (const row of rows) {
-        if (typeof row !== 'object' || row === null) {
+        if (!isRecord(row)) {
           continue
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: node:sqlite returns plain row objects; the object check above plus the per-field validation below reject anything else.
-        const record = row as Record<string, unknown>
         if (
-          typeof record.id !== 'string' ||
-          typeof record.directory !== 'string' ||
-          typeof record.time_created !== 'number'
+          typeof row.id !== 'string' ||
+          typeof row.directory !== 'string' ||
+          typeof row.time_created !== 'number'
         ) {
           continue
         }
         sessions.push({
-          id: record.id,
-          directory: record.directory,
-          createdAtMs: record.time_created,
-          parentId: typeof record.parent_id === 'string' ? record.parent_id : null
+          id: row.id,
+          directory: row.directory,
+          createdAtMs: row.time_created,
+          parentId: typeof row.parent_id === 'string' ? row.parent_id : null
         })
       }
       return sessions
@@ -62,7 +54,7 @@ export function readOpenCodeBinderSessions(
   })
 }
 
-// Why stat, not existsSync: a permission failure must surface, not read as an unused store.
+// stat surfaces permission errors that existsSync would confuse with an absent store.
 function storeExists(dbPath: string): boolean {
   try {
     statSync(dbPath)

@@ -1,6 +1,3 @@
-// Why: label/title wording for the dropdown rows, kept apart from the priority ladder so copy edits
-// do not touch the state machine.
-
 export function describePushCount(ahead: number): string {
   return `Push ${ahead} commit${ahead === 1 ? '' : 's'}`
 }

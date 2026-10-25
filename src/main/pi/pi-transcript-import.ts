@@ -12,7 +12,6 @@ export const PI_TRANSCRIPT_IMPORT = directoryTranscriptImport({
   accountHomeCandidates: () => [
     process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent')
   ],
-  // The file Session History lists under this id.
   findTranscript: async ({ providerSessionId, store, strictErrors }) => {
     const files = await walkSessionFiles(store, 'pi', [], {
       extensions: new Set(['.jsonl']),
@@ -32,6 +31,5 @@ export const PI_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     }
     return file
   },
-  // A Pi chat's handle names its session file, not the id.
   handleNamesTranscript: true
 })

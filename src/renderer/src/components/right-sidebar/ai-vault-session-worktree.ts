@@ -52,10 +52,7 @@ type WorktreeCandidate = {
   normalizedPathLength: number
 }
 
-/**
- * Every workspace that owns sessions by cwd: git worktrees, and folder workspaces as their usual
- * `folder:` rows. Git rows go first so a git worktree keeps an equal-path tie (the sort is stable).
- */
+/** Include worktrees and folder: rows; put git first to win equal-path ties in the stable sort. */
 export function aiVaultSessionOwnerWorkspaces(
   worktrees: readonly Worktree[],
   folderWorkspaces: readonly FolderWorkspace[]
@@ -92,10 +89,7 @@ export function resolveAiVaultSessionWorktreeInfo({
   )
 }
 
-/**
- * Stamps `status: 'current'` at read time so the session→worktree map itself
- * never depends on the active worktree — switching worktrees must not rebuild it.
- */
+/** Stamp current at read time so workspace switches do not rebuild the session map. */
 export function withAiVaultCurrentWorktreeStatus(
   worktreeInfo: AiVaultSessionWorktreeInfo | null,
   activeWorktreeId: string | null
@@ -199,11 +193,7 @@ function resolveWorktreeDisplayFromCandidates(
   return null
 }
 
-/**
- * Deliberately unaware of the active worktree: stamping `current` here would
- * rebuild the whole map (candidates × sessions) on every worktree switch.
- * Callers derive it per row via `withAiVaultCurrentWorktreeStatus`.
- */
+/** Keep active-worktree state out of this map; callers stamp current per row to avoid rebuilding candidates × sessions. */
 export function useAiVaultSessionWorktreeMap({
   sessions,
   repos = [],
@@ -214,8 +204,7 @@ export function useAiVaultSessionWorktreeMap({
   worktrees: readonly Worktree[]
 }): ReadonlyMap<string, AiVaultSessionWorktreeInfo> {
   return useMemo(() => {
-    // Hoisted out of the per-session loop: candidates and their normalized
-    // roots are session-independent.
+    // Build session-independent candidates and normalized roots once.
     const candidates = buildWorktreeCandidates(worktrees, repos)
     return new Map(
       sessions.flatMap((session) => {

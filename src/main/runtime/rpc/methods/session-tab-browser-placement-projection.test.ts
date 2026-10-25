@@ -41,8 +41,7 @@ describe('projectSessionTabBrowserPlacements', () => {
     expect(projected.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'group-terminal' })
   })
 
-  // Why named here: a CLI socket sends no capabilities at all, so anything asking it for browser
-  // tabs — an e2e oracle included — is blind to every client-placed page by design.
+  // CLI sockets advertise no capabilities, so even test oracles cannot see client-placed browser pages by default.
   it('hides client-placed pages from a native peer and from a caller with no capabilities', () => {
     expect(
       clientCanObserveClientHostedBrowserPages(NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES)

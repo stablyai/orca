@@ -1,8 +1,6 @@
 import type { CatalogModel, CatalogOption } from './agent-session-option-catalog'
 import type { AgentSessionOptionChoice, AgentSessionOptionsResult } from './agent-session-wire'
 
-// The picker options one listed model offers, built from what its host reported.
-
 function effortOption(model: AgentSessionOptionsResult['models'][number]): CatalogOption | null {
   if (model.efforts.length === 0) {
     return null

@@ -11,6 +11,7 @@ import {
   getRegisteredMouseUpHandler,
   makeBuffer,
   makeBufferLine,
+  makeExistsCache,
   makeFallbackTerminal
 } from './terminal-link-provider-buffer-fixtures'
 import {
@@ -73,8 +74,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     await flushAsyncWork()
 
     expect(opened).toBe(true)
-    // Why: direct click fallback cannot wait for xterm's hover-time async
-    // existence probe; openDetectedFilePath still stats before routing.
+    // Click fallback cannot wait for async hover probes; opening still verifies the target.
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/package.json' }),
@@ -96,7 +96,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
         runtimeEnvironmentId: null,
         wslDistro: 'Ubuntu',
-        pathExistsCache: new Map([
+        pathExistsCache: makeExistsCache([
           ['active\0\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md', true]
         ])
       }
@@ -201,6 +201,7 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('opens a wrapped continuation-row html path from a direct modifier-click fallback', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
     const rows = [
       makeBufferLine('open mobile/mock-'),
       makeBufferLine('homepage.html', { isWrapped: true })
@@ -241,7 +242,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         runtimeEnvironmentId: null,
-        pathExistsCache: new Map<string, boolean>([
+        pathExistsCache: makeExistsCache([
           ['active\0/repo/My Folder now', false],
           ['active\0/repo/My Folder', true]
         ])
@@ -269,7 +270,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         runtimeEnvironmentId: null,
-        pathExistsCache: new Map([['active\0/repo/unknown-dir', true]])
+        pathExistsCache: makeExistsCache([['active\0/repo/unknown-dir', true]])
       }
     )
     await flushAsyncWork()
@@ -277,6 +278,40 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(opened).toBe(false)
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('retries a direct file click when a cached missing path expires', async () => {
+    setPlatform('Macintosh')
+    const now = vi.spyOn(Date, 'now').mockReturnValue(10_999)
+    const pathExistsCache = new Map([
+      ['active\0/tmp/eventually-created.ts', { exists: false, checkedAt: 1_000, sequence: 0 }]
+    ])
+    const openAtCurrentTime = (): boolean =>
+      openFilePathLinkAtBufferPosition(
+        makeBuffer([makeBufferLine('eventually-created.ts')]),
+        { x: 4, y: 1 },
+        80,
+        {
+          startupCwd: '/tmp',
+          worktreeId: 'wt-1',
+          worktreePath: '/tmp',
+          runtimeEnvironmentId: null,
+          pathExistsCache
+        }
+      )
+
+    expect(openAtCurrentTime()).toBe(false)
+    expect(openFileMock).not.toHaveBeenCalled()
+
+    now.mockReturnValue(11_000)
+    expect(openAtCurrentTime()).toBe(true)
+    await flushAsyncWork()
+
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/eventually-created.ts' }),
+      { forceContentReload: true }
+    )
+    now.mockRestore()
   })
 
   it('retries a wrapped file click even when xterm already marked the link active', async () => {
@@ -294,7 +329,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       runtimeEnvironmentId: null,
       managerRef: { current: null },
       linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-      pathExistsCache: new Map<string, boolean>()
+      pathExistsCache: makeExistsCache()
     })
     const mouseUp = getRegisteredMouseUpHandler(element)
     const preventDefault = vi.fn()
@@ -337,7 +372,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       runtimeEnvironmentId: null,
       managerRef: { current: null },
       linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-      pathExistsCache: new Map<string, boolean>()
+      pathExistsCache: makeExistsCache()
     })
     const mouseUp = getRegisteredMouseUpHandler(element)
     const preventDefault = vi.fn()
@@ -575,7 +610,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       makeBufferLine(`${firstPath} · ${middleStart}`),
       makeBufferLine(`${middleEnd} · ${thirdPath}`)
     ]
-    const pathExistsCache = new Map([[`active\0/repo/${middlePath}`, true]])
+    const pathExistsCache = makeExistsCache([[`active\0/repo/${middlePath}`, true]])
     const positions = [
       { x: firstPath.length + ' · '.length + 2, y: 1 },
       { x: 2, y: 2 }

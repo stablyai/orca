@@ -17,8 +17,7 @@ export type PluginMarketplaceFetchResult = {
   marketplace: PluginMarketplace
 }
 
-/** Fetches a marketplace through system Git so private repositories use the
- * same SSH agent and credential helpers as every other Orca Git operation. */
+/** System Git retains private-repo SSH agent and credential-helper support. */
 export async function fetchPluginMarketplace(
   source: PluginMarketplaceRegisteredSource
 ): Promise<PluginMarketplaceFetchResult> {

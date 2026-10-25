@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import {
   addMobileDiffComment,
-  formatDiffComments,
   formatMobileDiffReviewPrompt,
   normalizeMobileDiffComments,
   removeDeliveredMobileDiffComments,
@@ -115,18 +114,6 @@ describe('mobile diff comments', () => {
         [delivered]
       )
     ).toEqual([comment({ id: 'a', body: 'new note' }), comment({ id: 'b' })])
-  })
-
-  it('uses the desktop-compatible prompt format', () => {
-    expect(formatDiffComments([comment({ id: 'a', body: 'quote "this"' })])).toBe(
-      ['File: src/app.ts', 'Line: 4', 'User comment: "quote \\"this\\""'].join('\n')
-    )
-  })
-
-  it('formats file-level notes with file scope', () => {
-    expect(formatDiffComments([comment({ id: 'a', lineNumber: 0 })])).toBe(
-      ['File: src/app.ts', 'Scope: file', 'User comment: "check this"'].join('\n')
-    )
   })
 
   it('wraps sent review notes in the mobile agent prompt', () => {

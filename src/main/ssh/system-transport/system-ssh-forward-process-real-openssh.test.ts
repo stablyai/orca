@@ -1,8 +1,4 @@
-/**
- * Real OpenSSH: a forward process must own its listener and see sshd's refusals even when the
- * user's ssh_config multiplexes through a ControlMaster. Opt-in (needs sshd and ssh on PATH):
- * ORCA_REAL_OPENSSH_TEST=1 pnpm test src/main/ssh/system-transport/system-ssh-forward-process-real-openssh.test.ts
- */
+/** ORCA_REAL_OPENSSH_TEST=1 requires ssh/sshd; verify listener/refusal ownership even with a user-configured ControlMaster. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SshConnection } from '../connection/ssh-connection'
 import { SystemSshPortForwardProvider } from '../port-forwarding/system-ssh-port-forward-provider'
@@ -47,8 +43,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       expect(await dial(forward.localPort)).toBe(false)
     }, 20_000)
 
-    // Why: any fixed-port forward starts here, and a master's forward may be the user's own; only
-    // the managed tunnel asks a master to give its persisted port back.
+    // A master may hold user forwards; only managed tunnels opt into cancelling their persisted forward.
     it("never takes a fixed port from a master's forward", async () => {
       const heldPort = await freePort()
       const spec = `127.0.0.1:${heldPort}:127.0.0.1:${prohibitedPort}`

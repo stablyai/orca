@@ -15,7 +15,6 @@ const HOST_LIST: AgentSessionModelCatalogResult = {
   fetchedAt: 1_000
 }
 
-/** Catalog reads take each scripted answer in turn; option reads never answer. */
 function client(
   catalog: () => Promise<AgentSessionModelCatalogResult>,
   options?: () => Promise<AgentSessionOptionsResult>
@@ -93,7 +92,6 @@ describe('the phone picker’s first frame', () => {
     expect(harness.frames.every((choices) => choices.length === 0)).toBe(true)
     await act(async () => answer(HOST_LIST))
     expect(harness.frames.at(-1)).toEqual(['gpt-host'])
-    // Only the host's list was ever offered.
     expect(harness.frames.filter((choices) => choices.length > 0)).toEqual(
       harness.frames.filter((choices) => choices.length > 0).map(() => ['gpt-host'])
     )

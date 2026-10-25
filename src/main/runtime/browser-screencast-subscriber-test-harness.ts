@@ -51,10 +51,7 @@ export type ScreencastHarness = {
   driver: () => RuntimeBrowserDriverState | undefined
 }
 
-/**
- * A runtime whose Chromium-facing screencast is replaced by a fake session per subscriber, so tests
- * drive the real subscription state machine without a browser.
- */
+/** Drive production subscription state with fake Chromium sessions. */
 export function createScreencastHarness(): ScreencastHarness {
   const runtime = new OrcaRuntimeService(store as unknown as never)
   let seq = 0
@@ -116,8 +113,7 @@ export function createScreencastHarness(): ScreencastHarness {
         void started()?.then(({ session }) => session.stop())
       },
       stops: () => sessionRef?.stops() ?? 0,
-      // Why: every absence assertion in these suites must not be allowed to pass before the
-      // subscriber reached the point where the signal it is checking would have been set.
+      // Await the signal-setting boundary so absence checks cannot pass too early.
       streaming: () =>
         vi.waitFor(() =>
           expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready' }))

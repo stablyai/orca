@@ -2,16 +2,7 @@ import type Database from '../../../sqlite/sync-database'
 import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 import type { OrcaSessionId } from '../../../../shared/orca-session-address'
 
-/**
- * The only place that inserts rows representing a live supervised worker.
- *
- * Why centralized: nesting depth must be stamped on every such row, and three
- * separate modules used to own their own INSERT. A boundary test forbids these
- * statements anywhere else, so a new spawn path cannot skip the stamp.
- *
- * Transaction-neutral on purpose — each caller keeps its own BEGIN IMMEDIATE or
- * SAVEPOINT, mutation-receipt write, and companion inserts.
- */
+/** Centralize live-worker inserts to enforce depth; callers retain transactions, receipts and companion writes. */
 
 export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
   id, run_id, task_id, contract_version, launch_token_hash,
@@ -54,7 +45,7 @@ const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments 
    dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
  ) VALUES (?, ?, ?, ?, ?, ?, ?)`
 
-/** Last line of defence: a row that reached here unstamped would read as a root. */
+/** Missing depth would turn a worker into an apparent root. */
 function assertStampedDepth(depth: number): void {
   if (!Number.isInteger(depth) || depth < 1) {
     throw new Error(
@@ -155,7 +146,7 @@ export function insertRemoteDispatchAttachmentRow(
     homePeerFingerprint: string
     protocolVersion: number
     runtimeEpoch: string
-    /** Propagated from the Run home, not computed here; absent (old client) = 1. */
+    /** Home-computed depth; old clients default to 1. */
     depth: number
   }
 ): void {

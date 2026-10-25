@@ -53,8 +53,7 @@ export function AddRemoteHostSshConfigPicker({
     []
   )
   const isResolving = resolvingAlias != null
-  // Why: filtering re-runs against a cached parse, so keep the field usable while a
-  // refresh (or a failed load the user can retry) is outstanding.
+  // Filtering uses cached config; refreshes/errors must not disable the field.
   const filterDisabled = isBulkImporting || isResolving
   const picksDisabled = isBulkImporting || isResolving
   const canAddAll =
@@ -150,8 +149,7 @@ export function AddRemoteHostSshConfigPicker({
             </p>
           </div>
         ) : (
-          // Why: these rows act on click and there is no selected row to track, so they stay
-          // plain buttons rather than a listbox whose aria-selected would always be a lie.
+          // Rows act without selection state, so plain buttons avoid false listbox aria-selected semantics.
           <ul
             aria-label={translate(
               'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerHostsLabel',
@@ -249,8 +247,7 @@ export function AddRemoteHostSshConfigPicker({
                   'Add all {{value0}} to Orca',
                   { value0: newHostCount }
                 )
-              : // Why: the remainder can be already-in-Orca or merely tombstoned, so the
-                // label cannot claim either one specifically.
+              : // Remaining hosts may be saved or tombstoned; copy must not assume either.
                 totalHostCount > 0
                 ? translate(
                     'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerNoNewHosts',

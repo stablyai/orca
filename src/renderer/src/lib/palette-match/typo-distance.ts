@@ -1,9 +1,6 @@
 export const PALETTE_TYPO_MIN_LENGTH = 4
 
-/**
- * True when `a` and `b` are within one edit. Length is checked before scanning so
- * impossible pairs never touch the character loop.
- */
+/** Check lengths before one-edit scanning so impossible pairs skip the loop. */
 export function isWithinOnePaletteEdit(a: string, b: string): boolean {
   const lengthDelta = a.length - b.length
   if (lengthDelta > 1 || lengthDelta < -1) {

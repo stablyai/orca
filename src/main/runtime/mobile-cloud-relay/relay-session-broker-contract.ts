@@ -15,8 +15,7 @@ export type RelayIdentity = {
   organizationId: string
 }
 
-// A refused renewal carries the reason the auth owner already computed, so the
-// broker closing first never costs the phone the cause.
+// Carry auth refusal through broker-first closure so phones retain the cause.
 export type RelayAccessTokenRefresh =
   | { accessToken: string }
   | { accessToken: null; hostCloseReason?: RelayHostCloseReason }

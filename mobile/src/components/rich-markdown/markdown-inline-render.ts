@@ -1,13 +1,6 @@
 import { escapeAttr, escapeHtml, isSafeUrl } from './markdown-escaping'
 
-/**
- * One line of markdown as inline markup: images, code, strikethrough, emphasis, links and bare
- * URLs, with everything between them escaped.
- *
- * The pattern is built per call rather than shared: it is a global regex read with `exec`, so a
- * module-level one would carry its `lastIndex` into the next call — and this function recurses
- * into its own matches, so the next call is usually itself.
- */
+// Build global exec regex per recursive call: shared lastIndex would leak between nested parses. Escape text between recognized inline forms.
 export function renderInline(text: string): string {
   const pattern =
     /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g

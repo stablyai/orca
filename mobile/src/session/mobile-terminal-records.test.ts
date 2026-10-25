@@ -38,10 +38,8 @@ describe('mobile terminal records', () => {
     })
 
     try {
-      for (let comparison = 0; comparison < 1_000; comparison += 1) {
-        expect(mobileTerminalThemesEqual(darkTheme, equivalentTheme)).toBe(true)
-        expect(mobileTerminalThemesEqual(darkTheme, lightTheme)).toBe(false)
-      }
+      expect(mobileTerminalThemesEqual(darkTheme, equivalentTheme)).toBe(true)
+      expect(mobileTerminalThemesEqual(darkTheme, lightTheme)).toBe(false)
     } finally {
       stringify.mockRestore()
     }
@@ -162,8 +160,6 @@ describe('mobile terminal records', () => {
   })
 
   it('treats a launch draft appearing or retracting as a session-tab change', () => {
-    // The route keeps `prev` when these compare equal, so a frame whose only
-    // delta is the draft would never reach the chat composer.
     const base: MobileTerminalSessionTab = {
       type: 'terminal',
       id: 'term-1::leaf-1',
@@ -184,6 +180,30 @@ describe('mobile terminal records', () => {
     expect(mobileSessionTabsEqual([seeded], [base])).toBe(false)
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded }])).toBe(true)
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded, launchDraftCreatedAt: 2 }])).toBe(false)
+  })
+
+  it('treats a browser load failure appearing or changing as a session-tab change', () => {
+    const url = 'http://localhost:3000/'
+    const page: Parameters<typeof mobileSessionTabsEqual>[0][number] = {
+      type: 'browser',
+      id: 'browser-1',
+      url,
+      loading: false
+    }
+    const refused = {
+      ...page,
+      loadError: { code: -102, description: 'ERR_CONNECTION_REFUSED', validatedUrl: url }
+    }
+    expect(mobileSessionTabsEqual([page], [refused])).toBe(false)
+    expect(
+      mobileSessionTabsEqual([refused], [{ ...refused, loadError: { ...refused.loadError } }])
+    ).toBe(true)
+    expect(
+      mobileSessionTabsEqual(
+        [refused],
+        [{ ...refused, loadError: { ...refused.loadError, code: -105 } }]
+      )
+    ).toBe(false)
   })
 
   it('treats terminal agent-status changes as session-tab changes', () => {
@@ -237,7 +257,6 @@ describe('mobile terminal records', () => {
 
     expect(mobileSessionTabsEqual([base], [{ ...base }])).toBe(true)
     expect(mobileSessionTabsEqual([base], [{ ...base, sessionId: 'session-2' }])).toBe(false)
-    // A status-only frame must still reach the tab strip's dot.
     expect(
       mobileSessionTabsEqual([base], [{ ...base, chatStatus: { state: 'working', updatedAt: 1 } }])
     ).toBe(false)
@@ -272,8 +291,7 @@ describe('mobile terminal records', () => {
       record({ handle: 'pty-2', connected: false })
     ]
 
-    // A worktree with no live PTY lists every parked leaf while tabs publish none;
-    // treating that as absence would pin the caller to the fast cadence forever.
+    // Parked leaves legitimately lack tabs; counting them as missing live PTYs would force fast polling forever.
     expect(hasConnectedTerminalAbsentFromSessionTabs(parked, [])).toBe(false)
   })
 

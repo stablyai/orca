@@ -45,25 +45,19 @@ export function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): 
   return entry.state === 'done' && !agentTurnEndedUncleanly(entry)
 }
 
-// Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive
-// record's tab. Sleeping a workspace must not become "one phone tap respawns all of it" — the pane
-// issues its own `--resume` cold restore when its tab is opened instead (#11598).
+// Done recovery stays passive: mobile wake background-mounts passive tabs and would respawn all work. Restore via --resume only when opened (#11598).
 export function markManualSleepLazyRestore(record: SleepingAgentSessionRecord): void {
   if (record.state === 'done') {
     record.restoreOnTabOpenOnly = true
   }
 }
 
-// Why: `live`/legacy rows are provisional checkpoints a fresh capture supersedes; an explicit
-// sleep or quit capture is the pane's only resume handle once its live row is gone.
+// Fresh captures replace provisional live/legacy checkpoints; explicit sleep/quit records may be the only surviving resume handle.
 export function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
   return record.origin === 'worktree-sleep' || record.origin === 'quit'
 }
 
-// Why: manual sleep kills the pty either way, so the record carries resume identity, not the dead
-// turn's verdict — and an explicitly slept workspace is never stale at wake, so a row the
-// user is deliberately sleeping must not trip the wake-side staleness discard. `state` is preserved
-// so a done pane wakes lazily in place instead of spawning a new tab.
+// Manual sleep kills PTY; capture resume identity without wake-side staleness discard. Preserve state so done panes resume lazily in place.
 export function manualSleepCaptureEntry(
   entry: AgentStatusEntry,
   capturedAt: number
@@ -88,8 +82,7 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
     if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
       continue
     }
-    // Why: a repeat sleep must not delete a durable record this capture cannot re-derive — the
-    // pane was never woken, so it has no live status row to rebuild it from (#11598).
+    // Repeated sleep lacks live rows for never-woken panes; retain durable records it cannot rederive (#11598).
     if (!replacements?.[paneKey] && isDurableSleepingCapture(record)) {
       continue
     }

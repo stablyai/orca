@@ -13,11 +13,6 @@ import {
 import { buildSourceControlManualReviewUrlFromContext } from './manual-review-url'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 
-/**
- * Reads the per-provider review links pinned to the worktree and derives everything the header and
- * remote actions need from them: the manual review URL, push-target usability, and the upstream
- * status the action model should act on.
- */
 export function useSourceControlLinkedReviews({
   activePrFromQueue,
   activeRepo,
@@ -88,7 +83,7 @@ export function useSourceControlLinkedReviews({
     linkedAzureDevOpsPR,
     linkedGiteaPR
   })
-  // Why: SSH-backed (connectionId) repos never fetch hostedReview, so skip the loading state or it would permanently block Publish Branch.
+  // SSH repos never fetch live reviews; treating them as loading would permanently block Publish Branch.
   const isHostedReviewStateLoading =
     !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
   const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({

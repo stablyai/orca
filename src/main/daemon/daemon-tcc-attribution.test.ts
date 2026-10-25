@@ -8,9 +8,7 @@ import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { getProcessStartedAtMs } from './daemon-process-start-time'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 
-// Real-process harness (same shape as daemon-bundle-staleness.test.ts): the health
-// check only trusts a pid record whose process is verifiably the daemon, so these
-// tests spawn a daemon-shaped child instead of mocking process identity.
+// Exercise real PID verification with a child whose argv matches the daemon.
 function spawnDaemonLikeProcess(socketPath: string, tokenPath: string) {
   return spawn(
     process.execPath,

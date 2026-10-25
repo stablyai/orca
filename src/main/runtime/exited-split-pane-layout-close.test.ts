@@ -48,15 +48,17 @@ const cleanExit = {
   freshSpawn: false,
   inputSeen: true,
   outputSeen: true,
-  shown: true,
-  endVouched: true
+  shown: true
 }
 const right = { worktreeId: WORKTREE, parentTabId: TAB, leafId: RIGHT, ptyId: 'pty-right' }
 
 describe('keepsExitedPane', () => {
-  it('leaves a split pane whose shell exited cleanly, or that main stopped, to the retirement', () => {
+  it('leaves a split pane whose shell exited cleanly to the retirement', () => {
     expect(keepsExitedPane(splitSession(), right, cleanExit)).toBe(false)
-    expect(keepsExitedPane(splitSession(), right, { ...cleanExit, exitCode: -1 })).toBe(false)
+  })
+
+  it('keeps a split pane on a negative code, host-confirmed or not, for recovery', () => {
+    expect(keepsExitedPane(splitSession(), right, { ...cleanExit, exitCode: -1 })).toBe(true)
   })
 
   it('keeps a split pane whose process failed behind its card', () => {

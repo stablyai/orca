@@ -19,7 +19,7 @@ import {
   JIRA_IMAGE_MAX_BYTES,
   JIRA_IMAGE_MAX_REFERENCES,
   type JiraMediaFormat
-} from '../../../shared/jira-attachment-image'
+} from '../../../shared/jira/jira-attachment-image'
 import { registerAttachmentImageGrant } from './image-grants'
 
 const DOWNLOAD_CONCURRENCY = 3
@@ -65,7 +65,7 @@ async function downloadImageAttachment(
           byteSize: binary.data.byteLength
         }
       } catch (error) {
-        // Why: one bad attachment should not blank the whole issue description.
+        // A missing attachment must not blank the whole issue.
         if (error instanceof JiraApiError && error.status === 404) {
           return null
         }
@@ -133,8 +133,7 @@ export async function loadIssueImageAttachments(
     }))
   }
 
-  // Why: pre-select by declared size so concurrent downloads do not fetch bodies
-  // that will be dropped by the total budget after completion.
+  // Enforce declared-size budgets before concurrent downloads fetch bytes that would be discarded.
   const toDownload: AttachmentMeta[] = []
   let plannedBytes = 0
   for (const meta of ordered.slice(0, MAX_IMAGES)) {
@@ -208,7 +207,7 @@ export function createMediaMarkdownResolver(
       return null
     }
     const index = queue.findIndex((entry) => entry.id === image.id)
-    // Why: already-consumed images must not re-emit; fall through to positional pairing.
+    // Consumed filename matches must fall through to positional pairing.
     if (index === -1) {
       return null
     }
@@ -228,8 +227,7 @@ export function createMediaMarkdownResolver(
     }
     const alt = attrs.alt?.trim() || 'Image'
     if (attrs.url) {
-      // Why: return placeholder (not null) so non-http / hostile externals do not
-      // fall through to positional attachment pairing.
+      // Return a placeholder so unsafe external URLs cannot fall through to attachment pairing.
       if (!/^https?:\/\//i.test(attrs.url)) {
         return unresolvedMediaPlaceholder({ ...attrs, alt })
       }
@@ -242,20 +240,18 @@ export function createMediaMarkdownResolver(
     }
 
     let resolved: string | null = null
-    // Why: ADF media IDs are Media Service UUIDs, not attachment IDs — skip byId
-    // lookup on attrs.id against attachment map (they never match).
+    // ADF media UUIDs are not attachment IDs; pair by filename or document order.
     if (attrs.alt?.trim()) {
       const matches = byFilename.get(attrs.alt.trim().toLowerCase())
       if (matches && matches.length > 0) {
         const stillQueued = matches.find((image) => queue.some((entry) => entry.id === image.id))
-        // Why: only take still-queued matches; never re-emit matches[0] after consume.
         if (stillQueued) {
           resolved = take(stillQueued)
         }
       }
     }
 
-    // Why: take() removes from queue; do not shift first or membership check fails.
+    // take() checks membership and removes; shifting first would make it fail.
     if (!resolved && queue.length > 0) {
       resolved = take(queue[0])
     }

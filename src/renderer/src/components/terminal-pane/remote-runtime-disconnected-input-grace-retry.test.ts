@@ -11,7 +11,6 @@ import {
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_DISCONNECTED_INPUT_GRACE_MS } from './remote-runtime-disconnected-input-grace'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')

@@ -1,7 +1,6 @@
 import type { KeybindingActionId, PluginKeybindingActionId } from '../keybindings'
 
-/** Built-in actions with a renderer-owned command handler. Keep this closed so
- * declarative aliases cannot target component-private shortcut implementations. */
+/** Closed renderer-owned actions prevent declarative aliases targeting component-private shortcuts. */
 export const PLUGIN_COMMAND_ALIAS_ACTION_IDS = [
   'worktree.history.back',
   'worktree.history.forward',

@@ -28,9 +28,7 @@ export type ContextualTourOverlayMeasurementResult =
       telemetryTotalSteps: number
     }
 
-// Why: keyed by the step's stable id, not its position — inserting a step must
-// not shift localized copy onto a neighbour. Thunks keep translate() out of
-// module scope so the lookup resolves in the language active at render time.
+// Key translated thunks by stable step IDs so insertions cannot shift copy and language resolves at render time.
 const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => string }> = {
   'automations-intro': {
     title: () =>
@@ -96,8 +94,7 @@ export function getContextualTourMeasurementAction(args: {
   if (args.visibleStepIndexes.some((index) => index > args.activeStepIndex)) {
     return { kind: 'advance' }
   }
-  // Why: browser step 3's Import Cookies row appears only after that step is
-  // active and the toolbar menu opens; keep remeasuring instead of cancelling.
+  // Browser import appears only after activating its step and opening the menu; keep measuring instead of cancelling.
   if (args.activeStepIndex < args.tour.steps.length - 1 || args.tour.id === 'browser') {
     return { kind: 'wait' }
   }
@@ -208,8 +205,7 @@ export function measureContextualTourOverlayRenderState(args: {
 
 export type MeasuredContextualTourTarget = { element: Element; rect: DOMRect }
 
-// Why: a scroll anywhere in the app reaches the overlay's capture-phase
-// listener. One rect read decides whether the full step scan is worth running.
+// App-wide capture scroll needs only one rect probe before paying for a full step scan.
 export function hasContextualTourTargetMoved(
   measured: MeasuredContextualTourTarget | null
 ): boolean {
@@ -225,9 +221,7 @@ export function hasContextualTourTargetMoved(
   )
 }
 
-// Why: re-measures fire on scroll, resize and the liveness poll, but the
-// measured state almost never changes. Bail out so an unchanged pass costs no
-// React commit and no floating-position resubscribe.
+// Skip unchanged measurements to avoid React commits and floating-position resubscription.
 export function areContextualTourRenderStatesEqual(
   a: ActiveTourRenderState | null,
   b: ActiveTourRenderState | null

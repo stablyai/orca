@@ -71,7 +71,6 @@ export function isStructuredChatCliForkSourceCurrent(
   )
 }
 
-/** Prepares the record's current conversation on its execution host, without a History inventory. */
 export async function prepareStructuredChatCliFork(
   args: AiVaultPrepareChatForkArgs,
   prepare: AiVaultSessionResumePreparation

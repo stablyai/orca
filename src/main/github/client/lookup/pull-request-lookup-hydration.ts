@@ -1,6 +1,7 @@
 import type { OwnerRepo } from '../../gh-utils'
 import type { GhExecOptions } from './../github-exec-scope'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
+import { mapPRState } from '../../mappers'
 import {
   normalizePullRequestLookupData,
   type PullRequestLookupData
@@ -14,14 +15,15 @@ export async function hydratePullRequestLookupData(
   const normalized = normalizePullRequestLookupData(data)
   const hasRichMergeFields =
     'reviewDecision' in data || 'mergeStateStatus' in data || 'autoMergeRequest' in data
-  const mergeMetadata = hasRichMergeFields
-    ? await detectRepositoryMergeMetadata(
-        ownerRepo,
-        normalized.stack?.baseRefName ?? normalized.baseRefName,
-        ghOptions,
-        executionScope
-      )
-    : undefined
+  const mergeMetadata =
+    hasRichMergeFields && mapPRState(data.state, data.isDraft) === 'open'
+      ? await detectRepositoryMergeMetadata(
+          ownerRepo,
+          normalized.stack?.baseRefName ?? normalized.baseRefName,
+          ghOptions,
+          executionScope
+        )
+      : undefined
   return {
     ...normalized,
     ...(mergeMetadata ? { mergeQueueRequired: mergeMetadata.mergeQueueRequired } : {}),

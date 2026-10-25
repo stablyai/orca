@@ -4,8 +4,6 @@ import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { SOURCE_CONTROL_ACTION_ICONS } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
-// Builds the bottom action-sheet entries from the source-control state. Kept
-// out of the panel component so the giant action map doesn't bloat the view.
 export function useMobileSourceControlActionSheet(
   state: MobileSourceControlState
 ): ActionSheetAction[] {
@@ -38,7 +36,7 @@ export function useMobileSourceControlActionSheet(
         busyAction,
         openingPath,
         openingBranchPath,
-        // Why: the create intent can publish/push before creating, matching desktop.
+        // Create intent may publish or push before review creation.
         prAvailable: upstreamKnown,
         handlers: {
           commit: () => void runActionSheetCommit(),

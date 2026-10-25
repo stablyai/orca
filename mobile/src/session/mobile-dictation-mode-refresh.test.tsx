@@ -1,4 +1,3 @@
-// Exercise the real screen state and mic bindings across connection, focus and foreground changes.
 import { createElement, useEffect, useRef } from 'react'
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -40,8 +39,7 @@ vi.mock('../platform/haptics', () => ({ triggerError: () => {} }))
 vi.mock('./use-terminal-live-input-mode-preference', () => ({
   useTerminalLiveInputModePreference: () => ({ liveInputTerminalHandles: new Set<string>() })
 }))
-// The capture pipeline and the native-chat surface are off this path; the real modules would pull
-// the Expo audio runtime in behind them.
+// Stub unused capture/native-chat paths to avoid Expo runtime imports.
 vi.mock('../hooks/use-mobile-dictation', () => ({
   useMobileDictation: (options: { enabled: boolean }) => {
     env.captureEnabled = options.enabled
@@ -100,8 +98,7 @@ function setupReply(mode: string, enabled = true): RpcResponse {
   return { id: 'desktop', ok: true, result: { enabled, dictationMode: mode, models: [] } }
 }
 
-// One logical client for the route's lifetime, like the shared per-host client: its identity does
-// not change across a reconnect. While down it refuses sends the way a relay session does.
+// Keep client identity stable across reconnects; refuse sends while disconnected.
 const client = {
   getState: () => (env.connected ? 'connected' : 'reconnecting'),
   sendRequest: async (): Promise<RpcResponse> => {
@@ -176,7 +173,6 @@ async function render(): Promise<void> {
   })
 }
 
-/** What a press on the mic does: hold binds press-in/out, toggle binds a tap. */
 function micBinding(): 'hold' | 'toggle' | 'inert' | 'hidden' {
   const mic = renderer?.root.findAll(
     (node) =>
@@ -246,7 +242,7 @@ describe('the mic follows the host dictation mode', () => {
     env.deferReply = false
     env.connected = true
     await render()
-    // The host's answer before the drop, arriving after the reconnected client's own.
+    // Deliver the pre-drop answer last to prove it cannot override the new generation.
     await act(async () => answerOld(setupReply('toggle', false)))
     expect(micBinding()).toBe('hold')
     expect(env.captureEnabled).toBe(true)

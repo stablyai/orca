@@ -7,7 +7,6 @@ import {
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import type { PtyTransport } from './pty-transport-types'
 
-// These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -83,11 +82,7 @@ function managedServer(pairingRevision: number, hostKey: string) {
   }
 }
 
-/**
- * Main's environment record, mirrored into the real catalog store. A managed-server update
- * restarts the server and re-pairs it under the same environment id, so main refuses every request
- * that still carries the old revision — before it reaches the host, whose terminals are untouched.
- */
+/** Update re-pair keeps environment ID and live terminals, but main refuses stale revisions before host dispatch; mirror the new revision into the real catalog. */
 async function installRepairableMain(): Promise<{
   repair: (hostKey?: string) => void
   publishCatalog: () => void

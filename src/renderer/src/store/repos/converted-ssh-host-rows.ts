@@ -10,13 +10,7 @@ type ConvertedHostRows = Pick<
   'repos' | 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'contestedPrimaryHostBySessionKey'
 >
 
-/**
- * Drops a converted SSH host's relay-era project and worktree rows from the renderer. Main already
- * hides them, but a local catalog refresh keeps SSH rows it no longer lists, so they would sit next
- * to the managed server's copies under the same ids. Session and terminal state are left alone, but
- * pinned to the host's partition: with no catalog owner a save would route them to 'local', where
- * they read as the moved source again. A primary already on a runtime host is the server's; keep it.
- */
+/** Remove relay-era catalog rows hidden by main but retained by local refresh. Preserve session/terminals under their source host partition or ownerless saves move them local as stale source state. Runtime-owned primary rows belong to destination and stay. */
 export function withoutConvertedSshHostRows(
   state: ConvertedHostRows,
   targetId: string

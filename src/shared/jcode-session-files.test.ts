@@ -7,9 +7,8 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-vi.mock('os', async () => {
-  // oxlint-disable-next-line typescript/consistent-type-imports -- vi.importActual needs the inline import() to type the real module
-  const actual = await vi.importActual<typeof import('os')>('os')
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return { ...actual, homedir: homedirMock }
 })
 
@@ -90,10 +89,7 @@ describe('shared jcode-session-files', () => {
   })
 
   it('keys a prompt by its place in the file, so appends do not remint the key', () => {
-    // Why: the backward scan windows the file from EOF, so appending shifts every window
-    // boundary and a region-local line index reminted the key for a prompt that never
-    // moved. A repeated turn_end would then slip past the same-hash dedupe as a second
-    // done event with duplicate agent_prompt_sent telemetry.
+    // EOF-relative windows shift on append; region-local keys reminted unchanged prompts and bypassed turn_end dedupe, duplicating prompt telemetry.
     const journalPath = join(sessionsDir, 'session_d_4.journal.jsonl')
     const filler = (index: number) =>
       JSON.stringify({
@@ -106,8 +102,7 @@ describe('shared jcode-session-files', () => {
       meta: { id: 'session_d_4' },
       append_messages: [{ id: 'm1', role: 'user', content: [{ type: 'text', text: 'keep me' }] }]
     })
-    // 200 lines before and 100 after put the prompt in the second 64 KiB window, far
-    // enough from that window's start that a shifted boundary changes its line index.
+    // Place the prompt deep in the second 64 KiB window so appends change its region-local line index.
     const before = Array.from({ length: 200 }, (_, index) => filler(index))
     const after = Array.from({ length: 100 }, (_, index) => filler(1000 + index))
 

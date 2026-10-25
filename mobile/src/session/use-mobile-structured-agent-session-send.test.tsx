@@ -3,9 +3,12 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
-import { fieldsOf, ok } from './use-mobile-structured-agent-session-queued.test-fixture'
+import {
+  fieldsOf,
+  ok,
+  snapshotEvent
+} from './use-mobile-structured-agent-session-queued.test-fixture'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -15,6 +18,7 @@ import {
   type StructuredAgentSessionHostSupport
 } from './mobile-structured-agent-session-host-support'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import {
   useMobileNativeChatSendError,
@@ -37,31 +41,6 @@ function sendResult(dispatchState: AgentJournalDispatchState, reason: string | n
     cursor: { epoch: 'epoch-1', sequence: 1 },
     value: structuredSendResultFixture(dispatchState, reason)
   })
-}
-
-function snapshotEvent(): Extract<AgentSessionSubscribeEvent, { type: 'snapshot' }> {
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence: 3,
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence: 3,
-      direction: 'tail',
-      items: [],
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: null,
-        newest: null,
-        nextCursor: { epoch: 'epoch-1', sequence: 0 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: 0 },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
 }
 
 describe('mobile structured send actions', () => {
@@ -214,7 +193,6 @@ describe('mobile structured send actions', () => {
           ? ok({ origin: 'probe', fetchedAt: 1, models: [opus] })
           : method === 'agentSession.options'
             ? ok({
-                // A stopped chat lists the host's rows and its own model.
                 models: [
                   opus,
                   { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }
@@ -270,41 +248,98 @@ describe('mobile structured send actions', () => {
     }
   )
 
-  it('keeps the original unknown host row while allowing another Send', async () => {
+  it('shows a recovered unknown once and a new Send and reply without replay', async () => {
     const original = structuredSendResultFixture('unknown')
     if (!('submission' in original)) {
       throw new Error('expected a submission answer')
     }
-    const event = snapshotEvent()
-    event.page.submissions = [original.submission]
-    event.page.items = [
-      {
-        itemId: 'original-message',
-        revision: 1,
-        sequence: 1,
-        observedAt: 10,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'same text' }] }
+    original.submission.recovered = true
+    const event = snapshotEvent({
+      items: [
+        {
+          itemId: agentJournalSubmissionKey(original.submission.clientMessageId),
+          revision: 1,
+          sequence: 1,
+          observedAt: 10,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'same text' }] }
+        }
+      ],
+      submissions: [original.submission]
+    })
+
+    sendRequest.mockImplementation(async (method, params) => {
+      if (method !== 'agentSession.send') {
+        return ok({ models: [], current: {} })
       }
-    ]
-    sendRequest.mockImplementation(async (method) =>
-      method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
-    )
+      const id = String(fieldsOf(fieldsOf(params).envelope).clientOperationId)
+      const value = structuredSendResultFixture('accepted')
+      if (!('submission' in value)) {
+        throw new Error('expected a submission answer')
+      }
+      value.clientMessageId = id
+      value.submission.clientMessageId = id
+      return ok({
+        ok: true,
+        replayed: false,
+        fence: 3,
+        cursor: { epoch: 'epoch-1', sequence: 2 },
+        value
+      })
+    })
     await mountSession()
     act(() => listener?.(event))
     const messages = hook!.session.messages
     expect(messages).toHaveLength(1)
+    expect(messages[0]?.unsent).toBeUndefined()
+    expect(hook!.isWorking).toBe(false)
+    expect(mobileNativeChatUnsentNotices(event.page, agent).size).toBe(0)
+    expect(renderer!.root.findByType('span').children).toEqual([])
     await act(async () => {
       expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
     })
-    // The new send is drawn under its own id until its row lands.
     const sent = agentJournalSubmissionKey(sentIds()[0] ?? '')
     expect(hook!.session.messages.map((message) => message.id)).toEqual([messages[0]?.id, sent])
     expect(hook!.session.messages[0]).toEqual(messages[0])
-    expect(event.page.submissions[0]?.dispatchState).toBe('unknown')
+    const followUp = structuredSendResultFixture('accepted')
+    if (!('submission' in followUp)) {
+      throw new Error('expected a submission answer')
+    }
+    const newId = sentIds()[0]!
+    expect(newId).not.toBe(original.submission.clientMessageId)
+    followUp.submission.clientMessageId = newId
+    const reply = snapshotEvent({
+      items: [
+        ...event.page.items,
+        { ...event.page.items[0]!, itemId: sent, sequence: 2, observedAt: 20 },
+        {
+          itemId: 'assistant-reply',
+          revision: 1,
+          sequence: 3,
+          observedAt: 30,
+          body: {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'Reply to the new send' }]
+          }
+        }
+      ],
+      submissions: [original.submission, followUp.submission]
+    })
+
+    act(() => listener?.(reply))
+    expect(hook!.session.messages.map((message) => message.id)).toEqual([
+      messages[0]?.id,
+      sent,
+      'assistant-reply'
+    ])
+    expect(hook!.session.messages.at(-1)?.blocks).toEqual([
+      { type: 'text', text: 'Reply to the new send' }
+    ])
+    expect(hook!.session.messages[0]).toEqual(messages[0])
+    expect(reply.page.submissions[0]).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(calls()).toHaveLength(1)
   })
 
-  // The recorded row is the message: in place, as not sent, with the sign-in row saying why once.
   it.each(['reply-before-row', 'row-before-commit'] as const)(
     'leaves a recorded rejection to its row, with no banner and nothing handed back, for %s',
     async (order) => {
@@ -315,25 +350,27 @@ describe('mobile structured send actions', () => {
         throw new Error('expected submission')
       }
       value.submission.rejection = fact
-      const event = snapshotEvent()
       const sentRow = agentJournalSubmissionKey(value.submission.clientMessageId)
-      event.page.items = [
-        {
-          itemId: 'auth-row',
-          sequence: 1,
-          revision: 1,
-          observedAt: 1,
-          body: { kind: 'status', tone: 'error', ...words }
-        },
-        {
-          itemId: sentRow,
-          sequence: 2,
-          revision: 1,
-          observedAt: 2,
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'my message' }] }
-        }
-      ]
-      event.page.submissions = [value.submission]
+      const event = snapshotEvent({
+        items: [
+          {
+            itemId: 'auth-row',
+            sequence: 1,
+            revision: 1,
+            observedAt: 1,
+            body: { kind: 'status', tone: 'error', ...words }
+          },
+          {
+            itemId: sentRow,
+            sequence: 2,
+            revision: 1,
+            observedAt: 2,
+            body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'my message' }] }
+          }
+        ],
+        submissions: [value.submission]
+      })
+
       sendRequest.mockImplementation(async (method) => {
         if (method !== 'agentSession.send') {
           return ok({ models: [], current: {} })

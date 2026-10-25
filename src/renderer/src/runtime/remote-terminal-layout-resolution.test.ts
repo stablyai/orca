@@ -26,8 +26,7 @@ describe('layoutCoversLeaves', () => {
 
 describe('resolveTerminalLayoutRoot', () => {
   it('uses the authoritative tree verbatim — direction is preserved', () => {
-    // Why: the "Split Right renders as down" bug was re-deriving direction
-    // instead of trusting the host tree. The authoritative tree must win.
+    // Host split direction must win; re-derivation once turned Split Right into down.
     const root = resolveTerminalLayoutRoot({
       authoritativeRoot: verticalSplit,
       leafIds: ['a', 'b']
@@ -37,8 +36,7 @@ describe('resolveTerminalLayoutRoot', () => {
   })
 
   it('falls back to the prior client tree (keeping direction) when authoritative does not cover the leaves', () => {
-    // A transitional snapshot where the host tree is momentarily stale/partial
-    // must NOT collapse to a guessed direction — keep the known-good tree.
+    // Stale/partial host trees must retain known directions rather than guess.
     const root = resolveTerminalLayoutRoot({
       authoritativeRoot: { type: 'leaf', leafId: 'a' }, // stale single-leaf
       existingRoot: verticalSplit,
@@ -70,8 +68,7 @@ describe('resolveTerminalLayoutRoot', () => {
   })
 
   it('prunes a superset tree to the live leaves instead of re-guessing its directions', () => {
-    // A stale/extra leaf in the known tree used to fail the exact-cover check and
-    // collapse the whole tab to a guessed chain.
+    // Extra stale leaves must not make exact-cover failure replace the whole known tree with guessed directions.
     const onSynthesize = vi.fn()
     const root = resolveTerminalLayoutRoot({
       authoritativeRoot: {

@@ -147,7 +147,9 @@ describe('automatic SQLite recovery generations', () => {
     clock.now = beginning + HOUR + 60_000
     rotation.schedule()
     await rotation.drain()
-    expect(profileStateDatabaseBackups(databasePath)).toHaveLength(2)
+    const backups = profileStateDatabaseBackups(databasePath)
+    expect(backups).toHaveLength(2)
+    expect(readBackup(backups[0].path)).toEqual({ settings: { generation: 2 } })
   })
 
   it('does not prune previous generations when the new copy fails strict validation', async () => {

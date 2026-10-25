@@ -20,7 +20,6 @@ const SKIP_REASON_COPY: Record<ImportSkipReason, { key: string; fallback: string
   }
 }
 
-/** User-facing copy for a drop skip reason; undefined for tokens outside the enum. */
 export function describeDropSkipReason(reason: string): string | undefined {
   if (!isImportSkipReason(reason)) {
     return undefined

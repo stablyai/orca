@@ -9,8 +9,7 @@ import type { NativeChatInteractiveSend } from './use-native-chat-interactive-se
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type * as InteractiveCardModule from './NativeChatInteractiveCard'
 
-// The transcript and composer are stubbed: the wire under test is which of this
-// pane's sends tell the transcript to bring the latest into view.
+// Stub transcript and composer to observe which pane sends request latest-message navigation.
 type ComposerStubProps = { onSubmitted?: () => void }
 const stubs = vi.hoisted(
   (): {
@@ -145,7 +144,6 @@ describe('NativeChatResolvedView sends', () => {
         ownsTabWideLaunchDraft={false}
       />
     )
-    // Anti-vacuous: opening the pane reveals nothing by itself.
     expect(stubs.revealLatest).not.toHaveBeenCalled()
 
     stubs.composer?.onSubmitted?.()

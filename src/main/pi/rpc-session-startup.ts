@@ -18,9 +18,14 @@ import { piRpcProviderLink, type PiRpcResolvedLaunch } from './rpc-launch-resolu
 import { piModelOptionId, readPiRpcCommands, readPiRpcSessionOptions } from './rpc-options'
 import { piRpcStateSchema, type PiRpcState } from './rpc-protocol'
 import type { PiRpcConnection, PiRpcSessionDeps } from './rpc-session'
+import { catchUpPiSession } from './rpc-history-catch-up'
+import type { PiHistoryAnchor } from './rpc-history-capture'
+import { decodePiHistoryClaim, encodePiHistoryClaim } from './rpc-history-journal-view'
 
 export class PiRpcSessionStartup {
   commands?: AgentSessionSlashCommand[]
+  /** Continue capture only from a claim reconciled to Pi's current leaf. */
+  historyAnchor?: PiHistoryAnchor
 
   constructor(
     private readonly input: StructuredAgentSessionAcquireInput,
@@ -32,7 +37,6 @@ export class PiRpcSessionStartup {
     private readonly failedCause: () => Error | undefined
   ) {}
 
-  /** Ready once Pi reports its state: only an unknown provider fails the start. */
   async run(
     launch: PiRpcResolvedLaunch,
     signal: AbortSignal
@@ -51,24 +55,46 @@ export class PiRpcSessionStartup {
       Date.now()
     )
     this.setState(state)
+    // Replacement sessions cannot inherit the prior conversation's history claim.
+    const continued = launch.sessionFile !== undefined || launch.forkFile !== undefined
+    const history = await this.wait(
+      catchUpPiSession({
+        connection: this.connection,
+        sessionId: this.input.identity.sessionId,
+        sessionFile: state.sessionFile,
+        lineage: new Set([...(launch.lineage ?? []), state.sessionFile]),
+        claim: continued ? decodePiHistoryClaim(launch.previous?.handle.resumeCursor) : null,
+        sink: this.input.events,
+        signal,
+        assertCurrent: () => this.assertLive(signal),
+        logger: this.deps.logger
+      }),
+      signal
+    )
+    this.assertLive(signal)
+    if (history.current) {
+      this.historyAnchor = { entry: history.claim?.entry ?? null }
+    }
     const current: AgentSessionOptionsResult['current'] = {
       model: state.model ? piModelOptionId(state.model.provider, state.model.id) : '',
       ...(state.thinkingLevel ? { effort: state.thinkingLevel } : {})
     }
     this.assertLive(signal)
     current.confirmed = [...(current.model ? ['model'] : []), ...(current.effort ? ['effort'] : [])]
-    return { link, reportedOptions: current }
+    const claimed = history.claim
+      ? { ...link, handle: { ...link.handle, resumeCursor: encodePiHistoryClaim(history.claim) } }
+      : link
+    return { link: claimed, reportedOptions: current }
   }
 
-  /** After the open: the listing and the `/` commands reach the host as later reports, and a read
-   *  that fails only leaves the chat without them. */
+  /** Listing/command failures after open leave optional metadata unavailable. */
   async readAfterOpen(
     generation: string,
     opening: AgentSessionOptionsResult['current']
   ): Promise<void> {
     const options = await this.readListing()
     if (options && !this.failedCause() && !this.connection.closed) {
-      // What it started on names its config's default once; a later switch teaches nothing.
+      // Only the opening model establishes the configured default; later switches do not.
       const { catalogListing } = withLiveCatalogListing(
         options,
         unpickedSessionConfiguredChoice({

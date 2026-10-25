@@ -91,7 +91,6 @@ export function useBrowserPageReloadActions({
     ]
   )
 
-  // Keep the accessible name honest: the same button is Stop mid-load and Retry after a failure.
   const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
   const reloadButtonLabel =
     reloadButtonLabelKind === 'stop'

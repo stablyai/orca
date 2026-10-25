@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inspectWorkerTerminal } from './worker-observation'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import { makePaneKey } from '../../../../../../shared/stable-pane-id'
+import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
 
 export function registerWorkerReleaseRuntimeIncarnationTests(): void {
   const PTY_ID = 'runtime_test:term_worker'
@@ -30,7 +31,7 @@ export function registerWorkerReleaseRuntimeIncarnationTests(): void {
           kill,
           getForegroundProcess: async () => null
         })
-        runtime.registerPty(PTY_ID, 'repo::worktree', null, {
+        registerBoundPty(runtime, PTY_ID, 'repo::worktree', null, {
           tabId: 'tab_worker',
           leafId: LEAF_ID,
           incarnationId: scenario === 'replacement' ? '2' : '1'
@@ -58,8 +59,7 @@ export function registerWorkerReleaseRuntimeIncarnationTests(): void {
         if (scenario === 'read') {
           const readTerminal = vi.spyOn(runtime, 'readTerminal')
           const output = await harness.call('orchestration.workerRead', { dispatch: dispatchId })
-          // Pins the read to the reminted terminal: the handle it reached must resolve to the
-          // registered pane and incarnation, which the stale durable handle never does.
+          // Pin reads to the reminted handle that resolves the recorded pane/incarnation; the stale durable handle cannot.
           const [[readHandle]] = readTerminal.mock.calls
           expect(runtime.getTerminalPaneKey(readHandle)).toBe(makePaneKey('tab_worker', LEAF_ID))
           expect(runtime.getTerminalProcessIncarnation(readHandle)).toBe(`${PTY_ID}:1`)

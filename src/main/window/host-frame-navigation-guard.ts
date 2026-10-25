@@ -4,10 +4,7 @@ import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../shared/plugins/plugin-pane
 
 type NavigationFrame = Pick<WebFrameMain, 'frameTreeNodeId' | 'isDestroyed' | 'name'>
 
-/**
- * Host-built srcdoc frames that hold content Orca did not write. Each kind is only a navigation
- * containment class: registering a frame grants it nothing (no plugin identity, no actions).
- */
+/** Host-marked srcdoc classes contain navigation only; registration grants no plugin identity or action authority. */
 const HOST_FRAME_KINDS = [
   { kind: 'plugin-panel', namePrefix: PLUGIN_PANEL_FRAME_NAME_PREFIX },
   { kind: 'chat-visual', namePrefix: NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX }
@@ -46,8 +43,7 @@ export class HostFrameNavigationRegistry {
     this.prune()
     const registeredTarget = frame ? this.frames.get(frame.frameTreeNodeId) : undefined
     if (registeredTarget) {
-      // Why: registration happens before the host-provided srcdoc commits;
-      // allow exactly that initial document, then contain every navigation.
+      // Registration precedes srcdoc commit; allow its initial document only, then contain all navigation.
       if (registeredTarget.initialSrcdocPending && destinationUrl === 'about:srcdoc') {
         registeredTarget.initialSrcdocPending = false
         return false
@@ -79,8 +75,7 @@ export function registerHostFrameNavigationGuard(webContents: WebContents): void
   })
   webContents.on('did-start-navigation', (event) => {
     if (!event.isMainFrame && event.url === 'about:srcdoc' && event.frame) {
-      // Some Chromium builds populate the frame name only when navigation
-      // starts; this event still precedes document parsing and frame content.
+      // Some Chromium builds expose frame names only at navigation start, still before content parsing.
       registry.register(event.frame)
     }
   })

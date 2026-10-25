@@ -277,8 +277,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
       mockApi.worktrees.updateMeta.mockResolvedValue({})
     })
 
-    // Why every workspace kind: main records every close it is told about, and the mirror is what
-    // the seeding predicate reads before the next launch hydrates main's copy.
+    // Cover every workspace kind: close mirror suppresses re-seeding before main’s saved copy hydrates.
     it.each([
       ['remote-tab', REMOTE_WORKTREE],
       ['local-tab', LOCAL_WORKTREE]

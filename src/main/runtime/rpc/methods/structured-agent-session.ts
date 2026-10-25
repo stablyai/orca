@@ -2,12 +2,8 @@ import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
-// `agentSession.*` — the structured session RPC surface.
-//
-// Every method here is gated on the client advertising
-// `agent-session.structured.v1`. A client that does not is told the surface does
-// not exist rather than receiving the journal or mutation surface. Session-tab
-// inventory may expose only a metadata placeholder for an incapable mobile client.
+import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
+// Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
 
 import {
   projectBackgroundTaskEvent,
@@ -72,7 +68,6 @@ import { sendStructuredAgentSessionForClient } from './structured-agent-session-
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredSessionNeverStarted } from '../../agent-session-record-founding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   noteStructuredAgentSessionClose,
@@ -147,14 +142,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   }),
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
   defineMethod({
-    // Releasing a chat view, not ending a conversation: the record and journal stay on disk so the
-    // same session can be attached again. Only the provider child and the in-memory entry go.
+    // Close only provider/in-memory state, preserving record/journal for future attachment.
     name: 'agentSession.close',
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
-      // Noted before the host is required: a close that fails still refuses the create it raced.
+      // Record close before requiring host so even failed closes fence racing creates.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         noteStructuredAgentSessionClose(
           params.sessionId,
@@ -229,7 +223,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       const host = await requireInstalledHost(ctx, params.sessionId)
       return projectTurnItemHistory(
         projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(await host.history(params), ctx),
+          projectBackgroundTaskHistory(
+            await host.history(
+              params,
+              undefined,
+              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+            ),
+            ctx
+          ),
           ctx
         ),
         ctx,
@@ -250,8 +251,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       if (stream.isClosed()) {
         return
       }
-      // Resolves once the conversation is open and the opening snapshot (or the missed batch) is
-      // emitted; a close that raced the open disposes what it bound.
+      // Resolve after opening snapshot/missed batch; a racing close disposes the bound stream.
       dispose = await host.subscribe({
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
@@ -267,13 +267,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
             )
           ),
         ...(params.cursor ? { cursor: params.cursor } : {}),
-        // Desktop snapshots require settled send echoes and independent current requests.
-        snapshotCatchUp:
-          ctx.clientKind === undefined ||
-          ctx.clientKind === 'mobile' ||
-          (ctx.clientCapabilities?.includes(AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY) ===
-            true &&
-            clientReadsCurrentRequests(ctx)),
+        snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
         // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
         ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
       })

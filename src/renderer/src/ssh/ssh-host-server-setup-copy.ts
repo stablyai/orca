@@ -1,4 +1,3 @@
-/** What the SSH host card says while Orca sets itself up on a host. */
 import type { SSH_MANAGED_SERVER_PHASES } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 

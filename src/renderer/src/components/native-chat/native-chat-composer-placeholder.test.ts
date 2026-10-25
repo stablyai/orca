@@ -26,7 +26,6 @@ describe("the composer's placeholder", () => {
     )
   })
 
-  // A held input or a lost terminal says why first: nothing can be queued from here then.
   it('keeps the reasons nothing can be sent ahead of it', () => {
     expect(nativeChatComposerPlaceholder(true, false, 'queue')).toBe(
       'Input is held by another device.'

@@ -155,6 +155,7 @@ function dropdownMenuStubs(): Record<string, unknown> {
     DropdownMenuRadioGroup: passthrough,
     DropdownMenuRadioItem: block,
     DropdownMenuSeparator: () => <hr />,
+    DropdownMenuShortcut: block,
     DropdownMenuSub: passthrough,
     DropdownMenuSubContent: block,
     DropdownMenuSubTrigger: block,

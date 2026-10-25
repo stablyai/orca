@@ -34,7 +34,6 @@ import {
   preloadHostModelCatalogSnapshots,
   resetHostModelCatalogSnapshotsForTests
 } from '@/runtime/host-model-catalog-snapshots'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
 const LOCAL_TARGET = { kind: 'local' } as const
@@ -67,7 +66,7 @@ const CLAUDE_LIST = listed([
   { id: 'opus[1m]', label: 'Opus (1M context)' },
   { id: 'sonnet', label: 'Sonnet' }
 ])
-// Labels the built-in list does not use, so a frame painted from it is told apart.
+// Distinct host labels expose accidental first paints from the built-in list.
 const CODEX_LIST = listed([
   { id: 'gpt-5.5', label: 'GPT-5.5 (host)' },
   { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }
@@ -94,7 +93,6 @@ function pill(snapshot: readonly SessionOptionDescriptor[]): Pill {
 
 const PLACEHOLDER: Pill = { model: null, label: null, effort: null, usable: false }
 
-/** Every frame the pane rendered, in order. */
 function renderNewChat(args: {
   agent: AgentType
   target?: RuntimeClientTarget
@@ -113,8 +111,7 @@ function renderNewChat(args: {
       fence: null,
       turnId: null,
       unloadedTurnRevisions: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no pick is made, so mutate is never called.
-      mutate: vi.fn() as unknown as StructuredAgentSessionMutate,
+      mutate: vi.fn(),
       launch: {
         kind: 'new',
         heldOptions: {},
@@ -161,7 +158,6 @@ describe('a new chat picker’s first frame', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     const final = { model: 'opus[1m]', label: 'Opus (1M context)', effort: 'high', usable: true }
     expect(frames[0]).toEqual(final)
-    // The pane's own read lands the same list: no frame ever showed anything else.
     expect(frames.every((frame) => JSON.stringify(frame) === JSON.stringify(final))).toBe(true)
     unmount()
   })
@@ -276,7 +272,6 @@ describe('a new chat picker’s first frame', () => {
       answer.resolve(list)
       await waitFor(() => expect(frames.at(-1)?.usable).toBe(true))
       const named = frames.filter((frame) => frame.model !== null)
-      // Only the host's label is ever painted: no built-in label, no raw id, no second change.
       expect(new Set(named.map((frame) => frame.label))).toEqual(new Set([first.label]))
       const beforeNamed = frames.slice(0, frames.indexOf(named[0]!))
       expect(beforeNamed).toEqual(beforeNamed.map(() => PLACEHOLDER))
@@ -331,7 +326,7 @@ describe('a new chat picker’s first frame', () => {
     })
     expect(second.frames[0]).toMatchObject({ label: 'GPT-6.1 Sol', usable: true })
     second.unmount()
-    // This machine's host never answered, so its chat waits for it rather than borrow the server's.
+    // A paired host’s cache must never name a model for the unanswered local host.
     const local = renderNewChat({ agent: 'codex', seedOptions: { model: 'gpt-5.5' } })
     expect(local.frames[0]).toEqual(PLACEHOLDER)
     local.unmount()

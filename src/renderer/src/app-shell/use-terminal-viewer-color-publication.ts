@@ -9,8 +9,7 @@ import { useAppStore } from '../store'
 export function useTerminalViewerColorPublication(): void {
   const settings = useAppStore((s) => s.settings)
 
-  // Why: panes publish only when they apply appearance, so with none open a theme change
-  // would never reach the hosts. The publisher dedupes, so an unrelated settings edit is free.
+  // Publish without open panes so hosts receive theme changes; deduplication makes unrelated preference edits free.
   useEffect(() => {
     if (!settings) {
       return

@@ -7,9 +7,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
-// Shared harness for the repo-slice runtime-routing suite: sample repos, IPC/runtime
-// mocks, and the window stub reset between tests. Extracted to keep the test file itself
-// under the max-lines limit.
+// Repo-routing fixtures centralize sample catalogs, transport mocks and window reset.
 
 export const localRepo: Repo = {
   id: 'local-repo',

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { retirePersistedStablePaneOwner } from '../../ipc/pty/pane/stable-owner'
-import { TEST_LEAF_1 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1 } from '../persistence-session-fixtures'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import {
   createWorkerMaintenanceFixture,

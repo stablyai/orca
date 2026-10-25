@@ -7,8 +7,7 @@ import {
   type MobileNativeChatComposerFieldProps
 } from './mobile-native-chat-composer-field-skill'
 
-// A textarea cannot style part of its text, so its own text goes clear and a copy laid over it
-// draws the skill. The caret stays visible. Plain object: React Native's types lack `caretColor`.
+// Textareas cannot style tokens: hide their text under a styled copy while preserving the caret. RN types omit caretColor.
 const clearText = { field: { color: 'transparent', caretColor: colors.textPrimary } }
 
 function scrollTopOf(event: unknown): number {
@@ -24,7 +23,6 @@ function scrollTopOf(event: unknown): number {
     : 0
 }
 
-/** The composer's text field on the page, where a copy laid over the field draws the skill. */
 export function MobileNativeChatComposerField({
   value,
   skillToken,
@@ -32,11 +30,10 @@ export function MobileNativeChatComposerField({
   ...props
 }: MobileNativeChatComposerFieldProps) {
   const [scrollTop, setScrollTop] = useState(0)
-  // One tree whether or not a skill leads: swapping it would remount the field and drop focus.
+  // Keep one tree so adding/removing a skill cannot remount the field and drop focus.
   return (
     <View style={styles.frame}>
       {skillToken ? (
-        // Positioned, so it paints over the field: touches pass through to the field below.
         <View pointerEvents="none" style={styles.copyLayer}>
           <Text
             aria-hidden
@@ -51,7 +48,6 @@ export function MobileNativeChatComposerField({
         ref={ref}
         value={value}
         style={skillToken ? [inputStyles.input, clearText.field] : inputStyles.input}
-        // Only the copy reads it, and there is a copy only while a skill leads.
         onScroll={skillToken ? (event) => setScrollTop(scrollTopOf(event)) : undefined}
         {...props}
       />

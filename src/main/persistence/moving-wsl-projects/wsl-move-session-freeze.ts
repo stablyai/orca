@@ -1,8 +1,4 @@
-/**
- * Once a move has paused a project, its workspaces' session stays exactly as the quiesce left it:
- * that slept state is what the move carries to the host, so a later renderer write must neither
- * change nor drop it. Every other workspace's rows, and the global fields, are taken as written.
- */
+// Preserve quiesced workspace rows against later renderer writes; accept unrelated rows and globals.
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
 import {
   mergeWorkspaceSessionArrayField,
@@ -57,7 +53,6 @@ function isSessionField(field: string): field is keyof WorkspaceSessionState {
   return Object.hasOwn(WORKSPACE_SESSION_FIELD_OWNERSHIP, field)
 }
 
-/** The store's write paths: a no-op unless some move has paused a project. */
 export function keepWslMoveFrozenSessionsForStore(
   next: WorkspaceSessionState,
   prior: WorkspaceSessionState | undefined

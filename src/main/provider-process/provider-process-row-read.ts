@@ -4,10 +4,7 @@ import { parseProcessTable, type ProcessTableRow } from '../pty-process-table-pa
 
 const PROCESS_ROW_TIMEOUT_MS = 2_000
 
-/**
- * One process's parent, group and start marker. `clock-tick` starts come from Linux /proc, where a
- * pid reused within one tick would need the whole pid space to cycle; `second` starts are ps lstart.
- */
+/** Linux /proc starts use clock ticks; ps lstart requires second-boundary PID-reuse checks. */
 export type ProviderProcessRow = Pick<ProcessTableRow, 'pid' | 'ppid' | 'pgid' | 'startedAt'> & {
   startResolution: 'clock-tick' | 'second'
 }
@@ -49,7 +46,7 @@ async function readPsProcessRow(pid: number): Promise<ProcessRowRead> {
     const result = await runProcess({
       program: 'ps',
       args: ['-o', 'pid=,ppid=,pgid=,lstart=', '-p', String(pid)],
-      // The same locale on every read, so two reads of one process compare equal.
+      // Stable locale makes repeated start markers comparable.
       env: { ...process.env, LANG: 'C', LC_ALL: 'C' },
       timeoutMs: PROCESS_ROW_TIMEOUT_MS,
       maxOutputBytes: 4096

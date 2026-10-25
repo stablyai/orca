@@ -7,7 +7,7 @@ import type { PrimaryEventSuppression, UpdateCheckVariant } from './updater-type
 
 export const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
-// Why: a persistently-failing feed used to re-arm the retry at a fixed 1h cadence forever (issue #7576); backoff doubles per failure up to this cap, any completed check resets.
+// #7576: back off persistent feed failures up to this cap; completed checks reset the cadence.
 export const MAX_AUTO_UPDATE_RETRY_INTERVAL_MS = 6 * 60 * 60 * 1000
 export const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
 export const NUDGE_ACTIVATION_COOLDOWN_MS = 5 * 60 * 1000
@@ -17,7 +17,7 @@ export const PRE_QUIT_CLEANUP_TIMEOUT_MS = 2_500
 export const REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS = 90_000
 export const UPDATE_CHECK_SILENT_SETTLE_DELAY_MS = 1_000
 export const UPDATE_CHECK_STALL_TIMEOUT_MS = 45_000
-// Why: Squirrel re-reads the whole bundle from the localhost proxy and verifies its signature; past this, a silent Squirrel is reported instead of left invisible.
+// Squirrel re-reads/verifies the bundle through localhost; report prolonged silence instead of leaving staging invisible.
 export const MAC_DEFERRED_STAGING_TIMEOUT_MS = 120_000
 
 export type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
@@ -30,7 +30,7 @@ export type UpdateInstallMode =
   | 'unsupported-headless-serve'
 export type PreQuitCleanupFailureMode = 'continue' | 'abort'
 
-// Why: expected preflight outcomes need typed context so UI routing never depends on matching error text.
+// Typed preflight context keeps UI routing independent of error-text matching.
 export class ReleaseFeedPreflightError extends Error {
   constructor(
     readonly reason: ReleaseFeedPreflightFailure,
@@ -49,7 +49,7 @@ export abstract class UpdaterState {
   protected onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
   protected onBeforeQuitFailure: PreQuitCleanupFailureMode = 'continue'
   protected autoUpdaterInitialized = false
-  // Why: modifier-clicking "Check for Updates" targets prerelease manifests; the feed still pins a concrete tag so cancelled prereleases without manifests are skipped.
+  // Modifier checks include prereleases but still pin a manifest-probed tag, skipping cancelled RCs.
   protected includePrereleaseActive = false
   protected availableVersion: string | null = null
   protected availableReleaseUrl: string | null = null
@@ -65,14 +65,14 @@ export abstract class UpdaterState {
     download: null as string | null,
     install: null as string | null
   }
-  // Why: once install has committed, late 'error' events must not clear quittingForUpdate — that would re-enable dock activate mid-installer.
+  // Late errors after commit must not clear quittingForUpdate or dock activate could reopen mid-install.
   protected updateInstallCommitted = false
-  // Why: recovery must only run after the native quitAndInstall call; pre-native errors must not clear quittingForUpdate or look like install recovery.
+  // Only native-invoked failures can recover; pre-native errors must not clear quittingForUpdate.
   protected quitAndInstallNativeInvoked = false
   protected persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
   protected _getLastUpdateCheckAt: (() => number | null) | null = null
   protected backgroundCheckLaunchPending = false
-  // Why: a promoted background check can emit an error event before its promise catch runs; keep the promotion attached to that launch.
+  // Retain promotion on the launch because its error event can precede the promise catch.
   protected backgroundCheckPromotedToUserInitiated = false
   protected updateCheckStallTimer: ReturnType<typeof setTimeout> | null = null
   protected updateCheckSilentSettleTimer: ReturnType<typeof setTimeout> | null = null
@@ -90,7 +90,7 @@ export abstract class UpdaterState {
   protected pendingPrereleaseFallback: {
     primaryTag: string
     fallbackTag: string
-    // Why: primary promise cleanup can run after fallback starts; fallback events need this attempt-scoped state, not the mutable global.
+    // Primary cleanup may run after fallback starts; fallback needs attempt-scoped state, not mutable globals.
     userInitiated: boolean
     suppressedPrimaryPromiseFailureKey: string | null
     suppressedPrimaryEventFailure: PrimaryEventSuppression | null
@@ -105,7 +105,7 @@ export abstract class UpdaterState {
   protected _getDismissedUpdateNudgeId: (() => string | null) | null = null
   protected _setPendingUpdateNudgeId: ((id: string | null) => void) | null = null
   protected _setDismissedUpdateNudgeId: ((id: string | null) => void) | null = null
-  // Why: guards against duplicate download() calls while an accepted request transitions status to 'downloading'.
+  // Guard duplicate download calls before status changes to downloading.
   protected downloadInFlight = false
   /** Guards the macOS `activate` handler from reopening the old version while ShipIt replaces the .app bundle. */
   protected quittingForUpdate = false
@@ -113,11 +113,9 @@ export abstract class UpdaterState {
   protected activeUpdateSource: 'release' | UpdateSource = 'release'
   protected activeLocalBuildFeed: LocalBuildFeed | null = null
   protected localBuildSelectionInProgress = false
-  // Why: a dev channel/tag jump may target an older build, so it needs allowDowngrade
-  // like local builds — but off a real release feed, not a loopback server.
+  // Dev-channel/tag jumps permit intentional downgrade from the real release feed.
   protected pinnedBuildSelectionInProgress = false
-  // Why: a pinned jump to a stable/rc tag keeps the 'release' source but is still a
-  // deliberate downgrade, so newer-only gates must yield to it too.
+  // Pinned release tags still represent deliberate downgrades; bypass newer-only gates.
   protected isPinnedBuildActive = false
   protected getReleaseChannelOverride: (() => ReleaseChannel | null) | null = null
 

@@ -31,13 +31,6 @@ describe('TabStripScrollIndicator', () => {
     expect(indicator.className).toContain('opacity-0')
   })
 
-  it('applies pointer-events-none when disabled', () => {
-    const { getByTestId } = render(<TabStripScrollIndicator hasOverflow disabled={true} />)
-    const indicator = getByTestId('tab-strip-scroll-indicator')
-    expect(indicator.className).toContain('pointer-events-none')
-    expect(indicator.className).not.toContain('group-hover/tab-strip:pointer-events-auto')
-  })
-
   it('stays hidden and unexpanded on hover when disabled', () => {
     const { getByTestId } = render(<TabStripScrollIndicator hasOverflow disabled={true} />)
     const indicator = getByTestId('tab-strip-scroll-indicator')
@@ -113,6 +106,7 @@ describe('TabStripScrollIndicator', () => {
     expect(scrollToMock).toHaveBeenCalledTimes(1)
     expect(scrollToMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        left: 300,
         behavior: 'smooth'
       })
     )

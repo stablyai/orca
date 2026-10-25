@@ -4,8 +4,7 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
 
 export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRuntimeWithStructuredSessionCliWriterHost {
-  /** Where a launch of `agent` finds its account, resolved on this host by the agent's own
-   *  registration; null for an agent this runtime does not register, whose create is refused. */
+  /** Resolve account home through this host's agent registration; null means unregistered and create refuses. */
   protected structuredAgentAccountHomeResolver(
     agent: StructuredAgentId,
     worktree: string,

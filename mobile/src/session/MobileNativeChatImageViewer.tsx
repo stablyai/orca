@@ -3,8 +3,6 @@ import { X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { colors, spacing } from '../theme/mobile-theme'
 
-/** An attached image at full size, over everything, until closed. Desktop opens the same
- *  picture in its full-size preview dialog. iOS also zooms it with a pinch. */
 export function MobileNativeChatImageViewer({
   uri,
   label,

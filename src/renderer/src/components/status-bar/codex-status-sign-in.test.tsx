@@ -1,12 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * STA-4422 symptom 2: the status bar's inline "Sign in" action re-authenticated
- * an account and then reported nothing — no toast on success or failure — and
- * never ran the session-restart workflow that an explicit account switch runs,
- * so live panes kept the old credentials. These render the real switcher and
- * click the real button so the wiring (intent flag, runtime target, restart
- * workflow, toasts) cannot pass while the handler is mis-wired.
- */
+/** Exercise real inline sign-in wiring through reauthentication, restart prompts and success/failure feedback. */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -62,7 +55,6 @@ function settingsWithActive(activeAccountId: string | null): GlobalSettings {
   } as unknown as GlobalSettings
 }
 
-/** An inactive account whose usage probe failed — the state that renders "Sign in". */
 const unavailableUsage: ProviderRateLimits = {
   provider: 'codex',
   session: null,
@@ -105,8 +97,7 @@ vi.mock('./tooltip', async (importOriginal) => ({
   ProviderPanel: () => null
 }))
 
-// Why: Radix portals its menu behind pointer-capture the DOM shim cannot drive;
-// passthrough shells render the same tree eagerly so the real handlers run.
+// Render Radix portals eagerly because the DOM shim cannot drive their pointer capture.
 vi.mock('@/components/ui/dropdown-menu', () => {
   const passthrough =
     (role?: string) =>
@@ -183,7 +174,6 @@ async function renderSwitcherAndOpenAccounts(summaryLabel: string): Promise<void
       iconOnly: false
     })
   )
-  // The account list is collapsed behind the summary row, exactly as in the app.
   fireEvent.click(screen.getByText(summaryLabel))
   await waitFor(() => expect(screen.getByRole('button', { name: /Sign in/ })).toBeTruthy())
 }
@@ -249,7 +239,6 @@ describe('status bar Codex sign-in action', () => {
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1))
-    // Healthy anchor: the intent and the clicked row's lane both reach the main process.
     expect(reauthenticate).toHaveBeenCalledWith({
       accountId: 'account-2',
       activateIfSelectionWasEmpty: true
@@ -273,7 +262,6 @@ describe('status bar Codex sign-in action', () => {
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1))
-    // Healthy anchor: the same click reached the main process; only the follow-up differs.
     expect(reauthenticate).toHaveBeenCalledWith({
       accountId: 'account-2',
       activateIfSelectionWasEmpty: true

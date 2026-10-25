@@ -31,12 +31,13 @@ export function normalizeAgentStatusMetadata(
   data: AgentStatusIpcPayload,
   authorityRestartId?: string
 ): AgentStatusMetadata | undefined {
-  if (!data.providerSession && !data.launchToken && !authorityRestartId) {
+  if (!data.providerSession && !data.launchToken && !authorityRestartId && !data.paneOwner) {
     return undefined
   }
   return {
     ...(authorityRestartId ? { authorityRestartId } : {}),
     ...(data.providerSession ? { providerSession: data.providerSession } : {}),
-    ...(data.launchToken ? { launchToken: data.launchToken } : {})
+    ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+    ...(data.paneOwner ? { paneOwner: data.paneOwner } : {})
   }
 }

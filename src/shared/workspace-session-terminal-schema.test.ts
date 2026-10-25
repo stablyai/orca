@@ -95,10 +95,7 @@ describe('parseWorkspaceSession terminal fields', () => {
     }
   })
 
-  // Why this matters beyond persistence hygiene: terminal-pane recovery asks
-  // the terminal ROW who owns the surface. While the row lost viewMode on load,
-  // a chat-owned tab read as "not chat-owned" after every restart and recovery
-  // would remount its hidden surface — the race #19745's guard exists to stop.
+  // Recovery reads the terminal row’s viewMode; losing it on load remounts chat-owned hidden surfaces (#19745).
   describe('terminal row viewMode', () => {
     function parseRow(row: Record<string, unknown>): Record<string, unknown> | undefined {
       const result = parseWorkspaceSession({
@@ -139,7 +136,6 @@ describe('parseWorkspaceSession terminal fields', () => {
     })
 
     it('degrades an unknown mode from a newer build instead of dropping the tab', () => {
-      // .catch('terminal') — the safe default, never a whole-session parse failure.
       expect(parseRow({ viewMode: 'holographic' })?.viewMode).toBe('terminal')
     })
   })

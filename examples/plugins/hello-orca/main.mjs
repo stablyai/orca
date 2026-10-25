@@ -1,7 +1,4 @@
-// Sample Orca plugin worker entry. Runs inside the out-of-process plugin
-// worker (plain Node, no Electron), forked lazily on the first trigger. The
-// default export receives the `orca` API: command registration, event
-// handlers, and the capability-gated host API.
+// Sample plugin runs in a lazily forked plain-Node worker; its default export receives commands, events and capability-gated host API.
 export default function activate(orca) {
   orca.commands.register('hello-ping', async (args) => {
     const stored = await orca.host.call('storage.get', { key: 'pings' })

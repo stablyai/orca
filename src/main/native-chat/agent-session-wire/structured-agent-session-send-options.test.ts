@@ -1,7 +1,3 @@
-// A send's carried choices against the real host, store and journal: kept with the message and
-// applied when its agent starts or is handed it, part of the operation's fingerprint, and kept on
-// a card Orca keeps.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
@@ -76,7 +72,6 @@ describe('a send carrying its model and effort to a chat at rest', () => {
 describe('an opening message created with a model and effort', () => {
   const OPENED = { model: 'opus', effort: 'high' }
 
-  /** Creates the chat with its opening message; its agent stays starting until `proveStart`. */
   async function createWhileStarting(
     rest: Awaited<ReturnType<typeof createRestTestRig>>,
     options: Record<string, string> = OPENED
@@ -104,7 +99,7 @@ describe('an opening message created with a model and effort', () => {
   it('runs on them though a pick made before its handover changed the chat', async () => {
     const rest = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
     try {
-      // Model only: this rig's agent answers a pick with nothing, so each write replaces the record.
+      // Limit to model: this rig’s pick response replaces rather than merges saved options.
       const { proveStart } = await createWhileStarting(rest, { model: 'opus' })
       const fields = { key: 'model', value: 'sonnet' }
       const send = restTestSend('unused', rest.store.getRecord(SESSION)?.lease.runtimeFence)

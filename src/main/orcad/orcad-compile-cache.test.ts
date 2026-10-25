@@ -47,7 +47,6 @@ describe('managed orcad compile cache', () => {
       {}
     )
     expect(orcadCompileCacheEnv('/slot', {}, managed)).toEqual({})
-    // Regression: an unmanaged orcad's own NODE_COMPILE_CACHE stays where the operator put it.
     expect(orcadCompileCacheEnv('/slot', enabled, {})).toEqual({})
   })
 })

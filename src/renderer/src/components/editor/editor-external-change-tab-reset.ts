@@ -3,7 +3,7 @@ import { getOpenFilesForExternalFileChange, type EditorPathMutationTarget } from
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { hasRecentSelfWrite } from './editor-self-write-registry'
 import type { AppStoreApi } from './editor-save-queue'
-import { editorModelSiblingTabs, isEditorModelDirty } from './editor-save-disk-precondition'
+import { isEditorModelDirty } from './editor-save-disk-precondition'
 
 export function createEditorExternalChangeTabReset(store: AppStoreApi): (event: Event) => void {
   return (event: Event): void => {
@@ -13,21 +13,14 @@ export function createEditorExternalChangeTabReset(store: AppStoreApi): (event: 
     }
 
     const state = store.getState()
-    const pathMatches = getOpenFilesForExternalFileChange(state.openFiles, detail)
-    // Why: a tab of another workspace showing the same model shares the text this change touches.
-    const matchingFiles = [
-      ...new Map(
-        pathMatches
-          .flatMap((file) => (file.mode === 'edit' ? editorModelSiblingTabs(state, file) : [file]))
-          .map((file) => [file.id, file])
-      ).values()
-    ]
+    // Why no sibling expansion: views of one file share a record, so each matches by path itself.
+    const matchingFiles = getOpenFilesForExternalFileChange(state.openFiles, detail)
     if (matchingFiles.length === 0) {
       return
     }
 
-    // Why: keep dirty drafts on external writes (data-loss half of #7265); mark changed-on-disk as backstop for tabs turned dirty during the notify debounce.
-    // Why model-level: a clean tab of a model another tab is editing shows that unsaved text.
+    // Keep model-level dirty drafts on external writes (#7265); clean sibling tabs show the same unsaved model text.
+    // Mark changed-on-disk too for tabs becoming dirty during notify debounce.
     const modelDirty = new Set(
       matchingFiles.filter((file) => isEditorModelDirty(state, file)).map((file) => file.id)
     )

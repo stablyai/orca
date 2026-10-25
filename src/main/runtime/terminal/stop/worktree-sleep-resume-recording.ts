@@ -63,18 +63,18 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
 
   private readonly paneLaunchConfigOf: PaneLaunchConfigOf = (paneKey, agent) => {
     for (const pty of this.ptysById.values()) {
-      if (pty.paneKey === paneKey && pty.launchConfig && pty.launchAgent === agent) {
+      if (
+        pty.launchConfig &&
+        pty.launchAgent === agent &&
+        this.paneOfPty(pty).paneKey === paneKey
+      ) {
         return pty.launchConfig
       }
     }
     return undefined
   }
 
-  /**
-   * A layout-owner build's resume record of a pane main holds, from the hook status main accepted:
-   * the window's rule, so a pane the window never opened still resumes after a quit. In order, so
-   * each status reads the record the one before it wrote.
-   */
+  // Main records accepted status for its panes even without windows, preserving window resume rules; serialize writes so statuses read prior records.
   recordHookStatusResume(row: AgentStatusIpcPayload): void {
     const status = resumeStatusFromHookRow(row, this.previousHookStatusByPaneKey.get(row.paneKey))
     if (!status) {

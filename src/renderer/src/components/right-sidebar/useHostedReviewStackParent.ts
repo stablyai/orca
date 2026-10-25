@@ -15,12 +15,7 @@ type UseHostedReviewStackParentOptions = {
   repoPath: string
   repoId?: string | null
   base: string
-  /**
-   * The repo's own default branch — not the worktree's base. Stacking on the
-   * repo default is meaningless, so that one case skips the lookup; every other
-   * base still gets one, including the worktree base a child branch forked from
-   * (the case stacking exists for).
-   */
+  /** Only the repo default skips stack lookup; a child worktree’s own base remains a valid stack parent. */
   repoDefaultBase?: string | null
   head: string
   fetchHostedReviewForBranch: FetchHostedReviewForBranch

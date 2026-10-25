@@ -33,12 +33,9 @@ type DesktopRelayServiceOptions = {
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
 }
 
-// Why: a broker that died without arming a retry (sleep past token expiry,
-// transient auth read) must not stay dead until the user clicks Retry. The
-// cadence is slow because it is a safety net, not the primary retry path.
+// Revive dead brokers lacking retry timers (sleep/token expiry) without requiring user Retry.
 const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
-// How long a demand caller waits through a scheduled reconnect. Phone requests
-// get less than a desktop mint so the reply lands inside the phone's budget.
+// Phone readiness budgets are shorter so replies arrive before their deadline.
 const PAIRING_MINT_READINESS_WAIT_MS = 20_000
 const PHONE_REQUEST_READINESS_WAIT_MS = 10_000
 
@@ -94,7 +91,6 @@ export class DesktopRelayService {
     this.refreshDemand()
   }
 
-  // Safe to call from any wake signal (power resume, network change).
   ensureLive(): void {
     if (!this.stopped) {
       this.coordinator.ensureLive()
@@ -106,9 +102,7 @@ export class DesktopRelayService {
   }
 
   fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
-    // Why: a fence must be hard — a surviving liveness tick could catch the
-    // window between the pre-sign-out fence and the profile wipe and briefly
-    // resurrect a broker. The next auth mutation re-arms via refreshDemand.
+    // Hard sign-out fences must stop ticks until the next auth mutation re-arms demand.
     if (this.livenessTimer) {
       clearInterval(this.livenessTimer)
       this.livenessTimer = null
@@ -207,8 +201,7 @@ export class DesktopRelayService {
       this.assertRelayHost(context, broker)
       const authorization = pairingAuthorizationForContext(context, broker.hostId)
       if (!authorization) {
-        // Why: a resume splice proves renewal through confirmation; it cannot be
-        // repurposed as either of the two initial-install authorization modes.
+        // Resume confirmation proves renewal, never either initial-install authorization mode.
         throw new Error('relay_provision_authorization_unavailable')
       }
       if (
@@ -275,8 +268,7 @@ export class DesktopRelayService {
       this.revokeOutbox.remove(item.reqId)
       this.refreshDemand()
     } catch {
-      // Why: the durable item is the source of truth; reconnecting the same
-      // account/control retries this stable reqId without delaying local revoke.
+      // Durable revoke reqId survives reconnect; remote retry must not delay local revocation.
     }
   }
 
@@ -315,8 +307,7 @@ export class DesktopRelayService {
     this.coordinator.reconcile()
     const expiresAt = this.demandLedger.nextPendingExpiry()
     if (expiresAt !== null) {
-      // Why: an unscanned QR must stop holding a standing control when its
-      // server invite expires, even if no renderer survives to report closure.
+      // Expired unscanned invites must release standing control even without a surviving renderer.
       const delay = Math.max(1, expiresAt - Date.now() + 1)
       this.demandExpiryTimer = setTimeout(() => this.refreshDemand(), delay)
     }

@@ -7,13 +7,7 @@ import {
   toolUpdate
 } from '../tool-input-preview'
 
-/** True for the one jcode tool a *human* answers.
- *
- *  jcode has no per-tool approval prompt — its safety model denies or asks the model
- *  to reflect, both inside the tool. `request_permission`
- *  (crates/jcode-app-core/src/tool/ambient.rs) is the only surface that waits on a
- *  person, resolved out of band with `jcode permissions`. Matched by exact name so a
- *  rename fails loudly here rather than silently widening to unrelated tools. */
+/** Only request_permission waits on a person (resolved via jcode permissions); other safety decisions stay in-model/tool. Match exactly to avoid widening human waits. */
 export function isJcodeUserInputTool(toolName: string | undefined): boolean {
   return toolName === 'request_permission'
 }
@@ -38,9 +32,7 @@ function hasIntentField(toolInput: unknown): toolInput is JcodeToolIntent {
   return typeof toolInput === 'object' && toolInput !== null && 'intent' in toolInput
 }
 
-// Why: every jcode tool schema carries an `intent` string the model fills in with
-// what it is doing, which reads better than a bare path when the tool-specific
-// key (file_path, command, …) is missing.
+// Use model-filled intent when tool-specific path/command fields are absent.
 function readJcodeIntent(toolInput: unknown): string | undefined {
   if (!hasIntentField(toolInput)) {
     return undefined
@@ -64,9 +56,7 @@ export function extractJcodeToolFields(
       {
         toolName,
         toolInput: preview,
-        // Why: the question card renders the untruncated tool input; only the
-        // ask-the-user tool gets one, and resolveToolState never inherits it, so
-        // a resolved question cannot linger on the row.
+        // Keep the full question input only on its own event; never inherit answered cards.
         interactivePrompt:
           isJcodeUserInputTool(toolName) && toolInput !== undefined
             ? JSON.stringify(toolInput)
@@ -77,14 +67,11 @@ export function extractJcodeToolFields(
   }
   if (eventName === 'post_tool') {
     const toolName = readString(hookPayload, 'tool_name')
-    // Why: post_tool reports no input. Keeping `hasToolInputField` false lets the
-    // matching pre_tool preview survive the tool's completion instead of blanking.
+    // post_tool omits input; preserve the matching pre_tool preview.
     return toolUpdate({ toolName, toolInput: undefined }, { hasToolInputField: false })
   }
   if (eventName === 'turn_end') {
-    // Why no tool clearing here: `turn_start` already resets the pane's tool cache
-    // for the next turn, and the completion notification needs the finished turn's
-    // detail (tool or reply) to be worth showing at all — same shape as Claude's Stop.
+    // Keep finished-turn detail for notifications; turn_start clears tools for the next turn.
     const message =
       readString(hookPayload, 'last_assistant_text') ??
       readString(hookPayload, 'last_assistant_message')

@@ -1,5 +1,4 @@
-// Why: the three commit rows share one disabled-reason ladder — commit, commit+push and commit+sync
-// must never disagree about why committing is blocked.
+// Share commit blockers across Commit, Commit & Push, and Commit & Sync so disabled reasons agree.
 
 import { translate } from '@/i18n/i18n'
 import type { DropdownItem } from './source-control-dropdown-item-types'
@@ -38,7 +37,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     disabled: !canCommit
   }
 
-  // Why: compound commit labels omit counts — the commit itself changes ahead/behind, so pre-commit numbers would mislead.
+  // Committing changes divergence, so compound labels must omit pre-commit counts.
   const commitPushTitle = upstreamLoading
     ? 'Checking branch status…'
     : publishBlockedByPRLoading
@@ -61,7 +60,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     kind: 'commit_push',
     label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
     title: commitPushTitle,
-    // Why: match explicit Push — only an open linked review with a known head can commit+push without a git upstream.
+    // Match Push: without upstream, Commit & Push requires a known open-review head.
     disabled:
       globalBusy ||
       upstreamLoading ||
@@ -86,7 +85,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
       return 'Check out a branch before syncing commits'
     }
     if (!hasUpstream) {
-      // Why: direct the user to Publish Branch (the primary action) rather than naming a nonexistent compound action.
+      // Point to the existing Publish Branch primary instead of naming a nonexistent compound action.
       return 'Publish the branch first to sync commits'
     }
     if (shouldForcePushWithLease) {

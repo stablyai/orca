@@ -1,3 +1,8 @@
+import {
+  markStructuredAgentSessionLaunchesPublished,
+  publishedStructuredSessions
+} from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '../../store'
 import { useAppStore } from '../../store'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -84,7 +89,11 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const notificationStatus = clientOwnedNotification ? remapped : accepted
-          if (!notificationStatus) {
+          // Why: an unverifiable `done` restates an earlier turn or none, never a completion.
+          if (
+            !notificationStatus ||
+            (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed)
+          ) {
             continue
           }
           const currentClientStateStartedAt = clientOwnedNotification
@@ -180,6 +189,14 @@ export function applyWebSessionTabsStorePatch(
     console.warn('[web-session-tabs-sync] a store subscriber failed after the patch landed:', error)
   }
 
+  for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
+    if (decision.apply && source) {
+      markStructuredAgentSessionLaunchesPublished(
+        toRuntimeExecutionHostId(environmentId),
+        publishedStructuredSessions([source])
+      )
+    }
+  }
   const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)
   try {
     if (mirroredAgentStatusChanged) {

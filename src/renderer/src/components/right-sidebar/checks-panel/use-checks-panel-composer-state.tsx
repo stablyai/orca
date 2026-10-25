@@ -160,14 +160,13 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     repoPath: repo?.path ?? '',
     repoId: repo?.id ?? null,
     base: prBase,
-    // Why: the repo default, not eligibility's defaultBaseRef — that one resolves to
-    // the worktree's own base, which is exactly the branch a stacked PR targets.
+    // Use the repo default; eligibility's default may be the stacked worktree's parent branch.
     repoDefaultBase: prRepoDefaultBaseRef,
     head: branch,
     fetchHostedReviewForBranch
   })
   useEffect(() => {
-    // Why: PR generation can finish while this composer is hidden by a worktree switch; hydrate once the original composer is visible again.
+    // Generation can finish while hidden after a workspace switch; hydrate when its composer returns.
     if (
       !activePullRequestGenerationKey ||
       !activePullRequestGenerationRecord ||
@@ -242,7 +241,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     [asyncResultKeyRef]
   )
   useEffect(() => {
-    // Why: compare without headSha — PR head can move while the agent is still starting.
+    // Ignore headSha because the PR head can move while the agent starts.
     if (
       agentComposerState?.commentResolution &&
       checksPanelReviewStableKey(agentComposerState.commentResolution.reviewContextKey) !==

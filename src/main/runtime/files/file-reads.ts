@@ -47,7 +47,6 @@ export class RuntimeFileReads {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
-    // Why: an `ssh:` host fails before path validation, as it always has.
     requireLocalRuntimeFileRoute(target)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
@@ -80,7 +79,6 @@ export class RuntimeFileReads {
         : previewableBinaryByteLimit(maxContentBytes)
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
     requireLocalRuntimeFileRoute(target)
-    // Why: sized by extension instead of a stat round trip.
     const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
     const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
@@ -173,7 +171,7 @@ export class RuntimeFileReads {
 }
 
 async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promise<string> {
-  // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
+  // Bound preview reads so large files cannot block the WebSocket.
   const { bytes } = await readLocalRuntimeFilePrefix(
     filePath,
     store,
@@ -182,7 +180,6 @@ async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promi
   return bytes.toString('utf8')
 }
 
-/** Up to `maxBytes` from the start of an authorized local file, and the file's full size. */
 export async function readLocalRuntimeFilePrefix(
   filePath: string,
   store: RuntimeStore,

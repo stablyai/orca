@@ -1,8 +1,11 @@
-import { useEffect, type MutableRefObject } from 'react'
-import { conflictOverviewFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
+import { useEffect, useMemo, type MutableRefObject } from 'react'
+import {
+  conflictOverviewView,
+  conflictOverviewViewsKey
+} from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
 import type { OpenFile } from '@/store/slices/editor'
 import { joinPath } from '@/lib/path'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
 import type { EditorPanelDiffContentLoader } from './useEditorPanelDiffContentLoader'
@@ -14,7 +17,6 @@ type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByW
 type UseEditorPanelActiveTabContentLoadParams = {
   activeFile: OpenFile | null
   selectedConflictReviewFile: OpenFile | null
-  openFiles: readonly OpenFile[]
   isVisible: boolean
   isChangesMode: boolean
   gitStatusEntries: GitStatusByWorktree[string] | undefined
@@ -28,9 +30,7 @@ type UseEditorPanelActiveTabContentLoadParams = {
   loadDiffContent: EditorPanelDiffContentLoader
 }
 
-// Why: the newest read for a tab is already on its way, so a re-run of the lazy
-// effect (a worktree flip-flop re-adds `isVisible`) must not fire a second RPC.
-// An invalidation bumps the tab's generation, so a superseded read never counts.
+// Reuse live reads across visibility changes; invalidation generations distinguish superseded reads.
 function hasLiveRead(
   generationsById: Record<string, number>,
   outstandingById: Record<string, number>,
@@ -43,7 +43,6 @@ function hasLiveRead(
 export function useEditorPanelActiveTabContentLoad({
   activeFile,
   selectedConflictReviewFile,
-  openFiles,
   isVisible,
   isChangesMode,
   gitStatusEntries,
@@ -60,6 +59,22 @@ export function useEditorPanelActiveTabContentLoad({
     activeFile,
     activeFile ? fileContents[activeFile.id] : undefined,
     isVisible
+  )
+  // Why: an overview file's view can open, close, re-key or rejoin anywhere; reload under its new id.
+  const overviewPaths = useMemo(
+    () =>
+      activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile
+        ? (activeFile.conflictReview?.entries ?? []).map((entry) =>
+            joinPath(activeFile.filePath, entry.path)
+          )
+        : [],
+    [activeFile, selectedConflictReviewFile]
+  )
+  const overviewWorktreeId = activeFile?.worktreeId ?? ''
+  const overviewViewsKey = useAppStore((state) =>
+    overviewPaths.length === 0
+      ? ''
+      : conflictOverviewViewsKey(state, overviewWorktreeId, overviewPaths)
   )
   const needsFileRead = (fileId: string): boolean => {
     const cached = fileContents[fileId]
@@ -99,9 +114,16 @@ export function useEditorPanelActiveTabContentLoad({
         }
 
         const absolutePath = joinPath(activeFile.filePath, entry.path)
-        const fileId = conflictOverviewFileId(openFiles, activeFile.worktreeId, absolutePath)
-        if (needsFileRead(fileId)) {
-          void loadFileContent(absolutePath, fileId, activeFile.worktreeId, entry.path)
+        const view = conflictOverviewView(
+          useAppStore.getState(),
+          activeFile.worktreeId,
+          absolutePath
+        )
+        // Why the view's own owner: another workspace's view must load as it would, never re-owned.
+        if (view ? needsFileRead(view.id) : needsFileRead(absolutePath)) {
+          void (view
+            ? loadFileContent(view.filePath, view.id, view.worktreeId, view.relativePath)
+            : loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path))
         }
       }
       return
@@ -138,6 +160,7 @@ export function useEditorPanelActiveTabContentLoad({
     selectedConflictReviewFile?.id,
     isChangesMode,
     isVisible,
-    gitStatusEntries
+    gitStatusEntries,
+    overviewViewsKey
   ])
 }

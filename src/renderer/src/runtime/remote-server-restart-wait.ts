@@ -24,12 +24,7 @@ type RestartWaitTiming = {
 /** Per-call ceiling for the two poll RPCs; each tick also clamps to the time left. */
 const RESTART_WAIT_RPC_TIMEOUT_MS = 10_000
 
-/**
- * Waits for the replacement process to answer on the target version and returns its runtime status.
- * Throws the server's own install-failure text as soon as the *original* process publishes one —
- * without that, a server that could not restart is indistinguishable from a slow one until the
- * reconnect budget runs out, and the user is told the wrong thing.
- */
+/** Wait for a new runtime on target version. Report install failure from the original process immediately; otherwise failed restart looks merely slow until budget expiry. */
 export async function waitForReplacementRuntime(
   environmentId: string,
   transport: RestartWaitTransport,
@@ -38,10 +33,10 @@ export async function waitForReplacementRuntime(
 ): Promise<RuntimeStatus> {
   const now = transport.now ?? Date.now
   const deadline = now() + timing.reconnectTimeoutMs
-  // Why: the install RPC returns before the installer fires, so an error on the first tick belongs to an earlier attempt.
+  // Install returns before installer fires; first-tick errors belong to earlier attempts.
   let probed = false
   while (now() < deadline) {
-    // Why: an RPC allowed to outlive the deadline drags the whole wait past the budget the caller set.
+    // Clamp each RPC to remaining time or it outlives the caller’s whole wait budget.
     const rpcTimeoutMs = Math.min(RESTART_WAIT_RPC_TIMEOUT_MS, deadline - now())
     let installFailure: string | null = null
     try {
@@ -51,8 +46,7 @@ export async function waitForReplacementRuntime(
       if (status.runtimeId !== install.runtimeId && reachedTarget) {
         return status
       }
-      // Why: the status RPC already spent part of rpcTimeoutMs, so the probe re-reads what is left
-      // rather than starting a second full budget of its own.
+      // Status spent part of this tick’s budget; re-read remaining time before probing.
       const probeTimeoutMs = Math.min(RESTART_WAIT_RPC_TIMEOUT_MS, deadline - now())
       installFailure =
         probed && probeTimeoutMs > 0

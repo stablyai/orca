@@ -13,10 +13,7 @@ function isClaudeResumeSelector(token: string): boolean {
   if (token === '--continue' || token.startsWith('--continue=')) {
     return true
   }
-  // Why: the joined -r<id> form is deliberately NOT matched — any `-r…` token
-  // is ambiguous with another option's dash-leading value (`--agent -review`),
-  // and no arity table can keep up with the CLI. Only exact selector shapes
-  // are stripped; a persisted joined form degrades to pre-guard behavior.
+  // Joined -rID is ambiguous with dash-leading option values such as --agent -review; strip only exact selector shapes and append otherwise.
   return token === '-r' || token.startsWith('-r=') || token === '-c' || token.startsWith('-c=')
 }
 
@@ -25,10 +22,7 @@ function isClaudeExecutableToken(token: string): boolean {
   return /^claude(\.(exe|cmd|bat|ps1))?$/i.test(base)
 }
 
-/** Accepts a claude token only in command position — index 0, right after a
- * wrapper's `--`, behind PowerShell's `&` call operator, or preceded solely by
- * NAME=value assignments — so an argument that merely ends in /claude (an ssh
- * key, a project dir) can never be mistaken for the executable. */
+/** Accept claude only in command position (start, wrapper --, PowerShell &, or POSIX assignments); path-shaped arguments cannot claim execution. */
 function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartupShell): number {
   let commandPosition = true
   for (let i = 0; i < tokens.length; i += 1) {
@@ -38,8 +32,7 @@ function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartu
         return i
       }
       if (
-        // Why: `NAME=value cmd` is sh-family syntax (fish included, 3.1+); on
-        // cmd/PowerShell such a token is a bogus executable name, not a prefix.
+        // NAME=value prefixes are POSIX/fish3.1+ syntax; Windows shells treat them as executable names.
         (isPosixStartupShell(shell) && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) ||
         (shell === 'powershell' && token === '&' && i === 0)
       ) {
@@ -54,8 +47,6 @@ function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartu
   return -1
 }
 
-/** Joins the resolved base command with the agent's resume argv. Claude goes
- * through the selector guard below; other agents keep plain appending. */
 export function buildAgentResumeLaunchCommand(
   agent: ResumableTuiAgent,
   baseCommand: string,
@@ -70,17 +61,7 @@ export function buildAgentResumeLaunchCommand(
   return resumeArgs ? `${baseCommand} ${resumeArgs}` : baseCommand
 }
 
-/** Builds the Claude cold-restore launch command: strips any resume/continue
- * selector the user's persisted command carries and appends exactly one
- * authoritative selector, so a stale or bare selector can never compete with
- * the provider session id (#12982).
- *
- * Fails open by design: when the base command cannot be tokenized, or no
- * claude executable token can be located (wrapper commands like
- * `bash -c claude`), the base is left byte-for-byte untouched and the
- * selector is appended, which is the pre-guard behavior. Bytes outside
- * removed selector tokens are always preserved verbatim — the base is
- * spliced by source span, never re-quoted. */
+/** Replace stale Claude resume/continue selectors with one authoritative session (#12982). Unknown tokenization/executable positions keep append-only behavior; splice source spans so other bytes retain their original quoting. */
 export function buildClaudeResumeLaunchCommand(
   baseCommand: string,
   resumeArgs: readonly string[],
@@ -100,11 +81,7 @@ export function buildClaudeResumeLaunchCommand(
   if (claudeIndex === -1) {
     return appended
   }
-  // Why: any token the tokenizer cannot model for this shell — an operator,
-  // comment, expansion, or cmd single-quoted region — means the splice could
-  // cut live syntax or misread a literal as a selector. The whole base must
-  // be modelable, including the executable itself; only PowerShell's leading
-  // call operator is a known-safe divergent token.
+  // Splicing requires the entire base to match shell semantics, including gaps/executable; only a leading PowerShell call operator is safe divergence.
   for (let i = 0; i <= tokens.length; i += 1) {
     const gapStart = i === 0 ? 0 : spans[i - 1].end
     const gapEnd = i === tokens.length ? baseCommand.length : spans[i].start
@@ -114,10 +91,7 @@ export function buildClaudeResumeLaunchCommand(
     if (i === tokens.length) {
       break
     }
-    // Why: a bare `--%` makes PowerShell pass the rest of the line to the
-    // child literally, so appended quoting would arrive as literal bytes. A
-    // quoted `--%` can also stop parsing, but only before a parameter token,
-    // where the base is already mangled with or without the guard.
+    // Bare PowerShell --% passes appended quotes literally; quoted variants before parameters already mangle the base.
     if (shell === 'powershell' && baseCommand.slice(spans[i].start, spans[i].end) === '--%') {
       return appended
     }
@@ -133,18 +107,14 @@ export function buildClaudeResumeLaunchCommand(
   for (let i = claudeIndex + 1; i < tokens.length; i += 1) {
     const token = tokens[i]
     if (token === '--') {
-      // Why: claude is the executable here, so `--` is claude's own
-      // terminator; the selector must stay in option position before it.
-      // Span-splice equivalent of insertBeforeTerminator in
-      // tui-agent-launch-command.ts, which re-quotes and cannot be reused.
+      // Keep selectors before Claude's -- terminator; preserve source spans instead of the launch builder's re-quoting.
       terminatorStart = spans[i].start
       break
     }
     if (!isClaudeResumeSelector(token)) {
       continue
     }
-    // Why: absorb the separator before the selector, but never cross into the
-    // previous token, whose span can end with an escaped-space byte.
+    // Absorb preceding whitespace without touching the prior token's possibly escaped final space.
     let start = spans[i].start
     while (start > spans[i - 1].end && ' \t'.includes(baseCommand[start - 1])) {
       start -= 1

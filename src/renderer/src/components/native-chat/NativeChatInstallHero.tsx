@@ -7,8 +7,7 @@ import { cn } from '@/lib/utils'
 import type { NativeChatInstallSlotInstall } from './NativeChatInstallSlot'
 import { NativeChatInstallTile } from './NativeChatInstallTile'
 
-/** A new chat's pane while its host has no program to run: what Install is, one action, and the
- *  steps once it runs. The composer stays below, disabled, so nothing moves when it finishes. */
+/** Keep the disabled composer below installation so completing setup does not move the input. */
 export function NativeChatInstallHero(props: {
   slot: NativeChatInstallSlotInstall
   agentLabel: string

@@ -9,8 +9,6 @@ import {
 
 describe('project header action selectors', () => {
   it('includes the actions overlay for both repo and group helpers', () => {
-    // Why: both helpers must share REPO_HEADER_ACTION_SELECTOR so overlay gaps
-    // never arm drag/toggle on either header kind.
     expect(REPO_HEADER_ACTION_SELECTOR).toContain('[data-repo-header-actions]')
 
     const header = document.createElement('div')

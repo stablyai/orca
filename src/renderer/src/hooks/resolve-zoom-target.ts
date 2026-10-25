@@ -19,10 +19,7 @@ const BROWSER_PAGE_ID_ATTRIBUTES = [
   'data-browser-page-menu-id'
 ]
 
-/**
- * The browser page that holds focus: its address bar or toolbar, its open "..." menu, or the
- * page itself. The page's <webview> and the menu both live outside the pane.
- */
+/** Resolve browser page focus from page, address bar/toolbar or external menu, which may live outside the pane. */
 export function focusedBrowserPageId(activeElement: unknown): string | null {
   for (const attribute of BROWSER_PAGE_ID_ATTRIBUTES) {
     const owner = closestFocusedElement(activeElement, `[${attribute}]`)
@@ -63,8 +60,7 @@ export function resolveZoomTarget(args: {
     )
   )
 
-  // Why first: as in Chrome, zooming from the address bar or toolbar zooms the page, and a
-  // floating browser can hold focus over Tasks or Settings.
+  // Address-bar/toolbar focus zooms its page; floating browsers can own focus over Tasks/Settings.
   if (focusedBrowserPageId(activeElement)) {
     return 'browser'
   }
@@ -84,9 +80,7 @@ export function resolveZoomTarget(args: {
   if (activeTabType === 'editor' || editorFocused) {
     return 'editor'
   }
-  // Why: terminal zoom is focus-owned. After the user clicks app chrome or
-  // whitespace, the active terminal tab remains visible but app zoom should own
-  // Cmd/Ctrl +/- until xterm focus returns.
+  // After focus moves to app chrome, app zoom owns the chord even if a terminal remains visible.
   if (terminalInputFocused) {
     return 'terminal'
   }

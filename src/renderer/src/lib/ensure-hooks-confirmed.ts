@@ -73,10 +73,7 @@ function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId)
     : state.repos.find((repo) => repo.id === repoId)
 }
 
-/**
- * Host that inspects the repo's hooks: a runtime owner the caller captured (a server-owned SSH
- * repo runs there), else the given host, else the repo row's own. Never the focused host.
- */
+/** Inspect on the captured runtime owner, then explicit host, then repo owner; never substitute focused host, including server-owned SSH repos. */
 function hookRepoOwnerHostId(
   state: AppState,
   repoId: string,
@@ -235,7 +232,7 @@ export async function readAndConfirmRuntimeIssueCommand(
 }
 
 export async function ensureHooksConfirmed(
-  // Why a getter: a caller that queues behind an earlier prompt must see the trust it recorded.
+  // Read current trust when dequeued so earlier prompts’ decisions apply.
   stateOrGetter: AppState | (() => AppState),
   repoId: string,
   scriptKind: HookScriptKind,
@@ -255,9 +252,7 @@ export async function ensureHooksConfirmed(
     let scriptContent = ''
     try {
       if (scriptKind === 'issueCommand') {
-        // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
-        // Why: hostId disambiguates duplicate repo ids on the local IPC path,
-        // matching the checkRuntimeHooks call below.
+        // Only shared orca.yaml needs repo trust; user-owned overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
         const result = await readRuntimeIssueCommand(
           hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId

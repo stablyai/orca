@@ -20,9 +20,7 @@ import {
   hostedReviewForBranchSchema
 } from './github-pr-read-reply-schema'
 
-// The parser suites below are the parity record for the schemas that replaced them: every
-// expectation is the one the hand parser carried, read through the schema instead. Where a case
-// now *refuses* rather than degrading, it says so — those four are the disclosed behaviour change.
+// Keep hand-parser parity cases; explicitly distinguish stricter schema refusal from legacy degradation.
 function parsed<T>(schema: z.ZodType<T, unknown>, value: unknown): T | null {
   const result = schema.safeParse(value)
   return result.success ? result.data : null
@@ -221,7 +219,6 @@ describe('readWorkItemDetails', () => {
 
   it('returns null when item is unparseable', () => {
     expect(readWorkItemDetails({ item: { number: 1 } })).toBeNull()
-    // `null` stays a value: the host sends it when the work item is gone.
     expect(readWorkItemDetails(null)).toBeNull()
   })
 
@@ -281,7 +278,6 @@ describe('readPRCheckDetails', () => {
   it('answers null for a run with no name, and refuses a non-record', () => {
     expect(readPRCheckDetails({ status: 'x' })).toBeNull()
     expect(refuses(githubPrCheckDetailsSchema, 7)).toBe(true)
-    // `null` stays a value: the host sends it for a check run it has no details for.
     expect(readPRCheckDetails(null)).toBeNull()
   })
 })

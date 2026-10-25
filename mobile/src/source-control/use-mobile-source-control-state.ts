@@ -42,8 +42,6 @@ export type MobileSourceControlStateParams = {
   onRequestClose?: () => void
   onFileOpenStart?: () => void
   onOpenedFileDiff?: (relativePath: string) => void
-  // When the panel runs inside the hub, "History" switches the segment instead of
-  // pushing the standalone route. Absent for the standalone/dock usage.
   onOpenHistory?: () => void
 }
 
@@ -140,7 +138,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       })),
     [branchCompareCanOpen, branchCompareSection]
   )
-  // Local changes only: dirty files + committed file diffs vs base (not PR/push).
   const shouldShowBranchCompareSection =
     branchEntries.length > 0 ||
     branchCompareState.kind === 'loading' ||
@@ -261,7 +258,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     router,
     setRootRef,
     worktreeLabel,
-    // screen state
     screenState,
     branchCompareState,
     branchDiffPreview,
@@ -287,7 +283,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     keyboardLift,
     openingPath,
     openingBranchPath,
-    // derived
     status,
     sections,
     branchCompareResult,
@@ -305,7 +300,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     syncLabel,
     primaryAction,
     createPrAction,
-    // actions
     loadStatus,
     openFile,
     openBranchDiff,

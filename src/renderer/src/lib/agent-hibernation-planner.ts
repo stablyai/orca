@@ -64,9 +64,7 @@ function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
     .sort((a, b) => a.paneKey.localeCompare(b.paneKey))
     .map(
       (pane) =>
-        // `updatedAt` is deliberately absent: same-state repaints advance it and would
-        // stop two consecutive ticks ever matching. Agent kind and full resume identity
-        // replace the change detection it incidentally provided.
+        // Ignore repaint-driven updatedAt so consecutive ticks can match; compare agent kind and full resume identity instead.
         `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.agentType}:${pane.providerSessionKey}:${pane.providerSessionId}:${pane.providerTranscriptPath}:${pane.state}:${pane.stateStartedAt}:${pane.effectiveIdleStart}:${pane.inputAt}`
     )
   return `${worktreeId}|${parts.join('|')}`
@@ -113,10 +111,7 @@ export function planAgentHibernationCandidates(
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
   const candidates: AgentHibernationCandidate[] = []
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
-    // Why: the tab on screen is `foregroundTerminalTabIds` below, and a tab just left is held by
-    // the `foregroundTerminalLastSeenAtByTabId` floor in getEligiblePane. Skipping the whole active
-    // worktree on top of that parked nothing in the tree a user actually works in — where a 16 GB
-    // host accumulates its idle agents (#16211).
+    // Protect the foreground tab and recently left tabs individually; excluding the entire active worktree prevents reclaim there (#16211).
     if (!worktreeId || tabs.length === 0) {
       continue
     }

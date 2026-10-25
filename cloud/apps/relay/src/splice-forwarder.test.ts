@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
 import {
   ProcessQueuedByteBudget,
@@ -27,6 +27,7 @@ class FakeSocket extends EventEmitter {
 }
 
 describe('splice forwarder', () => {
+  afterEach(() => vi.useRealTimers())
   it('preserves text/binary opcodes and propagates peer close', () => {
     const client = new FakeSocket()
     const host = new FakeSocket()
@@ -51,7 +52,7 @@ describe('splice forwarder', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('hard-closes a wedged splice and releases its global queued-byte reservation', () => {
+  it('hard-closes a splice exceeding the queue limit and releases its global queued-byte reservation', () => {
     const client = new FakeSocket()
     const host = new FakeSocket()
     host.bufferedAmount = 1024 * 1024
@@ -104,9 +105,9 @@ describe('splice forwarder', () => {
     expect(peerClose.closes).toHaveLength(1)
   })
 
-  it('queues one full catalog-sized frame for a backpressured peer without closing', async () => {
-    // Why: the desktop's worktree catalog response exceeds 1MiB on large
-    // workspaces; a single maxFrameBytes frame must survive backpressure.
+  it('queues one full catalog-sized frame for a backpressured peer without closing', () => {
+    // Large workspace catalogs exceed 1MiB; one maxFrameBytes frame must survive backpressure.
+    vi.useFakeTimers()
     const client = new FakeSocket()
     const host = new FakeSocket()
     host.bufferedAmount = 1024 * 1024
@@ -118,18 +119,19 @@ describe('splice forwarder', () => {
       budget,
       onClose
     })
-    client.emit('message', Buffer.alloc(8 * 1024 * 1024), true)
+    const frame = Buffer.alloc(8 * 1024 * 1024)
+    client.emit('message', frame, true)
     expect(client.closes).toEqual([])
     expect(host.closes).toEqual([])
     expect(budget.current()).toBe(8 * 1024 * 1024)
 
-    // Peer drains; the queued frame flushes and the reservation releases.
     host.bufferedAmount = 0
-    await new Promise((resolve) => setTimeout(resolve, 60))
-    expect(host.sent.some((frame) => (frame.data as Buffer).byteLength === 8 * 1024 * 1024)).toBe(
-      true
-    )
+    vi.advanceTimersByTime(25)
+    expect(host.sent).toHaveLength(1)
+    expect(host.sent[0]?.data).toBe(frame)
+    expect(host.sent[0]?.binary).toBe(true)
     expect(budget.current()).toBe(0)
     expect(onClose).not.toHaveBeenCalled()
+    client.close(1000, 'done')
   })
 })

@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A message shown as not sent stays in the outbox and draws below newer turns, after their live
-// activity. It is in no turn: the newer turn's "Working for" clock and "Worked for" bar stay with
-// that turn, never under it.
+// Unsent outbox messages stay below newer turns and their activity, without owning a turn bar.
 
 import '@testing-library/jest-dom/vitest'
 
@@ -123,7 +121,6 @@ function submission(
   }
 }
 
-/** The drawn sequence of the prompts, bars and live activity line, top to bottom. */
 function drawn(container: HTMLElement): string[] {
   const out: string[] = []
   for (const element of container.querySelectorAll('*')) {

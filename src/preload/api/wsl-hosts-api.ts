@@ -1,7 +1,4 @@
-/**
- * WSL distros as hosts; desktop-only and Windows-only (or the e2e fake) behind the internal gate,
- * else undefined.
- */
+// Available only on Windows desktops or e2e fakes with the internal gate enabled.
 import { ipcRenderer } from 'electron'
 import {
   WSL_HOST_STATUS_CHANNEL,

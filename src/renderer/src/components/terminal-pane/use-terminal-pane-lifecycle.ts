@@ -17,7 +17,6 @@ import { useTerminalPaneMountLifecycle } from './use-terminal-pane-mount-lifecyc
 import { useTerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { listenForHibernatedAgentWake } from './hibernated-agent-wake-listener'
 
-/** Coordinates mount, visibility, and live appearance effects for terminal panes. */
 export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): void {
   const refs = useTerminalPaneLifecycleRefs()
   useTerminalPaneMountLifecycle(deps, refs)

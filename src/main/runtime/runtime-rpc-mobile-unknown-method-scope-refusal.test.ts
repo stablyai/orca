@@ -7,19 +7,8 @@ import { DeviceRegistry } from './device-registry'
 import { createMobileRpcSurfaceRuntime } from './runtime-rpc-mobile-method-allowlist-fixtures'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
-/**
- * What a phone is told when this desktop has never heard of the method it called.
- *
- * The mobile allowlist gate runs before the dispatcher, so for a mobile-scoped device
- * `method_not_found` is reachable only for a method that IS allowlisted but unregistered.
- * A method an older desktop predates is missing from both, and the phone is told `forbidden`.
- *
- * That distinction is the whole skew contract for a phone probing a method to decide whether the
- * desktop can serve it (`pairing.provisionRelay`, `pairing.getEndpoints`). Keying the "too old,
- * stay on LAN" fallback on `method_not_found` alone never fires against a genuinely old desktop.
- * See docs/reference/remote-wire-compatibility.md — a scope refusal is not a missing method.
- */
-/** The RPC error code a reply carries, or undefined when the reply names no error. */
+/** Older hosts lack both registration and mobile allowlist entry, so unknown mobile probes return forbidden; method_not_found requires an allowlisted method.
+ * Phone skew fallback must handle scope refusal too (pairing.provisionRelay/getEndpoints; docs/reference/remote-wire-compatibility.md). */
 function errorCode(reply: Record<string, unknown>): string | undefined {
   const error = reply.error
   if (typeof error !== 'object' || error === null || !('code' in error)) {
@@ -63,9 +52,7 @@ describe('an unknown method reaching a mobile-scoped device', () => {
     expect(errorCode(reply)).toBe('method_not_found')
   })
 
-  // Why this build's own allowlist and not an older one: a desktop that serves the pairing probes
-  // allowlists them, so `forbidden` on either can only come from a build that predates them. That
-  // is what makes the phone's fallback a skew contract rather than a local error path.
+  // Current hosts allowlist supported pairing probes; forbidden identifies a host predating them for skew fallback.
   it('allowlists both pairing probes, so forbidden on one can only mean an older desktop', () => {
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('pairing.getEndpoints')).toBe(true)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('pairing.provisionRelay')).toBe(true)

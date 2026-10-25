@@ -135,7 +135,7 @@ describe.each(['serialized', 'parsed'] as const)(
           return { store, authority }
         }
 
-        // Only relay-era builds wrote this record; it reaches this build from disk.
+        // Emulate a relay-era record loaded from disk.
         const legacy = new ProfileStateSqliteAuthority(databaseFile, 'startup-secrets')
         legacy.writeSerializedState(
           Buffer.from(

@@ -10,12 +10,7 @@ import {
 /** Text appended mid-IME-composition: saved at once, shown once the composition settles. */
 type CompositionHold = { scopeKey: string; shown: string; appended: string }
 
-/**
- * The composer's draft text, read from the draft store so a typed-but-unsent message survives
- * the composer unmounting on a TUI/GUI toggle, a reload or a quit. Every change is made to the
- * store's current draft, never to a copy this composer holds. `scopeKey` is the stable pane key
- * also used for image attachments.
- */
+/** Mutate the durable scope store’s current draft, never a composer copy, so unsent text survives toggles, remounts and restarts. */
 export function useNativeChatDraft(
   scopeKey: string,
   isComposing: () => boolean
@@ -60,7 +55,6 @@ export function useNativeChatDraft(
     [isComposing, scopeKey, updateHold]
   )
 
-  // Accepts the same value/updater forms as a useState setter so call sites are drop-in.
   const setDraft = useCallback(
     (next: string | ((previous: string) => string), options?: { unsaved?: boolean }) => {
       const held = holdRef.current?.scopeKey === scopeKey ? holdRef.current : null

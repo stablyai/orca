@@ -105,14 +105,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } =
     rateLimits
 
-  // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
-  // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
+  // Antigravity has no saved credential; the checked item and detected CLI establish setup.
   const antigravityUsageConfigured =
     !remoteOwned &&
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
-  // A remote owner's bars come from its snapshot alone; this viewer's setup says nothing about that host.
+  // Use owner-specific durable setup flags; viewer credentials cannot establish remote configuration.
   const usageSettings = {
     ...(remoteOwned ? {} : settings),
     antigravityUsageConfigured,
@@ -152,22 +150,20 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
+  // MiniMax supports cookie/API-key usage without an installed CLI.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
-  // Why: a Cursor session can come from the IDE alone, so PATH detection of
-  // cursor-agent would hide a real meter from IDE-only users.
+  // Cursor IDE sessions can supply usage without cursor-agent on PATH.
   const showCursor = visibleCursor !== null && statusBarItems.includes('cursor')
-  // Why: a saved Coding Plan key is site-auth, not a CLI on PATH — a subscriber
-  // without the ZCode CLI must still earn the meter (same exemption as MiniMax/Cursor).
+  // A saved ZCode Coding Plan key establishes usage independently of CLI detection.
   const showZcode =
     visibleZcode !== null &&
     statusBarItems.includes('zcode') &&
     (rateLimits.zcodePlanApiKeyConfigured || isStatusBarItemAvailable('zcode', detectedAgentIds))
-  // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
+  // OpenCode Go usage can use web credentials independently of CLI detection.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
@@ -212,8 +208,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     : 'Show Floating Workspace'
   const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
 
-  // Why: the roster must contain only status items the user left visible;
-  // otherwise an empty trigger would bypass those visibility controls.
+  // Respect per-item visibility in the roster so its trigger cannot bypass hidden status items.
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,

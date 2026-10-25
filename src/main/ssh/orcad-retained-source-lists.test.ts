@@ -173,7 +173,7 @@ describe('project host setups of a converted host', () => {
   })
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-  // #30859: the server lists its own setup under the same id, so ours made every host show twice.
+  // #30859: retained setup rows duplicated the server's same-id host setups.
   it('hides the setups the hidden source rows own, and keeps local ones', () => {
     expect(visibleProjectHostSetups(store([FENCED])).map((entry) => entry.id)).toEqual([
       'repo-local'

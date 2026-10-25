@@ -59,7 +59,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     [sparseDirectories]
   )
 
-  // Why: only attribute the preset if the directories still match it; an edited selection is "Custom", not falsely tagged as the original preset.
+  // Edited directory selections become Custom; retain preset attribution only while paths still match.
   const effectivePresetId = useMemo(() => {
     if (!sparseSelectedPresetId) {
       return null
@@ -99,14 +99,14 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     [linkedIssue]
   )
 
-  // Why: a PR URL pasted into the name field (not picked) leaves linkedPR null; recover the number so the worktree still links back to its PR.
+  // Recover pasted PR numbers when no picker populated linkedPR.
   const effectiveLinkedPR = useMemo<number | null>(() => {
     if (linkedPR !== null) {
       return linkedPR
     }
     const fromName = parseGitHubIssueOrPRLink(name)
     if (fromName && fromName.type === 'pr') {
-      // Why: adopt the number only when the URL slug matches the selected repo (and the slug has resolved), else a foreign PR URL mislinks to a same-numbered PR here.
+      // Require the resolved selected-repo slug to match, preventing links to a foreign same-numbered PR.
       if (
         selectedRepoSlug &&
         githubRepoIdentityKey(fromName.slug) === githubRepoIdentityKey(selectedRepoSlug)
@@ -145,8 +145,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
 
   const shouldWaitForSetupCheck = Boolean(selectedRepo) && selectedRepoIsGit && isSetupCheckPending
 
-  // Why: blank name with no other seed → globally-unique creature name so workspaces don't collide across repos or on a literal default.
-  // Retired names are excluded too, so a recreated workspace never reuses a deleted one's path.
+  // Blank unseeded names need globally unique creature names; exclude retired paths too.
   const retiredNamesRefreshKey = useMemo(
     () =>
       (worktreesByRepo[repoId] ?? [])

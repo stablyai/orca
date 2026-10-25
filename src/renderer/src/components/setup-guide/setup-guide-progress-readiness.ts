@@ -36,7 +36,7 @@ export function getSetupScriptProbeSignature(
   if (!settings) {
     return null
   }
-  // Why: each repo's hooks are probed on its own host, so the host is part of the signature.
+  // Hook probes belong to each repo’s host, so host changes invalidate readiness.
   return JSON.stringify({
     repos: orderedGitRepos.map((repo) => ({
       id: repo.id,

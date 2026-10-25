@@ -3,7 +3,7 @@ import {
   type NativeChatTaskList
 } from '../../../../shared/native-chat-task-list'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { pairToolBlocks } from './native-chat-tool-fold'
+import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat-tool-pairs'
 
 const snapshots = new WeakMap<NativeChatMessage, NativeChatTaskList | null>()
 

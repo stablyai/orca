@@ -74,8 +74,7 @@ export function CreateHostedReviewComposerFields({
   strippedBranch,
   baseSameAsBranch
 }: CreateHostedReviewComposerFieldsProps): React.JSX.Element {
-  // Why: owned here, not in the picker — the stack option steps aside while the
-  // base list is open so results never overlap an option about that same base.
+  // Own editing state here so stack options step aside while base results would overlap them.
   const [baseEditing, setBaseEditing] = useState(false)
   const draftFieldId = useId()
   const stackFieldId = useId()
@@ -114,8 +113,7 @@ export function CreateHostedReviewComposerFields({
         />
 
         {generating ? (
-          // Why: visible scrim + status row so the user understands the title
-          // and description fields will be replaced while inputs are locked.
+          // Explain the locked title/description fields before generated replacements arrive.
           <div
             className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-background/40"
             aria-hidden="true"
@@ -162,8 +160,7 @@ export function CreateHostedReviewComposerFields({
                 onCheckedChange={(value) => setStacked(value === true)}
                 className={cn(COMPOSER_CHECKBOX_CLASS, 'mt-px')}
               />
-              {/* Why: the base field one row up already names the parent branch, so the
-                  helper explains the effect instead of repeating the ref. */}
+              {/* Explain the stack effect; the base field already names its parent branch. */}
               <Label
                 htmlFor={stackFieldId}
                 className="min-w-0 flex-1 flex-col items-start gap-0.5 text-xs leading-snug"
@@ -187,8 +184,6 @@ export function CreateHostedReviewComposerFields({
             </div>
 
             {stacked ? (
-              // Why: a single hairline instead of a nested card — the relation reads as
-              // detail of the checkbox above it, not as its own framed section.
               <div className="ml-6 space-y-1 border-l border-border pl-2 text-[11px]">
                 <div className="flex min-w-0 items-center gap-1.5">
                   <GitPullRequestArrow

@@ -40,11 +40,7 @@ export function writeInlineImageAsset(rootPath: string): void {
   )
 }
 
-/**
- * The schema RangeError is thrown inside EditorView.dispatch, outside React's
- * render phase, so no error boundary observes it — it only surfaces as a page
- * error. Collect both signals.
- */
+// EditorView.dispatch schema errors bypass React boundaries; collect page errors as well.
 export function collectRichMarkdownPageErrors(page: Page): string[] {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(`${error.name}: ${error.message}`))

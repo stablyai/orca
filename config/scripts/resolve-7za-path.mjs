@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-// Why: electron-builder 26.9+ dropped the bundled `7zip-bin` package in favour of a
-// toolset downloaded at build time, so the hardcoded `node_modules/7zip-bin/...` path
-// the release signing gates used silently stopped resolving (#6487).
+// Resolve electron-builder toolset: 26.9+ dropped bundled 7zip-bin, breaking hardcoded signing-gate path (#6487).
 
 import { createRequire } from 'node:module'
 import { existsSync, statSync } from 'node:fs'
@@ -10,9 +8,7 @@ import { resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
 
-// Why not existsSync: PowerShell's `Test-Path` is true for directories too, so a
-// override pointing at a folder would satisfy both checks and only fail later as
-// an opaque exec error inside the gate.
+// Require file, not merely existence: PowerShell Test-Path accepts directories that fail later as opaque exec errors.
 function isFile(path) {
   try {
     return statSync(path).isFile()
@@ -21,8 +17,7 @@ function isFile(path) {
   }
 }
 
-// Legacy layout, still valid if a transitive dep reintroduces 7zip-bin. The
-// package ships `mac/`, not `darwin/`, and keeps a separate ia32 build.
+// Retain legacy 7zip-bin if transitive dependency returns; its layout uses mac/, not darwin/, and separate ia32.
 export function legacy7zaRelativePath(platform = process.platform, arch = process.arch) {
   if (platform === 'win32') {
     return ['node_modules', '7zip-bin', 'win', arch, '7za.exe']
@@ -31,13 +26,8 @@ export function legacy7zaRelativePath(platform = process.platform, arch = proces
   return ['node_modules', '7zip-bin', dir, arch, '7za']
 }
 
-// app-builder-lib logs download progress to stdout, which would corrupt the
-// single-path contract the PowerShell gates parse. Divert it to stderr so a
-// cold toolset cache stays debuggable without breaking the caller.
-//
-// Why refcounted: patching `process.stdout.write` is process-global, so two
-// concurrent callers would each capture the other's patched function as their
-// "original" and the last `finally` would restore a diverting stub permanently.
+// Divert toolset download logs to stderr to preserve PowerShell’s one-path stdout contract.
+// Refcount global stdout patch: overlapping save/restores can otherwise leave a diverting stub installed permanently.
 let stdoutDivertDepth = 0
 let originalStdoutWrite = null
 
@@ -70,15 +60,13 @@ export async function resolve7zaPath(projectDir = process.cwd()) {
     return legacy
   }
 
-  // app-builder-lib reads the same env var and hard-fails on a stale value, so a
-  // dangling override must be cleared rather than passed through to the download.
+  // Clear stale override: app-builder-lib reads same variable and fails rather than downloading when it dangles.
   const restoreOverride = override !== undefined
   if (restoreOverride) {
     delete process.env.ELECTRON_BUILDER_7ZIP_PATH
   }
   try {
-    // The toolset is cached after the first download, so a release build has
-    // already paid this cost by the time the signing gate runs.
+    // Release build normally warmed the toolset cache before signing gate runs.
     const { getPath7za } = require('app-builder-lib/out/toolsets/7zip.js')
     const toolsetPath = await withStdoutDivertedToStderr(() => getPath7za())
     if (!existsSync(toolsetPath)) {

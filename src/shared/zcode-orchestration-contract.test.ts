@@ -7,16 +7,13 @@ import { recognizeAgentProcess } from './agent-process-recognition'
 
 describe('ZCode orchestration and send-to-agent contract', () => {
   it('is dispatchable: its foreground process resolves back to the zcode agent', () => {
-    // Why this matters: ZCode sets `process.title = 'zcode-cli'`, so without this mapping
-    // `dispatch --inject` refuses the pane with no_agent_detected.
+    // ZCode names its process zcode-cli; inject dispatch must recognize it.
     expect(TUI_AGENT_CONFIG.zcode.expectedProcess).toBe('zcode-cli')
     expect(recognizeAgentProcess('zcode-cli')?.agent).toBe('zcode')
   })
 
   it('has no session-option catalog, so worker --model is refused rather than swallowed', () => {
-    // Why: ZCode's CLI exposes no `--model` flag at all — the model comes from its own
-    // config and its in-TUI picker. Same position as opencode: a catalog here would accept
-    // `--model` and then silently drop it, which is worse than a clear refusal.
+    // ZCode chooses models in its config/TUI and has no --model; a catalog would accept and silently drop the option.
     expect(getAgentSessionOptionCatalog('zcode')).toBeNull()
   })
 
@@ -25,8 +22,7 @@ describe('ZCode orchestration and send-to-agent contract', () => {
   })
 
   it('delivers prompts over stdin, never as argv', () => {
-    // Why: ZCode reads positionals[0] as a SUBCOMMAND, so an argv prompt exits with
-    // "Unknown command"; `-p` is headless-only and quits after one turn.
+    // Positional prompts are parsed as subcommands; -p exits headlessly, so interactive prompts need stdin.
     expect(TUI_AGENT_CONFIG.zcode.promptInjectionMode).toBe('stdin-after-start')
     expect(agentPromptRidesLaunchCommand('zcode')).toBe(false)
   })
@@ -52,13 +48,11 @@ describe('ZCode orchestration and send-to-agent contract', () => {
       allowEmptyPromptLaunch: true,
       agentArgs: '--mode plan'
     })
-    // Args are shell-quoted into the launch command, so assert the quoted form.
     expect(plan?.launchCommand).toBe("zcode '--mode' 'plan'")
   })
 
   it('waits for the composer instead of a quiet window before pasting a draft', () => {
-    // Why: ZCode repaints its ASCII banner forever, so the default quiet-render window
-    // never settles — see zcode-readiness-transcript.test.ts for the captured evidence.
+    // The banner keeps repainting, so quiet-render readiness never settles; use the captured composer prompt.
     expect(TUI_AGENT_CONFIG.zcode.draftPasteReadySignal).toBe('zcode-composer-prompt')
   })
 })

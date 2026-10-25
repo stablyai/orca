@@ -21,6 +21,8 @@ export function useMobileNativeChatActiveResolution(args: {
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
   activeChatAgent: string | null
+  /** False when only memory names the agent; chat writes stay locked. */
+  activeChatAgentConfirmed: boolean
   activeChatAgentRef: MutableRefObject<string | null>
   activeChatSessionId: string | null
   activeChatStructured: boolean
@@ -85,6 +87,7 @@ export function useMobileNativeChatActiveResolution(args: {
     showNativeChat,
     showNativeChatRef,
     activeChatAgent,
+    activeChatAgentConfirmed: activeChatResolution?.agentConfirmed !== false,
     activeChatAgentRef,
     activeChatSessionId,
     activeChatStructured,

@@ -49,7 +49,7 @@ describe('ThreadAgentStateIndicator', () => {
 describe('ThreadAgentStateIndicator for a turn that ended without finishing', () => {
   it.each([
     { outcome: 'cancellation', label: 'Interrupted' },
-    // A turn anything but the user cut short is a fault, as a failure is.
+    // Non-user interruption is a fault; user cancellation is interrupted.
     { outcome: 'interruption', label: 'Failed' },
     { outcome: 'unconfirmed', label: 'Couldn’t confirm' }
   ] as const)('draws $outcome as $label', ({ outcome, label }) => {
@@ -242,11 +242,13 @@ describe('activity thread grouping', () => {
       makeActivityResult({
         entries: {
           [PANE_KEY]: makeWorkingEntryWithoutHistory(),
-          [PANE_KEY_2]: makeWorkingEntryWithoutHistory()
-        }
+          [PANE_KEY_2]: { ...makeWorkingEntryWithoutHistory(), paneKey: PANE_KEY_2 }
+        },
+        tabs: [makeTabWithIds('tab-1', 'wt-1'), makeTabWithIds('tab-2', 'wt-1')]
       })
     )
 
+    expect(threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY, PANE_KEY_2])
     expect(buildActivityThreadGroups(threads, 'none')).toEqual([{ key: 'all', label: '', threads }])
   })
 })

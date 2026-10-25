@@ -8,13 +8,7 @@ import {
   PLUGIN_STORAGE_VALUE_MAX_BYTES
 } from '../../shared/plugins/plugin-host-api'
 
-/**
- * Per-plugin JSON key-value persistence backing both `storage.*` (plugin
- * data) and `settings.*` (settings:own). Each plugin's data lives in its OWN
- * file under `<userData>/plugins-data/<publisher>.<id>/` — never a shared
- * namespaced blob, so one plugin's path can never resolve into another's.
- * Adapted from community PR #5801's per-plugin settings store.
- */
+// Keep plugin data/settings in separate qualified-key files (adapted from community PR #5801).
 
 const UNREADABLE_STORE_ERROR = 'storage file exists but could not be read; refusing to overwrite it'
 
@@ -38,7 +32,7 @@ export class PluginKvStore {
     this.filePath = join(pluginDataDir(pluginsDataDir, qualifiedKey), fileName)
   }
 
-  /** `null` means the file exists and this process may not read it - which is never `{}`. */
+  /** Null means unreadable, never empty. */
   private read(): Record<string, unknown> | null {
     try {
       if (!existsSync(this.filePath)) {
@@ -52,8 +46,7 @@ export class PluginKvStore {
         return parsed as Record<string, unknown>
       }
     } catch (error) {
-      // Being denied the read is not evidence of corruption. Returning `{}` here would make
-      // the next set()/delete() write a file holding only that one key, dropping the rest.
+      // Read denial cannot prove corruption; rewriting an empty store would discard existing keys.
       if (isUnreadableError(error)) {
         return null
       }

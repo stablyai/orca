@@ -76,24 +76,17 @@ export type PersistPtyBindingArgs = {
   ptyId: string
   incarnationId?: string
   startupCwd?: string
-  /** Proven host fallback correction; ordinary binds only seed new tabs. */
   correctStartupCwd?: string
   expectedBinding?: { ptyId: string; incarnationId?: string }
   expectedSourceBinding?: PtyBindingSourceExpectation
-  /**
-   * Defaults true, which is what `pty:spawn` needs — it can beat the debounced layout writer
-   * and must be able to mint the surface it is binding. A reattach is the opposite: the pane
-   * either still exists or the user closed it, so creating one grafts back a tab they closed.
-   * Callers pass false only once absence is meaningful; see the relay's reattach bind.
-   */
+  /** Spawns may precede layout saves; reattach must disable creation once absence proves a user close. */
   mayCreate?: boolean
-  /** Reattach must not revive a surface a prior build durably recorded as retired. */
   mayReviveRetiredSurface?: boolean
-  /** Span metadata only; see `PtyBindingOrigin`. The write path never reads it. */
+  /** Tracing metadata only; persistence must not branch on origin. */
   origin?: PtyBindingOrigin
-  /** Where a new leaf goes. Report-only for now: the span records whether it names today's tab. */
+  /** Report-only until main owns layout; then determines split placement. */
   placement?: TerminalPanePlacement
-  /** Replaces a gone process: with no `incarnationId`, the pane's recorded one is cleared. */
+  /** Replacement without incarnationId clears the saved incarnation. */
   dropsIncarnation?: true
 }
 
@@ -113,10 +106,7 @@ export class PtyBindingPersistenceOperations {
     this[ptyBindingPersistenceOperationsContext] = { runtime, sessions }
   }
 
-  /**
-   * Clears a stopped process's binding, keeping the pane; fenced on the id, which is dead in any
-   * incarnation. `fence.incarnationId` narrows that to one process, for an absence answer.
-   */
+  /** Preserve the pane while clearing its dead binding; an incarnation fence narrows absence evidence. */
   async retirePtyBinding(
     binding: Pick<PersistPtyBindingArgs, 'worktreeId' | 'tabId' | 'leafId' | 'ptyId'>,
     hostId?: string | null,
@@ -157,7 +147,7 @@ export class PtyBindingPersistenceOperations {
       }
       const before = cloneWorkspaceSessionState(session)
       const retired = clearReplacedPaneBinding(session, { ...binding, parentTabId: binding.tabId })
-      // Host retirement must not run renderer snapshot repair, which would put the old binding back.
+      // Publish directly: renderer snapshot repair would revive the retired binding.
       publish(retired)
       bumpPtyBindingGeneration(runtime, resolved, binding.leafId)
       const staged = cloneWorkspaceSessionState(retired)
@@ -193,7 +183,7 @@ export class PtyBindingPersistenceOperations {
         if (!args) {
           return { value: false, persist: false }
         }
-        // Measure the admitted binding operation; queue time precedes its current-state checks.
+        // Measure admitted execution after queue wait, before current-state checks.
         span = startPtyBindingSpan({
           hostKind: parseExecutionHostId(resolvedHostId)?.kind ?? 'local',
           origin: args.origin ?? 'unknown',
@@ -229,7 +219,6 @@ export class PtyBindingPersistenceOperations {
           return durabilityOnlyBindingResult(resolvedHostId)
         }
         span.setPath('mutation')
-        // After the fast lane, so a no-op rebind skips the scan.
         reportPtyBindingOwnerConflict(span, args, resolvedHostId, partitions)
         return {
           value: true,
@@ -245,17 +234,13 @@ export class PtyBindingPersistenceOperations {
     }
   }
 
-  /**
-   * Detach-to-new-tab, committed before the renderer mounts the target tab (STA-9259). It lives on
-   * the binding domain only for its runtime and partition access; the commit module owns the write.
-   */
+  /** Commit detached-tab moves before the renderer mounts the destination. */
   moveTerminalLeafToNewTab(request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> {
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
       moveLeaf(request, this.topology())
     )
   }
 
-  /** Writes a runtime-started pane before its terminal starts; the commit module owns the write. */
   admitTerminalPane(
     admission: TerminalPaneAdmission,
     hostId?: string | null
@@ -265,7 +250,7 @@ export class PtyBindingPersistenceOperations {
     )
   }
 
-  /** With `stillStarting`, a pane whose terminal bound or is starting stays (UnstartedPaneKept). */
+  /** stillStarting preserves panes that bound or began starting while withdrawal waited. */
   withdrawTerminalPane(
     pane: CommandOf<'closePane'>,
     hostId?: string | null,

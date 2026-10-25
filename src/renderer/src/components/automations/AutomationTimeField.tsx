@@ -180,16 +180,14 @@ export function AutomationTimeField({
   className?: string
 }): React.JSX.Element {
   const clock = getAutomationClockParts(time)
-  // Why: digit commits close over the latest clock parts without stale hour/minute.
-  // Sync in an effect so render stays pure (React Doctor: no ref writes during render).
+  // Read current clock parts in digit commits; sync after render to keep rendering pure.
   const clockRef = React.useRef(clock)
   React.useEffect(() => {
     clockRef.current = getAutomationClockParts(time)
   }, [time])
 
   const patchTime = (patch: Partial<AutomationClockParts>): void => {
-    // Why: apply the patch to the ref immediately so a second digit field commit
-    // in the same tick (or before the parent re-renders) cannot clobber the first.
+    // Patch the ref immediately so multiple digit commits before parent rendering cannot clobber one another.
     const next = { ...clockRef.current, ...patch }
     clockRef.current = next
     onTimeChange(formatAutomationTimeFromClockParts(next))

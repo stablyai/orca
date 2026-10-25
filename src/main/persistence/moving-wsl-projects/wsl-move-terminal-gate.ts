@@ -1,9 +1,4 @@
-/**
- * The WSL move's terminal gate (mover design, section 3.2): every pane in scope is either safe to
- * pause and restore on the host, or it blocks the move with the actions that would unblock it.
- * Nothing is ever ended to make progress. Unlike SSH, the local daemon can prove exit, so a pane it
- * cannot answer for is `unverifiable` and blocks rather than being guessed at.
- */
+// Never end work automatically; missing daemon evidence blocks rather than guessing a pane is restorable.
 import type { AgentStatusState } from '../../../shared/agent-status-types'
 import {
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
@@ -13,21 +8,16 @@ import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-s
 
 export type WslMovePaneFacts = {
   paneKey: string
-  /** The daemon's foreground-process probe, the one the close-tab warning uses. */
+  /** Same foreground probe as close-tab warnings. */
   foreground: 'shell-idle' | 'process-running' | 'unverifiable'
-  /**
-   * The agent in the pane, if any, as the hook server reports it. `ownsForeground` is true only
-   * when the foreground process is that agent; a stale row must not vouch for a dev server.
-   */
+  /** Only foreground ownership lets a current agent row vouch for the process. */
   agent?: { state: AgentStatusState; resumable: boolean; ownsForeground: boolean }
   scrollbackBytes: number
 }
 
 export type WslMoveGateInputs = {
   panes: readonly WslMovePaneFacts[]
-  /** Automation runs in scope that have not finished. */
   runningAutomationRunIds: readonly string[]
-  /** Orchestration dispatches in scope that have not finished. */
   activeDispatchIds: readonly string[]
 }
 
@@ -50,7 +40,7 @@ export type WslMoveGateVerdict =
   | { verdict: 'ready'; paneKeys: string[] }
   | { verdict: 'blocked'; blockers: WslMoveGateBlocker[] }
 
-// Mid-turn or waiting on a person: providers report a pending prompt as 'waiting' or 'blocked'.
+// Waiting and blocked both include agents awaiting human input.
 const AGENT_BUSY_STATES: ReadonlySet<AgentStatusState> = new Set(['working', 'waiting', 'blocked'])
 
 export function assessWslMoveTerminals(inputs: WslMoveGateInputs): WslMoveGateVerdict {
@@ -64,7 +54,7 @@ export function assessWslMoveTerminals(inputs: WslMoveGateInputs): WslMoveGateVe
     }
   }
   for (const pane of inputs.panes) {
-    // Only an agent that owns the foreground is current; a retained row speaks for nothing.
+    // Retained agent rows cannot vouch for another foreground process.
     const agent = pane.agent?.ownsForeground ? pane.agent : undefined
     const hasByteCount = isByteCount(pane.scrollbackBytes)
     if (pane.foreground === 'unverifiable' || !hasByteCount) {
@@ -86,7 +76,7 @@ export function assessWslMoveTerminals(inputs: WslMoveGateInputs): WslMoveGateVe
   for (const id of inputs.activeDispatchIds) {
     block('dispatch-running', id, ['wait', 'skip-project'])
   }
-  // A pane listed twice is one snapshot: count its largest reported size once.
+  // Duplicate panes contribute their maximum size once.
   const scrollbackByPane = new Map<string, number>()
   for (const pane of inputs.panes) {
     if (isByteCount(pane.scrollbackBytes) && pane.scrollbackBytes > 0) {
@@ -94,8 +84,7 @@ export function assessWslMoveTerminals(inputs: WslMoveGateInputs): WslMoveGateVe
       scrollbackByPane.set(pane.paneKey, bytes)
     }
   }
-  // Over the transfer's caps is a blocker, never a truncation; reported together with any
-  // per-pane overage so clearing one pane never uncovers a second blocker.
+  // Report all cap violations together so clearing one pane cannot reveal another hidden blocker.
   const total = [...scrollbackByPane.values()].reduce((sum, bytes) => sum + bytes, 0)
   if (
     total > MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES ||

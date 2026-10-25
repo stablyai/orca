@@ -2,8 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 
-/** Where an agent child this runtime spawns and supervises itself can run: on this machine, outside
- *  WSL, and on Windows only where a process start time proves which process a record names. */
+/** Local non-WSL only; Windows additionally needs process start-time proof. */
 export function supportsSupervisedProviderChildLocation(
   location: AgentSessionExecutionLocation,
   hasWindowsProcessStartTimeProof: () => boolean = isWindowsProcessStartTimeAvailable

@@ -34,21 +34,38 @@ function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
       continue
     }
     const text = 'question' in raw && typeof raw.question === 'string' ? raw.question : ''
-    const options = parseOptions('options' in raw ? raw.options : undefined)
+    const rawOptions = 'options' in raw ? raw.options : undefined
+    const options = parseOptions(rawOptions)
     if (text || options.length > 0) {
+      const multiSelect =
+        'multiSelect' in raw
+          ? raw.multiSelect === true
+          : ('multiple' in raw && raw.multiple === true) || ('multi' in raw && raw.multi === true)
       questions.push({
         question: text,
         header: 'header' in raw && typeof raw.header === 'string' ? raw.header : undefined,
-        multiSelect:
-          'multiSelect' in raw
-            ? raw.multiSelect === true
-            : ('multiple' in raw && raw.multiple === true) ||
-              ('multi' in raw && raw.multi === true),
-        options
+        multiSelect,
+        options,
+        ...(!multiSelect && askOptionsHavePreview(rawOptions) ? { hasPreviews: true } : {})
       })
     }
   }
   return questions.length > 0 ? { questions } : null
+}
+
+/** Claude only switches a single-select to its preview layout for a non-blank preview. */
+export function askOptionsHavePreview(rawOptions: unknown): boolean {
+  return (
+    Array.isArray(rawOptions) &&
+    rawOptions.some(
+      (option) =>
+        option &&
+        typeof option === 'object' &&
+        'preview' in option &&
+        typeof option.preview === 'string' &&
+        option.preview.trim().length > 0
+    )
+  )
 }
 
 function parseOptions(raw: unknown): AskOption[] {
@@ -104,9 +121,7 @@ export function parseAskFromStatus(
   }
 }
 
-/** Parse a question tool call's own input, through the same registered-parser
- *  dispatch live status uses. Codex delivers arguments as a JSON string, so a
- *  string input is decoded rather than treated as prose. */
+/** Use live status’s registered-parser dispatch on tool input; decode Codex’s JSON-string arguments first. */
 export function parseAskFromToolInput(
   toolName: string | undefined,
   input: unknown
@@ -116,10 +131,7 @@ export function parseAskFromToolInput(
     : parseToolInput(toolName, input)
 }
 
-/** Resolve the newest question tool that has not received its FIFO tool result.
- *  Transcript replay parses each tool-call through the same registered-parser +
- *  canonical-shape fallback as live status, so a question tool that rendered
- *  live cannot vanish from pending state after a reconnect/replay. */
+/** Newest question lacking its FIFO result; share live registered-parser/canonical-shape fallback so reconnects cannot drop visible asks. */
 export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPrompt | null {
   const scan = scanPendingAsks(messages)
   return scan.blocking ?? scan.replyAsMessage
@@ -149,20 +161,15 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
   replyAsMessage: AskPrompt | null
 } {
   let pending: AskPrompt | null = null
-  // The FIFO is two counters, not a queue: a result only needs to know how far the
-  // call that produced `pending` sits from the head, so nothing is retained per call.
+  // Two counters track pending’s FIFO depth without retaining a queue entry per call.
   let outstanding = 0
   let pendingDepth = -1
   // Each async question stays open past its immediate result until the agent receives a message.
   let asyncQuestions: AskQuestion[] = []
   const asyncCallIds = new Set<string>()
   for (const message of messages) {
-    // A new user turn (or an interrupt row) ends the turn that owns whatever
-    // calls are still in flight: their results never arrive, and `tool_use_id`
-    // is dropped at decode time so those orphans can never be matched by id.
-    // Without this reset one orphan shifts the result FIFO for the rest of the
-    // transcript and strands an answered ask as a permanent card over the
-    // composer (#11761). Claude's tool-result turns decode as role 'tool'.
+    // New user turns/interrupts abandon unresolved calls. Decoding drops tool_use_id, so orphan results cannot match by id;
+    // reset the FIFO or one orphan strands later answered asks forever (#11761). Claude tool results decode as role tool.
     const interrupted = isInterruptedStatusMessage(message)
     if (message.role === 'user' || interrupted) {
       outstanding = 0

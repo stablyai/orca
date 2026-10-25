@@ -62,13 +62,13 @@ import {
 } from './structured-agent-session-launch'
 import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
-import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   resetStructuredAgentLaunchPersistenceForTests,
   readStructuredAgentLaunchRecord
-} from './structured-agent-session-launch-persistence'
+} from './agent-session/launch/structured-agent-session-launch-persistence'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
-import { markStructuredAgentSessionLaunchPublished } from './structured-agent-session-launch-publication'
+import { markStructuredAgentSessionLaunchPublished } from './agent-session/launch/structured-agent-session-launch-publication'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 import {
   getStructuredAgentSessionReadOwner,
@@ -236,7 +236,6 @@ describe('the first message owned by create', () => {
           ...resume
         })
         await launch.launchResult
-        // The host seeds the remembered model itself.
         expect(createParams().options?.model).toBeUndefined()
       } finally {
         mocks.settings = {}
@@ -286,7 +285,6 @@ describe('the first message owned by create', () => {
     await expect(launch.launchResult).rejects.toBeInstanceOf(
       StructuredAgentSessionCreateRefusalError
     )
-    // The default moves back; the retry carries the user's own Fast.
     recordHostModelCatalogSnapshot(target, 'codex', null, list('m1'))
     expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))

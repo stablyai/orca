@@ -1,8 +1,4 @@
-/**
- * App-level complement to the deterministic subsystem P95 test: alternate
- * real Electron launches with zero and twenty approved plugins, then compare
- * startup milestones and prove no worker entry executed before a trigger.
- */
+// Alternate real launches with zero/twenty approved plugins; compare milestones and forbid worker entry before a trigger.
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -143,9 +139,7 @@ test('keeps real Electron launch stable with 20 approved inert plugins', async (
     }
   }
 
-  // The isolated 20-sample unit gate owns the ≤50 ms P95. This app-level
-  // complement measures the user-visible launch delta because background
-  // discovery completion overlaps unrelated main-process startup work.
+  // The isolated unit gate owns ≤50ms P95; this app comparison includes overlapping startup/discovery work.
   expect(populated.every((sample) => Number.isFinite(sample.pluginDurationMs))).toBe(true)
   expect(median(populated.map((sample) => sample.readyToShowMs))).toBeLessThanOrEqual(
     median(baseline.map((sample) => sample.readyToShowMs)) + 50

@@ -5,12 +5,8 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { GIT_OBJECT_QUARANTINE_DIR_PREFIX } from './git-object-quarantine'
 
-/**
- * A repository where `merge-tree --write-tree` has real work to do:
- * - `feature-conflict` conflicts with `main` on `shared.txt` (checked out in a linked worktree);
- * - `feature-extra` adds a file `main` lacks, so merging it produces a brand-new tree;
- * - `feature-squashed` adds a file `main` later received through a separate (squash) commit.
- */
+/** Divergent merge-tree fixture: feature-conflict conflicts on shared.txt in a linked checkout; feature-extra adds a new tree;
+ * feature-squashed duplicates a separately squashed change on main. */
 export type DivergentRepoFixture = {
   repoPath: string
   linkedPath: string
@@ -90,7 +86,7 @@ export function createDivergentRepoFixture(): DivergentRepoFixture {
 
   const linkedPath = join(root, 'linked')
   git(repoPath, 'worktree', 'add', '--quiet', linkedPath, 'feature-conflict')
-  // Why: start from a packed store so every loose object is one the code under test wrote.
+  // Pack the baseline so loose-object counts measure only writes under test.
   git(repoPath, 'gc', '--quiet', '--prune=now')
 
   const commonDir = join(repoPath, '.git')

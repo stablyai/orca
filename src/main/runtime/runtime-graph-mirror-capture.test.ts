@@ -26,8 +26,9 @@ import {
 } from './runtime-leaf-record-projection.test-fixture'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeSyncedTab } from '../../shared/runtime-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
-// Proves the projection's fixture is what today's mirror holds; deleted with the mirror.
+// Window-owned builds capture the mirror; layout-owner builds use main layout. runtime-leaf-record-projection.test.ts pins both projections to this fixture.
 
 type MirrorMaps = {
   tabs: Map<string, RuntimeSyncedTab>
@@ -63,8 +64,10 @@ function ptyFacts(mirror: MirrorMaps): Record<string, unknown> {
   )
 }
 
+const itWindowOwned = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
+
 describe("today's graph mirror", () => {
-  it('holds the captured tabs, leaves and PTY facts at each step', () => {
+  itWindowOwned('holds the captured tabs, leaves and PTY facts at each step', () => {
     const { runtime, mirror } = makeRuntime()
     runtime.attachWindow(1)
     runtime.registerPty('pty-a', WORKTREE_ID, null, { tabId: 'tab-1', leafId: LEAF_1 })
@@ -76,7 +79,10 @@ describe("today's graph mirror", () => {
 
     expect([...mirror().tabs.values()]).toEqual(MIRROR_TABS)
     expect([...mirror().leaves.values()]).toEqual(MIRROR_LEAVES_STEP_1)
-    expect(ptyFacts(mirror())).toEqual({ 'pty-a': PTY_FACTS['pty-a'], 'pty-b': PTY_FACTS['pty-b'] })
+    expect(ptyFacts(mirror())).toEqual({
+      'pty-a': PTY_FACTS['pty-a'],
+      'pty-b': PTY_FACTS['pty-b']
+    })
 
     runtime.registerPty('pty-c', WORKTREE_ID, null, { tabId: 'tab-1', leafId: LEAF_2 })
     runtime.onPtyData('pty-c', 'restarted\r\n', 3000)

@@ -103,11 +103,7 @@ describe('resolveNewIssueOpenSeed', () => {
 
 describe('store-retention P1 guard (restore of an in-selection non-fallback repo)', () => {
   it('never routes a valid restore through a scoped-field clear, so nothing empty is mirrored back', () => {
-    // P1 guard: a draft targeting a selected repo that is NOT selectedRepoIds[0]
-    // (the multi-repo case) must restore its repo-scoped labels/assignees intact.
-    // If restore instead emptied them, the write-through effect would mirror the
-    // empty values back into the store and durably corrupt the recovery draft.
-    // Compose the real helpers to prove restore never hits a clear path.
+    // Compose restore and vanish guards: clearing valid repo-scoped fields would persistently overwrite the recovery draft.
     const original = draft({
       title: 'Bug',
       body: 'details',
@@ -119,18 +115,13 @@ describe('store-retention P1 guard (restore of an in-selection non-fallback repo
 
     const seed = resolveNewIssueOpenSeed({ draft: original, selectedRepoIds })
 
-    // Restore keeps the scoped fields and targets the draft's own repo...
     expect(seed.repoId).toBe('repo-b')
     expect(seed.repoId).not.toBe(selectedRepoIds[0])
     expect(seed.labels).toEqual(['p1', 'regression'])
     expect(seed.assignees).toEqual([assignee])
 
-    // ...and the vanish-guard does NOT fire on the restored (in-selection) repo,
-    // so no imperative clear runs either.
     expect(resolveVanishedNewIssueRepoReset(seed.repoId, selectedRepoIds)).toBeNull()
 
-    // Therefore the fields the write-through would persist equal the original
-    // draft's scoped fields — non-empty and unchanged (no corruption).
     expect(seed.labels.length).toBeGreaterThan(0)
     expect(seed.assignees.length).toBeGreaterThan(0)
     expect(seed.labels).toEqual(original.labels)

@@ -1,3 +1,4 @@
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -10,8 +11,18 @@ vi.mock('@/lib/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 
+const launchErrorMocks = vi.hoisted(() => {
+  return { StructuredAgentSessionCreateRefusalError: class extends Error {} }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
 vi.mock('@/lib/launch-structured-agent-session', () => ({
-  StructuredAgentSessionCreateRefusalError: class extends Error {}
+  StructuredAgentSessionCreateRefusalError:
+    launchErrorMocks.StructuredAgentSessionCreateRefusalError
 }))
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'

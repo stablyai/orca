@@ -8,7 +8,7 @@ import type { NativeChatComposerHandle } from './NativeChatComposer'
 const REVEAL_FOCUS_FRAMES = 6
 const PENDING_FOCUS_MS = 1000
 
-const revealedComposerReclaims = new Map<string, () => void>()
+const revealedComposerReclaims = new Map<string, (onlyIfFocusUnclaimed?: boolean) => void>()
 const mountedComposers = new Set<RefObject<NativeChatComposerHandle | null>>()
 let pendingFocusRequest: { tabId: string | null; cancel: () => void } | null = null
 let focusRequestGeneration = 0
@@ -61,7 +61,15 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
 }
 
 /** Re-clicking a chat's active tab claims its composer again, as a terminal tab refocuses xterm. */
-export function requestNativeChatComposerFocus(tabId: string): void {
+export function requestNativeChatComposerFocus(
+  tabId: string,
+  options: { onlyIfFocusUnclaimed?: boolean } = {}
+): void {
+  if (options.onlyIfFocusUnclaimed) {
+    // A rename return is one-shot, not an activation to replay after a hidden composer reveals.
+    revealedComposerReclaims.get(tabId)?.(true)
+    return
+  }
   captureNativeChatComposerFocusIntent().request(tabId)
 }
 
@@ -75,15 +83,10 @@ export type NativeChatComposerRevealFocusArgs = {
   isFocusedGroup: boolean
   /** A composer is mounted and enabled — false while a prompt/question card owns the region. */
   composerReady: boolean
-  /** Override the frame scheduler (tests). */
   scheduleFrame?: (callback: () => void) => void
 }
 
-/**
- * Focus the composer whenever this pane reveals it, so a chat you just opened —
- * or switched back to — is ready to type into. Retained panes never unmount, so
- * the reveal edge, not mount, is the signal.
- */
+/** Retained panes do not remount; claim focus on reveal edges instead. */
 export function useNativeChatComposerRevealFocus({
   tabId,
   rootRef,
@@ -110,7 +113,15 @@ export function useNativeChatComposerRevealFocus({
     if (!revealed || !composerReady) {
       return
     }
-    const reclaim = (): void => {
+    const reclaim = (onlyIfFocusUnclaimed = false): void => {
+      if (onlyIfFocusUnclaimed) {
+        const root = rootRef.current
+        const active = root?.ownerDocument.activeElement
+        if (root && (active === null || active === root.ownerDocument.body)) {
+          composerRef.current?.focus()
+        }
+        return
+      }
       claimedRef.current = false
       explicitRef.current = true
       const active = rootRef.current?.ownerDocument.activeElement ?? null
@@ -183,8 +194,7 @@ export function useNativeChatComposerRevealFocus({
         return
       }
       const active = rootRef.current?.ownerDocument.activeElement ?? null
-      // Focus already inside this pane is our own take landing or the user's click; either ends it.
-      // A just-collapsed card is hidden and inert, so focus left in it is about to drop to body.
+      // Inside focus ends the claim unless a hidden/inert collapsed card is about to lose it.
       if (
         !explicitRef.current &&
         rootRef.current?.contains(active) === true &&
@@ -193,8 +203,7 @@ export function useNativeChatComposerRevealFocus({
         finish()
         return
       }
-      // Why: a live text field is a user edit — a batch worktree-create keeps its next name
-      // field open behind the pane we just revealed, and the find bar keeps its query.
+      // Preserve live text edits such as the next workspace name or find query behind the revealed pane.
       const editingSiblingComposer =
         explicitRef.current &&
         rootRef.current?.contains(active) !== true &&
@@ -211,8 +220,7 @@ export function useNativeChatComposerRevealFocus({
       }
       finish()
     }
-    // Why: Radix restores the dialog trigger in a setTimeout(0) on close, which beats a
-    // same-tick take; a frame lands after it.
+    // Claim on a frame after Radix’s setTimeout(0) trigger restoration, which beats same-tick focus.
     scheduleFrame(claim)
     return () => {
       cancelled = true

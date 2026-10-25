@@ -1,11 +1,4 @@
-/**
- * Projects mirrored renderer state into the catalog builder's input.
- *
- * Deliberately reads store state only. Query results are folded in later by
- * `automation-host-cache-health.ts`, because a catalog derived from the cache
- * would change every time the cache it drives commits, and re-applying a catalog
- * is what advances generations and cancels in-flight work.
- */
+/** Build catalog input only from mirrored store state. Fold query results into the separate health projection so cache commits cannot trigger generation changes/cancellation. */
 
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -43,6 +36,8 @@ export type AutomationHostCatalogSource = {
   desktopLabel?: string
   desktopSsh: AutomationCatalogSshSource
   runtimes: readonly AutomationCatalogRuntimeSource[]
+  /** The saved runtime this client's local transport reaches, when it has no runtime of its own. */
+  desktopAliasEnvironmentId?: string | null
   runtimeCatalogSettled: boolean
   referencedStableKeys?: Iterable<string>
   /** Authoritative orphan counts the cache has seen, keyed by authority catalog key. */
@@ -92,12 +87,7 @@ export function runtimeAuthorityHealth(
   return runtime.status.status === null ? 'unavailable' : 'fresh'
 }
 
-/**
- * Optimistic on an unknown capability set, fail-closed on a known one: the
- * scoped client re-checks the capability before every list and raises the
- * update-required error itself, so guessing `legacy-unscoped` here would only
- * throw away owners on a modern host we have not probed yet.
- */
+/** Unknown capabilities remain optimistic; the scoped client checks before each query and fails closed. Inventing legacy support here would discard unprobed modern owners. */
 export function runtimeQuerySupport(
   runtime: AutomationCatalogRuntimeSource
 ): AutomationHostQuerySupport {
@@ -123,8 +113,7 @@ export function buildAutomationHostCatalogSource(
   return {
     desktop: {
       label: source.desktopLabel ?? getLocalExecutionHostLabel(),
-      // Why 'disconnected' for a hydrated target with no state: the desktop
-      // records a state the moment it dials, so silence means it never did.
+      // Desktop records status when dialing; no state for a hydrated target means never connected.
       ssh: toSshMirror(source.desktopSsh, 'disconnected'),
       ...withOrphanCount(orphanCountFor(source, { kind: 'desktop' }))
     },
@@ -143,6 +132,9 @@ export function buildAutomationHostCatalogSource(
         ...withOrphanCount(orphanCountFor(source, authority))
       }
     }),
+    ...(source.desktopAliasEnvironmentId
+      ? { desktopAliasEnvironmentId: source.desktopAliasEnvironmentId }
+      : {}),
     runtimeCatalogSettled: source.runtimeCatalogSettled,
     ...(source.referencedStableKeys ? { referencedStableKeys: source.referencedStableKeys } : {})
   }

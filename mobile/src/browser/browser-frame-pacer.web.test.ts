@@ -1,8 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * The frame pacer as the page resolves it: against the `.web.ts` paint siblings, with real DOM
- * nodes for the layers, so what is asserted is what a layer shows and whether it is visible.
- */
+// Run pacer with real DOM and both web paint siblings, matching page bundle; assert visible layer pixels.
 import { act } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Image, ImageLoadEvent, View } from 'react-native'
@@ -30,10 +27,7 @@ function frameAt(index: number): BrowserScreencastFrame {
   }
 }
 
-/**
- * Decodes the test finishes one at a time, keyed on the source they were given: happy-dom resolves
- * every `decode()` in the next microtask, which would hide a frame sitting undecoded on a layer.
- */
+// Settle decodes individually by source; happy-dom’s automatic microtask resolution would hide pending-frame bugs.
 type PendingDecode = { uri: string; settle: (decoded: boolean) => void }
 const decodes: { pending: PendingDecode[] } = { pending: [] }
 let realImage: typeof window.Image

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService, electronMocks, makePaneKey } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -45,7 +46,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -77,14 +77,13 @@ describe('OrcaRuntimeService', () => {
     })
     expect(result.handle).toMatch(/^term_/)
     expect(createTerminal).not.toHaveBeenCalled()
-    // Why: agent status keys off `${tabId}:${leafId}`; main pre-allocates the tabId, env-stamps it before spawn, and reuses it for adoption.
+    // Pre-mint and reuse the env-stamped pane key so agent status survives adoption.
     const spawnedEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
     expectStablePaneKeyEnv(spawnedEnv)
     const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
-    // Why: the runtime spawn path must stamp the per-pane jcode runtime dir
-    // exactly like the renderer pty:spawn path (unix platforms only).
+    // Host spawns need the same Unix jcode runtime dir as renderer spawns.
     if (shouldInjectJcodeRuntimeDir(process.platform)) {
       expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(
         buildJcodeRuntimeDir(spawnedEnv.ORCA_PANE_KEY)
@@ -126,9 +125,7 @@ describe('OrcaRuntimeService', () => {
         title: 'win shell'
       })
 
-      // The defect this pins: a caller asking for cmd could only pass it as `command`, which the
-      // provider types into whatever shell it spawned — so the pty stayed the default shell and
-      // leaving cmd dropped the handle back onto a prompt the caller never asked for.
+      // Passing cmd through command starts a child in the default shell; shellOverride selects the actual PTY shell.
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({ shellOverride: 'cmd.exe', command: undefined })
       )
@@ -187,9 +184,7 @@ describe('OrcaRuntimeService', () => {
         shellOverride: 'cmd.exe'
       })
 
-      // The setting alone still quotes for PowerShell; the requested shell is the one that will
-      // read the command, so it owns the quoting family. PowerShell quoting typed into cmd is a
-      // syntax error at the prompt.
+      // Quote for the selected shell, even when Settings names a different Windows default.
       expect(spawn).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({ command: "claude '--dangerously-skip-permissions'" })
@@ -230,6 +225,52 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
+  it('knows the agent a flagged launch command names before any process read', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-omp-flags' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'omp --model x'
+    })
+
+    // Why: the command stays user-authored shell (no spawn launchAgent), but the pane is still omp's.
+    expect(spawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ launchAgent: expect.anything() })
+    )
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.objectContaining({ handle: terminal.handle, agentIdentity: 'omp' })
+    ])
+  })
+
+  it('retires a flagged command pane identity when the command exits', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-omp-flags-exit' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'omp --model x' })
+    runtime.onPtyData('pty-omp-flags-exit', '\x1b]133;D;0\x07', 100)
+
+    // Why: the shell prompt left behind is not the agent — command-line identity ends with it.
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.not.objectContaining({ agentIdentity: expect.anything() })
+    ])
+  })
+
   it('retires inherited launch authority when the agent command exits', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
     const retireAuthority = vi.fn()
@@ -241,7 +282,7 @@ describe('OrcaRuntimeService', () => {
       retireAgentHookCompatibilityAuthority: retireAuthority
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -256,7 +297,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -406,6 +446,11 @@ describe('OrcaRuntimeService', () => {
           ptyId: 'persisted-pty'
         }
       ]
+    })
+    registerLivePty(runtime, 'persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      incarnationId
     })
     const syntheticHandle = runtime.getAgentStatusTerminalHandleForPaneKey(paneKey)
     expect(syntheticHandle).toMatch(/^term_/)

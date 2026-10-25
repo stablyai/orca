@@ -14,12 +14,10 @@ export function ProjectOptionMark({
   return option.kind === 'project-group' ? (
     <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
   ) : (
-    // Square, matching the mark everywhere else (jump palette, sidebar).
     <RepoBadgeMark color={option.badgeColor} />
   )
 }
 
-/** Underlines the matched characters so a fuzzy hit is legible, not mysterious. */
 export function MatchedText({
   text,
   hits,
@@ -33,8 +31,7 @@ export function MatchedText({
   if (marks.size === 0) {
     return <span className={cn('min-w-0 truncate', className)}>{text}</span>
   }
-  // Hits are UTF-16 offsets but rendering splits by code point, so an astral
-  // glyph (an emoji-named folder) shifted every mark one position late.
+  // Translate UTF-16 offsets while rendering code points so astral glyphs do not shift marks.
   let codeUnit = 0
   return (
     <span className={cn('min-w-0 truncate', className)}>
@@ -56,11 +53,7 @@ export function MatchedText({
   )
 }
 
-/**
- * Detail line that keeps its final two path segments when space runs out —
- * `~/dev/…/services/checkout-api` stays distinct from its `-web` sibling, where
- * a plain truncate would render both identically.
- */
+/** Keep the final two path segments when narrowing so sibling projects remain distinguishable. */
 export function ProjectOptionDetail({
   detail,
   hits,
@@ -125,20 +118,16 @@ export function ProjectOptionRow({
       onMouseMove={onArm}
       onClick={onCommit}
       className={cn(
-        // Why: `items-baseline` (not `items-center`) — the name and its smaller
-        // detail line sit on one baseline, so the two type sizes read as one
-        // line rather than two boxes centred against each other.
+        // Baseline-align mixed text sizes so name/detail read as one line.
         'flex h-8 cursor-default items-baseline gap-2 rounded-sm px-2 text-sm',
         armed && 'bg-accent text-accent-foreground',
         current && !armed && 'bg-accent/60'
       )}
     >
-      {/* The mark is a dot, not text, so it centres on the row itself. */}
       <span className="flex h-8 shrink-0 items-center">
         <ProjectOptionMark option={option} />
       </span>
-      {/* Name keeps up to half the row; the path absorbs the rest so a deep
-          path can't squeeze the name down to "chec…". */}
+      {/* Reserve up to half the row for the name so deep paths cannot squeeze it away. */}
       <MatchedText
         text={option.displayName}
         hits={nameHits}

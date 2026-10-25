@@ -157,7 +157,7 @@ export abstract class SpeechModelHttpDownload {
           (parsedLength <= 0 || parsedLength === contentRange.end - contentRange.start + 1)
 
         if (resumeOffset > 0 && response.statusCode === 206 && !resumed) {
-          // Why: appending an unverified range can silently corrupt the file; discard and retry from byte zero.
+          // Discard unverified ranges; appending them could silently corrupt the model.
           try {
             rmSync(dest)
           } catch {
@@ -175,7 +175,7 @@ export abstract class SpeechModelHttpDownload {
 
         if (response.statusCode !== 200 && !resumed) {
           if (response.statusCode === 416) {
-            // Why: 416 means the server rejected our resume offset; drop the partial to restart from scratch.
+            // 416 rejects the resume offset; discard the partial and restart.
             try {
               rmSync(dest)
             } catch {
@@ -187,14 +187,14 @@ export abstract class SpeechModelHttpDownload {
           statusError.httpStatusCode = response.statusCode
           statusError.retryAfterMs = parseRetryAfterMs(response.headers['retry-after'])
           rejectOnce(statusError)
-          // Why: abort so a retry doesn't leave the error-response body draining unowned.
+          // Abort the error body so retries do not leave unowned transfers.
           activeRequest?.abort()
           return
         }
 
-        // Why: a 200 to our Range request means the server restarted from byte zero, so overwrite the partial.
+        // 200 ignored Range and restarted at zero; overwrite the partial.
         const progressBase = resumed ? resumeOffset : 0
-        // Why: Content-Length on a 206 is only this segment; on Content-Range '*' keep the known full size.
+        // 206 Content-Length describes only this segment; retain known total for Content-Range *.
         const totalSize = resumed
           ? (contentRange?.totalBytes ?? totals?.totalBytes ?? expectedSize)
           : parsedLength > 0
@@ -248,7 +248,7 @@ export abstract class SpeechModelHttpDownload {
         request.setHeader('Range', `bytes=${resumeOffset}-`)
       }
 
-      // Why manual: neither stack's request exposes an idle timeout that covers the response body.
+      // Neither request API exposes a body-wide idle timeout.
       resetIdleTimeout()
       detachRequest = request.listen({
         error: onRequestError,

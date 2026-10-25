@@ -7,13 +7,11 @@ import { useMobileEmulatorAgentSetupState } from './use-mobile-emulator-agent-se
 type MobileEmulatorAgentSetupGuideLayerProps = {
   children: ReactNode
   isActive: boolean
-  worktreeId: string
 }
 
 export function MobileEmulatorAgentSetupGuideLayer({
   children,
-  isActive,
-  worktreeId
+  isActive
 }: MobileEmulatorAgentSetupGuideLayerProps): React.JSX.Element {
   const mobileEmulatorAgentSetupDismissed = useAppStore((s) => s.mobileEmulatorAgentSetupDismissed)
   const setup = useMobileEmulatorAgentSetupState(isActive)
@@ -35,14 +33,13 @@ export function MobileEmulatorAgentSetupGuideLayer({
       {children}
       {showGuide ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex max-h-[min(72%,28rem)] flex-col justify-end px-3 pb-3">
-          {/* Why: a bottom scrim keeps the card readable without blurring the
-              simulator preview, which read as a rendering glitch. */}
+          {/* A bottom scrim keeps the card readable without making the simulator preview look blurred or broken. */}
           <div
             aria-hidden="true"
             className="mobile-emulator-agent-setup-guide-scrim absolute inset-x-0 bottom-0 h-40"
           />
           <div className="pointer-events-auto relative">
-            <MobileEmulatorAgentSetupGuide setup={setup} worktreeId={worktreeId} />
+            <MobileEmulatorAgentSetupGuide setup={setup} />
           </div>
         </div>
       ) : null}

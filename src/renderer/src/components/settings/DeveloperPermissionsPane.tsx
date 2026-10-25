@@ -272,10 +272,7 @@ export function DeveloperPermissionsPane({
     void refresh()
   }, [refresh])
 
-  // Why: after the user flips a permission in System Settings and switches
-  // back to Orca, the chip should reflect the new status without a manual
-  // Refresh click. Tied to window focus rather than a polling interval so
-  // we don't keep hammering `systemPreferences` while the pane is idle.
+  // Refresh after returning from System Settings so permission chips update without idle systemPreferences polling.
   useEffect(() => {
     const onFocus = (): void => {
       void refresh()

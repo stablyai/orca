@@ -69,7 +69,7 @@ export function useHostWorktreeActions(args: {
     worktrees
   } = state
 
-  // Why: a server's workspace is acted on where it runs, through the desktop.
+  // Route server-workspace actions through the desktop to their owning server.
   const clientForRow = useCallback(
     (item: Worktree) => client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
     [client, hostCapabilities]
@@ -207,17 +207,13 @@ export function useHostWorktreeActions(args: {
       leaveHost()
     } catch (error) {
       if (isPageHostRemovalUnavailable(error)) {
-        // Neither the confirm nor "try again": on the page removal is refused, not failed, so
-        // re-offering the control would be advice that cannot work anywhere in this document.
+        // Page removal is unsupported; do not offer a confirm or retry that cannot work.
         setActionError(error.message)
         return
       }
-      // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
+      // Reopen the confirm after removal failure; ConfirmModal closes on confirm.
       setConfirmRemoveHost(true)
-      // Not `Alert.alert`: it is a silent no-op in React Native Web, so inside the shell's page
-      // this failure had no surface at all. And not the identity error either: that one is an
-      // early return over the whole screen with nothing to dismiss it, so a removal that failed
-      // once would cost the list, the header and the confirm this line is asking to re-open.
+      // React Native Web Alert is a no-op; show a dismissible action error while keeping the list, header and confirm usable.
       setActionError('Could not remove host. Please try again.')
     }
   }, [hostId, leaveHost, forgetHostClient, setActionError, setConfirmRemoveHost])
@@ -251,8 +247,7 @@ export function useHostWorktreeActions(args: {
       if (routeHost === null) {
         return
       }
-      // Switch point: a feed-built list highlights this phone's last visit, noted here because the
-      // session may open as another page whose stored write this list never sees.
+      // Record this phone’s visit before navigation; a session opened in another page cannot publish its stored write back here.
       if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
         setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
       } else if (hostId) {
@@ -268,9 +263,7 @@ export function useHostWorktreeActions(args: {
           })
           .catch(() => null)
       }
-      // `?? ''` and not a cast: the hook takes `hostId` optional and every other member guards it,
-      // so an absent one builds `/h//session/...` — a pathname the shell's segment rule refuses —
-      // rather than the string "undefined", which it would accept as a host named undefined.
+      // Use an empty missing hostId: the shell refuses /h//session, whereas the string undefined would name an accepted host.
       const executionHost = routeHost ? `&executionHost=${encodeURIComponent(routeHost)}` : ''
       const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
       const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}${pane}`
@@ -288,8 +281,7 @@ export function useHostWorktreeActions(args: {
   )
 
   const openFloatingWorkspace = useCallback(() => {
-    // Why: no worktree.activate here — the floating sentinel has no worktree
-    // record; session.tabs.list hydrates its host-owned tabs on open.
+    // The floating sentinel has no worktree record to activate; tabs.list hydrates its host-owned tabs.
     navigateFromHostList(floatingWorkspaceSessionPath(hostId))
   }, [hostId, navigateFromHostList])
 

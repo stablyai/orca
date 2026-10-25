@@ -1,5 +1,3 @@
-// A signed-out Pi fails construction once; a later send after sign-in opens a new child.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,7 +49,6 @@ it('settles the held message once, closes Pi, and starts afresh for a later send
     clientMessageId: operationId(),
     body: hostTestMessage('hello, signed-out Pi')
   }
-  // As a new chat sends its first message: the start is made for it.
   const params = createTestParams(firstMessage, {
     provider: 'pi',
     agent: 'pi',

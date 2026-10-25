@@ -32,14 +32,12 @@ describe('a moved shell history that waited on live shells', () => {
     runtime.onPtyExit('pty-1', 0)
     const [worktreeId, options] = installDeferred.mock.calls[0]
     expect(worktreeId).toBe('repo-1::/srv/app')
-    // pty-2 still runs there, so the store keeps waiting.
     expect(options.worktreeHasLiveShells('repo-1::/srv/app')).toBe(true)
 
     runtime.onPtyExit('pty-2', 0)
     expect(installDeferred.mock.calls[1][1].worktreeHasLiveShells('repo-1::/srv/app')).toBe(false)
   })
 
-  // A moved history is this machine's; a same-id SSH twin's shell never writes it.
   it("does not wait on a same-id SSH twin's shell", () => {
     const installDeferred = vi.fn()
     const runtime = new OrcaRuntimeService({
@@ -71,7 +69,7 @@ describe('a moved shell history that waited on live shells', () => {
       getForegroundProcess: async () => null,
       listProcesses: vi.fn(async () => [
         { id: 'daemon-pty', cwd: '/srv/app', title: 'zsh', worktreeId: 'repo-1::/srv/app' },
-        // No provider owner: only the host's real worktrees can file this shell by its cwd.
+        // Unowned shell cwd can resolve only against real host workspaces.
         { id: 'unowned-pty', cwd: TEST_WORKTREE_PATH, title: 'zsh' }
       ])
     })

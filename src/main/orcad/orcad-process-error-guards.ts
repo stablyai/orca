@@ -1,18 +1,10 @@
-/**
- * Process-level error guards for orcad, which runs the desktop runtime on plain Node.
- *
- * Why: Node's default exits on any unhandled rejection, so one failed fire-and-forget chain
- * (an SSH reconnect, a persistence write) would kill the server and every hosted terminal
- * (desktop issue #9441). Rejections and known-benign exceptions are logged and survived; any
- * other uncaught exception leaves state unknown, so it runs the bounded graceful stop and exits
- * non-zero with the reason logged.
- */
+// Survive rejected tasks and known-benign exceptions; unknown exceptions require bounded shutdown.
 import process from 'node:process'
 import { isNativePtyException } from '../daemon/daemon-native-pty-exception'
 import { ORCAD_EXIT_FAILED } from './orcad-exit-code'
 import type { OrcadShutdownTrigger } from './orcad-lifecycle'
 
-// Why capped: one broken resource can reject hundreds of chains at once; log volume must not stall.
+// Cap rejection storms so logging cannot stall the server.
 const REJECTION_LOG_WINDOW_MS = 60_000
 const REJECTION_LOG_WINDOW_MAX = 20
 
@@ -59,7 +51,7 @@ export function installOrcadProcessErrorGuards(
 
   const onUncaughtException = (error: unknown): void => {
     const code = readCode(error)
-    // Why logged once: a closed stdio pipe fails every later write, including this log line.
+    // Broken stdio also rejects log writes; report it once.
     if (code === 'EPIPE' || code === 'EIO') {
       if (!stdioPipeErrorLogged) {
         stdioPipeErrorLogged = true
@@ -67,7 +59,7 @@ export function installOrcadProcessErrorGuards(
       }
       return
     }
-    // The PTY is already dead; the server is still healthy (same policy as the terminal daemon).
+    // An isolated native PTY failure need not terminate the host.
     if (isNativePtyException(error)) {
       safeLog('[orcad] native PTY exception; continuing:', error)
       return
@@ -75,7 +67,6 @@ export function installOrcadProcessErrorGuards(
     safeLog('[orcad] uncaught exception (fatal); stopping:', error)
     const shutdown = requestShutdown()
     if (!shutdown) {
-      // Before the stop trigger exists there is nothing to flush.
       process.exit(ORCAD_EXIT_FAILED)
       return
     }

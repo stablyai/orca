@@ -20,7 +20,6 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -157,7 +156,6 @@ describe('restored editor owner reparent', () => {
     }))
 
     const result = reparent(oldId)
-    // Switch on: main's frame shows the move, with the content rekeyed in the same update.
     await main.settle()
 
     expect(result.ok).toBe(true)
@@ -312,7 +310,7 @@ describe('restored editor owner reparent', () => {
       everActivatedWorktreeIds: new Set([SOURCE]),
       refreshGitHubForWorktreeIfStale
     } as unknown as Partial<AppState>)
-    // Switch on: main holds the target's tabs too, as a window's frames would have drawn them.
+    // Reload main with the target tabs a real window would already have drawn.
     main.close()
     main = await drawTabsFromMain(useAppStore)
     const targetSnapshots: AppState[] = []
@@ -430,7 +428,6 @@ describe('restored editor owner reparent', () => {
       recentTabIds: [keptTab.id]
     })
     expect(groups.find((group) => group.id === 'target-group')?.tabOrder).toContain(movedTabId)
-    // The migrated id survives exactly once, in the group that now owns the tab.
     expect(next.unifiedTabsByWorktree[TARGET]!.filter((tab) => tab.id === movedTabId)).toHaveLength(
       1
     )

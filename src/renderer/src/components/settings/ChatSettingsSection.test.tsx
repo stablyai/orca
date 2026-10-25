@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { decodeAgentSessionAgentsResult } from '../../../../shared/agent-session-registered-agents'
+import { decodeAgentSessionAgentsResult } from '../../../../shared/agent-session/agent-session-registered-agents'
 import { ChatSettingsSection } from './ChatSettingsSection'
 import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
 import { TooltipProvider } from '../ui/tooltip'
@@ -36,6 +36,7 @@ vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
   readHostStructuredAgents: () =>
     decodeAgentSessionAgentsResult({ agents: [{ agent: 'grok', capabilities: {} }] }) ?? []
 }))
+vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
 vi.mock('../../store', () => ({
   useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
     getState: () => state

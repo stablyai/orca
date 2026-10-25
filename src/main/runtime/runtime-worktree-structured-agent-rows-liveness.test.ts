@@ -19,15 +19,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
-/**
- * The whole chain `worktree ps` walks: journal -> status feed -> agent-status store -> agent rows
- * -> worktree status.
- *
- * The feed's `published` map never retracts, so it cannot be the roster. A closed chat that was
- * waiting on an approval is the sharp edge: deliberate close does not settle a pending prompt, so
- * the retained summary stays `attention`, which maps to a `blocked` row and would merge the
- * worktree to `permission`. The store is the roster: the host drops the row on close.
- */
+/** Exercise journal to worktree-status liveness: feed summaries never retract, but the store drops closed chats, including unanswered approvals whose retained status stays attention. */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const SUBJECT = makeStructuredAgentStatusSubject(

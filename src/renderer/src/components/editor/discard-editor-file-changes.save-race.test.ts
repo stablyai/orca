@@ -1,4 +1,4 @@
-// Why: "Don't Save" must never let a save queued (or not yet writing) put the dropped text on disk.
+// Don’t Save must void queued saves, including requests waiting on the remote host before writing.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestEditorFileSave } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
@@ -23,7 +23,7 @@ const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> 
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
-// Stands in for a remote host's status/capability round trip before the bytes are sent.
+// Hold the remote capability/status round trip before bytes are sent.
 const hostCheck = vi.hoisted((): { wait: Promise<void> | null } => ({ wait: null }))
 vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
   const actual = await importOriginal<typeof MutationClient>()
@@ -46,7 +46,6 @@ function gate(): { wait: Promise<void>; open: () => void } {
   return { wait, open }
 }
 
-/** Holds the next disk write until the returned release runs. */
 function holdNextWrite(disk: FakeEditorDisk): () => void {
   const { wait, open } = gate()
   // Why: the held write is always the first, so it lands unconditionally.
@@ -162,7 +161,7 @@ describe("Don't Save against running and queued saves", () => {
     await vi.advanceTimersByTimeAsync(0)
     edit('ab')
     const queued = requestEditorFileSave({ fileId: PATH })
-    // Like a notebook's retained source drafts: every flush republishes the discarded cells.
+    // Match retained notebook drafts that republish discarded cells on flush.
     const unregister = registerPendingEditorFlush(PATH, () => edit('cells'))
     try {
       const discard = discardEditorFileChangesAndClose(PATH)

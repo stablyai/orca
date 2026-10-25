@@ -107,7 +107,6 @@ describe('useAiVaultExecutionHostScope', () => {
   })
 
   it('does not claim local history when the active workspace host cannot be resolved (#13713)', async () => {
-    // The worktree and its repo are absent from the client store — `unverifiable`, not local.
     await renderHook({
       activeWorktreeId: 'repo-1::/remote/repo',
       resumeTargetState: {

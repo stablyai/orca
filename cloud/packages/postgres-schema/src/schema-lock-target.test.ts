@@ -7,8 +7,7 @@ import {
   takesRelationLock
 } from './schema-lock-target.js'
 
-// The shape a schema string split on ';' actually produces: the comment written above a statement
-// arrives glued to the front of it.
+// Semicolon splitting glues preceding SQL comments onto the next statement.
 const COMMENTED_INDEX = `-- Why: the maintenance sweep matches (active, deadline) while inactive
 -- bases accumulate unboundedly.
 CREATE INDEX IF NOT EXISTS relay_connection_bases_active_deadline
@@ -61,9 +60,7 @@ describe('sqlWithoutComments', () => {
 })
 
 describe('comments between keywords', () => {
-  // Before this, the classification regexes and the must-parse shapes both needed `ADD COLUMN`
-  // contiguous, so this statement derived NO target and threw NOTHING: the DDL ran with no
-  // pre-check, taking ACCESS EXCLUSIVE on every boot.
+  // Inter-keyword comments once bypassed classification and must-parse checks, taking ACCESS EXCLUSIVE every boot.
   it('derives a column target through a comment between ADD and COLUMN', () => {
     expect(requireSchemaLockTarget('ALTER TABLE t ADD /* note */ COLUMN c TEXT')).toEqual({
       kind: 'column',
@@ -252,7 +249,6 @@ describe('schemaLockTarget', () => {
   })
 
   it('skips a DROP CONSTRAINT IF EXISTS when the constraint is already gone', () => {
-    // The inverse polarity: nothing to drop is nothing to do.
     expect(schemaLockTarget('ALTER TABLE t DROP CONSTRAINT IF EXISTS c')).toEqual({
       kind: 'constraint',
       table: 't',
@@ -279,8 +275,7 @@ describe('schemaLockTarget', () => {
   })
 })
 
-// Each of these reads as an index or column statement and each fails to yield a target. Letting any
-// of them through would send an unchecked lock-taking statement on every boot.
+// Malformed lock-taking shapes must fail instead of silently joining the lock queue every boot.
 const MALFORMED = [
   ['an index with no ON clause', 'CREATE INDEX IF NOT EXISTS i'],
   ['an auto-named index', 'CREATE INDEX ON t(c)'],
@@ -321,8 +316,7 @@ describe('requireSchemaLockTarget', () => {
 
 describe('multi-action ALTER TABLE', () => {
   it('throws rather than deriving only the first subcommand', () => {
-    // Deriving `a` and skipping on it would drop `b` for the life of the database, and the first
-    // subcommand parses fine, so nothing else here would catch it.
+    // Skipping on the first subcommand would permanently drop every later action.
     const statement =
       'ALTER TABLE t ADD COLUMN IF NOT EXISTS a TEXT, ADD COLUMN IF NOT EXISTS b TEXT'
     expect(schemaLockTarget(statement)).toEqual({
@@ -434,24 +428,21 @@ describe('schemaLockTarget storage parameters', () => {
   })
 
   it('makes a changed value a different target, so it re-runs instead of skipping', () => {
-    // The failure this prevents: matching on the option name alone would read `fillfactor=100` as
-    // already satisfying `fillfactor = 70` and skip the statement for the life of the database.
+    // Comparing name alone would treat fillfactor=100 as satisfying 70 forever.
     const seventy = schemaLockTarget('ALTER TABLE t SET (fillfactor = 70)')
     const eighty = schemaLockTarget('ALTER TABLE t SET (fillfactor = 80)')
     expect(seventy?.name).not.toBe(eighty?.name)
   })
 
   it('refuses a multi-option SET rather than skipping on only the first option', () => {
-    // Same reason a multi-action ALTER TABLE is refused: skipping on one option would silently
-    // drop the others for good.
+    // Skipping on one option would permanently lose every other change.
     expect(() =>
       requireSchemaLockTarget('ALTER TABLE t SET (fillfactor = 70, autovacuum_enabled = false)')
     ).toThrow(/unparsed_schema_lock_target/)
   })
 
   it('fails the boot on a SET whose shape it cannot read, rather than sending it unchecked', () => {
-    // A storage parameter takes a relation lock, so no target means the lock is taken on every
-    // boot. RESET has no value to compare and is not supported.
+    // Unparsed SET would take a relation lock every boot; RESET has no comparable value and is outside precheck support.
     expect(() => requireSchemaLockTarget('ALTER TABLE t RESET (fillfactor)')).not.toThrow()
     expect(() => requireSchemaLockTarget('ALTER TABLE t SET (fillfactor)')).toThrow(
       /unparsed_schema_lock_target/
@@ -486,8 +477,7 @@ describe('schemaLockTarget dropped indexes', () => {
   })
 
   it('requires IF EXISTS, so a bare DROP fails the boot instead of running unchecked', () => {
-    // Same contract as DROP CONSTRAINT: a bare DROP on a missing index is an error the server is
-    // supposed to raise, and a pre-check that skipped it would swallow that.
+    // Skipping a bare DROP would swallow the server’s required missing-object error.
     expect(() => requireSchemaLockTarget('DROP INDEX i')).toThrow(/unparsed_schema_lock_target/)
   })
 
@@ -499,8 +489,7 @@ describe('schemaLockTarget dropped indexes', () => {
   })
 
   it('derives the target through a leading deferrable marker', () => {
-    // The real shape in relay's schema: the marker is a comment, so classification must see past
-    // it or the statement would reach the server with no pre-check at all.
+    // Real schema markers lead statements; classifier must strip them without losing target checks.
     const statement = '-- schema-deferrable: reason\nDROP INDEX IF EXISTS i'
     expect(sqlWithoutComments(statement)).toBe('DROP INDEX IF EXISTS i')
     expect(schemaLockTarget(statement)?.name).toBe('i')

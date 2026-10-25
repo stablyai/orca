@@ -1,5 +1,4 @@
-// Where the conversation stood when the reader last looked away from it: the "New" marker draws
-// above the first row that came, or kept growing, while they were away.
+// Mark the first row that arrived or kept growing while the reader was away.
 
 import { useCallback, useMemo, useState } from 'react'
 import { useOrcaWindowForegroundFocused } from '@/hooks/use-orca-window-foreground-focused'
@@ -7,8 +6,7 @@ import { compareAgentJournalPositions } from '../../../../shared/agent-session-j
 import type { AgentJournalPosition } from '../../../../shared/agent-session-journal-types'
 import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
-/** A drawn row of the conversation itself, as the journal places it. A terminal-backed chat's
- *  rows carry no position, so it marks nothing. A folded row still draws its turn's bar above. */
+/** Use journal positions for conversation rows, including folded-turn bars; terminal-backed rows have none and remain unmarked. */
 function rowPosition(slot: NativeChatTranscriptSlot): AgentJournalPosition | undefined {
   return slot.kind === 'message' && slot.depth === 0 && (slot.drawsMessage || slot.statusAbove)
     ? slot.message.journalPosition
@@ -22,8 +20,7 @@ const BEFORE_EVERY_ROW: AgentJournalPosition = { sequence: -1, index: 0 }
 type NativeChatLeftAt = {
   /** The newest row there was, as a position: that row may have folded away by the return. */
   position: AgentJournalPosition
-  /** The reply still being written. Grown by the return, it counts as new, and the marker
-   *  draws from the row `before` it. */
+  /** A growing reply counts as missed from the position immediately before it. */
   writing: { key: string; size: number; before: AgentJournalPosition } | null
 }
 
@@ -33,7 +30,6 @@ function rowSize(slot: NativeChatTranscriptSlot): number {
     : 0
 }
 
-/** The newest row's position, among those placed before `limit` when one is given. */
 function newestRowPosition(
   slots: readonly NativeChatTranscriptSlot[],
   limit?: AgentJournalPosition
@@ -57,8 +53,7 @@ function nativeChatLeftAt(
   waitingSlots: readonly NativeChatTranscriptSlot[]
 ): NativeChatLeftAt {
   const all = [...slots, ...waitingSlots]
-  // The working turn's latest row of the agent's own, wherever the reader's prompts sit: one
-  // delivered into the turn or held behind it comes after the reply and does not stop it growing.
+  // Later user prompts or held sends do not stop the turn’s latest assistant row from growing.
   const writer = slots.findLast(
     (slot) =>
       slot.kind === 'message' &&
@@ -113,7 +108,6 @@ export type NativeChatNewRowsMarkerPlacement = {
   place: 'above-row' | 'above-turn-bar'
 }
 
-/** What the row that draws the marker is handed. */
 export type NativeChatNewRowsMarkerState = NativeChatNewRowsMarkerPlacement & {
   /** The reader has just come back: bring the marker into view, once. */
   arriving: boolean
@@ -121,8 +115,7 @@ export type NativeChatNewRowsMarkerState = NativeChatNewRowsMarkerPlacement & {
   onDismiss: () => void
 }
 
-/** Above the first missed row, or above the turn bar when only that bar parts the row from the
- *  reader's prompt: the two lines would touch. */
+/** Place above the first missed row, or its turn bar when the two lines would otherwise touch. */
 export function nativeChatNewRowsMarkerPlacement(
   slots: readonly NativeChatTranscriptSlot[],
   missed: NativeChatMissedRows | null

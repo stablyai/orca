@@ -8,7 +8,7 @@ import type {
 } from '../mobile-web-shell/mobile-web-shell-update-failure'
 import { formatTimeAgo } from '../worktree/agent-row-display'
 
-/** Each phrase restates the recorded code and nothing more: this row claims only what was written. */
+// Describe only the recorded code; this row has no further evidence about the failure.
 const REASON_COPY: Record<MobileWebShellUpdateFailureReason, string> = {
   'no-connection': 'not connected to the host',
   'connection-lost': 'the connection dropped',
@@ -72,8 +72,6 @@ function outcomeCopy(failure: MobileWebShellUpdateFailure): string {
   }
 }
 
-/** "Last update from Host 1 failed 12m ago: asset checksum mismatch (generation 3f2a…)." plus what
- *  the shell showed instead. */
 export function formatUpdateFailure(
   failure: MobileWebShellUpdateFailure,
   hostName: string,

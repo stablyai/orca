@@ -107,7 +107,7 @@ function settledLegacyDispatch(
         paneKey
       })
     : undefined
-  // Why the receipt: only an operation this principal committed under this request id replays.
+  // Replay only operations this settled principal committed with this request id.
   return principal?.status === 'settled' &&
     principal.terminal_handle === handle &&
     principal.dispatch_id &&
@@ -116,11 +116,7 @@ function settledLegacyDispatch(
     : undefined
 }
 
-/**
- * The Run this pane coordinates. A migrated Run's legacy coordinator counts only once a committed
- * principal binds it to this exact pane: the unbound "first caller wins" adoption would let any
- * host pane claim the coordinator's handle, so a host-attested caller never takes that path.
- */
+/** Only committed principals bind migrated coordinators to exact host/pane identities; host-attested callers cannot use first-caller-wins adoption. */
 function resolveCoordinatedRun(
   db: OrchestrationDb,
   handle: string,
@@ -243,11 +239,7 @@ function isAllowedRecipient(
   return Boolean(worker && isPartyDispatch(db, caller, worker.id, livePane))
 }
 
-/**
- * Throws unless the call stays inside the caller's own orchestration. `exactReplay`: a mutation
- * this caller committed with this exact payload, which passed these checks then; only its sender,
- * Run and recipient may have since moved on.
- */
+/** Constrain calls to this orchestration. Exact committed replays tolerate moved sender/Run/recipient after the original checks passed. */
 export function assertLegacyRelayCliScope(
   db: OrchestrationDb,
   caller: LegacyRelayCliCaller,

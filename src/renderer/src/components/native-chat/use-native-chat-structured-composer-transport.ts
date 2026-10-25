@@ -11,7 +11,6 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { translate } from '@/i18n/i18n'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 
-/** Why a paired chat's files can't upload yet: its host has not created the chat. */
 function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: boolean): string {
   const label = structuredAgentLabel(agent)
   return starting
@@ -27,7 +26,6 @@ function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: b
       )
 }
 
-/** What the composer of a structured chat sends, picks and runs through, from the chat's controller. */
 export function useNativeChatStructuredComposerTransport(args: {
   props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
   controller: ReturnType<typeof useStructuredAgentSession>
@@ -37,7 +35,6 @@ export function useNativeChatStructuredComposerTransport(args: {
     withImages: boolean,
     send: () => boolean | 'queued'
   ) => boolean | 'queued'
-  /** The chat is starting: it takes no send yet. */
   starting: boolean
   transportEnabled: boolean
   worktreeId: string | undefined
@@ -45,7 +42,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   setOptionPickerRequest: Dispatch<SetStateAction<NativeChatOptionPickerRequest | null>>
   onError: NativeChatStructuredComposerTransport['onError']
   onSubmitted: () => void
-  /** Present while this chat's host may not take a turn; Send is held and a send refused. */
+  /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
   const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
@@ -66,6 +63,7 @@ export function useNativeChatStructuredComposerTransport(args: {
             : Promise.resolve(false)
       : null
     return {
+      capturePresentation: controller.capturePresentation,
       send: (text, attachments, ...request) =>
         sendBlockedReason === null &&
         sendThroughLaunch(text, attachments.length > 0, () =>

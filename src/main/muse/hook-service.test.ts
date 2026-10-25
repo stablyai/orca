@@ -8,10 +8,7 @@ import { MUSE_HOOK_EVENTS, buildMuseManagedHooksFile, getMuseManagedCommand } fr
 import { wrapWindowsHookCommand } from '../agent-hooks/windows-hook-command'
 import { createAgentHookMemorySftp } from '../agent-hooks/agent-hook-memory-sftp.test-fixture'
 
-// Why: getSharedManagedScriptPath() writes under homedir()/.orca and the
-// Muse config resolves via XDG_CONFIG_HOME ?? ~/.config/muse. Point HOME
-// at a temp dir and clear XDG_CONFIG_HOME so install/remove never touches the
-// real ~/.orca or ~/.config/muse. os.homedir() resolves $HOME on POSIX.
+// Isolate managed scripts and Muse settings from real HOME/XDG configuration.
 let home: string
 let originalHome: string | undefined
 let originalXdg: string | undefined
@@ -67,8 +64,6 @@ describe('MuseHookService', () => {
     expect(status.state).toBe('installed')
     expect(status.managedHooksPresent).toBe(true)
 
-    // The settings pointer aims at the Orca-owned managed file, and a fresh
-    // settings.json carries the schema_version muse requires.
     const settings = parseMuseSettingsText(readFileSync(configPath(), 'utf-8'), 'test')
     expect(settings?.managed_hooks_path).toBe(managedHooksPath())
     expect(settings?.schema_version).toBe(1)
@@ -77,13 +72,13 @@ describe('MuseHookService', () => {
     const managedText = readFileSync(managedHooksPath(), 'utf-8')
     expect(managedText).toContain(process.platform === 'win32' ? 'muse-hook.cmd' : 'muse-hook.sh')
     expect(MUSE_HOOK_EVENTS.every((event) => managedText.includes(`"${event}"`))).toBe(true)
-    // The managed script must exist and POST to the muse hook endpoint.
     const script = readFileSync(scriptPath(), 'utf-8')
     expect(script).toContain('/hook/muse')
-    // Why: payload is piped to curl via stdin so it never lands on the curl
-    // command line (EDR oversized-command-line false positive).
+    // Stdin payloads avoid oversized command-line EDR signals.
     expect(script).toContain(
-      process.platform === 'win32' ? 'payload@-' : 'printf \'%s\' "$payload" | curl'
+      process.platform === 'win32'
+        ? 'payload@-'
+        : 'printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl'
     )
   })
 
@@ -99,7 +94,6 @@ describe('MuseHookService', () => {
     expect(installed).toContain('"model": "muse-spark-1.2"')
     expect(installed).toContain('"approval_mode": "never"')
 
-    // Reinstall must converge without duplicating the pointer.
     service.install()
     const reinstalled = readFileSync(configPath(), 'utf-8')
     expect((reinstalled.match(/managed_hooks_path/g) ?? []).length).toBe(1)
@@ -141,8 +135,6 @@ describe('MuseHookService', () => {
     writeFileSync(configPath(), JSON.stringify({ schema_version: 1 }))
     const service = new MuseHookService()
     expect(service.install().state).toBe('installed')
-    // Hand-edited damage: null definition, non-array hooks, null entry,
-    // non-string command — status must degrade, never throw.
     const damaged = parseMuseSettingsText(readFileSync(managedPath, 'utf-8'), 'test')
     expect(damaged).not.toBeNull()
     if (!damaged) {

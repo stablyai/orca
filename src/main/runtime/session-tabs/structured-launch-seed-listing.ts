@@ -1,7 +1,4 @@
-// A new Claude chat seeded from the remembered default starts on a model the host's finished
-// listing names: a remembered model it no longer lists moves to the listing's default row, else
-// its first, with the effort moved to the nearest level offered. Only seeding: a chat's own saved
-// or running model is never replaced.
+// Seed new Claude chats from finished host listings: replace unlisted models with default/first and nearest supported effort; never replace saved/running chat choices.
 
 import { finishedListingIds } from '../../../shared/structured-agent-session-options'
 import type { AgentModelCatalogService } from '../../native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -26,8 +23,7 @@ export function nearestAgentEffort(
     .sort((a, b) => distance(a) - distance(b) || rank(b) - rank(a))[0]
 }
 
-/** The seed against the host's saved listing for the folder a new chat runs in; unread unless a
- *  Claude seed names a model, and an unreadable or unfinished listing keeps the seed. */
+/** Read saved catalogs only for Claude seeds naming a model; unreadable/unfinished catalogs preserve the seed. */
 export async function structuredLaunchSeedOnSavedListing(
   host: { deps: { modelCatalog?: Pick<AgentModelCatalogService, 'read'> } },
   agent: string,

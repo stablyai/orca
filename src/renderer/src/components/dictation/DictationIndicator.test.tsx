@@ -33,8 +33,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-// Why: the real TooltipContent portals out of the trigger's subtree. The mock must
-// too, or "the pill itself does not render the chip" would pass vacuously.
+// Portal tooltip content like the real primitive so chip-absence assertions cannot pass through mock containment.
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,

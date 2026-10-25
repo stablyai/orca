@@ -1,16 +1,17 @@
-import type { JiraIssue } from '../../../shared/jira-types'
-import { buildJiraIssueKeyJql, buildJiraTextMatchJql } from '../../../shared/jira-search-input-jql'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
+import {
+  buildJiraIssueKeyJql,
+  buildJiraTextMatchJql
+} from '../../../shared/jira/jira-search-input-jql'
 import { getJiraBadRequestReason } from './task-page-jira-load-state'
 
-/** Find the issue with this key, or failing that, issues whose text matches the input. */
 export async function searchJiraIssuesByKeyOrText(
   input: string,
   search: (jql: string) => Promise<JiraIssue[]>
 ): Promise<JiraIssue[]> {
   const keyJql = buildJiraIssueKeyJql(input)
   if (keyJql) {
-    // Why: `utf-8` is key-shaped but meant as text. Jira answers a key it doesn't have with
-    // no issues (unknown project) or a 400 (unknown number), so neither is a final answer.
+    // Key-shaped text such as utf-8 can yield an empty result or 400; neither rules out a text match.
     const issues = await search(keyJql).catch((error: unknown) => {
       if (getJiraBadRequestReason(error) === null) {
         throw error

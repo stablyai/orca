@@ -1,5 +1,4 @@
 /* eslint-disable max-lines */
-// Why: worktree create helpers (local + remote) split out of worktrees.ts; the cohesive create flow runs this file just over the per-file line limit.
 
 import { worktreeCreateGit } from '../git/worktree-create-git-executor'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
@@ -77,7 +76,7 @@ import { computeValidatedBranchName } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
 import { notifyLineageRepos } from '../worktree-lineage-change-notification'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
@@ -159,15 +158,11 @@ import {
   readWorktreeMetaForHost,
   worktreeRowTarget
 } from '../persistence/host-qualified-worktree-meta'
-// Why: bound the fallback `git fetch origin` so a Windows credential-manager GUI hang (STA-1292) can't wedge worktree creation forever.
+// Bound network fetches so Windows credential-manager GUI hangs cannot wedge creation (STA-1292).
 const CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS = 60_000
-// Why (#17828 CodeRabbit follow-up): the deferred materialize fetch runs off the main
-// create path (terminal spawn, mid-session sync) with nothing else bounding it -- same
-// STA-1292 hang risk as the create-time fallback above, so mirror its timeout.
+// Deferred materialization also fetches outside the create path and needs the same hang bound.
 const DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS = 60_000
-// Why (#17828 CodeRabbit follow-up): a terminal spawn and an explicit sync action can
-// both call materialize for the same worktree remote at once; without single-flighting,
-// the loser's `remote add` races the winner's fetch and can strand a duplicate remote.
+// Coalesce spawn/sync materialization so competing remote adds cannot strand duplicates.
 const worktreePushTargetMaterializeInflight = new Map<string, Promise<GitPushTarget>>()
 
 function worktreePushTargetMaterializeKey(repoPath: string, remoteName: string): string {
@@ -192,10 +187,7 @@ function getSetupRunnerCommandPlatformForLaunch(
   return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
 }
 
-/** Why not throw on a missing parent: nesting is optional decoration, and the pick can go stale
- *  between the composer and the create. A malformed or self-referential key is a bad request and
- *  still fails; a parent that simply disappeared degrades to an unattached workspace, matching the
- *  runtime path and `recordWorkspaceLineageForCreatedWorktree`. */
+/** Missing parent picks degrade to no nesting; malformed or self-referential keys still fail. */
 export function assertAttachableParentWorkspace(
   store: Store,
   parentWorkspace: CreateWorktreeArgs['parentWorkspace'],
@@ -264,7 +256,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  // Why: only a worktree parent produces sidebar nesting; a folder parent has no WorktreeLineage row.
+  // Folder parents have no WorktreeLineage row and do not create sidebar nesting.
   let lineage: CreateWorktreeResult['lineage'] = null
   let parentOutsideLineageBoundary = false
   let lineageOwnedByTwin = false
@@ -296,8 +288,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     }
   }
 
-  // Why: a workspace row for an out-of-boundary worktree parent is a cross-host link that survives restarts.
-  // A twin-owned bucket keeps the twin's workspace row too.
+  // Out-of-boundary parents and twin-owned buckets must not persist cross-host workspace links.
   if (parentOutsideLineageBoundary || lineageOwnedByTwin) {
     return NO_CREATED_WORKTREE_LINEAGE
   }
@@ -356,7 +347,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   }
 
   try {
-    // Why: only after `git worktree add` + metadata registration is the path safe for a runtime PTY to boot the agent while setup runs alongside.
+    // Git add and metadata registration must finish before runtime PTYs can safely resolve this workspace.
     const terminal = await runtime.createTerminal(
       `id:${worktree.id}`,
       {
@@ -368,7 +359,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
-        // Why: the submitting renderer decides whether to open the workspace; activating here yanked users who moved on (#9944).
+        // Submitting renderer owns activation; background completion must not yank users who moved on (#9944).
         surfaceOwner: false
       },
       worktree
@@ -638,10 +629,7 @@ export async function prepareWorktreePushTarget(
 ): Promise<GitPushTarget> {
   await validateGitPushTarget(repoPath, target, gitOptions)
   const prepared = await prepareWorktreePushTargetWithExec(
-    // Why: this is only ever reached via the deferred materialize path (#17828) -- bound
-    // just the network fetch so it can't hang indefinitely (see the timeout constant's
-    // comment). The other calls this makes (`remote`, `remote add`, `config`) are local-only
-    // and must stay untimed, matching every other local git call in this file.
+    // Bound only network fetch; local remote/config probes retain normal untimed behavior.
     (args, cwd) =>
       gitExecFileAsync(args, {
         cwd,
@@ -660,22 +648,14 @@ export async function prepareWorktreePushTarget(
           )
         : false
   )
-  // Why: opportunistically narrow any other fork remote in this repo still on the old
-  // wide refspec (pre-#17828 mint, or reused before this fix). Rate-limited and
-  // fire-and-forget so a large leaked-remote backlog never slows down this create.
+  // Narrow legacy fork remotes opportunistically without adding migration latency to creation.
   if (store && repoId) {
     void migrateForkRemoteRefspecs(repoPath, repoId, store, gitOptions)
   }
   return prepared
 }
 
-// Why: on-demand twin of `prepareWorktreePushTarget` for push/pull/fetch/
-// fast-forward (#17828) -- a deferred fork remote is materialized the first
-// time it's needed. The cheap named-remote probe keeps every push after the
-// first one down to a handful of extra subprocesses (probe, refspec-widen,
-// upstream-restore) instead of repeating the O(remotes) scan
-// `prepareWorktreePushTargetWithExec` does when it must add.
-/** The copy an IPC git handler ran on: the route it already required names the host. */
+/** Carry the proven Git execution host; worktree ID alone cannot distinguish host twins. */
 export function ipcGitWorktreeTarget(args: {
   worktreeId?: string
   connectionId?: string
@@ -694,7 +674,6 @@ export async function materializeWorktreePushTargetRemote(
   store?: WorktreePushTargetStore | null,
   repoId?: string,
   gitOptions: { wslDistro?: string } = {},
-  // The copy whose git ran here: an id alone cannot name one of two hosts' twins.
   worktree?: HostWorktreeTarget
 ): Promise<GitPushTarget> {
   if (!target.remoteUrl || target.remoteCreated) {
@@ -717,15 +696,7 @@ export async function materializeWorktreePushTargetRemote(
   const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
   const existing = worktreePushTargetMaterializeInflight.get(key)
   if (existing) {
-    // Why: the single flight is keyed on the *remote*, but everything after the remote add is
-    // per-branch. A joiner waiting on a sibling worktree's mint must not take that sibling's
-    // target -- it would inherit the sibling's branch and silently skip its own refspec widen,
-    // tracking-ref fetch, and upstream link. Wait for the remote, then do its own.
-    //
-    // Why not swallow the rejection: both mint rollbacks remove the remote, so adopting after a
-    // failed mint would write `remote.<name>.fetch` with no URL -- a config-only ghost that
-    // breaks `git fetch --all`, forces every later mint to a `-2` name, and survives
-    // `git remote remove`. Propagate instead; the map is already cleared, so a retry re-mints.
+    // Join the remote mint, then adopt this caller's branch; failed mints roll back, so propagate rather than writing ghost config.
     await existing
     return runForkRemoteAdoption(repoPath, target, () =>
       adoptExistingForkRemoteForBranch(
@@ -761,10 +732,7 @@ export async function materializeWorktreePushTargetRemote(
   return promise
 }
 
-// Why: the remote already exists -- minted by an earlier call, by create, or by a sibling
-// worktree. Everything left is per-branch, and it must run for *this* target: the refspec
-// widen, the tracking-ref fetch, and the upstream link. Previously these only ran inside
-// prepareWorktreePushTarget, unreachable once the remote was there.
+// Remote reuse still needs this branch's refspec, tracking ref and upstream, including after the initial materialization.
 async function adoptExistingForkRemoteForBranch(
   execGit: GitRemoteExec,
   repoPath: string,
@@ -775,16 +743,11 @@ async function adoptExistingForkRemoteForBranch(
   worktree: HostWorktreeTarget | undefined
 ): Promise<GitPushTarget> {
   await ensureRemoteTracksBranchNarrowly(execGit, repoPath, target.remoteName, target.branchName)
-  // Why: widening only rewrites config -- it never imports anything. For a sibling worktree's
-  // first materialize of a *new* branch on an already-existing remote, the branch's tracking
-  // ref doesn't exist yet, and `--set-upstream-to` below hard-fails with "the requested
-  // upstream branch does not exist" (verified against real git). Skip the fetch when the ref
-  // is already there so a repeat push/pull materialize stays a local-only probe.
+  // Config widening imports no refs; fetch missing tracking refs before upstream assignment while repeat calls stay local.
   if (
     !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
   ) {
-    // Why: a network fetch, unlike the local-only probes above -- bound it the same as the
-    // full-mint path's fetch so it can't hang indefinitely.
+    // Bound this network fetch like the full-mint path.
     await gitExecFileAsync(
       [
         'fetch',
@@ -795,11 +758,7 @@ async function adoptExistingForkRemoteForBranch(
     )
   }
   const restored = await restoreUpstreamAfterMaterialize(execGit, repoPath, target)
-  // Why: a remote another worktree minted is still Orca-owned. Without stamping ownership on
-  // the adopting worktree too, removing the minter leaves the survivor's metadata unowned and
-  // #17842's sweep -- which gates solely on `remoteCreated` -- can never reclaim the remote.
-  // Why derive: no caller supplies both -- IPC handlers pass a store with no repo id, runtime
-  // commands pass a repo id with no store -- so requiring both made this branch unreachable.
+  // Persist inherited Orca ownership for orphan cleanup; derive repo ID because IPC and runtime callers supply different context.
   const ownerRepoId = repoId ?? (worktree ? getRepoIdFromWorktreeId(worktree.id) : undefined)
   const owned =
     store !== undefined &&
@@ -811,10 +770,7 @@ async function adoptExistingForkRemoteForBranch(
   return adopted
 }
 
-// Why: the mint single flight only covers `remote add`. Every adopter afterwards writes
-// `remote.<name>.fetch` and `.tagOpt`, and concurrent `git config --add` has no lock retry --
-// measured 135/160 failures at 8-way concurrency, plus duplicate refspecs when two adopts add
-// the same value. Chain adopts per remote so they serialize instead of fanning out.
+// Serialize per-remote adoption: concurrent git config writes can fail locks or duplicate refspecs.
 const forkRemoteAdoptionQueue = new Map<string, Promise<unknown>>()
 
 function runForkRemoteAdoption<T>(
@@ -838,12 +794,7 @@ function runForkRemoteAdoption<T>(
   return next
 }
 
-// Why (review follow-up): on-demand materialization never went through the create-time
-// `setWorktreeMeta` write, so the store's `pushTarget.remoteCreated` flag stayed stale
-// forever for a lazily-minted remote -- invisible to #17842's orphan sweep
-// (`shouldReclaimPrRemote` gates solely on that flag) and to any SSH host whose relay
-// predates `markRemoteOrcaCreated` (no git-config marker either). `setWorktreeMeta` is
-// optional on `WorktreePushTargetStore` so narrow test/reconciliation stores keep compiling.
+// Deferred creation bypasses create-time metadata writes; persist ownership for orphan cleanup and older SSH hosts.
 function persistMaterializedPushTargetIfCreated(
   store: WorktreePushTargetStore | null | undefined,
   worktree: HostWorktreeTarget | undefined,
@@ -912,12 +863,7 @@ export async function cleanupUnusedWorktreePushTargetRemote(
   } catch (error) {
     console.warn(`[worktrees] Failed to clean up fork PR remote for ${removedWorktreeId}`, error)
   }
-  // Why: also catches remotes this specific removal couldn't reclaim (legacy metadata,
-  // a preserved branch since deleted, a worktree removed outside Orca) -- see
-  // worktree-push-target-reconciliation.ts. Rate-limited internally; safe to call every removal.
-  // Not awaited: a repo with a large backlog (the scenario this exists for) can have dozens of
-  // candidate remotes, each probed with a couple of git subprocesses -- that must never add
-  // latency to the worktree-removal call the user is waiting on. It catches its own errors.
+  // Reclaim legacy/external-removal leaks asynchronously; per-repo rate limits bound subprocess cost.
   void reconcileOrphanedPrRemotes(
     repoPath,
     getRepoIdFromWorktreeId(removedWorktreeId),
@@ -941,7 +887,7 @@ export async function configureCreatedWorktreePushTarget(
 }
 
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
-  // Why: invalidate detected-worktree caches before renderer observers react, so follow-up listDetected sees post-change state.
+  // Invalidate before notifying so observer list requests see the changed catalog.
   runWorktreeChangeInvalidators(repoId)
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
@@ -953,7 +899,7 @@ export function notifyWorktreeGitStatusMetadataChanged(
   repoId: string,
   worktreePaths: readonly string[] | null = null
 ): void {
-  // Why: index churn is a Source Control freshness hint, not a graph mutation; leave structural caches and runtime/mobile events untouched.
+  // Index churn refreshes Source Control only; it must not mutate structural caches or runtime/mobile graphs.
   if (!mainWindow.isDestroyed()) {
     const payload: GitStatusMetadataChangedEvent = worktreePaths
       ? { repoId, worktreePaths: [...worktreePaths] }
@@ -967,26 +913,21 @@ export function notifyWorktreeHeadIdentitiesChanged(
   repoId: string,
   identities: WorktreeHeadIdentity[]
 ): void {
-  // Why: background worktrees have no active status refresh, so metadata-detected head moves ride this targeted event instead of the structural fanout.
+  // Background workspaces lack active status refresh; publish head moves through targeted events.
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('worktrees:headIdentitiesChanged', { repoId, identities })
   }
 }
 
-// Why: two-phase spinner — fire 'fetching' before pre-create fetch and 'creating' before git worktree add so the renderer can swap its label.
-// `checkout` carries git's checkout meter during 'creating'; null means the checkout finished.
+// Report fetching/creating separately; checkout carries Git progress and null marks completion.
 export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
   creationId?: string,
-  checkout?: WorktreeCheckoutProgress | null
+  detail?: Pick<CreateWorktreeProgressEvent, 'checkout' | 'worktreeId'>
 ): void {
   if (!mainWindow.isDestroyed()) {
-    const event: CreateWorktreeProgressEvent = {
-      creationId,
-      phase,
-      ...(checkout !== undefined ? { checkout } : {})
-    }
+    const event: CreateWorktreeProgressEvent = { creationId, phase, ...detail }
     mainWindow.webContents.send('createWorktree:progress', event)
   }
 }
@@ -1000,9 +941,7 @@ export function createLocalWorktree(
   timing: WorktreeCreateTimingRecorder = createWorktreeCreateTimingRecorder(),
   onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
-  // Why a holder fired in `finally`: consuming a prepared checkout leaves the pool one short, so a
-  // create that fails after that point — include copy, push target, terminal startup — must still
-  // arm the replacement. Fires exactly once, after startup on the success path.
+  // Always rearm consumed preparation, even if later copy, metadata or startup work fails.
   const rearm: PreparationRearmHolder = { fire: () => {} }
   return worktreeCreateGit
     .run(() =>
@@ -1018,7 +957,7 @@ export function createLocalWorktree(
       )
     )
     .finally(() => {
-      // Closes the create's measured window first, so its own re-arm is not counted against it.
+      // Finish create timing before rearm so replacement preparation is not charged to this request.
       timing.finish()
       rearm.fire()
     })
@@ -1048,14 +987,13 @@ async function performLocalWorktreeCreate(
     ? [localWorktreeGitOptions]
     : []
   const creationId = args.creationId
-  // Why: only `git worktree add` reads onCheckoutProgress; a prepared-checkout claim never reports.
   const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions => ({
     ...options,
     ...localWorktreeGitOptions,
     ...(creationId
       ? {
           onCheckoutProgress: (checkout: WorktreeCheckoutProgress | null) =>
-            emitCreateWorktreeProgress(mainWindow, 'creating', creationId, checkout)
+            emitCreateWorktreeProgress(mainWindow, 'creating', creationId, { checkout })
         }
       : {})
   })
@@ -1070,9 +1008,7 @@ async function performLocalWorktreeCreate(
     args.nameWasGenerated === true
   )
   const requestedDisplayName = displayNameRequest.value
-  // Why: explicit branches and non-username prefix modes never consume this; skipping the probe preserves the exact generated branch name.
-  // Username and base resolution are independent read-only probes. Starting
-  // both before awaiting removes one serial git/config round trip from create.
+  // Resolve username only for generated username-prefixed branches; overlap its independent probe with base resolution.
   const usernamePromise =
     !args.branchNameOverride && settings.branchPrefix === 'git-username'
       ? resolveLocalGitUsername(repo.path)
@@ -1107,7 +1043,6 @@ async function performLocalWorktreeCreate(
   const [username, resolvedBaseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
   let baseBranch = resolvedBaseBranch
   if (!baseBranch) {
-    // Why: no default base resolved; fail clearly rather than pass a hardcoded non-existent ref to git worktree add (opaque error) so the UI can prompt.
     throw new Error(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
@@ -1139,7 +1074,7 @@ async function performLocalWorktreeCreate(
       const hasLocalBaseRef =
         hasRemoteTrackingBaseRef || hasNamedLocalBaseRef || hasFallbackLocalBaseRef
       if (!hasRemoteTrackingBaseRef && hasLocalBaseRef) {
-        // Why: use the usable local branch when offline refresh cannot create its tracking ref.
+        // Offline creation can still use a local base when tracking refresh fails.
         if (hasFallbackLocalBaseRef) {
           baseBranch = remoteTrackingBase.branch
         }
@@ -1161,7 +1096,7 @@ async function performLocalWorktreeCreate(
         }
       }
     } else if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions))) {
-      // Why: non-remote-prefix bases (plain main/master/local) keep the legacy best-effort fetch; verified PR SHA bases already have the object.
+      // Local bases retain best-effort origin refresh; verified review SHAs already have their objects.
       legacyFetchPromise = runtime
         .fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
         .then(() => undefined)
@@ -1181,7 +1116,7 @@ async function performLocalWorktreeCreate(
   }
   const workspaceRoot = await computeWorkspaceRootAsync(repo.path, worktreePathSettings)
 
-  // Why: this validation doesn't depend on remote refs, so it can overlap a required remote-tracking base refresh.
+  // Hook validation is ref-independent and can overlap required tracking-base refresh.
   const primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
   if (primarySetupScript) {
     shouldRunSetupForCreate(repo, args.setupDecision)
@@ -1218,7 +1153,7 @@ async function performLocalWorktreeCreate(
       ? await getRetiredNameRegistryForRepo(store, repo, store.getRepos(), settings)
       : null
     const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
-    // Why: a create-from-review branch override may already exist locally; suffix both branch and path instead of blocking the user.
+    // Existing review branches need matching branch/path suffixes rather than blocking creation.
     for (
       let suffix = 1, attempts = 0;
       attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS;
@@ -1321,7 +1256,7 @@ async function performLocalWorktreeCreate(
         continue
       }
 
-      // Why: gh pr list is a ~1–3s network call; only probe PR conflicts after a branch collision (suffix > 1) so the common no-collision path skips it.
+      // Probe PR conflicts only after collision; avoid the common-path gh network round trip.
       if (suffix > 1 && !checkoutExistingBranch) {
         lastExistingPR = null
         try {
@@ -1343,8 +1278,7 @@ async function performLocalWorktreeCreate(
         computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings, workspaceRoot),
         workspaceRoot
       )
-      // Why the pending check: Git may already have deleted the directory while Orca still owns
-      // the path until its removal settles; take the next name instead of racing it.
+      // Pending removals still own paths Git may already have deleted; skip them until teardown settles.
       if (
         existsSync(worktreePath) ||
         findPendingWorktreeRemovalConflict(repo.path, { worktreePath })
@@ -1358,9 +1292,7 @@ async function performLocalWorktreeCreate(
   })
 
   if (!resolved) {
-    // Why: every suffix collided; reject with a specific reason so the user sees why create failed instead of a generic error or hung spinner.
-    // Read once and format eagerly: the suffix loop assigns this from a callback, so the `let`'s
-    // narrowing does not reach the message.
+    // Snapshot callback-assigned review state for narrowing and report collision exhaustion precisely.
     const existingReviewNumber = lastExistingReviewNumber
     if (existingReviewNumber !== null) {
       throw new WorktreeCreateCollisionError(
@@ -1387,7 +1319,6 @@ async function performLocalWorktreeCreate(
     await timing.time('refresh_base_ref', async () => {
       const result = await remoteTrackingRefresh.promise
       if (!result.ok && !remoteTrackingRefresh.hadLocalBaseRef) {
-        // Why: only block create when the refresh failed AND there's no local base ref; an existing (possibly stale) ref keeps worktree add viable.
         throw new Error(
           `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}". Check your network and try again.`
         )
@@ -1410,10 +1341,12 @@ async function performLocalWorktreeCreate(
       await legacyFetchPromise
     })
   }
-  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
+  // Why: the catalog watcher can publish the checkout mid-create; the renderer must not seed it a shell yet.
+  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId, {
+    worktreeId: composeWorktreeId(repo.id, worktreePath)
+  })
 
-  // Why: defer the remote add + fetch to first push/pull/fetch/fast-forward
-  // (#17828) instead of paying it at create time for a read-only review.
+  // Defer fork remote creation/fetch until first synchronization; read-only review creation needs neither.
   const preparedPushTarget: GitPushTarget | undefined = args.pushTarget
 
   const suggestLocalBaseRefUpdate =
@@ -1447,8 +1380,7 @@ async function performLocalWorktreeCreate(
             timing
           })
           if (prepared.status === 'hit') {
-            // Why deferred: re-arming is a full `reset --hard`; started here it would hold a
-            // general admission slot for the rest of this create's own git.
+            // Preparation rearm runs reset --hard; defer it so it cannot occupy admission during this create's Git work.
             rearm.fire = prepared.rearm
             return prepared.result
           }
@@ -1533,18 +1465,15 @@ async function performLocalWorktreeCreate(
     }
     throw error
   }
-  // Why: the worktree is listable from here on. Every scan that started earlier -- including a
-  // prepared checkout's, which listings hide while it is still locked -- now describes a catalog
-  // without it, and must not be served or cached as the current one.
+  // Creation makes the checkout listable; older detected scans must not publish or cache pre-create catalogs.
   runWorktreeChangeInvalidators(repo.id)
 
-  // Why: fallible metadata work after creation must not leave a real workspace name reusable.
+  // Retire the generated name before fallible metadata work can leave a real workspace name reusable.
   if (shouldRetireGeneratedName) {
     await retireGeneratedWorktreeName(store, repo, settings, effectiveSanitizedName)
   }
 
-  // Why: `--set-upstream-to` needs the remote to exist -- true for a same-repo
-  // target but not for a fork remote, which materializes lazily (#17828).
+  // Upstream assignment needs an existing remote; fork remotes materialize later.
   let configuredPushTarget: GitPushTarget | undefined = preparedPushTarget
   if (preparedPushTarget && !preparedPushTarget.remoteUrl) {
     configuredPushTarget = await configureCreatedWorktreePushTarget(
@@ -1555,7 +1484,6 @@ async function performLocalWorktreeCreate(
     )
   }
 
-  // Re-list to get the freshly created worktree info
   const {
     created,
     worktrees: gitWorktrees,
@@ -1568,16 +1496,19 @@ async function performLocalWorktreeCreate(
   }
 
   const worktreeId = `${repo.id}::${created.path}`
+  if (created.path !== worktreePath) {
+    emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId, { worktreeId })
+  }
   const now = Date.now()
-  // Why: PR/MR worktrees start from a head ref/SHA but Source Control must compare against the review target branch.
+  // Review head SHA/ref seeds creation; Source Control comparison uses the review target branch.
   const metadataBaseRef = args.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch
   const metaUpdates: Partial<WorktreeMeta> = {
-    // Why: path-derived IDs can be reused after external deletion; rotate instance identity so stale lineage can't attach to the new occupant.
+    // Path IDs can be reused after external deletion; rotate instance identity to reject stale lineage.
     instanceId: randomUUID(),
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
-    // Stamp activity so the worktree sorts into its final position immediately, avoiding a re-sort race with scroll-to-reveal.
+    // Seed final activity ordering before scroll-to-reveal so later refresh cannot move the row.
     lastActivityAt: now,
     // createdAt protects the new worktree from ambient PTY bumps for CREATE_GRACE_MS.
     createdAt: now,
@@ -1642,9 +1573,7 @@ async function performLocalWorktreeCreate(
     worktree,
     now
   )
-  // Why: reuse the roots creation already paid for via `git worktree list` so later IPC doesn't lazily rescan and trip macOS privacy prompts.
-  // Why gated: registration replaces the repo's root set, so registering a create recovered without
-  // a listing would revoke filesystem access to every worktree that listing would have named.
+  // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
   if (listingComplete) {
     registerWorktreeRootsForRepo(
       store,
@@ -1653,12 +1582,11 @@ async function performLocalWorktreeCreate(
       localWorktreeGitOptions
     )
   } else {
-    // Recovered without a listing: authorize just the new root, or the create the user just made
-    // is rejected by filesystem/git-status IPC until a full scan repopulates the cache.
+    // Incomplete recovery authorizes only the created root until a complete listing repopulates the cache.
     registerCreatedWorktreeRoot(store, repo, created.path)
   }
 
-  // Why: link user-configured shared paths (e.g. `node_modules`, `.env`) before setup runs so setup scripts see them in place.
+  // Materialize configured shared paths before setup scripts need them.
   const symlinkPaths = repo.symlinkPaths ?? []
   if (symlinkPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
@@ -1666,8 +1594,7 @@ async function performLocalWorktreeCreate(
     })
   }
 
-  // Why: project-level `orca.yaml` shared directories add to (never replace) the per-user
-  // setting, so a repo's shared dirs reach every teammate (issue #10451).
+  // Repo shared directories supplement user settings so teammates inherit project configuration (#10451).
   const [sharedDirectories, includePaths] = await Promise.all([
     timing.time('resolve_shared_directories', () =>
       resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
@@ -1682,8 +1609,7 @@ async function performLocalWorktreeCreate(
     })
   }
 
-  // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
-  // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
+  // Repo .worktreeinclude promises private copies; skip paths already linked by user settings.
   let includeCopyWarning: string | undefined
   if (includePaths.length > 0) {
     await timing.time('copy_worktreeinclude', async () => {
@@ -1699,7 +1625,7 @@ async function performLocalWorktreeCreate(
     })
   }
 
-  // Why: the worktree's base-branch `orca.yaml` is authoritative; we don't re-gate on content parity with the primary checkout since benign divergence silently disabled setup (#1280).
+  // Created branch hooks are authoritative; benign divergence from primary must not disable setup (#1280).
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   await timing.time('prepare_setup', async () => {
@@ -1708,7 +1634,7 @@ async function performLocalWorktreeCreate(
     try {
       defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, args.setupDecision)
     } catch (error) {
-      // Why: default tab commands share setup's run policy; if the target branch adds commands without a renderer decision, create the tabs but don't run them.
+      // Unapproved target-branch tab commands may create tabs but must not execute.
       console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
       defaultTabs = createdYamlHooks?.defaultTabs
         ? { tabs: createdYamlHooks.defaultTabs, runCommands: false }
@@ -1720,14 +1646,13 @@ async function performLocalWorktreeCreate(
       try {
         shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
       } catch (error) {
-        // Why: target branch may add setup hooks the renderer never collected a decision for; worktree exists, so skip setup rather than fail creation.
+        // Target branch can add unseen hooks; skip unapproved setup without failing the existing workspace.
         console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
       }
     }
     if (setupScript && shouldLaunchSetup) {
       try {
-        // Why: main only writes the runner script and must not execute setup itself, or we reintroduce the old hidden background-hook behavior.
-        // Why: worktree already exists, so a runner-gen failure degrades to "created without setup launch" rather than failing creation.
+        // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
         setup = createSetupRunnerScript(
           repo,
           worktreePath,
@@ -1755,7 +1680,7 @@ async function performLocalWorktreeCreate(
     })
   )
 
-  // Why: an automation's terminals start in main, so the window is handed none to launch.
+  // Automation terminals are host-provisioned, so return none for renderer launch.
   const provisionedByHost = Boolean(args.automationProvenance)
   if (provisionedByHost && (setup || defaultTabs?.tabs.length)) {
     void runtime.provisionManagedWorktreeTerminals(

@@ -11,11 +11,7 @@ import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-stat
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
-/**
- * Keeps this host's hook server and its agents' hook configs true to its settings. The startup
- * reconcile is the desktop's: without it a freshly managed SSH host only got hooks when its hook
- * settings changed, so its agents never reported status.
- */
+/** Reconcile hooks at startup as well as setting changes so newly managed hosts report status immediately. */
 export function startOrcadManagedAgentHooks(
   store: Pick<ProfilePreferences, 'getSettings' | 'onSettingsChanged'>,
   setStatusHooksEnabled: (enabled: boolean) => void,
@@ -36,7 +32,6 @@ export function startOrcadManagedAgentHooks(
   startCodexHooks({
     pathReady: shouldHydrateShellPath ? hydrateAgentCliShellPath() : Promise.resolve(),
     isEnabled: () => isAgentStatusHooksEnabledForAgent(getSettings(), 'codex'),
-    // Why null: orcad launches Codex on ~/.codex; Orca-managed account homes are a desktop flow.
     resolveLaunchHome: () => null
   })
   void adoptLoginShellAgentHomes().then(() =>

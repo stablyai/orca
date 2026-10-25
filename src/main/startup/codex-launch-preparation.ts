@@ -6,13 +6,11 @@ export const prepareCodexRuntimeHomeForLaunch = createCodexRuntimeHomeLaunchPrep
   getSettings: () => state.store?.getSettings()
 })
 
-/** The runtime's structured Codex home resolvers: a launch prepares the home that a record-less
- *  catalog read resolves without side effects, so a new chat's picker and the chat share one key. */
+/** Launch preparation and side-effect-free catalog reads must resolve one account-home key. */
 export const codexStructuredLaunchHomeResolvers = {
   prepareCodexStructuredLaunch: ({ launchEnv }: { launchEnv: NodeJS.ProcessEnv }) =>
     prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
-  // Why throw like prepare does: a null from an uninitialized service would
-  // map to the system home and key a catalog read to the wrong account.
+  // Throw like preparation: null would silently key the catalog to the system home instead of the account.
   resolveCodexStructuredLaunchHome: ({ launchEnv }: { launchEnv: NodeJS.ProcessEnv }) => {
     const runtimeHome = state.codexRuntimeHome
     if (!runtimeHome) {

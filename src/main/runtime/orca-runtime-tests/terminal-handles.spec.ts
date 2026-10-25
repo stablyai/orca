@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import {
+  dropFromHostInventory,
+  registerBoundPty,
+  registerLivePty
+} from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
 import type {
   RuntimeClientEvent,
@@ -155,6 +160,10 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
+    registerLivePty(runtime, 'pty-1', 'repo-1::/tmp/worktree-a', null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
     runtime.syncWindowGraph(1, graph)
     const listed = await runtime.listMobileSessionTabs('branch:feature/foo')
     const mobileTab = listed.tabs.find((tab) => tab.type === 'terminal')
@@ -262,7 +271,7 @@ describe('OrcaRuntimeService', () => {
     const staleHandle = beforeSleep.terminals[0]?.handle ?? ''
     expect(staleHandle).toBeTruthy()
 
-    // Why: `terminal.show` is read-only; only a later renderer wake/rebind graph publish can repair this pane's CLI handle surface.
+    // terminal.show is read-only; renderer wake/rebind publication must repair the handle surface.
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -360,12 +369,12 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'tab-recover'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
+    await dropFromHostInventory(runtime, 'pty-expired')
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,
@@ -384,8 +393,6 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID,
       worktreeId: TEST_WORKTREE_ID
     })
-    // persistHostSessionBinding is no longer a per-call opt-in: createTerminal
-    // is host-initiated by construction and always persists its binding.
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
@@ -417,7 +424,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-live'
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-live', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-live', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
@@ -437,13 +444,13 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-cas'
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-old', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-old', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const oldHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-old', 0)
-    runtime.registerPty('pty-new', TEST_WORKTREE_ID, null, {
+    await dropFromHostInventory(runtime, 'pty-old')
+    registerBoundPty(runtime, 'pty-new', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
@@ -460,12 +467,12 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'tab-concurrent'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
+    await dropFromHostInventory(runtime, 'pty-expired')
     let finishCreate!: (result: RuntimeTerminalCreate) => void
     const pendingCreate = new Promise<RuntimeTerminalCreate>((resolve) => {
       finishCreate = resolve
@@ -493,12 +500,12 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'tab-retry'
     const runtime = createRuntimeWithSshLease('pty-expired', tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
+    await dropFromHostInventory(runtime, 'pty-expired')
     const createTerminal = vi
       .spyOn(runtime, 'createTerminal')
       .mockRejectedValueOnce(new Error('relay_reconnecting'))
@@ -522,18 +529,17 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not recover a pane whose authoritative SSH lease was terminated', async () => {
-    // An SSH pane, so this exercises the same id-form path recovery now travels: `terminated` is
-    // also the operator-close state (ssh:terminateSessions), so it must never resurrect a pane.
+    // terminated includes explicit operator closes and must never resurrect an SSH pane.
     const tabId = 'tab-terminated'
     const appPtyId = 'ssh:ssh-target@@pty-terminated'
     const runtime = createRuntimeWithSshLease(appPtyId, tabId, 'terminated')
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, 0)
+    await dropFromHostInventory(runtime, appPtyId)
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
 
     await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
@@ -543,20 +549,17 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('matches an SSH pane against its own lease across the relay/app id forms', async () => {
-    // Leases are stored in RELAY form: the relay-era writers ran ids through
-    // toStoredPtyId -> toRelaySshPtyId ("pty-3"). The runtime holds the APP form
-    // ("ssh:ssh-target@@pty-3"). getRecentExpiredSshLease compared the two raw, so this branch was
-    // unreachable for exactly the panes it names; it now normalizes before comparing.
+    // Normalize stored relay ids and runtime app ids before comparing leases.
     const tabId = 'tab-id-form'
     const appPtyId = 'ssh:ssh-target@@pty-3'
     const runtime = createRuntimeWithSshLease(appPtyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, 0)
+    await dropFromHostInventory(runtime, appPtyId)
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,
@@ -570,9 +573,7 @@ describe('OrcaRuntimeService', () => {
     await expect(
       runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)
     ).resolves.toMatchObject({ handle: 'term-replacement' })
-    // createTerminal is the re-adopt entry point, not a bare spawn: it calls adoptStablePane first,
-    // so a surviving orphan is reattached and only a host-confirmed absence falls through to a
-    // fresh shell.
+    // Re-adopt surviving orphans before spawning; only host-confirmed absence permits replacement.
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
@@ -581,20 +582,18 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not recover a pane whose expired lease was superseded by a newer one', async () => {
-    // #17966 split supersession out of plain `expired`: `supersededBy` names the lease that won
-    // this pane, so this id no longer routes to the shell the lease describes.
     const tabId = 'tab-superseded'
     const appPtyId = 'ssh:ssh-target@@pty-5'
     const runtime = createRuntimeWithSshLease(appPtyId, tabId, 'expired', {
       supersededBy: 'pty-6'
     })
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, 0)
+    await dropFromHostInventory(runtime, appPtyId)
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
 
     await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
@@ -610,12 +609,12 @@ describe('OrcaRuntimeService', () => {
       relayIdRecycled: true
     })
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(appPtyId, 0)
+    await dropFromHostInventory(runtime, appPtyId)
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
 
     await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
@@ -625,27 +624,19 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not recreate a shell for an expired lease whose PTY liveness is unverifiable', async () => {
-    // The production sequence this guards: the relay delivers an exit frame carrying code -1 for an
-    // SSH pane with no host confirmation (`preservesAbnormalSshSurface`), while the pane's lease is
-    // already 'expired'. Neither observed the process — every writer of 'expired' documents it as
-    // "the client lost its route", and code -1 with no host confirmation is recorded
-    // 'unverifiable'. Spawning a replacement there rebinds the pane away from a remote shell still
-    // running on the host and duplicates its agent. This is the `unverifiable` arm only; the
-    // relay's own absence branch (`handlePtyReattachFailure`) reaches the runtime with no verdict
-    // at all, and is covered by the relay-disowned case in terminal-handles-part-02.spec.ts.
+    // Expired leases and an unverifiable -1 exit mean lost SSH contact, not process death; replacement could duplicate a live agent.
     const tabId = 'tab-unverifiable'
     const ptyId = 'ssh:ssh-target@@pty-3'
     const runtime = createRuntimeWithSshLease(ptyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(ptyId, -1)
     expect(runtime.getPtyLivenessVerdict(ptyId)?.status).toBe('unverifiable')
-    // Resolve rather than call through, so a regression shows up as "spawned a second shell"
-    // rather than as whatever createTerminal happens to throw in the fixture.
+    // Stub create so a regression records a duplicate spawn rather than an unrelated fixture error.
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,
@@ -663,13 +654,11 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('still recreates a shell for an SSH pane whose host confirmed the exit', async () => {
-    // The other direction: a host-confirmed exit leaves no unverifiable verdict, so the pane a
-    // paired client asks about must still get a replacement shell.
     const tabId = 'tab-ssh-exited'
     const ptyId = 'ssh:ssh-target@@pty-4'
     const runtime = createRuntimeWithSshLease(ptyId, tabId)
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-target', {
+    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
       leafId: HEADLESS_LEAF_ID
     })
@@ -694,7 +683,7 @@ describe('OrcaRuntimeService', () => {
   it('drops a stale leaf when a woken agent PTY is re-keyed to a new leaf on renderer reload', async () => {
     const runtime = createRuntime()
     const tabId = 'tab-1'
-    // Why: the agent's pre-allocated ORCA_TERMINAL_HANDLE gives its PTY a handleByPtyId entry — the condition the reload preservation loop keys on.
+    // Pre-allocated exported handles are the condition used by reload preservation.
     runtime.preAllocateHandleForPty('pty-agent')
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
@@ -720,7 +709,7 @@ describe('OrcaRuntimeService', () => {
     const before = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     expect(before.terminals).toHaveLength(1)
 
-    // Simulate agent sleep + mobile wake: the renderer cold-restores the pane under a NEW leafId while the SAME agent PTY stays live.
+    // A cold-restored leaf can have a new id while retaining the live agent PTY.
     runtime.markRendererReloading(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
@@ -744,10 +733,9 @@ describe('OrcaRuntimeService', () => {
     })
 
     const after = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    // Before the fix two leaves shared one PTY, so both adopted the same ptyId-keyed handle and paired clients crashed on a duplicate React key.
+    // Duplicate leaves for one PTY share a handle and crash paired clients with duplicate React keys.
     expect(after.terminals).toHaveLength(1)
     expect(after.terminals[0].ptyId).toBe('pty-agent')
-    // The shared handle must NOT have been invalidated — it belongs to leaf-new now.
     await expect(runtime.showTerminal(after.terminals[0].handle)).resolves.toMatchObject({
       ptyId: 'pty-agent'
     })
@@ -780,7 +768,7 @@ describe('OrcaRuntimeService', () => {
     })
     expect((await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals).toHaveLength(1)
 
-    // Renderer reloads but hasn't rebound the pane (empty graph); the live CLI agent PTY + exported handle must survive.
+    // An empty reload graph must preserve the live CLI PTY and its exported handle.
     runtime.markRendererReloading(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
 

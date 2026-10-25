@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalToolCallItem } from '../../../src/shared/agent-session-journal-types'
-import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
+import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import { projectStructuredItemToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import type {
   NativeChatBlock,
@@ -15,7 +15,6 @@ const scrolls = vi.hoisted(() => ({ toEnd: vi.fn(), to: vi.fn() }))
 
 vi.mock('react-native', async () => {
   const React = await import('react')
-  // A class, so the run's box can call it the way it calls a real ScrollView.
   class ScrollView extends React.Component<{ children?: ReactNode }> {
     scrollToEnd = scrolls.toEnd
     scrollTo = scrolls.to
@@ -70,7 +69,6 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'CopyButton' }))
 vi.mock('../platform/external-link', () => ({ openExternalLink: vi.fn() }))
-// Android's policy: transcript text is not inline-selectable, so a scroll is never read as a selection.
 vi.mock('../components/inline-text-selection', () => ({ INLINE_TEXT_SELECTION: false }))
 
 import { openExternalLink } from '../platform/external-link'
@@ -88,7 +86,6 @@ describe('ToolRun', () => {
     renderer = null
   })
 
-  /** An opened run with its rows closed, as the turn caret leaves it. */
   function render(
     blocks: NativeChatBlock[] | NativeChatMessage,
     onOpenFile?: (path: string) => void
@@ -105,7 +102,6 @@ describe('ToolRun', () => {
     return renderer!
   }
 
-  /** Taps the run's header: a run starts closed. */
   function openRun(tree: ReactTestRenderer): void {
     act(() => {
       tree.root.findAll((node) => String(node.type) === 'Pressable')[0]!.props.onPress()
@@ -118,7 +114,6 @@ describe('ToolRun', () => {
       .map((text) => String(text.children.join('')))
 
   describe('tool rows, as desktop draws them', () => {
-    // The last match: a lone command's run header reads as the command too.
     const pressable = (tree: ReactTestRenderer, label: string): ReactTestInstance =>
       tree.root
         .findAll((node) => String(node.type) === 'Pressable')
@@ -204,7 +199,6 @@ describe('ToolRun', () => {
       expect(onOpenFile).toHaveBeenCalledWith('src/a.ts')
       expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Listed', 'src']))
       expect(textNode(tree, 'src').props.onPress).toBeUndefined()
-      // The rest of the row opens the row, not the file.
       open(tree, 'Read')
       expect(textIn(tree.root)).toContain('a')
       expect(onOpenFile).toHaveBeenCalledTimes(1)
@@ -273,7 +267,7 @@ describe('ToolRun', () => {
       })
     }
 
-    it('opens a rewrite to every removed and added line, interleaved, with nothing cut', () => {
+    it('opens a rewrite to every removed and added line in unified order, with nothing cut', () => {
       const before = Array.from({ length: 15 }, (_, i) => `old ${i}`).join('\n')
       const after = Array.from({ length: 15 }, (_, i) => `new ${i}`).join('\n')
       const tree = render([
@@ -287,9 +281,8 @@ describe('ToolRun', () => {
       expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Edited', 'a.ts', '+15', '-15']))
       openRow(tree, 'a.ts')
       const rows = textIn(tree.root).filter((text) => /^(old|new) \d+$/.test(text))
-      expect(rows).toHaveLength(30)
+      expect(rows).toEqual([...before.split('\n'), ...after.split('\n')])
       expect(textIn(tree.root).some((text) => text.includes('truncated'))).toBe(false)
-      // The result the card speaks for draws no row of its own.
       expect(textIn(tree.root)).not.toContain('The file src/a.ts has been updated.')
     })
 
@@ -418,7 +411,6 @@ describe('ToolRun', () => {
       { type: 'tool-result', output: 'a.ts' }
     ]
 
-    /** The transcript's store, with the run mounted or recycled away. */
     function Transcript({ mounted }: { mounted: boolean }) {
       const disclosures = useMobileNativeChatDisclosures('host\0worktree\0tab')
       return createElement(
@@ -571,7 +563,6 @@ describe('ToolRun', () => {
     act(() => {
       box().props.onContentSizeChange()
     })
-    // The result lands under the closed row: the box's height does not change.
     act(() => {
       renderer!.update(live([call, { type: 'tool-result', output: 'a.ts' }]))
     })

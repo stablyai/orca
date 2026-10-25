@@ -67,8 +67,6 @@ type SectionRowsArgs = {
   workspaceHostScope: AppState['workspaceHostScope']
 }
 
-// Builds the full sidebar row model: grouped worktree rows first, then the host-section
-// tier wrapped around them.
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))

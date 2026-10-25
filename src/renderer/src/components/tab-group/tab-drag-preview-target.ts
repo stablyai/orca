@@ -20,9 +20,7 @@ export function resolveDragPreviewTabId({
   const sourcePreDragTabId = preDragActiveTabIdByGroup[sourceGroupId] ?? null
 
   if (isTabDragData(overData) && overData.unifiedTabId !== activeDrag.unifiedTabId) {
-    // Why: tab-strip hovers target split drops or reorder slots. Previewing
-    // the hovered tab's content reads like an in-tab split even though the drop
-    // opens a new split.
+    // Keep source content over strip targets; previewing the hovered tab would imply an in-tab split.
     return { groupId: sourceGroupId, tabId: sourcePreDragTabId }
   }
 
@@ -47,8 +45,7 @@ export function resolveSourceGroupRestoreOnDrop(
   targetGroupId: string,
   restoreSnapshot: boolean
 ): TabDragItemData | undefined {
-  // Why: same-group splits keep the previewed active tab in the source pane via
-  // dropUnifiedTab; restoring the pre-drag snapshot would undo that preview.
+  // Same-group splits retain the previewed active tab; restoring the old snapshot would undo that preview.
   if (restoreSnapshot || activeData.groupId === targetGroupId) {
     return undefined
   }

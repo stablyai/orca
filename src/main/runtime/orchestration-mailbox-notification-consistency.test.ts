@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import { OrchestrationDb } from './orchestration/db'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   checkBoundMailbox,
   createBoundRun,
@@ -247,7 +248,6 @@ describe('orchestration notification mailbox consistency', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const unownedRun = createBoundRun(db, 'Unowned backlog')
-    // More than one 50-message page must not hide later owned mail.
     for (let index = 0; index < 51; index += 1) {
       db.insertMessage({
         from: TERMINAL_HANDLE,
@@ -472,46 +472,50 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('serializes equivalent panes while newer mail arrives during Enter delay', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Equivalent pane Run')
-    const first = insertDirectRunMessage(db, run.id, 'First status')
-    await driveToLiveIdle(harness.runtime)
-    expect(pointerCount(harness.write)).toBe(1)
+  // Main remints duplicate leaf ids at load, so equivalent-pane serialization applies only to window-owned layouts.
+  it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'serializes equivalent panes while newer mail arrives during Enter delay',
+    async () => {
+      vi.useFakeTimers()
+      const db = new OrchestrationDb(':memory:')
+      const harness = createRuntime(db)
+      const run = createBoundRun(db, 'Equivalent pane Run')
+      const first = insertDirectRunMessage(db, run.id, 'First status')
+      await driveToLiveIdle(harness.runtime)
+      expect(pointerCount(harness.write)).toBe(1)
 
-    registerSecondPane(harness.runtime, LEAF_ID)
-    const second = db.insertMessage({
-      from: 'term_worker',
-      to: `run:${run.id}`,
-      subject: 'Second status',
-      runId: run.id
-    })
-    harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
-    harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
-    await Promise.resolve()
-    expect(
-      harness.write.mock.calls.filter(
-        ([ptyId, payload]) => ptyId === SECOND_PTY_ID && isMailboxPointer(payload)
+      registerSecondPane(harness.runtime, LEAF_ID)
+      const second = db.insertMessage({
+        from: 'term_worker',
+        to: `run:${run.id}`,
+        subject: 'Second status',
+        runId: run.id
+      })
+      harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
+      harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
+      await Promise.resolve()
+      expect(
+        harness.write.mock.calls.filter(
+          ([ptyId, payload]) => ptyId === SECOND_PTY_ID && isMailboxPointer(payload)
+        )
+      ).toHaveLength(0)
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(
+        harness.write.mock.calls.filter(
+          ([ptyId, payload]) => ptyId === PTY_ID && isMailboxPointer(payload)
+        )
+      ).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const checked = await checkBoundMailbox(harness.runtime)
+      expect(checked).toMatchObject({ runId: run.id, count: 2 })
+      expect(checked.messages).toEqual(
+        [first, second].map((message) => expect.objectContaining({ id: message.id }))
       )
-    ).toHaveLength(0)
-
-    await vi.advanceTimersByTimeAsync(500)
-    expect(
-      harness.write.mock.calls.filter(
-        ([ptyId, payload]) => ptyId === PTY_ID && isMailboxPointer(payload)
-      )
-    ).toHaveLength(2)
-    await vi.advanceTimersByTimeAsync(500)
-
-    const checked = await checkBoundMailbox(harness.runtime)
-    expect(checked).toMatchObject({ runId: run.id, count: 2 })
-    expect(checked.messages).toEqual(
-      [first, second].map((message) => expect.objectContaining({ id: message.id }))
-    )
-    db.close()
-  })
+      db.close()
+    }
+  )
 
   it.each([
     ['Codex', '\x1b]0;Codex working\x07', '\x1b]0;Codex done\x07'],
@@ -570,7 +574,6 @@ describe('orchestration notification mailbox consistency', () => {
 
     await driveToLiveIdle(harness.runtime)
     expect(pointerCount(harness.write)).toBe(1)
-    // Parking unmounts the renderer leaf but intentionally leaves the PTY alive.
     harness.runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     await vi.advanceTimersByTimeAsync(500)
@@ -590,7 +593,6 @@ describe('orchestration notification mailbox consistency', () => {
     await driveToLiveIdle(harness.runtime)
     expect(pointerCount(harness.write)).toBe(1)
 
-    // The first post-unmount graph can omit the target while a decoy remains.
     harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -611,8 +613,7 @@ describe('orchestration notification mailbox consistency', () => {
         }
       ]
     })
-    // The parked watcher then republishes the target leaf. It is not a live
-    // renderer pane and must not clear the cold-park fence.
+    // A parked watcher can republish a leaf without a live renderer; retain the cold-park fence.
     harness.runtime.syncWindowGraph(1, {
       tabs: [
         {

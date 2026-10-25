@@ -1,19 +1,13 @@
-/**
- * The one fit of a cell box to the terminal frame, shared by the app and the document so a first
- * subscribe and every later refit reach the same grid from the same frame width.
- */
+// Share frame/cell fitting between app and document so initial subscribe and later refits choose the same grid.
 
 export type TerminalFitDimensions = { cols: number; rows: number }
 
-/** Below these the fit is not a terminal anyone can read, and the caller disables fit-to-phone. */
 export const MIN_FIT_COLS = 20
 export const MIN_FIT_ROWS = 8
 
-// Why: frame and cell are each device pixels over the pixel ratio, so an exact fit can divide to
-// 49.999…; a real shortfall is at least 1/cell-device-px (> 0.02) below the next integer.
+// Pixel-ratio division can round exact fits below an integer; a genuine one-device-pixel shortfall is much larger.
 const EXACT_FIT_TOLERANCE = 1e-6
 
-/** The grid the frame (as React Native laid it out) holds at this cell box; null when too narrow. */
 export function fitDimensionsFromCell(
   cell: { cellWidth: number; cellHeight: number },
   width: number,

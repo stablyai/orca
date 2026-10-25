@@ -141,7 +141,7 @@ export function migrateHydratedEditorTabsAndGroups(
     }
     const tabIdMigrations = new Map<string, string>()
     const nextTabs = tabs.map((tab) => {
-      // Why: widened for the shared live-move rekey — a move retargets every editor-family tab (diff/conflict-review/check-details), not only plain 'editor'.
+      // Live-move rekey covers all editor-family tabs, including diff/conflict/check-details.
       if (!isEditorTabContentType(tab.contentType)) {
         return tab
       }

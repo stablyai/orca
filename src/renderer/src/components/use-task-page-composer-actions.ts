@@ -2,7 +2,7 @@ import type { TaskPageJiraListEffectsModel } from './use-task-page-jira-list-eff
 import { useCallback } from 'react'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { useAppStore } from '@/store'
@@ -13,7 +13,7 @@ import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
 import { getJiraIssueWorkspaceSeed } from './task-page-source-context'
-import { findJiraIssueDefaultRepo } from '../../../shared/jira-project-reference'
+import { findJiraIssueDefaultRepo } from '../../../shared/jira/jira-project-reference'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) {
   const {
@@ -59,7 +59,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     setLinearTeamRefreshNonce,
     setLinearTeamSelection
   } = model
-  // Why: Linear ids are strings (e.g. "ENG-123") but the provider-generic shape needs a numeric number, so the adapter uses 0 as placeholder.
+  // Linear string IDs need the provider-generic numeric placeholder 0.
   const openComposerForLinearItem = useCallback(
     (issue: LinearIssue): void => {
       const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue)
@@ -74,7 +74,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   )
   const handleUseLinearItem = useCallback(
     (issue: LinearIssue): void => {
-      // Why: like handleUseWorkItem — open the pre-filled dialog instead of creating the worktree directly, so the user confirms name/agent/setup.
+      // Open the prefilled dialog so name, agent and setup still receive user confirmation.
       useAppStore.getState().recordFeatureInteraction('linear-tasks')
       openComposerForLinearItem(issue)
     },

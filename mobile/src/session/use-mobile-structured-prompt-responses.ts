@@ -25,16 +25,11 @@ import {
   type GroupedQuestionDraft
 } from './mobile-structured-grouped-question'
 
-/**
- * Answering the two durable prompt kinds. Kept beside the session hook rather than inside it
- * because grouped questions carry their own multi-step draft, which is state the rest of the
- * session does not touch.
- */
 export function useMobileStructuredPromptResponses(args: {
   stateRef: { readonly current: StructuredAgentSessionState }
   sessionKey: string
   mutate: StructuredAgentSessionMutate
-  /** Host takes structured `answers`; otherwise the answer is packed into `optionId`. */
+  // Older hosts require answers packed into optionId.
   questionAnswersSupported: boolean | null
   onSendError: (message: string) => void
 }): {
@@ -43,9 +38,7 @@ export function useMobileStructuredPromptResponses(args: {
   respondQuestion: (answer: string) => Promise<boolean>
 } {
   const { mutate, onSendError, questionAnswersSupported, sessionKey, stateRef } = args
-  // Partially answered grouped question, held only until its last step is submitted. The session it
-  // was collected in is stored with it and checked on read, so switching sessions drops the draft
-  // without an effect that would render the stale one for a frame first.
+  // Tag grouped drafts with the session so a switch cannot expose stale answers before an effect.
   const [collected, setCollected] = useState<{
     sessionKey: string
     draft: GroupedQuestionDraft
@@ -95,7 +88,7 @@ export function useMobileStructuredPromptResponses(args: {
         return Promise.resolve(null)
       }
       if (optionId.length > AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH) {
-        // Too long to pack for any host: while support is unknown, `answers` is the only form that can land.
+        // Unknown support cannot justify packing an oversized answer; only structured answers can land.
         if (questionAnswersSupported === null) {
           return send({ answers })
         }
@@ -134,7 +127,7 @@ export function useMobileStructuredPromptResponses(args: {
           return false
         }
         if (result.status !== 'rejected') {
-          // The group left the phone; a retry must start from the first question, not a stale tail.
+          // Once submitted, retries must restart at the first question.
           setCollected((current) =>
             current?.sessionKey === sessionKey && current.draft.promptKey === promptKey
               ? null
@@ -153,7 +146,6 @@ export function useMobileStructuredPromptResponses(args: {
       }
       const result = await sendAnswers(
         { itemId: target.itemId, expectedRevision: target.expectedRevision },
-        // Grouped questions returned above, so this is a single question.
         {},
         [target.answer]
       )

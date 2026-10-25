@@ -1,17 +1,6 @@
 import { execFileSync } from 'node:child_process'
 
-// DESIGN CHOICE: shell out to `gcloud auth print-access-token` instead of exchanging the
-// external_account credentials file that google-github-actions/auth writes.
-//
-// Every workflow on the Cloud SQL rollout lease already runs google-github-actions/setup-gcloud
-// right after auth (verified across all 11 mutating members), so gcloud is on PATH and already
-// bound to the federated identity. Doing the exchange ourselves would mean reimplementing the STS
-// token swap plus the service-account impersonation leg, in an action that must stay
-// zero-dependency and is duplicated by hand into a second repo. gcloud already handles every ADC
-// flavour and refreshes on its own. The metadata server is not an option: it does not exist on
-// GitHub or Blacksmith runners.
-//
-// Consequence, documented in the README: the lease step MUST come after setup-gcloud.
+// Use gcloud after setup-gcloud: it handles federated STS/impersonation and ADC refresh without dependencies or repo-local code in this duplicated action. Actions/Blacksmith runners have no metadata server.
 
 const TOKEN_REUSE_MS = 40 * 60 * 1_000 // GCP access tokens live ~60 min; re-mint well before that.
 

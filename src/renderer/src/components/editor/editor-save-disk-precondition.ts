@@ -2,6 +2,7 @@ import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { toEditorModelUri } from './editor-model-uri'
 import { getEditorModelOwnerKey } from './editor-model-owner'
+import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { detectLanguage } from '@/lib/language-detect'
 import { getDefaultMarkdownViewMode, getMarkdownViewModes } from './markdown-preview-controls'
 import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
@@ -9,35 +10,28 @@ import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
 
-/**
- * `user`: an explicit desktop save (shortcut, save-and-close dialog). `restart`: the save-all
- * before a restart. `overwrite`: the conflict banner's Overwrite, the only consent to replace a
- * disk change.
- */
-export type EditorSaveTrigger = 'autosave' | 'user' | 'restart' | 'overwrite'
+/** Only overwrite grants disk-conflict consent; convert grants non-UTF-8 conversion consent. Other explicit saves remain guarded. */
+export type EditorSaveTrigger = 'autosave' | 'user' | 'convert' | 'restart' | 'overwrite'
 
-/**
- * `written`: disk holds the text. `blocked-stale`: the host refused because disk moved on since the
- * tab's baseline. `failed`: nothing was written (read-only, suspended, superseded). Write errors reject.
- * Callers treat anything but `written` as not saved.
- */
-export type EditorSaveResult = 'written' | 'blocked-stale' | 'failed'
+/** Only written counts as saved; refusals return a reason and write errors reject. */
+export type EditorSaveResult = 'written' | 'blocked-stale' | 'not-utf8' | 'failed'
 
 export const EDITOR_STALE_SAVE_MESSAGE =
   'This file changed on disk since your edits. Use the banner to compare, reload, or overwrite.'
 
-/** The Monaco model a tab edits; tabs of one file on one host share it, and so share its text. */
+export const EDITOR_NOT_UTF8_SAVE_MESSAGE = "This file isn't UTF-8 text, so it wasn't saved."
+
 export function editorTabModelUri(state: AppState, file: OpenFile): string {
   return toEditorModelUri(file.filePath, getEditorModelOwnerKey(file, state))
 }
 
-/** Whether the tab edits its Monaco model directly; rich, notebook, CSV and preview views don't. */
+/** Exclude rich, notebook, CSV and preview views that do not directly edit the shared model. */
 export function isCodeViewTab(state: AppState, file: OpenFile): boolean {
-  // Why: the Changes view renders its own diff model, not the shared text model.
+  // Changes uses a separate diff model.
   if (file.mode !== 'edit' || state.editorViewMode?.[file.id] === 'changes') {
     return false
   }
-  // Why: a read-only tab always renders raw Monaco source (editor-panel-render-model), whatever its type.
+  // Read-only tabs always render raw Monaco source, regardless of type.
   if (file.readOnly === true) {
     return true
   }
@@ -49,27 +43,14 @@ export function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   return views.length === 0 || view === 'source'
 }
 
-/**
- * Code-view tabs showing the same live model as `file`, `file` included. They share the model's
- * text, so a write or Keep may advance their baseline; any other view is guarded on its own.
- */
 export function editorModelSiblingTabs(state: AppState, file: OpenFile): OpenFile[] {
-  if (!isCodeViewTab(state, file)) {
-    return [file]
-  }
-  const modelUri = editorTabModelUri(state, file)
-  return state.openFiles.filter(
-    (tab) =>
-      tab.id === file.id ||
-      (isCodeViewTab(state, tab) && editorTabModelUri(state, tab) === modelUri)
-  )
+  const viewIds = new Set(editorBufferSiblingViewIds(state, file.id))
+  viewIds.add(file.id)
+  const views = state.openFiles.filter((tab) => viewIds.has(tab.id))
+  return views.some((tab) => tab.id === file.id) ? views : [file, ...views]
 }
 
-/**
- * What an editor save may do. There is no plain-write case: a save is either compared against a
- * known disk version, the banner's explicit Overwrite, or refused. A host without the guarded
- * write gets the writer's compatibility fallback: the client reads and compares, then writes.
- */
+/** Require a known baseline or explicit overwrite; older hosts fall back to client compare-before-write. */
 export type EditorSavePrecondition =
   | { kind: 'guarded'; signature: string; allowMissing: boolean; requireLosslessUtf8?: boolean }
   | { kind: 'explicit-overwrite' }
@@ -77,49 +58,38 @@ export type EditorSavePrecondition =
 
 export type EditorSaveWrite = Exclude<EditorSavePrecondition, { kind: 'blocked' }>
 
-/** A code-view model is dirty when any tab of it holds unsaved edits; other views answer for themselves. */
 export function isEditorModelDirty(state: AppState, file: OpenFile): boolean {
   return editorModelSiblingTabs(state, file).some((tab) => tab.isDirty)
 }
 
-/** The tab holding the model's unsaved text; it may be a sibling of `file`, not `file` itself. */
 export function editorModelDraftHolder(state: AppState, file: OpenFile): OpenFile | undefined {
   return editorModelSiblingTabs(state, file).find(
     (tab) => tab.isDirty && state.editorDrafts[tab.id] !== undefined
   )
 }
 
-/**
- * The one disk version of a code-view model: every tab sharing the model holds the same value, set
- * only here. Other views keep their own. Returns the sibling tabs whose value moved.
- */
+/** Advance the record’s shared baseline and return sibling views whose baseline changed. */
 export function setEditorDiskBaseline(
   state: AppState,
   fileId: string,
   signature: string | undefined
 ): OpenFile[] {
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
-  const moved: OpenFile[] = []
-  for (const tab of file ? editorModelSiblingTabs(state, file) : []) {
-    if (tab.lastKnownDiskSignature !== signature) {
-      state.setLastKnownDiskSignature(tab.id, signature)
-      if (tab.id !== fileId) {
-        moved.push(tab)
-      }
-    }
+  if (!file) {
+    return []
   }
+  const moved = editorModelSiblingTabs(state, file).filter(
+    (tab) => tab.id !== fileId && tab.lastKnownDiskSignature !== signature
+  )
+  state.setLastKnownDiskSignature(fileId, signature)
   return moved
 }
 
-/**
- * A guarded save is refused when disk no longer holds the version its text came from, so an
- * unnoticed external write is never silently overwritten.
- */
 export function editorSavePrecondition(
   file: OpenFile,
   trigger: EditorSaveTrigger
 ): EditorSavePrecondition {
-  // Why: only the visible banner's Overwrite may replace a disk change the user was shown.
+  // Only banner Overwrite grants consent to replace a known disk change.
   if (trigger === 'overwrite') {
     return { kind: 'explicit-overwrite' }
   }
@@ -127,16 +97,16 @@ export function editorSavePrecondition(
   if (baseline === undefined) {
     return { kind: 'blocked', reason: 'no-baseline' }
   }
-  // Why: autosave must not resurrect a file deleted behind the editor's back; explicit saves may.
+  // Autosave must not resurrect deleted files; explicit saves may.
   return {
     kind: 'guarded',
     signature: baseline,
     allowMissing: trigger !== 'autosave',
-    requireLosslessUtf8: trigger === 'autosave' || trigger === 'restart'
+    // Only confirmed conversion may replace bytes that failed UTF-8 decoding.
+    requireLosslessUtf8: trigger !== 'convert'
   }
 }
 
-/** The only file write editor save code makes. */
 export function writeEditorSave(
   context: RuntimeFileOperationArgs,
   filePath: string,
@@ -161,11 +131,11 @@ export function writeEditorSave(
   )
 }
 
-// Why both clear when the read settles: entries live only while a Keep My Edits read is pending.
+// Release both markers when the pending Keep My Edits read settles.
 const pendingBaselineRestamps = new Map<string, Promise<void>>()
 const supersededBaselineRestamps = new Set<string>()
 
-/** A completed write re-baselines the tab, so a Keep read that started earlier must not restamp. */
+/** Prevent an older Keep My Edits read from restamping a newer write’s baseline. */
 export function noteEditorBaselineWrite(fileId: string): void {
   if (pendingBaselineRestamps.has(fileId)) {
     supersededBaselineRestamps.add(fileId)

@@ -6,6 +6,7 @@ import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
 import { readEnvironmentStoreRecords } from './runtime-environment-store-records'
 import {
+  getPreferredLoopbackRuntimePort,
   KnownRuntimeEnvironmentSchema,
   RuntimeAccessEndpointSchema,
   RuntimeSshAccessLinkSchema,
@@ -16,8 +17,7 @@ import {
 } from './runtime-environments'
 import { hardenExistingSecureFile } from './secure-file'
 
-// Why a sidecar: shipped builds parse orca-environments.json with key-stripping schemas and rewrite
-// it on routine use, so T5 state stored there would vanish across a downgrade. They never touch this.
+// Shipped builds strip unknown environment fields on routine writes; preserve newer state in this untouched sidecar.
 const SIDECAR_FILE = 'orca-environment-sidecar.json'
 const MAX_SIDECAR_FILE_BYTES = 1024 * 1024
 
@@ -35,7 +35,7 @@ const SidecarEntrySchema = z.object({
   binding: SidecarBindingSchema,
   // The store state a two-file rebind is moving to; the entry stays current through a crash between them.
   pendingBinding: SidecarBindingSchema.optional(),
-  // The runtime a link verified; it outlives the link like a learned runtimeId would.
+  // A verified link’s runtime ID until stored; differing IDs mean restart because orcad mints one each start (#32957).
   runtimeId: z.string().min(1).optional(),
   sshAccess: SidecarSshAccessSchema.optional(),
   pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
@@ -123,45 +123,54 @@ function isCurrentEntry(
   environment: PersistedRuntimeEnvironment,
   entry: RuntimeEnvironmentSidecarEntry
 ): boolean {
+  return currentEntry(environment, entry) !== undefined
+}
+
+/** The entry as of `environment`, or none when it is bound to a different store state. */
+function currentEntry(
+  environment: PersistedRuntimeEnvironment,
+  entry: RuntimeEnvironmentSidecarEntry
+): RuntimeEnvironmentSidecarEntry | undefined {
   const binding = runtimeEnvironmentSidecarBinding(environment)
   const matches = (candidate: z.infer<typeof SidecarBindingSchema> | undefined): boolean =>
     candidate?.createdAt === binding.createdAt &&
     candidate.pairingRevision === binding.pairingRevision &&
     candidate.preferredEndpointId === binding.preferredEndpointId
-  return matches(entry.binding) || matches(entry.pendingBinding)
+  if (matches(entry.binding)) {
+    return entry
+  }
+  if (!matches(entry.pendingBinding)) {
+    return undefined
+  }
+  // A rebind stopped after its store write: the stored endpoint already names the new tunnel port.
+  const localPort = getPreferredLoopbackRuntimePort(environment)
+  return entry.orcadDeployment && localPort !== null
+    ? { ...entry, orcadDeployment: { ...entry.orcadDeployment, localPort } }
+    : entry
 }
 
-/**
- * The environment callers see. An entry bound to a different pairing, or one whose overlay would be
- * inconsistent, is stale and ignored rather than trusted.
- */
+/** Ignore stale sidecars whose pairing binding or overlay validation no longer matches. */
 export function overlayRuntimeEnvironmentSidecar(
   environment: PersistedRuntimeEnvironment,
   entry: RuntimeEnvironmentSidecarEntry | undefined
 ): KnownRuntimeEnvironment {
   const base = KnownRuntimeEnvironmentSchema.parse(environment)
-  if (!entry || !isCurrentEntry(environment, entry)) {
+  const current = entry && currentEntry(environment, entry)
+  if (!current) {
     return base
   }
   const basePairingRevision = environment.pairingRevision ?? environment.createdAt
-  const access = entry.sshAccess
-  if (
-    entry.runtimeId !== undefined &&
-    environment.runtimeId !== null &&
-    environment.runtimeId !== entry.runtimeId
-  ) {
-    return base
-  }
+  const access = current.sshAccess
   const pairingRevision = Math.max(
     basePairingRevision,
-    entry.pairingRevisionFloor ?? basePairingRevision
+    current.pairingRevisionFloor ?? basePairingRevision
   )
   const { endpoint, ...link } = access ?? {}
   const overlaid = KnownRuntimeEnvironmentSchema.safeParse({
     ...environment,
     ...(pairingRevision !== basePairingRevision ? { pairingRevision } : {}),
-    ...(entry.runtimeId !== undefined
-      ? { runtimeId: environment.runtimeId ?? entry.runtimeId }
+    ...(current.runtimeId !== undefined
+      ? { runtimeId: environment.runtimeId ?? current.runtimeId }
       : {}),
     ...(access && endpoint
       ? {
@@ -171,20 +180,17 @@ export function overlayRuntimeEnvironmentSidecar(
           preferredEndpointId: endpoint.id
         }
       : {}),
-    ...(entry.pendingSshAccessOperation
-      ? { pendingSshAccessOperation: entry.pendingSshAccessOperation }
+    ...(current.pendingSshAccessOperation
+      ? { pendingSshAccessOperation: current.pendingSshAccessOperation }
       : {}),
-    ...(entry.orcadDeployment ? { orcadDeployment: entry.orcadDeployment } : {}),
-    ...(entry.orcadMigratedAt ? { orcadMigratedAt: entry.orcadMigratedAt } : {}),
-    ...(entry.reconciliation ? { reconciliation: entry.reconciliation } : {})
+    ...(current.orcadDeployment ? { orcadDeployment: current.orcadDeployment } : {}),
+    ...(current.orcadMigratedAt ? { orcadMigratedAt: current.orcadMigratedAt } : {}),
+    ...(current.reconciliation ? { reconciliation: current.reconciliation } : {})
   })
   return overlaid.success ? overlaid.data : base
 }
 
-/**
- * Replaces one environment's sidecar entry and drops entries whose environment no longer exists.
- * `pendingEnvironment` also binds the entry to the store state about to be written.
- */
+/** Replace an entry/prune absent owners; pendingEnvironment binds both sides of a two-file store transition. */
 export function writeRuntimeEnvironmentSidecarEntry(
   userDataPath: string,
   environments: readonly PersistedRuntimeEnvironment[],
@@ -260,5 +266,5 @@ export function readCurrentRuntimeEnvironmentSidecarEntry(
     )
   }
   const entry = sidecar.entries[environment.id]
-  return entry && isCurrentEntry(environment, entry) ? entry : undefined
+  return entry && currentEntry(environment, entry)
 }

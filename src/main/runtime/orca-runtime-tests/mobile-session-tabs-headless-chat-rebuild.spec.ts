@@ -9,9 +9,13 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
 
-// #29968: on a host with no window a chat tab lives only in the runtime's snapshot; rebuilding that
-// snapshot from the saved terminals and editors must not drop it.
+// #29968: chat tabs exist only in runtime snapshots; persisted terminal/editor rebuilds must retain them.
 const WORKTREE = `id:${TEST_WORKTREE_ID}`
 const README = `${TEST_WORKTREE_PATH}/README.md`
 const CHAT_TAB_ID = 'agent-session:claude_29968'
@@ -68,9 +72,40 @@ function sessionWithTerminalAndEditor(): WorkspaceSessionState {
   })
 }
 
-function headlessRuntimeWithChat() {
+/** asProfileStore lists host partitions and notifies writes so main-owned layout follows persisted changes. */
+function headlessRuntimeWithChat({ asProfileStore = false } = {}) {
   const harness = makeRuntimeStoreWithWorkspaceSession(sessionWithTerminalAndEditor())
-  const runtime = new OrcaRuntimeService(harness.runtimeStore)
+  const written = new Set<(hostId: ExecutionHostId | null) => void>()
+  const setSession = (next: WorkspaceSessionState): void => {
+    harness.setSession(next)
+    written.forEach((listener) => listener(LOCAL_EXECUTION_HOST_ID))
+  }
+  const runtime = new OrcaRuntimeService(
+    asProfileStore
+      ? {
+          ...harness.runtimeStore,
+          getWorkspaceSessionHostIds: () => ['local'],
+          onWorkspaceSessionWritten: (listener: (hostId: ExecutionHostId | null) => void) => {
+            written.add(listener)
+            return () => {
+              written.delete(listener)
+            }
+          },
+          setWorkspaceSession: setSession,
+          applyLayoutCommand: async (command: LayoutCommand, hostIds?: readonly string[]) => {
+            const change = applyCommandToSession(
+              resolveHostId(hostIds?.[0] ?? 'local'),
+              harness.getSession(),
+              command
+            )
+            if (change.session) {
+              setSession(change.session)
+            }
+            return change.value
+          }
+        }
+      : harness.runtimeStore
+  )
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
@@ -83,7 +118,7 @@ function headlessRuntimeWithChat() {
 
 async function openChat(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.listMobileSessionTabs(WORKTREE)
-  runtime.projectStructuredAgentSessionTab({
+  await runtime.publishStructuredAgentSessionTab({
     workspaceId: TEST_WORKTREE_ID,
     sessionId: 'claude_29968',
     agent: 'claude',
@@ -105,7 +140,6 @@ describe('a chat tab on a host with no window', () => {
     expect(listed.tabs.map((tab) => tab.id)).toContain(CHAT_TAB_ID)
     expect(listed.tabs.map((tab) => tab.id)).not.toContain('tab-readme')
     expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toContain(CHAT_TAB_ID)
-    // The chat stays the tab the host shows, not the terminal the rebuild re-marked active.
     expect(listed.activeTabId).toBe(CHAT_TAB_ID)
     expect(listed.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual([CHAT_TAB_ID])
   })
@@ -124,8 +158,14 @@ describe('a chat tab on a host with no window', () => {
   })
 
   it('lists tabs to phones in the order desktop clients draw after a rebuild', async () => {
-    const runtime = headlessRuntimeWithChat()
-    await openChat(runtime)
+    const runtime = headlessRuntimeWithChat({ asProfileStore: true })
+    await runtime.listMobileSessionTabs(WORKTREE)
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: TEST_WORKTREE_ID,
+      sessionId: 'claude_29968',
+      agent: 'claude',
+      activate: true
+    })
     const groupId = (await runtime.listMobileSessionTabs(WORKTREE)).tabGroups?.[0]?.id ?? ''
     await runtime.moveMobileSessionTab(WORKTREE, {
       kind: 'reorder',
@@ -178,7 +218,7 @@ describe('a chat tab on a host with no window', () => {
       leaves: [],
       unchangedMobileSessionWorktrees: [TEST_WORKTREE_ID]
     })
-    runtime.projectStructuredAgentSessionTab({
+    await runtime.publishStructuredAgentSessionTab({
       workspaceId: TEST_WORKTREE_ID,
       sessionId: 'claude_29968',
       agent: 'claude',
@@ -186,15 +226,13 @@ describe('a chat tab on a host with no window', () => {
     })
 
     const listed = await runtime.listMobileSessionTabs(WORKTREE)
-    expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toEqual([
-      CHAT_TAB_ID,
-      'win-term',
-      'serve-tab'
-    ])
-    expect(listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))).toEqual([
-      CHAT_TAB_ID,
-      'win-term',
-      'serve-tab'
-    ])
+    // Main-owned order is authoritative; window frames cannot add tabs/order missing from its layout.
+    const expectedOrder = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? ['serve-tab', 'tab-readme', CHAT_TAB_ID]
+      : [CHAT_TAB_ID, 'win-term', 'serve-tab']
+    expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toEqual(expectedOrder)
+    expect(listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))).toEqual(
+      expectedOrder
+    )
   })
 })

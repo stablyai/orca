@@ -27,8 +27,7 @@ describe('resolvePluginPanelIcon', () => {
   )
 
   it('keeps a hostile manifest icon renderable by the activity bar', () => {
-    // Object / Object.prototype are not valid React element types: rendering
-    // either throws past the right-sidebar boundary and blanks the whole rail.
+    // Inherited Object members are invalid React components and can crash the whole sidebar rail.
     const item = getPluginPanelActivityItems([{ ...panel, icon: 'constructor' }])[0]!
     expect(item.icon).not.toBe(Object)
     expect(item.icon).toBe(Plug)

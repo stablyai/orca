@@ -5,8 +5,7 @@ import {
   _resetZCodeInteractiveCapabilityForTests
 } from './interactive-capability'
 
-// Two real ZCode builds on this machine: the desktop app's bundled runtime (no TUI) and a
-// CLI built from zai-org/ZCode (has TUI). Skipped anywhere they are absent.
+// Compare real bundled/no-TUI and CLI/TUI builds only where those local fixtures exist.
 const WITHOUT_TUI = '/tmp/zcode-bin-notui/zcode'
 const WITH_TUI = '/tmp/zcode-bin-tui/zcode'
 const bothPresent = existsSync(WITHOUT_TUI) && existsSync(WITH_TUI)

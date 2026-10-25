@@ -185,7 +185,7 @@ describe('dropDeletedSshResumeCwd', () => {
     vi.stubGlobal('window', { api: { fs: { pathExists } } })
     const remote = session({ executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/feat-x' })
 
-    // Why: dropping the cwd here would strand every ordinary remote resume at the workspace root.
+    // Preserve recorded cwd or ordinary remote resumes would start at the workspace root.
     await expect(dropDeletedSshResumeCwd(remote)).resolves.toBe(remote)
     expect(pathExists).toHaveBeenCalledWith({
       filePath: '/home/ada/wt/feat-x',
@@ -207,7 +207,7 @@ describe('dropDeletedSshResumeCwd', () => {
     vi.stubGlobal('window', { api: { fs: { pathExists } } })
     const remote = session({ executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/feat-x' })
 
-    // Why: losing the host is not evidence the folder is gone (ssh-execution-boundary.md).
+    // Losing the host cannot prove its folder is gone (ssh-execution-boundary.md).
     await expect(dropDeletedSshResumeCwd(remote)).resolves.toBe(remote)
     expect(pathExists).toHaveBeenCalled()
   })

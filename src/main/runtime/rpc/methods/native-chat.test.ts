@@ -5,8 +5,7 @@ import type {
 } from '../../../../shared/native-chat-types'
 import type { RpcContext } from '../core'
 
-// Stub the bounded tail reader so the handler returns a deterministic transcript with
-// one oversized tool-result block; the test then asserts clip behavior per client.
+// Return a deterministic transcript with an oversized tool result to verify client-specific clipping.
 const OVERSIZED = 'x'.repeat(5000)
 const cachedResult = vi.hoisted(() => ({
   value: {
@@ -183,8 +182,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(output).toBe(`${OVERSIZED.slice(0, 4000)}\n… (truncated)`)
   })
 
-  // STA-3230: a paired desktop or mobile client saw long assistant replies cut
-  // at the tool-preview cap with `… (truncated)` and no way to read the rest.
+  // Preserve full assistant replies beyond the tool-preview cap; mobile has no way to read clipped text (STA-3230).
   it('passes a long assistant text block through unclipped for mobile clients', async () => {
     const text = 'prose '.repeat(1000)
     cachedResult.value = { messages: [makeTextMessage(text)] }
@@ -221,8 +219,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     }
     expect(block.agents).toHaveLength(64)
     expect(block.agents[0].label).toBe(`${'l'.repeat(512)}\n… (truncated)`)
-    // The id is as untrusted as the label on an imported roster, but it is the
-    // roster key: it is bounded with a digest, never clipped to a bare prefix.
+    // Roster ids are untrusted keys: digest-bound them rather than merge equal prefixes.
     expect(block.agents[0].id).toHaveLength(512)
     expect(block.agents[0].id).toBe(boundSubagentEntryId(`task-0-${'i'.repeat(600)}`))
   })
@@ -302,8 +299,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(JSON.stringify(input)).toContain('truncated')
   })
 
-  // The roster block reached mobile through a bare fall-through, uncapped, on the
-  // one path that exists to keep the payload off the phone.
+  // Mobile spawn rosters must not escape through uncapped fall-through.
   it('bounds a spawn-group roster before sending it to mobile', async () => {
     cachedResult.value = {
       messages: [
@@ -456,8 +452,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
   it('clamps a limit past the max window instead of rejecting (keeps pagination unstuck)', () => {
     const method = NATIVE_CHAT_METHODS.find((m) => m.name === 'nativeChat.readSession')
     const parsed = method?.params?.parse({ agent: 'claude', sessionId: 's', limit: 5000 })
-    // A hard reject here would fail the read and stall "load earlier" at the cap;
-    // clamping returns the 2000-tail so pagination stops cleanly instead.
+    // Clamp to the tail so load-earlier ends cleanly instead of stalling on a rejected cap.
     expect((parsed as { limit: number }).limit).toBe(2000)
   })
 
@@ -478,7 +473,6 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     )
     const messages = (result as { messages: NativeChatMessage[] }).messages
     expect(messages).toHaveLength(40)
-    // Tail-only: the last id survives, the first is dropped.
     expect(messages.at(-1)?.id).toBe('m-59')
     expect(messages[0].id).toBe('m-20')
     expect(result).toMatchObject({ hasMore: true, beforeOffset: 123 })
@@ -514,8 +508,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
   })
 
   it('settles a not-yet-flushed transcript with a pending window, then the real snapshot', async () => {
-    // A brand-new session's JSONL can be a minute out, or never written at all
-    // until the agent is prompted. With no frame the client just spins.
+    // New sessions may not write JSONL until prompted; send an initial frame to end the client's spinner.
     watcher.watching = true
     watcher.args = null
     const emitted: unknown[] = []
@@ -533,7 +526,6 @@ describe('nativeChat.subscribe initial snapshot', () => {
     callbacks.onInitialSnapshot?.([message], false, 123)
     expect(emitted).toHaveLength(2)
     expect(emitted[1]).toMatchObject({ type: 'snapshot', hasMore: false })
-    // The real window is authoritative and carries no pending marker.
     expect((emitted[1] as { pending?: boolean }).pending).toBeUndefined()
   })
 

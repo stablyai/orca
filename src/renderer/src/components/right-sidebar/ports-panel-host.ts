@@ -32,7 +32,7 @@ export function getPortsPanelOwnerKey(
   if (!workspaceId) {
     return null
   }
-  // Why no Active Server fallback: focus names a host unrelated to the workspace (#24067).
+  // Focus cannot resolve workspace ownership because Active Server may name another host (#24067).
   const owner = resolveOwner(state, { workspaceId })
   return owner.kind === 'resolved' ? authorityKey(owner.owner) : null
 }
@@ -50,8 +50,7 @@ export function portsPanelHostForOwnerKey(key: HostAuthorityKey | null): PortsPa
   if (host?.kind !== 'ssh') {
     return { kind: 'unknown' }
   }
-  // Why recipe VMs go host-scoped: their targets publish no connection state to the renderer, so
-  // only this app's own scan can tell a reachable VM with no listeners from an unreachable one.
+  // Recipe VMs lack connection state; host-scoped scans distinguish no listeners from unreachable hosts.
   if (authority.endpoint.kind === 'self' && !isRuntimeOwnedSshTargetId(host.targetId)) {
     return { kind: 'direct-ssh', connectionId: host.targetId }
   }
@@ -82,11 +81,7 @@ export function portsPanelReachesSshHost(
   }
 }
 
-/**
- * The SSH host whose connection carries this client's forwards for a managed server's workspace.
- * Why: the server scans its own ports, but a forward listens on this machine, so it rides the SSH
- * connection under the server's tunnel, as it did before the host moved (#29153).
- */
+/** Managed servers scan their ports, but client forwards still ride the SSH tunnel to their host (#29153). */
 export function portsPanelForwardTargetId(
   host: PortsPanelHost,
   environments: readonly { id: string; orcadDeployment?: OrcadDeploymentLink }[]

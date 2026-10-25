@@ -13,6 +13,8 @@ import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/structured-agent-session-client'
+import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import { withFrameDrawnChatTabPlacement } from './frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
@@ -20,7 +22,7 @@ import {
   abandonStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
 } from './launch-structured-agent-session'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   StructuredAgentSessionCreateError,
   StructuredAgentSessionCreateAbandonedError,
@@ -50,12 +52,7 @@ function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string
   return null
 }
 
-/**
- * Only the host that will execute the session can answer whether it supports creating one there.
- * Both providers ask: the host classifies per agent, and Codex inherits the
- * unresolvable-selector retry above along with the probe. The unknown branch stays on the chat for
- * reconciliation: a retry may follow a create whose reply was lost. Answers the seed create will use.
- */
+/** Only the executing host can classify create support for either provider. Retry unresolvable selectors; unknown attempts stay recoverable because create may have succeeded with a lost reply. Return the actual create seed. */
 async function requireHostCreateSupport(
   intent: StructuredAgentSessionLaunchIntent
 ): Promise<LaunchSeed> {
@@ -79,8 +76,7 @@ async function requireHostCreateSupport(
   return support.seedOptions
 }
 
-/** A paired host that would run the chat with more access than asked for gets nothing to start.
- *  The chat's own permission gate says why, so this refusal carries no words of its own. */
+/** Refuse paired hosts that would grant more access than requested; the chat permission gate owns the explanation. */
 const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
 
 async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
@@ -104,8 +100,7 @@ async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent)
   )
 }
 
-/** Told the seed a paired server says this create will use, which may differ from an earlier
- *  attempt's; a local launch reads its own settings instead. */
+// Use each paired attempt’s actual seed; local creates read local settings instead.
 export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
 
 export async function launchStructuredAgentSession(
@@ -134,6 +129,8 @@ export async function launchStructuredAgentSession(
     }
   }
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
+  // Typed so an async placement fails to compile: a tick here drops an eager joiner's create.
+  const params: StructuredAgentSessionCreateParams = withFrameDrawnChatTabPlacement(intent)
   // Nothing is created for a chat closed while its host was asked, or whose source retired.
   if (isCancelled() || intent.beforeCreate?.() === false) {
     abandonStructuredAgentSessionLaunchIntent(intent)
@@ -146,7 +143,7 @@ export async function launchStructuredAgentSession(
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,
       'agentSession.create',
-      intent.params
+      params
     )
   } catch (error) {
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)

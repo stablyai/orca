@@ -129,7 +129,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
   }
 }
 
-// Like the store-routed generation: the record runs before the first await and settles to the outcome.
+// Match store generation’s synchronous record publication before its first await.
 function startGeneration(options?: PullRequestGenerationOptions): void {
   useAppStore.getState().setPullRequestGenerationRecord(GENERATION_KEY, runningRecordFor(options))
 }
@@ -460,12 +460,11 @@ describe('useSourceControlHostedReviewCreation', () => {
   it('creates after generation even though generation ending refreshes eligibility', async () => {
     const { generate, finish } = deferredGeneration()
     const base = makeInput({ handleGeneratePullRequestFields: generate })
-    // Why: the first probe confirms the branch; any refetch stays pending, as a real one does for a while.
+    // Let the first probe resolve and later refetches hang to model delayed refreshes.
     const getEligibility = vi
       .fn<() => Promise<HostedReviewCreationEligibility>>()
       .mockResolvedValueOnce(readyEligibility)
       .mockReturnValue(new Promise(() => {}))
-    // Wires the real eligibility probe to the real create, as the Source Control panel does.
     const { result } = renderHook(() => {
       const [inFlight, setCreatePrInFlightByWorktree] = useState<Record<string, boolean>>({})
       const createPrInFlightRef = useRef<Record<string, boolean>>({})
@@ -524,9 +523,8 @@ describe('useSourceControlHostedReviewCreation', () => {
     act(() => {
       click = result.current.handleCreatePullRequest()
     })
-    // A repeated click is refused while the first one is in flight.
     await act(async () => result.current.handleCreatePullRequest())
-    // The run's record settles and the panel re-renders before the click's continuation resumes.
+    // Settle and rerender before the original click’s continuation resumes.
     await act(async () => {
       useAppStore
         .getState()
@@ -581,10 +579,9 @@ describe('useSourceControlHostedReviewCreation', () => {
           answer = resolve
         })
     )
-    // The cancel never reaches the host, so the stopped request stays pending.
+    // Model cancellation never reaching the host so the stopped request remains pending.
     runtime.cancel.mockReturnValue(new Promise(() => {}))
     const base = makeInput()
-    // Wires the real store-routed generation and Stop to the real create and its hold, as the Source Control panel does.
     const { result } = renderHook(() => {
       const [inFlight, setCreatePrInFlightByWorktree] = useState<Record<string, boolean>>({})
       const createPrInFlightRef = useRef<Record<string, boolean>>({})
@@ -640,7 +637,6 @@ describe('useSourceControlHostedReviewCreation', () => {
       '/repo',
       expect.objectContaining({ title: 'Fix readme typo', body: '' })
     )
-    // The stopped request's late result creates nothing.
     await act(async () => {
       answer({ success: true, fields: generatedFields })
       await firstClick

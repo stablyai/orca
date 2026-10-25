@@ -9,7 +9,6 @@ import type {
 } from '../../../../../../shared/git-diff-compare-types'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { openWorkspaceFile } from '@/lib/workspace-file-open'
 import {
   cancelSourceControlEditorRevealFrames,
   requestSourceControlEditorRevealFrame
@@ -26,6 +25,8 @@ export function useSourceControlNoteOpening({
   entries,
   branchEntries,
   branchSummary,
+  handleOpenDiff,
+  openCommittedDiff,
   sourceControlRef
 }: {
   activeWorktreeId: string | null
@@ -33,6 +34,8 @@ export function useSourceControlNoteOpening({
   entries: GitStatusEntry[]
   branchEntries: GitBranchChangeEntry[]
   branchSummary: GitBranchCompareSummary | null
+  handleOpenDiff: (entry: GitStatusEntry) => void
+  openCommittedDiff: (entry: GitBranchChangeEntry) => void
   sourceControlRef: RefObject<HTMLDivElement | null>
 }): SourceControlNoteOpening {
   const openFile = useAppStore((s) => s.openFile)
@@ -43,7 +46,7 @@ export function useSourceControlNoteOpening({
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
   const setSourceControlRoot = useCallback(
     (node: HTMLDivElement | null) => {
-      // Why: markdown-note reveal frames target this surface; cancel them on unmount rather than via a passive Effect.
+      // Cancel surface-owned reveal frames on ref detach instead of waiting for passive effect cleanup.
       if (node === null) {
         cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
       }
@@ -52,7 +55,7 @@ export function useSourceControlNoteOpening({
     [sourceControlRef]
   )
 
-  // Why: route the note by relative filePath to whichever diff surface owns it — unstaged, then branch compare, else a plain editor tab.
+  // Choose the owning diff by relative path: unstaged, then branch, then editor fallback.
   const handleOpenComment = useCallback(
     (comment: DiffComment) => {
       if (!activeWorktreeId || !worktreePath) {
@@ -95,14 +98,7 @@ export function useSourceControlNoteOpening({
         matches.find((e) => e.area === 'untracked') ??
         matches[0]
       if (uncommitted) {
-        openWorkspaceFile({
-          kind: 'uncommitted',
-          intent: 'diff',
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          entry: uncommitted,
-          options: { preview: true }
-        })
+        handleOpenDiff(uncommitted)
         if (commentId) {
           setScrollToDiffCommentId(commentId)
         }
@@ -110,21 +106,13 @@ export function useSourceControlNoteOpening({
       }
       const branchEntry = branchEntries.find((e) => e.path === filePath)
       if (branchEntry && branchSummary?.status === 'ready') {
-        openWorkspaceFile({
-          kind: 'branch',
-          intent: 'diff',
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          entry: branchEntry,
-          compare: branchSummary,
-          options: { preview: true }
-        })
+        openCommittedDiff(branchEntry)
         if (commentId) {
           setScrollToDiffCommentId(commentId)
         }
         return
       }
-      // Why: neither diff surface has the file (e.g. change committed+merged), so open a plain editor tab in 'changes' mode where DiffViewer picks up the scroll request.
+      // If both diffs lost the file, open changes-mode editor fallback so DiffViewer can consume the reveal request.
       const absPath = joinPath(worktreePath, filePath)
       const language = detectLanguage(filePath)
       openFile({
@@ -144,6 +132,8 @@ export function useSourceControlNoteOpening({
       branchEntries,
       branchSummary,
       entries,
+      handleOpenDiff,
+      openCommittedDiff,
       openFile,
       setEditorViewMode,
       setScrollToDiffCommentId,

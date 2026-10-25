@@ -3,15 +3,13 @@ import {
   nativeChatToolLineLabel as sharedToolLineLabel,
   type NativeChatToolLineLabel,
   type NativeChatToolRowVerb
-} from '../../../../shared/native-chat-tool-line-label'
+} from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
 
-/** Spelled out per verb, with the English literal at the call site, so the catalog
- *  extractor sees every key; `native-chat-shared-copy-matches-catalog` pins them
- *  against the record mobile renders. */
+/** Keep literal translation call sites for extraction; parity tests match the shared mobile record. */
 export function nativeChatToolRowVerb(verb: NativeChatToolRowVerb): string {
   switch (verb) {
     case 'running':

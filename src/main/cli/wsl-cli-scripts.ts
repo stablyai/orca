@@ -199,8 +199,7 @@ function bridgeLines(lines: readonly string[]): string {
 }
 
 export function getBridgePathFromCommandPath(commandPath: string): string {
-  // Why: both the current Linux command and the legacy pre-rename command
-  // share one WSL bridge under ~/.local/share/orca.
+  // Current and legacy command names share one bridge under ~/.local/share/orca.
   return `${commandPath.replace(/\/\.local\/bin\/(?:orca|orca-ide)$/, '/.local/share/orca')}/orca-wsl-bridge.ps1`
 }
 
@@ -220,8 +219,7 @@ export function buildSafeReplaceGuard(path: string, managedMarker: string): stri
 
 export function buildRegistrationLockPrelude(commandPath: string): string {
   const lockDir = getPosixDirname(getBridgePathFromCommandPath(commandPath))
-  // Why: the per-distro queue only serializes one Orca process; flock covers
-  // a second install (e.g. stable + nightly) mutating the same distro files.
+  // flock serializes separate Orca installs; the per-distro queue covers only this process.
   return [
     `if command -v flock >/dev/null 2>&1 && mkdir -p ${quotePosixShellDoubleQuotedApostrophe(lockDir)} 2>/dev/null; then`,
     `  exec 9>${quotePosixShellDoubleQuotedApostrophe(`${lockDir}/.orca-wsl-cli.lock`)}`,
@@ -231,23 +229,20 @@ export function buildRegistrationLockPrelude(commandPath: string): string {
 }
 
 export function buildManagedLegacyRemoveCommand(quotedLegacyCommandPath: string): string {
-  // Why: remove only the Orca-managed pre-rename wrapper; user-owned `orca`
-  // commands and symlinks must survive.
+  // Preserve user-owned commands and symlinks when removing the managed legacy wrapper.
   return `if [ ! -L ${quotedLegacyCommandPath} ] && [ -f ${quotedLegacyCommandPath} ] && grep -Fq ${quotePosixShellDoubleQuotedApostrophe(MANAGED_MARKER)} ${quotedLegacyCommandPath}; then rm -f ${quotedLegacyCommandPath}; fi`
 }
 
 export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: string): string {
   const bridgePath = getBridgePathFromCommandPath(commandPath)
   return [
-    // Why -eu not -euo pipefail: this script runs via runWslProcess's `sh -s`,
-    // and no pipe here needs pipefail -- dash on Ubuntu 20.04 lacks the option.
+    // Runs under sh; Ubuntu 20.04 dash lacks pipefail, and no pipeline here needs it.
     'set -eu',
     buildRegistrationLockPrelude(commandPath),
     buildSafeReplaceGuard(commandPath, MANAGED_MARKER),
     buildSafeReplaceGuard(bridgePath, BRIDGE_MANAGED_MARKER),
     `rm -f ${quotePosixShellDoubleQuotedApostrophe(commandPath)} ${quotePosixShellDoubleQuotedApostrophe(bridgePath)}`,
-    // Why: leaving a managed legacy `orca` behind lets startup reconciliation
-    // re-adopt it as opt-in proof and silently undo this removal.
+    // A leftover managed legacy command would let startup reconciliation undo removal.
     ...(legacyCommandPath
       ? [buildManagedLegacyRemoveCommand(quotePosixShellDoubleQuotedApostrophe(legacyCommandPath))]
       : [])

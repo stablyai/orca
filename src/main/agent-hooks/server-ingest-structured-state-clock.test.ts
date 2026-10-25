@@ -1,6 +1,4 @@
-// The host's status row takes its state clock from the summary's `statusStartedAt`, the session's
-// own lifecycle clock, so `worktree ps`, mobile and the dashboard date a parent the way the sidebar
-// does. An older summary without the clock keeps the ingest's own continuity rule.
+// Use the session lifecycle clock across projections; older summaries retain ingest continuity.
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
@@ -58,7 +56,7 @@ beforeEach(() => {
 })
 
 describe("the host row's state clock", () => {
-  it("dates a subagent's approval at the ask, and the parent's completion where it was", () => {
+  it("uses the summary's status clock across attention and idle", () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary({ statusStartedAt: SETTLED }), SUBJECT)
     server.ingestStructuredStatus(
@@ -85,7 +83,6 @@ describe("the host row's state clock", () => {
       summary({ status: 'working', statusStartedAt: 10_000, updatedAt: 10_000 }),
       SUBJECT
     )
-    // The row reads child liveness from the host's records, not the summary's task list.
     server.ingestStructuredChildWork(SUBJECT, [liveChild(23_000)], 'codex')
     server.ingestStructuredStatus(summary({ statusStartedAt: SETTLED, updatedAt: 24_000 }), SUBJECT)
     expect(row(server)).toMatchObject({ state: 'working', stateStartedAt: 10_000 })

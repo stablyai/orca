@@ -172,8 +172,7 @@ describe('forkAgentSessionFromPane', () => {
     )
   })
 
-  // A paired server's surface is published by the launcher; a seeding reveal would add a blank
-  // host terminal beside the chat or agent terminal.
+  // The launcher publishes the paired-host surface; seeding reveal would add an unwanted sibling shell.
   it('reveals a paired fork without seeding a surface of its own', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }

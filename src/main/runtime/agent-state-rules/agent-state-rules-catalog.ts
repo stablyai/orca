@@ -6,6 +6,7 @@ import codex from './codex.json'
 import cursor from './cursor.json'
 import dsh from './dsh.json'
 import gemini from './gemini.json'
+import hermes from './hermes.json'
 import omp from './omp.json'
 import opencode from './opencode.json'
 import opencode2 from './opencode2.json'
@@ -13,7 +14,6 @@ import pi from './pi.json'
 import primeAgent from './prime-agent.json'
 import unknownPane from './unknown-pane.json'
 
-/** Validates bundled rule files; a malformed one throws, naming the file and the bad field. */
 export function parseAgentStateRuleFiles(files: readonly unknown[]): AgentStateRulesFile[] {
   const parsed = files.map((file, index) => {
     const result = AgentStateRulesFileSchema.safeParse(file)
@@ -32,8 +32,7 @@ export function parseAgentStateRuleFiles(files: readonly unknown[]): AgentStateR
   return parsed
 }
 
-// Why imported, not read from disk: the bundler inlines them, so packaged and headless builds
-// carry the rules with no resource path to resolve.
+// Inline imports keep packaged/headless builds independent of resource paths.
 export const BUNDLED_AGENT_STATE_RULE_FILES: readonly AgentStateRulesFile[] =
   parseAgentStateRuleFiles([
     antigravity,
@@ -43,6 +42,7 @@ export const BUNDLED_AGENT_STATE_RULE_FILES: readonly AgentStateRulesFile[] =
     cursor,
     dsh,
     gemini,
+    hermes,
     omp,
     opencode,
     opencode2,

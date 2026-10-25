@@ -9,8 +9,7 @@ export function registerGitLocalBaseBranchBinaryCompatibilityCase(
   getRepoPath: () => string,
   usesContainer: boolean
 ): void {
-  // Why pin this: the owner-checkout fast-forward overrides the user's merge settings with flags
-  // and `-c` keys; every one must parse on the baseline, and a branch-level `-s ours` must not win.
+  // Pin baseline parsing of owner fast-forward flags/config; user branch mergeOptions such as -s ours must not override them.
   it('fast-forwards a checked-out base branch with the exact owner arguments', async () => {
     const repoPath = getRepoPath()
     const worktree = 'compat-ff-wt'

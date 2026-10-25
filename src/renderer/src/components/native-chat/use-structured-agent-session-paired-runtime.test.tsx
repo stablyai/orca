@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A chat on a paired server belongs to that server: its reads (history, live updates, rail outline),
-// writes, and the capability questions behind them go to it, never to this machine. The server here advertises today's capabilities and this machine
-// advertises none, so a question asked of the wrong runtime changes what is sent.
+// Advertise capabilities only on the paired host so misrouted reads, writes or capability probes change observable behavior.
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,7 +14,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   callRuntimeRpc: mocks.call,
-  // The sender checks compatibility itself before its send goes out.
   ensureRuntimeEnvironmentCompatible: async () => undefined,
   runtimeEnvironmentSupportsCapability: async (environmentId: string, capability: string) =>
     mocks.hostCapabilities.get(environmentId)?.includes(capability) === true
@@ -174,7 +171,7 @@ describe('a structured chat on a paired server', () => {
       })
     )
 
-    // Only the server takes a Stop that names no turn; this machine would leave nothing to stop.
+    // Only the paired host supports untargeted Stop; local routing would refuse it.
     await waitFor(async () => {
       await act(async () => {
         await result.current.stop()
@@ -183,7 +180,7 @@ describe('a structured chat on a paired server', () => {
     })
     expect(calls('agentSession.cancel')[0].params).not.toHaveProperty('turnId')
 
-    // The server keeps a repeated Stop quiet, so two presses both go out instead of joining.
+    // The paired host supports quiet repeats, so both Stop presses must be dispatched.
     await act(async () => {
       await Promise.all([result.current.cancel('turn-1'), result.current.cancel('turn-1')])
     })
@@ -223,7 +220,6 @@ describe('a structured chat on a paired server', () => {
     expect(mocks.call.mock.calls.every(([target]) => target === PAIRED_TARGET)).toBe(true)
   })
 
-  // The rail asks for the outline only while older history is unloaded.
   it("reads the rail's conversation outline from the server", async () => {
     olderHistoryUnloaded = true
     render(PAIRED_TARGET)

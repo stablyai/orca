@@ -60,7 +60,7 @@ vi.mock('./filesystem-list-files', () => ({
   listQuickOpenFiles: vi.fn()
 }))
 
-vi.mock('./filesystem-mutations', () => ({
+vi.mock('./filesystem/filesystem-mutations', () => ({
   registerFilesystemMutationHandlers: vi.fn()
 }))
 
@@ -77,7 +77,7 @@ vi.mock('./markdown-documents', () => ({
   listMarkdownDocuments: vi.fn()
 }))
 
-import { registerFilesystemHandlers } from './filesystem'
+import { registerFilesystemHandlers } from './filesystem/filesystem'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
@@ -174,8 +174,7 @@ describe('filesystem rg search timeout', () => {
       wslAwareSpawnMock.mockReturnValue(child)
       registerFilesystemHandlers({} as never)
 
-      // Why a root that exists: an ENOENT spawn failure is also what a vanished workspace looks
-      // like, so this stays about the binary only while the search root is reachable.
+      // ENOENT must concern the binary here, not a missing workspace.
       resolveAuthorizedPathMock.mockImplementation(async () => process.cwd())
       const promise = handlers.get('fs:search')!(
         { sender: { id: 7 } },
@@ -214,8 +213,7 @@ describe('filesystem rg search timeout', () => {
     await expect(promise).rejects.toThrow('post-spawn failure')
   })
 
-  // Why close(97): the WSL wrapper's "cd failed" code. It is above rg's own 0/1/2, so a handler
-  // that checks it after the unavailable branch reports a broken install instead.
+  // Classify WSL cd failure 97 before generic unavailable checks for codes above rg's 0/1/2.
   it('names the unreachable root when the WSL wrapper cannot enter it', async () => {
     const child = createMockProcess()
     Object.defineProperty(child, 'pid', { value: 1 })
@@ -331,11 +329,10 @@ describe('filesystem rg search timeout', () => {
     parseWslPathMock.mockReturnValue({ distro: 'Ubuntu' })
     registerFilesystemHandlers({} as never)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fs:search handlers return Promise<SearchResult>.
     const promise = handlers.get('fs:search')!(
       { sender: { id: 7 } },
       { rootPath: '\\\\wsl.localhost\\Ubuntu\\repo', query: 'ok' }
-    ) as Promise<unknown>
+    )
     await flushMicrotasks()
     child.emit('close', 1, null)
 

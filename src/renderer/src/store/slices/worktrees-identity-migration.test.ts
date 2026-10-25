@@ -17,7 +17,8 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory
+  resetWorktreeSliceModuleMemory,
+  worktreeListMock
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -250,7 +251,7 @@ describe('migrateWorktreeIdentity', () => {
     })
 
     store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
-    store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' })
+    store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' }, null)
     await vi.waitFor(() => {
       expect(getHostedReviewLinkMutationGenerationForTests(OLD)).toBe(0)
       expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
@@ -269,7 +270,7 @@ describe('migrateWorktreeIdentity', () => {
     const switched = store.getState().worktreesByRepo.repo1[0]
     store.setState({ worktreesByRepo: { repo1: [{ ...switched, id: NEW }] } } as Partial<AppState>)
     store.getState().migrateWorktreeIdentity(OLD, NEW)
-    mockApi.worktrees.list.mockResolvedValue([
+    worktreeListMock.mockResolvedValue([
       {
         ...switched,
         id: NEW,
@@ -302,10 +303,14 @@ describe('migrateWorktreeIdentity', () => {
     })
 
     store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
-    store.getState().updateWorktreeGitIdentity(OLD, {
-      head: 'new-head',
-      branch: 'refs/heads/stack/two'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      OLD,
+      {
+        head: 'new-head',
+        branch: 'refs/heads/stack/two'
+      },
+      null
+    )
     await vi.waitFor(() => {
       expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
         worktreeId: OLD,
@@ -316,7 +321,7 @@ describe('migrateWorktreeIdentity', () => {
     const switched = store.getState().worktreesByRepo.repo1[0]
     store.setState({ worktreesByRepo: { repo1: [{ ...switched, id: NEW }] } } as Partial<AppState>)
     store.getState().migrateWorktreeIdentity(OLD, NEW)
-    mockApi.worktrees.list.mockResolvedValue([
+    worktreeListMock.mockResolvedValue([
       {
         ...oldWorktree,
         head: 'old-head',
@@ -347,7 +352,7 @@ describe('migrateWorktreeIdentity', () => {
     })
 
     store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
-    store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' })
+    store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' }, null)
     await vi.waitFor(() => {
       expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
         worktreeId: OLD,
@@ -376,7 +381,7 @@ describe('migrateWorktreeIdentity', () => {
     })
 
     store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
-    store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' })
+    store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' }, null)
     const switched = store.getState().worktreesByRepo.repo1[0]
     store.setState({
       worktreesByRepo: {
@@ -432,7 +437,7 @@ describe('migrateWorktreeIdentity', () => {
     })
 
     store.setState({ worktreesByRepo: { repo1: [oldWorktree] } } as Partial<AppState>)
-    store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' })
+    store.getState().updateWorktreeGitIdentity(OLD, { branch: 'refs/heads/stack/two' }, null)
     await oldPersistStartedPromise
     const switched = store.getState().worktreesByRepo.repo1[0]
     store.setState({

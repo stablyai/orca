@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUDIT_EVENT_RETENTION_MS,
+  hashCredential,
   CONFIRM_RESULT_RETENTION_MS,
   RelayCredentialStore,
   type RelayIdentity
@@ -126,8 +127,7 @@ describe('credential cleanup invite reaper', () => {
   })
 
   it('never deletes an invite that a reader could still consume, however old', async () => {
-    // Retention is measured on updated_at, and a long-lived available invite has an old one. The
-    // state filter is what keeps the reaper from deleting a credential still in use.
+    // Old updated_at does not settle a live invite; state guard must prevent reaping it.
     const database = await openInMemoryRelayDatabase()
     const store = new RelayCredentialStore(database, () => NOW)
     const ancient = NOW - 400 * DAY_MS
@@ -167,8 +167,7 @@ describe('credential cleanup invite reaper', () => {
   })
 
   it('still expires credentials the sweep owns, and only those past their deadline', async () => {
-    // The reaper runs after the sweep in the same call, so this pins that adding it did not
-    // displace any of the five state transitions the sweep is there for.
+    // Reaper follows sweep; ensure all five prior transitions still run.
     const database = await openInMemoryRelayDatabase()
     const store = new RelayCredentialStore(database, () => NOW)
     await insertInvite(database, {
@@ -244,16 +243,12 @@ describe('credential cleanup invite reaper', () => {
   })
 
   it('reaps connection bases whose deadline passed over a day ago, and nothing else', async () => {
-    // Retention is measured on deadline, and both readers of a basis require deadline >= now, so a
-    // deadline a day in the past is already unusable however the active flag reads. The active = 0
-    // clause is what keeps the batch an index range, not what makes the row safe to delete.
+    // Passed deadlines make bases unusable regardless of active flag; active=0 provides an index range, not deletion safety.
     const database = await openInMemoryRelayDatabase()
     const store = new RelayCredentialStore(database, () => NOW)
     await insertBasis(database, { id: 'stale-inactive', active: 0, deadline: NOW - 2 * DAY_MS })
     await insertBasis(database, { id: 'recent-inactive', active: 0, deadline: NOW - 60_000 })
-    // A long-lived splice: still active hours after the 30s deadline it was created with. The
-    // sweep deactivates it this cycle and the reaper takes it in the same call, which is safe
-    // precisely because no reader would have accepted it since its deadline passed.
+    // Sweep deactivates this long-lived splice and reaps it immediately; no reader accepts its already-expired basis.
     await insertBasis(database, { id: 'stale-active', active: 1, deadline: NOW - 400 * DAY_MS })
     await insertBasis(database, { id: 'live-active', active: 1, deadline: NOW + DAY_MS })
 
@@ -342,26 +337,52 @@ describe('credential cleanup invite reaper', () => {
   })
 
   it('still replays a confirm result inside retention', async () => {
-    // The one reader: a retried confirm on the same basis gets the stored answer back.
     const database = await openInMemoryRelayDatabase()
-    const store = new RelayCredentialStore(database, () => NOW)
-    await database.query(
-      `INSERT INTO relay_confirm_results
-       (user_id, relay_host_id, req_id, basis_conn_id, tuple_json, result_json, committed_at)
-       VALUES (?, ?, 'confirm-1', 'basis-1', '{}', ?, ?)`,
-      [identity.userId, identity.relayHostId, JSON.stringify({ v: 1, reqId: 'confirm-1' }), NOW - DAY_MS]
-    )
-
-    await store.cleanup()
-
-    expect(
-      await store.confirmResume({
+    let now = NOW - DAY_MS
+    const store = new RelayCredentialStore(database, () => now)
+    try {
+      const invite = await store.createInvite(identity, 'device-1')
+      const reservation = await store.reserveCredential(identity.relayHostId, invite.inviteToken)
+      if (!reservation) {
+        throw new Error('invite did not reserve')
+      }
+      await store.recordConnectionBasis({
+        ...reservation,
+        basisConnId: 'invite-basis',
+        owningControlGeneration: 1,
+        deadline: reservation.leaseExpiresAt
+      })
+      await store.installCredential({
+        ...identity,
+        relayDeviceId: 'device-1',
+        reqId: 'install-1',
+        newResumeTokenHash: hashCredential('resume-token'),
+        owningControlGeneration: 1,
+        authorization: { mode: 'relay-basis', basisConnId: 'invite-basis' }
+      })
+      const resume = await store.reserveCredential(identity.relayHostId, 'resume-token')
+      if (!resume) {
+        throw new Error('resume did not reserve')
+      }
+      await store.recordConnectionBasis({
+        ...resume,
+        basisConnId: 'resume-basis',
+        owningControlGeneration: 1,
+        deadline: resume.leaseExpiresAt
+      })
+      const request = {
         ...identity,
         reqId: 'confirm-1',
-        basisConnId: 'basis-1',
+        basisConnId: 'resume-basis',
         owningControlGeneration: 1
-      })
-    ).toEqual({ v: 1, reqId: 'confirm-1' })
-    await database.close()
+      }
+      const confirmed = await store.confirmResume(request)
+      expect(confirmed).toMatchObject({ renewed: true, acceptedAs: 'current' })
+      now = NOW
+      await store.cleanup()
+      expect(await store.confirmResume(request)).toEqual(confirmed)
+    } finally {
+      await database.close()
+    }
   })
 })

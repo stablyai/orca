@@ -1,6 +1,4 @@
-// Same detection shape as isMobileGitUnavailable in mobile-git-status.ts:
-// 'forbidden' = method exists but is not mobile-allowlisted on the old
-// desktop; 'method_not_found' = desktop predates the method entirely.
+// Old hosts may refuse methods at the mobile allowlist before dispatch can report method_not_found; accept both.
 export function isMobileMethodUnavailableError(
   code: string | undefined,
   message: string | undefined

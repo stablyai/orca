@@ -1,6 +1,4 @@
-// Desktop parity: `native-chat-disclosure-store`. Where a transcript row's open/closed
-// disclosures live when the row itself may be unmounted: a run or line the reader opened
-// stays open after the list recycles its row and on reload.
+// Store disclosures above recycled transcript rows so opened tools remain open when rows remount.
 
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react'
 import {
@@ -8,14 +6,12 @@ import {
   type MobileNativeChatRootPosition
 } from './mobile-native-chat-scroll-roots'
 
-/** Where the reader left an opened run's own scroll box. */
 export type MobileNativeChatRunScroll = MobileNativeChatRootPosition
 
 export type MobileNativeChatDisclosureStore = {
   read: (key: string) => boolean | undefined
   write: (key: string, open: boolean) => void
-  /** By the run's disclosure key, and forgotten when that run closes. A plain map, not state:
-   *  scrolling a run must not re-render the transcript. */
+  // Keep scroll offsets outside React state so scrolling a run cannot rerender the transcript.
   runScroll: Map<string, MobileNativeChatRunScroll>
   roots: MobileNativeChatScrollRoots
 }
@@ -23,7 +19,6 @@ export type MobileNativeChatDisclosureStore = {
 export const MobileNativeChatDisclosureContext =
   createContext<MobileNativeChatDisclosureStore | null>(null)
 
-/** Bounded, so a chat that ran for a day does not carry every disclosure it ever opened. */
 export const MAX_DISCLOSURES = 512
 
 type ScopedDisclosures = {
@@ -43,7 +38,6 @@ function emptyDisclosures(scopeKey: string): ScopedDisclosures {
   }
 }
 
-/** One store per chat: another chat's choices never leak in. */
 export function useMobileNativeChatDisclosures(scopeKey: string): MobileNativeChatDisclosureStore {
   const [state, setState] = useState(() => emptyDisclosures(scopeKey))
   if (state.scopeKey !== scopeKey) {
@@ -53,7 +47,6 @@ export function useMobileNativeChatDisclosures(scopeKey: string): MobileNativeCh
   useLayoutEffect(() => () => roots.dispose(), [roots])
   const write = useCallback(
     (key: string, next: boolean) => {
-      // Forgotten with the run that closed, as desktop does.
       if (!next) {
         roots.forget(key)
       }
@@ -81,7 +74,6 @@ export function useMobileNativeChatDisclosures(scopeKey: string): MobileNativeCh
   )
 }
 
-/** A disclosure remembered under `key` while the transcript provides a store; local otherwise. */
 export function useMobileNativeChatDisclosure(
   key: string | undefined,
   initialOpen: boolean

@@ -24,14 +24,11 @@ function getOpenCodeDatabaseOverride(environment: NodeJS.ProcessEnv): OpenCodeDa
   }
 }
 
-// Why gated: the AI Vault's primary OpenCode source delegates here from inside
-// its discovery fan-out, so a UNC data dir or a UNC OPENCODE_DB on a stalled
-// distro would otherwise hang the whole scan on a raw syscall (STA-4049).
+// Gate UNC access so stalled WSL paths cannot hang the AI Vault discovery fan-out.
 export async function listOpenCodeDatabases(
-  /** Lets a caller report the refusal; an empty list otherwise reads as
-   *  "OpenCode not used" rather than "we could not look". */
+  /** Distinguish refused access from an unused provider. */
   onRefusal?: (path: string, error: WslTranscriptFsError) => void,
-  /** Every other stat/readdir failure, including ENOENT; also read as an empty list. */
+  /** Includes ENOENT; discovery otherwise returns an empty list. */
   onFsError?: (path: string, error: unknown) => void,
   signal?: AbortSignal,
   environment: NodeJS.ProcessEnv = process.env
@@ -89,9 +86,7 @@ function reportFailure(
 }
 
 export function compareOpenCodeClaimPriority(left: string, right: string): number {
-  // Why: the canonical opencode.db is the live database; it must claim
-  // duplicated sessions ahead of stale sibling copies. Remaining ties use
-  // path order so ownership is deterministic across rescans.
+  // Prefer the live canonical database over stale copies; path order breaks remaining ties.
   const leftRank = basename(left).toLowerCase() === 'opencode.db' ? 0 : 1
   const rightRank = basename(right).toLowerCase() === 'opencode.db' ? 0 : 1
   if (leftRank !== rightRank) {

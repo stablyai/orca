@@ -12,7 +12,6 @@ import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-c
 
 const DEFAULT_TITLE = 'Visualization'
 
-/** The quiet reserved space a visual takes while it loads. */
 function MobileNativeChatVisualPlaceholder() {
   return (
     <View style={[styles.frame, styles.placeholder]}>
@@ -21,7 +20,6 @@ function MobileNativeChatVisualPlaceholder() {
   )
 }
 
-/** The transcript's visual renderer for a structured chat's source; null without one. */
 export function useMobileNativeChatVisualRenderer(
   source: MobileNativeChatVisualSource | null
 ): MobileNativeChatVisualRender | null {
@@ -34,7 +32,6 @@ export function useMobileNativeChatVisualRenderer(
   )
 }
 
-/** A `::orca-visual{...}` line in a finished assistant reply, rendered from the chat's host. */
 export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   directive,
   source
@@ -43,7 +40,6 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   source: MobileNativeChatVisualSource
 }) {
   const { state, retry } = useMobileNativeChatVisual(source, directive.file)
-  // A frame that navigated away or kept crashing; cleared by the reader's retry.
   const [frameFailed, setFrameFailed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const title = directive.title ?? DEFAULT_TITLE

@@ -1,15 +1,4 @@
-/**
- * Singleton router for the out-of-band `pty:modelRestoreNeeded` channel
- * (sibling of the pty-dispatcher's data/exit routing — split out to keep the
- * dispatcher under the line limit).
- *
- * Why a dedicated channel + registry: the marker means "main dropped
- * renderer-bound bytes (hidden gate / pending cap); restore from the model
- * snapshot". It must NOT ride the transport data path — an in-band empty
- * chunk is ambiguous with chunks fully consumed by OSC-9999 stripping, and
- * remote-runtime transports (which never see main's gate) must stay
- * structurally unaffected.
- */
+/** Route main’s drop markers outside transport data: empty chunks are ambiguous after OSC stripping, and remote-runtime streams never use main’s gate. */
 import type { PtyModelRestoreNeededEvent } from '../../../../shared/pty-model-restore-marker'
 
 const ptyModelRestoreNeededHandlers = new Map<string, (event: PtyModelRestoreNeededEvent) => void>()
@@ -23,8 +12,7 @@ function ensureModelRestoreNeededChannel(): void {
   if (modelRestoreNeededChannelAttached) {
     return
   }
-  // Why optional-chained: unit tests and the web remote client expose a
-  // partial pty API; missing channel means "no markers", never a throw.
+  // Partial test/web APIs can omit the channel; treat absence as no markers.
   const onModelRestoreNeeded = (globalThis as { window?: Window }).window?.api?.pty
     ?.onModelRestoreNeeded
   if (typeof onModelRestoreNeeded !== 'function') {
@@ -49,9 +37,7 @@ export function registerPtyModelRestoreNeededHandler(
   }
 }
 
-/** Deliver markers fetched over invoke by the delivery watchdog. Same routing
- *  as the push channel — needed because a delivery-heal fires precisely when
- *  `pty:modelRestoreNeeded` push events cannot reach this renderer. */
+/** Route invoke-fetched watchdog markers identically to push events, which may be broken during delivery healing. */
 export function deliverPulledPtyModelRestoreMarkers(
   events: readonly PtyModelRestoreNeededEvent[]
 ): void {

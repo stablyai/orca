@@ -6,15 +6,7 @@ type PtyBinding = { ptyId: string; firstSeenAt: number; lastSeenAt: number }
 const ptyBindingByPaneKey = new Map<string, PtyBinding>()
 const boundaryResolvedAtByPaneKey = new Map<string, number>()
 
-/**
- * Floors the hibernation idle clock at the age of a pane's current PTY binding.
- *
- * Why: `dropHibernatedAgentStatusPane` never notifies main, and main's
- * `lastStatusByPaneKey` is persisted — so a woken or post-restart pane replays an
- * ancient `stateStartedAt` and is instantly past the idle window. A wake spawns a
- * fresh PTY and an app launch starts this map empty, so binding age restores the
- * grace `updatedAt` used to provide by accident.
- */
+/** Floor idle time at the current PTY binding’s age: main persists ancient stateStartedAt across wakes/restarts, so replay alone must not immediately hibernate a fresh pane. */
 export function observeHibernationPtyBindings(args: {
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
@@ -49,9 +41,7 @@ export function observeHibernationPtyBindings(args: {
       }
     }
   }
-  // Why: a transient layout gap already makes the planner fail closed, so dropping
-  // the binding there would hand the same PTY a fresh idle window on reappearance.
-  // Retain unseen entries; expire only on authoritative tab removal or by age.
+  // Layout gaps already fail closed; retain binding age until authoritative removal or expiry to avoid repeated grace resets.
   for (const [paneKey, binding] of ptyBindingByPaneKey) {
     if (seenPaneKeys.has(paneKey)) {
       continue
@@ -63,9 +53,7 @@ export function observeHibernationPtyBindings(args: {
   }
   for (const paneKey of boundaryResolvedAtByPaneKey.keys()) {
     const tabId = paneKey.slice(0, paneKey.indexOf(':'))
-    // Why: closed split panes mint fresh leaf ids when reopened. Once their
-    // retained binding expires, keeping the boundary stamp would leak one map
-    // entry per closed pane for the renderer's lifetime.
+    // Closed splits reopen with fresh leaf IDs; expire boundary stamps with retained bindings to avoid a lifetime leak.
     if (!liveTabIds.has(tabId) || !ptyBindingByPaneKey.has(paneKey)) {
       boundaryResolvedAtByPaneKey.delete(paneKey)
     }
@@ -80,12 +68,7 @@ export function getHibernationPtyBindingFirstSeenAtByPaneKey(): Record<string, n
   return out
 }
 
-/**
- * Stamped synchronously by the status store when a session-boundary `done` turns
- * into a real completion. Sampling this on the 60s coordinator tick would miss a
- * boundary written and cleared between two samples, leaving the pane on its
- * ancient anchor.
- */
+/** Stamp the real completion boundary synchronously; a 60s coordinator sample could miss a boundary written and cleared between ticks. */
 export function recordHibernationBoundaryResolved(paneKey: string, now: number): void {
   if (paneKey) {
     boundaryResolvedAtByPaneKey.set(paneKey, now)

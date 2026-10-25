@@ -16,7 +16,6 @@ import { isFileExistsErrorMessage } from './mobile-session-route-helpers'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalCreateActionsModel } from './use-mobile-session-terminal-create-actions'
 
-/** The tab sheet names the method it wants; each one is a separate operation on the same policy. */
 const BROWSER_NAVIGATION_COMMANDS = {
   'browser.back': browserGoBack,
   'browser.forward': browserGoForward,
@@ -91,7 +90,7 @@ export function useMobileSessionContentCreateActions(
     if (!client || creatingBrowser) {
       return false
     }
-    // Why: read via ref so a tap before the capability probe resolves (or a stale callback) still sees the live value.
+    // Read capability via ref so pre-probe taps and old callbacks see the current host facts.
     if (browserScreencastSupportedRef.current !== true) {
       showToast('Desktop update required for mobile browser streaming', 1600)
       return false
@@ -112,7 +111,6 @@ export function useMobileSessionContentCreateActions(
         {
           worktree: `id:${worktreeId}`,
           url,
-          // The user opened this tab (tapped HTML / address bar) → focus it.
           activate: true
         },
         { timeoutMs: 30_000 }
@@ -121,7 +119,7 @@ export function useMobileSessionContentCreateActions(
         () => sessionBrowserTabCreate.interpret(response),
         ''
       )
-      // Focus the new browser tab once it syncs; refresh a few times since the desktop registers the tab asynchronously.
+      // Poll briefly for async host registration before focusing the new browser tab.
       if (created.browserPageId) {
         pendingBrowserFocusPageIdRef.current = created.browserPageId
       }
@@ -138,7 +136,6 @@ export function useMobileSessionContentCreateActions(
       setCreatingBrowser(false)
     }
   }
-  // Keep the ref at the latest handleCreateBrowser so a terminal URL tap always runs the current closure.
   handleCreateBrowserRef.current = handleCreateBrowser
 
   async function handleBrowserNavigationCommand(

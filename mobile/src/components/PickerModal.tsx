@@ -67,8 +67,7 @@ function PickerModalContent<T extends string = string>({
   onLongSelect,
   onClose
 }: PickerModalContentProps<T>) {
-  // Why: closed BottomDrawer instances return null, so keeping option rows in
-  // this child avoids rebuilding hidden picker contents on every parent render.
+  // Put option rows in shown child; closed BottomDrawer returns null, avoiding hidden-content rebuilds on parent renders.
   return (
     <View style={styles.group}>
       {options.map((opt, i) => {

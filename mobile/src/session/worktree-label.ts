@@ -1,5 +1,4 @@
-// Why: worktree ids encode `repo::path`; screens that only receive the id
-// (deep links, route params without a name) still need a human label.
+// Deep links may provide only a repo::path id; derive a readable label from it.
 export function getWorktreeLabel(name: string | undefined, worktreeId: string): string {
   if (name?.trim()) {
     return name.trim()

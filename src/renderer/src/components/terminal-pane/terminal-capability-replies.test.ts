@@ -157,7 +157,6 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     expect(withSixelDa1Attribute('\x1b[?1;2c')).toBe('\x1b[?1;2;4c')
     expect(withSixelDa1Attribute('\x1b[?61;4c')).toBe('\x1b[?61;4c')
     expect(withSixelDa1Attribute('\x1b[?62;4;9;22c')).toBe('\x1b[?62;4;9;22c')
-    // Leaves anything that is not a DA1 response untouched.
     expect(withSixelDa1Attribute('\x1b[0m')).toBe('\x1b[0m')
   })
 

@@ -1,9 +1,4 @@
-/**
- * #26887 on the managed-server path: after the network to an orcad-managed SSH host drops and
- * comes back, a pane running an idle full-screen program shows the program's current frame. The
- * program changes its frame while the client is away and then goes quiet, the way an agent ends
- * its turn during a laptop sleep, so no later byte can heal the pane — only the reconnect can.
- */
+// #26887: change a managed SSH full-screen frame while disconnected, then go idle so only reconnect can repair the stale client frame.
 import { expect, test } from './helpers/orca-app'
 import { readPairedPaneContent } from './helpers/paired-host-terminal'
 import { startFreezableTcpProxy, type FreezableTcpProxy } from './helpers/freezable-tcp-proxy'

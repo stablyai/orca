@@ -1,0 +1,44 @@
+// COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+import type { ComponentProps, ReactNode } from 'react'
+import type { Button } from '../ui/button'
+import type { LocalAgentRuntime } from './CliSkillRuntimeSetup'
+
+type AgentSkillSetupPanelVariant = 'card' | 'inline'
+type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
+
+export type WslAgentSkillSetupPanelProps = {
+  title: string
+  description: ReactNode
+  command: string
+  installedCommand?: string
+  terminalTitle: string
+  terminalAriaLabel: string
+  terminalWorktreeId: string
+  installed: boolean
+  loading: boolean
+  error: string | null
+  installDisabled?: boolean
+  terminalHeightPx?: number
+  terminalShellOverride?: string
+  terminalRuntime?: LocalAgentRuntime
+  leading?: ReactNode
+  icon?: ReactNode
+  variant?: AgentSkillSetupPanelVariant
+  className?: string
+  hideHeader?: boolean
+  preInstallNotice?: ReactNode
+  getPrerequisiteStatus?: () => Promise<SkillPrerequisiteStatus>
+  isPrerequisiteAvailable?: (status: SkillPrerequisiteStatus) => boolean
+  onBeforeOpenTerminal?: () => void | Promise<void>
+  showInstallWhenInstalled?: boolean
+  showRecheckWhenInstalled?: boolean
+  installLabel?: string
+  installedInstallLabel?: string
+  installVariant?: ComponentProps<typeof Button>['variant']
+  actionHint?: ReactNode
+  openingHint?: ReactNode
+  footer?: ReactNode
+  onRecheck: () => void | Promise<unknown>
+  // Freshness inventory is local-host-only.
+  freshnessSkillName?: string
+}

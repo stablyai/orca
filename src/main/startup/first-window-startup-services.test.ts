@@ -143,8 +143,7 @@ describe('startFirstWindowStartupServices', () => {
       await vi.advanceTimersByTimeAsync(FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
       await expect(started.firstWindowReady).resolves.toBeUndefined()
 
-      // Why: opening the PTY gate before the daemon attempt finishes would
-      // spawn non-restorable LocalPtyProvider fallback terminals (#5232).
+      // Opening before daemon startup settles would create non-restorable fallback terminals (#5232).
       expect(ptyGateOpened).toBe(false)
       expect(daemonSignal?.aborted).toBe(false)
       expect(onDaemonError).not.toHaveBeenCalled()

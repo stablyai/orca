@@ -1,14 +1,10 @@
-// A client's mirror of the host's status feed: the latest summary per session. The desktop and
-// the phone fold the stream with these, so they agree on what a frame changes and on what losing
-// contact takes away.
+// Share desktop/phone status folding so frames and contact loss have the same meaning.
 
 import type { AgentSessionStatusEvent, AgentSessionStatusSummary } from './agent-session-wire'
 
 export type AgentSessionStatusSnapshot = ReadonlyMap<string, AgentSessionStatusSummary>
 
-/** The mirror after one frame; `end` leaves it as it is. A snapshot merges over what is held: a
- *  restarted host restores its readable sessions asynchronously, so its first snapshot can be
- *  empty, and dropping those rows would flicker every one to no status. */
+/** Merge snapshots: restarting hosts restore asynchronously and may first publish empty. Dropping retained rows would flicker; end changes nothing. */
 export function foldAgentSessionStatusEvent(
   snapshot: AgentSessionStatusSnapshot,
   event: AgentSessionStatusEvent
@@ -28,8 +24,7 @@ export function foldAgentSessionStatusEvent(
   return snapshot
 }
 
-/** With contact lost, what only a live host vouches for goes: its execution, and a Stop it was
- *  ending. The rest is kept, since losing contact is never exit. `snapshot` itself if unchanged. */
+/** Contact loss removes live host execution/Stop claims only; retain everything else because disconnect is no proof of exit. Preserve identity if unchanged. */
 export function revokeAgentSessionStatusLive(
   snapshot: AgentSessionStatusSnapshot
 ): AgentSessionStatusSnapshot {

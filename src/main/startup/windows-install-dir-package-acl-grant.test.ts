@@ -26,13 +26,10 @@ function unexpected(): never {
   throw new Error('the package grant must only read DACLs and call grantAccessAsync')
 }
 
-/** The addon wrapper namespaces every path; tests compare against the paths they wrote. */
+/** Normalize addon namespaced paths for comparison with fixture paths. */
 const plain = (path: string) => (path.startsWith('\\\\?\\') ? path.slice(4) : path)
 
-/**
- * Installs a fake addon that only reads DACLs and grants, and returns the grants it saw.
- * Directories in `protectedDirs` read back protected; everything else inherits.
- */
+/** Fake grants/DACL reads; only protectedDirs refuse inheritance. */
 function installFakeAddon(
   fail: (path: string) => boolean = () => false,
   protectedDirs: string[] = []
@@ -102,7 +99,7 @@ describe('install-dir package grant passes', () => {
     }
   })
 
-  // An inheriting directory already has the root's grant; re-granting it re-propagates its subtree.
+  // Re-granting inherited directories redundantly propagates entire subtrees.
   it('grants a directory only when its own DACL is protected, inheritably', async () => {
     const shielded = join(installDir, 'resources', 'app.asar.unpacked')
     const calls = installFakeAddon(() => false, [shielded])
@@ -178,8 +175,7 @@ describe('install-dir package grant passes', () => {
     })
   })
 
-  // The Win32 security APIs fail with error 123 past MAX_PATH; the loader adds the escape once
-  // through the host's toNamespacedPath, which is the identity off Windows.
+  // Windows security APIs need extended-length paths beyond MAX_PATH; the host wrapper namespaces once.
   it.runIf(process.platform === 'win32')(
     'reaches a path past MAX_PATH through the extended-length prefix',
     async () => {

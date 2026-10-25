@@ -265,8 +265,7 @@ describe('artifact sharing denial', () => {
   })
 })
 
-// Why: the renderer decides between "reload the host", "re-adopt", and "stop offering
-// the action" from this code; flattened to runtime_error it can only guess.
+// Clients need distinct owner-conflict codes to choose reload, re-adopt or stop offering the action.
 describe('automation owner conflicts', () => {
   it.each(Object.values(AUTOMATION_OWNER_CONFLICT_CODES))(
     'passes %s through structured',
@@ -327,8 +326,7 @@ describe('structured worker dispatch preamble errors', () => {
 describe('thrown agent-session refusals', () => {
   const meta = { runtimeId: 'runtime-1' }
 
-  // Released clients classify a thrown refusal by its wire code and message; both must read
-  // exactly as the bare `Error(code)` this replaced.
+  // Released clients match both wire code and message; preserve the prior bare Error(code) contract.
   it.each([
     [
       'agent_session_ownership_unknown',
@@ -377,7 +375,6 @@ describe('thrown agent-session refusals', () => {
     })
   })
 
-  // The shape every client test of a thrown refusal feeds in, pinned to what this produces.
   it("sends a journal refusal's reason where a client reads it", () => {
     const response = mapRuntimeError(
       'req_1',

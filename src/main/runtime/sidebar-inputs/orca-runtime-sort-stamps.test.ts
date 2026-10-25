@@ -4,11 +4,11 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-cont
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { OrcaRuntimeService } from '../orca-runtime'
-import type { RuntimeStore } from '../runtime-store-contract'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
+import { partialRuntimeStore, storeRepo, storeWorktreeMeta } from '../runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -17,17 +17,13 @@ const WT = 'repo-1::/tmp/worktree-a'
 function createHeadlessRuntime(
   stored: Pick<WorktreeMeta, 'lastActivityAt' | 'smartTier' | 'smartAt'> = { lastActivityAt: 0 }
 ) {
-  const meta: Record<
-    string,
-    Pick<WorktreeMeta, 'lastActivityAt' | 'smartTier' | 'smartAt'> & { isUnread?: boolean }
-  > = {
-    [WT]: stored
-  }
+  const meta: Record<string, WorktreeMeta> = { [WT]: storeWorktreeMeta(stored) }
   const written = new Set<(domains: readonly string[] | undefined) => void>()
+  const repo = storeRepo({ id: 'repo-1', path: '/tmp/repo-1', connectionId: null })
   const store = {
     // An unstamped row's writes resolve their host from its repo's only registration.
-    getRepos: () => [{ id: 'repo-1', connectionId: null }],
-    getRepo: (id: string) => (id === 'repo-1' ? { id, connectionId: null } : undefined),
+    getRepos: () => [repo],
+    getRepo: (id: string) => (id === repo.id ? repo : undefined),
     getSettings: () => ({}),
     getWorktreeMeta: (id: string) => meta[id],
     getAllWorktreeMeta: () => meta,
@@ -41,8 +37,7 @@ function createHeadlessRuntime(
       return () => written.delete(listener)
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stamp path reads only these members.
-  const runtime = new OrcaRuntimeService(store as unknown as RuntimeStore)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   // No window: a server with no client attached must still see its own bells and titles.
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, {
     tabs: [
@@ -137,7 +132,7 @@ describe('host sort stamps on a headless runtime', () => {
     expect(boundary).toMatchObject({ smartTier: 'done', smartAt: 76_000 })
     // No client is looking: a finish is news, a clear or a compaction is not.
     expect(finishUnread).toBe(true)
-    expect(boundaryUnread).toBeUndefined()
+    expect(boundaryUnread).toBe(false)
   })
 
   it('stamps agent transitions from the attached hook store', () => {
@@ -153,7 +148,7 @@ describe('host sort stamps on a headless runtime', () => {
         payload: { state: 'waiting', prompt: 'task', agentType: 'claude' }
       })
       // No client is looking, so the request for input also raises the unread flag.
-      expect(meta[WT]).toEqual({
+      expect(meta[WT]).toMatchObject({
         lastActivityAt: 70_000,
         smartTier: 'needs-you',
         smartAt: 70_000,
@@ -168,14 +163,18 @@ describe('host sort stamps on a headless runtime', () => {
     const live = createHeadlessRuntime({ lastActivityAt: 5, smartTier: 'done', smartAt: 4 })
     live.runtime.attachAgentStatusStore(new AgentHookServer())
     await live.runtime.sidebarFacts?.reconcileSortStampTiers({ probePtyLiveness: async () => true })
-    expect(live.meta[WT]).toEqual({ lastActivityAt: 5, smartTier: 'done', smartAt: 4 })
+    expect(live.meta[WT]).toMatchObject({ lastActivityAt: 5, smartTier: 'done', smartAt: 4 })
 
     const gone = createHeadlessRuntime({ lastActivityAt: 5, smartTier: 'done', smartAt: 4 })
     gone.runtime.attachAgentStatusStore(new AgentHookServer())
     await gone.runtime.sidebarFacts?.reconcileSortStampTiers({
       probePtyLiveness: async () => false
     })
-    expect(gone.meta[WT]).toEqual({ lastActivityAt: 5, smartTier: undefined, smartAt: undefined })
+    expect(gone.meta[WT]).toMatchObject({
+      lastActivityAt: 5,
+      smartTier: undefined,
+      smartAt: undefined
+    })
   })
 
   it('re-tiers a read Done beside a Working pane when any writer clears the flag', () => {

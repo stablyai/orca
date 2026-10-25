@@ -18,17 +18,11 @@ import type {
 const HOST = 'host-1'
 const WORKTREE = 'repo42::/p'
 
-/** The commit list reads its reconnect handle through the context `client-context.tsx` keeps. */
 export const sourceControlScreenReadMountExposures: readonly OperationExposure[] = [
   hostClientContextExposure
 ]
 
-/**
- * The four source-control reads whose replies no other adapter observes: the Changes screen's
- * status and branch compare, the history list's per-commit file list, and the committed-diff
- * preview. Each is mounted through the hook or screen that owns it rather than through the sender,
- * because the reply these operations return is only visible in what the owner then publishes.
- */
+// Mount reply owners so recordings observe published state rather than sender return values.
 export function sourceControlScreenReadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -40,8 +34,7 @@ export function sourceControlScreenReadMountAdapters(
         'mobile/src/source-control/use-mobile-source-control-loaders.ts'
       ).useMobileSourceControlLoaders
       let loaders: ReturnType<typeof useLoaders>
-      // Stable across renders: the hook's mount effect keys on the callbacks it was handed, so a
-      // fresh closure per render would re-send the status load and hide the settled state.
+      // Keep callbacks stable; new identities would retrigger status loading and hide settled state.
       const reportActionError = (message: string | null): void =>
         effect('source-control.action-error', { message })
       const reportStatusLoadSuccess = (): void => effect('source-control.status-load-success', {})
@@ -68,8 +61,7 @@ export function sourceControlScreenReadMountAdapters(
           }
           throw new Error(`Unknown changes load action: ${name}`)
         },
-        // The branch compare is loaded by the status load, not by an action, so both states are
-        // projected together: a status reply the reader rejects never reaches the compare at all.
+        // Project status and compare together because a refused status read prevents the compare load.
         state: () => ({
           screenState: loaders?.screenState ?? 'unmounted',
           branchCompareState: loaders?.branchCompareState ?? 'unmounted'
@@ -116,17 +108,14 @@ export function sourceControlScreenReadMountAdapters(
             return screen.unmount()
           }
           if (name === 'expand') {
-            // An inert FlatList never calls `renderItem`, so expanding a commit means rendering one
-            // row through the screen's own callback and calling the handler it put on it.
+            // The inert FlatList never renders rows; invoke the handler from the screen’s own renderItem.
             return performHookAction(() => pressFirstCommit(screen.tree()))
           }
           throw new Error(`Unknown history commit action: ${name}`)
         },
         state: () => ({
           ...projectMountedScreen(screen),
-          // The commit-compare reply is only ever drawn inside a row, so the row is rendered
-          // through the screen's own callback and read back. Without it the file list is
-          // unobservable and the operation has no oracle.
+          // Render the first row to observe its otherwise-hidden commit file list.
           commitRow: projectFirstCommitRow(screen.tree())
         }),
         dispose: screen.unmount
@@ -170,8 +159,7 @@ export function sourceControlScreenReadMountAdapters(
           }
           throw new Error(`Unknown branch diff action: ${name}`)
         },
-        // The highlighted lines are a rendering of the diff, not an observation of the reply, so the
-        // preview is projected by what it is and how much it carried.
+        // Observe displayed diff content without coupling the recording to syntax highlighting.
         state: () => ({ preview: projectBranchDiffPreview(openers?.branchDiffPreview) }),
         dispose: hook.unmount
       }
@@ -186,7 +174,6 @@ const BRANCH_ENTRY = mountFixture<MobileGitBranchChangeEntry>({
   removed: 1
 })
 
-/** A compare the screen has already loaded, which is the precondition the diff open guards on. */
 const BRANCH_COMPARE_READY: MobileBranchCompareState = {
   kind: 'ready',
   result: mountFixture<MobileGitBranchCompareReply>({
@@ -208,7 +195,16 @@ function projectBranchDiffPreview(preview: MobileBranchDiffPreviewState | null):
     return 'unopened'
   }
   if (preview.kind === 'ready') {
-    return { kind: 'ready', lines: preview.lines.length, truncated: preview.truncated }
+    return {
+      kind: 'ready',
+      lines: preview.lines.map(({ kind, text, oldLineNumber, newLineNumber }) => ({
+        kind,
+        text,
+        oldLineNumber,
+        newLineNumber
+      })),
+      truncated: preview.truncated
+    }
   }
   return preview.kind === 'error'
     ? { kind: 'error', message: preview.message }
@@ -218,7 +214,6 @@ function projectBranchDiffPreview(preview: MobileBranchDiffPreviewState | null):
 type RenderedRow = { props?: { onPress?: () => void; children?: unknown } }
 type CommitList = { data?: unknown; renderItem?: (row: { item: unknown }) => unknown }
 
-/** The copy the first commit row carries, which is where an expanded commit's files are drawn. */
 function projectFirstCommitRow(tree: unknown): unknown {
   const row = renderFirstCommit(tree)
   if (!row) {
@@ -229,7 +224,6 @@ function projectFirstCommitRow(tree: unknown): unknown {
   return text
 }
 
-/** The first commit row the list rendered, pressed through the handler the screen gave it. */
 function pressFirstCommit(tree: unknown): void {
   const press = findPressHandler(renderFirstCommit(tree))
   if (!press) {
@@ -238,10 +232,7 @@ function pressFirstCommit(tree: unknown): void {
   press()
 }
 
-/**
- * One row, built by the list's own `renderItem`. An inert FlatList never calls it, so this is the
- * only way either to reach a row's handler or to read what it drew.
- */
+// The inert FlatList never calls renderItem; build the row to read its copy or invoke its handler.
 function renderFirstCommit(tree: unknown): unknown {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both members are read back optionally and guarded below; FlatList props are whatever the screen passed.
   const list = renderedElementProps(tree, 'FlatList')[0] as CommitList | undefined
@@ -250,7 +241,6 @@ function renderFirstCommit(tree: unknown): unknown {
   return typeof render === 'function' && rows.length > 0 ? render({ item: rows[0] }) : null
 }
 
-/** The strings an unmounted element tree would draw, in render order. */
 function collectElementText(node: unknown, text: string[]): void {
   if (typeof node === 'string') {
     text.push(node)
@@ -273,7 +263,6 @@ function collectElementText(node: unknown, text: string[]): void {
   collectElementText((node as RenderedRow).props?.children, text)
 }
 
-/** First `onPress` in a rendered-but-unmounted element, depth first. */
 function findPressHandler(node: unknown): (() => void) | null {
   if (Array.isArray(node)) {
     for (const child of node) {

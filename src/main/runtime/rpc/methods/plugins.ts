@@ -14,16 +14,9 @@ import {
   PluginsPanelActionParams
 } from '../../../../shared/rpc-contract/plugins-params'
 
-/**
- * Serve/headless parity surface: the same consent, enablement, panel-action,
- * and command paths the desktop IPC handlers expose, over runtime RPC. Both
- * routes execute through PluginService's single chokepoint, so a permission
- * decision can never differ between a local window and a paired client.
- */
+/** Expose desktop IPC's plugin consent/actions over serve/headless RPC through the same PluginService permission boundary. */
 
-// Why: RpcContext only carries the OrcaRuntimeService, and plugins are a
-// separate composition-root service — inject via module setter the way the
-// desktop entry wires it, instead of widening the shared RPC context type.
+// Inject the separate composition-root PluginService without widening shared RpcContext.
 let pluginServiceForRpc: PluginService | null = null
 // Consent/enablement need the settings Store too, so the entry injects bound
 // closures instead of the store itself.
@@ -54,8 +47,7 @@ async function listForRpc(): Promise<PluginListEntry[]> {
 }
 
 function rpcPanelOwner(context: RpcContext): string {
-  // Why: the bearer session must not cross paired-client connections even
-  // when two sockets authenticate as the same device.
+  // Bind bearer sessions to individual paired connections, even for sibling sockets of one device.
   return `runtime:${context.connectionId ?? context.clientId ?? 'local'}`
 }
 
@@ -73,8 +65,7 @@ export const PLUGIN_METHODS = [
     handler: async () => listForRpc()
   }),
   defineMethod({
-    // Why: headless serve has no consent dialog — an explicit consent call is
-    // the only way a pending plugin becomes active on a server.
+    // Headless servers have no dialog; only explicit consent can activate a pending plugin.
     name: 'plugins.consent',
     permission: 'host-admin',
     params: pluginConsentRequestSchema,
@@ -103,13 +94,10 @@ export const PLUGIN_METHODS = [
     }
   }),
   defineMethod({
-    // Why: headless serve clients relay panel bridge requests over RPC, so
-    // capability enforcement must live behind this method too, not only in
-    // the desktop IPC handler.
+    // Enforce panel capabilities here too because headless clients relay bridge calls over RPC.
     name: 'plugins.panelAction',
     permission: 'host-admin',
-    // Why: raw admission must run before strict schema parsing so malformed
-    // and oversized traffic cannot bypass the panel budget.
+    // Apply raw admission before strict parsing so malformed/oversize traffic still consumes panel budget.
     params: PluginsPanelActionParams,
     handler: async (params, context) => {
       const service = requirePluginService()

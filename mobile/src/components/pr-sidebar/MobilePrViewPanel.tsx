@@ -20,9 +20,7 @@ type Props = {
   workspaceLabel: string | null
 }
 
-// Chromeless PR sidebar body for the source-control hub's Pull Request segment.
-// The hub owns the header, segmented control, load triggers, and the shared
-// controller (one fetch feeds both the branch-card chip and this body).
+// Hub owns PR header/segments/load/controller; one fetch feeds branch chip and chromeless sidebar body.
 export function MobilePrViewPanelBody({
   client,
   connState,

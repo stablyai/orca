@@ -25,8 +25,7 @@ describe('TabGroupPanel context menu id resolution', () => {
   ]
 
   it('resolves terminal and browser entity ids to their unified tab ids', () => {
-    // Why: terminal/browser context menu callbacks emit backing entity ids, but
-    // closeOthers/closeToRight must receive the unified tab id.
+    // Translate terminal/browser entity IDs into the unified IDs required by group close actions.
     expect(resolveGroupTabFromVisibleId(groupTabs, 'terminal-entity-1')?.id).toBe(
       'unified-terminal-1'
     )
@@ -36,8 +35,7 @@ describe('TabGroupPanel context menu id resolution', () => {
   })
 
   it('resolves editor unified tab ids without falling back to the file entity id only', () => {
-    // Why: editor tabs can have multiple visible tabs for one file. The menu
-    // emits the visible unified id so split groups close the selected copy.
+    // Editor menus identify split copies by unified ID because file entity IDs are shared.
     expect(resolveGroupTabFromVisibleId(groupTabs, 'unified-editor-1')?.id).toBe('unified-editor-1')
   })
 

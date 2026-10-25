@@ -70,6 +70,7 @@ describe('browserManager', () => {
     const guest = {
       id: 405,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -94,6 +95,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about shortcut forwarding.
+    rendererSendMock.mockClear()
 
     const beforeInputHandler = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-input-event'
@@ -103,9 +106,7 @@ describe('browserManager', () => {
 
     expect(beforeInputHandler).toBeTypeOf('function')
 
-    // Why: on Linux, Ctrl is the shortcut modifier, so Ctrl+R is the reload
-    // shortcut (not a readline chord). Only test Ctrl+R as a readline passthrough
-    // on macOS where Cmd is the modifier and Ctrl+R is genuinely a readline chord.
+    // Ctrl+R is a readline chord only on macOS; other platforms use it for reload.
     const readlineChords = [
       ...(process.platform === 'darwin'
         ? [
@@ -163,6 +164,7 @@ describe('browserManager', () => {
     const guest = {
       id: 406,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -187,6 +189,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about shortcut forwarding.
+    rendererSendMock.mockClear()
 
     const beforeInputHandler = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-input-event'
@@ -286,6 +290,15 @@ describe('browserManager', () => {
         control: !isDarwin,
         alt: false,
         shift: true
+      },
+      {
+        type: 'keyDown',
+        code: isDarwin ? 'KeyY' : 'KeyH',
+        key: isDarwin ? 'y' : 'h',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
       }
     ]
 
@@ -313,6 +326,9 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:hardReloadBrowserPage', {
       browserPageId: 'browser-1'
     })
+    expect(rendererSendMock).toHaveBeenNthCalledWith(11, 'ui:showBrowserHistory', {
+      browserPageId: 'browser-1'
+    })
   })
 
   it('uses customized keybindings when forwarding browser guest shortcuts', () => {
@@ -322,6 +338,7 @@ describe('browserManager', () => {
     const guest = {
       id: 407,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -352,6 +369,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about shortcut forwarding.
+    rendererSendMock.mockClear()
 
     const beforeInputHandler = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-input-event'
@@ -426,6 +445,7 @@ describe('browserManager', () => {
     const guest = {
       id: 407,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -450,6 +470,8 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    // Registration also reports audio state; this test is about shortcut forwarding.
+    rendererSendMock.mockClear()
 
     const beforeInputHandler = guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-input-event'
@@ -484,7 +506,7 @@ describe('browserManager', () => {
       }
     )
 
-    // Why: keydown must not preventDefault or Electron drops the commit keyup.
+    // Preventing keydown loses the commit keyup in Electron.
     expect(keyDownPreventDefault).not.toHaveBeenCalled()
     expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })
@@ -496,6 +518,7 @@ describe('browserManager', () => {
     const guest = {
       id: 408,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,

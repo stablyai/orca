@@ -1,11 +1,4 @@
-/**
- * A provider can run every command in a login shell: Codex runs `<shell> -lc <command>`. The login
- * profile rebuilds PATH — macOS's path_helper, a user's profile — so the directory Orca prepended
- * ends up behind a global install, and bare `orca` becomes that install, possibly an older Orca.
- * `ORCA_CLI_COMMAND` names this app's launcher by absolute path, which no startup file can reorder.
- * The zsh arm lives in `structured-session-cli-login-shell.live-shell.test.ts`, in the real-shell
- * lane that installs zsh.
- */
+/** Login profiles can put global Orca ahead on PATH; absolute ORCA_CLI_COMMAND must still reach this app. zsh runs in the real-shell lane. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {

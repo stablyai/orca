@@ -21,11 +21,7 @@ type ListItemContext = {
   parentItemType: ListItemTypeName | null
 }
 
-/**
- * Why: bullet and task lists nest into each other, so trying `listItem` first
- * and falling back to `taskItem` picks the wrong node — the command walks up to
- * any ancestor of that type and acts on *it*, mangling the surrounding list.
- */
+/** Resolve the nearest list/task item; trying one type first can act on an ancestor and corrupt mixed nesting. */
 function resolveListItemContext(editor: Editor): ListItemContext | null {
   const { $from } = editor.state.selection
   let found: { itemType: ListItemTypeName; itemDepth: number } | null = null
@@ -52,10 +48,7 @@ export function outdentRichMarkdownListItem(editor: Editor): boolean {
   if (!context) {
     return false
   }
-  // Why: the schema forbids a listItem sibling inside a taskList (and vice
-  // versa), so a mixed nest cannot lift as-is — prosemirror-schema-list would
-  // silently lift the item *out* of its list, dropping its marker entirely.
-  // Retype the item to match the list it is about to join, then lift normally.
+  // Retype mixed items before lifting or schema-list lifts them out of their list and drops the marker.
   if (context.parentItemType && context.parentItemType !== context.itemType) {
     splitListBeforeCursorItem(editor)
     retypeListAtCursor(editor, context.parentItemType)
@@ -64,11 +57,7 @@ export function outdentRichMarkdownListItem(editor: Editor): boolean {
   return editor.commands.liftListItem(context.itemType)
 }
 
-/**
- * Why: retyping is a whole-list operation, so peel the cursor's item (and the
- * siblings that will follow it out) into their own list first — items staying
- * behind must keep their original marker.
- */
+/** Split out lifted items before whole-list retyping so remaining siblings retain their markers. */
 function splitListBeforeCursorItem(editor: Editor): void {
   const context = resolveListItemContext(editor)
   if (!context) {
@@ -95,8 +84,7 @@ function retypeListAtCursor(editor: Editor, target: ListItemTypeName): void {
     return
   }
 
-  // Why: retyping the list and its items in separate steps would leave an
-  // intermediate doc the schema rejects, so swap the whole subtree at once.
+  // Replace the subtree atomically because separately retyping list/items creates schema-invalid intermediate states.
   const itemType = state.schema.nodes[target]
   const items = list.children.map((item) => itemType.create(null, item.content, item.marks))
   const retyped = state.schema.nodes[LIST_TYPE_FOR_ITEM[target]].create(
@@ -105,8 +93,7 @@ function retypeListAtCursor(editor: Editor, target: ListItemTypeName): void {
     list.marks
   )
   const tr = state.tr.replaceWith(listPos, listPos + list.nodeSize, retyped)
-  // Why: replaceWith treats the old subtree as deleted, collapsing the cursor to
-  // the range edge — the retype is size-preserving, so restore it verbatim.
+  // Size-preserving retyping deletes/reinserts the subtree; restore selection rather than keeping replaceWith’s collapsed cursor.
   tr.setSelection(TextSelection.create(tr.doc, from, to))
   editor.view.dispatch(tr)
 }

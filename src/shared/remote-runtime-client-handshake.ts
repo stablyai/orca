@@ -4,7 +4,7 @@ import {
 } from './paired-e2ee-client-handshake'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from './paired-e2ee-node-primitives'
 import { serializeRemoteRuntimePayload } from './remote-runtime-memory-limits'
-import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
+import { parseRemoteRuntimeJsonText } from './remote-runtime/requests/remote-runtime-request-frames'
 
 export type RemoteRuntimeHandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
@@ -22,8 +22,7 @@ export function createRemoteRuntimeClientHandshake(
   })
 }
 
-// Why: the auth step is async, so the socket can close or be replaced before the frame is
-// sealed; `stillAwaiting` is re-checked then, and a seal failure goes to `fail`.
+// Async auth sealing may outlive socket close/replacement; recheck stillAwaiting before send and route sealing errors to fail.
 export async function sendRemoteRuntimeTokenAuth(args: {
   handshake: PairedE2EEClientHandshake
   deviceToken: string

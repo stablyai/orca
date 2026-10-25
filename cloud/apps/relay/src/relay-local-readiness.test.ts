@@ -55,13 +55,13 @@ describe('local readiness verdict', () => {
     })
     verdict()
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise<void>((resolve) => setImmediate(resolve))
     verdict()
     expect(reload).toHaveBeenCalledTimes(2)
   })
 })
 
-// E-dep-3 in miniature: the database is down from boot, so it never enters a grace window.
+// Boot-down database never earns a grace window (E-dep-3).
 describe('cell /ready with the database down', () => {
   const servers: Server[] = []
   afterEach(async () => {

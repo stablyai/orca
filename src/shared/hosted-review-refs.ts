@@ -23,7 +23,6 @@ export function isRemoteHeadRef(ref: string, remotes: readonly string[] = []): b
   if (remote) {
     return shortRef.slice(remote.length + 1) === 'HEAD'
   }
-  // A stale ref whose remote is no longer configured is unambiguous only in
-  // the conventional two-component `<remote>/HEAD` shape.
+  // Unconfigured stale remotes are unambiguous only as <remote>/HEAD.
   return shortRef.split('/').length === 2 && shortRef.endsWith('/HEAD')
 }

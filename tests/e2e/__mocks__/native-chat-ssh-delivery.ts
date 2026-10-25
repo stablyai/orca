@@ -10,6 +10,7 @@ import {
   writeUnverifiable,
   type WriteSettlement
 } from '../../../src/shared/pty-write-settlement'
+import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { createPtyWriteInput } from '../../../src/main/ipc/pty/ipc/write-input'
 import type { IPtyProvider } from '../../../src/main/providers/pty-provider-contract'
 import type * as PtyProviderRegistry from '../../../src/main/ipc/pty/provider/registry'
@@ -45,11 +46,17 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
       : null
 }))
 
+type SettlingPtyProvider = Omit<IPtyProvider, 'write'> & {
+  write: (id: string, data: string) => boolean
+  hasPty: (id: string) => boolean
+  dispose: () => void
+}
+
 /** A remote PTY owner whose write acknowledgments settle per `mode`, like a host transport. */
 function createSettlingProvider(
   bytes: string[],
   mode: 'accepted' | 'lost' | 'slow'
-): IPtyProvider & { hasPty: (id: string) => boolean; dispose: () => void } {
+): SettlingPtyProvider {
   const timers = new Set<ReturnType<typeof setTimeout>>()
   const settleAfter = (ms: number, settlement: WriteSettlement): Promise<WriteSettlement> =>
     new Promise((resolve) => {
@@ -82,7 +89,7 @@ function createSettlingProvider(
       }
       timers.clear()
     }
-  } as unknown as IPtyProvider & { hasPty: (id: string) => boolean; dispose: () => void }
+  } as unknown as SettlingPtyProvider
 }
 
 export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted') {
@@ -93,7 +100,7 @@ export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted
   io.getProvider = () => provider
   const input = createPtyWriteInput({})
   const id = 'ssh:connection@@pty-1'
-  ptyOwnership.set(id, 'connection')
+  ptyOwnership.set(id, toSshExecutionHostId('connection'))
   vi.stubGlobal('window', {
     api: {
       pty: {

@@ -5,6 +5,7 @@ import type { OrchestrationCallerIdentity } from '../../../orchestration/orchest
 import { MESSAGE_TYPES } from '../../../orchestration/types'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../../../orchestration/db'
+import { isDispatchMutationMessageType, parseMessageTaskId } from './schemas'
 
 export function parseMessageTypes(rawTypes: string | undefined): MessageType[] | undefined {
   const types = rawTypes
@@ -26,6 +27,7 @@ export function resolveMessageRun(
     to?: string
     runId?: string
     payload?: string
+    type?: string
   }
 ): { run: RunRow | undefined; dispatchId: string | undefined } {
   const db = runtime.getOrchestrationDb()
@@ -45,6 +47,7 @@ export function resolveMessageRun(
       // Lifecycle validation owns malformed payload errors; routing simply cannot derive a Dispatch.
     }
   }
+  const payloadNamesDispatch = dispatchId !== undefined
   if (!dispatchId && params.to?.startsWith('dispatch:')) {
     dispatchId = params.to.slice('dispatch:'.length)
   }
@@ -59,6 +62,11 @@ export function resolveMessageRun(
     )
   }
   const targetRunId = params.to?.startsWith('run:') ? params.to.slice('run:'.length) : undefined
+  for (const namedRunId of new Set([params.runId, targetRunId])) {
+    if (namedRunId) {
+      rejectRemotelyHomedRun(db, namedRunId)
+    }
+  }
   const resolvedRunId = params.runId ?? targetRunId ?? dispatch?.run_id
   let run = resolvedRunId ? db.getRun(resolvedRunId) : undefined
 
@@ -76,6 +84,31 @@ export function resolveMessageRun(
       'dispatch_run_mismatch',
       `Dispatch ${dispatch.id} belongs to Run ${dispatch.run_id}, not ${run.id}.`
     )
+  }
+  // Payload/lifecycle Dispatch scopes mail; lifecycle validation checks Task/Dispatch mismatch.
+  if (
+    run &&
+    !params.to &&
+    !params.runId &&
+    !(dispatch && (payloadNamesDispatch || isDispatchMutationMessageType(params.type)))
+  ) {
+    const taskId = parseMessageTaskId(params.payload)
+    const task = taskId ? db.getTask(taskId) : undefined
+    // Nested coordinators reporting child-Run Tasks still reach their parent.
+    const senderCoordinatesTaskRun =
+      dispatch !== undefined &&
+      task?.run_id != null &&
+      db.runsBoundToCoordinator(params.sender).some((bound) => bound.id === task.run_id)
+    if (task?.run_id && task.run_id !== run.id && !senderCoordinatesTaskRun) {
+      // Offer Dispatch-bound senders only their own Run; another would fail dispatch_run_mismatch.
+      const nextStep = dispatch
+        ? `rerun with --run ${run.id} to send to your Dispatch ${dispatch.id}'s Run.`
+        : `rerun with --run ${task.run_id} to reach the Task's Run, or --run ${run.id} to keep the inferred Run.`
+      throw new OrchestrationError(
+        'task_run_mismatch',
+        `Task ${task.id} belongs to Run ${task.run_id}, not the inferred Run ${run.id}. Nothing was sent; ${nextStep}`
+      )
+    }
   }
   return { run, dispatchId: dispatch?.id ?? dispatchId }
 }
@@ -108,7 +141,7 @@ export function legacyWorkerDeliveryContract(
 export function interruptedAcknowledgedCheck(
   runId: string,
   acknowledged: string,
-  reason: 'consumer_fenced' | 'outcome_unknown' | 'waiter_exists'
+  reason: 'consumer_fenced' | 'outcome_unknown'
 ): Record<string, unknown> {
   return {
     runId,
@@ -123,8 +156,38 @@ export function interruptedAcknowledgedCheck(
   }
 }
 
-export function rejectFederatedExplicitTarget(params: { to?: string; run?: string }): void {
-  if (params.to || params.run) {
+/** Remote Run rows are local mirrors; mail stored there reaches nobody (#32292). */
+export function rejectRemotelyHomedRun(
+  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
+  runId: string
+): void {
+  if (db.getRun(runId)?.home_database === 'remote') {
+    throw remoteRunHomeUnreachable(db, runId)
+  }
+}
+
+export function remoteRunHomeUnreachable(
+  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
+  runId: string
+): OrchestrationError {
+  const dispatchId = db.findRemoteAttachmentForHomeRun(runId)?.dispatch_id
+  const detached = dispatchId
+    ? `this terminal is no longer attached to its Dispatch ${dispatchId}`
+    : 'this terminal is not attached to one of its Dispatches'
+  return new OrchestrationError(
+    'run_home_unreachable',
+    `Run ${runId} lives on the computer that coordinates it, which isn't reachable from here: ${detached}. Nothing was sent.`
+  )
+}
+
+/** A federated worker reaches only its Run home; naming that home is the same as omitting it. */
+export function rejectFederatedExplicitTarget(
+  params: { to?: string; run?: string },
+  homeRunId: string
+): void {
+  const namesOnlyHome =
+    (!params.to || params.to === `run:${homeRunId}`) && (!params.run || params.run === homeRunId)
+  if (!namesOnlyHome) {
     throw new OrchestrationError(
       'invalid_argument',
       'Federated Dispatch messages route to their Run home; omit --to and --run.'

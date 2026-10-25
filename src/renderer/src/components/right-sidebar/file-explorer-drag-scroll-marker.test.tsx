@@ -115,8 +115,7 @@ function virtualRowsElement(
 }
 
 describe('file explorer draggable rows carry the wheel-scroll marker', () => {
-  // Why: every draggable row must be tagged so the wheel-capture handler can
-  // rescue trackpad scroll that Chromium otherwise swallows over draggable nodes.
+  // Tag draggable rows so wheel capture can rescue scrolling swallowed by Chromium.
   it('marks file and directory rows so the wheel handler can target them', async () => {
     const container = await renderToBody(virtualRowsElement([fileNode, directoryNode]))
 
@@ -183,10 +182,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
     }
   )
 
-  // A selection outlives the rows that showed it: nothing prunes selectedPaths
-  // when a directory collapses, and the drag still carries every selected path.
-  // Resolving only against visible rows refused a drag whose owner the cache
-  // knows perfectly well.
+  // Collapsed selections still drag; recover ownership from cache when visible rows omit them.
   it('stamps a selection that reaches under a collapsed directory', async () => {
     const owner = { kind: 'local' } as const
     const collapsedChild: TreeNode = {
@@ -212,7 +208,6 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
       },
       '/repo/src': { children: [collapsedChild], operationOwner: owner }
     }
-    // `expanded` is empty, so /repo/src is collapsed and a.ts is not a row.
     const projection = createVisibleFileExplorerRowProjection(
       { dirCache, expanded: new Set<string>(), worktreePath: '/repo' },
       {
@@ -244,8 +239,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
     })
   })
 
-  // The virtualizer re-renders on every scroll frame; a per-render owner scan
-  // over the whole selection would be paid on each of them.
+  // Virtualized rows rerender every scroll frame; avoid scanning selection ownership on each one.
   it('resolves drag ownership at dragstart, not while rendering rows', async () => {
     const localNode: TreeNode = { ...fileNode, operationOwner: { kind: 'local' } }
     const otherNode: TreeNode = { ...directoryNode, operationOwner: { kind: 'local' } }
@@ -280,7 +274,7 @@ function HandlersProbe({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElemen
   capturedHandlers = useFileExplorerHandlers({
     activeWorktreeId: 'wt-1',
     runtimeEnvironmentId: null,
-    openWorkspaceFile: vi.fn(),
+    openFile: vi.fn(),
     makePreviewFilePermanent: vi.fn(),
     toggleDir: vi.fn(),
     loadDir: vi.fn(),

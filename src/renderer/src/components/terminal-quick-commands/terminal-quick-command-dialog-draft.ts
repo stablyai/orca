@@ -67,8 +67,7 @@ export function switchTerminalQuickCommandDialogAction(
     scope: getTerminalQuickCommandScope(draft)
   }
 
-  // Why: action modes are independent editors; toggling should not transform
-  // terminal command text into an agent prompt, or the reverse.
+  // Action modes retain independent drafts; switching must not convert command text into an agent prompt.
   if (action === 'agent-prompt') {
     return {
       memory: nextMemory,

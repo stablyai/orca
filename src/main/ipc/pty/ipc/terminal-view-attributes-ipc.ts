@@ -1,4 +1,4 @@
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import {
   getTerminalViewerColors,
   seedTerminalViewerColors,
@@ -15,8 +15,7 @@ export function installTerminalViewAttributesIpc(
 ): void {
   setTerminalViewerColorsListener(publishColorQueryReplyColors)
   const settings = session.getSettings?.()
-  // Why seed from settings: a headless host may never hear from a viewer, and a desktop pane
-  // can query before the first push lands; either way the owner should answer with the saved theme.
+  // Answer with saved theme before any viewer push, including headless hosts that may never get one.
   if (settings) {
     seedTerminalViewerColors(
       resolveConfiguredTerminalColors(settings, session.options?.systemPrefersDark?.() ?? true)
@@ -29,7 +28,7 @@ export function installTerminalViewAttributesIpc(
   const ipcMain = getPtyIpc()
   ipcMain.removeAllListeners('pty:terminalViewAttributes')
   ipcMain.on('pty:terminalViewAttributes', (_event, args: unknown) => {
-    // Why validate-or-drop: a malformed palette would give TUIs a wrong color reply.
+    // Malformed palettes would give TUIs incorrect color replies.
     const attributes = validateTerminalViewAttributes(args)
     if (attributes) {
       setTerminalViewAttributes(attributes)

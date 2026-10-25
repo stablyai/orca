@@ -6,7 +6,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
-import { TEST_LEAF_1, TEST_LEAF_2, TEST_LEAF_LIVE } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2, TEST_LEAF_LIVE } from '../persistence-session-fixtures'
 import { DelayedAuthority } from '../loading-store/profile-state-delayed-authority-fixture'
 import { Store } from '../loading-store/store'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
@@ -19,7 +19,6 @@ vi.mock('../../ssh/config/ssh-config-parser', () => ({
   sshConfigHostsToTargets: () => []
 }))
 
-// Off = the binding write as it was before the report-only check.
 const check = vi.hoisted(() => ({ enabled: true, throws: false, calls: 0 }))
 vi.mock('../../../shared/workspace-layout/terminal-owner-invariants', async (importOriginal) => {
   const actual = await importOriginal<typeof OwnerInvariants>()
@@ -78,7 +77,6 @@ function layout(ptyIdsByLeafId: Record<string, string>): TerminalLayoutSnapshot 
   }
 }
 
-/** Local holds a saved STA-9417 duplicate (`pty-setup` in two tabs) and a folder-workspace tab. */
 function seededProfile(): string {
   const state = buildProfileStateCutoverFixture()
   const local: WorkspaceSessionState = {
@@ -103,7 +101,7 @@ function seededProfile(): string {
   }
   return JSON.stringify({
     ...state,
-    // A fixed install id: load mints a random one when it is missing.
+    // Avoid random load-minted IDs in persistence comparisons.
     settings: {
       ...state.settings,
       telemetry: { existedBeforeTelemetryRelease: true, optedIn: null, installId: 'install-1' }
@@ -135,21 +133,15 @@ async function openStore() {
 type Binding = { worktreeId: string; tabId: string; leafId: string; ptyId: string }
 
 const BINDINGS: [Binding, string?][] = [
-  // Clean fresh spawn into a new local tab.
   [{ worktreeId: LOCAL_WT, tabId: 'tab-new', leafId: LEAF_NEW, ptyId: 'pty-new' }],
-  // STA-9417 again: the setup PTY bound to a second minted tab.
   [{ worktreeId: LOCAL_WT, tabId: 'tab-minted-2', leafId: LEAF_MINTED_2, ptyId: 'pty-setup' }],
-  // STA-9259: a moved leaf rebound under a second tab.
   [{ worktreeId: LOCAL_WT, tabId: 'tab-moved', leafId: TEST_LEAF_2, ptyId: 'pty-moved' }],
-  // Folder workspace rebind with a fresh PTY.
   [{ worktreeId: FOLDER_WT, tabId: 'tab-folder', leafId: TEST_LEAF_LIVE, ptyId: 'pty-folder-2' }],
-  // Relay reattach writes the ssh: pane into `local` under the same tab:leaf: one surface.
+  // Duplicate partitions of the same relay tab:leaf remain one surface.
   [{ worktreeId: REMOTE_WT, tabId: 'tab-ssh', leafId: LEAF_SSH, ptyId: SSH_PTY }],
-  // A second ssh: leaf on the relay PTY.
   [{ worktreeId: REMOTE_WT, tabId: 'tab-ssh-2', leafId: LEAF_SSH_2, ptyId: SSH_PTY }, SSH_HOST]
 ]
 
-/** Every write the store makes, as bytes, and the final profile, for one run of the bindings. */
 async function runBindings(enabled: boolean) {
   check.enabled = enabled
   const { store, authority, inner, close } = await openStore()
@@ -198,7 +190,6 @@ describe('report-only terminal owner check', () => {
       .map((record) => record.attributes['binding.owner_conflict'])
     const withoutCheck = await runBindings(false)
 
-    // Precondition: the check ran and saw every breach the bindings made.
     expect(reported).toEqual([
       'pty_bound_to_other_leaf',
       'leaf_in_other_tab',
@@ -208,7 +199,7 @@ describe('report-only terminal owner check', () => {
     expect(withCheck.saved).toContain('tab-minted-2')
     expect(withCheck.writes).toEqual(withoutCheck.writes)
     expect(withCheck.saved).toEqual(withoutCheck.saved)
-    // Load leaves saved breaches in place: the duplicate and folder tab load as they were.
+    // Report-only loading must preserve the saved duplicate and folder tab.
     expect(withCheck.loaded.tabsByWorktree).toMatchObject({
       [LOCAL_WT]: [{ id: 'tab-b' }, { id: 'tab-minted' }],
       [FOLDER_WT]: [{ id: 'tab-folder' }]

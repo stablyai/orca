@@ -1,8 +1,4 @@
-/**
- * Whether a Windows host has an sftp subsystem is a fact about that host, so the cache is keyed by
- * the endpoint that executes rather than by Orca's target id — otherwise a hardened host is
- * re-probed once per file, and two targets pointing at one machine learn the same fact twice.
- */
+/** Cache by execution endpoint so target re-creation and duplicate target rows share host facts. */
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import {
@@ -22,7 +18,6 @@ describe('getWindowsRemoteWriteExecutionHostKey', () => {
     const first = asTarget({ id: 'a', host: 'win.example', username: 'dev', port: 22 })
     const second = asTarget({ id: 'b', host: 'win.example', username: 'dev', port: 22 })
 
-    // A target re-created under a new id has not changed what the host supports.
     expect(getWindowsRemoteWriteExecutionHostKey(first)).toBe(
       getWindowsRemoteWriteExecutionHostKey(second)
     )
@@ -72,7 +67,6 @@ describe('getWindowsRemoteWriteCapabilities', () => {
 
     capabilities.rememberUnsupported('pwsh')
 
-    // No PowerShell 7 says nothing about whether the host will serve sftp.
     expect(capabilities.shouldTry('sftp-subsystem')).toBe(true)
     expect(capabilities.shouldTry('pwsh')).toBe(false)
   })

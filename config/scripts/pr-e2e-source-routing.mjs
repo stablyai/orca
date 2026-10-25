@@ -133,6 +133,16 @@ export const PR_E2E_SOURCE_ROUTES = [
           file
         ))
   },
+  {
+    id: 'ssh.orcad-update-anyway',
+    specs: ['tests/e2e/ssh-orcad-update-anyway.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/(?:ssh\/orcad-(?:update-plan|runtime-maintenance|installed-activation|remote-deploy)|managed-server\/lifecycle\/orcad-(?:managed-update-|managed-auto-update|runtime-status))|renderer\/src\/components\/settings\/(?:managed-server-|use-managed-server-lifecycle))/.test(
+          file
+        ))
+  },
   // COMPAT(legacy-relay-bridge): revisit 2027-01-15 with src/main/ssh/legacy-relay/.
   {
     id: 'ssh.orcad-legacy-relay-bridge',
@@ -228,6 +238,16 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    id: 'ssh.orcad-sleep-disconnected',
+    specs: ['tests/e2e/ssh-orcad-sleep-disconnected.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/(?:sleep-|workspace-sleep-))/.test(
+          file
+        ))
+  },
+  {
     id: 'ssh.orcad-idle-exit',
     specs: ['tests/e2e/ssh-orcad-idle-exit.spec.ts'],
     matches: (file) =>
@@ -238,8 +258,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
-    // Why: managed SSH hosts are now the only SSH path, so these specs carry its user journeys.
-    // Connect/Disconnect sources too: the journeys disconnect and reconnect a managed host (#30130).
+    // Managed SSH is the only SSH path; include Connect/Disconnect so journeys exercise reconnect (#30130).
     id: 'ssh.orcad-journeys',
     specs: [
       'tests/e2e/ssh-orcad-terminal-journeys.spec.ts',
@@ -275,6 +294,17 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
         /^src\/main\/(?:persistence\/migrating-orcad-catalog\/orcad-source-(?:draft-rename|workspace-session|session-copy-resolution|export)|ssh\/orcad-migration-source-retention|ipc\/ssh\/ssh)\.ts$/.test(
+          file
+        ))
+  },
+  {
+    // A saved managed tunnel port that can no longer be bound moves to a free one (#33182).
+    id: 'ssh.orcad-unbindable-tunnel-port',
+    specs: ['tests/e2e/ssh-orcad-unbindable-tunnel-port.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/managed-server\/lifecycle\/orcad-managed-tunnel|main\/ssh\/system-transport\/system-ssh-forward-port-reservation|shared\/runtime-environment-(?:sidecar|managed-orcad-store))/.test(
           file
         ))
   },
@@ -338,11 +368,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
-    // Why a route beside terminal-input.ime-and-synthetic-forwarding rather than more specs on
-    // it: that route selects the CDP-synthetic specs, which drive composition through
-    // Input.imeSetComposition and so prove Orca's handling without an input method existing.
-    // This one names the surface only a real ibus-hangul session can judge, and is the sole
-    // trigger that puts the real-IME lane on a PR.
+    // CDP Input.imeSetComposition proves synthetic handling without an IME; this separate route alone selects the real ibus-hangul lane.
     id: 'terminal-ime.native-input-method',
     specs: ['tests/e2e/terminal-ibus-hangul-native.spec.ts'],
     matches: (file) =>
@@ -378,20 +404,13 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
-    // Why a route of its own: every other terminal-pane route names what BINDS a pane — the pty
-    // transports, the ssh reconnect ledgers, the park watchers. Nothing named what unbinds one,
-    // so the close/retire lifecycle reached main with e2e skipped outright. Unbinding is the half
-    // that can strand a PTY or leave a retired leaf mounted as a blank pane.
-    //
-    // Deliberately absent: src/renderer/src/runtime/runtime-rpc-client.ts, the transport these
-    // retirements call out through. It carries no close decision and churns ~3x these files, so
-    // routing on it would run this lane on unrelated runtime work.
+    // Route unbind/retirement as well as binders: missed lifecycle edges can strand PTYs or leave blank mounted leaves.
+    // Omit runtime-rpc-client.ts: it makes no close decision and churns ~3x as often, triggering unrelated work.
     id: 'terminal-pane.close-and-retirement',
     specs: [
       // Closing a tab whose pane is parked (never mounted) must retire that exact PTY.
       'tests/e2e/terminal-parked-close-retirement.spec.ts',
-      // Closing one leaf of a split must leave root leaves, leaf→pty bindings, and live panes
-      // agreeing — the ghost-blank-pane shape a bad unbind produces.
+      // Split-leaf close must preserve agreement among root leaves, leaf-to-PTY bindings and live panes to prevent ghost blanks.
       'tests/e2e/terminal-pane-close-layout-consistency.spec.ts',
       // The runtime half: a leaf the host retires must stop being mounted on a paired client.
       'tests/e2e/paired-remote-split-pane-host-retired-ghost.spec.ts'
@@ -431,8 +450,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
-    // Why: layout resolution is the only place a split direction can be invented, and the
-    // loss is one-way — the guess is published and written back over the real tree.
+    // Layout resolution can invent split directions; publishing the guess overwrites the original tree irreversibly.
     id: 'terminal-session.split-orientation-resolution',
     specs: ['tests/e2e/desktop-published-split-orientation-legacy-leaf.spec.ts'],
     matches: (file) =>
@@ -451,11 +469,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
-    // Why: the host's row for a client-rendered page only exists across two real Electron
-    // apps, so this spec is the only gate on it. The high-churn seams it also rides
-    // (ipc/runtime, useIpcEvents, preload) are left out deliberately: routing on those runs a
-    // two-app e2e on most PRs, and their client-hosted share is already covered by the
-    // main-process integration test.
+    // Client-rendered host rows need two real Electron apps; omit high-churn ipc/runtime/useIpcEvents/preload seams covered by main-process integration.
     id: 'client-hosted-browser.host-strip',
     specs: ['tests/e2e/paired-client-hosted-browser-host-strip.spec.ts'],
     matches: (file) =>
@@ -463,11 +477,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       /^src\/.*(?:[Cc]lient-?[Hh]osted-?[Bb]rowser|BrowserPaneOverlayLayer)/.test(file)
   },
   {
-    // Why a second, wider pattern: restart survival breaks from seams that never say
-    // "client-hosted" - page adoption, the host lease/reconciliation plan, the session-tab
-    // snapshot the client culls rows against. orca-runtime.ts is included despite its churn: it
-    // publishes the snapshot flag the client holds its rows on, and no narrower path names that
-    // seam.
+    // Restart survival also depends on adoption, lease/reconciliation and tab snapshots; include orca-runtime.ts despite churn because it publishes the hold flag.
     id: 'client-hosted-browser.restart-survival',
     specs: ['tests/e2e/paired-client-hosted-browser-restart-survival.spec.ts'],
     matches: (file) =>
@@ -510,6 +520,7 @@ export function selectPrE2eSpecs(
         (file.startsWith('tests/e2e/helpers/') &&
           [...specs].some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX))) ||
         file === '.github/workflows/e2e.yml' ||
+        file === '.github/scripts/prepare-ubuntu-apt.sh' ||
         file === 'config/scripts/ci-e2e-job-selection.mjs'
     )
   ) {
@@ -521,8 +532,7 @@ export function selectPrE2eSpecs(
 /** Routes whose authorities a real input method can judge, and so require the native IME lane. */
 export const NATIVE_IME_SOURCE_ROUTE_IDS = ['terminal-ime.native-input-method']
 
-// Why derived from the routes: the native lane must trigger on IME source, not on the native
-// spec surviving in some route's spec list.
+// Derive native-IME triggers from source routes, independent of whether a route still lists the native spec.
 export function hasNativeImeSourceChange(changedPaths) {
   return PR_E2E_SOURCE_ROUTES.filter((route) =>
     NATIVE_IME_SOURCE_ROUTE_IDS.includes(route.id)

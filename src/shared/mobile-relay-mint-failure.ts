@@ -1,7 +1,4 @@
-/**
- * Structured failure when an Anywhere (Orca Relay) pairing mint cannot attach Relay.
- * Returned instead of silently degrading to a LAN-only QR under the Relay label.
- */
+/** Anywhere mint failure; never silently replace the Relay offer with a LAN-only QR. */
 export type MobileRelayMintFailureStage =
   | 'provider_missing'
   | 'e2ee_missing'

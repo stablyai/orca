@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { drawShape, textInkBox } from './markup-shape-render'
 import { HIGHLIGHT_ALPHA, type MarkupShape } from './markup-drawing-model'
 
-// Minimal recording stand-in for CanvasRenderingContext2D — drawShape only uses
-// this subset, so we can assert the dispatch without a real canvas.
+// Record the context subset drawShape uses without requiring a real canvas.
 function makeRecordingCtx() {
   const calls: { method: string; args: unknown[] }[] = []
   const record =

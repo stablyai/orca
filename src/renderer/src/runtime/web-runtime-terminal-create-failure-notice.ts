@@ -1,11 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-/**
- * The user asked for a terminal and the host never mirrored one, so no pane exists to show why.
- * "Couldn't confirm" stays true when the reply was lost and the terminal appears later; the reason
- * carries the host's refusal or the transport failure as reported. No retry: it could duplicate.
- */
+// No mirrored pane can show create errors. “Couldn’t confirm” remains accurate if a lost reply’s terminal later appears; report host/transport reason without retrying and risking duplicates.
 export function notifyWebRuntimeTerminalCreateFailure(
   reason: string,
   scope: { environmentId: string | null; worktreeId: string }

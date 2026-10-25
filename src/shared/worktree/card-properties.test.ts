@@ -68,7 +68,6 @@ describe('getWorktreeCardDetails', () => {
       })
     ).toMatchObject({
       compactCards: false,
-      // The new card style keeps a meta row but uses the title chip for the repo.
       repoInTitle: true,
       metaRow: true,
       host: true,

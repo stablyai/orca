@@ -20,6 +20,9 @@ export type TerminalOutputFrameChunk = {
   opcode?: TerminalStreamOpcode
 }
 
+/** `span` only for subscribers that decode OutputSpan (the multiplex); `text` is the opcode-1 encoding every client reads. */
+export type TerminalOutputFrameEncoding = 'span' | 'text'
+
 export const TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS = 8 * 1024
 const MAX_UTF8_BYTES_PER_CODE_UNIT = 3
 
@@ -49,16 +52,22 @@ export function exceedsTerminalStreamChunkBytes(data: string): boolean {
 
 export function* iterateTerminalOutputFrameChunks(
   data: string,
-  meta?: TerminalOutputMeta
+  meta: TerminalOutputMeta | undefined,
+  encoding: TerminalOutputFrameEncoding
 ): Generator<TerminalOutputFrameChunk> {
   const rawLength = meta?.rawLength ?? data.length
-  if (meta?.transformed || rawLength !== data.length) {
+  const isSpan = meta?.transformed === true || rawLength !== data.length
+  if (isSpan && encoding === 'span') {
     yield {
       opcode: TerminalStreamOpcode.OutputSpan,
       bytes: encodeTerminalStreamJson({ data, rawLength, transformed: true }),
       displayLength: data.length,
       seq: meta?.seq
     }
+    return
+  }
+  if (isSpan && !data) {
+    // Why: a fully stripped span has no text, and a text frame has no field for its raw length.
     return
   }
   if (!exceedsTerminalStreamChunkBytes(data)) {
@@ -69,17 +78,15 @@ export function* iterateTerminalOutputFrameChunks(
     }
     return
   }
-  const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
-  // Unreachable past the OutputSpan branch above (rawLength === data.length there), but kept
-  // as defence in depth: it is the only shape that can carry a seq the chunk offsets can't map.
+  const canPreserveChunkSeq = typeof meta?.seq === 'number' && !isSpan
+  // A span sent as text: chunk offsets can't map back to its raw sequence.
   const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta?.seq === 'number'
   const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
   let chunkStart = 0
   let chunkBytes = 0
   let delayedChunk: { text: string; seq?: number } | null = null
 
-  // Why two offsets instead of an accumulator: the emitted text is always the contiguous
-  // substring from chunkStart to end. Keep the legacy addition order for unsafe sequence values.
+  // Emit contiguous substrings; retain legacy addition order for unsafe sequence values.
   const takeChunk = (end: number): { text: string; seq?: number } => {
     const text = data.slice(chunkStart, end)
     const current = {
@@ -109,8 +116,7 @@ export function* iterateTerminalOutputFrameChunks(
       partBytes = 4
       width = 2
     }
-    // Why chunkBytes > 0: keeps a code point wider than the whole cap in its own frame
-    // instead of splitting an empty one forever.
+    // A code point wider than the cap must occupy one frame; splitting an empty chunk would loop forever.
     if (chunkBytes > 0 && chunkBytes + partBytes > TERMINAL_STREAM_CHUNK_BYTES) {
       const nextChunk = takeChunk(index)
       if (shouldDelayFinalSeq) {
@@ -135,7 +141,7 @@ export function* iterateTerminalOutputFrameChunks(
   // A split always advances past its boundary, so the tail after the loop is never empty.
   const finalChunk = takeChunk(data.length)
   if (shouldDelayFinalSeq) {
-    // Why: only the final frame can safely carry the high-water mark when rawLength can't map back to UTF-16 offsets.
+    // Unmappable raw lengths may carry high-water only on the final frame.
     if (delayedChunk) {
       yield {
         bytes: encodeTerminalStreamText(delayedChunk.text),

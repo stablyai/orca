@@ -194,18 +194,15 @@ describe('runtime environment store', () => {
       pairingCode: pairingCode()
     })
 
-    // First use persists (lastUsedAt started null).
     markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 1_000 })
     expect(listEnvironments(userDataPath)[0]).toMatchObject({
       lastUsedAt: 1_000,
       runtimeId: 'runtime-1'
     })
 
-    // A second use shortly after, same runtime, is skipped — lastUsedAt stays put.
     markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 5_000 })
     expect(listEnvironments(userDataPath)[0]!.lastUsedAt).toBe(1_000)
 
-    // Once the throttle window elapses, it persists again.
     markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 61_000 })
     expect(listEnvironments(userDataPath)[0]!.lastUsedAt).toBe(61_000)
   })

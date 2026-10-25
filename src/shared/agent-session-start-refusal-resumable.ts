@@ -1,10 +1,6 @@
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
 
-/**
- * Whether a refused start leaves the chat anything to start again from. `false`: this host has
- * nothing to restart it from — no record, or none it can run — so only a new chat continues.
- * A new wire code does not compile until it is classified here.
- */
+/** False means no runnable stored chat remains, so only a new chat continues. Classify every new wire code before compilation succeeds. */
 export const START_REFUSAL_RESUMABLE: Record<AgentSessionWireRefusalCode, boolean> = {
   execution_owner_reconciling: true,
   agent_session_conflict: true,

@@ -1,13 +1,5 @@
-/**
- * Records a live agent CLI session through a real PTY into a test fixture, bytes intact.
- *
- * Why a PTY and not `agy | tee`: a pipe is not a terminal, so the CLI renders its
- * non-interactive path — no alternate screen, no caret, no dialogs. The detector under
- * test only ever sees the PTY shape, so that is the only shape worth capturing.
- *
- * Nothing here strips escapes, folds CRs, or rewraps lines: the transcript is written
- * exactly as the terminal received it. See docs/reference/agent-pty-transcript-capture.md.
- */
+// Capture real interactive CLI PTY bytes unchanged: pipes omit alternate screen/caret/dialog behavior.
+// Preserve escapes/CRs/wrapping for detectors; usage in docs/reference/agent-pty-transcript-capture.md.
 import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -79,8 +71,7 @@ function parseArgs(argv) {
   return { options, command }
 }
 
-// String.fromCharCode, not a literal: the formatter rewrites an escape sequence into a raw
-// control byte in source, which is unreadable and survives badly in diffs.
+// Construct control byte at runtime or formatter embeds unreadable raw escapes in source diffs.
 const ESC = String.fromCharCode(27)
 const SEND_ESCAPES = { r: '\r', n: '\n', t: '\t', e: ESC, '\\': '\\' }
 
@@ -165,9 +156,7 @@ ${String(error)}`
   let recording = true
   term.onData((chunk) => {
     const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
-    // Why recording stops before the kill: an agent repaints an idle frame on its way out, so
-    // a transcript that keeps writing through shutdown ends on that frame instead of on the
-    // state you stopped to capture. A mid-turn or dialog capture cannot survive that.
+    // Stop recording before kill or shutdown repaint overwrites the dialog/mid-turn frame being captured.
     if (recording) {
       sink.write(bytes)
     }
@@ -199,8 +188,7 @@ ${String(error)}`
     }
     term.write(chunk.toString('binary'))
   })
-  // Why scripted input: a dialog capture has to be driven, and CI (or an agent) has no TTY to
-  // type into. The keystrokes ride the same PTY a human's would, so the capture is unchanged.
+  // Scripted keystrokes use the real PTY when CI/agents have no interactive TTY.
   const sendTimers = options.sends.map((send) => setTimeout(() => term.write(send.text), send.atMs))
   const durationTimer = options.duration === null ? null : setTimeout(stop, options.duration * 1000)
 

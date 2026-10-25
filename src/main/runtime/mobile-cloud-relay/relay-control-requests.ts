@@ -23,13 +23,9 @@ export type RelayControlRequestTimeout = {
   sentAt: number
 }
 
-/** Notified when a request hits its deadline, so liveness can probe the socket. */
 export type OnRelayControlRequestTimeout = (timeout: RelayControlRequestTimeout) => void
 
-// A classification key, not prose: consumers exact-match this against
-// /^relay_[a-z0-9_]{1,74}$/ (src/shared/mobile-relay-mint-failure.ts), so any
-// appended diagnostic downgrades a precise code to the generic fallback.
-// Diagnostics belong in the log — see RelayControlLiveness.noteRequestTimeout.
+// REQUEST_TIMEOUT_CODE is an anchored relay_* classification key; diagnostics belong in liveness logs.
 const REQUEST_TIMEOUT_CODE = 'relay_control_request_timeout'
 
 export type DeviceCredentialInstallAuthorization =
@@ -43,7 +39,6 @@ export type DeviceCredentialInstallInput = {
   authorization: DeviceCredentialInstallAuthorization
 }
 
-/** Every control-plane request this class hands to `send`. */
 type RelayControlRequestPayload =
   | { type: 'invite-create'; reqId: string; relayDeviceId: string }
   | { type: 'device-revoke'; reqId: string; relayDeviceId: string }
@@ -191,7 +186,6 @@ export class RelayControlRequests {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.finish(reqId)
-        // Runs before the reject so the probe observes the socket as the deadline found it.
         this.onTimeout?.({ kind, sentAt })
         reject(new Error(REQUEST_TIMEOUT_CODE))
       }, 10_000)
@@ -210,7 +204,6 @@ export class RelayControlRequests {
     if (pending) {
       clearTimeout(pending.timer)
       this.pending.delete(reqId)
-      // Settle the request before its final waiter retires the owning origin.
       queueMicrotask(() => this.onPendingChanged?.())
     }
   }

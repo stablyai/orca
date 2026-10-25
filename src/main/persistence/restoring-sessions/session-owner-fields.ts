@@ -7,13 +7,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
 
-/**
- * The census fields this path deletes by indexing the owner key.
- *
- * Two classified fields are handled separately below: the topology revision is keyed by repo
- * rather than by owner, so removing one owner advances it instead of dropping it; and the recency
- * map also holds host-qualified keys, so it is scanned rather than indexed.
- */
+// Repo-keyed topology revisions advance rather than delete; host-qualified recency keys need a scan.
 export const OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER =
   SESSION_FIELDS_PRUNED_BY_OWNER_KEY.filter(
     (field) => field !== 'terminalTopologyRevisionByRepoId' && field !== 'lastVisitedAtByWorktreeId'
@@ -46,7 +40,7 @@ export function cloneWorkspaceSessionState(session: WorkspaceSessionState): Work
   return structuredClone(session)
 }
 
-// Owner-keyed deletes only; pane-key-scanned collections live in deleteScannedSessionFieldsForOwners so a batch prune scans each once.
+// Keep owner-indexed deletion separate so batch pruning scans pane-keyed collections only once.
 export function deleteOwnerKeyedSessionFields(
   next: WorkspaceSessionState,
   ownerKey: string,
@@ -81,15 +75,14 @@ export function deleteOwnerKeyedSessionFields(
       delete next.browserPagesByWorkspace[workspace.id]
     }
   }
-  // Driven by the same census the repo-removal path uses, so a field added to the session type
-  // cannot be dropped there and forgotten here -- which is how the client-hosted rows were missed.
+  // Share the removal census so new fields cannot be pruned on only one path.
   for (const field of OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER) {
     const record = next[field] as Record<string, unknown> | undefined
     if (record) {
       delete record[ownerKey]
     }
   }
-  // Scanned, not indexed: this map also holds `${executionHostId}|${worktreeId}` keys.
+  // Include host-qualified executionHostId|worktreeId keys.
   if (next.lastVisitedAtByWorktreeId) {
     for (const key of Object.keys(next.lastVisitedAtByWorktreeId)) {
       const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key

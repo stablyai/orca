@@ -1,5 +1,5 @@
 import { AgentSessionAcquisitionExitUnprovenError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { isCodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
+import { isCodexAppServerHandshakeExitUnprovenError } from './app-server/codex-app-server-handshake-exit-proof'
 import {
   cancelCodexAcquisitionAttempt,
   type CodexAcquisitionAttempt,

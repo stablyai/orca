@@ -35,16 +35,12 @@ import type { OrcadServerRepository } from './orcad-migration-repository-link'
 
 type OrcadCatalogMigrationOperation = 'abort' | 'commit' | 'stage' | 'state'
 
-/**
- * A destination that does not offer catalog migration: an older orcad without the capability or
- * the method. This is a definite refusal; any other failure, including a lost answer, is not, and
- * the caller re-reads the catalog state before deciding anything.
- */
+/** Missing capability/method is definite refusal; other failures require catalog re-read because a lost reply may hide staged state. */
 export const ORCAD_MIGRATION_DESTINATION_UNSUPPORTED = 'orcad_migration_destination_unsupported'
-/** An older destination would strip automations' extra agent arguments, so the move is refused. */
+/** Refuse older destinations that would silently strip extra agent arguments. */
 export const ORCAD_MIGRATION_DESTINATION_EXTRA_AGENT_ARGS_UNSUPPORTED =
   'orcad_migration_destination_extra_agent_args_unsupported:Update Orca on this host to use extra arguments.'
-/** The destination does not parse this manifest's source kind; nothing was sent, so nothing staged. */
+/** Unsupported source kinds are refused before any staging request. */
 export const ORCAD_MIGRATION_DESTINATION_SOURCE_KIND_UNSUPPORTED =
   'orcad_migration_destination_source_kind_unsupported:Update Orca on this host to move this project to it.'
 
@@ -69,7 +65,7 @@ export function stageRemoteOrcadMigrationCatalog(
   return requestCatalogState(pairingCode, 'stage', manifest, options)
 }
 
-/** `expectedBlobs` names what was moved so the destination refuses a commit missing any. */
+/** Expected blobs make the destination refuse incomplete commits. */
 export async function commitRemoteOrcadMigrationCatalog(
   pairingCode: string,
   manifest: OrcadMigrationManifest,
@@ -96,7 +92,7 @@ export async function abortRemoteOrcadMigrationCatalog(
 ): Promise<OrcadMigrationCatalogAbortResult> {
   const result = await request(pairingCode, 'abort', manifest, options)
   const parsed = parseOrcadMigrationCatalogAbortResult(result, manifest)
-  // Older hosts flush real aborts, but their already-absent responses prove no persistence.
+  // Older already-absent replies prove no durability, unlike real aborts.
   if (parsed.state === 'absent' && !parsed.aborted && parsed.durableAbsent !== true) {
     throw new Error('orcad_migration_abort_durability_unverifiable:destination_update_required')
   }
@@ -140,7 +136,7 @@ export async function stageRemoteOrcadMigrationBlobChunk(
     options,
     false,
     null,
-    // Per request: a downgraded destination must refuse the kind, never stage what it can't install.
+    // Recheck every request so a downgraded destination cannot stage an unsupported blob kind.
     (capabilities) => {
       const unsupported = findUnsupportedMigrationBlobKind([request.blob], capabilities)
       if (unsupported) {
@@ -154,7 +150,6 @@ export async function stageRemoteOrcadMigrationBlobChunk(
   return parseOrcadMigrationBlobChunkResult(response.result, request)
 }
 
-/** One `*.list` read of the server's own rows, through the same migration preflight. */
 export async function listServerRows(
   pairingCode: string,
   method: string,
@@ -172,7 +167,7 @@ export async function listServerRows(
   return response.result
 }
 
-// Every orcad's repo.list returns stored rows whole, so a row without host fields is its own.
+// repo.list returns full stored rows; omitted host fields identify server-local repos.
 const ServerRepositoriesSchema = z.object({
   repos: z.array(
     z.object({
@@ -185,7 +180,6 @@ const ServerRepositoriesSchema = z.object({
   )
 })
 
-/** The projects the destination already holds, with the host each one's files are on. */
 export async function listRemoteOrcadRepositories(
   pairingCode: string,
   options: CatalogRequestOptions = {}
@@ -223,10 +217,9 @@ async function request(
   if (!pairing) {
     throw new Error('orcad_migration_pairing_code_invalid')
   }
-  // Only with blobs: SSH and blob-free moves keep sending exactly `{ manifest }`.
+  // Preserve exact { manifest } wire shape for blob-free and SSH moves.
   const params = expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest }
-  // A manifest under the validation cap can still overflow the host's sealed frame (more so with
-  // expectedBlobs); the host would answer by closing the socket, so refuse before sending.
+  // Validation-size limits can exceed sealed-frame capacity; reject before the host closes the socket.
   assertOrcadMigrationRequestFits(params)
   const carriesExtraAgentArgs =
     (operation === 'stage' || operation === 'commit') &&
@@ -239,9 +232,9 @@ async function request(
     params,
     options,
     carriesExtraAgentArgs,
-    // Every operation: an older destination would parse a non-SSH source as malformed or as SSH.
+    // Recheck source capabilities on every operation; older hosts may misparse non-SSH sources.
     requiredOrcadMigrationSourceCapability(manifest.source),
-    // A destination without the blob channel would strip the field and commit unchecked.
+    // Hosts without blob capability would strip expectedBlobs and commit unchecked.
     (capabilities) => {
       const unsupported = findUnsupportedMigrationBlobKind(expectedBlobs, capabilities)
       if (unsupported) {

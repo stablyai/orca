@@ -51,8 +51,6 @@ type BuildArgs = {
   ) => void
 }
 
-// Assembles the per-render context the row dispatcher reads. Plain data — everything in it
-// is either a prop, a memoised hook result, or a stable callback.
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
   return {

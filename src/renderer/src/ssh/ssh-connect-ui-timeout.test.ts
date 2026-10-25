@@ -28,8 +28,7 @@ describe('withUiConnectTimeout', () => {
     await expect(failing).rejects.toThrow('Passphrase rejected')
   })
 
-  // Why: ssh.connect has no timeout of its own, so a stalled backend would otherwise leave
-  // the control disabled with a spinner forever.
+  // Bound UI wait because ssh.connect itself can stall without timeout.
   it('rejects a stalled connect once the UI budget elapses', async () => {
     const stalled = withUiConnectTimeout(new Promise(() => {}))
     const assertion = expect(stalled).rejects.toThrow(/Connection timed out/)
@@ -39,8 +38,7 @@ describe('withUiConnectTimeout', () => {
     await assertion
   })
 
-  // Why: an interactive passphrase alone allows 120s in main, so the reconnect surfaces pass
-  // a longer budget; the default composer budget must not fence them.
+  // Reconnect budget must cover main’s 120s passphrase prompt beyond the shorter composer default.
   it('honours a caller-supplied budget instead of the composer default', async () => {
     const stalled = withUiConnectTimeout(new Promise(() => {}), SSH_RECONNECT_UI_TIMEOUT_MS)
     const assertion = expect(stalled).rejects.toThrow(/Connection timed out/)

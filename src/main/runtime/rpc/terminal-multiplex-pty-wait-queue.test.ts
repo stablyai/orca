@@ -80,7 +80,7 @@ describe('terminal multiplex PTY wait queue', () => {
     await vi.waitFor(() =>
       expect(waits.size).toBe(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION)
     )
-    // Why: a queued pane's mount is part of its paced admission, not fired at subscribe.
+    // Mount only during paced admission, not when subscribe queues the pane.
     expect(requestRendererTerminalTabMount).toHaveBeenCalledTimes(
       TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION
     )

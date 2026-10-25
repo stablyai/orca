@@ -4,14 +4,19 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
 const fixtureDir = mkdtempSync(join(tmpdir(), 'script-module-dependencies-'))
+
+afterAll(() => {
+  rmSync(fixtureDir, { recursive: true, force: true })
+})
 
 function sourceTree(files) {
   const sourceDir = mkdtempSync(join(fixtureDir, 'source-'))
@@ -25,7 +30,11 @@ function copiedNames(files, entryName) {
   const sourceDir = sourceTree(files)
   const destinationDir = join(mkdtempSync(join(fixtureDir, 'dest-')), 'scripts')
   copyScriptWithLocalModules(join(sourceDir, entryName), destinationDir)
-  return readdirSync(destinationDir).sort()
+  const names = readdirSync(destinationDir).sort()
+  for (const name of names) {
+    expect(readFileSync(join(destinationDir, name), 'utf8'), name).toBe(files[name])
+  }
+  return names
 }
 
 describe('copyScriptWithLocalModules', () => {
@@ -59,9 +68,7 @@ describe('copyScriptWithLocalModules', () => {
     ).toEqual(['dep.mjs', 'entry.mjs'])
   })
 
-  // The Windows addon gates are .cjs and reach each other by require. A module
-  // pulled in only that way used to be left behind, and the subprocess then
-  // failed with a resolution error that looks nothing like the defect it hides.
+  // Cover require-only CJS gate dependencies so copied fixture fails for target defect, not missing module.
   it('follows a co-located require, not only an import', () => {
     expect(
       copiedNames(

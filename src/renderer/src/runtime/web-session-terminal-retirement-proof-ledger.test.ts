@@ -38,10 +38,7 @@ function frame(
 describe('web session terminal retirement proof ledger', () => {
   beforeEach(() => clearRetainedTerminalRetirementProofsForTests())
 
-  // Why: a recreated worktree keeps the same environment and worktree id but its fresh host entry
-  // holds no proofs and omits the field. Absence must forget, so the successor occupant never
-  // inherits its predecessor's proofs even when the removed frame was missed. A delta host with
-  // nothing new sends `[]`, which keeps what was retained.
+  // Omitted proofs reset recreated worktrees even if removal was missed; negotiated delta hosts send [] when unchanged, which retains evidence.
   it('forgets on an absent field but keeps proofs on an empty delta', () => {
     mergeRetainedTerminalRetirementProofs(
       ENVIRONMENT_ID,
@@ -99,10 +96,7 @@ describe('web session terminal retirement proof ledger', () => {
     ).toBeUndefined()
   })
 
-  // Why: a restarted host has an empty proof map, so a proof retained from its predecessor must
-  // not survive to falsely match a handle the new host issues. The store advances the connection
-  // generation whenever `status.runtimeId` changes (runtime-status.test.ts pins that), and the
-  // ledger keys every entry on that generation.
+  // Key proofs by connection generation, advanced on runtimeId change, or restarted hosts’ reused handles can match predecessor evidence (runtime-status.test.ts).
   it('forgets everything on a removed frame and on a new host connection', () => {
     mergeRetainedTerminalRetirementProofs(
       ENVIRONMENT_ID,
@@ -126,9 +120,7 @@ describe('web session terminal retirement proof ledger', () => {
     ).toBeUndefined()
   })
 
-  // Why: an older host never negotiates the delta and repeats its full list on every frame. The
-  // ledger cannot tell a full list from a delta and does not need to: the merge is a union keyed
-  // by exact identity, so a repeated full list is a no-op and the ledger never outgrows the host.
+  // Legacy full lists merge by exact-identity union like deltas; repeats are no-ops and remain host-bounded.
   it('treats a full list repeated by a legacy host as idempotent', () => {
     const proofs = Array.from({ length: 64 }, (_, index) => ({
       ...retired,
@@ -151,9 +143,7 @@ describe('web session terminal retirement proof ledger', () => {
     expect(merged.retiredTerminalSurfaces?.at(-1)?.leafId).toBe('leaf-new')
   })
 
-  // Why: an old host never negotiates the delta — it sends the full list whenever it holds any
-  // proofs and omits the field whenever it holds none. Forgetting on absence loses nothing there,
-  // because every proof-bearing frame from such a host already carries the whole list.
+  // Legacy hosts omit only when no proofs remain, so forgetting on absence loses no evidence.
   it('matches legacy visibility against a full-list host that omits the field when empty', () => {
     const proofs = Array.from({ length: 3 }, (_, index) => ({
       ...retired,
@@ -181,8 +171,7 @@ describe('web session terminal retirement proof ledger', () => {
   })
 })
 
-// Why: the end-to-end contract — a delta frame that omits the proof must still retire the pane
-// the earlier frame proved dead, without any host round trip.
+// Earlier proofs must retire panes on later delta frames without another host round-trip.
 describe('orphan recovery over delta frames', () => {
   beforeEach(() => clearWebSessionTerminalOrphanRecoveryForTests())
 

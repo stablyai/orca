@@ -1,19 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 
-/**
- * Binds every store action the Source Control panel dispatches.
- *
- * Why `getState()` and not one selector each: zustand action identities are fixed when the store is
- * built and no slice ever puts one in a `set()` payload, so subscribing to them can never fire. The
- * 40 action subscriptions only added 40 live listeners and 40 selector runs to every store write
- * while the panel was mounted. The two generation-record maps are real state, so they stay
- * subscribed.
- *
- * Reference stability is preserved and slightly stronger than before: each action keeps the single
- * identity it was created with, and the returned object itself is now stable until one of the two
- * subscribed maps changes, so downstream dependency arrays keep working.
- */
+/** Read fixed-identity actions via getState; subscribe only to generation maps, keeping the return object stable between map changes. */
 export function useSourceControlStoreActions() {
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
   const commitMessageGenerationRecords = useAppStore((s) => s.commitMessageGenerationRecords)

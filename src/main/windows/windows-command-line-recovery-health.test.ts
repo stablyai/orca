@@ -21,8 +21,7 @@ describe('windows command line recovery health', () => {
   })
 
   it('warns when the querying process has no command line of its own', () => {
-    // We can always open ourselves with PROCESS_QUERY_LIMITED_INFORMATION, so
-    // an empty self command line means the query is refused host-wide.
+    // An empty self command line signals query refusal; other processes may legitimately deny handles.
     reportWindowsCommandLineRecoveryHealth([selfRow(''), { pid: 4, commandLine: '' }])
 
     expect(warn).toHaveBeenCalledTimes(1)

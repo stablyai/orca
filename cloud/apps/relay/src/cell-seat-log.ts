@@ -1,13 +1,4 @@
-// Seat changes on this cell, read by directors through `GET /v1/admin/cell-seats`.
-// Wire contract (v1); readers must ignore unknown fields:
-//   since=<incarnation>:<seq> returns `changes` after seq, or `full` when the cursor is
-//   absent, from another incarnation, or older than the ring. `seq` in the reply is the
-//   cursor for the next poll; `more` says a page was cut at CELL_SEAT_FEED_PAGE_MAX.
-//   Apply a change only when its generation is >= the seat's: a superseded generation's
-//   socket can close after its successor joined. `full` is this log's own seats under the
-//   same rules, so a reader that applies every change holds exactly `counts.seats`.
-//   Step 5 adds `reserve` (a booking, never a seat) and `reservedBy` on the join it admitted;
-//   a full snapshot also carries `recentlyLeft`, this cell's leavers of the last 10 minutes.
+// v1 feed: ignore unknown fields. since=<incarnation>:<seq> returns changes or full for absent/stale/wrong-incarnation cursors; reply seq continues and more signals paging. Apply generations >= current so late superseded closes cannot erase successors. Full seats obey the same rules/counts. Reserve is a booking, reservedBy identifies join’s booker, and recentlyLeft spans ten minutes.
 
 export type CellSeatState = 'active' | 'drain-only'
 
@@ -99,6 +90,10 @@ export class CellSeatLog {
       changes.push(this.ring[seq % this.capacity]!)
     }
     return { seq: lastSeq, changes, more: lastSeq < this.headSeq }
+  }
+
+  seatList(): CellSeat[] {
+    return [...this.seats.values()]
   }
 
   seatOf(userId: string, relayHostId: string): CellSeat | undefined {

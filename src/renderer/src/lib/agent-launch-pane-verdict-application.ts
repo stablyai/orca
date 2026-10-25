@@ -1,7 +1,4 @@
-/**
- * The window's half of a launch pane's verdict: main derives it on the pane's spawn (or when it
- * takes a pane back) and sends it typed; the tab keeps what is final and forgets what is settled.
- */
+/** Apply main’s typed spawn/takeback verdicts, retaining final pane outcomes until session cleanup. */
 
 import type { AgentLaunchPaneVerdictEvent } from '../../../shared/agent-launch-pane-verdict'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
@@ -27,12 +24,10 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
     return
   }
   if (verdict.kind !== 'proceed') {
-    // Reported before the pane's spawn returns: its prompt is never pasted.
     settleAgentLaunchPaneStart(tabId, leafId, null)
   }
   switch (verdict.kind) {
     case 'proceed':
-      // Settled: the agent attached, or the pane is an ordinary terminal again.
       releaseMainWrittenLaunchTab(tabId)
       forgetAgentLaunchPanePrompt(tabId)
       state.setTabAgentLaunchPane(tabId, undefined)
@@ -41,18 +36,15 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
     case 'unconfirmed': {
       const root = state.terminalLayoutsByTabId[tabId]?.root
       if (root && !collectLeafIdsInOrder(root).includes(leafId)) {
-        // The user closed that pane: nothing is left for the outcome to describe.
         forgetAgentLaunchPanePrompt(tabId)
         state.setTabAgentLaunchPane(tabId, undefined)
         return
       }
-      // Final for this pane for this session.
       state.setTabAgentLaunchPane(tabId, { ...tab.agentLaunchPane, outcome: verdict })
       return
     }
     case 'withdrawn': {
       forgetAgentLaunchPanePrompt(tabId)
-      // Main takes back a tab it wrote itself; this window only drops what it kept.
       if (releaseMainWrittenLaunchTab(tabId)) {
         state.setTabAgentLaunchPane(tabId, undefined)
         return

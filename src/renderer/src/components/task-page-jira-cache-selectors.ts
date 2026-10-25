@@ -3,7 +3,7 @@ import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 
 type JiraIssueCache = Record<string, CacheEntry<JiraIssue>>
 type JiraSearchCache = Record<string, CacheEntry<JiraIssue[]>>
@@ -33,8 +33,7 @@ export function findTaskPageJiraIssue(
     if (options.siteId && issue.siteId !== options.siteId) {
       return false
     }
-    // Why: Jira issue keys are only unique within a site/source, so drawer lookup
-    // must not borrow a same-key issue cached for another host/account.
+    // Scope drawer lookup by site/source so identical issue keys cannot borrow another host/account’s cache.
     return sourceScope === null || cacheKey.startsWith(`${sourceScope}::`)
   }
 

@@ -5,8 +5,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-// Why: the sidebar card control, terminal overlay, host-header menu, and status-bar row all
-// read this table. It is the only thing keeping them from naming one click three ways.
+// One shared vocabulary keeps simultaneous sidebar/pane/header/status controls consistent.
 describe('sshConnectVerb', () => {
   it('names an authentication failure a reconnect', () => {
     expect(sshConnectVerb('auth-failed')).toBe('Reconnect')

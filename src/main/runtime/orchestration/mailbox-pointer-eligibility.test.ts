@@ -73,7 +73,7 @@ describe('selectOrchestrationPointerBatch', () => {
     }
   })
 
-  // An unfiltered waiter owns the mailbox: a caller blocked in `check --wait` preempts delivery.
+  // An unfiltered check --wait owns the entire mailbox and preempts pointer delivery.
   it('yields nothing when any waiter is unfiltered', () => {
     const db = seeded()
     try {

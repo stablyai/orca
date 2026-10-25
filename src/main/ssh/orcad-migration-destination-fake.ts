@@ -11,10 +11,7 @@ export type FakeOrcadMigrationDestination = { commits: number } & {
   [Method in keyof Catalog]: Mock<Catalog[Method]>
 }
 
-/**
- * An in-memory destination with the T6-9 semantics: idempotent stage, receipt-keyed commit, one
- * catalog state per migration so a delta move after a first migration starts absent.
- */
+/** Model idempotent stage and receipt-keyed commit with separate catalog state for each migration, including later deltas. */
 export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
   const states = new Map<string, 'absent' | 'staged' | 'committed'>()
   const stateOf = (manifest: OrcadMigrationManifest) => states.get(manifest.migrationId) ?? 'absent'

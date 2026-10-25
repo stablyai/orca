@@ -71,8 +71,7 @@ describe('browser settings search copy', () => {
     expect(terminalActionsEntry?.keywords).toContain('ctrl')
   })
 
-  // Why: shipping the opt-in must not reword this row for anyone who never enables
-  // it, so the default output has to stay byte-identical to the pre-feature copy.
+  // Default-off inversion must preserve existing copy byte-for-byte.
   it('keeps the pre-feature wording while inverting is off', () => {
     expect(getBrowserLinkRoutingDescription({ isMac: true })).toBe(
       "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. ⇧⌘-click always uses your system browser."
@@ -82,8 +81,7 @@ describe('browser settings search copy', () => {
     )
   })
 
-  // Why: "always" would be a lie once the chord can land in Orca, so the nested row
-  // takes over the claim.
+  // Once inversion can route to Orca, the parent row cannot claim the chord always uses the system browser.
   it('drops the modifier claim once inverting is on', () => {
     const description = getBrowserLinkRoutingDescription({ isMac: true }, true)
     expect(description).not.toContain('click')
@@ -92,8 +90,7 @@ describe('browser settings search copy', () => {
 })
 
 describe('browser link routing modifier copy', () => {
-  // Why: BrowserPane gates each row on getBrowserPaneSearchEntries()[n], so a
-  // reordered or inserted entry silently shows the wrong row for a search.
+  // BrowserPane indexes entries by position; reordering silently changes which rows search reveals.
   it('keeps the search entry order BrowserPane indexes by position', () => {
     expect(getBrowserPaneSearchEntries({ isMac: true }).map((entry) => entry.title)).toEqual([
       'Default Home Page',
@@ -107,7 +104,9 @@ describe('browser link routing modifier copy', () => {
       'Remote server workspaces',
       'SSH workspaces',
       'Browser identity',
-      'Site permissions'
+      'Site permissions',
+      'Profile for new tabs',
+      'Open links in the background'
     ])
   })
 
@@ -134,25 +133,21 @@ describe('browser link routing modifier copy', () => {
     )
   })
 
-  // Why: the toggle is off by default, so present-tense "opens one in Orca" would
-  // describe behavior the user does not have yet.
+  // Default-off inversion needs enabled-state wording rather than promising current behavior.
   it('phrases the Orca branch as enabled-state copy', () => {
     expect(getLinkRoutingModifierDescription({ openLinksInApp: false, isMac: true })).toContain(
       'When enabled'
     )
   })
 
-  // Why: the entry is built with openLinksInApp false, so without this the row is
-  // unfindable by the title it actually renders when Link Routing is on.
+  // Index both routing titles because the catalog builds only the false-state variant.
   it('indexes both titles so the row is findable in either routing state', () => {
     const entry = getBrowserPaneSearchEntries({ isMac: true })[4]
     expect(entry?.keywords).toContain(getLinkRoutingModifierTitle(true))
   })
 })
 
-// The bug this file guards: the Link Routing description was a bare template
-// literal, so it stayed English in every locale. Asserting only "no {{...}} leaked"
-// cannot catch that — the English literal has no placeholder either.
+// Placeholder checks cannot detect untranslated English literals; require actual localized descriptions.
 describe('Link Routing description localization', () => {
   const KEY = 'auto.components.settings.BrowserLinkRoutingSetting.description'
   const BASE_KEY = 'auto.components.settings.BrowserLinkRoutingSetting.descriptionBase'
@@ -174,7 +169,6 @@ describe('Link Routing description localization', () => {
     const description = getBrowserLinkRoutingDescription({ isMac: true })
     expect(description).toBe(koCopy.replace('{{shortcut}}', '⇧⌘-click'))
     expect(description).not.toMatch(/\{\{.+?\}\}/)
-    // Fails when the copy is a hardcoded English literal.
     expect(description).not.toContain("Orca's built-in browser")
 
     // The entry title is localized too, so match on the description instead.
@@ -198,14 +192,11 @@ describe('Link Routing description localization', () => {
 
     const description = getBrowserLinkRoutingDescription({ isMac: true }, true)
     expect(description).toBe(koBase)
-    // Fails when the invert-on branch regresses to a hardcoded English literal.
     expect(description).not.toContain("Orca's built-in browser")
   })
 
   it('uses the catalog key rather than an inline literal', () => {
-    // Against en.json, not the runtime resource: the renderer only bundles the
-    // English entries i18next cannot rebuild from a call site default, so the
-    // translator catalog is what has to carry the key for other locales.
+    // Read en.json: runtime resources omit English entries reconstructible from defaults, but translators still need catalog keys.
     expect(lookupEnglishCatalog(KEY)).toBeTruthy()
     expect(lookupEnglishCatalog(BASE_KEY)).toBeTruthy()
   })

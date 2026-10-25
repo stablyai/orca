@@ -1,11 +1,5 @@
-/**
- * Layout rework P3 baselines: a pinned released desktop build, and its bundled CLI, against the
- * current `orca serve`. The old desktop splits a server pane (it sends `terminal.create` with the
- * tab's id and a new leaf id), closes it, and rides out a server restart. Each step records what
- * the server publishes and what the old desktop draws; the shapes are compared with main's.
- *
- * Needs ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE (CI: packaged-browser-e2e.yml, job layout-compat).
- */
+// P3 baseline: pinned released desktop/CLI split and close server panes, then reconnect to current serve after restart.
+// Requires ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE (packaged-browser-e2e.yml layout-compat).
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

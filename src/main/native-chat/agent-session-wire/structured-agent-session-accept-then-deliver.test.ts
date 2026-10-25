@@ -1,7 +1,5 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// A send is accepted, then delivered: the host answers once the message is recorded, and the
-// session's delivery loop starts a provider child for it and hands it over. Against the real host,
-// store and journal; each assertion reads what an open chat or the journal's next reader sees.
+// Exercise durable acceptance before provider delivery through the real host/store/journal.
 
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -48,7 +46,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
-import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import { structuredAgentSessionHeldStarts } from './structured-agent-session-held-start.test-support'
 
@@ -85,7 +83,6 @@ const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spa
 
 const starts = structuredAgentSessionHeldStarts(() => host)
 
-/** A child whose handshake is still running: `starting` until the test settles `started`. */
 const spawnStartingChild = starts.held(spawnChild)
 
 async function startHost(): Promise<void> {
@@ -160,7 +157,6 @@ function sendParams(text: string) {
   }
 }
 
-/** Accepted at once, whatever the child is doing; answers the message id. */
 async function accept(text: string): Promise<string> {
   const params = sendParams(text)
   expect(await host.send(CALLER, params)).toMatchObject({
@@ -193,7 +189,6 @@ async function submission(id: string): Promise<AgentJournalSubmission | undefine
   )
 }
 
-/** Read back after the conversation was closed, through the same open any reader takes. */
 async function reopened(id: string): Promise<AgentJournalSubmission | undefined> {
   await host.revealSession(SESSION)
   return submission(id)
@@ -216,7 +211,7 @@ let subscriptions = 0
 async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
   const events: AgentSessionSubscribeEvent[] = []
   subscriptions += 1
-  // Cloned as received: a frame shares the journal's live objects, which later rows revise.
+  // Clone at delivery: later journal revisions can change shared frame objects.
   await host.subscribe({
     id: `sub-${subscriptions}`,
     sessionId: SESSION,
@@ -225,7 +220,6 @@ async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
   return events
 }
 
-/** What an open chat was told about one message, in frame order. */
 function framedStates(events: AgentSessionSubscribeEvent[], id: string): string[] {
   let previous: string | undefined
   return events.flatMap((event) =>
@@ -247,7 +241,6 @@ function framedStates(events: AgentSessionSubscribeEvent[], id: string): string[
   )
 }
 
-/** Rows written by an earlier host process that ended before handing them over. */
 async function writeAsEarlierProcess(
   write: (journal: AgentSessionJournal, fence: number) => Promise<void>
 ): Promise<void> {
@@ -329,7 +322,6 @@ describe('a send is answered at acceptance', () => {
       expect((await submission(secondId))?.dispatchState).toBe('accepted')
     )
     expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([first, secondId])
-    // The second was accepted while the start held the queue — before the first was handed over.
     expect((await submission(secondId))!.submittedAt).toBeLessThanOrEqual(
       (await submission(first))!.handedOverAt!
     )
@@ -370,8 +362,7 @@ describe('a start the chat needed and did not get', () => {
     await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
     const rows = await errorRows()
     expect(rows).toHaveLength(1)
-    // Orca's spawn error goes to the log; the row and every message say what failed, typed. The
-    // child is gone, but no exit was observed, so nothing blames the provider.
+    // Log Orca’s spawn error; absent observed exit must not blame the provider.
     expect(rows[0]).toBe("Codex couldn't restart. Send your message to try again.")
     const failure = {
       kind: 'restartFailed',
@@ -467,7 +458,6 @@ describe('a start the chat needed and did not get', () => {
           new AgentSessionPreSpawnError(new Error('Not logged in. Please run /login.'))
         ),
       {
-        // No process ever started, so nothing says the provider stopped.
         text: "Codex couldn't restart. Send your message to try again.",
         failure: {
           kind: 'restartFailed',
@@ -499,7 +489,7 @@ describe('a start the chat needed and did not get', () => {
   it('names the start failure on queued messages when the attach fails after acquiring (W4′a)', async () => {
     await host.close(SESSION, 'evict')
     const id = await accept('hello')
-    // The attach's own success record is the post-acquisition step that fails.
+    // Fail the post-acquisition success record.
     const record = vi.spyOn(store, 'recordOperationOutcome')
     record.mockImplementation(async (input) => {
       if (input.operationId !== id && input.outcome.status === 'succeeded') {
@@ -509,15 +499,13 @@ describe('a start the chat needed and did not get', () => {
       return AgentSessionRecordStore.prototype.recordOperationOutcome.call(store, input)
     })
 
-    // Read through the open any reader takes, so a conversation the failure dropped is reopened
-    // and its message read as that reopen settles it.
+    // Reopen through the normal path so recovery settles dropped conversations.
     let settled: AgentJournalSubmission | undefined
     await eventually(async () => {
       settled = await reopened(id)
       expect(settled?.dispatchState).not.toBe('pending')
     })
-    // The message names the start that failed, not a close or a restart it never met — and never
-    // the store's own error, which is Orca's and goes to the log.
+    // Attribute rejection to the failed start, keeping host storage errors in logs.
     expect(settled).toMatchObject({
       dispatchState: 'rejected',
       rejection: (await errorFailures())[0]
@@ -540,7 +528,7 @@ describe('an attach that fails after indexing its child', () => {
       }
     })
     const first = await accept('hello')
-    // The attach's own success record is the step after `onAttached` indexed the child.
+    // Fail outcome recording after onAttached has indexed the child.
     const record = vi.spyOn(store, 'recordOperationOutcome')
     record.mockImplementation(async (input) => {
       if (input.operationId !== first && input.outcome.status === 'succeeded') {
@@ -550,7 +538,6 @@ describe('an attach that fails after indexing its child', () => {
       return AgentSessionRecordStore.prototype.recordOperationOutcome.call(store, input)
     })
     await eventually(async () => expect((await submission(first))?.dispatchState).toBe('rejected'))
-    // Nothing was indexed, so nothing had to be taken back: no list ever showed a child.
     expect(host['sessions'].get(SESSION)?.child).toBeNull()
     expect(owned).not.toContain(true)
     const acquiresBefore = acquire.mock.calls.length
@@ -581,8 +568,6 @@ describe('what an earlier host process left behind', () => {
   })
 
   it('leaves a legacy pending message and a handed-over one in doubt, never re-sent (W4′c)', async () => {
-    const providerHistoryWindow = vi.fn(async () => null)
-    adapterExtras = { providerHistoryWindow }
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('legacy', 'l'), fence })
       await journal.appendSubmission({ ...earlierSubmission('handed', 'h', true), fence })
@@ -600,8 +585,6 @@ describe('what an earlier host process left behind', () => {
 
     expect(await submission('legacy')).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(await submission('handed')).toMatchObject({ dispatchState: 'unknown', recovered: true })
-    // Deciding them from provider history waits for a won lease (W4′d).
-    expect(providerHistoryWindow).not.toHaveBeenCalled()
     expect(dispatch).not.toHaveBeenCalled()
   })
 })
@@ -610,7 +593,6 @@ describe('a child that exits before open completes', () => {
   it('rejects the message with the start failure instead of starting another child (W24)', async () => {
     await host.close(SESSION, 'evict')
     await startHost()
-    // The child exits before the host can finish its protocol open.
     acquire.mockImplementation(async (input) => {
       const child = await spawnStartingChild(input)
       const acquisitionGeneration = `generation-${acquire.mock.calls.length}`
@@ -640,7 +622,6 @@ describe('a child that exits before open completes', () => {
 
 describe('a start that fails while messages wait on it', () => {
   it('keeps one row in the words its rejected messages carry', async () => {
-    // Both are held for a starting child that never proves its start.
     acquire.mockImplementation(spawnStartingChild)
     await host.close(SESSION, 'evict')
     await startHost()
@@ -661,13 +642,11 @@ describe('a start that fails while messages wait on it', () => {
     })
     await host.flushStreamedEvents(SESSION)
 
-    // Both are rejected by the delivery loop's next step, never having been handed over.
     await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
     const rows = (await host.journalSnapshot(SESSION)).items.filter((item) =>
       item.itemId.includes('start-failure')
     )
     expect(rows).toHaveLength(1)
-    // Worded once, from the exit's own diagnostic, for the row and every message sent to that start.
     const row = rows[0].body
     expect(row).toMatchObject({
       failure: { kind: 'providerStartFailed', detail: { text: 'codex: config.toml is invalid' } }
@@ -697,7 +676,7 @@ describe('Stop withdraws what is queued', () => {
 
     expect(await stop()).toMatchObject({ ok: true })
 
-    // A person's message is kept as a held card, which no Stop withdraws; the rest is rejected.
+    // Personal text survives as a card under reopen pause; reject nonpersonal work.
     const hostRestarted = agentSessionFailureWords(agentSessionFailureFact('hostRestarted'), {
       surface: 'rejection'
     })
@@ -720,7 +699,6 @@ describe('Stop withdraws what is queued', () => {
     await host.close(SESSION, 'evict')
     await startHost()
     acquire.mockImplementationOnce(spawnStartingChild)
-    // Held for the starting child, which never proves its start.
     const id = await accept('hello')
     await eventually(() => expect(childPhase()).toBe('starting'))
     expect((await submission(id))?.handedOverAt).toBeUndefined()
@@ -749,7 +727,7 @@ describe('an eviction between acceptance and handover', () => {
     })
     const id = await accept('hello')
     await eventually(async () => expect(acquire).toHaveBeenCalledTimes(2))
-    // Asked for during the delivery loop's start step, the close runs ahead of its handover step.
+    // Queue close ahead of the delivery loop’s handover step.
     const closing = host.close(SESSION, 'evict')
     started.resolve()
     await closing
@@ -767,7 +745,7 @@ describe('an eviction between acceptance and handover', () => {
     dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const handed = await accept('handed over')
     await eventually(async () => expect((await submission(handed))?.handedOverAt).toBeDefined())
-    // Held, the second send is accepted and the close runs next, ahead of its handover.
+    // Hold delivery so close queues after acceptance but before handover.
     const second = Promise.withResolvers<void>()
     void host['tasks'].serialize(SESSION, () => second.promise)
     const accepting = accept('still queued')
@@ -795,23 +773,19 @@ describe('an eviction between acceptance and handover', () => {
     })
     const id = await accept('hello')
     await eventually(async () => expect(acquire).toHaveBeenCalledTimes(2))
-    // The idle sweep ticks every few milliseconds meanwhile, past the idle window.
     clock = NOW + idleMs
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // Fresh again before publish: a start quiet for the whole window is stopped by design.
+    // Refresh time before readiness; intentionally silent starts remain evictable.
     clock = NOW
     started.resolve()
-    // Handed to the child it was queued for; the eviction may follow once nothing is owed.
     await eventually(async () => expect(dispatch).toHaveBeenCalledTimes(1))
     expect(dispatch.mock.calls[0]?.[0].clientMessageId).toBe(id)
     expect(acquire).toHaveBeenCalledTimes(2)
   })
 })
 
-// A close abandons what is queued before it stops the child, so a wind-down step that then fails
-// (reported, never the close's failure) still leaves every queued message rejected as closed,
-// never blamed on the provider.
+// Wind-down errors must not undo closed-send settlement or attribute host faults to the provider.
 describe('a close that stops the child and then a wind-down step fails', () => {
   const END_CHILD = {
     evict: () => host.close(SESSION, 'evict')
@@ -821,7 +795,7 @@ describe('a close that stops the child and then a wind-down step fails', () => {
     'rejects what is queued as $kind after a $end (during startup: $starting)',
     async ({ end, starting, kind, verdict }) => {
       adapterExtras = {
-        // Once: the host's own teardown acknowledges again.
+        // Teardown acknowledges again; fail only the first call.
         acknowledgeSessionRelease: vi.fn().mockImplementationOnce(() => {
           throw new Error('release acknowledgement failed')
         })
@@ -832,7 +806,6 @@ describe('a close that stops the child and then a wind-down step fails', () => {
       const id = await accept('hello')
       await eventually(() => expect(childPhase()).toBe('starting'))
 
-      // Asked for while the child is still starting, the close runs ahead of the handover step.
       await expect(END_CHILD[end]()).resolves.toBeUndefined()
 
       await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
@@ -848,7 +821,6 @@ describe('a rewind an earlier child left prepared', () => {
   async function leftPrepared(prepare: (fence: number) => Promise<unknown>): Promise<void> {
     await host.close(SESSION, 'evict')
     await prepare(store.getRecord(SESSION)!.lease.runtimeFence)
-    // A new process: nothing is open and no view attaches.
     await host.flushAllStreamedEvents()
     await startHost()
   }

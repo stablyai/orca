@@ -32,8 +32,6 @@ describe('AdvertisedUrlWatcher.lookupBest PID validation', () => {
       'custom.example.com'
     )
     expect(watcher.lookup(WORKTREE, 3001)?.validatedListenerPid).toBeUndefined()
-    // Remote port reused by a different process: the pinned winner and the
-    // unvalidated non-winner both get evicted by scanner reconciliation.
     watcher.reconcileScan([WORKTREE, 'repo::/wt2'], [{ port: 3001, pid: 9999 }])
     expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001, 9999)).toBeUndefined()
     expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001)).toBeUndefined()
@@ -59,11 +57,8 @@ describe('AdvertisedUrlWatcher.lookupBest PID validation', () => {
     watcher.bindPty('pty-2', 'repo::/wt2')
     watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
     watcher.ingest('pty-2', 'B: https://b.example.com:3001/\n')
-    // Pin only the WORKTREE entry to PID 100.
     expect(watcher.lookup(WORKTREE, 3001, 100)?.host).toBe('a.example.com')
-    // Now query with PID 200 across both worktrees: the WORKTREE entry
-    // gets evicted (mismatch), and the repo::/wt2 entry - which had no
-    // pinned PID yet - gets pinned to 200 and wins.
+    // Evict the mismatched pinned entry; only the previously unpinned candidate can win.
     expect(watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001, 200)?.host).toBe('b.example.com')
   })
 })
@@ -74,7 +69,6 @@ describe('AdvertisedUrlWatcher.lookup PID validation', () => {
     watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
     const first = watcher.lookup(WORKTREE, 3001, 4242)
     expect(first?.validatedListenerPid).toBe(4242)
-    // Same PID on a later lookup keeps the entry.
     const second = watcher.lookup(WORKTREE, 3001, 4242)
     expect(second?.host).toBe('a.example.com')
   })
@@ -85,9 +79,7 @@ describe('AdvertisedUrlWatcher.lookup PID validation', () => {
     watcher.onDidChange((event) => events.push(event))
     watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
     expect(watcher.lookup(WORKTREE, 3001, 4242)?.validatedListenerPid).toBe(4242)
-    // Different PID means the port was reused by another process.
     expect(watcher.lookup(WORKTREE, 3001, 9999)).toBeUndefined()
-    // Entry is gone.
     expect(watcher.lookup(WORKTREE, 3001, 4242)).toBeUndefined()
     expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3001 })
   })
@@ -95,16 +87,14 @@ describe('AdvertisedUrlWatcher.lookup PID validation', () => {
   it('skips validation when no PID is provided', () => {
     const watcher = bindFresh()
     watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
-    watcher.lookup(WORKTREE, 3001, 4242) // pins PID
-    // Looking up without a PID does not evict.
+    watcher.lookup(WORKTREE, 3001, 4242)
     expect(watcher.lookup(WORKTREE, 3001)?.host).toBe('a.example.com')
   })
 
   it('replacing a cached URL resets validatedListenerPid', () => {
     const watcher = bindFresh()
     watcher.ingest(PTY, 'A: http://localhost:3001/\n')
-    watcher.lookup(WORKTREE, 3001, 100) // pins PID to old listener
-    // A higher-score URL replaces; the new entry starts unvalidated.
+    watcher.lookup(WORKTREE, 3001, 100)
     watcher.ingest(PTY, 'B: https://custom.example.com:3001/\n')
     const refreshed = watcher.lookup(WORKTREE, 3001)
     expect(refreshed?.host).toBe('custom.example.com')

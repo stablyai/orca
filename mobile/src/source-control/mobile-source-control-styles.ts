@@ -100,7 +100,7 @@ const baseStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  // Separate line under counts — keeps Abort inside the card on narrow phones.
+  // Keep Abort below counts so narrow cards cannot overflow.
   conflictRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -115,7 +115,6 @@ const baseStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     textTransform: 'capitalize'
   },
-  // Match bulk-action hit target so Abort reads as a real control, not a chip.
   abortButton: {
     minHeight: 32,
     paddingHorizontal: spacing.md,

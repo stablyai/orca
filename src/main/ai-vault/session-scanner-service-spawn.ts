@@ -138,7 +138,6 @@ export function clearSessionSearchInService(): Promise<void> {
   })
 }
 
-/** Boot and every settings change: push the policy and keep a child while the index runs. */
 export function updateSessionSearchInService(init: AiVaultSessionSearchInit): void {
   getSharedClient().updateSessionSearch(init)
 }
@@ -147,7 +146,6 @@ export function invalidateAiVaultServiceCache(paths: string[]): Promise<void> {
   return sharedClient?.invalidate(paths) ?? Promise.resolve()
 }
 
-/** A forced refresh is a deliberate user action, so it reopens the restart circuit. */
 export function clearAiVaultServiceRestartCircuit(): void {
   sharedClient?.clearRestartCircuit()
 }

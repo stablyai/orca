@@ -1,6 +1,6 @@
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
 
-export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled' | 'waiter_exists'
+export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled'
 
 export type RuntimeMessageWaiter = {
   handle: string
@@ -40,15 +40,9 @@ export class RuntimeMessageWaiters {
       typeFilter?: string[]
       timeoutMs?: number
       signal?: AbortSignal
-      exclusive?: boolean
     }
   ): Promise<MessageWaitResult> {
     return new Promise((resolve) => {
-      const currentWaiters = this.waitersByHandle.get(handle)
-      if (options?.exclusive && currentWaiters && currentWaiters.size > 0) {
-        resolve('waiter_exists')
-        return
-      }
       const waiter: RuntimeMessageWaiter = {
         handle,
         typeFilter: options?.typeFilter,

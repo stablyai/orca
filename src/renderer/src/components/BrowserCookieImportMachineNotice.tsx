@@ -2,10 +2,7 @@ import { DropdownMenuLabel } from './ui/dropdown-menu'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 
-// Why: for a remote environment the same Import menu silently lists either this desktop's
-// browsers or the remote machine's, depending on where the environment's pages are hosted.
-// The menu must say which machine it is — a remote-side import even prompts on that machine's
-// screen. Renders nothing while browser settings target the local host.
+// Name the import machine for remote pages: it chooses the browser inventory and receives permission prompts. Local imports need no notice.
 export function BrowserCookieImportMachineNotice(): React.JSX.Element | null {
   const detectedBrowsersHost = useAppStore((s) => s.detectedBrowsersHost)
   if (!detectedBrowsersHost) {

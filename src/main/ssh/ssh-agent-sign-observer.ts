@@ -9,11 +9,7 @@ import {
 
 type AgentPublicKey = Parameters<BaseAgent['sign']>[0]
 
-/**
- * Delegates to the real agent and records when the host asked it to sign. ssh2 only signs after the
- * host accepted the agent key (PK_OK), so a sign is the only evidence that an agent key partially
- * succeeded: ssh2 swallows that failure's partialSuccess flag and method list for agent keys.
- */
+/** ssh2 signs only after PK_OK; observe signatures because it drops agent partialSuccess/method-list evidence. */
 class SignObservingAgent extends BaseAgent<ParsedKey | Buffer | string> {
   private resolved: BaseAgent | null = null
 
@@ -24,7 +20,7 @@ class SignObservingAgent extends BaseAgent<ParsedKey | Buffer | string> {
     super()
   }
 
-  // Resolved on first use so building an auth queue never opens an agent the attempt won't reach.
+  // Resolve lazily so queue construction cannot open an agent the attempt never uses.
   private get agent(): BaseAgent {
     this.resolved ??= typeof this.source === 'string' ? createAgent(this.source) : this.source
     return this.resolved

@@ -15,21 +15,10 @@ export type LiveTerminalSurfaceOwner = {
   tabId: string
 }
 
-/**
- * The host observed a live PTY with no surface. `recorded` is the pane its record last named: the
- * host's graph only carries mounted or provably live panes, so this renderer may still hold it.
- */
+/** Host-observed live PTY with no surface. recorded names its former pane, which this renderer may retain despite its absence from the mounted/live host graph. */
 export type UnownedLiveTerminal = { unowned: true; recorded: LiveTerminalSurfaceOwner | null }
 
-/**
- * ptyId → owning surface, as the execution host records it. The renderer's own
- * binding maps are a projection that hydration, a second window, or a
- * client-created tab can leave empty, so they cannot answer "is this PTY
- * unowned?" — only the host can.
- *
- * Only an `UnownedLiveTerminal` proves the host observed a live PTY with no surface. Null and
- * missing entries are unverifiable; an earlier inventory may name a retired PTY.
- */
+/** Host PTY ownership is authoritative; renderer projections can be empty during hydration, multiwindow or client-created tabs. Only UnownedLiveTerminal proves a live unowned PTY; null/missing entries are unverifiable, and earlier inventories may name retired PTYs. */
 type LiveTerminalSurfaceOwnership = LiveTerminalSurfaceOwner | UnownedLiveTerminal | null
 export type LiveTerminalSurfaceOwnerIndex = ReadonlyMap<string, LiveTerminalSurfaceOwnership>
 
@@ -126,8 +115,7 @@ export async function readWorktreeLiveTerminalSurfaceOwners(
       limit: OWNER_LISTING_LIMIT,
       requireFreshPtyLiveness: true,
       includeVisualLayouts: false,
-      // Switch point: main shows the workspace's unshown live terminals first, so the listing
-      // names main's panes for them and this sweep only reads it.
+      // Main places unshown live terminals before listing; this sweep only reads its panes.
       ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { placeUnshownLiveTerminals: true } : {})
     }
   })
@@ -135,10 +123,7 @@ export async function readWorktreeLiveTerminalSurfaceOwners(
     return null
   }
   const { hostScope, terminals, truncated } = response.result
-  // A worktree-scoped listing names every host but the target's as omitted by
-  // design, so completeness here is "the workspace's own host answered" —
-  // `hostIds` holds exactly that host when it did. A truncated list never proves
-  // any PTY unowned.
+  // Workspace-scoped completeness requires its own host in hostIds; other hosts are intentionally omitted. Truncated listings never prove a PTY unowned.
   return truncated === true || hostScope.hostIds.length === 0
     ? null
     : indexLiveTerminalSurfaceOwners(terminals, worktreeId)

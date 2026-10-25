@@ -7,8 +7,6 @@ function matchesQuery(name: string, query: string): boolean {
   return !query || name.toLocaleLowerCase('en-US').includes(query.toLocaleLowerCase('en-US').trim())
 }
 
-/** The publisher's own links, listed on the page that publishes them so the
- *  record of a share lives beside the thing that made it. */
 export function SkillSharedLinksView({
   query,
   shares: { shares, loading, error, busyShareId, revoke, refresh }

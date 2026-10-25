@@ -13,8 +13,7 @@ describe('isBrowserPagePanePaintable', () => {
     { ...PARKED, isActive: true },
     { ...PARKED, isAutomationVisible: true },
     { ...PARKED, isMobileDriven: true },
-    // Why: a paired desktop/web/CLI client streaming this page holds no lock and is not the host's
-    // active pane, so it is the only term keeping its own screencast alive.
+    // Paired viewers take no driver lock and may watch an inactive pane; this term alone preserves their screencast.
     { ...PARKED, hasRemoteViewer: true }
   ])('keeps the pane paintable for %o', (state) => {
     expect(isBrowserPagePanePaintable(state)).toBe(true)

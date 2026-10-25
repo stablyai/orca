@@ -3,11 +3,7 @@ import type { ArtifactListItem } from '../../../../shared/artifacts'
 import { ArtifactListRow } from './ArtifactListRow'
 import { ARTIFACTS_TABLE_ROW_HEIGHT_PX } from './artifacts-table-layout'
 
-/**
- * The artifacts table body, windowed inside the collection's scroller. Load more only appends, so
- * between refreshes the list grows without bound; below the virtualize threshold rows stay in
- * natural flow.
- */
+/** Window the append-only artifact list inside the collection scroller; below the threshold, keep natural flow. */
 export function ArtifactListRows({
   artifacts,
   deletingId,
@@ -21,19 +17,15 @@ export function ArtifactListRows({
   deletingId: string | null
   selectedSlug: string | null
   scrollElement: HTMLDivElement | null
-  // Why it has to reach the rows: the cursor is what makes the loaded count not the real total, so
-  // without it every row would announce a set size the Load more button next to it contradicts.
+  // Propagate the cursor so rows do not announce loaded count as the total while Load more still exists.
   hasMore: boolean
   selectArtifact: (slug: string) => void
   deleteArtifact: (item: ArtifactListItem) => void
 }): React.JSX.Element {
-  // Why: appended pages are deduped against the slugs already loaded, and the first page's are
-  // unique per the server, so a slug identifies the last row without an index — which `renderRow`
-  // does not supply.
+  // Pages are slug-deduped and renderRow has no index, so identify the last row by its unique slug.
   const lastSlug = artifacts.at(-1)?.artifact.slug
 
-  // Accepted: rows are transform-positioned, so an insert above the viewport slides the list with
-  // no layout shift for scroll anchoring to correct.
+  // Transform-positioned inserts do not cause layout shifts that scroll anchoring could correct.
   return (
     <VirtualizedList
       rows={artifacts}

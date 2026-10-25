@@ -47,8 +47,7 @@ export const mobileOnboardingStyles = StyleSheet.create({
   page: {
     height: '100%'
   },
-  // Why: every decision remains reachable in landscape and with accessibility
-  // text scaling even though Back and swipe-to-skip are intentionally disabled.
+  // Allow landscape/accessibility scrolling because Back and swipe-to-skip are disabled.
   pageContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl

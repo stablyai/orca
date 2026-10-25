@@ -128,8 +128,7 @@ export type WorkerTerminalReleaseDecision =
   | { action: 'retained'; reason: WorkerTerminalRetainedReason }
   | { action: 'proceed' }
 
-// The single (ownership_state, release_state) -> action table. Both release guards read it, so a
-// resource the dispatch no longer owns can never be settled as released down either path.
+// Both release paths use this ownership/state table; neither may release a resource its Dispatch no longer owns.
 export function decideWorkerTerminalRelease(
   resource: Pick<WorkerTerminalResourceRow, 'ownership_state' | 'release_state' | 'retained_reason'>
 ): WorkerTerminalReleaseDecision {

@@ -1,9 +1,4 @@
-// Why: the cell inventory lock is held to COMMIT, and the assignment path runs
-// many statements after taking it. Tuning the request-path wait bound needs the
-// hold distribution, and no runtime metric carried it before this change.
-// Which lock a hold sample came from. Every site feeds the same max, so one
-// alert on cellInventoryHoldMsMax covers them all; the label names the holder.
-// 'isolated-replacement' is a drain return's regional target rows.
+// Measure COMMIT-held lock durations to tune request waits. All sites feed shared max; labels identify holders, including drain-return regional rows as isolated-replacement.
 export type CellLockHoldSite = 'inventory' | 'rehome-target-row' | 'isolated-replacement'
 
 export type CellInventoryHoldCounts = {
@@ -20,12 +15,7 @@ export type CellInventoryHoldCounts = {
   rehomeTargetRowHoldMsP99: number
   isolatedReplacementHoldMsP99: number
   isolatedReplacementHolds: number
-  // Why: a failed acquisition produces no hold sample, so the hold fields alone
-  // read healthy while the lock is saturated. Split by wait policy, not by
-  // caller: fail-fast covers background sweeps that step aside by design AND
-  // request-path first attempts that retry, so it reads as contention pressure,
-  // not user-visible failure. An expired bounded wait has already spent its
-  // budget, so that lane is the one that tracks stalls.
+  // Failed acquisitions have no duration. Fail-fast counts sweep skips and initial request retries as pressure; expired bounded waits measure stalls separately.
   cellInventoryLockUnavailable: number
   cellInventoryLockTimeouts: number
 }

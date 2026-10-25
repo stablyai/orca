@@ -48,8 +48,7 @@ const LEGACY_OVERLAY: MobileRelayHostOverlay = {
   ]
 }
 
-// Frozen copy of the overlay schema shipped builds parse with (relay endpoint schema is shared);
-// they drop a record it rejects.
+// Freeze the shipped overlay schema to prove older builds still accept written records.
 const ShippedOverlaySchema = z
   .object({
     v: z.literal(2),

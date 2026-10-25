@@ -1,13 +1,9 @@
-// Why: the interpreter a setup/issue-command script is written for is a property of the script,
-// not of the user's terminal preference, so a `#!` line is how a project declares it.
+// Script shebangs choose the interpreter independently of the user’s terminal preference.
 
 const POSIX_SHELL_BASENAMES = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'ash'])
-// Why: only the letters `set` itself accepts (`set [--abefhkmnptuvxBCHP] [-o option]`). An
-// invocation-only flag such as `-l` or `-r` makes `set` exit 2, which under the runner's `set -e`
-// aborts setup before its first line runs.
+// Accept only set-compatible flags; invocation-only flags abort the set -e runner or restrict setup.
 const SET_OPTION_FLAG_PATTERN = /^[-+][abefhkmnptuvxBCHP]+$/
-// Why: `-o`/`-euo` name their option in the next token; a trailing `-o` with no name would make
-// `set` dump the whole shell-option table into the setup terminal instead.
+// Require a name after -o/-euo or set would print its option table into the terminal.
 const SET_LONG_OPTION_FLAG_PATTERN = /^[-+][abefhkmnptuvxBCHP]*o$/
 const SHELL_OPTION_NAME_PATTERN = /^[a-z_]+$/
 

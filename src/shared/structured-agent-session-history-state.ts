@@ -79,15 +79,8 @@ export function mergeItems(
   return [...byId.values()].sort(compareAgentJournalItems)
 }
 
-/**
- * Live rows the loaded window can take. The window is a contiguous suffix of the
- * journal, and its oldest row is the load-older anchor. A revision of a row older
- * than the window keeps that row's original sequence, so admitting it would move
- * the anchor below the window and paging `before` it would skip every row between.
- * The journal keeps the revision; the page reader serves it once the window
- * reaches the row. With nothing older on the host the window is the whole journal
- * and a row below the head (a revived tombstone) leaves no hole, so it is admitted.
- */
+/** Keep the contiguous loaded suffix: an older revision retains its sequence and would move the paging anchor past a hole.
+ * Leave it for paging unless the window already covers the whole journal, where revival below the head cannot skip rows. */
 export function liveItemsWithinWindow(
   state: StructuredAgentSessionState,
   incoming: readonly AgentJournalRenderItem[]

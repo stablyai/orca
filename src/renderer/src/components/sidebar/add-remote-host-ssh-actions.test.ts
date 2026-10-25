@@ -143,8 +143,6 @@ describe('bulk add of ~/.ssh/config hosts', () => {
     vi.clearAllMocks()
   })
 
-  // The button counts (and promises) only the new hosts the picker listed; re-adopting
-  // would resurrect hosts the user deleted, which those counts deliberately omit.
   it('imports without re-adopting deleted aliases', async () => {
     const importConfig = vi.fn().mockResolvedValue({
       targets: [{ id: 'ssh-1', label: 'prod', host: 'prod', port: 22, username: '' }],

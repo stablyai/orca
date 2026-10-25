@@ -45,8 +45,7 @@ describe('resolveTerminalMinimumContrastRatio', () => {
   })
 })
 
-// #10754: the automatic floor rewrites deliberately low-contrast TUI output (Powerline seams, dimmed
-// secondary text), so the user setting has to win over the luminance gate on both backgrounds.
+// User contrast overrides must beat luminance defaults on both backgrounds, preserving deliberate Powerline seams/dim text (#10754).
 describe('resolveTerminalMinimumContrastRatio with a user override', () => {
   it('lets 1 disable contrast correction on a dark background', () => {
     expect(resolveTerminalMinimumContrastRatio('#1e242a', 'dark', 1)).toBe(1)
@@ -102,9 +101,7 @@ describe('normalizeTerminalMinimumContrastRatio', () => {
   })
 })
 
-// #10104: the dark-background floor must sit in the window that rescues near-background body text
-// without over-brightening vibrant ANSI colors (the #7934 regression). Guarding both edges keeps a
-// future tweak from silently sliding out of that window.
+// Keep dark correction above near-background text but below saturated ANSI colors; both edges prevent #7934 over-brightening regressions (#10104).
 describe('DARK_BG_MIN_CONTRAST rescue window', () => {
   const DARK_BG = '#1e242a'
 
@@ -114,30 +111,25 @@ describe('DARK_BG_MIN_CONTRAST rescue window', () => {
   })
 
   it('stays below the contrast that saturated ANSI colors naturally reach on a dark background', () => {
-    // Normal red/blue/magenta sit at ~3.0-3.4:1 here; the floor must not exceed them or xterm would
-    // wash them toward white — exactly the over-brightening #7934 disabled the 4.5 floor to avoid.
+    // Normal chromatic ANSI near 3–3.4:1 must not be lifted toward white, as the old 4.5 floor did (#7934).
     for (const ansi of ['#cd3131', '#2472c8', '#bc3fbc']) {
       expect(contrastRatio(DARK_BG, ansi)).toBeGreaterThanOrEqual(DARK_BG_MIN_CONTRAST)
     }
   })
 })
 
-// #10104: pin which real builtin dark themes have normal ANSI colors below the floor, so a new theme
-// or floor tweak forces an explicit decision instead of a silent #7934-style regression.
+// Pin below-floor builtin exceptions so theme/floor changes require explicit choices (#10104/#7934).
 describe('DARK_BG_MIN_CONTRAST vs the builtin theme catalog', () => {
-  // Normal (non-bright) chromatic ANSI channels — the vibrant body-text colors #7934 protects.
-  // Bright variants are excluded: several themes (e.g. Solarized) repurpose them as achromatic grays.
+  // Test normal chromatic channels; bright variants may intentionally be grays (e.g. Solarized).
   const CHROMATIC_ANSI = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan'] as const
 
-  // Accepted below-floor cases: near-illegible primaries on very dark backgrounds where the mild
-  // lift helps rather than harms. Keep in sync with the comment in terminal-contrast-correction.ts.
+  // Accept mild lifts for near-illegible Homebrew/Gruvbox primaries; sync with terminal-contrast-correction.ts.
   const ACCEPTED_BELOW_FLOOR = ['Gruvbox Dark:red', 'Homebrew:blue', 'Homebrew:red']
 
   it('leaves every dark-theme chromatic ANSI color at/above the floor, except the pinned exceptions', () => {
     const belowFloor: string[] = []
     for (const [name, theme] of Object.entries(TERMINAL_THEME_CATALOG)) {
       const background = theme.background
-      // Only dark-slot themes get the dark floor; the resolver picks it exactly for those.
       if (
         !background ||
         resolveTerminalMinimumContrastRatio(background, 'dark') !== DARK_BG_MIN_CONTRAST

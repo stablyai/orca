@@ -1,11 +1,6 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-/**
- * Dispatch rows recorded who they were assigned to but never who created them, so a coordinator
- * that dispatched context to its own terminal read back as its own depth-1 worker and every later
- * `worker-start` from it failed the nesting cap. Nulls stay ambiguous and keep counting, which is
- * the pre-v37 behaviour and fails closed.
- */
+/** Record creators to distinguish self-bookkeeping from depth-1 workers; legacy nulls conservatively remain parents. */
 export function migrateV37(this: OrchestrationDb, current: number): void {
   if (current >= 37) {
     return

@@ -91,9 +91,7 @@ const OSC_FILE_TAP_CASES: FileTapResolverCase[] = [
 
 type InjectedFileTapResolver = (uri: string) => TappedFilePath | null
 
-// Why: the document carries its own copy of this logic, so the two are run against one set of
-// cases and cannot drift. Both are modules now, so the comparison is an import rather than an
-// evaluation of the document's text.
+// Run both module implementations against identical cases so native-document URL matching cannot drift.
 function createInjectedFileTapResolvers(): {
   resolveTerminalFileUrlTap: InjectedFileTapResolver
   resolveTerminalOscFileTap: InjectedFileTapResolver
@@ -116,10 +114,7 @@ describe.each([
     expect(resolvers.resolveTerminalOscFileTap(uri)).toEqual(expected)
   })
 
-  it.each(FILE_URL_TAP_CASES)('OSC resolver accepts file URL: $name', ({ uri, expected }) => {
-    if (expected === null) {
-      return
-    }
+  it.each(FILE_URL_TAP_CASES)('resolves or rejects OSC file URL: $name', ({ uri, expected }) => {
     expect(resolvers.resolveTerminalOscFileTap(uri)).toEqual(expected)
   })
 })
@@ -155,6 +150,15 @@ describe('findUrlAtColumn', () => {
 
     expect(findUrlAtColumn(line, line.indexOf('example'))).toBe('https://example.com')
     expect(findUrlAtColumn(line, line.length - 1)).toBeNull()
+  })
+
+  it('ends the tapped URL at CJK punctuation', () => {
+    const line = '投稿（https://github.com/stablyai/orca/pull/1078）。'
+
+    expect(findUrlAtColumn(line, line.indexOf('1078'))).toBe(
+      'https://github.com/stablyai/orca/pull/1078'
+    )
+    expect(findUrlAtColumn(line, line.indexOf('）'))).toBeNull()
   })
 
   it('only matches http(s) schemes', () => {

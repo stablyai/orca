@@ -136,8 +136,7 @@ it.each([
   const props = { ...paneProps(), isWindowsTerminalHost: platform.hostIsWindows }
   const view = render(<TerminalPane {...props} />)
   await act(async () => {})
-  // The invariant is identity, not a magic number: the matched section keeps the same DOM
-  // node across every query edit, so editing the query cannot cost an extra read.
+  // Assert DOM identity across search edits so retained sections cannot repeat reads.
   const mountedButton = screen.getByRole('button', { name: 'Refresh sessions' })
   const inventoryReadsAfterMount = fake.listSessions.mock.calls.length
   const healthReadsAfterMount = fake.attribution.mock.calls.length

@@ -373,14 +373,13 @@ describe('mobile new-tab agent loading', () => {
     await expect(
       loadOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
     ).rejects.toBeInstanceOf(MobileWorkspaceOnOtherRuntimeError)
-    // Neither the paired host nor its SSH targets are probed for a workspace it does not own.
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'repo.list',
       'settings.get'
     ])
   })
 
-  // Rows on two hosts share the id; the SSH row first, so its connection would name this host's target.
+  // Put another host’s colliding repo id first so its SSH connection cannot accidentally address this host.
   function sharedRepoIdClient(detectAgents: () => unknown) {
     return createClient(async (method, params) => {
       if (method === 'settings.get') {

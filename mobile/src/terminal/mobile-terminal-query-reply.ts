@@ -1,5 +1,5 @@
 import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { terminalInputSend } from './mobile-terminal-operations'
 
 type TerminalSubscriptionRegistry = {
@@ -8,7 +8,7 @@ type TerminalSubscriptionRegistry = {
 
 type MobileTerminalQueryReplyOptions = {
   bytes: string
-  client: RpcClient | null
+  client: RpcOperationSender | null
   clientId: string | null
   connected: boolean
   handle: string
@@ -25,10 +25,8 @@ export function sendMobileTerminalQueryReply({
   hostSupportsQueryReplyInput,
   subscribedTerminals
 }: MobileTerminalQueryReplyOptions): Promise<boolean> {
-  // Why: every subscribed mobile xterm suppresses main's responder, including
-  // hidden panes, so ownership follows the subscription rather than focus.
-  // Hosts without terminal.query-reply-input.v1 strip inputKind and would take
-  // reply bytes as floor-stealing shell input, so drop (pre-fix behavior).
+  // Subscriptions, including hidden panes, suppress the desktop responder and own replies.
+  // Drop on older hosts that strip inputKind, or reply bytes would take the input floor.
   if (
     !client ||
     !connected ||

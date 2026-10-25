@@ -48,7 +48,6 @@ type ActivationRecord = {
   task: Promise<PluginWorkerHandle>
 }
 
-/** Owns lazy activation, bounded capacity, restart policy, cancellation, and idle reap. */
 export class PluginWorkerManager {
   private readonly supervisor = new PluginSupervisor()
   private readonly workers = new Map<string, StartedPluginWorker>()
@@ -104,9 +103,7 @@ export class PluginWorkerManager {
       if (pluginWorkerSpawnSpecsEqual(activeSpec, spec)) {
         return existing?.handle ?? pending!.task
       }
-      // Why: refresh/trigger races can present a new dev manifest while the
-      // old revision is still starting. Cancel and re-check atomically enough
-      // that callers never join a stale activation by key alone.
+      // Refresh may replace a dev manifest mid-activation; cancel and recheck rather than join by key.
       await this.deactivate(spec.pluginKey)
       if (this.disposed) {
         throw new Error('plugin workers are shut down')

@@ -42,7 +42,6 @@ function bootShell(html: string): Shell {
       sent.push(message)
     }
   }
-  // The shell script is this module's own inline source.
   new Function('window', 'document', 'getComputedStyle', script)(
     shellWindow,
     document,

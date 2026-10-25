@@ -93,8 +93,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       }
     }
     if (args.agentSessionEnsure && !ctx.preAdoptedStablePane) {
-      // Why: daemon-backed claims can outlive this controller; import all
-      // proven owners before deciding that an identity is absent.
+      // Claims can outlive this controller; import authoritative owner listings before deciding absence.
       await reconcileAgentSessionOwnerListings()
       const recoveredOwner = agentSessionOwners.find(args.agentSessionEnsure.claim)
       if (recoveredOwner && ctx.pendingRegistrationPtyId !== recoveredOwner.ptyId) {
@@ -119,7 +118,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           assertClientStillConnected()
           providerResult = await ctx.provider.spawn(ctx.spawnOptions)
           ctx.rejectedRegistrationCandidate = providerResult
-          // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
+          // Lower-owner success proves physical work committed even if admission observes early exit.
           ctx.reportPtySpawnCommitted()
           assertSpawnReplyWasLive(providerResult)
           ctx.deps.runtime?.assertPtyRegistrationAllowed?.(
@@ -127,8 +126,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
             providerResult.incarnationId
           )
           if (providerResult.incarnationId) {
-            // Why: local providers cannot serialize controller claims, so liveness proof
-            // needs the exact incarnation before the registry promotes the new owner.
+            // In-process providers cannot list controller claims; record exact incarnation before ownership promotion.
             ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
           }
           const providerEnsure = providerResult.agentSessionEnsure
@@ -145,7 +143,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         isLive: async (owner) => {
           const ownerProvider = tryGetProviderForPty(owner.ptyId)
           if (!ownerProvider) {
-            // Why: an owner on a host this process cannot reach is unknown, never absent.
+            // Unreachable execution owners remain unknown.
             throw new Error('execution_owner_unavailable')
           }
           return await isProviderAgentSessionOwnerLive(ownerProvider, owner)
@@ -158,8 +156,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ctx.result = providerResult ?? {
         id: ensured.owner.ptyId,
         isReattach: true,
-        // Why: adoption from an authoritative listing must preserve the
-        // incarnation proof used to reject a delayed exit from an older process.
+        // Preserve listing-proven incarnation to reject delayed exits from older processes.
         incarnationId: ptyIncarnationById.get(ensured.owner.ptyId)
       }
       ctx.result.agentSessionEnsure = ensured
@@ -186,7 +183,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ctx.pendingRegistrationPtyId = ctx.result.id
     }
     assertSpawnReplyWasLive(ctx.result)
-    // Why: admission precedes sequence/context state and every durable publication below.
+    // Admit registration before mutating sequence/context or publishing durable state.
     if (
       ctx.pendingRegistrationClaim &&
       !ctx.deps.runtime?.narrowPtyRegistration(
@@ -201,9 +198,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =
         ctx.deps.runtime?.getPtyOutputSequence?.(ctx.result.id) ?? 0
-      // Why kept: this is the reattach boundary in the RENDERER's sequence
-      // domain, and the daemon snapshot's kitty flags mean nothing without
-      // the boundary they were proven at.
+      // Preserve the renderer-domain boundary needed to reconcile daemon snapshot kitty flags.
       ctx.reconciledSnapshotSeq =
         ctx.deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
           ctx.result.id,

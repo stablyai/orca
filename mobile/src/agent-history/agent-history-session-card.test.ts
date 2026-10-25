@@ -6,7 +6,6 @@ import {
   isSessionInActiveWorktree
 } from './agent-history-session-card'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
-import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 
 const NOW = Date.parse('2026-06-29T00:00:00.000Z')
@@ -96,8 +95,7 @@ describe('buildMobileAgentHistorySections', () => {
     const sections = buildMobileAgentHistorySections(
       [
         session(),
-        // Truly empty: no turns, no preview turns, no recoverable signals —
-        // preview turns alone now count as resumable content and stay visible.
+        // Preview-only sessions remain resumable; empty means no turns, previews or recoverable signals.
         session({ id: 'claude:empty', messageCount: 0, previewMessages: [] })
       ],
       {
@@ -120,8 +118,7 @@ describe('buildMobileAgentHistorySections', () => {
     expect(sections.flatMap((s) => s.data).map((card) => card.id)).toEqual(['claude:2'])
   })
 
-  // Why: the host union widens, so the screen must narrow scoped tabs by cwd
-  // path-prefix on the client — otherwise Workspace/Project show the same set as All.
+  // Host hints only widen discovery; client prefix narrowing must distinguish Workspace/Project from All.
   it('narrows Workspace scope to sessions whose cwd is inside the active worktree path', () => {
     const sessions = [
       session({ id: 'claude:in', cwd: '/Users/ada/repo/app/src' }),
@@ -158,8 +155,7 @@ describe('buildMobileAgentHistorySections', () => {
     ).toEqual(['claude:active', 'claude:sibling'])
   })
 
-  // Why: before worktree.ps resolves, scopeFilterPaths is empty on a scoped tab;
-  // the builder must fall back to unnarrowed rather than filter to an empty list.
+  // Before worktree.ps resolves, absent prefixes must leave scoped tab unfiltered.
   it('falls back to unnarrowed when a scoped tab has no scopeFilterPaths yet', () => {
     const sessions = [
       session({ id: 'claude:a', cwd: '/Users/ada/repo/app' }),
@@ -198,14 +194,6 @@ describe('buildMobileAgentHistorySections', () => {
         .map((card) => card.id)
         .sort()
     ).toEqual(['claude:a', 'claude:b'])
-  })
-})
-
-describe('MOBILE_AI_VAULT_CAPABILITY', () => {
-  it('stays in lockstep with the host AI_VAULT_RUNTIME_CAPABILITY string', () => {
-    // Why: mobile's protocol-version copy lacks the host constant; this literal
-    // must match src/shared/protocol-version.ts AI_VAULT_RUNTIME_CAPABILITY.
-    expect(MOBILE_AI_VAULT_CAPABILITY).toBe('aiVault.v1')
   })
 })
 

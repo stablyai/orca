@@ -114,7 +114,7 @@ describe('orcad migration manifest contract', () => {
     ).toThrow('orcad_migration_dormant_workspace_lineage_scope_invalid')
   })
 
-  // The field a build that shed drafts into a blob would send; no released desktop ever did.
+  // Retired draft-blob field from development builds; no released desktop sent it.
   it('accepts and drops the retired editorDraftsBlob declaration', () => {
     const dormantState = {
       ...dormantLineage('folder:folder-1', 'worktree:repo-1::/srv/repo-1'),

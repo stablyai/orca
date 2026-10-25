@@ -69,7 +69,6 @@ function questionId(question: Record<string, unknown>, index: number): string {
 /** Session-local callback ownership; none of this state is reconstructed from the transcript. */
 export class ClaudePromptRegistry {
   private readonly prompts = new Map<string, ClaudePendingPrompt>()
-  /** Journal item id to the prompt key it shows. */
   private readonly journalBindings = new Map<string, string>()
   private readonly claims = new Map<ClaudePendingPrompt, ClaudePromptClaim>()
 
@@ -105,13 +104,12 @@ export class ClaudePromptRegistry {
     return prompt
   }
 
-  /** The request is still open and nobody is answering it yet. */
   awaitsAnswer(promptKey: string): boolean {
     const prompt = this.prompts.get(promptKey)
     return prompt !== undefined && !this.claims.has(prompt)
   }
 
-  /** True only if the prompt was still pending; lets abort and answer settle once. */
+  /** Prevent abort and answer from settling the same pending request twice. */
   forgetIfPending(prompt: ClaudePendingPrompt): boolean {
     if (!this.prompts.has(prompt.promptKey)) {
       return false

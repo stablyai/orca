@@ -93,14 +93,10 @@ export function PaletteFilterFieldOptions({
     [group.options, selected, normalizedQuery, rankMode]
   )
 
-  // State, not a ref: the scroller unmounts on an empty list, and the wheel
-  // listener has to re-attach to the node that replaces it.
+  // The scroller remounts after empty results; state reattaches the native wheel listener to its replacement.
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  // Why the field/query are stored alongside the cursor instead of reset in an
-  // effect: a stale row would stay active for one paint. Why not key off the
-  // ranked list identity: a toggle re-ranks, so that would yank the cursor back
-  // to the top mid multi-select.
+  // Store field/query with highlight to avoid stale paints; list identity changes on toggles and must not reset multi-select navigation.
   const [highlight, setHighlight] = useState<{
     field: PaletteFilterField
     query: string
@@ -112,10 +108,7 @@ export function PaletteFilterFieldOptions({
   }))
   const storedId =
     highlight.field === group.field && highlight.query === normalizedQuery ? highlight.id : null
-  // Why track the option id rather than its position: toggling re-ranks the list and pins
-  // the toggled option to the front, so a stored index would land on a different option and
-  // the next Enter would check one the user never aimed at. findIndex also covers the option
-  // disappearing from a narrowed list.
+  // Track option IDs: toggling re-ranks rows, so indices could aim the next Enter at another option.
   const activeIndex =
     storedId === null
       ? 0
@@ -170,8 +163,7 @@ export function PaletteFilterFieldOptions({
   )
 
   const handleListKeyDown = useCallback(
-    // Space toggles only from the listbox; in the search input it stays a
-    // typeable character, and labels like "Delta Host" need it.
+    // Space toggles only from the listbox; search text must still accept spaces.
     (event: React.KeyboardEvent, allowSpaceToToggle = true) => {
       if (event.key === 'ArrowDown') {
         event.preventDefault()
@@ -203,8 +195,7 @@ export function PaletteFilterFieldOptions({
     group.field === 'host'
       ? translate('worktreeJumpPalette.filter.noHosts', 'No matching hosts')
       : translate('worktreeJumpPalette.filter.noProjects', 'No matching projects')
-  // Why a dedicated string per field: lowercasing a translated heading breaks in
-  // languages that capitalize nouns mid-sentence (German "Projekte").
+  // Translate complete field-specific labels; lowercasing nouns breaks languages such as German.
   const clearLabel =
     group.field === 'host'
       ? translate('worktreeJumpPalette.filter.clearHosts', 'Clear hosts')

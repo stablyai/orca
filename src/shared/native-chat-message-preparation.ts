@@ -1,15 +1,13 @@
-// What a chat reads from a terminal agent's transcript before folding it into rows. Desktop and
-// mobile both prepare through here, so a turn one of them draws is never dropped by the other.
+// Share transcript preparation across desktop/mobile so neither drops turns the other renders.
 
 import type { AgentType } from './agent-status-types'
 import { getVerifiedNativeChatCommands } from './native-chat-agent-profiles'
-import { surfaceSkillInvocationUserTurns } from './native-chat-command-envelope'
-import { surfaceNativeChatCommandOutputs } from './native-chat-command-output'
+import { surfaceSkillInvocationUserTurns } from './native-chat/native-chat-command-envelope'
+import { surfaceNativeChatCommandOutputs } from './native-chat/tools/native-chat-command-output'
 import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
 import type { NativeChatMessage } from './native-chat-types'
 
-/** A skill invocation as the `/name args` the user sent, and a reporting command's reply as its
- *  output; the harness records both as envelopes the noise filter would otherwise hide. */
+/** Surface skill invocation text and reporting-command output before noise filtering hides their harness envelopes. */
 export function surfaceNativeChatHarnessTurns(
   messages: readonly NativeChatMessage[],
   agent: AgentType

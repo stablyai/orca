@@ -1,13 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
 
-/** How a supported agent session opens: the raw terminal or the native chat view. */
 export type MobileSessionView = 'terminal' | 'chat'
 
 const DEFAULT_SESSION_VIEW_KEY = 'orca:defaultSessionView'
 const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
 
-// Why: default stays terminal so native chat remains strictly opt-in.
+// Default to terminal; native chat is opt-in.
 export const DEFAULT_SESSION_VIEW: MobileSessionView = 'terminal'
 
 let defaultViewWriteBarrier: Promise<void> | null = null
@@ -29,7 +28,6 @@ export type DefaultSessionViewPreference = {
   readonly hasStoredValue: boolean
 }
 
-/** Reads the raw per-device default and whether its storage key exists. */
 export async function readDefaultSessionViewPreference(): Promise<DefaultSessionViewPreference> {
   await defaultViewWriteBarrier
   try {
@@ -44,17 +42,13 @@ export async function readDefaultSessionViewPreference(): Promise<DefaultSession
   }
 }
 
-/** Global (per-device) default for how supported agent sessions open. */
 export async function loadDefaultSessionView(): Promise<MobileSessionView> {
   return (await readDefaultSessionViewPreference()).value ?? DEFAULT_SESSION_VIEW
 }
 
 export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
-  // Why: callers can outlive their route; a shared barrier keeps remounted
-  // Settings screens from letting an older write land after a newer choice.
+  // Share the write barrier across route remounts so an older save cannot overwrite a newer choice.
   const write = (defaultViewWriteBarrier ?? Promise.resolve()).then(() => {
-    // Through the one write path: the hybrid shell hands this key to the page on every `init`,
-    // built synchronously, and what it reads is noted there on an accepted write (ruling 35).
     return persistMirrored(DEFAULT_SESSION_VIEW_KEY, view)
   })
   const barrier = write.catch(() => undefined)
@@ -84,10 +78,8 @@ async function readSessionViewOverridesStorage(
   try {
     parsed = JSON.parse(raw) as unknown
   } catch {
-    // Invalid preference data is safe to replace on the next user mutation.
     return { overrides: new Map(), loaded: true }
   }
-  // Legacy format: an array of tab ids that were showing native chat.
   if (Array.isArray(parsed)) {
     return {
       overrides: new Map(
@@ -108,9 +100,7 @@ async function readSessionViewOverridesStorage(
   return { overrides: new Map(), loaded: true }
 }
 
-/** Per-tab session-view overrides that win over the global default, scoped to the
- *  paired host and worktree so colliding remote ids cannot activate a transcript
- *  watcher on another host. */
+// Scope overrides by host/worktree so colliding tab ids cannot activate another host’s transcript watcher.
 export async function loadSessionViewOverrides(
   hostId: string,
   worktreeId: string
@@ -118,7 +108,7 @@ export async function loadSessionViewOverrides(
   return (await readSessionViewOverridesPreference(hostId, worktreeId)).overrides
 }
 
-/** Reads overrides without conflating an empty preference with unavailable storage. */
+// Distinguish empty preferences from unavailable storage.
 export async function readSessionViewOverridesPreference(
   hostId: string,
   worktreeId: string
@@ -128,7 +118,7 @@ export async function readSessionViewOverridesPreference(
   return readSessionViewOverridesStorage(key)
 }
 
-/** Persists one user mutation without replacing sibling overrides from another mount. */
+// Apply one mutation without replacing another mount’s sibling overrides.
 export async function updateSessionViewOverride(
   hostId: string,
   worktreeId: string,
@@ -139,8 +129,7 @@ export async function updateSessionViewOverride(
   const previous = overrideUpdateBarriers.get(key) ?? Promise.resolve()
   const update = previous.then(async () => {
     const current = await readSessionViewOverridesStorage(key)
-    // Why: a transient read failure must not replace valid saved siblings with
-    // a partial map containing only the latest tab.
+    // Read failure must not replace saved siblings with a partial map containing only this tab.
     if (!current.loaded) {
       throw new Error('Session view overrides could not be read')
     }

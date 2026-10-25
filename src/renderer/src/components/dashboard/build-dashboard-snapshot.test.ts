@@ -355,7 +355,6 @@ describe('buildDashboardSnapshot', () => {
     expect(unnamed.cards[0].conversationName).toBeUndefined()
   })
 
-  // STA-2811: both panes of a split tab carried the focused pane's title.
   it('names each pane of a split tab from its own title', () => {
     const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
     const snapshot = buildDashboardSnapshot(
@@ -395,8 +394,7 @@ describe('buildDashboardSnapshot', () => {
     expect(nameByPaneKey.get(siblingPaneKey)).toBe('Redis cache strategy')
   })
 
-  // Why: `orca terminal rename --title` is unbounded, and the main-process
-  // validator drops any card whose label exceeds the shared bound.
+  // Unbounded terminal labels must fit the shared validator or the card is dropped.
   it('truncates labels to the length the snapshot validator accepts', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -409,8 +407,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].conversationName).toHaveLength(DASHBOARD_MAX_LABEL_LENGTH)
   })
 
-  // Why: filterOptions is snapshot-level, so an over-long project label is not
-  // recoverable by dropping a card — it invalidates the entire board.
+  // Overlong snapshot-level filter labels reject the entire board rather than one card.
   it('truncates the project filter label the whole snapshot rides on', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -477,8 +474,7 @@ describe('buildDashboardSnapshot', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
         agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
-        // Layout still remembers pty1 (it survives restarts), but the live
-        // set says that pty is gone — e.g. a parked tab after an app restart.
+        // Layouts retain old PTY IDs after restart; only the live set proves preview availability.
         ptyIdsByTabId: { [TAB_ID]: [] }
       }),
       NOW
@@ -652,8 +648,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].parentWorktreeId).toBeUndefined()
     expect(snapshot.cards[0].hostKind).toBeUndefined()
     expect(snapshot.cards[0].workspaceKind).toBeUndefined()
-    // Why: the card has a live pty, so only the count-path gate keeps the
-    // host-input resolution off the sidebar's per-status-tick rebuild.
+    // A live PTY alone must not trigger host-input resolution on sidebar count rebuilds.
     expect(snapshot.cards[0].ptyId).toBe('pty1')
     expect(snapshot.cards[0].terminalInput).toBeUndefined()
     expect(snapshot.workspaces).toBeUndefined()
@@ -754,9 +749,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].task).toBe('Batched orchestration task')
   })
 
-  // Why identity, not release: the batch is a view of the shared orchestration index, which
-  // mounted sidebar cards read through. A dashboard that drops below two worktrees must not
-  // invalidate it, and nothing the index reads changed across these transitions.
+  // Singleton/zero dashboard transitions must not release the shared orchestration index still read by mounted sidebar cards.
   it('keeps batch records live and correct when production moves from multi to singleton to zero', () => {
     const secondLeafId = '77777777-7777-4777-8777-777777777777'
     const firstPaneKey = makePaneKey('tab-w1', LEAF_ID)

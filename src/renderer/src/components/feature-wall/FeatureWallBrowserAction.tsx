@@ -1,14 +1,25 @@
+import { useBundledSkillInstallAction } from '@/hooks/use-bundled-skill-install-action'
+import { bundledSkillSetupActionLabel } from '../settings/bundled-skill-setup-copy'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
+import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useState } from 'react'
-import { ArrowUpRight, Loader2, Terminal } from 'lucide-react'
+import { ArrowUpRight, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { track } from '@/lib/telemetry'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
-import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
-import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import {
+  bundledSkillInstallNeedsAttention,
+  useBundledSkillInstall
+} from '@/hooks/use-bundled-skill-install'
+import { BundledSkillInstallStatus } from '../settings/BundledSkillInstallStatus'
+import {
+  onboardingFeatureSetupRunTelemetry,
   runOnboardingFeatureSetup,
   type OnboardingFeatureSetupSelection
 } from '../onboarding/onboarding-feature-setup'
@@ -39,8 +50,7 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
     closeModal()
     activateAndRevealWorktree(targetWorktree.id, { providesInitialSurface: true })
     const state = useAppStore.getState()
-    // Why: open the browser into the worktree's active group so it lands beside
-    // the user's current work rather than spawning a detached surface.
+    // Open beside the current work in its active group.
     const groupId =
       state.activeGroupIdByWorktree[targetWorktree.id] ??
       state.groupsByWorktree[targetWorktree.id]?.[0]?.id
@@ -80,8 +90,7 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   )
 }
 
-// Scope the shared feature setup to just browser use — the grab→agent flow only
-// needs the Orca CLI and browser skill, not Computer Use or orchestration.
+// Browser grab-to-agent needs only the CLI and browser skill.
 const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
   browserUse: true,
   computerUse: false,
@@ -89,29 +98,50 @@ const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
   linearTickets: false
 }
 
-// The grab→agent flow relies on the browser skill, so offer the same install action
-// the agent skills step uses, scoped to just browser use.
 function BrowserSkillInstallButton(): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const [command, setCommand] = useState<string | null>(null)
-  const [runtimeContext, setRuntimeContext] = useState<OnboardingFeatureSetupRuntimeContext | null>(
-    null
-  )
   const [busy, setBusy] = useState(false)
-  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const activeRuntime = useActiveProjectSkillRuntime()
+  const [wslSetup, setWslSetup] = useState<{
+    command: string
+    runtime: OnboardingFeatureSetupRuntimeContext
+  } | null>(null)
+  const legacyWsl = activeRuntime.agentRuntime?.runtime === 'wsl'
+  const skillInstall = useBundledSkillInstall()
+  const installSkills = skillInstall.install
+  const installAction = useBundledSkillInstallAction([ORCA_CLI_SKILL_NAME], {
+    enabled: !legacyWsl,
+    refreshKey: skillInstall.state.kind
+  })
 
   const handleInstall = useCallback(async () => {
-    if (busy || command !== null) {
+    if (busy) {
       return
     }
     setBusy(true)
     try {
-      const result = await runOnboardingFeatureSetup(
-        BROWSER_ONLY_FEATURE_SETUP,
-        undefined,
-        activeSkillRuntime
-      )
+      const result = await runOnboardingFeatureSetup(BROWSER_ONLY_FEATURE_SETUP)
       recordFeatureInteraction('agent-browser-setup')
+      // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+      if (legacyWsl) {
+        const command = buildAgentFeatureSkillInstallCommand(result.skillNames)
+        await window.api.ui.writeClipboardText(command)
+        setWslSetup({ command, runtime: activeRuntime })
+        return
+      }
+      const installState = await installSkills(
+        result.skillNames,
+        installAction.kind === 'replace' ? installAction.paths : undefined
+      )
+      const telemetry =
+        installState &&
+        onboardingFeatureSetupRunTelemetry(BROWSER_ONLY_FEATURE_SETUP, result, installState)
+      if (telemetry) {
+        track('onboarding_feature_setup_run', telemetry)
+      }
+      if (installState?.kind !== 'done' || !installState.summary.ok) {
+        return
+      }
       const firstWarning = result.warnings[0]
       if (firstWarning) {
         toast.warning(
@@ -121,23 +151,13 @@ function BrowserSkillInstallButton(): React.JSX.Element {
           ),
           { description: firstWarning.message }
         )
-      } else if (result.skillCommandsCopied) {
+      } else {
         toast.success(
           translate(
             'auto.components.feature.wall.FeatureWallBrowserAction.e02b11e6b0',
             'Browser setup ready'
-          ),
-          {
-            description: translate(
-              'auto.components.feature.wall.FeatureWallBrowserAction.d6d15077df',
-              'Skill command copied and inserted below for review.'
-            )
-          }
+          )
         )
-      }
-      if (result.skillInstallCommand) {
-        setRuntimeContext(activeSkillRuntime)
-        setCommand(result.skillInstallCommand)
       }
     } catch (error) {
       console.error('Browser setup failed', error)
@@ -159,34 +179,78 @@ function BrowserSkillInstallButton(): React.JSX.Element {
     } finally {
       setBusy(false)
     }
-  }, [activeSkillRuntime, busy, command, recordFeatureInteraction])
+  }, [activeRuntime, busy, installAction, installSkills, legacyWsl, recordFeatureInteraction])
 
-  if (command) {
+  // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+  if (wslSetup) {
     return (
       <FeatureSetupInlineTerminal
-        command={command}
-        runtimeContext={runtimeContext ?? undefined}
+        command={wslSetup.command}
+        runtimeContext={wslSetup.runtime}
         selection={BROWSER_ONLY_FEATURE_SETUP}
       />
     )
   }
+  if (
+    skillInstall.state.kind === 'unsupported' ||
+    (!legacyWsl && installAction.kind === 'unsupported') ||
+    bundledSkillInstallNeedsAttention(skillInstall.state) ||
+    (!legacyWsl && installAction.kind === 'attention')
+  ) {
+    return (
+      <BundledSkillInstallStatus
+        install={skillInstall}
+        unsupported={installAction.kind === 'unsupported' ? installAction.reason : undefined}
+        attention={
+          installAction.kind === 'attention'
+            ? { retry: () => void handleInstall(), message: installAction.attentionMessage }
+            : undefined
+        }
+        className="w-full"
+      />
+    )
+  }
 
+  if (!legacyWsl && installAction.kind === 'none') {
+    if (skillInstall.state.kind === 'done') {
+      return <BundledSkillInstallStatus install={skillInstall} />
+    }
+    return (
+      <p className="text-xs text-muted-foreground">
+        {translate('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
+      </p>
+    )
+  }
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      className="w-fit gap-2"
-      disabled={busy}
-      onClick={() => void handleInstall()}
-    >
-      {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Terminal className="size-3.5" />}
-      {busy
-        ? translate(
-            'auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b',
-            'Installing…'
-          )
-        : translate('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
-    </Button>
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="w-fit gap-2"
+        disabled={
+          (!legacyWsl && installAction.kind === 'loading') ||
+          busy ||
+          (legacyWsl ? Boolean(activeRuntime.installDisabledReason) : !skillInstall.ready)
+        }
+        onClick={() => void handleInstall()}
+      >
+        {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+        {busy
+          ? translate(
+              'auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b',
+              'Installing…'
+            )
+          : installAction.kind === 'replace'
+            ? translate(
+                'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                "Replace with Orca's copy"
+              )
+            : installAction.kind === 'run' && installAction.changes
+              ? bundledSkillSetupActionLabel(installAction.changes)
+              : translate('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
+      </Button>
+      <BundledSkillInstallStatus install={skillInstall} />
+    </>
   )
 }

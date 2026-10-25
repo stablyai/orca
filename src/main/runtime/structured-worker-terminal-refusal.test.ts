@@ -59,8 +59,7 @@ describe('the refusal a terminal verb gives a structured worker handle', () => {
   })
 
   it('says the handle is an agent session, not that it went stale', () => {
-    // `terminal_handle_stale` is a claim the handle died. It never did — the session is live and
-    // has no terminal — so callers went looking for a remint that cannot exist.
+    // A live structured handle has no terminal; stale would falsely suggest reminting it.
     const handle = registerWorker()
     installRecord()
     const error = structuredWorkerTerminalRefusal(handle, null)

@@ -82,21 +82,14 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
   }
 
   getStatus(): RuntimeStatus {
-    // Why: browser panes need a backend that can create and stream a page. A
-    // desktop renderer provides one via <webview>; a headless serve provides one
-    // via the offscreen backend. Either way the same browser.screencast.v1 path
-    // works, so advertise it when either is present. browser.headless.v1
-    // additionally tells clients this host owns browser pages with no renderer,
-    // so they must not fall back to a local desktop browser tab.
+    // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
     const statusHost = this.asRuntimeStatusHost()
     const hasRenderer = Boolean(statusHost.getAvailableAuthoritativeWindow())
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
     const canHostClientPages = runtimeBrowserCommandsFactorySupportsClientHosting()
-    // TEMPORARY: nothing on this host reads it any more. Clients older than this build keep
-    // re-probing their WSL capabilities until it is true, so it is published for one
-    // compatibility window and then removed.
+    // TEMPORARY compatibility field: older clients otherwise re-probe WSL capabilities indefinitely.
     const windowsProcessStartTimeAvailable =
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
@@ -107,7 +100,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
           canBrowse ||
           hasHeadlessCommands ||
           canHostClientPages) &&
-        // Why: the nested-runtime E2E needs a real legacy transport without maintaining an old binary fixture.
+        // Nested-runtime E2E exercises legacy transport without maintaining an old binary.
         (process.env.ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL !== '1' ||
           capability !== REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
         (process.env.ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING !== '1' ||
@@ -116,29 +109,24 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
           capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY) &&
         (capability !== TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY ||
           supportsDurableTerminalPromptDelivery()) &&
-        // Why: only a host with its own usage poller reads keys saved through these methods.
+        // Only hosts running their own usage poller can consume saved keys.
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY ||
           statusHost.getUsageRateLimits() !== null)
     )
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
-    // Why not a static capability: the identity is this host's own process-wide choice, fixed
-    // before ready. A host that never initialized the store has no identity to report or change,
-    // so advertising it would point clients at a method that can only throw.
+    // Only initialized identity stores can serve this process-wide, pre-ready mode.
     if (isBrowserIdentityModeStoreInitialized()) {
       capabilities.push(BROWSER_IDENTITY_RUNTIME_CAPABILITY)
     }
-    // Why not static: only the orcad inside a distro can receive that distro's projects.
+    // Only the daemon inside a distro can receive that distro's projects.
     if (servesLocalWslMigrationSource()) {
       capabilities.push(ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY)
     }
-    // Why not static: a blob kind is advertised only once this build installs it, since an
-    // unadvertised kind is refused by the sender rather than staged and silently never applied.
+    // Advertise only installed blob kinds; senders refuse unsupported kinds instead of silently losing staged data.
     capabilities.push(...advertisedOrcadMigrationBlobCapabilities())
-    // Why: certificate proceed is owned by the browser-hosting process for both
-    // desktop webviews and offscreen pages. Advertise whenever either backend
-    // can host a page so remote clients can surface Proceed Anyway (Unsafe).
+    // Certificate proceed belongs to whichever process hosts the page, renderer or offscreen.
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
     }
@@ -149,15 +137,11 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
       capabilities.push(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)
     }
     capabilities.push(...darkSwitchRuntimeCapabilities())
-    // Why not a static capability: dev trees and `orca serve` installs may carry no
-    // out/mobile-web, and advertising a bundle this install cannot produce would promise a
-    // download that only ever answers mobile_web_bundle_unavailable.
+    // Dev/serve installs may lack out/mobile-web; never advertise downloads this install cannot produce.
     if (loadBundledMobileWebBundle()) {
       capabilities.push(MOBILE_WEB_BUNDLE_CAPABILITY)
     }
-    // Why the cause and not one fixed sentence: the operator can only act on the reason
-    // that actually applies, and a host that says "set ORCA_BROWSER_EXECUTABLE" to someone
-    // who already set it sends them to fix a thing that is not broken.
+    // Report the actual failure so operators are not told to fix already-correct configuration.
     const cause = canBrowse || hasHeadlessCommands ? null : runtimeBrowserUnavailableCause()
     const degradations: RuntimeDegradation[] = cause
       ? [
@@ -184,8 +168,6 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
       liveLeafCount: this.leaves.size,
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-      // Why: headless orca serve cannot create/stream BrowserViews, so clients
-      // must not treat browser panes as supported just because runtime RPC is up.
       capabilities,
       ...(degradations.length > 0 ? { degradations } : {}),
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
@@ -199,23 +181,17 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     }
   }
 
-  /** The name status publishes: the configured override, else the detected one. */
   readMachineName(): string {
     return this.machineName.read()
   }
 
-  /**
-   * Waits for the machine-name lookup up to the publish budget. A status read leaks the bare
-   * hostname only while a slow lookup is still running; the next read carries what it found.
-   */
+  /** Bound machine-name lookup; slow lookups temporarily publish hostname, then their result on the next read. */
   machineNameReady(): Promise<void> {
     return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
   }
 
   setPtyController(controller: RuntimePtyController | null): void {
-    // Why: CLI terminal writes must go through the main-owned PTY registry
-    // instead of tunneling back through renderer IPC, or live handles could
-    // drift from the process they are supposed to control during reloads.
+    // Write through the main-owned PTY registry so renderer reloads cannot drift handle/process identity.
     this.ptyController = controller
   }
 
@@ -293,10 +269,11 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
       return { tabId: record.tabId, worktreeId: record.worktreeId }
     }
     const pty = record.ptyId ? this.ptysById.get(record.ptyId) : null
+    const pane = this.paneOfPty(pty)
     const tabId =
-      pty?.tabId && !pty.tabId.startsWith('pty:')
-        ? pty.tabId
-        : parsePaneKey(pty?.paneKey ?? '')?.tabId
+      pane.tabId && !pane.tabId.startsWith('pty:')
+        ? pane.tabId
+        : parsePaneKey(pane.paneKey ?? '')?.tabId
     if (!pty || !tabId || tabId.startsWith('pty:')) {
       return null
     }
@@ -311,7 +288,6 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
       sortOrders?: WorktreeSortOrderUpdate[]
     }
   ): void {
-    // Headless hosts invalidate here unless only metadata changed.
     if (options?.invalidateGitScans !== false) {
       runWorktreeChangeInvalidators(repoId)
     }
@@ -331,11 +307,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     })
   }
 
-  /** Detail-level worktree lifecycle tap (plugin event bus). The coarse
-   *  worktreesChanged client event carries only repoId, which is not enough
-   *  for subscribers that need the affected worktree's identity.
-   *  Removal payloads carry no branch: the removal target resolves before
-   *  the git worktree is torn down and only pins id + path. */
+  /** Unlike coarse repoId-only changes, lifecycle events name the workspace; removals resolve only id/path before teardown. */
   onWorktreeLifecycle(listener: (event: RuntimeWorktreeLifecycleEvent) => void): () => void {
     return this.worktreeLifecycleEvents.on(listener)
   }
@@ -350,9 +322,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     this.emitClientEvent({ type: 'reposChanged' })
   }
 
-  // Why: automation writes land in the automation service and IPC handlers, so
-  // like SSH state they need a public entry point onto the client-event stream.
-  // Old clients drop the unknown event type; nothing is negotiated for it.
+  // Automation/IPC writes need a public stream entry; older clients drop this unknown event without negotiation.
   notifyAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.notifier?.automationsChanged?.(payload)
     this.emitClientEvent({ type: 'automationsChanged', ...payload })

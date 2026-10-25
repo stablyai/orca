@@ -4,8 +4,7 @@ import type * as UIZoomModule from './ui-zoom'
 const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 const LINUX_UA = 'Mozilla/5.0 (X11; Linux x86_64)'
 
-/** Loads a fresh copy of the module: `isMac` is resolved once at module scope,
- *  so platform and the preload bridge have to be in place before evaluation. */
+/** Install platform/preload before fresh module evaluation; isMac is captured at import time. */
 async function loadUIZoom(
   args: { level?: number; userAgent?: string; withBridge?: boolean } = {}
 ): Promise<{
@@ -42,8 +41,7 @@ afterEach(() => {
 })
 
 describe('windowDipToCssPx', () => {
-  // STA-7568: a box pinned to a native size must shrink as UI zoom inflates the CSS px
-  // it is measured in, so that box x factor lands back on the DIP size it was given.
+  // Fixed native-DIP boxes must shrink in CSS pixels as UI zoom grows, so box × factor stays native size (STA-7568).
   it('converts a DIP size into the CSS px that occupies it at the live zoom level', async () => {
     const { module, setLevel } = await loadUIZoom()
 
@@ -96,8 +94,7 @@ describe('syncZoomCSSVar', () => {
     module.syncZoomCSSVar()
 
     expect(setProperty).toHaveBeenCalledWith('--ui-zoom-factor', String(1.2))
-    // Main restores the zoom before startup hydration runs; writing it back would be a no-op
-    // at best and could clobber a level applied in between.
+    // Main restores zoom before hydration; writing it back can clobber a newer level.
     expect(setZoomLevel).not.toHaveBeenCalled()
   })
 })

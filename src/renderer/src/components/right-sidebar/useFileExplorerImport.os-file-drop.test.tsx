@@ -156,7 +156,6 @@ describe('file explorer OS file drops', () => {
       worktreePath: '/repo'
     })
     expect(mocks.importPaths.mock.calls[0][2]).toBe('/repo/app/src')
-    // The explorer now shows workspace A, so the B result is not selected there.
     await waitFor(() => expect(clearDrag).toHaveBeenCalled())
     expect(setSelected).not.toHaveBeenCalled()
   })

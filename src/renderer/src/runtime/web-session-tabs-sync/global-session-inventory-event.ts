@@ -1,6 +1,6 @@
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
+import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../store'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
@@ -37,7 +37,6 @@ export type GlobalSessionInventoryEventArgs = {
   coordinator: VisibilityResumeCoordinator
 }
 
-/** Apply a full-inventory frame from the all-worktrees stream, fencing visibility omissions. */
 export function handleGlobalSessionInventoryEvent({
   environmentId,
   expectedEnvironmentConnectionGeneration,
@@ -137,6 +136,7 @@ export function handleGlobalSessionInventoryEvent({
           frames: applicable.map(({ snapshot }, index) => ({
             environmentId,
             worktreeId: snapshot.worktree,
+            source: snapshot,
             decision: decisions[index]!,
             expectedEnvironmentConnectionGeneration,
             expectedEnvironmentPairingRevision,
@@ -176,7 +176,6 @@ export function handleGlobalSessionInventoryEvent({
         settleHydration?.()
       }
     })
-  // Each subscription opens with one census: the host is reachable again. Chats it lists were
-  // already settled as published above, before any recovery await.
+  // Each subscription opens with one census: recheck launches now that the host is reachable.
   recheckUnconfirmedStructuredAgentLaunches(toRuntimeExecutionHostId(environmentId))
 }

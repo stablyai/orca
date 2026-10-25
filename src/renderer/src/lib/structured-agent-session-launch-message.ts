@@ -9,10 +9,10 @@ import {
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
-import { trackStructuredLaunchPromptOutcome } from './structured-agent-session-launch-prompt-outcome'
+import { trackStructuredLaunchPromptOutcome } from './agent-session/launch/structured-agent-session-launch-prompt-outcome'
 
 /** Null when the chat's start has not failed, or its restart could not begin. */
 export function relaunchFailedStructuredAgentSessionWithMessage(

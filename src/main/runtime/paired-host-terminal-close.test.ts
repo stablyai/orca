@@ -1,5 +1,4 @@
-// STA-7826: a CLI close of a terminal a paired runtime runs must reach that runtime, the only
-// machine that can stop its process, instead of "stopping" the remote id on this machine.
+// CLI close must route to the paired runtime that owns the process, not claim a local stop of its remote id (STA-7826).
 import { describe, expect, it, vi } from 'vitest'
 import { toRemoteRuntimePtyId } from '../../shared/remote-runtime-pty-id'
 import { OrchestrationError } from './orchestration/orchestration-error'
@@ -41,7 +40,6 @@ function pairedHostLeafRuntime(hostCall: HostCall, runtimeStore: typeof store = 
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
     closeTerminalTab,
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })
@@ -98,7 +96,6 @@ describe('closing a terminal that a paired runtime runs', () => {
     expect(closeTerminalTab).toHaveBeenCalledWith('tab-1', {
       localPtyTeardownOwnedExternally: true
     })
-    // This machine cannot stop the paired host's process, so it must not pretend to.
     expect(localStops).toEqual([])
   })
 
@@ -141,8 +138,7 @@ describe('closing a terminal that a paired runtime runs', () => {
   })
 
   it('retires the mirror of a terminal the owning host no longer knows, without claiming a stop', async () => {
-    // The owner is a real runtime that never issued this handle; the RPC layer passes its
-    // refusal code through, as `mapRuntimeError` does for `terminal_handle_stale`.
+    // Exercise a real owner that never issued the handle so its refusal survives RPC error mapping.
     const owner = new OrcaRuntimeService(store)
     owner.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { runtime, closeTerminalTab } = pairedHostLeafRuntime(async (_env, _method, params) => {
@@ -169,35 +165,41 @@ describe('closing a terminal that a paired runtime runs', () => {
     expect(closeTerminalTab).toHaveBeenCalledOnce()
   })
 
-  it('refuses a pinned tab before the owning host stops anything', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          {
-            id: 'tab-1',
-            ptyId: toRemoteRuntimePtyId('term_on_host', 'env-1'),
-            worktreeId: WORKTREE_ID,
-            title: 'Shell',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0,
-            isPinned: true
+  it.each(['local', 'runtime:env-1'] as const)(
+    'refuses a pinned tab saved in the %s partition before the owning host stops anything',
+    async (partition) => {
+      const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            [WORKTREE_ID]: [
+              {
+                id: 'tab-1',
+                ptyId: toRemoteRuntimePtyId('term_on_host', 'env-1'),
+                worktreeId: WORKTREE_ID,
+                title: 'Shell',
+                customTitle: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: 0,
+                isPinned: true
+              }
+            ]
           }
-        ]
-      }
-    })
-    const { runtime, call } = pairedHostLeafRuntime(
-      async () => ({ close: { handle: 'term_on_host', tabId: 'host-tab', ptyKilled: true } }),
-      runtimeStore
-    )
-    const handle = await listedHandle(runtime)
+        },
+        partition
+      )
+      const { runtime, call } = pairedHostLeafRuntime(
+        async () => ({ close: { handle: 'term_on_host', tabId: 'host-tab', ptyKilled: true } }),
+        runtimeStore
+      )
+      const handle = await listedHandle(runtime)
 
-    await expect(runtime.closeTerminal(handle)).rejects.toThrow('terminal_tab_pinned')
-    await expect(runtime.closeTerminalTab(handle)).rejects.toThrow('terminal_tab_pinned')
-    expect(call).not.toHaveBeenCalled()
-  })
+      await expect(runtime.closeTerminal(handle)).rejects.toThrow('terminal_tab_pinned')
+      await expect(runtime.closeTerminalTab(handle)).rejects.toThrow('terminal_tab_pinned')
+      expect(call).not.toHaveBeenCalled()
+    }
+  )
 
   it('leaves a pane rebound during the host call to its new occupant', async () => {
     let answerHost: ((value: unknown) => void) | null = null
@@ -243,8 +245,7 @@ describe('closing a terminal that a paired runtime runs', () => {
     }))
     const handle = await listedHandle(runtime)
 
-    // This harness publishes no session snapshot, so the local tab commit after it answers
-    // tab_not_found; the host close must already have been sent.
+    // No local snapshot exists; host close must be sent before the later tab_not_found.
     await runtime.closeTerminalTab(handle).catch(() => undefined)
     expect(call).toHaveBeenCalledWith(
       'env-1',

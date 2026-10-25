@@ -108,8 +108,7 @@ export function EditorContent({
     viewStateScopeId === activeFile.id
       ? `${activeFile.filePath}:pdf`
       : `${activeFile.filePath}::${viewStateScopeId}:pdf`
-  // Why: the same absolute path can exist in different worktrees, paired
-  // runtimes, or SSH targets; durable PDF zoom must not cross those owners.
+  // Scope durable PDF zoom by owner: identical paths can belong to different worktrees or remote hosts.
   const pdfPreferenceKey = buildPdfScalePreferenceKey(activeFile)
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
   const reloadOpenCheckRunDetailsTab = useAppStore((state) => state.reloadOpenCheckRunDetailsTab)

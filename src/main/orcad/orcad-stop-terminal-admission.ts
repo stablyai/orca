@@ -1,9 +1,6 @@
-/**
- * The running server's terminal admission, held closed from the moment it begins to stop until it
- * exits: a terminal admitted then would die with it, uncounted, whatever a census asked.
- */
+// Hold admission until exit so shutdown cannot miss newly created terminals.
 let runningTerminalAdmission: { holdUntilExit(): void } | null = null
-// A stop can begin during startup, before the runtime binds its admission.
+// Shutdown can begin before the runtime binds terminal admission.
 let stopBegan = false
 
 export function bindOrcadStopTerminalAdmission(admission: { holdUntilExit(): void }): void {

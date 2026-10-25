@@ -14,9 +14,7 @@ type Props = {
   onLinked: () => void
 }
 
-// Link-an-existing-PR form body (number or GitHub URL). Renders a plain View so
-// it can sit inline inside the PR sidebar's ScrollView, mirroring the compose
-// form fix — a BottomDrawer overlay nested in a ScrollView gets clipped.
+// Use inline View inside sidebar ScrollView; nested BottomDrawer overlay clips, matching compose-form constraint.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)

@@ -2,10 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { resolveMountedLazyModalIds, type LazyModalId } from '../lazy-modal-mount-state'
 import { useAppStore } from '../store'
 
-/**
- * Tracks which lazy modal chunks are mounted. Modals load on first use and then stay mounted
- * so repeat opens preserve state and avoid re-fetch flashes.
- */
+/** Retain first-opened lazy modals for state and smooth reopening; AddRepo unmounts after its close cleanup. */
 export function useLazyModalMounts(): {
   mountedLazyModalIds: ReadonlySet<LazyModalId>
   shouldMountAddRepoDialog: boolean
@@ -25,7 +22,7 @@ export function useLazyModalMounts(): {
       return
     }
     if (shouldMountAddRepoDialog && !unmountAddRepoDialogTimerRef.current) {
-      // Why: AddRepoDialog's close effect aborts in-flight clone work; keep one closed render before unmounting hidden SSH/remote subscriptions.
+      // Let AddRepo’s closed render abort cloning before unmounting its remote subscriptions.
       unmountAddRepoDialogTimerRef.current = setTimeout(() => {
         setShouldMountAddRepoDialog(false)
         unmountAddRepoDialogTimerRef.current = null

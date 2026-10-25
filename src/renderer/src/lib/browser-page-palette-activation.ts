@@ -34,8 +34,7 @@ export function activateBrowserPagePaletteResult({
 }: BrowserPagePaletteActivationTarget): BrowserPagePaletteActivationResult {
   const initialState = useAppStore.getState()
   const worktree = initialState.getKnownWorktreeById(worktreeId, executionHostId)
-  // Why worktree first: removing a worktree also purges its browser workspaces
-  // and pages, so a page-first check would report a dead workspace as a stale page.
+  // Check workspace first: removal also purges pages and must not look like a merely stale page.
   if (!worktree) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
@@ -52,8 +51,7 @@ export function activateBrowserPagePaletteResult({
     return { status: 'failed', reason: 'missing-page' }
   }
 
-  // Why: activateAndRevealWorkspace mutates store state, so a later page lookup
-  // is unreliable — resolve the focus target from the URL captured here.
+  // Capture the URL before activateAndRevealWorkspace mutates the page state.
   const focusTarget: BrowserPageFocusTarget = isBlankBrowserUrl(page.url)
     ? 'address-bar'
     : 'webview'
@@ -72,8 +70,7 @@ export function activateBrowserPagePaletteResult({
     return { status: 'blocked' }
   }
 
-  // Why the failure and not a bare activation: without a unified tab the browser state would go
-  // active behind a tab that never shows the page.
+  // Without a unified tab, browser activation would stay hidden behind the current tab.
   if (
     !activateBrowserWorkspaceTab({
       worktreeId: worktree.id,

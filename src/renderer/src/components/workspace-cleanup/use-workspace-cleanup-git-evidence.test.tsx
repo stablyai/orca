@@ -114,7 +114,6 @@ describe('useWorkspaceCleanupGitEvidence', () => {
     await waitFor(() => expect(holders.scan).toHaveBeenCalledTimes(1))
     expect(pending[0]?.worktreeIds).toHaveLength(300)
 
-    // 600 more ids queue while the first request is in flight.
     view.rerender({ candidates: grown })
     await waitFor(() => expect(view.result.current.totalCount).toBe(900))
     expect(holders.scan).toHaveBeenCalledTimes(1)

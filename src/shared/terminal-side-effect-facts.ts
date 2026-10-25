@@ -1,18 +1,10 @@
-/**
- * Derived terminal side-effect facts carried on the `pty:sideEffect` channel
- * (main → renderer). Events are facts, not decisions: main parses every
- * local-daemon/SSH PTY byte exactly once and emits what it observed; the
- * renderer store handler owns notification/unread policy.
- */
+/** Main parses local/SSH PTY facts once on pty:sideEffect; renderer store policy decides notifications/unread state. */
 
 import type { AgentIdleStatus } from './agent-title-status'
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
 
-/** Why tagged: stale-clear facts come from main's unthrottled 3s timer, not
- *  observed bytes. Renderer policy clears title/cache state from them but
- *  must not schedule task-complete notifications or unread attention — a
- *  merely-paused agent (>3s silent mid-task) is not a completion. */
+/** Timer stale-clears restore title/cache only; a >3s pause is not task completion and must not create unread/notification attention. */
 export type TerminalSideEffectFact =
   | { kind: 'agent-status'; payload: ParsedAgentStatusPayload }
   | { kind: 'title'; normalizedTitle: string; rawTitle: string; staleWorkingTitleClear?: boolean }
@@ -27,38 +19,26 @@ export type TerminalSideEffectFact =
   | { kind: 'agent-exited' }
   /** OSC 133;D — foreground shell command exited (exit code best-effort). */
   | { kind: 'command-finished'; exitCode: number | null }
-  /** Carries the parsed link so the renderer store consumer never re-parses
-   *  the URL (parse drift would break the per-PTY dedupe contract). */
+  /** Carry the parsed URL to avoid renderer parse drift breaking per-PTY dedupe. */
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
-  /** Command Code output scrape (that CLI lacks hooks). Working seeds the
-   *  agent-status row immediately; done is a hint the renderer settle-checks
-   *  against its live status row before completing the turn. */
+  /** Command Code lacks hooks: scrape working to seed status, but settle-check done against the live row before completing. */
   | { kind: 'command-code-working'; prompt: string }
   | { kind: 'command-code-done'; prompt: string }
-  /** DECSET 2031 color-scheme subscribe observed in the byte stream. Emitted
-   *  so hidden-delivery-gated views (whose bytes never arrive) can still record
-   *  the subscription and push later theme flips; subscribing is never answered. */
+  /** Gated views miss subscription bytes; carry state for later theme pushes, never an immediate reply. */
   | { kind: '2031-subscribe' }
-  /** DECSET 2031 withdrawal observed in the byte stream. Gated views never see
-   *  these bytes, so without this fact their subscription registry goes stale
-   *  and a later theme flip pushes CSI 997 at a shell that already withdrew. */
+  /** Gated views miss withdrawal bytes; retire their registry entry before a later theme flip. */
   | { kind: '2031-unsubscribe' }
 
 export type TerminalSideEffectBatch = {
   ptyId: string
-  /** PTY output byte sequence at emission. Replay batches carry the sequence
-   *  their title state was current at, so the handler can drop a replay title
-   *  older than the last live title fact it applied. */
+  /** Replay title sequence permits dropping state older than the latest applied live title. */
   seq: number
-  /** Facts from one chunk, in byte order: agent status, titles, then bell.
-   *  Command Code scrape facts trail the chunk's parser facts — their policy
-   *  (status-row seeding) never interacts with title/bell ordering. */
+  /** Chunk facts contain agent status, titles and bell; Command Code scrape facts follow without affecting title/bell ordering. */
   facts: TerminalSideEffectFact[]
   /** True for (re)attach snapshots. Replay batches restore title state only —
    *  attention facts (bell, agent transitions) never replay. */
   replay?: boolean
-  /** Main-known attribution from runtime leaf/PTY records (same resolution as
-   *  agent-status events). Absent when main has no binding for the PTY yet. */
+  /** Main resolves attribution from runtime leaf/PTY bindings; absent until a binding is known. */
   worktreeId?: string
   tabId?: string
   paneKey?: string

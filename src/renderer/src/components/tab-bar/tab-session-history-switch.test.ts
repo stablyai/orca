@@ -24,6 +24,7 @@ import {
   findTabSessionHistoryRow,
   lookupTabSessionHistoryRow,
   resolveTabSessionHistorySubject,
+  resolveNativeChatCliForkIdentity,
   resolveTabSessionSwitch,
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
@@ -115,8 +116,6 @@ function makeState(
   return useAppStore.getState()
 }
 
-// What the Session History panel sends for its default Workspace scope, at the panel's default
-// depth, on the workspace's own host.
 const PANEL_REQUEST = {
   scopePaths: ['/repo/wt'],
   executionHostScope: 'local',
@@ -201,6 +200,25 @@ describe('resolveTabSessionHistorySubject', () => {
       executionHostId: 'local'
     })
   })
+  it.each(['local', 'runtime:server-1', 'ssh:dev-box', null] as const)(
+    'keeps lightweight native eligibility and the public request on workspace host %s',
+    (executionHostId) => {
+      const state = makeState({}, executionHostId ? { executionHostId } : {})
+      if (!executionHostId) {
+        state.repos = []
+      }
+      const args = {
+        tab: { id: 'chat-tab', worktreeId: WORKTREE_ID },
+        nativeChat: { sessionId: 'chat-1', agent: 'claude' as const }
+      }
+      const expected = executionHostId === 'ssh:dev-box' ? null : executionHostId
+      const identity = resolveNativeChatCliForkIdentity(state, args)
+      const full = resolveTabSessionHistorySubject(state, args)
+      expect(identity?.executionHostScope ?? null).toBe(expected)
+      expect(full?.request.executionHostScope ?? null).toBe(expected)
+    }
+  )
+
   it('finds a native chat tab by the chat it shows', () => {
     expect(
       resolveTabSessionHistorySubject(makeState(), {

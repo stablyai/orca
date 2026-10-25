@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-02T11:02:33.523Z",
+  "platform": "linux",
+  "command": ["hermes", "--tui"],
+  "cols": 120,
+  "rows": 31,
+  "note": "Hermes Agent v0.21.5, real model-provider picker left open. Printable letters and digits replaced at the same length to remove account, provider inventory, usage, paths and submitted text; ANSI bytes and grid geometry retained.",
+  "exitCode": 0
+}

@@ -46,8 +46,7 @@ function dedupeKnownIds(ids: string[], builtInSet: Set<string>): string[] {
   return out
 }
 
-// Why: built-ins added after the user saved a custom order should land next
-// to their canonical neighbors, not dangle at the end of the bar.
+// Place newly added built-ins beside canonical neighbors in saved custom layouts.
 function insertMissingBuiltInIds(
   ordered: string[],
   currentBuiltInIds: string[]
@@ -135,7 +134,7 @@ export function normalizeTerminalAccessoryLayoutPreference(
         visibleSet.add(id)
       }
     }
-    // Why: v1 layouts never had a custom order, so migrate to canonical order.
+    // Version-one layouts had no custom order; migrate them to canonical order.
     return {
       version: 2,
       orderedBuiltInIds: [...currentBuiltInIds],
@@ -228,7 +227,5 @@ export async function loadTerminalAccessoryLayout(): Promise<TerminalAccessoryLa
 export async function saveTerminalAccessoryLayout(layout: TerminalAccessoryLayout): Promise<void> {
   const preference = createTerminalAccessoryLayoutPreference(layout)
   const value = JSON.stringify(preference)
-  // Through the one write path: the hybrid shell hands this key to the page on every `init`,
-  // built synchronously, and what it reads is noted there on an accepted write (ruling 35).
   await persistMirrored(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, value)
 }

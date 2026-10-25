@@ -29,8 +29,7 @@ function renderButton(): HTMLElement {
   return screen.getByRole('button')
 }
 
-// Tailwind's `invisible` never resolves in the test DOM, so read the rendered state
-// from the class and the accessibility flag both labels carry.
+// Test DOM does not resolve Tailwind invisible; inspect both class and accessibility state.
 function shown(text: string): boolean {
   const label = screen.getByText(text)
   return !label.className.includes('invisible') && label.getAttribute('aria-hidden') === 'false'

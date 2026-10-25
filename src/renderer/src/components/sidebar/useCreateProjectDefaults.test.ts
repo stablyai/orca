@@ -150,7 +150,6 @@ describe('useCreateProjectDefaults', () => {
     expect(setCreateParent).toHaveBeenCalledWith('/home/alice/orca/projects')
     expect(mocks.stateValues[DEFAULT_PARENT_STATE]).toBe('/home/alice/orca/projects')
     expect(mocks.stateValues[RUNTIME_PARENT_STATUS_STATE]).toBe('idle')
-    // Why: runtime Git availability must be probed on the host, not the client.
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'repo.gitAvailable',

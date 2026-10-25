@@ -9,7 +9,6 @@ import {
 } from '@/store/slices/store-test-helpers'
 import { isTabOnScreen, resolveAutoAckTabTargets } from './agent-auto-ack-targets'
 
-// The user is present unless a test says otherwise.
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
 

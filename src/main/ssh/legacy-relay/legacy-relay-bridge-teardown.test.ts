@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { LegacyRelayBridgedPane } from '../../../shared/legacy-relay-bridge-contract'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import type { SshConnection } from '../connection/ssh-connection'
 import type { LegacyRelayTargetBridgeDeps } from './legacy-relay-target-bridge'
 import type { LegacyRelayBridgeHost } from './legacy-relay-bridge-registry'
+import { unusedSshConnection } from '../unused-host-transport.test-fixture'
 
 const TARGET = 'ssh-box'
 const PTY = toAppSshPtyId(TARGET, 'pty-1')
@@ -152,8 +152,7 @@ describe('a hung-up legacy relay bridge (loss of contact is not exit)', () => {
 describe('attaching a bridged pane', () => {
   it('sends a reattach screen in output order and only once', async () => {
     const replays: string[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach only checks a connection exists.
-    const connection = {} as SshConnection
+    const connection = unusedSshConnection()
     registry.installLegacyRelayBridge({
       leases: () => leases,
       retireLease: vi.fn(),

@@ -1,6 +1,4 @@
 import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/media-file-extensions'
-// Pure tree projection for the mobile file explorer. Mobile mirrors desktop
-// browse semantics by flattening cached files.readDir results as folders open.
 import { compareFileNames } from '../../../src/shared/file-name-sort'
 
 export type MobileDirEntry = {
@@ -132,8 +130,7 @@ export function getDirectoryCacheState(
   cache: DirectoryCache,
   relativePath: string
 ): DirectoryState | undefined {
-  // Why: repository paths are arbitrary object keys; inherited keys like
-  // "constructor" must not masquerade as loaded directory state.
+  // Inherited keys such as constructor must not masquerade as cached directories.
   return Object.hasOwn(cache, relativePath) ? cache[relativePath] : undefined
 }
 

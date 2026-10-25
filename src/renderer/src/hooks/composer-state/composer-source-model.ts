@@ -1,7 +1,7 @@
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -62,6 +62,7 @@ export type ComposerSourceModel = {
   onConnectSelectedRepo: () => Promise<void>
   prefetchSshConnectedGeneration: number
   resolvePendingSmartGitHubSubmit: () => Promise<PendingSmartGitHubSubmitResolution>
+  selectAddedProjectGroup: (groupId: string) => boolean
   selectAddedProjectRepo: (nextRepoId: string) => void
   showProjectRequiredError: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null

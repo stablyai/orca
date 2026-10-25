@@ -1,10 +1,6 @@
 import { z } from 'zod'
 
-/**
- * What a runtime host says about its own installation. `installationId` is generated once per
- * profile; `machineBinding` is HMAC(installationId, machine id + profile path) and is only a hint
- * that the profile moved or was copied, never an identity on its own.
- */
+/** installationId persists per profile; HMAC machineBinding hints at moved/copied profiles and is never identity alone. */
 export const RuntimeHostDescriptorSchema = z.object({
   installationId: z
     .string()

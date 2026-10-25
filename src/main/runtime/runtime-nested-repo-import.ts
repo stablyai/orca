@@ -93,8 +93,7 @@ export class RuntimeNestedRepoImport {
           })
           continue
         }
-        // Why not SSH: an SSH row can sit at the same path, and this import adds native rows. A
-        // paired host stamps its native rows `runtime:<env>`, so those still match.
+        // Import native rows only; SSH may share the path string. Paired hosts stamp native rows runtime:<env>, which still match.
         const existing = store
           .getRepos()
           .find(

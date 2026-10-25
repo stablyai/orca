@@ -55,8 +55,7 @@ class SqliteTransaction implements PushDatabase {
     return await operation(this)
   }
 
-  // BEGIN IMMEDIATE already holds the single writer lock for the whole
-  // transaction, so there is nothing narrower left to take.
+  // BEGIN IMMEDIATE already holds SQLite’s single writer lock.
   async lockQuotaScope(): Promise<void> {}
 
   async tryLockScope(): Promise<boolean> {
@@ -71,8 +70,7 @@ class SqliteTransaction implements PushDatabase {
 }
 
 class SqliteDatabase extends SqliteTransaction {
-  // node:sqlite is synchronous and has no nested transactions, so overlapping
-  // callers are serialized behind one tail promise instead of racing BEGIN.
+  // Serialize callers: synchronous node:sqlite has no nested transactions, so overlapping BEGIN would race.
   private tail: Promise<void> = Promise.resolve()
 
   override async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
@@ -147,8 +145,7 @@ class PostgresTransaction implements PushDatabase {
 
 function retryablePostgresTransactionError(error: unknown): boolean {
   const code = String((error as { code?: unknown }).code)
-  // 57014 is the pool statement_timeout firing. It aborts the transaction the
-  // same way a lock timeout does, so it takes the bounded retry path too.
+  // 57014 statement timeout aborts transactions like lock timeout; use the same bounded retry.
   return code === '40P01' || code === '40001' || code === '55P03' || code === '57014'
 }
 
@@ -205,8 +202,7 @@ class PostgresDatabase implements PushDatabase {
     throw new Error('postgres_transaction_retry_exhausted')
   }
 
-  // An advisory transaction lock taken outside a transaction is released by the
-  // implicit commit before the caller reads anything, which protects nothing.
+  // Outside an explicit transaction, implicit commit releases the advisory lock before any protected read.
   async lockQuotaScope(): Promise<void> {
     throw new Error('lock_quota_scope_requires_transaction')
   }
@@ -228,11 +224,7 @@ async function applySchema(database: PushDatabase): Promise<void> {
   for (const statement of pushSchemaStatements()) await database.query(statement)
 }
 
-// Why: DDL is not a request. A CREATE INDEX on a grown table can legitimately
-// outlive the request statement_timeout, and inheriting it would fail every
-// startup at the same statement instead of finishing once. One connection of
-// its own, closed before the serving pool opens, keeps the untimed session off
-// the request path entirely.
+// DDL may outlast request statement_timeout; apply once on a separate untimed connection, closed before serving, or every startup repeats the failure.
 async function applySchemaOnUntimedPool(
   databaseUrl: string,
   applicationName: string | undefined
@@ -251,8 +243,7 @@ async function applySchemaOnUntimedPool(
   try {
     await applyPostgresSchema(pushSchemaStatements(), (statement) => database.query(statement), {
       eventPrefix: 'orca_push_postgres_schema',
-      // Push has no catalog pre-check, so a lock timeout here says nothing about whether the
-      // object already exists and the old bounded retry is still the right answer.
+      // No catalog pre-check: lock timeout cannot prove DDL already exists, so retain bounded retry.
       retryLockTimeout: true
     })
   } finally {
@@ -262,8 +253,7 @@ async function applySchemaOnUntimedPool(
 
 export function absorbPostgresIdleClientErrors(pool: Pick<pg.Pool, 'on'>): void {
   pool.on('error', () => {
-    // node-postgres removes failed idle clients itself; an unhandled 'error'
-    // would crash the service and turn a SQL blip into a restart loop.
+    // Handle idle pg errors after the pool removes failed clients; otherwise transient SQL faults crash-loop the service.
     console.warn('[orca-push] idle PostgreSQL client failed')
   })
 }

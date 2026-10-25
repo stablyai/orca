@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
+import type { BrowserLoadFailureRoute } from '../../../../shared/browser-load-failure'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
 
@@ -27,14 +28,7 @@ export function classifySshWorkspaceBrowserRouteError(
   return 'unknown'
 }
 
-/**
- * Resolves the proxy-verified partition an SSH workspace's browser page must
- * mount on. Fail-closed: while preparing or failed, the caller must not mount
- * a webview at all — falling back to a profile partition would silently browse
- * from the local machine instead of the SSH host. The only unrouted paths are
- * explicit: the global setting, or a per-target opt-out the user chose from
- * the error card.
- */
+/** Mount only a proxy-verified partition; preparing/failed routes must never fall back to local egress. Unrouted access requires an explicit opt-out. */
 export function useSshWorkspaceBrowserRoute(
   worktreeId: string,
   sessionProfileId: string | null
@@ -71,9 +65,7 @@ export function useSshWorkspaceBrowserRoute(
   const hostConnection = useWorktreeHostConnection(worktreeId, targetId)
   const routeHost =
     targetId !== null && hostConnection.targetId === targetId ? hostConnection : null
-  // Why only an unsettled route waits: a dial is a transient, so it must not unmount a ready
-  // page or swap a failed route's card for "preparing". A connect (below) re-derives a failed one.
-  // Unrouted and another target's page are unsettled too: neither answers for this target.
+  // Dialing must preserve ready/error views; unrouted or wrong-target state remains unsettled until this target is answered.
   const routeReady =
     state.kind === 'ready' &&
     state.targetId === targetId &&
@@ -83,16 +75,13 @@ export function useSshWorkspaceBrowserRoute(
   const [seenConnectedHostEpoch, setSeenConnectedHostEpoch] = useState(connectedHostEpoch)
   if (connectedHostEpoch !== seenConnectedHostEpoch) {
     setSeenConnectedHostEpoch(connectedHostEpoch)
-    // Why: a host that connects — or reconnects under a new generation — re-derives a route
-    // it failed or held, the same as Retry, but keeps the user's probe choice.
+    // A connected host epoch rechecks failed/unsettled routes while preserving the user’s probe choice.
     if (connectedHostEpoch !== null && !routeReady) {
       setAttempt((current) => ({ ...current, count: current.count + 1 }))
     }
   }
 
-  // Why: a persisted "Try anyway" means the user vouched for this host once
-  // (e.g. PermitOpen allows their sites while the loopback probe is refused);
-  // re-nagging every launch would train them to distrust the card.
+  // Persist “Try anyway”: forwarding may work while the loopback probe is forbidden; do not re-prompt every launch.
   const skipProbe = attempt.skipProbe || probeSkippedTargetIds?.includes(targetId ?? '') === true
   useEffect(() => {
     if (!targetId) {
@@ -100,8 +89,7 @@ export function useSshWorkspaceBrowserRoute(
       return
     }
     setState({ kind: 'preparing' })
-    // Why: the SSH connection is still being established, so prepare could only fail with
-    // ssh-unavailable; the connected transition above restarts it.
+    // Preparing during dial can only fail ssh-unavailable; wait for the connected transition.
     if (awaitingHost) {
       return
     }
@@ -138,19 +126,14 @@ export function useSshWorkspaceBrowserRoute(
     }
   }, [targetId, expectedSshTargetGeneration, browserProfileId, attempt, skipProbe, awaitingHost])
 
-  // Why (review P1-1): `state` lags one commit behind a targetId transition on
-  // an already-mounted instance; returning stale 'unrouted' (or a stale
-  // 'ready' minted for a different target) for that render would mount a
-  // webview with the wrong egress before the effect corrects it. The
-  // routed/unrouted decision must be derived from targetId in-render.
+  // Derive target changes synchronously; stale unrouted/other-target state could mount a local-egress guest before the effect corrects it.
   const effectiveState: SshWorkspaceBrowserRouteState = !targetId
     ? { kind: 'unrouted' }
     : awaitingHost || state.kind === 'unrouted' || (state.kind === 'ready' && !routeReady)
       ? { kind: 'preparing' }
       : state
   const rederive = (nextSkipProbe: boolean): void => {
-    // Why: landing on preparing with the new attempt lets the effect's first run see a dialing
-    // host and wait, instead of starting a prepare that its own preparing write then cancels.
+    // Set preparing with the attempt so the effect can wait for dialing without cancelling its own prepare.
     setState({ kind: 'preparing' })
     setAttempt((current) => ({ count: current.count + 1, skipProbe: nextSkipProbe }))
   }
@@ -184,26 +167,26 @@ export function useSshWorkspaceBrowserRoute(
   }
 }
 
-/**
- * The undo for a persisted "Try anyway", surfaced where its cost shows up: on
- * a routed page's load-failure overlay. Returns null unless this workspace's
- * SSH target carries the skip; clearing it flips the route hooks back to
- * probing, which resurfaces the classified card if forwarding is still blocked.
- */
-export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void) | null {
+function useSshWorkspaceRouteTargetId(worktreeId: string): string | null {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
   const browserRoutingSettings = useAppStore((s) => s.settings)
   const environments = useAppStore((s) => s.runtimeEnvironments)
-  const probeSkippedTargetIds = useAppStore(
-    (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
-  )
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const targetId =
+  return (
     resolveSshWorkspaceBrowserRouteEligibility(
       executionHostId,
       browserRoutingSettings,
       environments
     )?.targetId ?? null
+  )
+}
+
+/** Revoke persisted “Try anyway” on load failure so route hooks probe again and can explain blocked forwarding. */
+export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void) | null {
+  const probeSkippedTargetIds = useAppStore(
+    (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
+  )
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const targetId = useSshWorkspaceRouteTargetId(worktreeId)
   if (!targetId || probeSkippedTargetIds?.includes(targetId) !== true) {
     return null
   }
@@ -213,4 +196,15 @@ export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void
         (id) => id !== targetId
       )
     })
+}
+
+export function useSshWorkspaceBrowserLoadFailureRoute(worktreeId: string): {
+  route: BrowserLoadFailureRoute | null
+  recheck: (() => void) | null
+} {
+  const recheck = useSshWorkspaceProbeSkipRecheck(worktreeId)
+  const targetId = useSshWorkspaceRouteTargetId(worktreeId)
+  const routeConnected = useWorktreeHostConnection(worktreeId, targetId).phase === 'connected'
+  // Why: after "Try anyway" nothing proved the host forwards ports, so a SOCKS failure can't mean "nothing is running".
+  return { route: recheck ? null : { routed: true, routeConnected }, recheck }
 }

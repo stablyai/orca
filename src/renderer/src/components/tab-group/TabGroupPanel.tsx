@@ -26,8 +26,7 @@ const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
-/** Who renders this group's tab strip: the panel itself ('attached', the main surface), or the
- *  host shell ('external', the floating panel's titlebar strip). */
+/** The panel draws attached strips; external hosts provide their single strip in shell chrome. */
 export type TabGroupPanelTabStrip = 'attached' | 'external'
 
 export default function TabGroupPanel({
@@ -242,15 +241,13 @@ export default function TabGroupPanel({
     />
   )
 
-  // Why: only width changes the toolbar footprint; focusing a pane must never reflow its tabs.
   const actionChromeClassName = cn(
     'ml-1.5 flex shrink-0 items-center gap-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
   )
   return (
     <div
-      // Why: vertical borders stay `border-border` so the focus highlight (--accent ~#f5f5f5 in light) doesn't paint a near-white strip by the resize handle; only the bottom border changes on focus.
-      // Why: unfocused split groups dim subtly so the focused one reads as selected; only when hasSplitGroups since a lone group has nothing to contrast against.
+      // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
           ? // Why: skip border-l/border-r on edge-touching groups; the split-layout wrapper and right sidebar already paint borders at those seams (double line otherwise).
@@ -268,10 +265,8 @@ export default function TabGroupPanel({
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
     >
-      {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
-      {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
-      {/* Why absent (not hidden) for an 'external' host: the floating panel's titlebar owns the one
-          strip, and a mounted second strip would register duplicate sortables in the drag scope. */}
+      {/* Each visible split needs its own strip; the shared titlebar cannot represent them all. */}
+      {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
           className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-card"

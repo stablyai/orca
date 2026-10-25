@@ -15,7 +15,6 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  // Return the English fallback so assertions can match user-facing copy.
   translate: (_key: string, fallback: string) => fallback
 }))
 

@@ -116,8 +116,7 @@ export function useCombinedDiffSectionActions({
     ]
   )
 
-  // Why: match single-file HTML diffs — preview the on-disk working tree file
-  // beside the combined view when the section is still present on disk.
+  // Match single-file HTML diffs by previewing the on-disk working file beside this combined view.
   const openSectionPreview = useCallback(
     (section: DiffSection) => {
       if (
@@ -132,8 +131,7 @@ export function useCombinedDiffSectionActions({
       ) {
         return
       }
-      // Why: use this combined-diff tab's group, not worktree activeGroupId —
-      // in a multi-pane layout the active group may be a different split.
+      // Use this tab’s split group; the workspace active group may belong to another pane.
       const state = useAppStore.getState()
       const sourceGroupId =
         (state.unifiedTabsByWorktree[file.worktreeId] ?? []).find(
@@ -162,7 +160,7 @@ export function useCombinedDiffSectionActions({
   const writtenBySectionRef = useRef(new Map<string, string>())
   const runSectionSave = useCallback(
     async (sectionKey: string, mode?: 'overwrite') => {
-      // Why by key: rows can be rebuilt while a save waits; a gone section is not saved.
+      // Resolve by key after queued saves; rows may move or disappear while waiting.
       const index = sectionsRef.current.findIndex((s) => s.key === sectionKey)
       const section = sectionsRef.current[index]
       if (!section) {
@@ -175,9 +173,7 @@ export function useCombinedDiffSectionActions({
 
       const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
-      // Why: edits live in modifiedContent; the diff result keeps the text loaded from (or last
-      // written to) disk, unless a large diff pruned it, in which case no version is known.
-      // Why first: a save earlier in this section's chain wrote it, maybe before state caught up.
+      // Prefer the prior queued write’s baseline, which may precede state updates; otherwise use unpruned loaded disk text, never the edited draft.
       const loaded =
         writtenBySectionRef.current.get(section.key) ??
         (section.diffResult?.kind === 'text' && !isPrunedTextDiffResult(section.diffResult)
@@ -202,7 +198,7 @@ export function useCombinedDiffSectionActions({
           operationProvenance: file.operationProvenance
         }
         const context = getEditorFileOperationContext(state, owner, worktree?.path ?? null)
-        // Why: shares the file's write lock with editor tabs saving the same path.
+        // Share the path write lock with ordinary editor tabs.
         const writeResult = await withEditorFileWriteLock(
           editorPathHoldKey(state, owner, absolutePath),
           () =>
@@ -225,8 +221,7 @@ export function useCombinedDiffSectionActions({
           return
         }
         writtenBySectionRef.current.set(sectionKey, content)
-        // Why: the section list can be rebuilt while the write is pending, so re-resolve
-        // by key — the captured index may now point at a different file.
+        // Re-resolve by key after writing; rebuilt section lists can move the saved file to another index.
         const savedIndex = sectionsRef.current.findIndex((s) => s.key === sectionKey)
         if (savedIndex === -1) {
           return
@@ -239,7 +234,7 @@ export function useCombinedDiffSectionActions({
             }
             const written =
               s.diffResult?.kind === 'text' ? { ...s.diffResult, modifiedContent: content } : null
-            // Why: edits made while this write was in flight are newer; only the baseline moves.
+            // Typing during the write is newer intent; advance only the baseline.
             if (s.modifiedContent !== content) {
               return written ? { ...s, diffResult: written, saveConflict: undefined } : s
             }
@@ -277,7 +272,7 @@ export function useCombinedDiffSectionActions({
     ]
   )
 
-  // Why per section: each save builds its precondition only after the previous one settles.
+  // Build each precondition after that section’s prior save settles.
   const sectionSaveChainsRef = useRef(new Map<string, Promise<void>>())
   const handleSectionSave = useCallback(
     (index: number, mode?: 'overwrite'): Promise<void> => {

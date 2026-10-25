@@ -1,7 +1,4 @@
-// Turn timing read straight off durable lifecycle items. The execution host
-// stamps both endpoints on its own clock and records the provider's own
-// measured duration when it reports one, so a completed value is the same on
-// every client and needs no local clock. Shared by desktop and mobile.
+// Durable host-clock lifecycle endpoints/provider durations keep settled timing identical on desktop/mobile without client clocks.
 
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import type {
@@ -19,18 +16,15 @@ export type StructuredAgentTurnTiming = {
   state: AgentJournalTurnLifecycleState
   /** Host clock at provider turn-start receipt. */
   startedAt: number
-  /** Host clock at the send that opened the turn; absent when the host could not
-   *  name one (provider-resumed turns, replayed history, older hosts). */
+  /** Opening send’s host clock; absent for resumed/history turns or older hosts. */
   requestedAt?: number
   /** Host clock at the terminal provider event; absent while running or unverifiable. */
   completedAt?: number
   /** The provider's own measurement; used when exact host endpoints are unavailable. */
   durationMs?: number
-  /** Host clock this turn's send stopped waiting behind the journal's previous
-   *  turn; present only when the send was issued before that turn ended. */
+  /** Previous turn’s end for a send queued behind it; absent when it did not wait. */
   queuedUntil?: number
-  /** Host clock when the lifecycle row was appended; with `startedAt` it gives
-   *  the host-side lag a client must subtract to anchor a live counter. */
+  /** Row append’s host clock; subtract start-to-append lag from the live anchor. */
   observedAt: number
   /** The turn's verdict, the provider's or the host-observed end's; absent when unknown. */
   verdict?: AgentTurnOutcome
@@ -61,8 +55,7 @@ function readTiming(
       ? durationMs
       : undefined
   const verdict = agentTurnVerdict({ state, outcome: readAgentJournalTurnOutcome(turn) })
-  // A send queued behind the previous turn counts from that turn's end (recorded, else its row's
-  // last host revision), never past this turn's own start: the provider opens it only after.
+  // Exclude waiting behind the previous turn, using its end or last host revision, capped at this turn’s start.
   const queuedUntil =
     precedingTurnEndedAt === undefined ? undefined : Math.min(precedingTurnEndedAt, startedAt)
   return {
@@ -79,10 +72,8 @@ function readTiming(
   }
 }
 
-/** Every root turn record in one pass over the journal, keyed by its anchor (see
- *  `structuredAgentTurnAnchors`: the user message that opened it, or the record itself for a turn
- *  no message opened) and by provider turn id. Untimed rows are skipped from the anchor map unless
- *  explicitly unverifiable (null). */
+/** One root-turn scan, indexed by provider ID and opener/self anchor (structuredAgentTurnAnchors).
+ * Omit untimed anchor rows unless explicitly unverifiable (null). */
 type StructuredAgentJournalTurns = {
   byAnchor: ReadonlyMap<string, StructuredAgentTurnTiming | null>
   byTurnId: ReadonlyMap<string, StructuredAgentTurnTiming | null>
@@ -119,8 +110,7 @@ export function selectStructuredAgentTurnTimings(
   return readStructuredAgentJournalTurns(items, submissions).byAnchor
 }
 
-/** The live turn's lifecycle timing, or null when its row carries no host start
- *  (an older host), in which case a surface falls back to local observation. */
+/** Null timing on older hosts without a host start lets surfaces fall back to local observation. */
 export function selectStructuredAgentRunningTurnTiming(
   items: readonly AgentJournalRenderItem[],
   turnId: string
@@ -128,10 +118,7 @@ export function selectStructuredAgentRunningTurnTiming(
   return readStructuredAgentJournalTurns(items).byTurnId.get(turnId) ?? null
 }
 
-/** The single instant every reading of a turn's elapsed time counts from: the
- *  send that opened it when the host named one — or, for a send queued behind the
- *  previous turn, that turn's end — and the provider turn-open otherwise.
- *  One origin is what keeps the live counter and the settled duration agreeing. */
+/** Shared live/settled origin: queuedUntil, else opening send, else provider start; excludes time waiting behind the prior turn. */
 export function structuredAgentTurnOrigin(timing: StructuredAgentTurnTiming): number {
   return timing.queuedUntil ?? timing.requestedAt ?? timing.startedAt
 }
@@ -155,12 +142,8 @@ export function completedStructuredAgentTurnSeconds(
     : null
 }
 
-/** A local-clock anchor for the live counter that carries no host/client skew.
- *  With the host's own clock at publish time, the anchor is the client's first
- *  sighting moved back by how long the host says the turn has already run, so a
- *  client attaching mid-turn counts from the real start. Without it, only the
- *  host-side lag between turn-start receipt and the row's append is known, and
- *  the counter starts at first sight. Every difference is single-clock. */
+/** Convert elapsed host-only differences onto the client’s firstSeen clock to avoid skew. With hostNow, include pre-attach elapsed;
+ * otherwise subtract only known start-to-append lag. Never subtract timestamps from different clocks. */
 export function structuredAgentTurnLocalStartedAt(
   timing: StructuredAgentTurnTiming,
   firstSeenAt: number,
@@ -171,16 +154,12 @@ export function structuredAgentTurnLocalStartedAt(
     hostNow !== undefined && Number.isFinite(hostNow)
       ? hostNow - origin
       : timing.observedAt - origin
-  // Wall-clock, not monotonic: an NTP step can put the origin after the host's
-  // own reading, and a negative elapsed would run the counter backwards.
+  // Clamp NTP-induced negative host elapsed so the counter cannot run backwards.
   return firstSeenAt - Math.max(0, hostElapsed)
 }
 
-/** What a chat surface hands to the shared turn-status selector: every turn the
- *  host recorded, with its duration or null. A null still outranks the local
- *  clock, so a turn whose end the host never observed shows no duration on the
- *  surface that watched it, exactly as it will after a reload. A rejected send
- *  never reached the provider, so it opened no turn and its message shows none. */
+/** Host null durations outrank local guesses, keeping live/reloaded surfaces consistent for unobserved ends.
+ * Rejected sends opened no turn and therefore show no duration. */
 export function selectStructuredAgentSettledTurns(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
@@ -215,9 +194,7 @@ function settledTurnsOf(
   return settled
 }
 
-/** Everything a chat surface reads off the journal for its turn bars, from one
- *  pass: settled durations and the running turn's timing. Which bar carries the
- *  running clock is the turn membership's answer (`nativeChatTurnMembership`). */
+/** Scan once for settled/running timings; nativeChatTurnMembership separately chooses the running bar. */
 export function selectStructuredAgentTurnBars(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],

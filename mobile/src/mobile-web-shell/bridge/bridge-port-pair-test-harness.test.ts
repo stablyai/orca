@@ -1,9 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { onTestFinished, describe, expect, it } from 'vitest'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse } from '../../transport/types'
 import { createBridgePortPair, createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 
-/** Every member of the contract, none of them a fake anything: the pair must carry a plain client. */
 function plainShellClient(record: string[]): RpcClient {
   return {
     sendRequest: (method: string) => {
@@ -22,48 +21,54 @@ function plainShellClient(record: string[]): RpcClient {
 }
 
 describe('the bridge port pair', () => {
-  it('lands `init` on the page with no await, so a caller can mount in the same turn', () => {
+  it('delivers init synchronously so a caller can mount in the same turn', () => {
     const pair = createFakeBridgePortPair()
-    let rounds = 0
-    while (pair.client.getShellSession() === null && rounds < 4) {
-      pair.drainNow()
-      rounds += 1
+    try {
+      for (let rounds = 0; pair.client.getShellSession() === null && rounds < 4; rounds += 1) {
+        pair.drainNow()
+      }
+      expect(pair.client.getShellSession()).toMatchObject({
+        sessionId: 'session-a',
+        buildId: 'build-a',
+        route: { pathname: '/h/host-a' }
+      })
+      expect(pair.client.getState()).toBe('connected')
+    } finally {
+      pair.client.close()
+      pair.host.dispose()
     }
-    expect(pair.client.getShellSession()).toEqual({
-      sessionId: 'session-a',
-      buildId: 'build-a',
-      grants: expect.anything(),
-      // The screen the shell says this page stands in for, and the routes it keeps for itself; the
-      // pair names both so the session it hands back is the shape a page on a route actually holds.
-      route: expect.objectContaining({ pathname: expect.any(String) }),
-      pageRoutes: expect.any(Array),
-      pageRouteGrants: null,
-      safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
-      keyboardInset: 0,
-      host: expect.objectContaining({ id: expect.any(String) }),
-      storage: expect.any(Object),
-      storageOversize: [],
-      ownsHostArea: false
-    })
   })
 
-  it('reports how many frames it moved, and moves none once both lanes are empty', () => {
+  it('reports movement and reaches a quiet handshake in a bounded drain', () => {
     const pair = createFakeBridgePortPair()
-    expect(pair.drainNow()).toBeGreaterThan(0)
-    while (pair.drainNow() > 0) {
-      // the handshake is more than one frame; drain until it settles
+    try {
+      expect(pair.drainNow()).toBeGreaterThan(0)
+      let moved = 1
+      for (let rounds = 0; moved > 0 && rounds < 8; rounds += 1) {
+        moved = pair.drainNow()
+      }
+      expect(moved).toBe(0)
+      expect(pair.drainNow()).toBe(0)
+    } finally {
+      pair.client.close()
+      pair.host.dispose()
     }
-    expect(pair.drainNow()).toBe(0)
   })
 
   it('carries a shell client that is not the fake, which is what the golden recorder needs', async () => {
     const record: string[] = []
     const client = plainShellClient(record)
     const pair = createBridgePortPair({ rpc: client })
+    onTestFinished(() => {
+      pair.client.close()
+      pair.host.dispose()
+    })
     expect(pair.rpc).toBe(client)
     await pair.flush()
-    void pair.client.sendRequest('worktree.list')
+    void pair.client.sendRequest('worktree.list').catch(() => undefined)
     await pair.flush()
     expect(record).toEqual(['worktree.list'])
+    pair.client.close()
+    pair.host.dispose()
   })
 })

@@ -108,9 +108,7 @@ export function appendWorktreeRows(
   }
 }
 
-/** The one folder-workspace row constructor, shared by the project-group,
- *  grouped-lane and flat emitters so their rows cannot diverge. Keyed by host: two hosts can
- *  share a folder id. */
+/** One host-keyed folder row constructor for all emitters; IDs can collide across hosts. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
   groupDepth: number

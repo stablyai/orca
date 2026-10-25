@@ -1,6 +1,4 @@
-// Draws each unbroken stretch of tool calls and thoughts as one slot. A pass over the slots
-// already built, so anything else that takes a slot (a section head, a roster's entries, a
-// row carrying only its turn's bar or rollup) ends a run just by sitting between its rows.
+// Combine calls/thoughts after slot selection so every intervening visible row or section boundary ends the run.
 
 import { agentJournalItemSubagentId } from '../../../../shared/agent-session-journal-producer'
 import {
@@ -20,7 +18,6 @@ import type {
 } from './native-chat-transcript-slots'
 
 function workRunRow(slot: NativeChatTranscriptSlot): NativeChatWorkRunRow {
-  // Every slot draws something: its message, or its turn's bar or rollup.
   if (slot.kind !== 'message') {
     return { member: null, draws: true, scope: undefined }
   }

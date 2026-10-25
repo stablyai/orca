@@ -169,8 +169,7 @@ export function AutomationListLocalRow({
   const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${automationUsageText(row.usageSummary ?? undefined)}`
   const canRunNow = automationRunAvailability.canRunNow && allows(row, 'run')
   const lastRun = lastRunByAutomationId.get(automation.id)
-  // Without a fetched run, the row's projected summary carries the newest
-  // retained run's status — the list never downloads run history for this.
+  // Use the projected newest retained run when history is absent; the list does not download history.
   const lastRunSnapshot = lastRun
     ? getLocalAutomationLastRunSnapshot(automation, lastRun)
     : getAutomationRowLastRunSnapshot(row)
@@ -222,8 +221,7 @@ export function AutomationListLocalRow({
           data-automation-row-id={row.key}
           data-current={isSelected ? 'true' : undefined}
           onClick={(event) => {
-            // Why: Radix portals menus out of the row DOM, but React still
-            // bubbles those clicks here — ignore so menu actions don't open detail.
+            // React bubbles portaled menu clicks through this row; ignore them to avoid opening detail.
             if (isPortaledRowMenuClick(event)) {
               return
             }

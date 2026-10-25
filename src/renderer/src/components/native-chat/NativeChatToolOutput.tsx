@@ -12,9 +12,11 @@ import type {
   AgentJournalItemBody
 } from '../../../../shared/agent-session-journal-types'
 import type { NativeChatToolResultBlock } from '../../../../shared/native-chat-types'
-import { MAX_TOOL_DETAIL_LENGTH } from '../../../../shared/native-chat-tool-summary'
+import {
+  MAX_TOOL_DETAIL_LENGTH,
+  truncateToolDetail
+} from '../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
-import { truncateToolDetail } from './native-chat-tool-summary'
 
 /** A partial detail response retains its original byte count. */
 type FullOutput = { text: string; partial: { shown: number; total: number } | null }
@@ -26,8 +28,7 @@ function fullPayload(body: AgentJournalItemBody): AgentJournalBoundedPayload | n
   return body.kind === 'diff' ? body.patch : null
 }
 
-/** A tool's output in an opened row: a head of it, and the whole of it on request, read from the
- *  host that keeps it. State is the row's own, so a live revision never fights it. */
+/** Read full output from its owning host on request; keep expansion state independent of live revisions. */
 export function NativeChatToolOutput({
   body
 }: {

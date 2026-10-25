@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
-  createMobileFilePreviewRequest,
   formatPreviewByteLength,
   loadMobileFilePreview,
   saveMobileTerminalArtifactPreview
@@ -43,37 +42,48 @@ describe('mobile-file-preview-request', () => {
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
-  it('selects readPreview for raster images and read for text-like files', () => {
-    expect(createMobileFilePreviewRequest('wt-1', 'assets/logo.png')).toEqual({
+  it.each([
+    {
+      relativePath: 'assets/logo.png',
       method: 'files.readPreview',
-      params: { worktree: 'id:wt-1', relativePath: 'assets/logo.png' }
-    })
-    expect(createMobileFilePreviewRequest('wt-1', 'docs/readme.md')).toEqual({
+      payload: { content: 'aW1hZ2U=', isBinary: true, isImage: true, mimeType: 'image/png' },
+      expected: { status: 'ready', kind: 'image', dataUri: 'data:image/png;base64,aW1hZ2U=' }
+    },
+    {
+      relativePath: 'docs/readme.md',
       method: 'files.read',
-      params: { worktree: 'id:wt-1', relativePath: 'docs/readme.md' }
-    })
-    expect(createMobileFilePreviewRequest('wt-1', 'public/index.html')).toEqual({
+      payload: { content: '# Notes', truncated: false, byteLength: 7 },
+      expected: {
+        status: 'ready',
+        kind: 'markdown',
+        content: '# Notes',
+        truncated: false,
+        byteLength: 7
+      }
+    },
+    {
+      relativePath: 'public/index.html',
       method: 'files.read',
-      params: { worktree: 'id:wt-1', relativePath: 'public/index.html' }
-    })
-  })
-
-  it('loads images through readPreview and never calls files.open', async () => {
-    const client = clientWith(
-      ok({ content: 'aW1hZ2U=', isBinary: true, isImage: true, mimeType: 'image/png' })
-    )
-
-    await expect(loadMobileFilePreview(client, 'wt-1', 'assets/logo.png')).resolves.toEqual({
-      status: 'ready',
-      kind: 'image',
-      dataUri: 'data:image/png;base64,aW1hZ2U='
-    })
-    expect(client.sendRequest).toHaveBeenCalledWith('files.readPreview', {
-      worktree: 'id:wt-1',
-      relativePath: 'assets/logo.png'
-    })
-    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
-  })
+      payload: { content: '<h1>hi</h1>', truncated: false, byteLength: 11 },
+      expected: {
+        status: 'ready',
+        kind: 'html',
+        content: '<h1>hi</h1>',
+        truncated: false,
+        byteLength: 11
+      }
+    }
+  ])(
+    'loads $relativePath through the matching read without opening a desktop tab',
+    async ({ relativePath, method, payload, expected }) => {
+      const client = clientWith(ok(payload))
+      await expect(loadMobileFilePreview(client, 'wt-1', relativePath)).resolves.toEqual(expected)
+      expect(client.sendRequest).toHaveBeenCalledExactlyOnceWith(method, {
+        worktree: 'id:wt-1',
+        relativePath
+      })
+    }
+  )
 
   it('loads terminal artifacts through grant-scoped artifact RPCs', async () => {
     const client = clientWith(ok({ content: '{"ok":true}', truncated: false, byteLength: 11 }))

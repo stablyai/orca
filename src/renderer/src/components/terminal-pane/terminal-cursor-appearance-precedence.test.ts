@@ -1,21 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * Issue #12729's second claim — "`terminalCursorStyle` / `terminalCursorOpacity` are ignored".
- *
- * Neither reproduces as a plumbing defect: an explicit `bar` survives the settings round trip and
- * the opacity composes into the theme's cursor colour. What the report was looking at is the IME
- * preedit overlay, which no cursor option reaches by construction
- * (`terminal-ime-xterm-trailing-preedit-occlusion.test.ts`).
- *
- * The one thing that does override the preference is a `DECSCUSR` from the running program, which
- * every terminal honours and which prompt frameworks emit routinely. That precedence is pinned
- * here because it is the answer to "my setting does nothing" whenever the overlay is not involved.
- *
- * Note what this file does NOT establish: composing the opacity into `theme.cursor` is not the same
- * as it reaching the screen. The webgl renderer uses the cursor colour as a cell background and
- * drops its alpha, so opacity is inert for a block cursor there — the default style on the default
- * renderer. That is upstream in the addon, and only the DOM renderer is exercised below.
- */
+/** Verify settings round-trip and DECSCUSR precedence (#12729); IME overlay is separate. DOM rendering only: WebGL drops cursor alpha for block cursors, so theme composition alone cannot prove visible opacity. */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
@@ -42,11 +26,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-/**
- * Lets the act settle, drains the frame it already scheduled, then subscribes before forcing the
- * one under assertion — so the awaited render is guaranteed to post-date the act, and the listener
- * is always in place before its trigger runs.
- */
+// Drain pending frames and subscribe before refresh so the awaited render follows the action.
 async function actAndAwaitRender(
   terminal: Terminal,
   act: () => void | Promise<void>
@@ -65,7 +45,6 @@ async function actAndAwaitRender(
 
 describe('#12729 — cursor style and opacity survive the settings path', () => {
   it('keeps an explicitly chosen bar across the settings write and the next load', () => {
-    // The write path stamps the migration flag alongside the user's choice.
     const written = normalizeTerminalCursorStyleDefault(
       { terminalCursorStyle: 'bar' },
       { preserveExplicitValue: true }
@@ -75,7 +54,6 @@ describe('#12729 — cursor style and opacity survive the settings path', () => 
       terminalCursorStyleDefaultedToBlock: true
     })
 
-    // The load path re-runs the migration over what was persisted and must not re-default it.
     expect(normalizeTerminalCursorStyleDefault(written).terminalCursorStyle).toBe('bar')
   })
 
@@ -122,8 +100,7 @@ describe('#12729 — DECSCUSR from the program outranks the preference', () => {
     // `CSI 2 SP q` — steady block, what a prompt framework emits on every redraw.
     await actAndAwaitRender(terminal, () => write(terminal, '\x1b[2 q'))
     expect(decPrivateCursorStyle(terminal)).toBe('block')
-    // The rendered class, not the private mode: the two are separate fields, so only what the
-    // renderer resolved out of them can fail when the precedence itself is dropped.
+    // Assert the rendered class; preference and active escape-mode fields are distinct.
     expect(cursorClasses(container)).toContain('xterm-cursor-block')
     expect(cursorClasses(container)).not.toContain('xterm-cursor-bar')
 
@@ -136,7 +113,6 @@ describe('#12729 — DECSCUSR from the program outranks the preference', () => {
     // Orca sends this reset on replay and on the agent-idle path (RESET_TERMINAL_CURSOR_STYLE).
     await actAndAwaitRender(terminal, () => write(terminal, '\x1b[0 q'))
     expect(decPrivateCursorStyle(terminal)).toBeUndefined()
-    // And control lands back on the preference, which moved to underline while DECSCUSR held it.
     expect(cursorClasses(container)).toContain('xterm-cursor-underline')
   })
 })

@@ -1,3 +1,5 @@
+import { AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { getChatPermissionSearchEntry } from './chat-permission-search'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
@@ -19,7 +21,6 @@ const SHELL_ENV_TOGGLE = '[aria-label="Toggle using your shell environment"]'
 const NAME_INPUT = '#settings-native-chat-shell-environment-name'
 
 function renderSetting(overrides: Partial<GlobalSettings>, updateSettings = vi.fn()) {
-  // The wrapper also covers rerender: the permission picker's tooltip needs the app's provider.
   return render(
     <ChatBehaviorSetting
       settings={{ ...getDefaultSettings('/tmp'), ...overrides }}
@@ -238,3 +239,18 @@ describe('ChatBehaviorSetting permissions', () => {
     expect(container.querySelector('#chat-permissions')).toBeNull()
   })
 })
+
+it.each([false, true])(
+  'matches Chat copy and search to its API owner typed capability %s',
+  (typed) => {
+    setLocalRuntimeCapabilitiesForTests(typed ? [AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY] : [])
+    const { container } = renderSetting({
+      nativeChatPermissionMode: 'ask',
+      agentPermissionDefault: 'full-access',
+      activeRuntimeEnvironmentId: 'unrelated-agents-host'
+    })
+    const description = getChatPermissionSearchEntry(typed).description
+    expect(container.querySelector('#chat-permissions')?.textContent).toContain(description)
+    expect(description?.includes('own settings')).toBe(typed)
+  }
+)

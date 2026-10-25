@@ -86,7 +86,7 @@ function initialRecoveryDecision(
   return null
 }
 
-/** Keeps a sanctioned app-server claimant alive until Codex completes its own backfill. */
+/** Keep an app-server claimant alive so Codex can finish its own backfill. */
 export async function runCodexStateDbBackfillRecovery(
   codexHomePath: string,
   signal: AbortSignal,
@@ -173,7 +173,6 @@ export async function withCodexBackfillSupervisorLock<T>(
   run: () => Promise<T>
 ): Promise<T> {
   const hostIdentity = scopeRecoveryHostIdentity(await readManagedHookHostIdentity(), codexHomePath)
-  // Reuse the crash-safe hard-link claim protocol; its storage root is Codex-specific.
   return await withManagedHookInstallLock(
     resolveCodexBackfillSupervisorLockRoot(codexHomePath),
     signal,
@@ -270,7 +269,7 @@ export function startCodexStateDbBackfillRecoveryInBackground(
   return task
 }
 
-/** Waits only for exact-owner arbitration, never for the potentially long Codex index. */
+/** Wait for owner arbitration; indexing continues in the background. */
 export async function ensureCodexStateDbBackfillRecoveryStarted(
   codexHomePath: string
 ): Promise<void> {

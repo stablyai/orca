@@ -18,8 +18,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/termin
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 
-// ─── Oracle: the pre-index full-map scans, kept here (not in src) so the
-// randomized suite can assert the indexed resolvers are byte-identical. ───
+// Keep pre-index scans as the randomized differential oracle for exact resolver behavior.
 
 function oracleAnyTabAgent(
   map: Record<string, AgentStatusEntry>,
@@ -138,8 +137,6 @@ const ORACLES = {
     return activeLeafId ? oracleAnyRetainedTabAgent(map, tabId, activeLeafId) : null
   }
 }
-
-// ─── Fixtures ───
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0

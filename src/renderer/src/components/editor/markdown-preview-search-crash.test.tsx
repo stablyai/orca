@@ -1,11 +1,5 @@
 // @vitest-environment happy-dom
-//
-// Regression guards for crash 237acef1: search highlighting must not mutate the
-// DOM react-markdown owns. Injecting <mark> by splitting react's text nodes (and
-// normalize()-merging them on clear) left react with stale child pointers, so
-// the next streamed-content commit threw
-//   NotFoundError: Failed to execute 'insertBefore' on 'Node': The node before
-//   which the new node is to be inserted is not a child of this node.
+// Mutating React-owned text nodes for highlights caused insertBefore crashes after streamed updates; preserve the DOM.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -58,7 +52,6 @@ describe('markdown preview search highlighting keeps react-owned DOM intact (cra
     const body = render(['hello world'])
     const matches = applyMarkdownPreviewSearchHighlights(instance, body, 'lo')
     expect(matches.length).toBe(1)
-    // No <mark> is injected; the text react owns is byte-for-byte intact.
     expect(body.querySelector('mark')).toBeNull()
     expect(body.textContent).toBe('hello world')
   })
@@ -66,18 +59,12 @@ describe('markdown preview search highlighting keeps react-owned DOM intact (cra
   it('survives a streamed re-render while highlights are active', () => {
     const body = render(['alpha ', 'beta'])
     applyMarkdownPreviewSearchHighlights(instance, body, 'beta')
-    // Highlights stay registered while streamed content rewrites the paragraph.
-    // When they mutated react's text nodes this commit threw NotFoundError; with
-    // no DOM mutation it is clean. (afterEach clears the instance.)
+    // Streamed commits previously threw NotFoundError after highlighting mutated React-owned text nodes.
     expect(() => render(['alpha ', 'gamma', ' delta'])).not.toThrow()
   })
 })
 
-// The paint path only runs where the CSS Custom Highlight API exists (prod
-// Electron), which jsdom/happy-dom lack — so stub a faithful, Electron-shaped
-// registry + Highlight to exercise it. The stub Highlight throws if handed any
-// constructor argument, catching any accidental `new Highlight(...ranges)`
-// spread (which overflows V8's arg stack on large docs).
+// Stub Electron’s Highlight API; reject constructor arguments to catch range spreads that overflow V8’s argument stack.
 class StubHighlight {
   readonly ranges = new Set<Range>()
   constructor(...args: Range[]) {
@@ -124,7 +111,6 @@ describe('markdown preview search painting with the CSS Custom Highlight API', (
   it('paints many matches without a constructor-arg spread', () => {
     const instance = {}
     const body = bodyWithText('a a a a a a a a')
-    // A spread paint (new Highlight(...ranges)) would throw via the stub.
     expect(() => applyMarkdownPreviewSearchHighlights(instance, body, 'a')).not.toThrow()
     expect(registry.entries.get(SEARCH_HIGHLIGHT_NAME)?.ranges.size).toBe(8)
     clearMarkdownPreviewSearchHighlights(instance)
@@ -144,7 +130,6 @@ describe('markdown preview search painting with the CSS Custom Highlight API', (
     // The registry paints the union (A's 2 + B's 1), not just the last writer's.
     expect(registry.entries.get(SEARCH_HIGHLIGHT_NAME)?.ranges.size).toBe(3)
 
-    // Closing B keeps A's highlights.
     clearMarkdownPreviewSearchHighlights(b)
     expect(registry.entries.get(SEARCH_HIGHLIGHT_NAME)?.ranges.size).toBe(2)
 
@@ -162,9 +147,8 @@ describe('markdown preview search painting with the CSS Custom Highlight API', (
     const paintedAfterApply = registry.entries.get(SEARCH_HIGHLIGHT_NAME)
     setActiveMarkdownPreviewSearchMatch(instance, matches, 0)
     setActiveMarkdownPreviewSearchMatch(instance, matches, 1)
-    // The SEARCH highlight object is untouched by navigation (not rebuilt each Next/Prev)...
+    // Navigation must retain the search highlight while moving the active match.
     expect(registry.entries.get(SEARCH_HIGHLIGHT_NAME)).toBe(paintedAfterApply)
-    // ...while the ACTIVE highlight tracks the current match.
     expect(registry.entries.get(ACTIVE_SEARCH_HIGHLIGHT_NAME)?.ranges.has(matches[1])).toBe(true)
     clearMarkdownPreviewSearchHighlights(instance)
     body.remove()
@@ -178,8 +162,7 @@ describe('markdown preview search painting with the CSS Custom Highlight API', (
     setActiveMarkdownPreviewSearchMatch(instance, first, 0)
     expect(registry.entries.has(ACTIVE_SEARCH_HIGHLIGHT_NAME)).toBe(true)
 
-    // A streamed rerender / new query re-applies and clears the active range even
-    // when the match count is unchanged (regression for the vanishing active mark).
+    // Reapplying an equal-sized result set must still clear the old active range.
     const second = applyMarkdownPreviewSearchHighlights(instance, body, 'two')
     expect(second.length).toBe(first.length)
     expect(registry.entries.has(ACTIVE_SEARCH_HIGHLIGHT_NAME)).toBe(false)

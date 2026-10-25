@@ -21,7 +21,6 @@ describe('createAnnouncedNotificationRegistry', () => {
     registry.record('busy', 'id-2')
     registry.record('busy', 'id-3')
     registry.record('new', 'id-new')
-    // 'old' was last announced before 'busy', so 'new' evicts it; 'busy' keeps only its newest two.
     expect(registry.take('old').map((entry) => entry.id)).toEqual([])
     expect(registry.take('busy').map((entry) => entry.id)).toEqual(['id-2', 'id-3'])
     expect(registry.take('new').map((entry) => entry.id)).toEqual(['id-new'])

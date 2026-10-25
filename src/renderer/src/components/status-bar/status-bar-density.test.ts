@@ -24,7 +24,6 @@ describe('pickStatusBarDensityLevel', () => {
   })
 
   it('fits a collapsing level by its collapsed width, not its natural width', () => {
-    // Level 3 would need 500 with every chip, but 380 with calm chips folded into "+N".
     expect(pickStatusBarDensityLevel([w(700), w(600), w(500), w(500, 380), w(300)], 400)).toBe(3)
   })
 
@@ -52,7 +51,6 @@ describe('recordStatusBarDensityWidth', () => {
   })
 
   it('forgets other levels when a level re-measures differently', () => {
-    // A segment appeared or vanished, so the other levels' widths no longer describe the bar.
     expect(recordStatusBarDensityWidth([w(700), w(600), w(500)], 1, w(640))).toEqual([
       undefined,
       w(640)

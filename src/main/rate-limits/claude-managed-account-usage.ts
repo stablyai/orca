@@ -9,7 +9,7 @@ import { fetchActiveClaudeRateLimits } from './claude-active-usage-fetch'
 import { claudeUsageUnavailable, makeClaudeUsageResult } from './claude-usage-result'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 
-/** Usage reads the account's own folder; a host account's comes from its id, never a stored path. */
+/** Derive host account folders from account ids, never stored paths. */
 export type InactiveClaudeAccount = {
   id: string
   managedAuthRuntime?: 'host' | 'wsl'
@@ -22,7 +22,7 @@ export async function fetchInactiveClaudeAccountUsage(
   options: ClaudeManagedAccountUsageOptions = {}
 ): Promise<ProviderRateLimits> {
   if (account.managedAuthRuntime !== 'wsl') {
-    // Why the router: a covered account's usage is System default's, as its launches are.
+    // Covered accounts share System Default usage and launch routing.
     const authPreparation = getClaudeProfileRouter()?.accountUsagePreparation(account.id)
     return authPreparation
       ? fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
@@ -33,7 +33,7 @@ export async function fetchInactiveClaudeAccountUsage(
   if (!distro || !router) {
     return signInAgain()
   }
-  // Why: a stopped distro parks a UNC read for minutes, and the inactive loop is sequential.
+  // A stopped distro can block UNC reads for minutes and strand the sequential inactive-account loop.
   const guestRoot = toWindowsWslPath('/', distro)
   if (
     (await filterPathsToRunningWslDistrosAsync([guestRoot], { requireConfirmed: true })).length ===

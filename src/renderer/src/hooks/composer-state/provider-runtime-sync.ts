@@ -54,9 +54,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
     updateRepo
   } = input
 
-  // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
-  // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on
-  // the object would re-run this and briefly flip the toggle back to the stale value — the glitch.
+  // Depend on persisted hook-policy value; refetched repo identities must not replay stale toggles.
   const persistedSetupAgentStartupPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
 
   useEffect(() => {
@@ -193,9 +191,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
       if (existing?.key === key) {
         return existing.promise
       }
-      // Why: drop the cache entry on failure so a transient IPC error doesn't pin every later
-      // check for this repo/host to the same rejection.
-      // Why: the repo row names its host; an unknown one is inspected nowhere.
+      // Evict rejected checks so transient errors can retry; inspect only the repo’s known host.
       const promise: Promise<HookCheckResult> = (
         selectedRepoExecutionHostId
           ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId)

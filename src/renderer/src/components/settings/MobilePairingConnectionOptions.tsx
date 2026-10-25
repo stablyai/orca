@@ -40,8 +40,7 @@ function relayStatusLabel(status: MobileRelayStatus): string {
   )
 }
 
-// Support needs the cell a slow session actually landed on; the scheme adds
-// nothing a reader can act on, so only the host is shown.
+// Show the landed Relay cell for support; the scheme offers no actionable detail.
 function relayCellLabel(cellUrl: string): string | null {
   try {
     return new URL(cellUrl).host || null
@@ -69,9 +68,7 @@ export function MobilePairingConnectionOptions({
   const [relayCellUrl, setRelayCellUrl] = useState<string | undefined>(undefined)
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
-  // Why: an unconfigured build has no Relay endpoint to sign into, so a Sign in
-  // CTA would be dead. Treat that case as unavailable (matching the prior UI)
-  // and only offer Sign in when the build can actually reach Relay.
+  // Unconfigured builds have no Relay sign-in endpoint; mark unavailable instead of offering a dead CTA.
   const configured = authStatus?.configured !== false
   const needsSignIn = value === 'automatic' && !signedIn && configured
   // Availability is a property of the build, not of the current selection.
@@ -82,10 +79,7 @@ export function MobilePairingConnectionOptions({
     'local-only': null
   })
 
-  // Why: ARIA radiogroups move selection with the arrow keys; wrap between the
-  // two options and move focus so keyboard users get standard behavior.
-  // Ignore arrows that originate on nested controls (Sign in) so they do not
-  // steal keys from the button or flip the path while focus is outside a radio.
+  // Wrap/focus radio arrow navigation, but leave nested Sign in controls’ arrows untouched.
   const handleArrowKeys = (event: React.KeyboardEvent): void => {
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
       return

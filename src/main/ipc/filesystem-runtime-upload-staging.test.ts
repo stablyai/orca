@@ -6,8 +6,7 @@ import type * as RuntimeImportLimits from './runtime-import-limits'
 
 type RuntimeImportLimitsModule = typeof RuntimeImportLimits
 
-// Why: real ceilings are gigabytes, and truncate() is not sparse on NTFS, so a
-// literal over-limit fixture would allocate that much on Windows CI.
+// Scale down gigabyte ceilings: NTFS truncate may allocate the entire oversized fixture.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({
   ...(await importOriginal<RuntimeImportLimitsModule>()),
   REMOTE_IMPORT_MAX_FILE_BYTES: 4 * 1024,
@@ -70,8 +69,7 @@ describe('stageOneSourceForRuntimeUpload', () => {
     const staged = await stageOneSourceForRuntimeUpload(filePath)
 
     expect(staged).toMatchObject({ status: 'failed' })
-    // Why: a dropped file's relative path is '', so this is the regression that
-    // would otherwise report "'' is 6 KB, over the 4 KB ... limit".
+    // Dropped files have an empty relative path; errors must use their filename.
     expect(staged.status === 'failed' && staged.reason).toBe(
       "'clip.mp4' is 6 KB, over the 4 KB per-file remote import limit"
     )
@@ -91,7 +89,6 @@ describe('stageOneSourceForRuntimeUpload', () => {
     const filePath = join(workDir, 'second.bin')
     await writeFile(filePath, Buffer.alloc(3 * 1024))
 
-    // Alone it fits; after 14 KB of earlier sources the 16 KB drop ceiling is gone.
     await expect(stageOneSourceForRuntimeUpload(filePath, 0)).resolves.toMatchObject({
       status: 'staged'
     })

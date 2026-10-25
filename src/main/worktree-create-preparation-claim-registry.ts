@@ -1,4 +1,3 @@
-// Creates that hold a prepared checkout, and the preparations deferred until each one releases it.
 import { preparationEntryKey, preparationPathKey } from './worktree-create-preparation-claim'
 import type { PreparationEntry, StartPreparationArgs } from './worktree-create-preparation-pool'
 
@@ -62,7 +61,6 @@ export function deferPreparationForClaim(
   return true
 }
 
-/** A second release is inert, including after a test reset. */
 export function releasePreparationClaim(claim: PreparationClaim): {
   released: boolean
   pendingPreparations: DeferredPreparation[]

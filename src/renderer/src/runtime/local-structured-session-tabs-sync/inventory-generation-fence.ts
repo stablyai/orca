@@ -1,10 +1,7 @@
 import type { SessionTabsPublicationEpochHistory } from '../web-session-tabs-sync/state'
 import type { StructuredSessionTabPublicationVersion } from '../local-structured-session-tab-retirement'
 
-// Which publisher instance the renderer is listening to, which publication it
-// already accepted per worktree, and the one-shot startup restore. Every async
-// entry point carries the generation it was started under and re-checks it
-// before applying, so a test reset fences responses still in flight.
+// Track publisher generation, accepted per-worktree publications and one-shot restore. Every async entry rechecks its starting generation so reset fences in-flight responses.
 let syncGeneration = 0
 let restorePromise: Promise<void> | null = null
 

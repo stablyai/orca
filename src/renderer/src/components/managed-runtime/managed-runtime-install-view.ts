@@ -10,18 +10,14 @@ export type ManagedRuntimeInstallView = {
   status: string | null
   /** Percent downloaded, while a download of known size runs. */
   progress: number | null
-  /** Why the last operation or status read failed. */
   error: string | null
   action: ManagedRuntimeInstallAction | null
-  /** Update or Reinstall for a copy on disk, offered in the row's menu beside Remove. */
   menuAction: ManagedRuntimeInstallAction | null
   /** The action is the first step to using the agent, so Settings draws it as a button. */
   prominent: boolean
   /** Settings may offer to delete the copy Orca installed: one is there and nothing runs. */
   removable: boolean
-  /** A removal runs, so the line shows it as work in progress. */
   removing: boolean
-  /** Said after the actions, such as what Install downloads. */
   note: string | null
 }
 
@@ -143,7 +139,6 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
       'This copy of {{agent}} is damaged.',
       { agent }
     )
-    // The repair is the next step, so it is the row's button rather than a menu item.
     const label = translate('components.managed-runtime.reinstallShort', 'Reinstall')
     return { ...view(status, label), prominent: true }
   }
@@ -151,11 +146,9 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
   if (operation?.kind === 'install' && operation.phase === 'cancelled') {
     return view(translate('components.managed-runtime.cancelled', 'Installation cancelled.'), retry)
   }
-  // A failed install says only why, beside Try again.
   if (operation?.kind === 'install' && failed) {
     return view(null, retry)
   }
-  // The size says what Install costs.
   const size = state.downloadBytes
   return {
     ...view(
@@ -171,8 +164,7 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
   }
 }
 
-/** What an install row says and offers for the host's answer. `cancelling`: this row's Cancel is
- *  still out, so it says so until the host's cancel settles. */
+/** Show local cancellation feedback only until this row’s pending Cancel request settles. */
 export function managedRuntimeInstallView(
   snapshot: ManagedRuntimeInstallSnapshot,
   agent: string,

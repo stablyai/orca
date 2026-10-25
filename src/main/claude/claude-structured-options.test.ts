@@ -53,6 +53,9 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
       proof: createClaudeInitProof(),
       account: undefined,
       resumesTranscript: false,
+      claudeConfigDir: '/claude-home',
+      cwd: '/work',
+      history: { leafUuid: null, covered: true, contextActivity: 0 },
       onLateRefusal: () => {}
     }
   }
@@ -193,8 +196,6 @@ describe('Claude structured Fast mode', () => {
     expect(applyFlagSettings).not.toHaveBeenCalled()
   })
 
-  // The child omits the reason when nothing blocks Fast, so a later unblocked frame is
-  // the only all-clear. Without it the first reason latches and the control never returns.
   it('clears a blocking reason once a later frame reports state without one', async () => {
     const { session } = fastModeSession(true)
 
@@ -207,7 +208,6 @@ describe('Claude structured Fast mode', () => {
       fastModeSupport: { supported: false, reason: 'model_not_allowed' }
     })
 
-    // Switched back to a model that allows Fast: state reported, reason omitted.
     observeClaudeFastModeFacts(session, { fast_mode_state: 'on' })
     expect(session.fastModeDisabledReason).toBeUndefined()
     expect(
@@ -322,13 +322,6 @@ describe('Claude structured Fast mode', () => {
 })
 
 describe('Claude Fast mode against a catalog that identifies nothing', () => {
-  /**
-   * A CLI whose catalog answers with nothing identifies no model, so it is not
-   * evidence against one — the same rule the model admit-check already applies.
-   * Refusing here would have Fast unavailable on every model of a CLI that cannot
-   * answer, while a catalog that did list the model and stayed silent about Fast
-   * still refuses.
-   */
   it('allows Fast on when the catalog identifies no model at all', async () => {
     const { session, applyFlagSettings } = fastModeSession(true)
     session.connection.supportedModels = async () => []
@@ -341,16 +334,8 @@ describe('Claude Fast mode against a catalog that identifies nothing', () => {
 })
 
 describe('Claude Fast mode reported by the session frame alone', () => {
-  /**
-   * Measured against a running Claude session: the first `agentSession.options`
-   * read carries `fastModeState: 'off'` while `effective.fastMode` is still absent,
-   * so the two are not redundant — the frame answers at a moment the boolean has no
-   * answer. Without this the picker asks the user to disambiguate a value the
-   * provider already reported.
-   */
   function frameOnlySession(state: 'off' | 'on' | 'cooldown') {
     const { session } = fastModeSession(true)
-    // Settings are silent on Fast, exactly as observed on a fresh session.
     session.connection.getSettings = async () => ({ effective: { effortLevel: 'high' } })
     observeClaudeFastModeFacts(session, { fast_mode_state: state })
     return session

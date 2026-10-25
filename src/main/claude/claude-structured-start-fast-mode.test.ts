@@ -1,6 +1,3 @@
-// A saved Fast the launch leaves out beside the agent Arguments' own `--settings`, applied by the
-// message input once the child answers.
-
 import { expect, it, vi } from 'vitest'
 import {
   adapterFor,

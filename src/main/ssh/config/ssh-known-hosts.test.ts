@@ -1,8 +1,4 @@
-/**
- * Vectors verified against OpenSSH 10.2p1 — `ssh-keygen -H` for the hashed entries and a throwaway
- * sshd with `-v` for the verdicts — rather than derived from this implementation. That matters:
- * a parser test written from its own parser passes by construction.
- */
+/** Trust vectors measured with OpenSSH10.2p1, ssh-keygen -H and a real sshd, independently of this implementation. */
 import { describe, expect, it } from 'vitest'
 import {
   hostCandidatePasses,
@@ -70,7 +66,6 @@ describe('candidate passes', () => {
     expect(hostCandidatePasses('Example.com', 22)).toEqual([['example.com']])
   })
 
-  // OpenSSH logs "checking without port identifier" — the bare form is a real second pass.
   it('tries the bracketed form first and falls back to bare off-port', () => {
     expect(hostCandidatePasses('example.com', 2222)).toEqual([
       ['[example.com]:2222'],
@@ -117,7 +112,6 @@ describe('matching a presented key', () => {
       expect(verdict(line('example.com', ED_A), { port: 2222, key: ED_A })).toBe('match')
     })
 
-    // The fallback pass is advisory: OpenSSH downgrades a wrong key there to "not known".
     it('never reports a change from the fallback pass', () => {
       expect(verdict(line('example.com', ED_B), { port: 2222, key: ED_A })).toBe('unknown')
     })
@@ -128,8 +122,7 @@ describe('matching a presented key', () => {
     })
   })
 
-  // The design moved IPv6 into scope: a literal that comes back `unknown` because we mangled the
-  // brackets is prompt-training, the harm the whole outcome vocabulary exists to avoid.
+  // IPv6 bracket mistakes create false first-contact prompts; cover literal forms.
   describe('IPv6 literals', () => {
     it('matches a bare literal on the default port', () => {
       const contents = line('2001:db8::1', ED_A)
@@ -177,7 +170,6 @@ describe('matching a presented key', () => {
       expect(verdict(contents, { host: 'other.com', key: ED_A })).toBe('unknown')
     })
 
-    // The bracketed string itself is hashed, so each candidate form must be hashed separately.
     it('matches a hashed bracketed entry on its port', () => {
       const contents = `${HASHED_EXAMPLE_COM_2222} ssh-ed25519 ${ED_A}`
       expect(verdict(contents, { port: 2222, key: ED_A })).toBe('match')
@@ -214,8 +206,7 @@ describe('matching a presented key', () => {
   })
 
   describe('key types', () => {
-    // The distinction the whole design rests on: a host we know by another type is NOT first
-    // contact, or an attacker who cannot forge the known type just presents a different one.
+    // Exact-endpoint other-type entries are known-host evidence; fallback-pass entries remain first contact.
     it('does not report a change when only another key type is on file', () => {
       const contents = line('example.com', RSA_A, 'ssh-rsa')
       expect(verdict(contents, { key: ED_A })).toBe('unknown-type-known-host')
@@ -237,8 +228,7 @@ describe('matching a presented key', () => {
       expect(verdict(contents, { key: ED_A })).toBe('match')
     })
 
-    // Files are unioned by the caller: any exact hit wins, and disagreement elsewhere is not a
-    // change. Both orderings verified live.
+    // Unioned files accept any exact hit; both line orders were measured.
     it.each([
       ['user file first', `${line('h', ED_A)}\n${line('h', ED_B)}`],
       ['global file first', `${line('h', ED_B)}\n${line('h', ED_A)}`]
@@ -248,14 +238,8 @@ describe('matching a presented key', () => {
   })
 })
 
-/**
- * Vectors produced by a real OpenSSH 10.2p1 client against a real sshd on 127.0.0.1:2222, with the
- * client's verdict recorded from its own output. Everything else in this file states what we believe
- * ssh does; these state what it did.
- */
-// HostKeyAlias is the one case where the port is not part of the key. Verified live on port 2225:
-// with HostKeyAlias=myalias, ssh finds an entry keyed `myalias` and reports "No ED25519 host key is
-// known for myalias" for one keyed `[myalias]:2225`.
+/** Captured real-client verdicts against a local sshd supplement synthetic expectations. */
+// Measured HostKeyAlias always uses bare alias, even on a non-default port.
 describe('a lookup keyed on HostKeyAlias', () => {
   it('never brackets the alias, whatever the port', () => {
     expect(hostCandidatePasses('myalias', 2225, true)).toEqual([['myalias']])
@@ -279,8 +263,7 @@ describe('a lookup keyed on HostKeyAlias', () => {
     ).toBe('match')
   })
 
-  // The regression the flag prevents: pass 0 finding a bracketed entry now stops the fallback, so
-  // without it this stale line turns a working bastion into a hard failure.
+  // Stale bracketed aliases must not suppress the real bare lookup.
   it('ignores a stale bracketed entry that ssh would never consult', () => {
     const ED = 'AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'
     const ED_OTHER = 'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7'
@@ -300,11 +283,7 @@ describe('a lookup keyed on HostKeyAlias', () => {
 describe('lines ssh itself refuses to parse', () => {
   const ED = 'AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'
 
-  // Buffer.from SKIPS invalid base64 characters instead of failing, so each of these decodes to
-  // something. Verified live against OpenSSH 10.2p1 on 127.0.0.1:2224: the valid control reached
-  // authentication and ALL THREE of these produced "No ED25519 host key is known" — ssh drops the
-  // line. Honouring them means granting trust from a line the user's own ssh ignores, and for the
-  // padded variant it means raising a CHANGED alarm from one.
+  // Buffer.from ignores junk that measured OpenSSH10.2p1 rejects; those lines cannot confer trust.
   it.each([
     ['trailing junk', `${ED}!!!`],
     ['invalid characters spliced into the middle', ED.replace(/^(.{20})/, '$1@@')]
@@ -312,10 +291,7 @@ describe('lines ssh itself refuses to parse', () => {
     expect(parseKnownHostsLine(`example.com ssh-ed25519 ${keyField}`)).toBeUndefined()
   })
 
-  // Still VALID base64 — 68 characters plus 4 is a legal length — and the algorithm header still
-  // reads ssh-ed25519, so neither the base64 check nor the header check catches it. ssh parses the
-  // whole key structure and drops the line; we decoded 54 bytes where the key is 51 and reported a
-  // CHANGED alarm from an entry ssh ignores.
+  // Valid base64/type headers can still carry trailing wire bytes; OpenSSH drops the malformed key.
   it('drops a key blob with trailing bytes its own structure does not account for', () => {
     expect(parseKnownHostsLine(`example.com ssh-ed25519 ${ED}AAAA`)).toBeUndefined()
   })
@@ -335,9 +311,7 @@ describe('lines ssh itself refuses to parse', () => {
     expect(parseKnownHostsLine(`example.com ssh-ed25519 ${ED}`)).toBeDefined()
   })
 
-  // ssh's extract_salt demands exactly one SHA1 digest: "expected salt len 20, got 16". A shorter
-  // salt is still a usable HMAC key for us, so we could match a hand-crafted line that is invisible
-  // to the user's ssh. ssh-keygen -H always writes 20 bytes, so refusing loses no real entry.
+  // OpenSSH requires20-byte SHA1 salts; shorter HMAC-compatible values cannot grant trust.
   it('drops a hashed entry whose salt is not a full SHA1 digest', () => {
     const shortSalt = Buffer.alloc(16, 1).toString('base64')
     const hash = Buffer.alloc(20, 2).toString('base64')
@@ -353,18 +327,13 @@ describe('lines ssh itself refuses to parse', () => {
   const [, , REAL_SALT = '', REAL_HASH = ''] = HASHED_EXAMPLE_COM.split('|')
   const hashedLine = (salt: string, hash: string): string => `|1|${salt}|${hash} ssh-ed25519 ${ED}`
 
-  // Non-obvious: every mutation below still decodes to exactly 20 bytes, so the length check above
-  // passes and the entry would be trusted — Buffer.from just skips the junk. Verified live against
-  // OpenSSH 10.2p1 with `ssh-keygen -vvv -F` on a real `ssh-keygen -H` file: the salt cases print
-  // "extract_salt: salt decode error" / "bad host hash", and the hash cases find nothing silently
-  // because ssh regenerates the canonical `|1|salt|hash` string and byte-compares it.
+  // All mutations still decode to20 bytes; OpenSSH rejects noncanonical encodings despite permissive Buffer.from.
   it.each([
     ['salt with invalid characters spliced into the middle', REAL_SALT.replace(/^(.{6})/, '$1@@')],
     ['salt with trailing junk', `${REAL_SALT}!!!`],
     // Buffer.from accepts the base64url alphabet and yields the same 20 bytes; ssh does not.
     ['salt in the base64url alphabet', REAL_SALT.replace(/\//g, '_').replace(/\+/g, '-')],
-    // Right length and it looks like base64, but the final character's leftover bits are set — the
-    // case a "does it look like base64" check misses and b64_pton rejects as a subliminal channel.
+    // Correct length with nonzero leftover bits is still noncanonical and rejected by b64_pton.
     ['salt whose final character carries non-zero padding bits', `${REAL_SALT.slice(0, -2)}9=`],
     ['salt with its base64 padding stripped', REAL_SALT.replace(/=+$/, '')]
   ])('drops a hashed entry with a %s, as ssh does', (_label, salt) => {
@@ -378,7 +347,6 @@ describe('lines ssh itself refuses to parse', () => {
     expect(parseKnownHostsLine(hashedLine(REAL_SALT, hash))).toBeUndefined()
   })
 
-  // Guards the cases above from passing by rejecting everything.
   it('still accepts the unmutated ssh-keygen -H vector', () => {
     expect(parseKnownHostsLine(hashedLine(REAL_SALT, REAL_HASH))).toBeDefined()
   })
@@ -401,8 +369,7 @@ describe('agreement with a live OpenSSH client', () => {
   const SERVER_KEY = 'AAAAC3NzaC1lZDI1NTE5AAAAIM2eSSqUqU9LERdg8qNjFiU59unM+JyfwFHLkMxR13oq'
   const OTHER_KEY = 'AAAAC3NzaC1lZDI1NTE5AAAAIKmVZ4Z+MJ3VYnZmZmZmZmZmZmZmZmZmZmZmZmZmZmZm'
 
-  // `ssh-keygen -H` on `[127.0.0.1]:2222 ssh-ed25519 <SERVER_KEY>`. The salt and hash are its own
-  // output, so this pins that we hash the BRACKETED candidate — hashing the bare host would miss.
+  // Real ssh-keygen -H output hashes the bracketed endpoint, not the bare host.
   const HASHED_BRACKETED_ENTRY = `|1|nfzVRh+YQtj+wIqjDBYLW2cryfQ=|Q51GJuiWfUGYpAPuRPyFC/FpKj4= ssh-ed25519 ${SERVER_KEY}`
 
   it('accepts the hashed bracketed entry ssh-keygen -H produced, as ssh did', () => {
@@ -411,11 +378,7 @@ describe('agreement with a live OpenSSH client', () => {
     ).toBe('match')
   })
 
-  // THE accept-a-changed-key case. Live on 127.0.0.1:2223 against an ed25519-only server, with an
-  // off-port RSA entry AND a bare correct ed25519 line, ssh printed IDENTIFICATION HAS CHANGED and
-  // refused — and printed NO "checking without port identifier", so the fallback never ran. ssh
-  // gates that pass on the port-qualified lookup matching no plain entry of ANY type; gating it on
-  // "no match and no same-type mismatch" instead reaches the bare line and returns `match`.
+  // Measured off-port RSA evidence blocks bare correct-ed25519 fallback and refuses as changed; continuing would accept an endpoint SSH rejects.
   it('does not fall back past an off-port entry of another type, as ssh did not', () => {
     const contents = `${line('[127.0.0.1]:2223', RSA_A, 'ssh-rsa')}\n${line('127.0.0.1', SERVER_KEY)}`
     expect(verdict(contents, { host: '127.0.0.1', port: 2223, key: SERVER_KEY })).toBe(
@@ -423,9 +386,7 @@ describe('agreement with a live OpenSSH client', () => {
     )
   })
 
-  // The same flags, the opposite error. Live, a BARE ssh-rsa entry dialed on 2223 against the same
-  // ed25519-only server made ssh add the host and connect — plain first contact. Letting the
-  // fallback pass set unknown-type-known-host refuses a host ssh accepts.
+  // Measured bare-only other-type evidence is first contact off-port.
   it('treats an other-type entry found only on the fallback pass as unknown, as ssh did', () => {
     expect(
       verdict(line('127.0.0.1', RSA_A, 'ssh-rsa'), {
@@ -436,26 +397,19 @@ describe('agreement with a live OpenSSH client', () => {
     ).toBe('unknown')
   })
 
-  // Live: ssh reached authentication, so it accepted the bare line for a non-default port.
   it('falls back to the bare host line on a non-default port, as ssh did', () => {
     expect(
       verdict(line('127.0.0.1', SERVER_KEY), { host: '127.0.0.1', port: 2222, key: SERVER_KEY })
     ).toBe('match')
   })
 
-  // THE one that decides whether the fallback pass may report a change. Live, with
-  // StrictHostKeyChecking=accept-new and a bare line holding a DIFFERENT key, ssh connected and
-  // appended a new `[127.0.0.1]:2222` line — so it read this as first contact, not as a changed
-  // key, and printed no IDENTIFICATION HAS CHANGED banner. Reporting `mismatch` here would refuse a
-  // host ssh connects to happily.
+  // Measured wrong bare fallback keys are first contact; strict accept-new appends the port-qualified key.
   it('reports a wrong key on the bare fallback line as unknown, as ssh did', () => {
     expect(
       verdict(line('127.0.0.1', OTHER_KEY), { host: '127.0.0.1', port: 2222, key: SERVER_KEY })
     ).toBe('unknown')
   })
 
-  // Same file shape, but the entry is for the exact endpoint: live, ssh printed
-  // IDENTIFICATION HAS CHANGED and refused.
   it('reports a wrong key on the exact bracketed line as a change, as ssh did', () => {
     expect(
       verdict(line('[127.0.0.1]:2222', OTHER_KEY), {
@@ -466,9 +420,7 @@ describe('agreement with a live OpenSSH client', () => {
     ).toBe('mismatch')
   })
 
-  // Live: known_hosts held an ssh-rsa key for the endpoint and the server offered ed25519 — ssh
-  // printed IDENTIFICATION HAS CHANGED and refused. So our unknown-type-known-host rejection is
-  // neither stricter nor laxer than ssh; treating it as first contact would have been laxer.
+  // Measured exact-endpoint other-type keys refuse as HOST_CHANGED, never first contact.
   it('refuses a key type it has not seen for a host it knows, as ssh did', () => {
     expect(
       verdict(line('[127.0.0.1]:2222', RSA_A, 'ssh-rsa'), {

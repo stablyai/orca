@@ -50,10 +50,14 @@ describe('routeListingBranchSwitchesThroughGitIdentity', () => {
     })
 
     expect(updateWorktreeGitIdentity).toHaveBeenCalledTimes(1)
-    expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo1::/path/wt1', {
-      head: 'def456',
-      branch: 'refs/heads/feature-two'
-    })
+    expect(updateWorktreeGitIdentity).toHaveBeenCalledWith(
+      'repo1::/path/wt1',
+      {
+        head: 'def456',
+        branch: 'refs/heads/feature-two'
+      },
+      null
+    )
   })
 
   it('does nothing when the branch is unchanged', () => {
@@ -156,10 +160,14 @@ describe('routeListingBranchSwitchesThroughGitIdentity', () => {
       updateWorktreeGitIdentity
     })
 
-    expect(updateWorktreeGitIdentity).toHaveBeenCalledWith('repo1::/path/wt1', {
-      head: 'def456',
-      branch: null
-    })
+    expect(updateWorktreeGitIdentity).toHaveBeenCalledWith(
+      'repo1::/path/wt1',
+      {
+        head: 'def456',
+        branch: null
+      },
+      null
+    )
   })
 
   it('rejects a listing response when the branch changed again after the request started', () => {

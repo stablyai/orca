@@ -321,8 +321,7 @@ describe('isChecksPanelHardErrorCleared', () => {
   })
 
   it('stays blocked while only a queued/in-flight retry replaced the error', () => {
-    // No request that both started after the error and settled with an accepted
-    // outcome, so Create must not flap back.
+    // An unfinished or pre-error request cannot clear the block and reenable Create.
     expect(isChecksPanelHardErrorCleared(cleared({ eligibilityRequestStartedAt: undefined }))).toBe(
       false
     )

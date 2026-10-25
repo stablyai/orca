@@ -1,12 +1,10 @@
 import { resolveTerminalFileUrlTarget } from '../../../shared/terminal-file-url-target'
 import type { ParsedTerminalFileLink } from './terminal-links'
 
-// Why: plain-text file URIs bypass both the HTTP and local-path detectors; use
-// the OSC 8 resolver so both terminal representations open identically.
+// Share OSC 8 resolution for plain file URIs missed by HTTP/local-path detectors.
 
 const MAX_FILE_URI_LENGTH = 2048
-// Why: extraction runs on hover; cap before URL parsing and filesystem probes
-// so a file:// prefix in a huge dumped token cannot block the renderer.
+// Bound file URI candidates before URL parsing/filesystem probes so dumped tokens cannot stall hover.
 const FILE_URI_REGEX = /\bfile:\/\/[^\s"`<>|]{1,2049}/gi
 
 const TRAILING_PROSE_CHARS = new Set(['.', ',', ';', ':', '!', '?', '>', '"', "'", '`'])
@@ -28,8 +26,7 @@ function trimTrailingProse(uriText: string): string {
       end -= 1
       continue
     }
-    // Why: standard file URIs leave parentheses unescaped; trim only closing
-    // delimiters supplied by surrounding prose, not balanced filename text.
+    // Preserve balanced filename parentheses; trim only unmatched prose closers from standard unescaped file URIs.
     if (char === ')' && parentheses > 0) {
       parentheses -= 1
       end -= 1
@@ -50,10 +47,7 @@ function trimTrailingProse(uriText: string): string {
   return uriText.slice(0, end)
 }
 
-// Remote hosts are rejected: on a local pane a hostname'd URI would resolve to a
-// path that does not exist, and the provider's existence probe would drop it
-// anyway. Windows UNC support stays with the OSC path, which has the platform
-// context this pure pass deliberately avoids.
+// Reject remote hostnames in this platform-free pass; local probes cannot resolve them. OSC handling retains Windows UNC support with its platform context.
 function toFileUriLink(uriText: string, startIndex: number): ParsedTerminalFileLink | null {
   let url: URL
   try {

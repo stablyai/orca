@@ -4,7 +4,7 @@ import { getDefaultRepoHookSettings } from '../../../shared/constants'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
-import { normalizeJiraProjectReference } from '../../../shared/jira-project-reference'
+import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
 import {
   sanitizeForkSyncMode,
@@ -17,11 +17,7 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../shared/worktree/visibility-sources'
 
-/**
- * Cache key for a repo's resolved git username. Host-scoped because the same checkout path can exist
- * on local, SSH, and runtime hosts with different `user.name`, and a path-only key hydrates one
- * host's username onto another (wrong `git-username` branch prefix).
- */
+/** Same paths on different hosts can have different git usernames and branch prefixes. */
 export function repoGitUsernameCacheKey(
   repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>
 ): string {
@@ -57,7 +53,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const worktreeVisibilitySourcePreferences = normalizeWorktreeVisibilitySourcePreferences(
     rawWorktreeVisibilitySourcePreferences
   )
-  // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
+  // Hydrate cached identity only; stuck git/gh probes froze Windows startup (#7225).
   const gitUsername = isFolderRepo(repo)
     ? ''
     : (gitUsernameCache.get(repoGitUsernameCacheKey(repo)) ?? repo.gitUsername ?? '')

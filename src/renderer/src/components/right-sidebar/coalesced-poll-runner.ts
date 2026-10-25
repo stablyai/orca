@@ -1,7 +1,5 @@
 export type CoalescedPollRunnerTrigger = {
-  // True when the caller has evidence something changed (file-watch event,
-  // repo metadata push signal, finished terminal command) rather than a bare
-  // timer tick. Change signals wait out a shorter slow-task backoff.
+  // Evidence of a real change (watch/push/command), which gets shorter backoff than timer ticks.
   changeSignal?: boolean
 }
 
@@ -11,22 +9,14 @@ export type CoalescedPollRunner = {
 }
 
 export type SlowTaskBackoffOptions = {
-  // Idle gap before an evidence-free timer tick may re-run, as a multiple of
-  // the previous run's duration.
+  // Required idle time as a multiple of the previous duration for timer ticks.
   idleMultiplier: number
-  // Idle gap before a change-signal run may re-run. Kept low so slow repos
-  // still refresh promptly after real changes, while sustained churn can
-  // never keep the task running back-to-back.
+  // Shorter change-signal idle time keeps slow repos responsive without allowing back-to-back runs.
   changeSignalMultiplier: number
   maxIntervalMs: number
 }
 
-// Why: on large monorepos a poll task (git status) can take tens of seconds,
-// so a fixed idle gap makes polling effectively continuous (#7983). Scale the
-// gap with the previous run's duration — aggressively for evidence-free timer
-// ticks, mildly for change signals — capped so results never go minutes-stale.
-// Shared with the git-status refresh scheduler so both pacing machines keep
-// the same guarantee: sustained triggers can never run the task back-to-back.
+// Scale idle time with slow runs to prevent continuous polling (#7983); signals wait less than ticks, with a staleness cap.
 export function slowTaskRequiredIdleMs(
   lastRunDurationMs: number,
   multiplier: number,
@@ -81,8 +71,7 @@ export function createCoalescedPollRunner(
       return
     }
     if (inFlight) {
-      // Why: keep the strongest pending trigger so a change signal arriving
-      // mid-run is not downgraded to tick pacing by a later timer tick.
+      // Preserve the strongest pending trigger so later ticks cannot downgrade a change signal.
       rerunTrigger = { changeSignal: rerunTrigger?.changeSignal || trigger?.changeSignal }
       return
     }
@@ -90,8 +79,7 @@ export function createCoalescedPollRunner(
     const now = Date.now()
     const allowedAt = lastRunEndedAt + requiredIdleMsFor(trigger)
     if (now < allowedAt) {
-      // Why: a change signal may pull an already-scheduled evidence-free run
-      // earlier; a weaker trigger must never push a scheduled run later.
+      // Signals may advance a scheduled tick; weaker triggers must never delay a scheduled run.
       if (allowedAt >= timeoutFiresAt) {
         return
       }
@@ -109,8 +97,7 @@ export function createCoalescedPollRunner(
     inFlight = true
     void task()
       .catch(() => {
-        // Poll callers handle their own expected transient errors. A rejected
-        // task must still release the in-flight latch and optional trailing run.
+        // Callers handle transient errors; rejection must still release the latch and allow trailing work.
       })
       .finally(() => {
         inFlight = false

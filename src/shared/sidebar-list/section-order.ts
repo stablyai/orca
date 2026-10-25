@@ -58,12 +58,6 @@ export function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   if (mainWorktrees.length === 0) {
     return worktrees
   }
-  // Why: project groups are scanned by repo; keep the repo's canonical
-  // workspace anchored even when dynamic sorts rank a child workspace first.
+  // Keep canonical workspaces first for repo-scanned project groups despite dynamic child ranking.
   return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
-
-/**
- * Build the flat row list consumed by the virtualizer.
- * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
- */

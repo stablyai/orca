@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { StructuredAgentSessionCommandRefusalCause } from '../../../src/shared/structured-agent-session-composer'
 
-/** What a send error says beyond its text. `refusedWhile`: a refused command's cause, whose line is
- *  said only while the chat shows it. */
+// Keep command-refusal causes only while the chat still shows the work that caused them.
 export type MobileNativeChatSendErrorDetails = {
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
@@ -12,7 +11,6 @@ export type MobileNativeChatSendErrorReporter = (
   details?: MobileNativeChatSendErrorDetails
 ) => void
 
-/** What the phone's chat shows a refused command waiting on. */
 export type MobileNativeChatCommandRefusalCauses = Readonly<
   Partial<Record<StructuredAgentSessionCommandRefusalCause, boolean>>
 >
@@ -20,11 +18,7 @@ export type MobileNativeChatCommandRefusalCauses = Readonly<
 const NATIVE_CHAT_SEND_ERROR_HOLD_MS = 4000
 const NATIVE_CHAT_SEND_ERROR_TOAST_MS = 1600
 
-/** Holds the newest native-chat send failure for the composer's inline banner.
- *  Why a banner and not the bottom toast: chat failures happen with the keyboard
- *  up, which covers the toast — the surface the user is looking at is the composer.
- *  Scoped like drafts and image chips: a failure belongs to the terminal it was
- *  raised on and must not follow the user to another tab. */
+// Show failures beside the composer because the keyboard covers toasts; scope banners per terminal so tab switches cannot misattribute them.
 export function useMobileNativeChatSendError(args: {
   scopeKey: string | null
   showToast: (message: string, durationMs?: number) => void
@@ -32,9 +26,7 @@ export function useMobileNativeChatSendError(args: {
   message: string | null
   show: MobileNativeChatSendErrorReporter
   clear: () => void
-  /** Called each render with what the chat shows: a refusal whose cause has ended is dropped. */
   keepWhile: (causes: MobileNativeChatCommandRefusalCauses | null) => void
-  /** Set by the route each render; gates banner vs toast. */
   bannerMountedRef: MutableRefObject<boolean>
 } {
   const [error, setError] = useState<
@@ -48,10 +40,7 @@ export function useMobileNativeChatSendError(args: {
   const bannerMountedRef = useRef(false)
   const showToastRef = useRef(args.showToast)
   showToastRef.current = args.showToast
-  // Why: `show`/`clear` are handed to sends that resolve much later (a 20s
-  // unconfirmed send, a paced answer). Comparing the scope they were built for
-  // against the live one is what stops tab A's late outcome from painting — or
-  // wiping — tab B's banner.
+  // Late write callbacks compare captured and live scope before painting or clearing another tab’s banner.
   const liveScopeRef = useRef(args.scopeKey)
   liveScopeRef.current = args.scopeKey
   const scopeKey = args.scopeKey
@@ -70,9 +59,7 @@ export function useMobileNativeChatSendError(args: {
   }, [clearTimer, scopeKey])
   const show = useCallback(
     (next: string, details?: MobileNativeChatSendErrorDetails) => {
-      // Why: deferred failures can land after the user left chat (banner unmounted)
-      // or moved to another tab, where the banner belongs to a different terminal —
-      // both must fall back to the toast instead of being swallowed or misattributed.
+      // Fall back to toast after leaving chat or changing tabs so late failures remain visible without misattribution.
       if (liveScopeRef.current !== scopeKey || !bannerMountedRef.current) {
         showToastRef.current(next, NATIVE_CHAT_SEND_ERROR_TOAST_MS)
         return
@@ -86,22 +73,19 @@ export function useMobileNativeChatSendError(args: {
     },
     [clearTimer, scopeKey]
   )
-  // A scope change retires its timer; rendering already discards its held failure.
   useEffect(() => {
     clearTimer()
   }, [clearTimer, scopeKey])
   useEffect(
     () => () => {
-      // Why: the route writes this ref during render, so an unmount leaves it stuck
-      // true and a pending send's late failure would target a banner that no longer
-      // exists — swallowing the one signal the toast fallback is here to carry.
+      // Clear the render-written mounted ref on unmount or deferred failures target a missing banner and disappear.
       bannerMountedRef.current = false
       clearTimer()
     },
     [clearTimer]
   )
   const keepWhile = (causes: MobileNativeChatCommandRefusalCauses | null) => {
-    // Dropped, not hidden: the cause coming back later is not what this refusal was about.
+    // Drop ended causes permanently; their later recurrence does not revive this refusal.
     const refusedWhile = visibleError?.refusedWhile
     if (refusedWhile !== undefined && causes?.[refusedWhile] === false) {
       setError(null)

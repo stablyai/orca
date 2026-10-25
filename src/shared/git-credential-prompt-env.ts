@@ -13,8 +13,7 @@ export function mergeGitConfigEnvProtocol(
     return next
   }
 
-  // Why: COUNT and its indexed pairs form one protocol; retaining lower-priority
-  // indices behind a smaller override count makes an otherwise valid env ambiguous.
+  // COUNT and indexed pairs are atomic; stale lower-priority indices make an overridden protocol ambiguous.
   for (const key of Object.keys(next)) {
     if (GIT_CONFIG_WSLENV_KEY_RE.test(key)) {
       delete next[key]
@@ -66,8 +65,7 @@ export function appendGitConfigEnv(
   const next = { ...env }
   const base = readValidGitConfigEnvCount(env)
   if (base === null) {
-    // Why: ambiguous protocol state may contain caller data at any index, so
-    // scalar guards are safer than overwriting it with Orca-owned entries.
+    // Ambiguous indices may hold caller data; use scalar guards instead of overwriting them.
     return next
   }
   entries.forEach(([key, value], index) => {
@@ -95,16 +93,14 @@ export function gitCredentialPromptGuardEnv(
       // Why: GCM can ignore terminal/askpass guards and open its own GUI.
       GCM_INTERACTIVE: 'never'
     },
-    // Why: keep the helper so cached credentials continue to work; disable
-    // only its interactive fallback.
+    // Retain cached credentials while disabling only interactive helper fallback.
     [
       ['credential.interactive', 'false'],
       ['credential.guiPrompt', 'false']
     ]
   )
   if (platform === 'win32') {
-    // Why: wsl.exe imports only variables registered in WSLENV. Indexed Git
-    // config must cross as a complete set or Git rejects the count.
+    // WSLENV must register the complete indexed config protocol or Git rejects its count.
     const configKeys =
       readValidGitConfigEnvCount(next) === null
         ? []

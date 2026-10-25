@@ -49,8 +49,7 @@ describe('sftp-upload', () => {
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
-    // One durable 'error' listener stays for the stream's whole life: a STATUS reply that
-    // lands after the transfer settles must not throw into ssh2's parser (#15479).
+    // Retain one lifetime error listener for late STATUS replies after settlement (#15479).
     expect(writeStream.listenerCount('error')).toBe(1)
   })
 
@@ -71,8 +70,7 @@ describe('sftp-upload', () => {
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
-    // One durable 'error' listener stays for the stream's whole life: a STATUS reply that
-    // lands after the transfer settles must not throw into ssh2's parser (#15479).
+    // Retain one lifetime error listener for late STATUS replies after settlement (#15479).
     expect(writeStream.listenerCount('error')).toBe(1)
   })
 
@@ -97,7 +95,7 @@ describe('sftp-upload', () => {
     const realDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
     await writeFile(join(realDir, 'asset.txt'), 'asset')
     const aliasDir = `${realDir}-alias`
-    // Why a junction on Windows: directory symlinks need Developer Mode or admin there.
+    // Windows directory symlinks require privileges; junctions exercise the same alias path.
     await symlink(realDir, aliasDir, process.platform === 'win32' ? 'junction' : 'dir')
     const sftp = createSftpMock()
 
@@ -159,8 +157,7 @@ describe('sftp-upload', () => {
     const linkPath = join(localDir, process.platform === 'win32' ? 'link-dir' : 'link.txt')
     if (process.platform === 'win32') {
       await mkdir(targetPath)
-      // Why: file symlinks often require Developer Mode/admin on Windows, while
-      // junctions still exercise the symlink rejection branch.
+      // Use a Windows junction to exercise rejection without symlink privileges.
       await symlink(targetPath, linkPath, 'junction')
     } else {
       await writeFile(targetPath, 'secret')

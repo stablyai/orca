@@ -68,6 +68,7 @@ describe('browserManager popup child policies', () => {
     const childGuest = {
       id: 4040,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: childSetBackgroundThrottlingMock,
       setWindowOpenHandler: childSetWindowOpenHandlerMock,
@@ -78,6 +79,7 @@ describe('browserManager popup child policies', () => {
     const guest = {
       id: 404,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,

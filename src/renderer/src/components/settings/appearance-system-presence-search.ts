@@ -89,7 +89,7 @@ export function getSystemTrayEntries(
 ): SettingsSearchEntry[] {
   const show =
     options.showSystemTray ??
-    // Why: a Windows web client can report win32, but it has no local tray.
+    // Windows web clients report win32 but have no local tray.
     (getRendererAppPlatform() === 'win32' && !isWebClientLocation())
   return show ? getSystemTrayEntryCatalog() : []
 }

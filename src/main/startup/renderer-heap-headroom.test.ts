@@ -19,21 +19,21 @@ const GIB = 1024 * 1024 * 1024
 describe('computeRendererHeapCeilingMb', () => {
   it('leaves Chromium default (null) below the ~8 GB gate to avoid OS memory pressure', () => {
     expect(computeRendererHeapCeilingMb(4 * GIB)).toBeNull()
-    expect(computeRendererHeapCeilingMb(6 * GIB)).toBeNull() // 6 GB reports ~5.7 GiB
-    expect(computeRendererHeapCeilingMb(7 * GIB)).toBeNull() // below the 7.5 GiB gate
+    expect(computeRendererHeapCeilingMb(6 * GIB)).toBeNull()
+    expect(computeRendererHeapCeilingMb(7 * GIB)).toBeNull()
   })
 
   it('includes 8 GB machines that report below 8 GiB (Linux MemTotal excludes reserved RAM)', () => {
-    // A real 8 GB Linux box reports ~7.7 GiB; it must still get the headroom.
+    // Linux MemTotal omits reserved RAM; real 8GB machines can report ~7.7GiB.
     expect(computeRendererHeapCeilingMb(7.7 * GIB)).toBe(3072)
     expect(computeRendererHeapCeilingMb(7.5 * GIB)).toBe(3072)
   })
 
   it('raises the ceiling toward the 4 GB pointer-compression cage, floored and capped', () => {
-    expect(computeRendererHeapCeilingMb(8 * GIB)).toBe(3072) // floor: 8 GB default ~2.2 GB -> 3072
-    expect(computeRendererHeapCeilingMb(12 * GIB)).toBe(4096) // 0.4*12 -> 4096 (cage)
-    expect(computeRendererHeapCeilingMb(16 * GIB)).toBe(4096) // cage cap
-    expect(computeRendererHeapCeilingMb(128 * GIB)).toBe(4096) // cage cap, never higher
+    expect(computeRendererHeapCeilingMb(8 * GIB)).toBe(3072)
+    expect(computeRendererHeapCeilingMb(12 * GIB)).toBe(4096)
+    expect(computeRendererHeapCeilingMb(16 * GIB)).toBe(4096)
+    expect(computeRendererHeapCeilingMb(128 * GIB)).toBe(4096)
   })
 
   it('honors a positive ORCA_RENDERER_HEAP_MB override regardless of RAM', () => {

@@ -52,12 +52,7 @@ export function previewAdvertisesKittyKeyboard(
   return !terminalInput || terminalInput.kittyKeyboardAdvertised
 }
 
-/**
- * Full option set for the preview's xterm: the same defaults, user appearance,
- * and host compatibility flags a pane resolves, so the agent's TUI negotiates
- * with an identically-configured emulator. Scrollback stays preview-sized —
- * main only ever serializes a short history window into this terminal.
- */
+/** Match pane negotiation and appearance while limiting scrollback to the short history main serializes. */
 export function buildPreviewTerminalOptions(args: {
   settings: GlobalSettings | null
   terminalInput: DashboardCardTerminalInput | null

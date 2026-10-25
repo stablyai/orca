@@ -1,11 +1,5 @@
-/**
- * What the WSL project mover does with every piece of user state that can belong to a local WSL
- * project. Each typed store is checked for exhaustiveness at compile time, and
- * `wsl-move-dispositions.test.ts` censuses the untyped ones (localStorage modules, SQLite tables),
- * so a new field cannot ship without a decision. UI, storage and out-of-store tables live in the
- * sibling `wsl-move-*-dispositions.ts` files. `item` numbers are the inventory rows in the
- * mover design (docs/design/wsl-via-orcad-lossless-mover.md, section 2).
- */
+/** Exhaustive state dispositions for local WSL project moves. Typed stores are compile-checked; tests census localStorage/SQLite. Sibling tables cover UI, storage and out-of-store state.
+ * Item numbers refer to docs/design/wsl-via-orcad-lossless-mover.md §2. */
 import type { PersistedState } from '../persisted-state-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 
@@ -145,7 +139,9 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   },
   terminalTopologyRevisionByRepoId: { disposition: 'rederive', item: 35 },
   terminalSurfaceTombstonesByPaneKey: moveDisposition(34),
-  closedTerminalTabTombstonesByTabId: moveDisposition(34)
+  closedTerminalTabTombstonesByTabId: moveDisposition(34),
+  // Names terminals of the host the project leaves, as the incarnation map does.
+  closedTerminalPanesByPaneKey: { disposition: 'drop-pty-binding', item: 36 }
 } as const satisfies Record<keyof WorkspaceSessionState, WslMoveFieldDisposition>
 
 /** Nested PTY bindings dropped wherever they appear in moved session rows (item 36). */

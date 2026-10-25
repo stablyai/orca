@@ -1,6 +1,4 @@
-// Why: fork PR/MR heads live on the hosting remote (almost always `origin`);
-// picking an arbitrary first remote (e.g. a contributor `fork`) fetches the
-// wrong object. Prefer origin, then a lone remote, else refuse to guess.
+// Fetch fork PR/MR heads from hosting origin; otherwise accept only a lone remote rather than guessing a contributor fork.
 export function pickPreferredGitRemote(remotes: readonly string[]): string {
   const cleaned = remotes.map((line) => line.trim()).filter(Boolean)
   if (cleaned.includes('origin')) {

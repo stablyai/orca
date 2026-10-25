@@ -9,14 +9,14 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../../shared/pty-renderer-delivery-health'
 import type { PtyRendererDeliveryDebugSnapshot } from './delivery/debug'
-import { PtyProducerFlowController } from '../pty-producer-flow-control'
-import { PtyPendingDataDrainQueue } from '../pty-pending-data-drain-queue'
-import type { PendingPtyData } from '../pty-pending-data-drain-contract'
+import { PtyProducerFlowController } from './delivery/pty-producer-flow-control'
+import { PtyPendingDataDrainQueue } from './delivery/pty-pending-data-drain-queue'
+import type { PendingPtyData } from './delivery/pty-pending-data-drain-contract'
 import { activeRendererPtys } from './delivery/visibility-state'
 import {
   isHiddenPtyDeliveryGateEnabled,
   shouldDropHiddenRendererPtyData
-} from '../pty-hidden-delivery-gate'
+} from './delivery/pty-hidden-delivery-gate'
 import type { CodexHomePtySpawnedLifecycleArgs, PrepareCodexSessionResume } from './host-env/types'
 import { tryGetProviderForPty } from './provider/registry'
 
@@ -50,7 +50,7 @@ export type PtyIpcSessionOptions = {
   prepareCodexSessionResume?: PrepareCodexSessionResume
   awaitLocalPtyStartup?: () => Promise<void>
   awaitLocalPtyProviderStartup?: () => Promise<void>
-  // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
+  // Recovery reload must preserve live in-process PTYs until restore re-adopts them (#5787).
   isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   onPtyExit?: (id: string, exitSequence: number) => void
@@ -259,7 +259,7 @@ export function createPtyIpcSession(args: {
   session.pendingData = new PtyPendingDataDrainQueue(
     (id) => {
       const runnableLane = activeRendererPtys.has(id) ? 'active' : 'background'
-      // Why first: hidden bytes are dropped from main's pending queue even when renderer credit is exhausted.
+      // Hidden delivery can retire even when renderer credit is exhausted.
       if (shouldDropHiddenRendererPtyData(id, session.getSettings?.())) {
         return runnableLane
       }

@@ -1,8 +1,4 @@
-/**
- * A workspace's unsent chat drafts die only with a user's delete, by keys read before the host
- * round trip. The host announces a removal before it replies, and a listing purge that lands first
- * must not hide them; a purge that is not a user's delete must not erase them.
- */
+/** User deletion clears drafts using pre-RPC keys; host removal announcements may purge listings before reply, while non-user purges must retain drafts. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -23,7 +19,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 const mockApi = {
-  worktrees: { list: vi.fn(), remove: vi.fn(), updateMeta: vi.fn().mockResolvedValue({}) },
+  worktrees: { remove: vi.fn(), updateMeta: vi.fn().mockResolvedValue({}) },
   repos: { removeForHost: vi.fn() },
   folderWorkspaces: { delete: vi.fn() },
   pty: { kill: vi.fn() },

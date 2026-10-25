@@ -1,5 +1,3 @@
-// What a queued edit tells the person when its card changed or left under it, or refused a Save.
-
 import { translate } from '@/i18n/i18n'
 
 /** A question or approval holds the chat box's place, so the text there is out of sight until then. */
@@ -46,7 +44,6 @@ export function queuedEditNotice(
   }
 }
 
-/** A Save answered `changed`: whether the edit went to the chat box or was not saved. */
 export function queuedEditChangedNotice(handedOff: boolean, promptOpen: boolean): string {
   if (!handedOff) {
     return queuedEditNotice('editChangedNotSaved')

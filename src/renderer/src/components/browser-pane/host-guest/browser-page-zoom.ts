@@ -14,8 +14,7 @@ export function getBrowserPageZoomIndicatorState({
 }: {
   feedbackVisible: boolean
 }): BrowserPageZoomIndicatorState {
-  // Why: browser zoom percent is transient feedback; non-default page zoom
-  // should not leave a permanent badge over the webview.
+  // Show zoom only as transient feedback; non-default zoom must not leave a permanent badge.
   return {
     ariaHidden: !feedbackVisible,
     opacityClassName: feedbackVisible ? 'opacity-100' : 'opacity-0'

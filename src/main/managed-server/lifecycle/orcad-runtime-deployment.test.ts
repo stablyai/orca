@@ -62,7 +62,8 @@ vi.mock('../../orcad/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
 vi.mock('./orcad-managed-wake', () => ({ wakeStoppedManagedOrcad: mocks.wake }))
-vi.mock('../activation/orcad-activation-fence-hold', () => ({
+vi.mock('../activation/orcad-activation-fence-hold', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   orcadActivationFenceRefusal: mocks.fenceRefusal
 }))
 vi.mock('../install/orcad-remote-build-hash', () => ({
@@ -127,6 +128,7 @@ let flushes: number
 
 function setupStore(overrides: { repos?: { connectionId: string }[] } = {}) {
   const store = {
+    ...emptyDependentStateStore(),
     allocateSshTargetGeneration: () => 9,
     flushPendingOrThrowAsync: async () => {
       flushes += 1
@@ -134,7 +136,6 @@ function setupStore(overrides: { repos?: { connectionId: string }[] } = {}) {
     },
     getFolderWorkspaces: () => [],
     getRepos: () => overrides.repos ?? [],
-    ...emptyDependentStateStore(),
     getSshTarget: (id: string) => (id === target.id ? target : undefined),
     getSshTargets: () => [target],
     updateSshTarget: (_id: string, updates: Partial<SshTarget>) => {
@@ -227,7 +228,6 @@ describe('createManagedOrcadEnvironment', () => {
       census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null },
       nodePath: ''
     })
-    // SSH hosts keep re-hashing the runtime on every deploy.
     expect(mocks.deploy.mock.calls[0]?.[0]).not.toHaveProperty('recordedNodeRuntimeProbe')
   })
 
@@ -266,7 +266,7 @@ describe('createManagedOrcadEnvironment', () => {
     }
 
     it('redeploys a host an older build stopped without naming its version', async () => {
-      // What every Stop that predates keeping the app version commits.
+      // Legacy stops dropped activeAppVersion from their committed record.
       const legacy = withDeactivatedVersion(servedBy('1.4.0', '0.1.0+old'))
       expect(legacy.activeAppVersion).toBeUndefined()
       const { admitted, result } = await admitOn(legacy)
@@ -364,7 +364,7 @@ describe('createManagedOrcadEnvironment', () => {
         migration: true
       })
 
-      // Its own deploy would wait on a terminal count only the paired server can give.
+      // Only the paired server can count terminals; redeploy would defer without that census.
       expect(mocks.deploy).not.toHaveBeenCalled()
       expect(result).toMatchObject({ outcome: 'already-current', activeVersion: OTHER })
       expect(listEnvironments(userDataPath).map((entry) => entry.id)).toEqual(['env-m'])
@@ -469,8 +469,7 @@ describe('createManagedOrcadEnvironment', () => {
     })
 
     it('pairs with a build a rebooted host stopped, after starting it (#28833)', async () => {
-      // A reboot leaves the record naming a slot whose process is gone; only a started server
-      // can count terminals, so the update check after pairing decides the update, not a guess.
+      // Start before pairing so a real terminal census, rather than a guess, decides updates.
       mocks.wake.mockResolvedValueOnce({ outcome: 'started', readiness: readiness() })
       const result = await deploy()
       expect(mocks.deploy).not.toHaveBeenCalled()
@@ -478,8 +477,7 @@ describe('createManagedOrcadEnvironment', () => {
     })
 
     it('after a reboot, waits on the desktop starting the server, then pairs on reconnect (#28833)', async () => {
-      // Every desktop reconnects at once; the one that loses the race to start the stopped server
-      // used to deploy its own build, which over an uncounted host could only defer on the census.
+      // Losing the wake race must defer, not redeploy over a host whose terminals are still uncounted.
       mocks.deploy.mockResolvedValue({
         outcome: 'installed-not-activated',
         fullVersion: VERSION,
@@ -568,13 +566,13 @@ describe('createManagedOrcadEnvironment', () => {
 
   it('does not contact the host when the claim cannot be made durable', async () => {
     const claims = new SshTargetOrcadClaims({
+      ...emptyDependentStateStore(),
       allocateSshTargetGeneration: () => 9,
       flushPendingOrThrowAsync: async () => {
         throw new Error('disk full')
       },
       getFolderWorkspaces: () => [],
       getRepos: () => [],
-      ...emptyDependentStateStore(),
       getSshTarget: () => target,
       getSshTargets: () => [target],
       updateSshTarget: (_id, updates) => (target = { ...target, ...updates })
@@ -698,6 +696,7 @@ describe('getManagedOrcadRuntimeStatus', () => {
       environmentId: environment?.id,
       sshTargetId: 'ssh-1',
       activeVersion: VERSION,
+      activeAppVersion: null,
       previousVersion: null,
       activatedAt: 'now',
       rollbackAvailable: false,
@@ -709,7 +708,8 @@ describe('getManagedOrcadRuntimeStatus', () => {
       },
       terminals: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 39 },
       migration: null,
-      deferredUpdate: null
+      deferredUpdate: null,
+      availableUpdate: null
     })
     expect(mocks.recover).toHaveBeenCalledTimes(1)
   })

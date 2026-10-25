@@ -1,36 +1,19 @@
 import { PANEL_PING_TYPE, PANEL_PONG_TYPE } from './plugin-panel-bridge'
 
-/**
- * Host-generated shell wrapped around plugin panel HTML before it is handed
- * to the sandboxed iframe. The shell's job is to make the CSP parse BEFORE
- * any plugin content does: an opaque-origin sandboxed iframe without a CSP
- * can still fetch() CORS-permissive endpoints and beacon data out via <img>.
- *
- * Prepending works because (a) a CSP <meta> applies from the moment it
- * parses and cannot be un-applied by later markup or DOM removal, and (b) a
- * second CSP meta from the plugin can only intersect (tighten), never loosen.
- * The plugin document merges into the shell's open <head>/<html>, so design
- * tokens defined here are visible to plugin CSS as ordinary custom
- * properties.
- *
- * Electron-free string builder: desktop main and headless serve both wrap
- * panel HTML through this one function.
- */
+/** Prepend CSP before any untrusted panel HTML: opaque origins alone still permit CORS fetch/beacons. Parsed CSP survives
+ * DOM removal and later CSP can only tighten it. Open head/html exposes design tokens to plugin CSS.
+ * Shared Electron-free builder keeps desktop and serve wrapping identical. */
 
 export const PLUGIN_PANEL_CSP =
   "default-src 'none'; connect-src 'none'; script-src 'unsafe-inline'; " +
   "style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'"
 
-/** Renderer-substituted placeholders. Main cannot know the renderer's theme
- *  or token values; the renderer replaces these with a color-scheme class and
- *  CSS custom-property declarations before mounting the srcdoc. */
+/** Renderer fills theme/tokens before mounting srcdoc; main cannot know the active presentation values. */
 export const PANEL_SHELL_TOKENS_PLACEHOLDER = '/*__ORCA_PANEL_TOKENS__*/'
 export const PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER = '__ORCA_COLOR_SCHEME__'
 
-/** Curated design-token subset injected into panel documents. Deliberately
- *  NOT all of main.css (~257 custom properties): freezing every token as
- *  public API would lock future refactors. Grow additively; renaming or
- *  dropping an entry here is a plugin-facing breaking change. */
+/** Expose only curated tokens: freezing all main.css properties would lock refactors. Additions are compatible;
+ * renaming/removing published tokens breaks plugins. */
 export const PANEL_DESIGN_TOKEN_ALLOWLIST = [
   '--background',
   '--foreground',

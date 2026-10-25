@@ -12,6 +12,11 @@ import {
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
 const repo = { id: 'repo-1', path: '/repo', kind: 'git', connectionId: null as string | null }
+const LOCAL = { kind: 'local' } as const
+const localGitOwnerModule = () => ({ getWorktreeGitOwnerTarget: () => LOCAL })
+const gitCopyModule = (connectionId?: string) => () => ({
+  resolveWorktreeGitCopyNow: (id: string) => ({ worktreeId: id, transport: LOCAL, connectionId })
+})
 
 type PollState = {
   activeWorktreeId: string
@@ -94,9 +99,7 @@ async function usePollingOnce(
     }
   })
 
-  vi.doMock('./worktree-git-owner-target', () => ({
-    getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
-  }))
+  vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
   vi.doMock('@/store', () => ({
     useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
       getState: () => ({ settings: null })
@@ -116,6 +119,7 @@ async function usePollingOnce(
   vi.doMock('@/lib/connection-context', () => ({
     getConnectionId: () => options.connectionId ?? undefined
   }))
+  vi.doMock('@/lib/worktree-git-copy', gitCopyModule(options.connectionId ?? undefined))
 
   vi.stubGlobal('window', {
     api: {
@@ -378,9 +382,7 @@ describe('useGitStatusPolling', () => {
         useRef: <T>(initial: T) => ({ current: initial })
       }
     })
-    vi.doMock('./worktree-git-owner-target', () => ({
-      getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
-    }))
+    vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -394,6 +396,7 @@ describe('useGitStatusPolling', () => {
       useRepoMap: () => new Map([[repo.id, repo]])
     }))
     vi.doMock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+    vi.doMock('@/lib/worktree-git-copy', gitCopyModule())
     vi.stubGlobal('window', {
       api: {
         git: { status: gitStatus },
@@ -494,9 +497,7 @@ describe('useGitStatusPolling', () => {
         useRef: <T>(initial: T) => ({ current: initial })
       }
     })
-    vi.doMock('./worktree-git-owner-target', () => ({
-      getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
-    }))
+    vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -510,6 +511,7 @@ describe('useGitStatusPolling', () => {
       useRepoMap: () => new Map([[repo.id, repo]])
     }))
     vi.doMock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+    vi.doMock('@/lib/worktree-git-copy', gitCopyModule())
     vi.stubGlobal('window', {
       api: {
         git: { status: gitStatus },
@@ -621,9 +623,7 @@ describe('useGitStatusPolling', () => {
         }
       }
     })
-    vi.doMock('./worktree-git-owner-target', () => ({
-      getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
-    }))
+    vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })
@@ -637,6 +637,7 @@ describe('useGitStatusPolling', () => {
       useRepoMap: () => new Map([[repo.id, repo]])
     }))
     vi.doMock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+    vi.doMock('@/lib/worktree-git-copy', gitCopyModule())
     vi.stubGlobal('window', {
       api: {
         git: { status: gitStatus },
@@ -718,8 +719,7 @@ describe('useGitStatusPolling', () => {
     expect(globalThis.setInterval).not.toHaveBeenCalled()
     expect(gitStatus).not.toHaveBeenCalled()
 
-    // Push signals (e.g. a commit's metadata write) must stay subscribed while
-    // huge — a fresh non-huge status result is the only way the flag clears.
+    // Keep push signals subscribed while huge; only a fresh non-huge result can clear that flag.
     const onChanged = window.api.worktrees.onChanged as ReturnType<typeof vi.fn>
     expect(onChanged).toHaveBeenCalledTimes(1)
     const handleRepoSignal = onChanged.mock.calls[0][0] as (payload: { repoId: string }) => void
@@ -753,8 +753,7 @@ describe('useGitStatusPolling', () => {
         }
       }
     )
-    // Signals dropped while the window was hidden must be caught up on
-    // reveal so the huge flag can still clear.
+    // Visibility recovery must catch up hidden signals so the huge flag can clear.
     expect(gitStatus).not.toHaveBeenCalled()
 
     visibilityDocument.visibilityState = 'visible'
@@ -806,9 +805,7 @@ describe('useGitStatusPolling', () => {
       }
     })
 
-    vi.doMock('./worktree-git-owner-target', () => ({
-      getWorktreeGitOwnerTarget: () => ({ kind: 'local' })
-    }))
+    vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
         getState: () => ({ settings: null })

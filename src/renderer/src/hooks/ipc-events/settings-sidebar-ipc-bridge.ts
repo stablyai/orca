@@ -57,8 +57,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
     }) ?? (() => {})
   )
 
-  // Why: a phone stuck in a silent 4001 auth loop (lost device registry) reads as
-  // "phone won't connect" with no clue on either end; main throttles to once per session.
+  // Lost-registry auth loops need a visible remedy on either end; main throttles this notice once per session.
   unsubs.push(
     subscribeToUnpairedDeviceAuthNotification(window.api.mobile, () => {
       toast.warning(

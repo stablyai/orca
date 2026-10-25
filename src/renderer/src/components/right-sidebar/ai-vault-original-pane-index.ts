@@ -24,8 +24,7 @@ export type AiVaultOriginalPaneIndex = {
 }
 
 function providerKey(agent: string, sessionId: string): string {
-  // Why: unlike punctuation delimiters, NUL cannot collide with agent or
-  // provider-session text, so distinct identity pairs stay distinct keys.
+  // NUL cannot collide with agent/session text, keeping identity pairs distinct.
   return `${agent}\u0000${sessionId}`
 }
 

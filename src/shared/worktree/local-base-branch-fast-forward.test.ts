@@ -42,7 +42,7 @@ const MUTATIONS = new Set(['merge', 'update-ref', 'reset', 'checkout'])
 type Reply = { stdout: string } | Error
 type Handler = (args: string[], cwd: string) => Reply | Promise<Reply>
 
-/** The git subcommand, past leading global options such as `-c key=value`. */
+/** Skip leading global Git options when identifying the subcommand. */
 function commandOf(args: readonly string[]): string {
   for (let index = 0; index < args.length; index += 1) {
     if (args[index] === '-c') {
@@ -115,7 +115,6 @@ describe('inspectLocalBaseBranch', () => {
     expect(fake.git.listWorktrees).not.toHaveBeenCalled()
   })
 
-  // #15331: a branch that does not exist yet cannot be stale.
   it('has nothing to do when the local branch is proven absent', async () => {
     const fake = createFakeGit({
       'rev-parse': (args) =>
@@ -342,7 +341,6 @@ describe('fastForwardLocalBaseBranch', () => {
     await vi.runAllTimersAsync()
 
     await expect(pending).resolves.toEqual({ status: 'updated', ownerWorktreePath: '/repo-main' })
-    // Each attempt re-confirms the owner's branch before merging.
     expect(fake.commands().slice(-5)).toEqual([
       'symbolic-ref',
       'merge',

@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { claudeDiffPanelMayAutoOpen } from '../../../claude/claude-diff-panel-auto-open'
 import { probeRecentClaudeCliVersion } from '../../../claude/claude-hook-event-versions'
@@ -11,8 +11,7 @@ import { tryGetProviderForPty } from '../provider/registry'
 
 type Deps = { getLocalPtyProviderStartupPromise: () => Promise<void> | undefined }
 
-/** The CLAUDE_CONFIG_DIR a host pane's `claude` sees: the selected account's home, else the
- *  user's own; undefined when it runs on the CLI default. */
+/** Resolve the host account home, preserving CLI defaults when no config override exists. */
 function hostPaneClaudeConfigDirEnv(): string | undefined {
   const router = getClaudeProfileRouter()
   return router
@@ -20,13 +19,12 @@ function hostPaneClaudeConfigDirEnv(): string | undefined {
     : process.env.CLAUDE_CONFIG_DIR?.trim() || undefined
 }
 
-/** Whether Claude in a local host pane may open its diff panel unasked; false for any other pane. */
 export function installPtyClaudeDiffPanelNoticeIpcHandler(deps: Deps): void {
   getPtyIpc().handle(
     'pty:claudeDiffPanelMayAutoOpen',
     async (_event, args: { id: unknown; target?: unknown }): Promise<boolean> => {
       const id = args?.id
-      // Why host panes only: a WSL or SSH pane's Claude keeps its config on that other host.
+      // WSL/SSH Claude config belongs to the execution host.
       if (
         typeof id !== 'string' ||
         !isHostTarget(args?.target) ||
@@ -37,7 +35,7 @@ export function installPtyClaudeDiffPanelNoticeIpcHandler(deps: Deps): void {
         return false
       }
       try {
-        // Why: the pre-swap provider does not own restored daemon ids.
+        // Restored daemon IDs are not owned by the pre-swap provider.
         await deps.getLocalPtyProviderStartupPromise()
         const [version, size] = await Promise.all([
           probeRecentClaudeCliVersion(resolveClaudeCommand()),

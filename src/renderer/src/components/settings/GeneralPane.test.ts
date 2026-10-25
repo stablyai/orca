@@ -109,8 +109,7 @@ describe('GeneralPane project runtime section visibility', () => {
   const entries = getGeneralPaneSearchEntries()
 
   it('hides the section on non-Windows hosts even with an empty search query', () => {
-    // Regression: matchesSettingsSearch returns true for an empty query, so the
-    // platform gate is what keeps the orphaned header off macOS/Linux.
+    // Empty searches match empty entries; the platform gate must suppress orphaned non-Windows headers.
     expect(shouldShowProjectRuntimeSection(false, '', [])).toBe(false)
     expect(shouldShowProjectRuntimeSection(undefined, '', [])).toBe(false)
   })

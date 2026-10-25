@@ -16,6 +16,7 @@ import {
 import { forgetFailedAgentLaunches } from '../../agent-launch/agent-launch-pane-attachment'
 import { closeClientHostedBrowserPagesForWorktree } from '../worktree-browser-client-page-close'
 import { teardownStops } from '../owned-session-teardown-policy'
+import { deleteRemovedOwnerBrowserProfile } from '../browser-host/managed-browser-profile-removal'
 import type {
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult
@@ -69,7 +70,6 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     })
   }
 
-  /** Runs the same delete again for each local removal a quit or crash interrupted. */
   finishInterruptedWorktreeRemovals(): void {
     const store = this.store
     if (!store) {
@@ -80,7 +80,6 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     )
   }
 
-  /** The removal a request for this worktree waits on: the one still running. */
   protected joinPendingWorktreeRemoval(
     worktreeId: string,
     options: RemoveManagedWorktreeOptions
@@ -88,11 +87,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(options.hostId)?.id)
   }
 
-  /**
-   * Delete on a local delete that failed after Git dropped the registration, while Git's listing
-   * still does not register the path: refuses while the folder is there, else finishes that removal.
-   * True when it did.
-   */
+  /** Finish a failed local removal only while Git still omits the path and the directory is gone; refuse while it exists. */
   protected async retryFailedRemoval(
     route: { kind: string },
     target: { id: string; path: string },
@@ -151,8 +146,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     worktreeId: string,
     hostId?: ExecutionHostId
   ): void {
-    // Why: worktree IDs are path-derived and can be recreated, so removal must
-    // purge history and process-local caches before the ID points at new state.
+    // Purge history/caches before path-derived ids can name a recreated workspace.
     const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
     const repoId = splitWorktreeId(worktreeId)?.repoId
     const preservesSameIdOwner = Boolean(
@@ -163,11 +157,10 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     const acceptedRendererSnapshot = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
     const storedSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     removeWorktreeMetaRow(store, worktreeId, hostId)
-    // Why outside the same-id gate: retirement is per host and per pane, so a surviving owner keeps its own.
+    // Retire only this host's panes even when a same-id owner survives.
     this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
     if (!preservesSameIdOwner) {
-      // A paired PTY can outlive the delete acknowledgement; it must not be
-      // rescued into a newly-created occupant of the same path-derived ID.
+      // Do not rescue surviving paired PTYs into a recreated occupant of the same path-derived id.
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
         const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
         if (ptyWorktreeId && worktreeIdsEqual(ptyWorktreeId, worktreeId)) {
@@ -197,8 +190,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     }
   }
 
-  // Every removal path calls this (desktop IPC, runtime, project); PTYs and chats stop before.
-  // Headless pages are main-process windows that otherwise outlive the worktree.
+  // All removal paths stop PTYs/chats first; release headless windows that would outlive the workspace.
   releaseRemovedWorktreeHostSessions(
     worktreeId: string,
     entryPoint: 'worktree-removal' | 'folder-removal' | 'project-removal'
@@ -214,6 +206,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       void backend?.closeTab(tab.browserPageId).catch(() => {})
     }
     closeClientHostedBrowserPagesForWorktree(this, worktreeId)
+    deleteRemovedOwnerBrowserProfile({ kind: 'worktree', id: worktreeId })
   }
 
   async forceDeletePreservedBranch(
@@ -240,23 +233,22 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
-      // Why: not pty.title — that is the process's own title evidence, and a name there reads as
-      // the shell taking the pane back (#20626).
+      // Keep manual names out of process-title evidence or they read as the shell reclaiming the pane (#20626).
       pty.pty.manualTitle = title?.trim() || null
+      const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
-      // Why: without a renderer the rename only lived on the live pty and was
-      // lost on restart. Persist customTitle so a headless rebuild keeps it.
-      if (!this.notifier?.renameTerminal && pty.pty.tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, pty.pty.tabId, title)
-        // Why: paired desktops rank their own saved-session title above the live one, so the
-        // name has to be published as manual or a resumed session hides it (#29975).
+      // Persist headless custom titles so restart cannot lose a rename.
+      const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
+      if (tabIdForTitle) {
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabIdForTitle, title)
+        // Publish manual titles: paired desktops prefer saved-session names over live titles (#29975).
         const customTitle = title?.trim() || null
-        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, pty.pty.tabId, {
+        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, tabIdForTitle, {
           customTitle,
-          // Why: a name set while the pane slept lives in the snapshot title; a reset must drop it.
+          // Reset must also drop a name saved while sleeping.
           ...(customTitle === null
             ? {
-                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, pty.pty.tabId)
+                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, tabIdForTitle)
               }
             : {})
         })
@@ -267,7 +259,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
           return { handle, tabId: leaf.tabId, title }
         }
       }
-      const tabId = pty.pty.tabId ?? pty.record.tabId
+      const tabId = recordedTabId() ?? pty.record.tabId
       // A notifier can exist before its pane graph; retain the rename on the known tab.
       if (this.notifier?.renameTerminal && tabId) {
         this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)

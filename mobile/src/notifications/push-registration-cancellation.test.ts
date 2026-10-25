@@ -130,7 +130,7 @@ it('does not register with stale consent after the user disables notifications d
   )
 })
 
-it('waits for the Android notification channel before registering a token', async () => {
+it('waits for notification channel readiness before requesting a token', async () => {
   const pending = deferred<void>()
   vi.mocked(ensureDesktopNotificationChannel).mockReturnValueOnce(pending.promise)
   const connection = client()

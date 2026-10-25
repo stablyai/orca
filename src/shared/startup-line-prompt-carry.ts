@@ -1,20 +1,7 @@
-/**
- * Whether a launch prompt rides the command line that gets TYPED into the user's shell, or the agent
- * starts clean and the prompt is pasted once it is ready. A paste needs a host that can prove the
- * agent holds its terminal (`launched-agent-foreground`); elsewhere the line carries it, as on main.
- *
- * Measured on the built line, not the raw prompt: quoting, the launcher, its arguments and session
- * options all land on that line, and every failure a long or multi-line typed line has is a property
- * of the line — macOS bash 3.2 reads each newline as Enter, a line editor reads any other control
- * byte as a key, a canonical-mode write truncates a line
- * past MAX_CANON (1024 on macOS), and cmd caps a line at 8191. Decided here, where the line exists,
- * so the answer is a fact about what was built rather than a prediction of it.
- *
- * `startup-line-typed-length.live-shell.test.ts` types lines through Orca's own ready barrier and
- * submission into real shells, including one whose config outlasts the barrier's 1.5 s cap so the
- * line lands while the terminal is still line-buffered. Only zsh read a multi-line line whole in
- * both cases, and only while each of its lines stayed short; a long single line was lost there.
- */
+/** Choose prompt delivery from the built, quoted line: control bytes edit/submit, MAX_CANON truncates (1024 on macOS),
+ * and cmd caps at 8191. Paste fallback requires launched-agent-foreground proof or it could reach an exited agent’s shell.
+ * startup-line-typed-length.live-shell.test.ts measures real shells through the ready barrier, including config beyond its 1.5s cap;
+ * only zsh preserved multiline input in both timings, with short individual lines. Long zsh lines still failed. */
 
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { buildAgentStartupPlan, type AgentStartupPlan } from './tui-agent-startup'
@@ -45,13 +32,11 @@ export function startupLineCarriesPrompt(args: {
   if (!withPrompt || withPrompt.followupPrompt !== null) {
     return false
   }
-  // Where nothing can prove the agent took the terminal, a paste could land in the shell of an
-  // agent that exited, so the line carries the prompt at any size, as it always did.
+  // Without foreground proof, paste could reach an exited agent’s shell; retain the prompt on the line at any size.
   if (!args.hostProvesAgentInFront) {
     return true
   }
-  // Hermes types a fixed line that reads the prompt from the spawn env, so the line never grows
-  // with the text; its own env budget already returned null above when the text did not fit.
+  // Hermes reads prompt env, so line length stays fixed; its env budget already rejected oversized input above.
   if (TUI_AGENT_CONFIG[args.agent].promptInjectionMode === 'hermes-query') {
     return true
   }
@@ -62,11 +47,7 @@ export function startupLineCarriesPrompt(args: {
   return args.shellName === 'zsh' && zshReadsMultiLineWhole(line)
 }
 
-/**
- * zsh takes a multi-line line as one bracketed paste, and a write that beats its line editor still
- * reaches it line by line, so each line must fit the terminal's line buffer. bash 3.2 has no
- * bracketed paste, and fish drops a paste written before its reader is up.
- */
+/** Early zsh paste still passes through the canonical per-line buffer; bash 3.2 lacks paste and early fish consumes it. */
 function zshReadsMultiLineWhole(line: string): boolean {
   const lines = line.split('\n')
   return (
@@ -77,8 +58,7 @@ function zshReadsMultiLineWhole(line: string): boolean {
   )
 }
 
-/** Any C0 byte or DEL, not just CR/LF: no quoter escapes them, and a single-line command is written
- *  raw, so a TAB completes, ESC starts a key sequence, and ^C/^U/^W kill or edit the line. */
+/** Raw C0/DEL bytes edit the line (TAB completion, ESC sequences, Ctrl-C/U/W), even without CR/LF. */
 export function hasControlByte(line: string): boolean {
   for (let i = 0; i < line.length; i += 1) {
     const code = line.charCodeAt(i)
@@ -94,10 +74,6 @@ type StartupPlanInputs = Omit<
   'prompt' | 'allowEmptyPromptLaunch'
 >
 
-/**
- * The startup plan for a launch that offers a prompt: the prompted plan when its typed line can
- * carry the text, else the clean plan, with which one it was.
- */
 export function planStartupWithPromptCandidate(
   inputs: StartupPlanInputs,
   prompt: string,

@@ -1,8 +1,4 @@
-// Item-identity → stable journal key. Pure and shared: the host keys upserts
-// with it and clients reconcile optimistic sends against the same string.
-//
-// Components are percent-encoded before joining so a value containing the
-// delimiter cannot collide with a different identity.
+// Share stable upsert/optimistic-send keys; percent-encode components before joining to prevent delimiter collisions.
 
 import type { AgentJournalItemIdentity } from './agent-session-journal-types'
 
@@ -15,25 +11,10 @@ type ParsedJournalItemIdentity = AgentJournalItemIdentity & {
   readonly [PARSED_JOURNAL_ITEM_KEY]?: string
 }
 
-/** Longest raw component a key may embed. Real provider ids are tens of bytes;
- *  anything larger would push the composed key past wire page budgets, so it
- *  travels as a stable digest instead of verbatim. */
+/** Digest oversized provider IDs so composed keys fit wire page budgets. */
 export const MAX_JOURNAL_KEY_COMPONENT_CHARS = 1024
 
-/**
- * Deterministic stand-in for an oversized or ill-formed key component: same
- * input, same output, so revisions and tombstones of one identity still share
- * a key, and re-deriving from a parsed key is a fixed point (the bounded form
- * is well-formed and far below the cap). The head keeps keys debuggable;
- * length plus two independent hashes makes an accidental collision practically
- * impossible. Pure JS because clients derive keys too and cannot reach
- * node:crypto.
- *
- * JSON strings are arbitrary UTF-16 code units, so a component can carry a
- * lone surrogate that `encodeURIComponent` throws on. Those values take the
- * digest form too: the hashes run over the raw code units, so a value and its
- * replacement-character spelling keep distinct keys.
- */
+/** Bound oversized/ill-formed UTF-16 with a diagnostic head, length and two hashes over raw code units. This is deterministic and idempotent for revisions/tombstones, distinguishes lone surrogates from U+FFFD, and works in clients without node:crypto. */
 export function boundJournalKeyComponent(value: string): string {
   if (value.length <= MAX_JOURNAL_KEY_COMPONENT_CHARS && !hasLoneSurrogate(value)) {
     return value
@@ -43,11 +24,7 @@ export function boundJournalKeyComponent(value: string): string {
   return `${wellFormedBoundedHead(value, 40)}~orca-oversized~${value.length}~${h1}${h2}`
 }
 
-/** The diagnostic head must be valid Unicode for `encodeURIComponent`: a pair
- *  split by the cut is dropped and a lone surrogate becomes U+FFFD — the
- *  hashes over the raw units keep the full key collision-safe regardless.
- *  Digest forms are persisted, so for well-formed input the head must stay
- *  byte-stable across builds or one identity would stop sharing a key. */
+/** Make the head URI-encodable by dropping cut pairs and replacing lone surrogates; raw-unit hashes preserve identity. Persisted well-formed heads must remain byte-stable across builds. */
 function wellFormedBoundedHead(value: string, maxUnits: number): string {
   let head = ''
   let index = 0
@@ -112,16 +89,7 @@ function isBoundedComponentRepresentation(value: string): boolean {
   return BOUNDED_COMPONENT_PATTERN.test(value)
 }
 
-/**
- * Stable string key for an item identity.
- *
- * Codex renumbers `item-N` ids on every resume, so its key is the thread, the
- * turn, and the item's ordinal WITHIN that turn — a position that survives
- * renumbering because a completed turn's item list does not change. `thread/fork`
- * copies turns keeping their original turn ids, so the thread id must stay in the
- * key. Claude copies item uuids on `--fork-session`, so its key is the session id
- * plus the uuid. Text never participates.
- */
+/** Codex resume renumbers item IDs: key by thread, turn and within-turn ordinal. Forks retain turn IDs, so keep thread identity; Claude forks copy UUIDs, so include session identity. Never key by text. */
 export function agentJournalItemKey(identity: AgentJournalItemIdentity): string {
   // Parsed pre-tag digest keys must keep addressing their persisted revision chain.
   const parsedKey = (identity as ParsedJournalItemIdentity)[PARSED_JOURNAL_ITEM_KEY]
@@ -155,15 +123,9 @@ export function agentJournalSubmissionKey(clientMessageId: string): string {
   return agentJournalItemKey({ provider: 'orca', clientMessageId })
 }
 
-/**
- * Inverse of {@link agentJournalItemKey}. Clients hold item KEYS, but an upsert
- * needs the identity behind one — answering an approval re-appends the same
- * item at the next revision. Components are percent-encoded; raw strings that
- * imitate a bounded component carry a reserved encoded-domain tag.
- */
+/** Recover identity from a client-held key for revision upserts such as approval answers. Percent-encode components; tag raw values imitating bounded components in the encoded domain. */
 export function parseAgentJournalItemKey(key: string): AgentJournalItemIdentity | null {
-  // Persisted keys can be corrupted: a malformed percent sequence must fail
-  // the parse, never throw through journal replay or open.
+  // Corrupt percent sequences must return parse failure instead of throwing through replay/open.
   const parts: string[] = []
   let preserveExactKey = false
   for (const part of key.split(KEY_DELIMITER)) {

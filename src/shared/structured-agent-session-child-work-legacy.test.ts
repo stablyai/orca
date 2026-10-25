@@ -1,5 +1,4 @@
-// What a client that predates child views reads of a Codex child agent that launched a shell: the
-// flat roster it always read, derived from the host's views.
+// Pre-child-view clients read flat Codex shell-child rosters derived from the host views.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkView } from './agent-status-child-work-view'

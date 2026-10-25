@@ -5,12 +5,7 @@ import {
   deriveMobileNativeChatStreaming
 } from './mobile-native-chat-streaming-gate'
 
-/** Live streaming-bubble text for the chat list. The gate remembers which
- *  transcript tail predates the current stream segment, so a reply that repeats
- *  the previous turn's prefix still shows while streaming. Call this from a
- *  component that outlives the chat list itself: the baseline has to survive the
- *  view toggles that unmount it, or the next segment reverts to prefix-matching.
- *  `streamLive` keeps those textless gaps from reading as an idle stream. */
+// Keep the segment baseline above list remounts so view toggles preserve repeated-prefix previews; streamLive distinguishes hidden gaps from turn end.
 export function useMobileNativeChatStreamingBubble(
   folded: readonly NativeChatMessage[],
   streamingText: string | undefined,
@@ -23,8 +18,7 @@ export function useMobileNativeChatStreamingBubble(
     streamLive
   })
   if (step.gate !== gate) {
-    // Render-time state adjustment (derived-state pattern): the advance is
-    // idempotent for a repeated (text, tail) pair, so this settles in one pass.
+    // Idempotent derived-state adjustment settles after one render for repeated text/tail.
     setGate(step.gate)
   }
   return step.streaming

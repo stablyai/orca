@@ -86,14 +86,9 @@ function recordCommandApply(args: {
   optionId: string
   midSession: CatalogMidSessionApply | undefined
   command: string
-  /** Canonicalize a parsed value, or reject it. A template's prefix also matches
-   *  prose that merely starts with it (`/model` parses `is a weird word` out of
-   *  "/model is a weird word"), and tracking that renders raw prose as the
-   *  current value — and, for the model, drops every option the model owns. */
+  /** Validate/canonicalize parsed values: command templates also match leading prose, which would become raw option labels and erase model-scoped options. */
   canonicalize: (value: string) => string | null
-  /** The model the picker draws this option under. Reading the tracked model alone
-   *  would drop a typed `/effort low` under a CLI default, and treat a typed
-   *  `/model <that default>` as a switch that resets the model's tracked state. */
+  /** Picker’s effective model, including CLI default; otherwise typed options are lost and retyping that default falsely resets state. */
   effectiveModelId: string | null
   persist?: PersistSessionOption
 }): boolean {
@@ -123,8 +118,7 @@ function recordCommandApply(args: {
   const previousModelId = effectiveModelId
   if (optionId === 'model') {
     if (previousModelId !== value) {
-      // Why: a model command can reset model-scoped state, so an older value
-      // from a prior visit is no longer evidence about this live session.
+      // Switching models can reset live options; previously tracked destination values are no longer evidence.
       delete record.valuesByModel[value]
     }
     record.model = { value, source: 'dispatched' }
@@ -157,17 +151,11 @@ export function recordNativeChatSessionOptionCommand(args: {
     optionId: 'model',
     midSession: catalog.modelApply.midSession,
     command,
-    // A typed model can be an alias or a full provider id, so reuse the same
-    // matcher the hook reports go through rather than demanding a catalog id.
-    // Whitespace means this was never a bare command — a multi-line paste whose
-    // first line happens to read `/model sonnet` is a prompt as far as we can
-    // tell, so track nothing rather than guess. Model ids never contain spaces.
+    // Use hook model matching for aliases/full provider ids. Reject whitespace: multiline/prose inputs may merely begin with /model and cannot prove dispatch.
     canonicalize: (value) =>
       /\s/.test(value)
         ? null
-        : // Fall back to the seed: an alias this host's CLI no longer lists is
-          // still a legitimate thing to type, and callers reconcile it back into
-          // the list (withTrackedNativeChatModel) rather than blanking the row.
+        : // Fall back to seeded aliases absent from host discovery; withTrackedNativeChatModel restores their row.
           (matchNativeChatCatalogModelId({ ...catalog, models: [...models] }, value) ??
           matchNativeChatCatalogModelId(catalog, value)),
     effectiveModelId: resolveEffectiveNativeChatModelId(catalog, models, record),

@@ -9,8 +9,7 @@ import { createRelayServer } from './relay-server.js'
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 
-// c25 exited after 45 s of boot retries when its database was unreachable, and the MIG
-// recreated it into the same loop. A cell now opens a lazy pool and listens at once.
+// Lazy pool/listen avoids the unreachable-DB boot/MIG restart loop that hit c25 after 45s retries.
 describePostgres('cell boot while PostgreSQL is unreachable', () => {
   const cleanups: Array<() => Promise<void>> = []
 

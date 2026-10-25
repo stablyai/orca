@@ -7,7 +7,7 @@ import {
   buildNativeChatImagePasteBytes,
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from './native-chat-send'
+} from '../../../../shared/native-chat-paste-bytes'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import { formatImageDropPasteText } from '../terminal-pane/terminal-drop-image-path'
 import { isTerminalDropWindowsPathLike } from '../terminal-pane/terminal-drop-shell'
@@ -21,8 +21,7 @@ import { sendNativeChatMessage, type NativeChatSendHandle } from './native-chat-
 
 export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
-/** The path text an agent detects as an image. One with spaces or shell characters is escaped as a
- *  terminal image drop is, which agent TUIs undo before checking the file exists. */
+/** Escape image paths as terminal drops do; agent TUIs unescape before checking file existence. */
 export function agentImagePastePath(agent: AgentType, path: string): string {
   const formatted = formatAgentImagePath(agent, path)
   if (formatted !== path) {

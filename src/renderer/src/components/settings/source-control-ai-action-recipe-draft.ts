@@ -21,8 +21,7 @@ function readActionRecipeInputValue(
 ): ActionRecipeDraftValue {
   const recipe = config.actions?.[actionId]
   const value = recipe?.commandInputTemplate
-  // Why: execution trims templates, but the controlled textarea must preserve
-  // an in-progress trailing space so users can keep typing the next word.
+  // Execution trims templates; preserve trailing spaces while the user types the next word.
   return {
     commandInputTemplate:
       typeof value === 'string' ? value : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId],

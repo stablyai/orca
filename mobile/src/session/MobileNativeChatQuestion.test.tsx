@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -46,9 +47,9 @@ describe('MobileNativeChatQuestion', () => {
       )
     })
 
-    const choices = renderer.root.findAllByProps({ accessibilityRole: 'checkbox' })
+    const choices = renderer!.root.findAllByProps({ accessibilityRole: 'checkbox' })
     await act(async () => choices[1]!.props.onPress())
-    const submit = renderer.root.findByProps({ accessibilityLabel: 'Submit selected options' })
+    const submit = renderer!.root.findByProps({ accessibilityLabel: 'Submit selected options' })
     await act(async () => submit.props.onPress())
 
     expect(onAnswer).toHaveBeenCalledWith('second-token')
@@ -72,7 +73,7 @@ describe('MobileNativeChatQuestion', () => {
       )
     })
 
-    const choices = renderer.root.findAllByProps({ accessibilityRole: 'button' })
+    const choices = renderer!.root.findAllByProps({ accessibilityRole: 'button' })
     await act(async () => choices[1]!.props.onPress())
 
     expect(onAnswer).toHaveBeenCalledWith('Choice')
@@ -97,11 +98,11 @@ describe('MobileNativeChatQuestion', () => {
       )
     })
 
-    const choices = renderer.root.findAllByProps({ accessibilityRole: 'checkbox' })
+    const choices = renderer!.root.findAllByProps({ accessibilityRole: 'checkbox' })
     await act(async () => choices[0]!.props.onPress())
-    const input = renderer.root.findByType('TextInput')
+    const input = findByHostType(renderer!.root, 'TextInput')
     await act(async () => input.props.onChangeText('ap-south'))
-    const submit = renderer.root.findByProps({ accessibilityLabel: 'Submit selected options' })
+    const submit = renderer!.root.findByProps({ accessibilityLabel: 'Submit selected options' })
     await act(async () => submit.props.onPress())
 
     expect(onAnswer).toHaveBeenCalledWith('east-token, other-token:ap-south')
@@ -125,7 +126,7 @@ describe('MobileNativeChatQuestion', () => {
         })
       )
     })
-    const cancel = renderer.root.findByProps({ accessibilityLabel: 'Cancel' })
+    const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
     await act(async () => cancel.props.onPress())
     expect(onCancel).toHaveBeenCalledWith({ itemId: 'question-1', expectedRevision: 7 })
   })
@@ -153,14 +154,14 @@ describe('MobileNativeChatQuestion', () => {
       )
     })
 
-    const input = renderer.root.findByType('TextInput')
+    const input = findByHostType(renderer!.root, 'TextInput')
     expect(input.props).toMatchObject({
       value: '  draft\n',
       placeholder: 'Write here',
       multiline: true
     })
     await act(async () => input.props.onChangeText('  \n '))
-    const send = renderer.root.findByProps({ accessibilityLabel: 'Send reply' })
+    const send = renderer!.root.findByProps({ accessibilityLabel: 'Send reply' })
     expect(send.props.disabled).toBe(false)
     await act(async () => send.props.onPress())
     expect(onAnswer).toHaveBeenCalledWith(`editor-token:${encodeURIComponent('  \n ')}`)
@@ -178,22 +179,21 @@ describe('MobileNativeChatQuestion', () => {
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatQuestion, {
-          // Pi's `input` dialog: a declared input that names no `multiline`.
           question: { ...question, freeTextInput: { allowEmpty: true } },
           onAnswer
         })
       )
     })
-    const send = renderer.root.findByProps({ accessibilityLabel: 'Send reply' })
-    expect(renderer.root.findByType('TextInput').props.multiline).toBe(false)
+    const send = renderer!.root.findByProps({ accessibilityLabel: 'Send reply' })
+    expect(findByHostType(renderer!.root, 'TextInput').props.multiline).toBe(false)
     expect(send.props.disabled).toBe(false)
     await act(async () => send.props.onPress())
     expect(onAnswer).toHaveBeenCalledWith('input-token:')
 
     await act(async () =>
-      renderer.update(createElement(MobileNativeChatQuestion, { question, onAnswer }))
+      renderer!.update(createElement(MobileNativeChatQuestion, { question, onAnswer }))
     )
-    expect(renderer.root.findByProps({ accessibilityLabel: 'Send reply' }).props.disabled).toBe(
+    expect(renderer!.root.findByProps({ accessibilityLabel: 'Send reply' }).props.disabled).toBe(
       true
     )
   })

@@ -1,13 +1,7 @@
 import { hostStableKey, parseHostStableKey } from './automation-owner-key'
 import type { StableAutomationCatalogRef } from './automation-owner-ref'
 
-/**
- * The Automations page host filter.
- *
- * Only the *stable* form is ever persisted: a rename, reconnect, runtime
- * re-pair, or SSH reconnect must not lose the user's selection, while data and
- * actions captured from an old incarnation still have to be discarded.
- */
+/** Persist stable host identity across rename/reconnect/re-pair, while discarding actions/data captured from old incarnations. */
 export type AutomationHostFilter =
   | { kind: 'all' }
   | { kind: 'host'; host: StableAutomationCatalogRef }

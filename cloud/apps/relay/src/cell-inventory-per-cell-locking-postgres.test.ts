@@ -5,10 +5,7 @@ import { openRelayDatabase, type RelayDatabase } from './database.js'
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 
-// Sorted ascending, and the host is pinned to the LAST id on purpose: the
-// fleet-wide lock is one ordered scan, so it holds every earlier row while it
-// waits on the pinned one. Pinning to the first id would make the two locking
-// models indistinguishable.
+// Pin to last ascending cell: a fleet scan holds earlier rows while waiting, whereas per-cell locking leaves them free; first-cell pins cannot distinguish these.
 const cells = ['a', 'b', 'c'].map((suffix) => ({
   id: `percell-postgres-${suffix}`,
   url: `https://percell-postgres-${suffix}.example.com`,
@@ -102,9 +99,7 @@ describePostgres('PostgreSQL per-cell inventory locking', () => {
     return false
   }
 
-  // Why: a sticky refresh whose first NOWAIT probe loses retries by taking a
-  // cell row before the assignment row. That retry used to take the whole
-  // inventory, so one busy cell stalled every other cell's reconnects.
+  // Sticky NOWAIT retry must lock only the pinned cell first; fleet-wide retry previously stalled every cell’s reconnects.
   it('waits only on the pinned cell row while refreshing a sticky assignment', async () => {
     await removeTestRows(databases[0]!)
     const store = new RelayAssignmentStore(databases[0]!, () => 100)
@@ -132,25 +127,29 @@ describePostgres('PostgreSQL per-cell inventory locking', () => {
     await rowHeldPromise
 
     const refresh = store.assign(identity)
-    expect(await lockWaiterAppeared(databases[2]!)).toBe(true)
-    // The refresh is blocked on cell C. Every earlier row must still be free:
-    // the ordered fleet-wide scan would be holding both of them by now.
     const heldWhileRefreshWaits: string[] = []
-    await databases[2]!.transaction(async (transaction) => {
-      for (const cell of [cellA, cellB]) {
-        try {
-          await transaction.queryLocked(
-            `SELECT * FROM relay_cells WHERE cell_id = ?`,
-            [cell.id],
-            { failIfUnavailable: true }
-          )
-        } catch {
-          heldWhileRefreshWaits.push(cell.id)
+    try {
+      expect(await lockWaiterAppeared(databases[2]!)).toBe(true)
+      // The refresh is blocked on cell C. Every earlier row must still be free:
+      // the ordered fleet-wide scan would be holding both of them by now.
+      await databases[2]!.transaction(async (transaction) => {
+        for (const cell of [cellA, cellB]) {
+          try {
+            await transaction.queryLocked(
+              `SELECT * FROM relay_cells WHERE cell_id = ?`,
+              [cell.id],
+              { failIfUnavailable: true }
+            )
+          } catch {
+            heldWhileRefreshWaits.push(cell.id)
+          }
         }
-      }
-    })
-    releaseRow()
-    await holder
+      })
+    } finally {
+      releaseRow()
+      await holder
+      await refresh.catch(() => undefined)
+    }
 
     expect(heldWhileRefreshWaits).toEqual([])
     expect((await refresh).cellId).toBe(cellC.id)

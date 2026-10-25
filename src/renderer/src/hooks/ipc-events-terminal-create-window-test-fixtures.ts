@@ -4,8 +4,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 
 type ListenerRef = { current: unknown }
 
-// Why: the preload surface the terminal-create scenario stubs is large enough that
-// inlining it would push the scenario test past the file-length budget.
+// Extract the large preload stub so scenario assertions stay within the line budget.
 export function buildTerminalCreateWindow(args: {
   dispatchEvent: unknown
   replyTerminalCreate: unknown
@@ -124,7 +123,7 @@ export function buildTerminalCreateWindow(args: {
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
         onCloseTerminal: () => () => {},
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
         onNewBrowserTab: () => () => {},
         onNewMarkdownTab: () => () => {},
@@ -163,6 +162,7 @@ export function buildTerminalCreateWindow(args: {
       browser: {
         onGuestLoadFailed: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
+        onSessionProfilesChanged: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {},
         onPaneFocus: () => () => {}
@@ -184,6 +184,7 @@ export function buildTerminalCreateWindow(args: {
       ssh: {
         listTargets: () => Promise.resolve([]),
         listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         getState: () => Promise.resolve(null),
         onStateChanged: () => () => {},

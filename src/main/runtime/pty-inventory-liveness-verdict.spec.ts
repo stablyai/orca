@@ -2,11 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../shared/pty-liveness-verdict'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
 export function registerPtyInventoryLivenessVerdictTests(): void {
-  // The aggregate inventory only enumerates registered providers, so a dropped
-  // relay clears `connected` for every one of its PTYs at once. Only the
-  // provider's own answer separates an observed exit from lost contact.
+  // Aggregate inventory may omit a disconnected relay; only its owner's evidence can distinguish exit from lost contact.
 
   const WORKTREE_ID = 'repo-1::/tmp/inventory-verdict'
   const REMOTE_PTY_ID = 'ssh:conn-1@@relay-9'
@@ -20,10 +19,12 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
   }
 
   function makeStore() {
-    const session = getDefaultWorkspaceSession()
+    let session = getDefaultWorkspaceSession()
     return {
       getWorkspaceSession: vi.fn(() => session),
-      setWorkspaceSession: vi.fn(),
+      setWorkspaceSession: vi.fn((next: typeof session) => {
+        session = next
+      }),
       getRepos: vi.fn(() => [
         {
           id: 'repo-1',
@@ -90,8 +91,6 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
 
       runtime.onPtyExit(REMOTE_PTY_ID, -1, undefined, { hostExitConfirmed: true })
 
-      // A host-delivered exit frame is the one signal that observes the process, so it both clears
-      // the lost-contact doubt and is retained as the certificate itself.
       expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({ status: 'exited' })
     })
 
@@ -111,17 +110,11 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
 
       await runtime.listTerminals(`id:${WORKTREE_ID}`)
 
-      // An observed absence is the death certificate callers already act on.
       expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
     })
 
     it('records no death certificate when a listing of the owning host omits the PTY', async () => {
-      // The host answered and named a sibling on the same relay, so this is the strongest absence the
-      // inventory can report — and it is still not a certificate. `pty.listProcesses` returns the
-      // relay's CURRENT session map, so a relay that restarted omits every id the previous one minted
-      // (ids are `pty2:<ptyIdMintEpoch>:<n>` with a fresh epoch per relay start) whether or not those
-      // shells ever died. Recording `exited` here would only relocate the fabrication that
-      // handlePtyReattachFailure was corrected for (docs/reference/ssh-execution-boundary.md).
+      // A restarted relay lists only its current id epoch; omission never proves old shells exited (docs/reference/ssh-execution-boundary.md).
       const runtime = makeRuntimeMissingFromInventory(
         () => false,
         vi.fn(async () => [{ id: 'ssh:conn-1@@relay-sibling', worktreeId: WORKTREE_ID }])
@@ -145,8 +138,7 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
       reconnected = true
       await runtime.listTerminals(`id:${WORKTREE_ID}`)
 
-      // The owning host named the id in its own listing. That is evidence of life, and it must be
-      // recorded as such rather than collapsed into the same null a never-asked host produces.
+      // An owning-host listing proves life, unlike an unasked host.
       expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({
         status: 'live',
         ptyIds: [REMOTE_PTY_ID]
@@ -195,7 +187,7 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
       expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
 
       runtime.markPtyLivenessUnverifiable(REMOTE_PTY_ID, 'registration raced reconnect')
-      runtime.registerPty(REMOTE_PTY_ID, WORKTREE_ID, 'conn-1', {
+      registerBoundPty(runtime, REMOTE_PTY_ID, WORKTREE_ID, 'conn-1', {
         tabId: 'tab-new',
         leafId: '00000000-0000-4000-8000-000000000001',
         incarnationId: 'incarnation-2'
@@ -218,8 +210,7 @@ export function registerPtyInventoryLivenessVerdictTests(): void {
     })
 
     it('bounds detached verdicts while preserving every still-addressable one', () => {
-      // Eviction classifies by CURRENT addressability, so churn cannot push an active PTY's verdict
-      // out: only ids that no record, handle, or leaf still names are candidates.
+      // Evict only currently unaddressable ids so churn cannot discard live PTY verdicts.
       const runtime = new OrcaRuntimeService(makeStore() as never)
       for (let index = 0; index < 400; index += 1) {
         const ptyId = `ssh:conn-1@@churn-${index}`

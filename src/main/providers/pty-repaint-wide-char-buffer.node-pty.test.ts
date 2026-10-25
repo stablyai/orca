@@ -1,29 +1,5 @@
-/**
- * Real-ConPTY reproduction for #15192, asserted on BUFFER CONTENT rather than on
- * the byte stream.
- *
- * Its sibling windows-conpty-wide-char-duplication.node-pty.test.ts asserts that
- * no two identical wide characters arrive adjacent in the bytes node-pty emits.
- * That passes on both backends, and it cannot fail for the fault the reporter
- * actually described: in their decisive run the command echo was doubled while
- * that same command's output was clean, so the shell never received doubled
- * bytes. A repaint landing at the wrong cells is made entirely of legitimate
- * bytes -- cursor positioning plus text -- and only the cells it lands on are
- * wrong. The doubled text also pasted doubled into Notepad, so the corruption
- * was in the buffer.
- *
- * So the ConPTY output is replayed into Orca's own main-side emulator, resizing
- * it before the pty exactly as Session.resize does (session.ts), and the
- * resulting lines are compared to the fixtures.
- *
- * Everything that does not need ConPTY runs on every platform: on macOS and
- * Linux node-pty spawns a real pty, so the same assertions guard those and prove
- * the replay harness is not silently vacuous on the Windows lane. Only the
- * backend A/B (bundled OpenConsole vs the system ConPTY) is win32-only.
- *
- * The width sweep behind these fixtures lives in
- * src/main/daemon/headless-emulator-wide-char-repaint.test.ts.
- */
+/** #15192: replay ConPTY bytes/resizes into the host emulator and assert buffer cells, since valid repaint bytes can still duplicate glyphs.
+ * Fixture/control assertions also run on POSIX; only bundled-vs-system ConPTY comparison requires Windows. */
 import { describe, expect, it } from 'vitest'
 import type { Terminal } from '@xterm/headless'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -51,7 +27,7 @@ type RunOptions = {
   holdMs: number
 }
 
-/** Why node and not a shell: cmd.exe's output codepage follows the machine's ANSI codepage, so the fixture bytes would not be trustworthy. */
+// Node writes deterministic UTF-8; cmd.exe output depends on the machine codepage.
 function childScript(holdMs: number): string {
   return [
     `const ko=${JSON.stringify(KOREAN_LINE)};`,
@@ -73,8 +49,7 @@ async function recordConpty(options: RunOptions): Promise<Event[]> {
     ...(options.useConptyDll ? { useConptyDll: true } : {})
   })
 
-  // One ordered log: a resize recorded here replays at the same point in the
-  // stream it happened at, which is the only way the replay can be faithful.
+  // Preserve resize/output order for faithful Session.resize replay.
   const events: Event[] = []
   proc.onData((chunk) => {
     events.push({ data: chunk })
@@ -128,10 +103,9 @@ function doubledWideRuns(text: string): string[] {
 }
 
 function expectFixtureLinesOnly(lines: string[]): void {
-  // Guard against a vacuous pass: the fixture must actually have reached us.
   expect(lines.length).toBeGreaterThan(0)
   expect(lines.filter((line) => line === KOREAN_GLYPHS)).toHaveLength(LINE_REPEATS)
-  // Control: Latin survives whatever happened above, so a failure is script-selective.
+  // Latin is the control for script-specific corruption.
   expect(lines.filter((line) => line === LATIN_GLYPHS)).toHaveLength(LINE_REPEATS)
   expect(lines.filter((line) => line !== KOREAN_GLYPHS && line !== LATIN_GLYPHS)).toEqual([])
 }
@@ -163,8 +137,7 @@ describe('pty repaint fidelity in the terminal buffer (#15192)', () => {
   )
 
   it('survives the resize the reporter used as a workaround, after output settles', async () => {
-    // Resizing once the child is quiet isolates the repaint: nothing is being
-    // written, so any line that changes was moved by ConPTY's redraw alone.
+    // Resize a quiet child so only ConPTY repaint can change the settled text.
     const events = await recordConpty({
       useConptyDll: true,
       holdMs: 900,
@@ -177,10 +150,7 @@ describe('pty repaint fidelity in the terminal buffer (#15192)', () => {
   }, 60_000)
 
   it('does not double a wide glyph when a resize lands mid-line', async () => {
-    // Deliberately weaker than the cases above: a resize that interrupts a line
-    // lets ConPTY's reflow and xterm's disagree about where the tail belongs,
-    // which would fail an exact comparison without proving duplication. What
-    // must never happen either way is a glyph appearing twice.
+    // Mid-line resize can disagree with xterm reflow without duplicating glyphs; assert duplication only.
     const events = await recordConpty({
       useConptyDll: true,
       holdMs: 200,

@@ -117,9 +117,7 @@ describe('nextPetDragAnimation', () => {
   })
 
   it('keeps the last direction without advancing when horizontal travel stays under 4px', () => {
-    // A vertical/near-vertical drag has ~0 horizontal delta: keep the direction
-    // but do not reset the baseline, so accumulated horizontal travel still adds
-    // up toward the threshold on a slow diagonal drag.
+    // Subthreshold moves must preserve the horizontal baseline so slow diagonal travel can accumulate.
     expect(nextPetDragAnimation('running-left', 0)).toEqual({
       animation: 'running-left',
       accepted: false

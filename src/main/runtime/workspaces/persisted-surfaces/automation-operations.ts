@@ -16,6 +16,10 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrchestrationDb } from '../../orchestration/db'
+import {
+  committedHandBackTypes,
+  type MailHandBack
+} from '../../orchestration/db/messages/helper-mailbox-hand-back'
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { getAppEnvironment } from '../../../../shared/app-environment'
@@ -144,12 +148,11 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     return this.automation.ownerPrecondition(id)
   }
 
-  // Why: lazy initialization — the DB path depends on Electron's userData
-  // which may not be finalized until after app.ready. Also allows unit tests
-  // to inject an in-memory DB without touching the filesystem.
+  // Defer until userData is final; tests can inject an in-memory DB.
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
+      this.bindMailHandBack(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
     }
@@ -171,8 +174,34 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
+    this.bindMailHandBack(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
+  }
+
+  private bindMailHandBack(db: OrchestrationDb): void {
+    db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
+  }
+
+  /** Wakes the Run for helper mail its creator's settlement moved there, once that committed. */
+  private offerHandedBackMail(db: OrchestrationDb, handBack: MailHandBack): void {
+    // A replaced database's consumers belong to another runtime.
+    if (this._orchestrationDb !== db) {
+      return
+    }
+    try {
+      if (db.db.isTransaction) {
+        this.mailPointerRepointScheduler.schedule(handBack.mailbox)
+        return
+      }
+      // Re-read committed rows so rolled-back settlements wake nobody.
+      for (const type of committedHandBackTypes(db, handBack)) {
+        this.notifyMessageArrived(handBack.mailbox, type)
+      }
+    } catch (error) {
+      console.warn('[orchestration] failed to offer handed-back helper mail', error)
+      this.mailPointerRepointScheduler.schedule(handBack.mailbox)
+    }
   }
 
   protected async flushWorkspaceSessionOrThrowAsync(): Promise<void> {
@@ -236,8 +265,8 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     if (
       !pty?.connected ||
       pty.incarnationId !== expected.incarnationId ||
-      pty.tabId !== expected.tabId ||
-      pty.paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
+      this.paneOfPty(pty).tabId !== expected.tabId ||
+      this.paneOfPty(pty).paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
       !worktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
       this.handleByPtyId.get(expected.ptyId) !== expected.terminalHandle
     ) {

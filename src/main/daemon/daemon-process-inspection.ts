@@ -131,9 +131,7 @@ export async function queryWindowsProcess(
   }
 }
 
-// Why: the sync procfs helper in daemon-process-start-time spawns getconf per call; CLK_TCK is fixed for
-// the kernel's lifetime, so cache one async spawn and only retry after a failure. The cache is
-// keyed by runner because CLK_TCK belongs to the host that executes the command, not the module.
+// Cache fixed CLK_TCK per host runner; retry failed reads.
 const clockTicksPerSecondByRunner = new WeakMap<InspectionCommandRunner, Promise<number | null>>()
 
 async function readClockTicksPerSecond(
@@ -157,8 +155,7 @@ async function readClockTicksPerSecond(
   return ticksPerSecond
 }
 
-// Why: same main-thread hazard as darwin — the sync linux helper does two readFileSync calls
-// plus a getconf spawn, and this audit-only probe runs in the Electron main process.
+// Read procfs and CLK_TCK asynchronously to keep Electron's main loop responsive.
 export async function readLinuxProcessStartedAtMs(
   pid: number,
   dependencies: DaemonProcessInspectionDependencies = {}
@@ -184,8 +181,7 @@ export async function readLinuxProcessStartedAtMs(
   }
 }
 
-// Why: `ps` is darwin's only start-time source and this audit-only probe runs in the
-// Electron main process, where the sync spawn blocks every IPC/UI turn for its duration.
+// macOS needs ps for start time; spawning synchronously would block Electron's main loop.
 export async function readMacosProcessStartedAtMs(
   pid: number,
   dependencies: DaemonProcessInspectionDependencies = {}

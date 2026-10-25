@@ -20,9 +20,7 @@ const X64 = writeImage('x64.node', () => peImage({ machine: PE_MACHINE.x64 }))
 const ARM64 = writeImage('arm64.node', () => peImage({ machine: PE_MACHINE.arm64 }))
 
 describe('PE_MACHINE', () => {
-  // Spelled out rather than taken from the module: the fixtures below build
-  // their headers from these, so a table that is wrong in both entries would
-  // otherwise agree with itself.
+  // Use independent numeric machine values or fixture headers and wrong table could agree by construction.
   it('holds the IMAGE_FILE_MACHINE values Windows actually stamps', () => {
     expect(PE_MACHINE).toEqual({ x64: 0x8664, arm64: 0xaa64 })
   })
@@ -36,8 +34,7 @@ describe('readPeMachine', () => {
     expect(readPeMachine(path)).toBe(expected)
   })
 
-  // Callers ask this of files they did not produce, so anything that is not a
-  // PE has to be an answer rather than a crash.
+  // External non-PE artifacts need classifiable null result, not exception.
   it.each([
     ['a Mach-O or ELF binary', () => Buffer.alloc(0x200)],
     ['a file too short to hold a DOS header', () => Buffer.from('MZ')],
@@ -59,8 +56,7 @@ describe('readPeMachine', () => {
 })
 
 describe('peImage fixture', () => {
-  // A fixture that quietly stamps machine 0x0000 for an arch it does not know
-  // is the same species of silent lie these gates exist to catch.
+  // Reject unknown fixture arch instead of quietly stamping machine zero and hiding gate failures.
   it('refuses to invent a machine value for an arch it has none for', () => {
     expect(() => peImage({ arch: 'ia32' })).toThrow(/must not invent one/)
   })
@@ -73,8 +69,7 @@ describe('peImage fixture', () => {
 })
 
 describe('describePeMachine', () => {
-  // The callers put this straight into an error, and "not a PE image" is a
-  // different problem from a cross-arch build.
+  // Distinguish non-PE artifact from wrong-arch build in caller’s error.
   it('names a machine field it read', () => {
     expect(describePeMachine(PE_MACHINE.arm64)).toBe('machine 0xaa64')
   })

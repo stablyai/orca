@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// The end-to-end shape of the 9 shipped lazy-chunk crash reports: a corrupt chunk
-// fails, recovery requests a reload, the reload never lands, and the boundary files
-// a react-error-boundary crash report instead of containing the failure.
+// Contain lazy-chunk failures even when the recovery reload never lands.
 
 import { Suspense, act, type ReactElement, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -74,7 +72,6 @@ describe('RecoverableRenderErrorBoundary after a recovery reload never lands', (
       )
     })
 
-    // Outlive the reload settle grace window, then let React commit the rejection.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(RELOAD_SETTLE_GRACE_MS + 50)
     })
@@ -83,8 +80,6 @@ describe('RecoverableRenderErrorBoundary after a recovery reload never lands', (
     })
 
     expect(container?.querySelector('[role="alert"]')).not.toBeNull()
-    // Before the fix the boundary received the raw SyntaxError and filed a report;
-    // that is exactly what produced all 9 shipped crash reports.
     expect(reportCrashMock).not.toHaveBeenCalled()
   })
 })

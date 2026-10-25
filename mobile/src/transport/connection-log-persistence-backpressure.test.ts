@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createConnectionLogStore } from './connection-log-buffer'
 import type { ConnectionLogEntry } from './types'
 
@@ -14,6 +14,17 @@ async function drainMicrotasks(): Promise<void> {
     await Promise.resolve()
   }
 }
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  if (vi.isFakeTimers()) {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  }
+})
 
 describe('connection log persistence backpressure', () => {
   it('writes only the latest pending snapshot when storage falls behind', async () => {
@@ -44,11 +55,11 @@ describe('connection log persistence backpressure', () => {
     }
     expect(saved).toEqual([['0']])
     release()
-    for (let i = 0; i < 1000; i++) {
-      await drainMicrotasks()
-    }
+    await drainMicrotasks()
     expect(saved).toHaveLength(2)
-    expect(saved[1]).toEqual(store.get('a').map((item) => item.id))
+    const expected = Array.from({ length: 200 }, (_, index) => String(801 + index))
+    expect(saved[1]).toEqual(expected)
+    expect(store.get('a').map((item) => item.id)).toEqual(expected)
   })
 
   it('persists a different host while one host has a stalled save', async () => {
@@ -185,7 +196,6 @@ describe('connection log persistence backpressure', () => {
     expect(attempted).toEqual([['1']])
     release()
     await drainMicrotasks()
-    // The superseded ['1'] snapshot is never replayed; only the newest one is attempted.
     expect(attempted).toEqual([['1'], ['2', '3']])
   })
 
@@ -225,10 +235,8 @@ describe('connection log persistence backpressure', () => {
       for (let i = 0; i < 20; i++) {
         await drainMicrotasks()
       }
-      // 500 stalled appends cost the held write plus one attempt at the newest snapshot.
       expect(writes).toBe(2)
       await vi.advanceTimersByTimeAsync(5_000)
-      // Draining the backoff adds that snapshot's single retry and nothing more.
       expect(writes).toBe(3)
     } finally {
       vi.useRealTimers()

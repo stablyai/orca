@@ -110,8 +110,7 @@ describe('agent sleep coordinator runtime-liveness races', () => {
     delayed.resolve(runtimeListResult(['pty-1']))
     await tick
 
-    // The racing pass has no host evidence for `wt-late`, so it must not count as one of
-    // the two confirmations; hibernating on the next tick would rest on client PTYs alone.
+    // Missing host evidence cannot count toward two confirmations, or the next tick could hibernate using client PTYs alone.
     await runAgentHibernationTick()
     expect(shutdown).not.toHaveBeenCalledWith('wt-late', expect.anything())
 

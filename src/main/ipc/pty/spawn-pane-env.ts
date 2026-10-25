@@ -1,10 +1,9 @@
-// The pane identity a new PTY's env carries, stamped from the spawn's own ids, for both spawn lanes.
-
 import { mkdirSync } from 'node:fs'
 import {
   buildJcodeRuntimeDirEnv,
   JCODE_RUNTIME_DIR_ENV_KEY
 } from '../../../shared/jcode-runtime-dir'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
 
@@ -14,7 +13,6 @@ export type PtySpawnPane = {
   worktreeId: string | undefined
 }
 
-/** The pane a host spawn's own ids name, or null when they name none. */
 export function ptySpawnPaneFromIds(ids: {
   tabId?: string
   leafId?: string
@@ -47,11 +45,12 @@ export function stampPtySpawnPaneEnv(
   }
   const { pane } = args
   if (!pane) {
-    // Why: ORCA_PANE_KEY crosses into shells/hook registries; only a key naming this spawn's own pane may reach it.
+    // Shell/hook identity must name this spawn's own pane, never an unproved renderer key.
     delete env.ORCA_PANE_KEY
     delete env.ORCA_TAB_ID
     delete env.ORCA_WORKTREE_ID
     delete env.ORCA_AGENT_LAUNCH_TOKEN
+    applyScrubSafeAgentEnvAliases(env)
     return
   }
   env.ORCA_PANE_KEY = pane.paneKey
@@ -69,6 +68,8 @@ export function stampPtySpawnPaneEnv(
   if (args.jcodeRuntimeDir !== undefined) {
     env[JCODE_RUNTIME_DIR_ENV_KEY] = args.jcodeRuntimeDir
   }
+  // Why: SSH relay spawns skip the local/daemon env builders that otherwise mirror these.
+  applyScrubSafeAgentEnvAliases(env)
 }
 
 /** Window local providers validate asynchronously; daemon spawns retain their synchronous preparation. */

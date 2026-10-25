@@ -1,8 +1,6 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 
-// Why: one source for each dispatch refusal's code, message, and data, so the runtime emits and
-// the CLI test formats the identical envelope. Messages are supplied per call site because each
-// existing string is a published receipt an old consumer may match on.
+// Share refusal envelopes across runtime/CLI; retain call-site messages because older consumers may match published strings.
 
 export type DispatchRefusalReceipt = {
   code: 'task_not_found' | 'task_not_startable' | 'inject_rejected'
@@ -74,8 +72,8 @@ function taskNotStartableNextSteps(detail: TaskNotStartableDetail): string[] {
   ]
 }
 
-// Why: the old five-name example read as an allowlist (#15125); derive from the field detection keys on so it cannot drift.
-// Not filtered by `disabledTuiAgents` — that gates Orca's launchers, not detection, so a hand-started disabled agent still injects.
+// Derive from detection’s expectedProcess keys: a five-name example was mistaken for an allowlist (#15125).
+// Launcher disablement does not gate detection; hand-started disabled agents still inject.
 const RECOGNIZED_AGENT_PROCESS_NAMES = [
   ...new Set(Object.values(TUI_AGENT_CONFIG).map((config) => config.expectedProcess))
 ].sort()

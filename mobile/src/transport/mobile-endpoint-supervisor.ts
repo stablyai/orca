@@ -80,9 +80,7 @@ export class MobileEndpointSupervisor {
       this.relayRotationPending = true
       void this.recoverRelay(true)
     })
-    // Why: the race owns recovery exactly like a network-change replacement — its
-    // failure must book the shared cooldown. recoverRelay's own guards already
-    // cover stopped/background, so the timer needs no scope check.
+    // The race owns recovery and must book shared cooldown on failure; recoverRelay already guards stopped/background state.
     this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, () => {
       void this.recoverRelay(true, true)
     })
@@ -153,8 +151,7 @@ export class MobileEndpointSupervisor {
       return
     }
     if (!this.bundle) {
-      // Why: a Keychain race at open must not kill relay recovery for the whole
-      // process lifetime; each recovery attempt re-reads the durable bundle.
+      // Re-read durable credentials each recovery attempt so an opening keychain race cannot disable relay for the process lifetime.
       this.logRelay('credential bundle unavailable at start; recovery will re-read')
     }
     this.unsubscribeState = this.logical.onStateChange((state) => {
@@ -205,18 +202,14 @@ export class MobileEndpointSupervisor {
     return !this.stopped && this.backgroundGrace.isForeground()
   }
 
-  // forceReplacement: dial past the "direct still looks live" guard — a lease
-  // rotation, a network-change replacement, or the happy-eyeballs grace race.
-  // ownsRecovery: this dial is the connection's only hope, so a failure books the
-  // shared cooldown and any session left stale-'connected' by a half-open socket
-  // comes down; lease rotation clears it because armRetry owns its own retry.
+  // forceReplacement bypasses live-direct guards; ownsRecovery books cooldown and retires stale sessions on failure.
+  // Lease rotation leaves retry ownership to its timer.
   private async recoverRelay(forceReplacement = false, ownsRecovery = false): Promise<void> {
     if (!this.isActive()) {
       return
     }
     if (this.operationInFlight) {
-      // Why: a 12s direct probe can own the mutex when a network handoff lands;
-      // afterProbe replays the queued replacement so the signal is never lost.
+      // Queue handoff intent while a direct probe holds the mutex; afterProbe replays it.
       this.pendingReplace ||= forceReplacement && ownsRecovery
       return
     }
@@ -225,17 +218,14 @@ export class MobileEndpointSupervisor {
       forceReplacement = true
       ownsRecovery = true
     }
-    // Why: connecting/handshaking is live direct progress; an unforced relay dial
-    // would race it before the grace timer has given direct its head start.
+    // Give connecting/handshaking direct its grace period before unforced relay recovery.
     if (!forceReplacement && !this.relayReconnect.needsRecovery(this.logical.getState())) {
       return
     }
-    // Why: revival and lease timers can overlap resume failures; one shared cooldown
-    // prevents PEER_DROPPED/LIMIT_EXCEEDED reconnect churn.
+    // Share cooldown across overlapping resume, revival and lease failures to prevent reconnect churn.
     if (this.relayReconnect.shouldDefer()) {
       if (ownsRecovery) {
-        // Why: never tear down a session no dial has disproven — the intent stays
-        // queued so the armed retry runs forced once the cooldown lapses.
+        // Without a dial, no session was disproven; keep intent queued for forced recovery after cooldown.
         this.pendingReplace = true
       }
       this.logRelay('recovery deferred by cooldown or gate')
@@ -253,13 +243,11 @@ export class MobileEndpointSupervisor {
       this.bundle = selection.bundle
       if (selection.credentials.length === 0) {
         this.logical.setRecoveryPath(null)
-        // Why: "expired" vs "missing" separates a sleep-past-expiry phone
-        // (needs re-pair or LAN) from a Keychain failure in field reports.
+        // Distinguish expired credentials from missing keychain data in diagnostics.
         logRelayCredentialUnavailable(this.logRelay, selection.bundle !== null)
         this.relayReconnect.armCredentialReprobe()
         if (ownsRecovery) {
-          // Why: no dial happened — keep the session and the intent; the reprobe
-          // runs forced and replaces make-before-break once a credential exists.
+          // Preserve session/intent until credentials return; reprobe will replace without breaking the live session.
           this.pendingReplace = true
         }
         return
@@ -279,12 +267,10 @@ export class MobileEndpointSupervisor {
       }
       if (dialed.outcome === 'aborted') {
         this.logical.setRecoveryPath(null)
-        // Why: direct won the race or the supervisor went inactive — not a
-        // failure; booking backoff would delay the next genuine recovery.
+        // Withdrawal is not failure; booking cooldown would delay genuine later recovery.
         return
       }
-      // Why: cleanup may happen while a relay dial is awaiting the network;
-      // record its outcome without recreating a foreground retry timer.
+      // Record a dial completing after cleanup without recreating foreground timers.
       const scheduleRetry = (!forceReplacement || ownsRecovery) && this.isActive()
       this.relayReconnect.registerFailure(dialed.error, scheduleRetry)
       recoveryPresentation.clearIfCredentialBlocked(this.logical, this.relayReconnect)
@@ -327,8 +313,7 @@ export class MobileEndpointSupervisor {
       credentialRefreshed = true
       await this.sessionEstablisher.adoptRelay(result.relay)
     } catch {
-      // Why: pending material remains durable; the next authenticated direct
-      // opportunity must reconcile it before creating another install key.
+      // Retain pending material for direct reconciliation before generating another install key.
     } finally {
       if (credentialRefreshed) {
         this.relayReconnect.completeCredentialRefresh()

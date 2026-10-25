@@ -1,4 +1,4 @@
-/** User-facing words for whether an SSH host's managed server serves it; all go through the catalog. */
+// Translate managed SSH server status through the catalog.
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
@@ -75,13 +75,12 @@ export function sshHostServerStatusLine(
   return null
 }
 
-/** A failed connect's toast: an unserved host's translated reason, else main's message. */
 export function sshConnectFailureText(
   state: Pick<SshConnectionState, 'managedServer'> | undefined,
   fallback: string
 ): string {
   const status = state?.managedServer
-  // Why uncapped: the pane and toast have no "Details", and a refusal's way out comes last.
+  // Uncapped because panes/toasts lack Details and refusal recovery guidance comes last.
   return status?.kind === 'relay' ? unservedLine(status, Number.POSITIVE_INFINITY).text : fallback
 }
 
@@ -104,7 +103,7 @@ function sourceChangedLine(): SshHostServerStatusLine {
     tone: 'warning',
     text: translate(
       'auto.components.settings.sshHostServer.sourceChanged',
-      'An older version of Orca changed this host’s projects. Move those changes to this host’s Orca server, or keep the server’s version, to connect again.'
+      'This computer has projects or folders for this host that its Orca server doesn’t have yet, often added by an older version of Orca. Move them to this host’s Orca server, or keep the server’s version, to connect again.'
     )
   }
 }

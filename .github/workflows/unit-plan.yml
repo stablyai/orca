@@ -1,11 +1,6 @@
 name: Unit plan
 
-# Why its own workflow: the caller's `needs` gate the whole called workflow, so while this lived
-# inside unit-tests.yml it waited on static analysis and typecheck before it could even start —
-# and the shards then waited on it. Planning needs neither (its inputs are the checkout, a git
-# diff against HEAD^1, the import graph, and the checked-in timing baseline), so hoisting it out
-# lets it overlap the gate instead of queueing behind it. Measured: a median 93s off the shard
-# matrix's start.
+# Plan independently of static/type gates so checkout/diff/import-graph/timing work overlaps them; moving it out of unit-tests advanced shards by median 93s.
 on:
   workflow_call:
     inputs:
@@ -25,7 +20,7 @@ permissions:
 
 jobs:
   plan:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
       shards: ${{ steps.plan.outputs.shards }}

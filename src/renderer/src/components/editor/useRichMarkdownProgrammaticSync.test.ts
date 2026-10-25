@@ -23,10 +23,11 @@ vi.mock('./editor-stale-view-edit', () => ({
 function buildEditor(
   codec: RichMarkdownEditorCodec,
   htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext,
-  markdown: string
+  markdown: string,
+  element: HTMLElement | null = null
 ): Editor {
   return new Editor({
-    element: null,
+    element,
     extensions: createRichMarkdownExtensions({
       codec,
       htmlSuperscriptLinks: true,
@@ -46,22 +47,18 @@ describe('useRichMarkdownProgrammaticSync external-reload baseline adoption (#60
       worktreeRoot: null,
       sourceOwner: { kind: 'unknown' as const }
     })
-    // The editor currently shows emphasis loaded from the original `_old_` source;
-    // its canonical (getMarkdown) form is `*old*` with no trailing newline.
+    // Show the canonical form of originally underscored emphasis without a trailing newline.
     const canonical = '# T\n\n*old*'
     const editor = buildEditor(codec, htmlSuperscriptLinkContext, canonical)
     expect(editor.getMarkdown()).toBe(canonical)
 
-    // Refs still reflect the ORIGINAL non-canonical source bytes on disk.
     const lastCommittedMarkdownRef = { current: '# T\n\n_old_' }
     const originalSourceRef = { current: '# T\n\n_old_' }
     const baseCanonicalRef = { current: canonical }
     const isApplyingProgrammaticUpdateRef = { current: false }
 
     try {
-      // An external tool rewrites disk to the canonical bytes (same semantics,
-      // new byte-level style). The doc already renders them, so no reload — but
-      // the reconciliation baseline must still be refreshed to the new bytes.
+      // Style-only external changes need new source baselines even when the rendered document already matches.
       renderHook(() =>
         useRichMarkdownProgrammaticSync({
           codec,
@@ -86,8 +83,7 @@ describe('useRichMarkdownProgrammaticSync external-reload baseline adoption (#60
         })
       )
 
-      // Without the fix these stay stale at `_old_`, and the next edit would
-      // rewrite the file back to `_old_`, silently undoing the external change.
+      // Stale underscore baselines would undo the external style rewrite on the next edit.
       expect(lastCommittedMarkdownRef.current).toBe(canonical)
       expect(originalSourceRef.current).toBe(canonical)
       expect(baseCanonicalRef.current).toBe(canonical)
@@ -150,7 +146,6 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
     vi.useFakeTimers()
     vi.mocked(notifyStaleViewEditRejected).mockClear()
     const commitPaneB = vi.fn()
-    // Pane B typed "pane b" over "base" and is waiting out its serialize delay.
     const { editor, hook, serializeTimerRef, onContentChangeRef } = renderPane(
       'pane b',
       commitPaneB
@@ -217,6 +212,70 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
       hook.rerender({ content: 'pane a' })
       expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
       expect(editor.getMarkdown()).toBe('pane a')
+    } finally {
+      editor.destroy()
+    }
+  })
+})
+
+describe('useRichMarkdownProgrammaticSync undo history', () => {
+  it("never makes another view's text an undo step, so undo can't re-apply text undone there", () => {
+    const codec = createRichMarkdownEditorCodec()
+    const editor = buildEditor(
+      codec,
+      createRichMarkdownHtmlSuperscriptLinkContext({
+        sourceFilePath: '',
+        worktreeId: '',
+        worktreeRoot: null,
+        sourceOwner: { kind: 'unknown' as const }
+      }),
+      'base',
+      document.createElement('div')
+    )
+    const lastCommittedMarkdownRef = { current: 'base' }
+    const originalSourceRef = { current: 'base' }
+    const baseCanonicalRef = { current: 'base' }
+    const hook = renderHook(
+      ({ content }: { content: string }) =>
+        useRichMarkdownProgrammaticSync({
+          codec,
+          content,
+          docLinkMenuSetter: vi.fn(),
+          editor,
+          fileId: 'f1',
+          filePath: '/repo/README.md',
+          isApplyingProgrammaticUpdateRef: { current: false },
+          lastCommittedMarkdownRef,
+          onContentChangeRef: { current: vi.fn() },
+          originalSourceRef,
+          baseCanonicalRef,
+          markdownDocuments: undefined,
+          rootRef: { current: null },
+          runtimeTarget: { kind: 'local' },
+          serializeTimerRef: { current: null },
+          pendingEditEpochRef: { current: 0 },
+          slashMenuSetter: vi.fn(),
+          worktreeId: 'w1',
+          worktreeRoot: null
+        }),
+      { initialProps: { content: 'base' } }
+    )
+    try {
+      // The source view typed, then undid it; this view's undo must not bring it back.
+      hook.rerender({ content: 'base XYZ' })
+      hook.rerender({ content: 'base' })
+      editor.commands.undo()
+      expect(editor.getMarkdown()).toBe('base')
+
+      // Nor undo the source view's text out from under it.
+      hook.rerender({ content: 'base XYZ' })
+      editor.commands.undo()
+      expect(editor.getMarkdown()).toBe('base XYZ')
+
+      editor.commands.insertContentAt(editor.state.doc.content.size - 1, '!')
+      expect(editor.getMarkdown()).toBe('base XYZ!')
+      editor.commands.undo()
+      expect(editor.getMarkdown()).toBe('base XYZ')
     } finally {
       editor.destroy()
     }

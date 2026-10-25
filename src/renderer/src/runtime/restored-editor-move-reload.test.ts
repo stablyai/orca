@@ -1,7 +1,4 @@
-// An editor tab Orca moved survives restart (plan Q5), window side: main saved a restored-editor
-// move (F42); a window reloaded from that session and drawn from main's snapshot shows the tab and
-// its open file in the new workspace only. main/runtime/restored-editor-move-restart.test.ts runs
-// the same move through main's real Store.
+// Reload main’s saved restored-editor move (F42/Q5); frame-drawn tab and file must exist only in destination workspace. Main Store counterpart: main/runtime/restored-editor-move-restart.test.ts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'

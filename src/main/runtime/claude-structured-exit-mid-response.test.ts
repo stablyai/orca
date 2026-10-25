@@ -1,6 +1,4 @@
-// A Claude CLI that exits on its own after its start landed, with a message handed to it: the chat
-// says Claude stopped, by name. Against the production runtime, adapter, record store and host,
-// with only the CLI process scripted.
+// Script only the CLI; verify self-exit attribution through the production runtime/adapter/store/host.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'

@@ -1,5 +1,4 @@
 import './orca-runtime-test-lifecycle.spec'
-import type { RuntimeStore } from './runtime-store-contract'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
 import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
@@ -12,6 +11,11 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { bindPaneFirst, committingSpawn } from './bind-first-pane.test-fixture'
+import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 describe('terminal rename before renderer graph hydration', () => {
   it.each(['Media Engine Orch', null])(
@@ -20,12 +24,11 @@ describe('terminal rename before renderer graph hydration', () => {
       const session = makeWorkspaceSessionWithHeadlessTerminal()
       session.tabsByWorktree[TEST_WORKTREE_ID][0].customTitle = 'Previous name'
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The shared fixture supplies RuntimeStore methods; its legacy Mock return type loses callable signatures.
-      const checkedStore = runtimeStore as RuntimeStore
+      const checkedStore = runtimeStore
       const runtime = new OrcaRuntimeService(checkedStore)
       const renameTerminal = vi.fn()
       runtime.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'omp-initial-pty' })),
+        spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'omp-initial-pty' }))),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -39,7 +42,6 @@ describe('terminal rename before renderer graph hydration', () => {
         renameTerminal,
         focusTerminal: vi.fn(),
         closeTerminal: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
@@ -52,10 +54,13 @@ describe('terminal rename before renderer graph hydration', () => {
 
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(title)
       expect(renameTerminal).toHaveBeenCalledWith('host-tab', title)
-      runtime.onPtyExit('omp-initial-pty', 0)
+      // Main-owned last-pane exit closes its tab; model restart with a fresh runtime over the saved session instead.
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+        runtime.onPtyExit('omp-initial-pty', 0)
+      }
       const restored = new OrcaRuntimeService(checkedStore)
       restored.setPtyController({
-        spawn: vi.fn(async () => ({ id: 'omp-replacement-pty' })),
+        spawn: vi.fn(committingSpawn(restored, async () => ({ id: 'omp-replacement-pty' }))),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -70,12 +75,11 @@ describe('terminal rename before renderer graph hydration', () => {
   it('does not recreate a closed persisted tab from a surviving PTY record', async () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal()
     const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Shared fixture implements RuntimeStore; its legacy Mock typing loses callable signatures.
-    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+    const runtime = new OrcaRuntimeService(runtimeStore)
     const notifier = createMobileCreateTestNotifier(vi.fn())
     runtime.setNotifier(notifier)
     runtime.setPtyController({
-      spawn: vi.fn(async () => ({ id: 'surviving-pty' })),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'surviving-pty' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -94,7 +98,6 @@ describe('terminal rename before renderer graph hydration', () => {
   })
 })
 
-// The name is display only (#20626): every reader that shows the terminal still shows it.
 describe('terminal rename display', () => {
   it('reveals a renamed background terminal under its name', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
@@ -203,13 +206,21 @@ describe('terminal view rename characterization', () => {
       renameTerminal,
       focusTerminal() {},
       closeTerminal() {},
-      sleepWorktree() {},
       terminalFitOverrideChanged() {},
       terminalDriverChanged() {}
     }
   }
   it('keeps rename persistence before the current notifier with its own receiver', async () => {
-    const runtime = new OrcaRuntimeService()
+    // Switch-on, main's layout says which tab holds the terminal; that layout lives in a store.
+    const runtime = new OrcaRuntimeService(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? partialRuntimeStore() : undefined
+    )
+    bindPaneFirst(runtime, {
+      worktreeId: 'folder-workspace',
+      tabId: 'host-tab',
+      leafId: '00000000-0000-4000-8000-000000000002',
+      ptyId: 'rename-pty'
+    })
     const pty = runtime['recordPtyWorktree']('rename-pty', 'folder-workspace', {
       tabId: 'host-tab'
     })
@@ -246,7 +257,8 @@ describe('terminal view rename characterization', () => {
 })
 
 describe('terminal query erased boundary regressions', () => {
-  it('keeps the cached-null pane failure when a later binding read is valid', () => {
+  // Pane getter changes per read to catch internally inconsistent summaries (L80); ordinary records do not.
+  it('summarizes from one read of the pane, though a later read would differ', () => {
     class SummaryRuntime extends OrcaRuntimeService {
       summarize() {
         const pty = this.recordPtyWorktree('changing-binding', 'missing', { connected: false })
@@ -258,8 +270,11 @@ describe('terminal query erased boundary regressions', () => {
         })
         const issueHandle = vi.fn(() => 'handle')
         Object.defineProperty(this, 'issuePtyHandle', { value: issueHandle })
-        expect(() => this.buildPtyTerminalSummary(pty, new Map())).toThrow(TypeError)
-        expect(reads).toBeGreaterThanOrEqual(2)
+        expect(this.buildPtyTerminalSummary(pty, new Map())).toMatchObject({
+          orphaned: true,
+          tabId: 'pty:changing-binding'
+        })
+        expect(reads).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 0 : 1)
         expect(issueHandle).toHaveBeenCalledExactlyOnceWith(pty)
       }
     }
@@ -284,4 +299,106 @@ describe('terminal query erased boundary regressions', () => {
     await expect(runtime.remove('ssh-host')).rejects.toThrow('PTY provider unavailable')
     expect(runtime.providerReads).not.toHaveBeenCalled()
   })
+})
+
+describe('first-turn identity under recorded title clocks (#32030)', () => {
+  const launchAt = 1_800_000_000_000
+  const hookAt = launchAt + 2_000
+  const providerSession = { key: 'session_id' as const, id: 'first-turn' }
+  const tab = {
+    type: 'terminal' as const,
+    id: 'tab::leaf',
+    parentTabId: 'tab',
+    leafId: HEADLESS_LEAF_ID,
+    title: 'Terminal',
+    isActive: true
+  }
+
+  function freshHookSession(pty: RuntimePtyWorktreeRecord) {
+    return buildRuntimeMobileAgentStatus(
+      pty,
+      tab,
+      'term',
+      null,
+      () => [
+        {
+          paneKey: 'tab:leaf',
+          state: 'done',
+          prompt: '',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: hookAt,
+          evidenceObservedAt: hookAt,
+          stateStartedAt: hookAt,
+          providerSession
+        }
+      ],
+      { getPaneKey: () => 'tab:leaf', getLeaf: () => null, getTrackedTitle: () => null }
+    ).agentStatus?.providerSession
+  }
+
+  function makeRuntime() {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    return new OrcaRuntimeService(runtimeStore)
+  }
+
+  it('keeps the first clock of a shell title that inventory replays after the hook', () => {
+    const runtime = makeRuntime()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(launchAt)
+    try {
+      const pty = runtime['recordPtyWorktree']('replay-pty', TEST_WORKTREE_ID, { title: 'zsh' })
+      pty.lastAgentStatus = 'idle'
+      now.mockReturnValue(hookAt + 1_000)
+      runtime['recordPtyWorktree']('replay-pty', TEST_WORKTREE_ID, { title: 'zsh' })
+      expect(freshHookSession(pty)).toEqual(providerSession)
+
+      runtime['recordPtyWorktree']('replay-pty', TEST_WORKTREE_ID, { title: 'bash' })
+      expect(freshHookSession(pty)).toBeUndefined()
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it.each(['none', 'recorded', 'osc'] as const)(
+    'dates the launch title before spawn, with %s title evidence during spawn',
+    async (observation) => {
+      const runtime = makeRuntime()
+      const now = vi.spyOn(Date, 'now').mockReturnValue(launchAt)
+      runtime.setPtyController({
+        spawn: vi.fn(
+          committingSpawn(runtime, async () => {
+            now.mockReturnValue(launchAt + 1_000)
+            const pty = runtime['recordPtyWorktree'](
+              'spawn-title-pty',
+              TEST_WORKTREE_ID,
+              observation === 'recorded' ? { title: 'bash' } : {}
+            )
+            if (observation === 'osc') {
+              runtime['applyTrackedPtyTitle']('spawn-title-pty', 'bash', 'bash')
+            }
+            pty.lastAgentStatus = 'idle'
+            now.mockReturnValue(hookAt + 1_000)
+            return { id: 'spawn-title-pty' }
+          })
+        ),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      try {
+        await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+          title: 'zsh',
+          tabId: 'host-tab',
+          leafId: HEADLESS_LEAF_ID
+        })
+        const pty = runtime['ptysById'].get('spawn-title-pty')!
+        expect(freshHookSession(pty)).toEqual(providerSession)
+        expect(pty.title).toBe({ none: 'zsh', recorded: 'bash', osc: null }[observation])
+      } finally {
+        now.mockRestore()
+      }
+    }
+  )
 })

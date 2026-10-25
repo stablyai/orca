@@ -1,3 +1,4 @@
+import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
 export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string
@@ -35,8 +36,7 @@ export type BrowserCertificateProceedResult =
   | { ok: true }
   | { ok: false; reason: BrowserCertificateProceedFailureReason }
 
-// Why: BrowserPage persists the active viewport preset so CDP emulation can be
-// reapplied on reload/navigation without the user re-picking from the toolbar.
+// Persist viewport presets to reapply CDP emulation after navigation/reload.
 export type BrowserViewportPresetId =
   | 'mobile-s'
   | 'mobile-m'
@@ -60,23 +60,14 @@ export type BrowserViewportScrollState = {
   maxScrollTop: number
 }
 
-/**
- * A page that shows a workspace document rather than a URL. The document is the identity: the grant
- * and the `orca-preview://` URL it is served over are minted when the page mounts and replaced on a
- * hard reload, so neither may be stored, persisted or published — this is what is, and `url` stays
- * the blank URL for the whole life of such a page.
- */
+/** Persist workspace document identity only; mount/reload mints fresh grants/orca-preview URLs, which must never be stored or published. url stays blank for the document page. */
 export type BrowserPageDocLocation = {
   kind: 'workspace-doc'
   worktreeId: string
   filePath: string
 }
 
-/**
- * Where a converted page came from — one level deep, so Back can cross the conversion boundary.
- * A `workspace-doc` origin carries the document identity only; a `url` origin carries the page's
- * last stored (already-fenced) url, so no grant URL can ride provenance into persistence.
- */
+/** Keep one-level Back provenance: document identity or an already-fenced stored URL, never grant URLs. */
 export type BrowserPageConversionOrigin =
   | { kind: 'workspace-doc'; docLocation: BrowserPageDocLocation }
   | {
@@ -100,11 +91,9 @@ export type BrowserPage = {
   canGoForward: boolean
   loadError: BrowserLoadError | null
   createdAt: number
-  // Why: remote-owned worktrees can still host client-local fallback browser
-  // pages until headless remote runtimes support real browser panes.
+  // Remote worktrees may still use client-local fallback pages until headless runtimes support browser panes.
   browserRuntimeEnvironmentId?: string | null
-  // Why: the runtime page id lives only in the in-memory handle map, so without persisting it a
-  // relaunch cannot reclaim the host's page and falls through to creating a blank one.
+  // Persist runtime page identity so relaunch reclaims its page instead of creating a blank one.
   remoteBrowserPageId?: string | null
   /** The remote page was hosted by this desktop, not the runtime; it must not restore as streamed. */
   remoteBrowserPageClientHosted?: boolean
@@ -121,25 +110,15 @@ export type BrowserPage = {
 export type BrowserWorkspace = {
   id: string
   worktreeId: string
-  /** Stable display label for the outer Orca tab ("Browser 1", "Browser 2", …).
-   *  Optional so sessions persisted before this field was added fall back
-   *  gracefully to the URL-derived label in getBrowserTabLabel. */
+  /** Stable outer tab label; older saved sessions fall back to getBrowserTabLabel URL naming. */
   label?: string
-  // Why: each browser workspace binds to exactly one session profile at creation
-  // time. The profile determines which Electron partition (and thus which
-  // cookies/storage) the guest webview uses. Absent means the legacy shared
-  // partition, which keeps backward compat with workspaces persisted before
-  // session profiles existed.
+  // Bind each workspace to its creation profile/partition for cookies/storage; absence retains the legacy shared partition.
   sessionProfileId?: string | null
-  // Why: runtime-created tabs resolve profile partition in main. Persisting it
-  // keeps isolated storage stable when the renderer profile mirror is stale.
+  // Persist main-resolved runtime profile partitions to retain isolated storage when renderer mirrors are stale.
   sessionPartition?: string | null
   activePageId?: string | null
   pageIds?: string[]
-  // Why: the active page owns real browser chrome state now, but the top-level
-  // Orca tab strip still renders one workspace entry. Mirror the active page's
-  // title/url/loading metadata here so existing workspace-level UI can stay
-  // stable while Phase 2 introduces nested browser pages.
+  // Mirror active-page title/URL/loading into the outer workspace entry for existing tab-strip consumers.
   url: string
   title: string
   loading: boolean
@@ -177,6 +156,8 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
+  /** Set when Orca manages this profile for one repo or workspace; it goes when its owner is removed. */
+  owner?: ManagedBrowserProfileOwner
 }
 
 export type BrowserCookieImportSummary = {
@@ -199,9 +180,7 @@ export type BrowserCookieImportSummary = {
         failedCookies: number
       }
     | {
-        // Why: a row that will not decrypt is indistinguishable from a corrupt one by the time
-        // decrypt returns null, so the cause is captured at the point of failure and reported
-        // here. Without this an undecryptable profile is reported as a successful empty import.
+        // Capture decrypt failure cause before null merges unreadable and corrupt rows, preventing false successful-empty imports.
         code: 'cookies-undecryptable'
         failedCookies: number
         otherFailedCookies?: number

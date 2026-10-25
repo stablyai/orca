@@ -9,27 +9,9 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
+import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 
-// The retention suite that the reconciled verdict loop replaced carried one assertion the split
-// suites did not: the store subscription is held for exactly as long as something needs it.
-//
-// Measured rather than assumed, because half of it turned out to be covered already:
-//   - RETAIN direction (drop the verdict term from `stopStoreSubscriptionIfIdle`, so a verdict
-//     with no waiter behind it loses the subscription its drain needs): already caught, by
-//     host-mirror-handle-gap-landed-handle.test.ts. Two failures there without this file.
-//   - RELEASE direction (never release the subscription at all): caught by NOTHING else. With
-//     `stopStoreSubscriptionIfIdle` neutered, the three cases below are the only failures in the
-//     handle-gap and session-tabs tree: 326 tests across the other 37 files still pass. A leaked
-//     subscription rescans every parked pane on every store write for the life of the session and
-//     nothing else notices.
-//
-// So this file exists for the release direction; the retain cases are here because the two belong
-// in one place, not because they were missing. `stopStoreSubscriptionIfIdle` counts VERDICTS as
-// well as waiters -- the landed-handle drain observes a transition no waiter is parked for -- and
-// that is exactly the term the reconcile moved, so both directions are worth holding still.
-//
-// Asserted through a spy rather than a new test-only export: whether the module is subscribed is
-// already observable at the store boundary, and the production surface should not grow to say so.
+// Observe subscription release at the store boundary: verdicts need it after waiters leave, but draining both must unsubscribe to avoid session-long rescans. No test-only production export is needed.
 
 const ENVIRONMENT_ID = 'env-subscription'
 const OTHER_ENVIRONMENT_ID = 'env-other'
@@ -43,11 +25,13 @@ let subscribeCalls: number
 function publishPaneAndPark(environmentId: string, tabId: string): void {
   const state = useAppStore.getState()
   const published = state.tabsByWorktree[WORKTREE_ID] ?? []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     ptyIdsByTabId: {},
     tabsByWorktree: {
-      [WORKTREE_ID]: [...published.filter((tab) => tab.id !== tabId), { id: tabId, title: tabId }]
+      [WORKTREE_ID]: [
+        ...published.filter((tab) => tab.id !== tabId),
+        makeTerminalTab({ id: tabId, worktreeId: WORKTREE_ID, title: tabId })
+      ]
     },
     terminalLayoutsByTabId: {
       ...state.terminalLayoutsByTabId,
@@ -58,16 +42,15 @@ function publishPaneAndPark(environmentId: string, tabId: string): void {
         ptyIdsByLeafId: { [`leaf-${tabId}`]: `remote:${environmentId}@@term_${tabId}` }
       }
     }
-  } as never)
+  })
   parkUntilHostMirrorHandleLands(environmentId, WORKTREE_ID, tabId, () => {})
 }
 
 /** Lands the pane's handle, which is what both releases a waiter and retires a verdict. */
 function landHandle(tabId: string): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
   useAppStore.setState({
     ptyIdsByTabId: { ...useAppStore.getState().ptyIdsByTabId, [tabId]: [`pty-${tabId}`] }
-  } as never)
+  })
 }
 
 describe('host-mirror handle-gap store subscription lifetime', () => {
@@ -78,15 +61,14 @@ describe('host-mirror handle-gap store subscription lifetime', () => {
     unsubscribeCalls = 0
     subscribeCalls = 0
     const realSubscribe = useAppStore.subscribe.bind(useAppStore)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the subscriber is invoked with the store state pair; the narrowed listener type is what this suite asserts on.
-    vi.spyOn(useAppStore, 'subscribe').mockImplementation(((listener: never) => {
+    vi.spyOn(useAppStore, 'subscribe').mockImplementation((listener) => {
       subscribeCalls += 1
       const unsubscribe = realSubscribe(listener)
       return () => {
         unsubscribeCalls += 1
         unsubscribe()
       }
-    }) as never)
+    })
   })
 
   afterEach(() => {
@@ -121,8 +103,7 @@ describe('host-mirror handle-gap store subscription lifetime', () => {
   })
 
   it('keeps the subscription for a verdict with no waiter parked behind it', () => {
-    // The case the reconcile introduced: the waiter is gone, but the landed-handle drain still has
-    // a verdict to watch. Counting only waiters here would drop the subscription that drain needs.
+    // A verdict outlives its waiter and still needs landed-handle observation.
     publishPaneAndPark(ENVIRONMENT_ID, 'tab-a')
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 

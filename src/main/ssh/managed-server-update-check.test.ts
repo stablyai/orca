@@ -7,7 +7,7 @@ import {
 import type { ManagedOrcadAutoUpdateOutcome } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../managed-server/activation/orcad-activation-fence-hold'
 
-// The retry decision is read under the host's lifecycle lock, so the stub's last call answers it.
+// Read the final callback because retry eligibility is decided under the lifecycle lock.
 const failedBeforeOf = (autoUpdate: ManagedServerUpdateDeps['autoUpdate']) =>
   vi.mocked(autoUpdate).mock.lastCall?.[1].failedBefore()
 
@@ -99,7 +99,7 @@ describe('a recorded update failure', () => {
           failure = reason
           failedThisLaunch.add(t.id)
         },
-        // Like the host lifecycle lock: one update at a time, each reading the decision inside.
+        // Serialize like the host lifecycle lock, reading each decision after the preceding update.
         autoUpdate: (_id, options) => {
           const run = lock.then(async (): Promise<ManagedOrcadAutoUpdateOutcome> => {
             if (options.failedBefore()) {
@@ -115,7 +115,7 @@ describe('a recorded update failure', () => {
     )
     const results = await Promise.all([check(d), check(d)])
     expect(attempts).toBe(1)
-    // The waiting check names the failure the first one just recorded.
+    // The waiting check must observe the newly recorded failure.
     expect(results[1].note).toEqual({ state: 'failed', detail: 'bad' })
   })
 })

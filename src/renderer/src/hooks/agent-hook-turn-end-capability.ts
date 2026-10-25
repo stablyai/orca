@@ -7,8 +7,7 @@ import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import { AGENT_STATUS_TURN_END_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { HostTurnEndFacts } from '../../../shared/agent-status-types'
 
-// Why: a paired server (incl. SSH) that predates the turn-end stamp can't tell a later turn end
-// from a restatement. Local and WSL-relay PTYs always run this build; an unbound PTY is unknown.
+// Older paired hosts lack turn-end stamps; local/WSL relay uses this build, while unbound PTYs remain unknown.
 function ptyHostStampsTurnEnds(ptyId: string | null | undefined): boolean {
   if (!ptyId) {
     return false
@@ -29,12 +28,7 @@ function ptyHostStampsTurnEnds(ptyId: string | null | undefined): boolean {
 
 export type HookTurnEndEvidence = 'identified' | 'ambiguous' | 'legacy'
 
-/**
- * The one decision for every pane behavior hook-owned turn ends changed, the same for every agent:
- * the pane's bound PTY runs on a host that stamps turn ends, and how that host identified the
- * current end. `identified`: the hook lane owns it. `ambiguous`: main's title role stays. `legacy`
- * (old host, unbound PTY, no disposition): main's behavior exactly.
- */
+/** Gate pane turn-end behavior by bound-host evidence: identified gives hook authority, ambiguous retains title authority, and legacy/unbound preserves main behavior. */
 export function hookTurnEndEvidence(
   ptyId: string | null | undefined,
   row: Pick<HostTurnEndFacts, 'turnEndDisposition'> | undefined

@@ -2,22 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
 import { beginTabStripPointerGesture } from './tab-strip-pointer-gesture'
 
-/**
- * Defer tab activation to pointer-up and suppress it when the press turns into a
- * drag. PR #5927 shipped this so dragging a tab (to reorder, move into another
- * pane, or split) never switched the active tab or stole terminal focus
- * mid-gesture; #6395 removed it (activating eagerly on pointerdown) to fix
- * click-to-switch-after-reorder, which regressed the drag feature.
- *
- * We gate on measured pointer DISPLACEMENT, not the drag-active context ref the
- * old hook used — that ref clears asynchronously relative to the drop's
- * pointerup, which is what made #6395's click-after-reorder misfire. Displacement
- * mirrors dnd-kit's own activation threshold, but the authority is the release
- * position. A release within it is a click (activate); a release outside it is a
- * drag (activation suppressed). Because each press measures its own gesture, a
- * click after a reorder always activates.
- */
-/** Whether an in-page guest (a `<webview>`) currently owns the keyboard, which blurs the embedder. */
+/** Activate from release displacement, not asynchronously cleared drag state, so drags stay inactive and post-drag clicks still work. */
 function isGuestHoldingKeyboard(): boolean {
   return typeof document !== 'undefined' && document.activeElement?.tagName === 'WEBVIEW'
 }
@@ -38,9 +23,7 @@ export function useTabStripPointerActivation({
   onActivateRef.current = onActivate
   const cleanupRef = useRef<(() => void) | null>(null)
 
-  // Why: a press still holding when the tab unmounts (tab closed mid-drag, group
-  // collapse) would otherwise leak its window listeners and later fire activation
-  // on a dead closure.
+  // Retire window listeners on unmount so held presses cannot activate dead tabs.
   useEffect(() => () => cleanupRef.current?.(), [])
 
   const onPointerDown = useCallback(
@@ -48,17 +31,14 @@ export function useTabStripPointerActivation({
       if (disabled || event.button !== 0) {
         return
       }
-      // Why: start the dnd-kit gesture immediately on pointerdown; only the
-      // activation decision is deferred to release.
+      // Start dnd-kit immediately; defer only the tab activation decision.
       dragListener?.(event)
 
       cleanupRef.current?.()
       const startX = event.clientX
       const startY = event.clientY
       const releaseTabStripPointerGesture = beginTabStripPointerGesture()
-      // Why a press that starts under a guest forgives one window focus: an in-page <webview>
-      // holding the keyboard leaves the embedder blurred, so this very press is what pulls focus
-      // back and #7316's flush would eat the click that takes the reader out of a browser pane.
+      // Forgive one focus restoration when a press starts in a guest-blurred embedder; that press is leaving the guest.
       let pendingGuestFocusHandoff = isGuestHoldingKeyboard()
 
       const cleanup = (): void => {
@@ -74,8 +54,7 @@ export function useTabStripPointerActivation({
           Math.hypot(upEvent.clientX - startX, upEvent.clientY - startY) >=
           TAB_DRAG_ACTIVATION_DISTANCE_PX
         cleanup()
-        // Why: packaged Chromium can deliver a stale first pointermove after
-        // focus; the final release position is the click/drag authority.
+        // Use final release coordinates because packaged Chromium can deliver a stale first move after focus.
         if (!wasDrag) {
           onActivateRef.current()
         }

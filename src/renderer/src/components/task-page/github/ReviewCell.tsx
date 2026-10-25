@@ -20,13 +20,13 @@ import {
 import { cn } from '@/lib/utils'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverTrigger } from '@/components/ui/popover'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import {
   mergeReviewerSuggestions,
   resolveTaskPullRequestRepo
-} from '../../task-page-github-review-model'
+} from './task-page-github-review-model'
 import { ReviewChipAvatar } from './Avatars'
-import { createTaskPageGitHubReviewerActions } from '../../task-page-github-reviewer-actions'
+import { createTaskPageGitHubReviewerActions } from './task-page-github-reviewer-actions'
 import { TaskPageGitHubReviewerPicker } from './ReviewerPicker'
 export function PRReviewCell({
   item,

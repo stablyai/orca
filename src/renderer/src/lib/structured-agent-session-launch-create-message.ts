@@ -1,11 +1,11 @@
 import { structuredAgentSessionCreateFingerprint } from '../../../shared/structured-agent-session-mutation'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
-import { notifyStructuredLaunchListeners } from './structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-registry'
+import { notifyStructuredLaunchListeners } from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   prepareStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
@@ -52,8 +52,7 @@ export function prepareStructuredLaunchCreateMessage(state: StructuredLaunchStat
   notifyStructuredLaunchListeners()
 }
 
-/** Picks held so far, and the chat's own model and effort: a first message starts its turn on
- *  them, as a later send does. */
+// Apply held picks and chat model/effort to the opening turn, matching ordinary sends.
 function structuredLaunchCreateOptions(
   state: StructuredLaunchState
 ): Readonly<Record<string, string>> | undefined {

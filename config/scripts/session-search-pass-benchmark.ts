@@ -8,12 +8,8 @@ import { resetTranscriptConsumersForTests } from '../../src/main/ai-vault/sessio
 import { SessionSearchIndexer } from '../../src/main/ai-vault-search/session-search-indexer'
 import { writeSyntheticTranscriptCorpus } from '../../src/main/ai-vault-search/session-search-synthetic-corpus'
 
-// Bundle with esbuild --bundle --platform=node, then run on the host under test.
-// What a warm pass costs on a machine with a real number of transcripts: a cycle
-// stats the newest N per agent, a sweep stats every file under every root, and
-// neither reads anything the index already holds at its current stat. This is the
-// number the reconcile interval is chosen against; it does not set one.
-// Never point this at a real transcript tree.
+// Bundle with esbuild --bundle --platform=node and run on target host over synthetic corpus only; never use real transcripts.
+// Price warm stat-only cycle/sweep used to choose reconcile interval, without setting it or reading already-current content.
 
 const SESSIONS = 5_000
 const TURNS_PER_SESSION = 4
@@ -28,8 +24,7 @@ const roots = isolatedScanRoots(root)
 const databasePath = join(root, 'index', 'session-search.sqlite')
 
 try {
-  // A flat corpus is not what discovery walks: spread it over project directories
-  // so the readdir count is realistic rather than one enormous listing.
+  // Spread synthetic corpus over project dirs to model discovery’s readdir cost instead of one flat listing.
   for (let index = 0; index < PROJECTS; index++) {
     await mkdir(join(roots.claudeProjectsDir, `project-${index}`), { recursive: true })
   }
@@ -46,8 +41,7 @@ try {
     databasePath,
     roots,
     historyDays: null,
-    // No wall-clock ceiling: the cold build has to finish before a warm pass can
-    // be measured, and a deadline would leave a backlog priced into every number.
+    // Finish cold indexing before warm measurement; deadline would contaminate timings with backlog.
     passDeadlineMs: Number.MAX_SAFE_INTEGER,
     onError: (error) => errors.push(error)
   })

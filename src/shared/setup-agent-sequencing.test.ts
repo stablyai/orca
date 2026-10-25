@@ -300,22 +300,16 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.startupEnv).toEqual({
       [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --model gpt-5 'fix !PATH! & test'"
     })
-    // Why: `-EncodedCommand` is not execution-policy gated — only `-File` is — so the switch
-    // was a no-op, and base64 beside `-ExecutionPolicy Bypass` is a heavily EDR-flagged shape.
-    // The base64 itself must stay: these strings are typed into a terminal pane.
+    // EncodedCommand is not policy-gated; command-line ExecutionPolicy Bypass was a no-op with an EDR-heavy shape.
+    // Keep base64 because terminal panes reparse these strings.
     expect(result.setupCommand).not.toMatch(/-ExecutionPolicy/i)
     expect(result.startupCommand).not.toMatch(/-ExecutionPolicy/i)
-    // Why: dropping the switch alone would break a user startup command that invokes a
-    // `.ps1` — a `.ps1` IS policy gated even though `-EncodedCommand` is not. The relief
-    // moves into the payload, where it is not part of the flagged command-line shape.
+    // User startup may invoke policy-gated .ps1; move relief inside the payload instead of deleting it.
     expect(startupPowerShell).toContain(
       'Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop'
     )
-    // Why `-ErrorAction Stop` and a reporting catch: autoload can fail for reasons that are
-    // not about policy at all (a 5.1 install with duplicate extended type data fails every
-    // cmdlet in Microsoft.PowerShell.Security), and the old SilentlyContinue plus `catch {}`
-    // hid that -- the user saw only their own script being refused. The catch must report and
-    // must NOT rethrow, or a broken policy cmdlet would take the whole startup with it.
+    // Stop routes autoload failures (e.g. duplicate PS5.1 type data) to a reporting catch.
+    // Report without rethrowing so broken policy cmdlets cannot abort startup.
     expect(startupPowerShell).not.toContain('catch {}')
     expect(startupPowerShell).toMatch(/catch \{ \[Console\]::Error\.WriteLine\(/)
     expect(startupPowerShell).toContain('$_.FullyQualifiedErrorId')
@@ -328,9 +322,7 @@ describe('createSequencedSetupAgentCommands', () => {
   })
 
   it('launches a batch runner through the cmd launcher inside a Git Bash gate', () => {
-    // Regression (#6896): a Git Bash terminal with a batch setup script still gets a .cmd
-    // runner, and the gate must not hand that runner to bash. The gate itself stays POSIX
-    // because the Git Bash pane types it and quoted the startup command for bash.
+    // Batch setup stays a cmd runner inside Git Bash; the gate remains bash to parse the already-POSIX-quoted startup command (#6896).
     const result = createSequencedSetupAgentCommands({
       runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.cmd',
       startupCommand: "claude 'fix the user'\\''s login'",
@@ -346,8 +338,7 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(decodePowerShellScript(result.setupCommand)).toContain(
       "$runner = 'C:\\repo\\.git\\orca\\setup-runner.cmd'"
     )
-    // Why: PowerShell's `Invoke-Expression` cannot parse the POSIX `'\''` escaping a Git Bash
-    // pane produces, so the gate that evaluates the startup command must be bash.
+    // PowerShell Invoke-Expression cannot parse POSIX apostrophe escaping; bash must evaluate startup.
     expect(result.setupCommand).toMatch(/^bash -lc /)
     expect(result.startupCommand).toMatch(/^bash -lc /)
     expect(result.startupCommand).not.toContain('Invoke-Expression')
@@ -638,8 +629,7 @@ function spawnWindowsCommand(
   env: Record<string, string> = {}
 ): ReturnType<typeof spawn> {
   const scriptPath = join(dir, filename)
-  // Why: /s strips the quotes Node adds for batch paths containing spaces;
-  // argv spawning still exercises cmd.exe's native parser without that loss.
+  // Avoid /s stripping Node’s batch-path quotes; argv spawning still exercises native cmd parsing.
   writeFileSync(scriptPath, `@echo off\r\n${command}\r\nexit /b %ERRORLEVEL%\r\n`, 'utf8')
   return spawn('cmd.exe', ['/d', '/c', scriptPath], {
     stdio: 'pipe',

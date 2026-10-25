@@ -31,10 +31,7 @@ import {
 
 type WslSetup = (distro: string, guestHome: string, accountId: string) => Promise<void>
 
-/**
- * The host router's rules for one WSL distro: account folders, setup and the which-account file
- * all live in the guest, so links are Linux links and history shares within the guest.
- */
+/** Route each distro through guest-owned profiles, history links, and selection pointers. */
 export class ClaudeWslProfileRouter {
   private readonly setups = new Map<string, Promise<void>>()
   constructor(
@@ -42,7 +39,6 @@ export class ClaudeWslProfileRouter {
       getSettings: () => ClaudeProfileRouterSettings
       /** The host's data folder; it names the guest pointer per Orca build. */
       dataRoot: string
-      /** Tests replace the guest helper. */
       runSetup?: WslSetup
     }
   ) {}
@@ -58,7 +54,7 @@ export class ClaudeWslProfileRouter {
       )
   }
 
-  /** Running distros that hold an Orca account; startup must not boot a stopped one. */
+  /** Startup must not boot stopped distros. */
   async runningDistros(): Promise<string[]> {
     const running = await listRunningWslDistrosAsync({ requireConfirmed: true })
     return running.filter((distro) => this.accountIn(distro))
@@ -73,8 +69,7 @@ export class ClaudeWslProfileRouter {
     return { home, selected, profile: await this.routed(distro, home, selected) }
   }
 
-  /** The host router's fallback: an account with no login of its own runs on the guest's ~/.claude
-   *  while that is signed in to the same email. */
+  /** Reuse a matching guest System default login until the account signs in separately. */
   private async routed(
     distro: string,
     home: string,
@@ -100,7 +95,7 @@ export class ClaudeWslProfileRouter {
     return posix.join(home, wslClaudeProfilePointer(this.args.dataRoot))
   }
 
-  /** Pointer first, then setup in the background, as on the host. No accounts here means no pointer. */
+  /** Publish the pointer before background setup; remove it when no accounts remain. */
   async publish(distro: string): Promise<void> {
     const { home, selected, profile } = await this.resolve(distro)
     if (!this.accountIn(distro)) {
@@ -112,7 +107,7 @@ export class ClaudeWslProfileRouter {
       return
     }
     await writePointer(distro, this.pointerIn(home), profile?.home ?? '')
-    // Why even a missing or covered folder: setup creates it without a login, for a sign-in.
+    // Create missing or covered folders so the account can sign in separately.
     if (selected) {
       this.setUpInBackground(distro, home, selected.accountId)
     }
@@ -124,22 +119,19 @@ export class ClaudeWslProfileRouter {
     })
   }
 
-  /** Waits for a first setup that never finished, running or not; otherwise refreshes alongside. */
+  /** Wait for initial setup; later refreshes run in the background. */
   async prepareLaunch(distro: string): Promise<ClaudeRuntimeAuthPreparation> {
     const { home, profile } = await this.resolve(distro)
-    // Why the marker: setup writes it last, so a missing folder is set up too. A re-run of a
-    // set-up folder never blocks.
     if (profile && !(await hasMarker(distro, profile))) {
       await this.setUp(distro, home, profile.accountId).catch((error: unknown) => {
         console.warn('[claude-profile] WSL account setup failed:', error)
         throw claudeProfileSetupFailed()
       })
     } else if (profile) {
-      // Why in the background: a guest refresh starts a guest Node, too slow for every launch.
+      // Starting guest Node for each refresh would delay launches.
       this.setUpInBackground(distro, home, profile.accountId)
     }
-    // Why: a missing or stale guest pointer would run the pane's `claude` under another account.
-    // Re-read the selection: one made during setup has already published its own pointer.
+    // Re-read selection after setup so a concurrent switch cannot be overwritten by a stale pointer.
     if (this.accountIn(distro)) {
       const current = await this.routed(distro, home, this.selectedProfile(home, distro))
       await writePointer(distro, this.pointerIn(home), current?.home ?? '')
@@ -147,7 +139,7 @@ export class ClaudeWslProfileRouter {
     return this.preparationFor(distro, home, profile)
   }
 
-  /** The host router's old-terminal check for a pane in this distro; null with no account selected. */
+  /** Compare pre-routing terminals against the selection; null means no account is selected. */
   async systemDefaultRunsAnotherAccount(distro: string): Promise<boolean | null> {
     const { home, selected } = await this.resolve(distro)
     if (!selected) {
@@ -160,7 +152,7 @@ export class ClaudeWslProfileRouter {
     return !login || !systemDefault || !isSameClaudeLogin(login, systemDefault)
   }
 
-  /** Where an unselected account's usage is read in the guest: where its launches would run. */
+  /** Read usage from the same guest login the account would launch with. */
   async accountUsagePreparation(
     distro: string,
     accountId: string
@@ -176,7 +168,6 @@ export class ClaudeWslProfileRouter {
     return this.preparationFor(distro, home, profile)
   }
 
-  /** Creates and sets up an account's guest folder for sign-in; the login itself is Claude's. */
   async prepareAccount(distro: string, accountId: string): Promise<string> {
     const { home } = await this.resolve(distro)
     const { profile } = wslClaudeProfile(home, distro, accountId)
@@ -187,10 +178,7 @@ export class ClaudeWslProfileRouter {
     return profile.home
   }
 
-  /**
-   * Deletes an account's guest folder after any setup running for it, which would otherwise
-   * recreate it. Linux `rm -r` never follows the history links.
-   */
+  /** Wait for setup so it cannot recreate the folder; guest rm preserves linked history. */
   async removeAccount(distro: string, accountId: string): Promise<void> {
     await this.setups.get(accountId)?.catch(() => {})
     const { home } = await this.resolve(distro)
@@ -205,7 +193,6 @@ export class ClaudeWslProfileRouter {
     }
   }
 
-  /** The shape main's WSL account path returns, so trust and rate limits need nothing new. */
   private preparationFor(
     distro: string,
     home: string,
@@ -227,7 +214,7 @@ export class ClaudeWslProfileRouter {
     }
   }
 
-  /** One setup per account at a time; a later request reuses the running one. */
+  /** Reuse in-flight setup per account. */
   private setUp(distro: string, home: string, accountId: string): Promise<void> {
     const running = this.setups.get(accountId)
     if (running) {
@@ -241,12 +228,11 @@ export class ClaudeWslProfileRouter {
   }
 }
 
-/** The login a guest state file names, read over the share like the marker. */
 function guestLogin(distro: string, stateFile: string): Promise<ClaudeFolderLogin | null> {
   return readClaudeFolderLoginAsync(toWindowsWslPath(stateFile, distro))
 }
 
-// Why over the distro's share: a launch must not wait on a guest process for two stats.
+// Read over the share to avoid spawning a guest process for stats.
 async function guestStat(distro: string, linuxPath: string) {
   return lstat(toWindowsWslPath(linuxPath, distro)).catch(() => null)
 }
@@ -255,9 +241,9 @@ async function hasMarker(distro: string, profile: ClaudeProfileDescriptor): Prom
   return (await guestStat(distro, claudeProfileMarkerPath(profile)))?.isFile() ?? false
 }
 
-/** Writes in the guest only when the file differs, so a launch reads it over the share instead. */
+/** Read over the share first to avoid a guest process when the pointer is unchanged. */
 async function writePointer(distro: string, pointer: string, home: string): Promise<void> {
-  // Why the timeout: a hung share must not stall startup's serialized publish; the guest write decides.
+  // Bound share reads so startup publication can fall back to a guest write.
   const current = await Promise.race([
     readFile(toWindowsWslPath(pointer, distro), 'utf8').catch(() => null),
     new Promise<null>((resolve) => setTimeout(resolve, 2_000, null).unref())
@@ -283,7 +269,7 @@ async function runGuest(distro: string, spec: WslSpec, timeoutMs = 15_000): Prom
   return result.stdout.trim()
 }
 
-/** Step 1's setup, run as Linux inside the distro on Orca's pinned Node. */
+/** Run guest setup with the pinned Node runtime. */
 const runWslSetup: WslSetup = async (distro, home, accountId) => {
   const helper = relayBundleCandidates('wsl')
     .map((dir) => join(dir, WSL_CLAUDE_PROFILE_HELPER_FILENAME))
@@ -302,7 +288,7 @@ const runWslSetup: WslSetup = async (distro, home, accountId) => {
     args: ['-a', '-u', helper],
     loginPath: 'none'
   })
-  // Prints its report only when setup was incomplete; a refusal exits non-zero.
+  // Successful setup is silent; warnings produce a report and refusal exits nonzero.
   const report = await run(
     {
       program: '/usr/bin/env',

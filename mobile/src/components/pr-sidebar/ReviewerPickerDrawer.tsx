@@ -26,10 +26,7 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'loaded'; users: GitHubAssignableUser[] }
 
-// Searchable assignable-user list in a BottomDrawer. Mapped rows (not FlatList):
-// this drawer is opened from the PR ScrollView, and a VirtualizedList nested in
-// that ScrollView throws and can leave the Reviewers section blank.
-// Seeded reviewers + author sort first for quick un-request.
+// Use mapped rows: VirtualizedList nested in PR ScrollView throws and can blank section. Seed reviewers/author first for easy unrequest.
 export function ReviewerPickerDrawer({
   visible,
   onClose,
@@ -74,7 +71,6 @@ export function ReviewerPickerDrawer({
       return []
     }
     const seed = new Set(seededLogins.map((l) => l.toLowerCase()))
-    // Seeded reviewers sort first so the user can quickly un-request them.
     const sorted = [...load.users].sort((a, b) => {
       const aSeed = seed.has(a.login.toLowerCase()) ? 0 : 1
       const bSeed = seed.has(b.login.toLowerCase()) ? 0 : 1

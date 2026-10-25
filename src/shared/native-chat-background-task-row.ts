@@ -1,9 +1,4 @@
-// One background task's durable transcript row: the vocabulary its producer,
-// the desktop renderer and the plain-text surfaces all read it by.
-//
-// Shared because the row is written once and read by clients that cannot draw
-// the block. The frozen sentence beside it is built here too, so the twin and
-// the block can never describe the task differently.
+// Build durable task blocks and frozen plain-text twins together so clients without block support read the same report.
 
 import type { AgentJournalMessageItem } from './agent-session-journal-types'
 import {
@@ -12,16 +7,11 @@ import {
   type NativeChatBlock
 } from './native-chat-types'
 
-/** The only states a task can still leave. Everything else is an outcome,
- *  including `unverifiable`, which records that we stopped being able to see
- *  the task rather than what it did (docs/reference/ssh-execution-boundary.md).
- *  A state this build does not know reads as settled, never as in-flight: a row
- *  written by a newer build must not leave the transcript spinning forever. */
+/** Only these states remain in flight. Unknown/newer states are settled to prevent endless spinners;
+ * unverifiable records lost visibility, not task outcome (docs/reference/ssh-execution-boundary.md). */
 const IN_FLIGHT_TASK_STATES: ReadonlySet<string> = new Set(['working', 'monitoring', 'waiting'])
 
-/** The task's own verdict about itself, which a later frame may not overwrite.
- *  `unverifiable` is deliberately absent: contact can return, and latching the
- *  loss would report a task that finished as one we never saw finish. */
+/** Latch task verdicts; unverifiable may recover when contact returns, so never latch lost visibility. */
 const LATCHED_TASK_STATES: ReadonlySet<string> = new Set(['done', 'blocked', 'idle'])
 
 const KNOWN_TASK_STATES = [
@@ -34,8 +24,7 @@ const KNOWN_TASK_STATES = [
   'unverifiable'
 ] as const satisfies NativeChatBackgroundTaskBlock['state'][]
 
-/** A state this build has no word for reads as `unverifiable` — we cannot say
- *  what the task did, only that we cannot name what it reported. */
+/** Unknown states mean unverifiable; do not invent a task outcome. */
 export function normalizeBackgroundTaskState(
   state: string
 ): NativeChatBackgroundTaskBlock['state'] {
@@ -46,9 +35,7 @@ export function isSettledBackgroundTaskState(state: string): boolean {
   return !IN_FLIGHT_TASK_STATES.has(state)
 }
 
-/** Whether `next` may replace `current`. Nothing returns to in-flight once we
- *  have given up on it, so a straggler progress tick cannot re-light a settled
- *  row. */
+/** Settled rows cannot return to in-flight from straggler progress ticks. */
 export function canReplaceBackgroundTaskState(current: string, next: string): boolean {
   if (!isSettledBackgroundTaskState(current)) {
     return true
@@ -67,7 +54,6 @@ const KNOWN_TASK_KINDS = [
   'unknown'
 ] as const satisfies NativeChatBackgroundTaskBlock['kind'][]
 
-/** A kind this build has no name for is simply an unnamed task, not a guess. */
 export function normalizeBackgroundTaskKind(kind: string): NativeChatBackgroundTaskBlock['kind'] {
   return KNOWN_TASK_KINDS.find((known) => known === kind) ?? 'unknown'
 }
@@ -86,26 +72,15 @@ const SETTLED_VERBS: Record<string, string> = {
   idle: 'was stopped'
 }
 
-/**
- * Plain-text stand-in for the row, frozen into the journal at write time for
- * clients without the block type — mobile renders only this.
- *
- * It leads with the provider's OWN sentence whenever it sent one: that sentence
- * is the point of the row, and paraphrasing it would discard the only account
- * of the failure the provider ever gave. Everything else states what stays true
- * once the writing process is gone. A live task claims only that it was
- * started, never that it is still running: the clients reading this instead of
- * the block reconcile nothing and cannot re-check the task, so a frozen
- * "running" would assert a liveness only the dead process could have observed.
- */
+/** Frozen journal fallback for clients without task blocks (mobile). Preserve the provider’s summary/error verbatim as its only failure report.
+ * For live tasks claim only started: fallback readers cannot reconcile/recheck liveness after the writer exits. */
 export function backgroundTaskFallbackText(block: NativeChatBackgroundTaskBlock): string {
   const sentence = block.summary?.trim() || block.error?.trim()
   if (sentence) {
     return sentence
   }
   const noun = KIND_NOUNS[normalizeBackgroundTaskKind(block.kind)]
-  // A task the provider never named falls through to its kind: quoting an empty
-  // label would print `background command ""`.
+  // An empty label falls back to kind rather than printing empty quotes.
   const subject = block.label.trim() ? `${noun} "${block.label}"` : noun
   if (!isSettledBackgroundTaskState(block.state)) {
     return `Started ${subject}`
@@ -124,7 +99,6 @@ export function backgroundTaskJournalBody(
   }
 }
 
-/** The background-task rows in `blocks`. */
 export function backgroundTaskBlocks(
   blocks: readonly NativeChatBlock[]
 ): NativeChatBackgroundTaskBlock[] {
@@ -132,21 +106,13 @@ export function backgroundTaskBlocks(
 }
 
 export type BackgroundTaskTwinClaims = {
-  /** Text blocks a row's frozen twin occupies, by position, so a surface
-   *  drawing the block does not print the same sentence beside it. */
+  /** Frozen-twin text positions consumed by block-rendering surfaces to avoid duplicate sentences. */
   twinTextIndexes: Set<number>
-  /** Rows left with no twin, by position, and the sentence each must print
-   *  itself on a surface that cannot draw the block. */
+  /** Unpaired block positions and fallback sentences for surfaces without block support. */
   unpairedRows: Map<number, string>
 }
 
-/** Pair every task row with the frozen twin written beside it.
- *
- *  Matched on exact text, which the producer guarantees: it writes the twin
- *  from `backgroundTaskFallbackText` and nothing else into the row. A row
- *  written by a newer build that phrases a state differently matches nothing,
- *  and then prints its own sentence beside the unclaimed text — redundant, but
- *  never a lost report, which is the only degradation this row may have. */
+/** Pair exact producer-written fallback text. Newer phrasings may produce duplicates but must never lose a report. */
 export function claimBackgroundTaskTwins(
   blocks: readonly NativeChatBlock[]
 ): BackgroundTaskTwinClaims {

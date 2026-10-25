@@ -6,8 +6,7 @@ import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig,
-  type SleepingAgentSessionRecord
+  type SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import {
@@ -30,6 +29,15 @@ export type MobileTerminalCommandOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+}
+
+/** What a resume reads from a recorded session; a SleepingAgentSessionRecord is one. */
+export type ResumableAgentSessionSource = {
+  agent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
+  /** The capture's connection; undefined when the caller compared hosts itself. */
+  connectionId?: string | null
+  launchConfig?: SleepingAgentLaunchConfig
 }
 
 export type MobileTerminalCommand = {
@@ -56,13 +64,13 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
   /** The `--resume` launch for a pane's recorded agent session, as the host window's cold restore builds it. */
   protected resolveMobileSessionResumeCommand(
     workspace: TerminalWorkspaceLaunchScope,
-    record: SleepingAgentSessionRecord
+    record: ResumableAgentSessionSource
   ): MobileTerminalResumeCommand | null {
     const providerSession = normalizeAgentProviderSession(record.providerSession)
     if (!this.store || !providerSession || !isResumableTuiAgent(record.agent)) {
       return null
     }
-    // Why: a session id names a transcript on the machine that captured it; elsewhere it cannot resume.
+    // Transcript ids belong to their capture host; another machine cannot resume them.
     if (
       record.connectionId !== undefined &&
       normalizeOriginConnectionId(record.connectionId) !==
@@ -83,7 +91,8 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       ...resolveResumeLaunchRecipe(launchConfig),
       platform: launchRuntime.platform,
       shell: agentLaunchQuotingShell(launchRuntime),
-      isRemote: Boolean(workspace.connectionId)
+      isRemote: Boolean(workspace.connectionId),
+      launchCwd: workspace.path
     })
     if (!startupPlan) {
       return null
@@ -125,10 +134,10 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       ...resolveAgentStartupPlanInputs({
         agent: opts.agent,
         settings,
-        // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
+        // Quote for the execution host, even when the mobile client runs another OS.
         platform: launchRuntime.platform,
         shell: agentLaunchQuotingShell(launchRuntime),
-        // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
+        // SSH uses relay-shim orca, never the local Linux orca-ide rename.
         isRemote: Boolean(workspace.connectionId)
       }),
       prompt: opts.agentPrompt ?? '',
@@ -143,8 +152,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     return {
       command: startupPlan.launchCommand,
       env: startupPlan.env,
-      // Why: a real-home Codex resume strips inherited CODEX_HOME via
-      // envToDelete; dropping it here would resume against the wrong home.
+      // Codex real-home resumes need envToDelete to strip inherited CODEX_HOME.
       envToDelete: opts.envToDelete,
       launchConfig: startupPlan.launchConfig,
       launchAgent: opts.agent,

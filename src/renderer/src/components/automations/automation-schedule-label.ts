@@ -6,11 +6,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
 
-/**
- * Localized schedule label for UI surfaces. The shared formatter stays English because the CLI
- * consumes it; word order and plural form differ per locale, so each sentence is one catalog key
- * rather than a localized weekday concatenated with an English suffix.
- */
+/** Translate whole schedule sentences for locale grammar; the shared English formatter also serves the CLI. */
 export function formatUiAutomationScheduleDescriptor(
   descriptor: AutomationScheduleDescriptor
 ): string {

@@ -40,8 +40,7 @@ vi.mock('@/components/ui/button', () => ({
   )
 }))
 
-// Why: fall back to English defaults so this test doesn't depend on locale files
-// being loaded; the bug is missing JSX whitespace around those fragments.
+// Use English fallbacks so this JSX-whitespace regression is independent of locale loading.
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))

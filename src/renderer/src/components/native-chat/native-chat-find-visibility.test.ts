@@ -20,7 +20,6 @@ function placeAt(target: Element | Range, box: Box): void {
 const VIEW = { top: 100, bottom: 700, left: 0, right: 800 }
 const BAR = { top: 108, bottom: 144, left: 444, right: 784 }
 
-/** A transcript holding `text` inside `boxStyle`d boxes, outermost first; returns its match. */
 function transcriptWith(...boxStyles: Partial<CSSStyleDeclaration>[]): {
   transcript: HTMLElement
   boxes: HTMLElement[]

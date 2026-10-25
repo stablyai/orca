@@ -1,7 +1,4 @@
-/**
- * Slots a live terminal daemon still runs from. Local `orca serve` forks its daemon from its own
- * slot, and that daemon outlives orcad, so the instance lock alone stops naming the slot.
- */
+// Daemons outlive instance locks; pin their entry/runtime slots separately.
 import { readdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseDaemonPidFile } from '../daemon/daemon-pid-file-parse'
@@ -10,10 +7,9 @@ import {
   currentOrcadPeerMachine,
   orcadPeerPidIsJudgeableHere,
   type OrcadPeerMachine
-} from './orcad-instance-lock'
+} from './orcad-lock-holder-locality'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
 
-/** This machine, for telling a peer record's PID apart from one another machine issued. */
 export type OrcadSlotPeerJudge = {
   self: OrcadPeerMachine
   dataRootIsOnLocalDisk: (dataRoot: string) => boolean
@@ -25,7 +21,7 @@ export function defaultOrcadSlotPeerJudge(): OrcadSlotPeerJudge {
 
 const DAEMON_PID_FILE = /^daemon-v\d+\.pid$/u
 
-/** Slot names under `cacheRoot` holding a live daemon's entry or runtime; null when unprovable. */
+/** Null when live-daemon slot ownership cannot be established. */
 export function liveDaemonOrcadSlots(
   userDataPath: string,
   cacheRoot: string,
@@ -37,7 +33,7 @@ export function liveDaemonOrcadSlots(
   try {
     names = readdirSync(runtimeDir)
   } catch (error) {
-    // No daemon directory means no daemon; anything else leaves the slots unprovable.
+    // Only ENOENT proves absence; other errors leave slot ownership unknown.
     return hasErrorCode(error, 'ENOENT') ? [] : null
   }
   const slots: string[] = []
@@ -49,10 +45,10 @@ export function liveDaemonOrcadSlots(
       return null
     }
     if (!record || !Number.isInteger(record.pid) || record.pid <= 0) {
-      // A record being written or torn names no process we could rule out.
+      // Torn/incomplete records cannot prove that their process is gone.
       return null
     }
-    // A daemon on another machine or boot (a shared home) is unverifiable here; keep its slot.
+    // Shared-home records from another machine/boot remain unverifiable; keep their slots.
     const judgeable = orcadPeerPidIsJudgeableHere(
       { bootId: record.bootId ?? undefined },
       judge.self,

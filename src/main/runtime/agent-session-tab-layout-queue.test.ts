@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { createChatTabLayoutQueue } from './agent-session-tab-layout-queue'
-import type { ChatTabLayoutCommand } from './agent-session-tab-layout'
+import type { ChatTabLayoutCommand } from './agent-session/agent-session-tab-layout'
 
 const open = (sessionId: string) => ({
   worktreeId: 'wt',

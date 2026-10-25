@@ -8,9 +8,7 @@ import {
   type PaletteActivityRank
 } from './palette-match/palette-ranking'
 
-// Why a shared class and not raw scores: each section's score encodes its own list
-// position, so only a small common vocabulary can say which section holds the
-// better hit. Lower ranks lead.
+// Section scores encode incompatible list positions; compare shared match ranks first, lower leading.
 export const NO_PALETTE_QUALITY_RANK = Number.MAX_SAFE_INTEGER
 
 export function paletteQualityRank(
@@ -37,7 +35,6 @@ export type PaletteRankedItem = {
   activity?: PaletteActivityRank
 }
 
-/** Match rank first, then recent activity, then positional order, then stable id. */
 export function comparePaletteRankedItems(a: PaletteRankedItem, b: PaletteRankedItem): number {
   if (a.rank && b.rank) {
     return comparePaletteEntityRanks(
@@ -71,11 +68,7 @@ export function shouldOpenTabsLeadPaletteSections(args: {
   return args.bestOpenTabQualityRank <= args.bestWorktreeQualityRank
 }
 
-/**
- * A decisive settings/action/project intent may lead *weaker* entity hits only.
- * An entity that matched its own visible name exactly is not weaker, so typing a
- * workspace's exact name never sinks it under a same-named settings pane.
- */
+/** Decisive settings/action/project intent may outrank weaker entities, never an exact visible entity name. */
 export function shouldIntentSectionLeadPaletteSections(args: {
   bestEntityQualityRank: number
   bestIntentQualityRank: number

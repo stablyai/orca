@@ -24,9 +24,7 @@ function usePetAnimationName(
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
-  // Re-render when the freshness scheduler ticks so stale live states stop
-  // driving pet animations even if no other store value changes, and read the
-  // boundary clock in render so the stale frame never paints.
+  // Scheduler ticks expire animation evidence even without other store updates; read the boundary clock before paint.
   const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
 
   return selectPetAnimationName({
@@ -40,11 +38,7 @@ function usePetAnimationName(
   })
 }
 
-// Why: pet bundles ship a sprite sheet — animate by stepping a CSS background
-// across the cells of one row. We pick the row from the live pet state
-// when the manifest provides that animation, then fall back to the bundle's
-// default animation. imageRendering: 'pixelated' keeps edges crisp even when
-// scale is fractional (needed when frames exceed maxSize).
+// Step backgrounds across the resolved sprite row; pixelated rendering keeps fractional-scale edges crisp.
 function SpriteFrame({
   url,
   sprite,
@@ -58,8 +52,7 @@ function SpriteFrame({
   animate: boolean
   maxSize: number
   animationName: PetAnimationName
-  // Why: folded into the keyframes name, so bumping it mints a fresh animation
-  // that restarts from frame 0 even when the state row is unchanged.
+  // Include in keyframes identity to restart same-row grabs at frame 0.
   restartKey: number
 }): React.JSX.Element {
   const baseId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
@@ -68,16 +61,11 @@ function SpriteFrame({
     (sprite.defaultAnimation && sprite.animations?.[sprite.defaultAnimation]) ||
     (sprite.animations ? Object.values(sprite.animations)[0] : undefined)
   const row = anim?.row ?? 0
-  // Why: clamp to >=1 so an empty/invalid manifest can't produce steps(0),
-  // which is rejected as invalid CSS and freezes the animation.
+  // steps(0) is invalid CSS; tolerate empty/invalid manifests with at least one frame.
   const frames = Math.max(1, anim?.frames ?? sprite.columns ?? 1)
-  // Why: name the @keyframes by the RESOLVED track (+restartKey for same-row
-  // grabs), so a genuine row change starts at frame 0 while a state that falls
-  // back to the same row (e.g. hover on a pet without a jumping row) doesn't
-  // needlessly restart.
+  // Key by resolved track/grab generation so actual changes restart, but same-row fallbacks do not.
   const animKeyframesId = `${baseId}-${row}-${frames}-${restartKey}`
-  // Why: allow fractional downscaling so frames larger than maxSize shrink to
-  // fit instead of overflowing the overlay; mirrors DetectedSpriteFrame's math.
+  // Allow fractional scaling so oversized frames fit the overlay.
   const scale = Math.min(maxSize / sprite.frameWidth, maxSize / sprite.frameHeight)
   const renderedW = sprite.frameWidth * scale
   const renderedH = sprite.frameHeight * scale
@@ -114,11 +102,7 @@ function SpriteFrame({
   )
 }
 
-// Why: when the manifest doesn't declare frame size, we auto-detect frames
-// from the keyed sheet. Render via canvas because the frames may be different
-// sizes; we scale each one to fit the overlay box and step through them at a
-// fixed fps. requestAnimationFrame is paused when `animate` is false so the
-// overlay respects reduced motion / hidden window.
+// Without manifest dimensions, draw detected irregular frames on canvas and pause rAF for hidden/reduced-motion views.
 function DetectedSpriteFrame({
   detected,
   animate,
@@ -131,13 +115,9 @@ function DetectedSpriteFrame({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const frameIndexRef = useRef(0)
   const lastTimeRef = useRef(0)
-  // Why: honor manifest fps captured at import time so bundles play at their
-  // intended speed; default to 8 only when the manifest didn't declare one.
   const fps = detected.fps > 0 ? detected.fps : 8
 
-  // Why: size the canvas to one fixed footprint bounding the largest scaled
-  // frame so the drag wrapper hugs the pet instead of a maxSize square. A
-  // single size across frames avoids the jitter a per-frame resize would cause.
+  // Use one footprint for the largest scaled frame so the hit area hugs the pet without per-frame jitter.
   const { footprintW, footprintH } = useMemo(() => {
     let w = 0
     let h = 0
@@ -160,8 +140,6 @@ function DetectedSpriteFrame({
     }
     canvas.width = footprintW
     canvas.height = footprintH
-    // Why: reset playback when the underlying sprite changes so the new
-    // animation starts from frame 0 rather than wherever the prior one stopped.
     frameIndexRef.current = 0
     lastTimeRef.current = 0
     if (detected.frames.length === 0) {
@@ -180,8 +158,6 @@ function DetectedSpriteFrame({
       const scale = Math.min(maxSize / f.w, maxSize / f.h)
       const w = f.w * scale
       const h = f.h * scale
-      // Why: center each frame within the fixed footprint so frames of differing
-      // sizes stay aligned without resizing the canvas per frame.
       ctx.drawImage(bmp, (footprintW - w) / 2, (footprintH - h) / 2, w, h)
     }
     const tick = (now: number): void => {
@@ -229,8 +205,7 @@ function useDocumentVisible(): boolean {
   return visible
 }
 
-// Why: keep a default for the cached helpers below; the live size now comes
-// from the store so the user can resize from the status-bar menu.
+// Fallback for cached position callers; live sizing comes from the store.
 const SIZE = 180
 const POSITION_STORAGE_KEY = 'pet-overlay-position'
 const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
@@ -281,12 +256,9 @@ function loadStoredPosition(size: number = SIZE): Position | null {
     if (migratedFromLegacy) {
       try {
         window.localStorage.setItem(POSITION_STORAGE_KEY, raw)
-      } catch {
-        // ignore storage failures
-      }
+      } catch {}
     }
-    // Why: clamp using the live overlay size so a persisted position from a
-    // larger overlay doesn't slip off the bottom/right edge after a shrink.
+    // Clamp retained positions against the current size to keep the pet within viewport bounds.
     return clampToViewport({ x: parsed.x, y: parsed.y }, size)
   } catch {
     return null
@@ -307,8 +279,7 @@ function defaultPosition(size: number = SIZE): Position {
   )
 }
 
-// Why: the bob float is runtime CSS, not user-visible copy; keep CSS keywords
-// out of i18n so translated locales cannot invalidate the keyframes.
+// Keep runtime CSS keywords outside translation so locales cannot invalidate animation.
 const PET_BOB_KEYFRAMES_CSS =
   '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
 export function PetOverlay(): React.JSX.Element {
@@ -321,10 +292,7 @@ export function PetOverlay(): React.JSX.Element {
     size: number
     position: Position
   }>(() => {
-    // Why: read the persisted size eagerly via getState so the initial clamp
-    // uses the user's last pet size — useState's lazy initializer runs
-    // before the `size` prop binding settles, and `loadStoredPosition` would
-    // otherwise default to SIZE and clip a previously-saved position.
+    // Read persisted size before initial clamping; the fallback size could clip a restored position.
     const currentSize = useAppStore.getState().petSize ?? SIZE
     return {
       size: currentSize,
@@ -367,22 +335,17 @@ export function PetOverlay(): React.JSX.Element {
     }
     try {
       window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position))
-    } catch {
-      // ignore storage failures
-    }
+    } catch {}
   }, [dragging, position])
 
   const motionAllowed = documentVisible && !reducedMotion
-  // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
-  // horizontal drag keeps animating so the running rows show. Bob always pauses.
+  // Stationary/vertical grabs pause at frame 0; horizontal drags animate running rows, while bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
   const bobAnimate = motionAllowed && !dragging
   const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
 
   return (
-    // Why: the outer box and middle layer stay pointer-events-none so app chrome
-    // stays interactive; only the innermost wrapper opts in and shrink-wraps its
-    // content, so the grab/drag hit area hugs the pet, not the full square box.
+    // Only the content-fit wrapper takes pointer events so empty overlay space cannot block app chrome.
     <div
       aria-hidden
       className="pointer-events-none fixed z-40"
@@ -402,16 +365,14 @@ export function PetOverlay(): React.JSX.Element {
             animation: 'pet-bob 1.2s ease-in-out infinite',
             animationPlayState: bobAnimate ? 'running' : 'paused',
             touchAction: 'none',
-            // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
-            // otherwise collapse to 0×0 during the image-load window.
+            // Keep a minimum grab area while loading would otherwise collapse fit-content dimensions.
             minWidth: 24,
             minHeight: 24
           }}
         >
           <style>{PET_BOB_KEYFRAMES_CSS}</style>
           {sprite ? (
-            // Why: remount per pet so a switched-to sprite starts a fresh
-            // animation instead of inheriting the prior pet's currentTime.
+            // Remount per URL so pet changes cannot inherit the prior animation’s currentTime.
             <SpriteFrame
               key={url}
               url={url}
@@ -424,10 +385,7 @@ export function PetOverlay(): React.JSX.Element {
           ) : detected ? (
             <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
           ) : (
-            // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
-            // fit-content, so max-w/h-full has no fixed box to resolve against
-            // and the image would otherwise render at its intrinsic size and
-            // overflow the persisted size box that clamping still assumes.
+            // Fit-content parents give max-full no fixed size; cap the image explicitly to preserve clamping bounds.
             <img
               src={url}
               alt=""

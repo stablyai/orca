@@ -84,8 +84,7 @@ export default function RunTargetRowList({
                 />
               }
               label={row.option.label}
-              // Why: Connect / Set project location already say the next
-              // step, so the detail line would only repeat that.
+              // Inline Connect/Set location already provides the next step; omit duplicate detail text.
               detail={hasConnect || hasSetLocation ? '' : row.option.detail}
               armed={isArmed}
               current={false}
@@ -109,7 +108,6 @@ export default function RunTargetRowList({
             />
           )
         }
-        // Recipes submenu row.
         return (
           <RecipesSubmenuRow
             key={row.key}

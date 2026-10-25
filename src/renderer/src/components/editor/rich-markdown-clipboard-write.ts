@@ -4,11 +4,7 @@ import { serializeRichMarkdownSliceForClipboard } from './rich-markdown-clipboar
 import { inspectRichMarkdownSourceOwningSlice } from './rich-markdown-source-owning-slice'
 import { showRichMarkdownSourceOwningCutLimitError } from './rich-markdown-source-owning-cut-feedback'
 
-/**
- * Writes a rich-markdown slice to the clipboard (HTML + plain), verifying
- * readback. Returns false when the write must not be followed by a delete
- * (source-owning limit or clipboard rejection).
- */
+/** Verify rich clipboard readback; false forbids deleting the cut selection after a limit or write rejection. */
 export function writeRichMarkdownSliceToClipboard(
   clipboardData: DataTransfer,
   view: EditorView,
@@ -23,8 +19,7 @@ export function writeRichMarkdownSliceToClipboard(
   const serialized = serializeRichMarkdownSliceForClipboard(view, slice)
   clipboardData.setData('text/html', serialized.html)
   clipboardData.setData('text/plain', visibleText)
-  // Why: if the clipboard rejected the write we must not delete, and we must
-  // surface the same cut-limit feedback so the no-op is not silent.
+  // Rejected clipboard writes must preserve content and explain why cutting was refused.
   if (
     typeof clipboardData.getData === 'function' &&
     (clipboardData.getData('text/html') !== serialized.html ||

@@ -11,7 +11,6 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
 
-// Switch on, the open goes to main as `layout.apply` and main's frame draws the tab.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -29,7 +28,6 @@ const drawn = vi.hoisted((): { store: DrawnStore | null; main: TabsDrawnFromMain
   main: null
 }))
 
-/** Switch on: a real store seeded like the mock (whose tabs it keeps), drawn from main's frames. */
 async function drawFromMain(): Promise<{
   store: DrawnStore
   sent: () => readonly { type: string }[]
@@ -100,8 +98,6 @@ async function drawFromMain(): Promise<{
   return { store, sent: () => layoutApplyTestTransport.sent }
 }
 
-/** Switch on: opens through main, draws main's answer, and returns the drawn tab and the open
- *  main got (over this machine's `layout.apply`, the only target the transport answers). */
 async function openThroughMain(open: () => string | null): Promise<{
   tabId: string | null
   tab: Tab | undefined
@@ -119,10 +115,7 @@ async function openThroughMain(open: () => string | null): Promise<{
   }
 }
 
-/**
- * A background open for this machine's host, in group-1, drawn local and never selected.
- * `viaMain` false: a paired server owns the active twin, so the window draws it as today.
- */
+// Open locally in group-1 without selection; the active paired-server twin must not redirect ownership.
 async function expectBackgroundLocalOpen(viaMain: boolean): Promise<void> {
   const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
   const { tabId, tab, sent, store } = await openThroughMain(() =>
@@ -138,7 +131,6 @@ async function expectBackgroundLocalOpen(viaMain: boolean): Promise<void> {
   expectNotSurfaced(store, tab!)
 }
 
-/** The window selected the tab, its group and the simulator view, as a surfaced open does. */
 function expectSurfaced(store: DrawnStore, tab: Tab): void {
   const state = store.getState()
   const group = state.groupsByWorktree['wt-1']?.find((entry) => entry.id === tab.groupId)
@@ -148,7 +140,6 @@ function expectSurfaced(store: DrawnStore, tab: Tab): void {
   expect(state.activeTabType).toBe('simulator')
 }
 
-/** No focus: not in the group's recents, no focus time, the view type unchanged. */
 function expectNotSurfaced(store: DrawnStore, tab: Tab): void {
   const state = store.getState()
   const group = state.groupsByWorktree['wt-1']?.find((entry) => entry.id === tab.groupId)
@@ -244,7 +235,6 @@ describe('ensureSimulatorTab', () => {
     mockStoreState.focusGroup.mockReset()
     mockStoreState.setActiveTab.mockReset()
     mockStoreState.setActiveTabType.mockReset()
-    // Switch on, main's transport and frames live in modules a reset would orphan.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
       vi.resetModules()
     }
@@ -288,7 +278,6 @@ describe('ensureSimulatorTab', () => {
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // The active twin is host-b's, a paired server's: the window draws it as today.
       const { tabId, tab, sent } = await openThroughMain(() => ensureSimulatorTab('wt-1'))
       expect(tabId).not.toBe('sim-local')
       expect(sent).toEqual([])
@@ -488,7 +477,6 @@ describe('ensureSimulatorTab', () => {
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main makes the split with the tab in one apply: no half-made split to fall back from.
       const { tabId, tab, sent, store } = await openThroughMain(() =>
         ensureSimulatorTab('wt-1', { placement: 'rightSplit' })
       )
@@ -567,7 +555,6 @@ describe('ensureSimulatorTab', () => {
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // This machine's twin goes to main; its frame names the tab's host.
       await expectBackgroundLocalOpen(true)
       return
     }

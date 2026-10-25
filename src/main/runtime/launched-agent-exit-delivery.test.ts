@@ -1,8 +1,4 @@
-/**
- * An agent that exits at startup leaves its shell at a prompt that turns bracketed paste on, which
- * is the same signal an agent's composer gives. Driven through the launch's own readiness wait,
- * foreground read and write guard, with each host answering the way it does after the exit.
- */
+/** Shell prompts mimic composer readiness after startup exit; verify foreground guards across hosts. */
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -15,7 +11,6 @@ import { waitForWorktreeStartupDraft } from './runtime-worktree-startup-readines
 
 const PTY_ID = 'pty-1'
 
-// What `ps` limited to the pane's terminal answers; the verdict over it stays the real one.
 const paneTerminal = vi.hoisted(() => {
   const state: { rows: ProcessTableRow[] | null } = { rows: null }
   return state
@@ -25,7 +20,6 @@ vi.mock('./terminal-foreground-group', async (importOriginal) => ({
   readTerminalProcessRows: vi.fn(async () => paneTerminal.rows)
 }))
 
-/** A macOS pane under `login` whose terminal `group` holds, with `jobs` launched from its zsh. */
 function loginPane(
   group: number,
   jobs: { pid: number; command: string }[] = []
@@ -52,14 +46,12 @@ function loginPane(
 }
 const SHELL_HANDOFF = '\x1b[?2004l'
 
-/** zsh's prompt, the launch line it runs, then its prompt again once that command exited. */
 function zshRunsLaunchLineThatExits(): string[] {
   const zsh = readFileSync(join(__dirname, '__fixtures__', 'zsh-prompt-runs-command.txt'), 'utf8')
   const split = zsh.indexOf('\n', zsh.indexOf(SHELL_HANDOFF)) + 1
   return [zsh.slice(0, split), 'stub: crashing at startup\r\n', zsh.slice(split)]
 }
 
-/** Git Bash and WSL's bash: readline turns bracketed paste on at each prompt. */
 function bashRunsLaunchLineThatExits(): string[] {
   return [
     '\x1b[?2004hqa@host:~$ claude\r\n\x1b[?2004l\r',
@@ -73,13 +65,12 @@ type HostAnswers = {
   host: { remote: boolean; windows: boolean }
   cached: string | null
   scanned: string | null
-  /** The pane terminal's processes, for a local macOS or Linux host. */
   rows?: ProcessTableRow[]
   shellAlone: boolean
 }
 
 const HOSTS: [string, HostAnswers, () => string[]][] = [
-  // The shell keeps other processes in its job, so the shell-alone check never answers.
+  // Shared shell jobs prevent proving shell-alone foreground.
   [
     'Windows Git Bash',
     {
@@ -90,7 +81,6 @@ const HOSTS: [string, HostAnswers, () => string[]][] = [
     },
     bashRunsLaunchLineThatExits
   ],
-  // The QA stub: a `grok` override that exits at once.
   [
     'Windows Git Bash, grok',
     {
@@ -107,7 +97,6 @@ const HOSTS: [string, HostAnswers, () => string[]][] = [
     { host: { remote: false, windows: true }, cached: 'claude', scanned: 'wsl', shellAlone: false },
     bashRunsLaunchLineThatExits
   ],
-  // A pane under `login`, whose cached name is still the exited stub's.
   [
     'macOS zsh',
     {
@@ -164,7 +153,7 @@ function launchedPane(answers: HostAnswers) {
       }
       return { handle: 'term-1', satisfied: true, status: 'running' }
     },
-    // The idle evidence after the budget: the shell's prompt can look settled too.
+    // Even fallback idle evidence may describe the returned shell prompt.
     waitForTerminal: vi.fn(async () => ({ handle: 'term-1', satisfied: true, status: 'idle' })),
     readLaunchedAgentForeground: (ptyId: string) => readForeground(ptyId),
     subscribeToTerminalData: subscribe,

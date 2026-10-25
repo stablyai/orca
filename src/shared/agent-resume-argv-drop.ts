@@ -5,9 +5,7 @@ import {
 } from './agent-session-resume'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
-/** `dropped` carries the plain launch command; `unrecognized` means the resume
- *  locator is still in there and the caller must refuse the launch rather than
- *  run a resume it could not cancel. */
+/** Unrecognized locators require refusal: the caller cannot safely launch a resume it could not cancel. Dropped returns the plain launch command. */
 export type AgentResumeArgvDrop =
   | { status: 'dropped'; command: string }
   | { status: 'absent' }
@@ -33,14 +31,7 @@ function stripSuffix(command: string, suffix: string): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-/**
- * Remove the resume argv `buildAgentResumeStartupPlan` appended, leaving the plain
- * agent launch. Main uses this when it cannot verify which account owns the session,
- * so the pane starts fresh instead of resuming under whichever account is selected.
- * Codex-only in practice: claude resume commands may carry the selector before a
- * `--` terminator (agent-resume-launch-command.ts), which this trailing-suffix
- * strip would report as `unrecognized`.
- */
+/** Strip appended resume argv when account ownership is unverifiable so launch starts fresh. Trailing-only: Claude selectors before -- remain unrecognized and must be refused. */
 export function dropAgentResumeArgvFromCommand(args: {
   command: string
   agent: ResumableTuiAgent

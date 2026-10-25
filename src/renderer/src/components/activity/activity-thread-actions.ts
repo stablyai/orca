@@ -1,6 +1,6 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
-import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { useAppStore } from '@/store'
@@ -15,8 +15,7 @@ import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected
 import type { AppState } from '@/store/types'
 import type { AgentPaneThread } from './activity-thread-types'
 
-// Same focused-host fallback the Agents scope filter uses; defaulting to `local` here would
-// look up a hostless runtime-owned workspace on the wrong host and silently drop the jump.
+// Use the scope filter’s focused-host fallback; local would misroute hostless runtime-owned workspaces.
 function getActivityThreadExecutionHostId(
   thread: AgentPaneThread,
   defaultHostId: ExecutionHostId
@@ -53,10 +52,7 @@ export function createActivityThreadActions({
   unacknowledgeAgents,
   setSelectedPaneKey
 }: {
-  /** Getter (not a snapshot) so the handlers keep one identity for the row memo
-   *  bail-outs while bulk actions still see the current thread set. This is the
-   *  badge-coherent set (child-filter only), not the search/scope-narrowed one,
-   *  so Mark all read always drives the Agents badge to zero. */
+  /** Read current badge-coherent threads through a stable handler; Mark all read ignores search/scope so the badge reaches zero. */
   getMarkAllReadThreads: () => AgentPaneThread[]
   acknowledgeAgents: (paneKeys: string[], reads?: undefined, intent?: 'explicit') => void
   unacknowledgeAgents: (paneKeys: string[]) => void
@@ -92,10 +88,7 @@ export function createActivityThreadActions({
       thread,
       getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
     )
-    // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
-    // state of an SSH session that was never revived — has no resident tab until
-    // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
-    // Probing tab residency first is what made a remote row click a silent no-op (#16731).
+    // Activate before probing residency: cold SSH tabs are revived/seeded here; probing first made remote row clicks no-ops (#16731).
     if (
       !isFloatingTerminal &&
       activateAndRevealWorkspace(thread.worktree.id, {
@@ -118,8 +111,7 @@ export function createActivityThreadActions({
     const activated = useAppStore.getState()
     const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
     if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
-      // Retained threads outlive their tab; the workspace is still activated, but there is
-      // no pane to focus and focusing a sibling would be worse than focusing nothing.
+      // Retained threads may outlive their tab; keep the workspace activated without focusing an unrelated sibling.
       return
     }
     // Floating tabs have no catalog workspace; reveal their panel without changing the main workspace.

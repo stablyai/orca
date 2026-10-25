@@ -6,8 +6,7 @@ import {
 } from './structured-agent-session-main-agent-working'
 import { agentSessionCurrentContextRows } from './agent-session-context-clear'
 
-/** A running turn or an unanswered send: what a `working` status means, and what an `attention`
- *  status hides beneath its pending prompt. The main-agent rule, read from the journal's items. */
+/** Journal main-agent rule: running turn or unanswered send, including work hidden beneath an attention prompt. */
 export function owesStructuredAgentSessionWork(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],

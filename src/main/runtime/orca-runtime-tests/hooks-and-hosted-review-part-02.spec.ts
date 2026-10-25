@@ -586,7 +586,7 @@ describe('OrcaRuntimeService', () => {
           connectionId: 'ssh-1'
         }
       ],
-      // Why: this process serves no SSH git, so the SSH repo resolves from its stored rows.
+      // SSH git is not served here; resolve remote workspaces from persisted rows.
       getAllWorktreeMeta: () => ({
         [`${TEST_REPO_ID}::/remote/repo`]: makeWorktreeMeta()
       }),

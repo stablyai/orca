@@ -1,12 +1,6 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { scriptedCodexCatalogSession } from './scripted-codex-model-catalog.test-fixture'
-// One structured Codex session driven end to end over `agentSession.*`.
-//
-// Nothing here is stubbed except the Codex child itself: the RPC dispatcher, the
-// zod schemas, the capability gate, the durable record store, the journal, the
-// lease, the Codex adapter, and the event-to-journal translation are all the ones
-// that ship. The fake app-server answers the same JSON-RPC calls the real one
-// does and pushes the same notifications and blocking requests back.
+// Exercise shipped RPC, schemas, capability gate, stores, lease and adapter; only the Codex app-server child is fake.
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,9 +8,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../ipc/desktop-renderer-runtime-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session-create-capabilities'
@@ -60,9 +54,7 @@ const JOURNAL_IDENTITY = {
   agent: 'codex' as const,
   providerHandle: codexProviderHandle(THREAD)
 }
-// An eager-start client with current options capabilities. Without the pending-send
-// one the host holds the reply until the send settles, which is a shim for
-// clients too old to render a pending bubble — not what this suite models.
+// Use current pending-send capability; older clients wait for settlement because they cannot render pending bubbles.
 const CLIENT = {
   clientId: 'device-a',
   clientKind: 'runtime' as const,
@@ -70,8 +62,6 @@ const CLIENT = {
     (capability) => capability !== AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
   )
 }
-
-// ─── the fake `codex app-server` ────────────────────────────────────────────
 
 type CodexScript = {
   connections: FakeConnection[]
@@ -162,13 +152,9 @@ function fakeCodex(): CodexScript {
   }
 }
 
-// ─── the RPC client ─────────────────────────────────────────────────────────
-
 let operations = 0
 
-/** `<13-digit ms>-<32 hex>`, the only shape the durable ledger accepts. Real
- *  time, not a frozen constant: the runtime under test stamps the ledger with
- *  its own clock and refuses a future-dated id. */
+/** Use ledger-shaped ids with its real clock; future-dated ids are refused. */
 function operationId(): string {
   operations += 1
   return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
@@ -239,7 +225,6 @@ let codexOverrideReads: number
 let configuredCodexProfile: string
 let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 
-/** Runs a one-shot method and returns its decoded reply. */
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
   const request: RpcRequest = { id: `req-${operations}`, authToken: 'token', method, params }
@@ -251,7 +236,6 @@ async function call(method: string, params: unknown): Promise<RpcResponse> {
   return first
 }
 
-/** Asserts success and unwraps the host's `{ok:true, value}` mutation result. */
 async function ok<T>(method: string, params: unknown): Promise<T> {
   const response = await call(method, params)
   expect(response, `${method} failed: ${JSON.stringify(response)}`).toMatchObject({ ok: true })
@@ -260,7 +244,6 @@ async function ok<T>(method: string, params: unknown): Promise<T> {
   return result.value as T
 }
 
-/** Opens a live subscription and keeps collecting frames after the call settles. */
 async function subscribe(
   requestId: string,
   cursor?: { epoch: string; sequence: number }
@@ -284,11 +267,9 @@ async function subscribe(
   return frames
 }
 
-/** Settles everything the provider streamed into the journal. Real clients see
- *  these rows arrive on the subscription; a test has to wait for them. */
-function drainStreamedEvents(): Promise<void> {
-  return getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION) ?? Promise.resolve()
-}
+/** Flush provider writes; real clients wait for their subscription frames. */
+const drainStreamedEvents = (): Promise<void> =>
+  getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION) ?? Promise.resolve()
 
 function textOf(item: AgentJournalRenderItem): string {
   const body = item.body
@@ -297,7 +278,6 @@ function textOf(item: AgentJournalRenderItem): string {
     : ''
 }
 
-/** The durable submission row, which settlement rewrites after the send returns. */
 async function submissionOf(clientMessageId: string): Promise<AgentJournalSubmission | undefined> {
   return (await getStructuredAgentSessionHost()?.journalSnapshot(SESSION))?.submissions.find(
     (entry) => entry.clientMessageId === clientMessageId
@@ -450,7 +430,6 @@ describe('a structured codex session over agentSession.*', () => {
       fence: 0,
       options: { filePath: rollout }
     })
-    // The previous process exits, closing its database.
     await journals.closeAll()
 
     const created = await ok<{ page: { items: AgentJournalRenderItem[] } }>(
@@ -473,7 +452,6 @@ describe('a structured codex session over agentSession.*', () => {
       CODEX_HOME: '/home/dev/.codex'
     })
     const store = await readPersistedTestAgentSessionStoreText(root)
-    // The record this create wrote, so the checks below read the runtime's own rows.
     expect(store).toContain('/home/dev/.codex')
     expect(store).not.toContain('EXAMPLE_GATEWAY_TOKEN')
     expect(store).not.toContain('"launchEnv"')
@@ -487,15 +465,12 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, created.fence),
       body
     })
-    // Admission, not identity. `turn/start` proves Codex owns the message, but a
-    // send coalesced into a running turn is answered with that turn's id, so
-    // which message landed where is knowable only from the echo.
+    // Admission does not identify a message: coalesced turn/start answers name the running turn; only its echo identifies the send.
     expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
     await handedOverAs({ threadId: THREAD, clientUserMessageId: sent.clientMessageId })
 
     codex.notify('turn/started', { turn: { id: TURN } })
-    // Codex echoes the message back carrying the `clientId` it was sent under,
-    // which is the only thing that names which submission this row settles.
+    // Only the echoed clientId identifies the submission to settle.
     codex.notify('item/completed', {
       item: {
         type: 'userMessage',
@@ -512,9 +487,7 @@ describe('a structured codex session over agentSession.*', () => {
     await drainStreamedEvents()
 
     expect(itemsOf(stream).map(textOf).filter(Boolean)).toEqual(['hi', 'Hello.'])
-    // The echo is the first item of this turn, so the settled key is ordinal 0 —
-    // minted by the same `identityFor` a history replay computes with, rather
-    // than guessed from the turn/start response.
+    // Echo ordinal 0 must use the same identityFor key as history replay.
     await vi.waitFor(async () =>
       expect(await submissionOf(sent.clientMessageId)).toMatchObject({
         dispatchState: 'accepted',
@@ -524,8 +497,7 @@ describe('a structured codex session over agentSession.*', () => {
   })
 
   it('runs create → send → stream → approval → cancel → reconnect → page history', async () => {
-    // ── create ──────────────────────────────────────────────────────────────
-    // No host exists yet; `create` is the call that builds one.
+    // Create builds the host lazily.
     expect(getStructuredAgentSessionHost()).toBeNull()
     const created = await ok<{ fence: number; page: { items: unknown[] } }>(
       'agentSession.create',
@@ -543,7 +515,6 @@ describe('a structured codex session over agentSession.*', () => {
     const stream = await subscribe('sub-1')
     expect(stream[0]).toMatchObject({ type: 'snapshot', sessionId: SESSION })
 
-    // ── options ─────────────────────────────────────────────────────────────
     await readKnownOptions()
     await ok('agentSession.setOption', {
       envelope: envelope('agentSession.setOption', { key: 'model', value: 'gpt-live' }, fence),
@@ -563,7 +534,6 @@ describe('a structured codex session over agentSession.*', () => {
     )
     expect(itemsOf(stream)).toEqual([])
 
-    // ── send ────────────────────────────────────────────────────────────────
     const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'list files' }] }
     const sent = await ok<{
       clientMessageId: string
@@ -572,9 +542,7 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, fence),
       body
     })
-    // Codex took the message, so the submission is pending rather than
-    // "delivery unconfirmed" — it carries no identity yet, because the response
-    // to a coalesced send names the running turn rather than this message.
+    // Accepted sends stay pending without identity until the provider echo.
     expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
     await handedOverAs({
       threadId: THREAD,
@@ -583,12 +551,8 @@ describe('a structured codex session over agentSession.*', () => {
       effort: 'high'
     })
 
-    // ── stream ──────────────────────────────────────────────────────────────
     codex.notify('turn/started', { turn: { id: TURN } })
-    // Codex echoes the user message back as ordinal 0 of the turn, carrying the
-    // `clientId` it was sent under. That echo settles the submission's identity,
-    // and has to reconcile into the bubble the client already has rather than
-    // append a second copy of it.
+    // The echo must settle into the pending client bubble without appending a duplicate.
     codex.notify('item/completed', {
       item: {
         type: 'userMessage',
@@ -599,8 +563,7 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await drainStreamedEvents()
     expect(itemsOf(stream).filter((item) => textOf(item) === 'list files')).toHaveLength(1)
-    // Settled from the echo's own journal identity, so it is by construction the
-    // key a replay recomputes for this row.
+    // Use the echo identity so replay computes the same key.
     await vi.waitFor(async () =>
       expect(await submissionOf(sent.clientMessageId)).toMatchObject({
         dispatchState: 'accepted',
@@ -612,8 +575,7 @@ describe('a structured codex session over agentSession.*', () => {
     codex.notify('item/agentMessage/delta', { itemId: 'item-1', delta: 'Two ' })
     codex.notify('item/agentMessage/delta', { itemId: 'item-1', delta: 'files.' })
     await drainStreamedEvents()
-    // The 60ms window has not elapsed, so no half-written row reached the
-    // journal — the coalescer is holding both deltas.
+    // Before 60ms the coalescer must hold both deltas without journaling a partial row.
     expect(itemsOf(stream).filter((item) => textOf(item).startsWith('Two'))).toEqual([])
 
     codex.notify('item/completed', {
@@ -624,7 +586,6 @@ describe('a structured codex session over agentSession.*', () => {
     // Keyed by (threadId, turnId, ordinal), so a resumed thread reuses this row.
     expect(answer?.itemId).toBe(`codex:${THREAD}:${TURN}:1`)
 
-    // ── approval ────────────────────────────────────────────────────────────
     codex.notify('item/started', {
       item: { type: 'commandExecution', id: 'item-2', command: 'ls -la', status: 'inProgress' }
     })
@@ -656,10 +617,8 @@ describe('a structured codex session over agentSession.*', () => {
       }
     )
     expect(answered.resolution).toMatchObject({ state: 'resolved', selectedOptionId: 'accept' })
-    // The durable journal item id round-tripped back to the live Codex request.
     expect(codex.live().replies).toEqual([{ id: 7, result: { decision: 'accept' } }])
 
-    // ── cancel ──────────────────────────────────────────────────────────────
     const cancelled = await ok<{ turnId: string; cancelled: boolean }>('agentSession.cancel', {
       envelope: envelope('agentSession.cancel', { turnId: TURN }, fence),
       turnId: TURN
@@ -670,9 +629,7 @@ describe('a structured codex session over agentSession.*', () => {
       params: { threadId: THREAD, turnId: TURN }
     })
 
-    // ── reconnect ───────────────────────────────────────────────────────────
-    // The client drops. Its subscription is reaped; the session and its child
-    // are not.
+    // Disconnect reaps the subscription while retaining the session and child.
     await call('agentSession.unsubscribe', { sessionId: SESSION })
     const lastCursor = cursorOf(stream)
     codex.notify('item/completed', {
@@ -681,7 +638,6 @@ describe('a structured codex session over agentSession.*', () => {
     codex.notify('turn/completed', { turn: { id: TURN } })
     await drainStreamedEvents()
 
-    // Resubscribing from the cursor it held replays only what it missed.
     const missed = await subscribe('sub-2', lastCursor)
     expect(missed[0]?.type).toBe('batch')
     expect(
@@ -691,25 +647,23 @@ describe('a structured codex session over agentSession.*', () => {
     ).toBe(true)
     expect(itemsOf(missed).map(textOf).filter(Boolean)).toEqual(['Stopped.'])
 
-    // A runtime taking the session over is the other half of reconnect: the
-    // fence advances, the old child is reaped, and its replacement resumes the
-    // thread this session proved rather than forking a new one.
+    // Stop closes the old child; takeover advances the fence and resumes the proven thread.
     const reaped = codex.live()
+    await vi.waitFor(() => expect(reaped.closed).toBe(true))
+    const stoppedFence =
+      getStructuredAgentSessionHost()?.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? fence
     const resumed = await ok<{ fence: number; page: { items: AgentJournalRenderItem[] } }>(
       'agentSession.ensure',
-      attachParams(fence)
+      attachParams(stoppedFence)
     )
-    expect(resumed.fence).toBe(fence + 1)
-    expect(reaped.closed).toBe(true)
+    expect(resumed.fence).toBe(stoppedFence + 1)
     expect(codex.live().resumedThreadId).toBe(THREAD)
     expect(await readKnownOptions()).toMatchObject({
       ok: true,
       result: { current: { effort: 'high' } }
     })
-    // The journal belongs to the session, not to the process that just died.
     expect(resumed.page.items.map(textOf)).toContain('Two files.')
 
-    // ── page history ────────────────────────────────────────────────────────
     const tail = await historyPage('tail', { limit: 2 })
     expect(tail.ok).toBe(true)
     if (!tail.ok) {
@@ -724,9 +678,7 @@ describe('a structured codex session over agentSession.*', () => {
       throw new Error('history reset')
     }
     expect(older.page.hasOlder).toBe(false)
-    // Every step of the conversation, in order, from the durable journal alone —
-    // no page overlaps another, and nothing the live stream showed is missing.
-    // The turn's lifecycle row outlives the turn: it is revised, never tombstoned.
+    // Pages must cover the streamed conversation without overlap; turn lifecycle rows are revised, never tombstoned.
     expect([...older.page.items, ...tail.page.items].map((item) => item.body?.kind)).toEqual([
       'message',
       'turn',
@@ -782,8 +734,7 @@ describe('a structured codex session over agentSession.*', () => {
     )
 
     expect(replies[0]).toMatchObject({ ok: false })
-    // Building the host is itself observable — it opens a store and spawns a
-    // child — so the gate has to run before it, not after.
+    // Gate before host construction, which opens storage and can spawn children.
     expect(getStructuredAgentSessionHost()).toBeNull()
     expect(codex.connections).toEqual([])
   })

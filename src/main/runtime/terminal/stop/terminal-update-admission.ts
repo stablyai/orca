@@ -1,9 +1,4 @@
-/**
- * The window between an update's last terminal census and the stop that follows it: while closed,
- * this server starts no new terminal, so the census stays true until the stop. Per runtime, since
- * the stop it guards ends the whole server. Timed, so a desktop that vanishes mid-update cannot
- * lock users out for long.
- */
+/** Close per-runtime spawn admission between update census and server stop; time-bound it so vanished desktops cannot lock users out. */
 export const TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE =
   'This server is restarting for an update. Try again in a moment.'
 
@@ -55,11 +50,7 @@ export class TerminalUpdateAdmission {
     this.heldUntilExit = true
   }
 
-  /**
-   * Admits a spawn and holds it in flight until `release` runs. While closed, only a reattach to a
-   * session the daemon still runs is admitted, and only `attachOnly`: should that session exit
-   * first, the spawn must fail rather than start a terminal the census never saw.
-   */
+  /** While closed, admit only daemon-proven live reattachments with attachOnly, so an exited session cannot spawn after the census. */
   async admit(
     reattachSessionId: string | undefined
   ): Promise<{ release: () => void; attachOnly: boolean }> {

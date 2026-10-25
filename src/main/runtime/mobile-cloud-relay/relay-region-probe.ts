@@ -7,8 +7,7 @@ export type RelayRegion = (typeof RELAY_REGIONS)[number]
 
 export const PROBE_TIMEOUT_MS = 1_500
 const PROBE_SAMPLES = 3
-// Absolute floor for the flap check: a warmed keep-alive path still jitters, and
-// a floor below TLS-scale noise rejects healthy regions on nearly every run.
+// TLS-scale jitter needs a floor or healthy warmed paths fail spread checks.
 const SPREAD_FLOOR_MS = 150
 
 export const RelayRegionSchema = z.enum(RELAY_REGIONS)
@@ -102,12 +101,10 @@ export type RelayRegionProbeReport = {
   verdict: RelayRegionProbeVerdict
 }
 
-// The first request of a process pays TCP and TLS setup, which can exceed the
-// round trip it is meant to measure, so it is discarded before sampling.
+// Discard TCP/TLS setup cost before measuring round trips.
 async function sampleMinLatencies(origins: string[], probe: RelayProbe): Promise<LatencySamples> {
   const warmupMs = await Promise.all(origins.map(probe))
-  // An origin that failed its warm-up would spend one probe timeout per round
-  // to report nothing, so the sampling rounds skip it entirely.
+  // Failed warm-ups must not spend another timeout every sampling round.
   const live = origins.filter((_origin, index) => warmupMs[index] !== null)
   if (live.length === 0) {
     return { warmupMs, keptMs: [] }
@@ -144,8 +141,7 @@ export async function measureRegion(
   }
   const [min, median, max] = keptMs as [number, number, number]
   const spreadMs = max - min
-  // Regions compare by their best round trip; the spread check only rejects a
-  // path that is genuinely flapping, not one that warmed up.
+  // Rank by best RTT; spread rejects flapping without penalizing warm-up.
   const verdict = spreadMs > Math.max(SPREAD_FLOOR_MS, median) ? 'rejected-spread' : 'measured'
   return { ...probed, minMs: min, spreadMs, verdict }
 }

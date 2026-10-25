@@ -1,9 +1,4 @@
-/**
- * The host asking the window that owns a workspace's tab layout to show an agent launch's tab before
- * the agent exists. The window creates the tab under the host's ids (or finds the one it already
- * made under them), lays out its one pane, and replies with where it landed. The pane then waits
- * for the host's process; see `agent-launch-pane-attachment`.
- */
+/** The host publishes/resolves a launch tab under its IDs before spawning; the window places its pending pane and returns placement. */
 
 import type { AgentLaunchPlacement, AgentLaunchPlacementReceipt } from './agent-launch-intent'
 import type { TuiAgent } from './tui-agent'
@@ -37,11 +32,7 @@ export type AgentLaunchTabPublishRequest = {
   prompt?: string
   /** Which launch this is: a retry of the same one never resets what the tab keeps about it. */
   operationId?: string
-  /**
-   * Layout-owner builds: main already wrote the tab, which the window draws from main's frame at
-   * `frameSeq`. The window makes no tab; it keeps the launch's pane, prompt and presentation, as it
-   * does for a tab it made. `created`: this launch made the tab, so its viewer rule applies.
-   */
+  /** Main-owned layout: draw the existing tab at frameSeq, retain pane/prompt/presentation, and apply viewer rules only if this launch created it. */
   shownByMain?: { frameSeq?: number; created: boolean }
 }
 
@@ -49,8 +40,7 @@ export type AgentLaunchTabPublishReply =
   | {
       requestId: string
       tabId: string
-      /** True when the tab exists only for this launch: the window made it now, or made it for this
-       *  launch just before asking (a desktop launch). False for a retry that found the tab. */
+      /** True for a tab created by this launch (including just before request); false for retries finding it. */
       created: boolean
       placement: AgentLaunchPlacementReceipt
     }

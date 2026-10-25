@@ -42,7 +42,7 @@ const ENGLISH_ATTACHMENT_LABELS: WorkspaceAttachmentLabelFormats = {
   issue: (number) => `Issue #${number}`
 }
 
-/** A reference as people say it: the tracker's own key for Linear and Jira, else `PR #12`-style. */
+/** Use provider-native Linear/Jira keys; other references use PR #12-style labels. */
 export function workspaceAttachmentReferenceLabel(
   item: Pick<
     WorkspaceAttachment,
@@ -188,7 +188,12 @@ export function normalizeWorkspaceAttachmentUpdate(
     linkedWorkItem: existing?.linkedWorkItem,
     linkedTaskSourceContext: existing?.linkedTaskSourceContext
   })[0]
+  const selectionCleared = reviewSlots.every(([slot]) => requested[slot] === null)
   for (const fields of WORKSPACE_ATTACHMENT_LEGACY_FIELDS) {
+    // Clearing the active review must not delete the workspace's review history.
+    if (selectionCleared && reviewSlots.some(([slot]) => slot === fields[0])) {
+      continue
+    }
     if (updates[fields[0]] === null) {
       items = removeSelectedWorkspaceAttachments(
         items,

@@ -17,28 +17,10 @@ import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 import { readMainLayout } from './helpers/main-terminal-layout'
 import { REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT } from '../../src/renderer/src/constants/terminal'
 
-/**
- * Repro hunt for the "ghost blank pane" field incident: a split pane whose PTY
- * and leaf→PTY binding were torn down while the persisted layout `root` kept
- * the leaf, so revisiting the tab materialized a permanently blank pane with
- * no terminal behind it.
- *
- * Field state (workspace remote-issue-2, 2026-07-09): root held 3 leaves,
- * ptyIdsByLeafId held 2, no daemon session for the third — the close/exit ran
- * near a hidden/park boundary. Each test here closes (or exits) a split pane
- * at a different phase of the hidden-view parking lifecycle and asserts the
- * invariant that broke in the field:
- *
- *   leaves(persisted root) === keys(persisted ptyIdsByLeafId) === live panes
- *
- * A failing scenario IS the finding — it pins which boundary loses the layout
- * collapse.
- */
+// Ghost-pane repro: remote-issue-2 (2026-07-09) retained three root leaves but only two bindings/live PTYs near a hide/park close boundary.
+// Close or exit at each lifecycle phase and require persisted root leaves === persisted binding keys === live panes.
 
-// Why 2000ms: the override shrinks BOTH cold-park delay and hot-retain, and
-// the hidden-but-mounted scenario needs the shell exit to land well inside the
-// hot-retain window — 500ms let slow shell teardown race past parking and turn
-// that scenario into the exits-while-parked one.
+// Use 2000ms for cold/hot retention: 500ms lets slow shell teardown race past mounted-hidden into parked-exit coverage.
 const PARKING_DELAY_MS = Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 2_000
 
 // Why exit 0: zsh startup on macOS can leave $? at 1, and a non-zero exit stays behind the exited card on purpose.
@@ -116,11 +98,7 @@ async function readLayoutConsistency(page: Page, tabId: string): Promise<LayoutC
   }, tabId)
 }
 
-/**
- * The invariant under hunt. Polls so post-close persists can land, then does a
- * final full read whose diff names the divergence (stale root leaf vs dropped
- * binding vs ghost live pane).
- */
+// Poll persistence then read the full shape so failures distinguish stale root leaves, missing bindings and ghost live panes.
 async function expectLayoutConsistent(
   page: Page,
   tabId: string,
@@ -128,8 +106,7 @@ async function expectLayoutConsistent(
   phase: string,
   deadPtyId?: string
 ): Promise<void> {
-  // Why: polling a shape (not a boolean) makes a timeout print the diverged
-  // state — which of root/bindings/live panes went stale is the finding.
+  // Poll a shape so timeout prints the divergent root/binding/live state.
   await expect
     .poll(
       async () => {
@@ -236,8 +213,7 @@ type SplitTabSetup = {
   splitPtyId: string
 }
 
-// Why: every scenario starts from the field shape — a tab whose main pane got
-// a split (the "setup pane" analog) that is fully bound and settled.
+// Seed the field shape: main plus fully bound/settled split pane.
 async function setUpSplitTab(page: Page): Promise<SplitTabSetup> {
   await waitForSessionReady(page)
   const worktreeId = await waitForActiveWorktree(page)
@@ -341,8 +317,7 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
   test('split pane shell exits while hidden but still mounted', async ({ orcaPage }) => {
     const { worktreeId, tabId, splitPtyId } = await setUpSplitTab(orcaPage)
     await createActiveTerminalTab(orcaPage, worktreeId)
-    // The setup-script analog: the split's shell ends on its own while the
-    // tab is hidden-but-mounted.
+    // Model setup-script shell exit while hidden but still mounted.
     await sendToTerminal(orcaPage, splitPtyId, CLEAN_SHELL_EXIT)
     await orcaPage.waitForTimeout(PARKING_DELAY_MS / 2)
     await activateTerminalTab(orcaPage, tabId)
@@ -361,9 +336,7 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
     await orcaPage.waitForTimeout(PARKING_DELAY_MS)
     await activateTerminalTab(orcaPage, tabId)
     await waitForTabRemounted(orcaPage, tabId)
-    // Why: the parked exit is deliberately deferred (no PaneManager to promote
-    // siblings) — the reveal remount owns the per-leaf teardown. This asserts
-    // that ownership actually resolves instead of leaving a ghost pane.
+    // Parked exits defer sibling promotion to reveal’s remounted PaneManager; require per-leaf teardown to finish without a ghost pane.
     await expectLayoutConsistent(orcaPage, tabId, 1, 'shell-exit-while-parked', splitPtyId)
     await expectMainHoldsWindowPanes(orcaPage, worktreeId, tabId, 'shell-exit-while-parked')
   })

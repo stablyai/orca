@@ -67,9 +67,7 @@ describe('resolveRepairedActiveTerminalTabId', () => {
   })
 
   it('restores the remembered tab instead of the first tab when repairing', () => {
-    // Why (regression): a repair firing on a transient worktree-switch render
-    // must not reset the selection to Terminal 1 — it should land on the tab
-    // the worktree remembers the user was on.
+    // Transient workspace switches must preserve remembered selection instead of resetting to Terminal 1.
     expect(
       resolveRepairedActiveTerminalTabId({
         activeTabType: 'terminal',

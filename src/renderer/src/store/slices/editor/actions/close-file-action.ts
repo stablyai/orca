@@ -79,7 +79,7 @@ export function createCloseFileAction(
       )
       const closedTabOrderIds = new Set([...fileIdsToClose, ...unifiedTabIdsToClose])
       const preCloseFiles = get().openFiles.filter((file) => fileIdsToClose.has(file.id))
-      // Why: also check editorDrafts — isDirty is set by a debounced callback, so a draft can exist before isDirty flushes; a draft means the user typed something.
+      // Debounced isDirty can lag real edits; any editorDrafts entry also prevents empty-untitled cleanup.
       const hasDraft = fileId in get().editorDrafts
       const shouldDeleteFromDisk =
         preClose !== undefined &&
@@ -88,7 +88,7 @@ export function createCloseFileAction(
           (file) => !fileIdsToClose.has(file.id) && mayShareEditorBackingFile(file, preClose)
         )
 
-      // Why: mirrored tabs are host-owned, so the host must close its copy or its next snapshot re-mirrors the file and the tab reopens.
+      // Notify mirrored host closes or its next snapshot reopens the tab.
       for (const file of preCloseFiles) {
         notifyHostOfMirroredEditorClose(get(), file.worktreeId, file.id)
       }
@@ -228,7 +228,7 @@ export function createCloseFileAction(
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
           let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
           const wtRecent = closedFile?.worktreeId
-          // Why: exclude untitled unedited files (deleted from disk after close, so Cmd+Shift+T can't reopen a gone path), ephemeral preview tabs, and chat visuals (one click away in their chat) from the reopen stack.
+          // Exclude deleted empty placeholders, ephemeral previews and chat visuals from undo; they have no useful reopen target.
           if (
             closedFile &&
             wtRecent &&
@@ -291,11 +291,12 @@ export function createCloseFileAction(
                 ? null
                 : s.pendingEditorFocusRequest,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
-            recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds
+            recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds,
+            editorBufferKeepRequest: opts?.keepEditorBuffer
           }
         })
 
-        // Why: untitled unedited files exist on disk only because createUntitledMarkdownFile() eagerly writes a bindable path; delete the clutter (fire-and-forget).
+        // Eagerly created empty untitled paths are bindable placeholders; delete them after close to avoid disk clutter.
         if (shouldDeleteFromDisk && preClose && typeof window !== 'undefined') {
           deleteUntouchedUntitledFile(get, preClose)
         }

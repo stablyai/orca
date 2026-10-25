@@ -90,8 +90,7 @@ describe('PopoverContent wheel shim', () => {
   })
 
   it('scrolls a nested viewport when the content itself cannot scroll', () => {
-    // The workspace-cleanup Filters panel: a flex column whose PopoverContent is
-    // overflow-hidden, with a ScrollArea viewport above a pinned footer.
+    // Model cleanup’s pinned-footer layout: scroll only the viewport inside overflow-hidden content.
     renderPopover('popover-scroll-content', true)
     const content = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
     const viewport = document.querySelector<HTMLElement>('[data-testid="viewport"]')!
@@ -108,8 +107,7 @@ describe('PopoverContent wheel shim', () => {
   it('still scrolls the content itself when it is the scroller', () => {
     renderPopover('popover-scroll-content', false)
     const content = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
-    // Inline because happy-dom does not apply the stylesheet; in the app
-    // `.popover-scroll-content` already sets `overflow-y: auto` (main.css).
+    // Inline overflow because happy-dom does not apply main.css.
     content.style.overflowY = 'auto'
     makeScrollable(content, 1000, 400)
 
@@ -166,8 +164,7 @@ describe('PopoverContent wheel shim', () => {
   })
 
   it('runs for the shim-only marker, which carries no styling', () => {
-    // The workspace-cleanup Filters panel needs the wheel shim but must NOT inherit
-    // `.popover-scroll-content`'s 15rem max-height, which would crush its 471px column.
+    // Cleanup needs the wheel shim without the content class’s max-height, which would crush its column.
     renderPopover('popover-wheel-scroll', true)
     const content = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
     const viewport = document.querySelector<HTMLElement>('[data-testid="viewport"]')!
@@ -219,8 +216,7 @@ describe('PopoverContent wheel shim', () => {
 
   it('respects descendant cancellation', () => {
     const innerOnWheel = vi.fn((event: ReactWheelEvent<HTMLDivElement>) => {
-      // Model React's passive delegated wheel event: synthetic cancellation does not
-      // update the native event observed by the shim.
+      // Passive React cancellation does not mark the native event seen by the shim.
       Object.defineProperty(event.nativeEvent, 'preventDefault', { value: vi.fn() })
       event.preventDefault()
     })

@@ -5,8 +5,7 @@ import {
   type StandardEmojiShortcodeEntry
 } from '../../../shared/emoji-shortcode-catalog'
 
-// Why eager here and lazy in main: a dynamic import made the shortcode transform return an
-// empty catalog until it settled, so a `:wink:` submitted in that window persisted literally.
+// Keep transforms synchronous with eager catalog data; lazy loading once persisted literal :wink: during its unresolved window.
 setEmojiShortcodeDatasetLoader(() => emojiShortcodes)
 
 export type WorkspaceEmojiSuggestion = StandardEmojiShortcodeEntry
@@ -22,8 +21,7 @@ export type WorkspaceEmojiReplacement = {
   value: string
 }
 
-// Lazy for the same reason as the shared catalog it indexes: nothing needs it
-// until a `:` shortcode is completed.
+// Build this lazy index only when a colon shortcode completes, like its shared catalog.
 let exactShortcode: ReadonlyMap<string, WorkspaceEmojiSuggestion> | null = null
 
 function exactShortcodeIndex(): ReadonlyMap<string, WorkspaceEmojiSuggestion> {

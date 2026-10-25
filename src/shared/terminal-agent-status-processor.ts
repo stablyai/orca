@@ -52,7 +52,7 @@ function mergeInBandStatusPayloads(
   }))
   for (const entry of osc7501) {
     let index = merged.length
-    // `>=`: a stripped 9999 frame at the 7501 frame's end offset was written after it.
+    // At equal offsets, insert 7501 before stripped 9999, which followed it in the raw bytes.
     while (index > 0 && merged[index - 1].offset >= entry.offset) {
       index -= 1
     }
@@ -61,10 +61,7 @@ function mergeInBandStatusPayloads(
   return merged
 }
 
-/**
- * Every in-band agent status a PTY stream carries, for main's side-effect scan: Orca's OSC 9999
- * payloads (stripped from `cleanData`) and the Program Status Protocol, OSC 7501 (left in place).
- */
+/** Merge stripped OSC 9999 and retained OSC 7501 statuses for main’s side-effect scan. */
 export function createTerminalAgentStatusProcessor(): (data: string) => ProcessedAgentStatusChunk {
   const processAgentStatusOsc = createAgentStatusOscProcessor()
   const scanProgramStatus = createProgramStatusSideEffectScanner()

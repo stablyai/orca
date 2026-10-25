@@ -9,8 +9,7 @@ import {
 } from '../../managed-server-actions-registry'
 import { defineMethod } from '../core'
 
-// Why a refusal and not a crash: only the desktop main process registers these actions, and a
-// client must read their absence the same way it reads an older host's method_not_found.
+// Only desktop main registers actions; report absence like an older host's method_not_found.
 function actions(): ManagedServerActions {
   const registered = getManagedServerActions()
   if (!registered) {
@@ -57,7 +56,7 @@ export const MANAGED_SERVER_METHODS = [
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().cancelStop(selector)
   }),
-  // A new method, not a stop flag: an older desktop would drop the flag and decommission instead.
+  // Use a separate method: older desktops would strip a flag and decommission instead.
   defineMethod({
     name: 'managedServer.forget',
     permission: 'host-admin',

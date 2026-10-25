@@ -49,6 +49,10 @@ export type OwnedMobileTerminalCreateOptions = {
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   resumesSleepingRecord?: true
+  /** See TerminalCreateOptions; a create that throws before it proves nothing spawned. */
+  onPtySpawnDispatched?: () => void
+  /** The PTY this create produced, reported before publication can fail. */
+  onPtyCreated?: (ptyId: string) => void
 }
 
 export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
@@ -96,30 +100,27 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         focus: false,
         ...(opts.presentation ? { presentation: opts.presentation } : {}),
         ...(opts.afterDesktopTabId ? { afterTabId: opts.afterDesktopTabId } : {}),
-        ...(mutationHandle
-          ? {
-              onPtySpawnDispatched: (launch) => {
-                if (!launch) {
-                  return
-                }
-                if (
-                  !this.ownedMobileDispatchRecipes.has(mutationHandle) &&
-                  this.ownedMobileDispatchRecipes.size >= 4096
-                ) {
-                  throw new Error('runtime_unavailable')
-                }
-                // Retain original dispatch evidence across an ambiguous response; retry payloads cannot replace it.
-                this.ownedMobileDispatchRecipes.set(mutationHandle, {
-                  connectionId: workspace.connectionId ?? null,
-                  recordedAt: Date.now(),
-                  ...(launch.launchConfig
-                    ? { launchConfig: copySleepingAgentLaunchConfig(launch.launchConfig) }
-                    : {}),
-                  ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {})
-                })
-              }
+        onPtySpawnDispatched: (launch) => {
+          if (mutationHandle && launch) {
+            if (
+              !this.ownedMobileDispatchRecipes.has(mutationHandle) &&
+              this.ownedMobileDispatchRecipes.size >= 4096
+            ) {
+              throw new Error('runtime_unavailable')
             }
-          : {}),
+            // Retain original dispatch evidence across an ambiguous response; retry payloads cannot replace it.
+            this.ownedMobileDispatchRecipes.set(mutationHandle, {
+              connectionId: workspace.connectionId ?? null,
+              recordedAt: Date.now(),
+              ...(launch.launchConfig
+                ? { launchConfig: copySleepingAgentLaunchConfig(launch.launchConfig) }
+                : {}),
+              ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {})
+            })
+          }
+          // Why after the recipe: its refusal above is still before dispatch.
+          opts.onPtySpawnDispatched?.()
+        },
         ...(preAllocatedHandle ? { preAllocatedHandle } : {}),
         command: opts.command,
         ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
@@ -147,7 +148,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
             : {}),
         ...(isNewSession ? { isNewSession: true } : {}),
         persistHostSessionBinding: true,
-        // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
+        // Publish only the authoritative snapshot below to avoid a temporary wrong-group placement.
         deferMobileSessionPublish: true,
         signal: opts.signal,
         ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
@@ -162,6 +163,9 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           (_selector, handle) => create(handle)
         )
       : await create()
+    if (terminal.ptyId) {
+      opts.onPtyCreated?.(terminal.ptyId)
+    }
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {
       throw new Error('terminal_handle_stale')
@@ -204,8 +208,9 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         terminalHandle: terminal.handle
       })
     }
-    const parentTabId = livePty.pty.tabId ?? `pty:${livePty.pty.ptyId}`
-    const leafId = parsePaneKey(livePty.pty.paneKey ?? '')?.leafId ?? randomUUID()
+    const recorded = this.paneOfPty(livePty.pty)
+    const parentTabId = recorded.tabId ?? `pty:${livePty.pty.ptyId}`
+    const leafId = parsePaneKey(recorded.paneKey ?? '')?.leafId ?? randomUUID()
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const existingSurface =
       existing?.tabs.find(
@@ -273,10 +278,10 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
-      // Why: a fresh epoch retires the current publisher, so clients drop its later tab updates.
+      // New epochs retire the prior publisher and reject its later updates.
       publicationEpoch: existing?.publicationEpoch ?? `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-      // Why: activating the new tab also focuses its group, so a "+" targeting a specific split group makes that group active too.
+      // Activating the new tab must also focus its requested split group.
       activeGroupId:
         activate && opts.targetGroupId
           ? opts.targetGroupId
@@ -284,12 +289,11 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
       tabGroups,
-      // Why: keep group split geometry on new-tab creation, else opening a terminal while split loses the arrangement.
+      // Retain split geometry when adding a tab.
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    // Why: emit the stored snapshot, not the pre-store one — storing grafts on retirement
-    // proofs, and subscribers dedupe on version so they would never see them otherwise.
+    // Store adds retirement proofs; emit that snapshot because version-deduping subscribers would miss proofs from a pre-store frame.
     const stored = this.storeMobileSessionSnapshot(worktreeId, next)
     const result = this.toMobileSessionTabsResult(stored)
     const changeSequence = ++this.mobileSessionTabsChangeSequence

@@ -86,10 +86,7 @@ export function matchPaletteTabDocument(
   }
 }
 
-/**
- * Shared entry point for the tab sections: `null` means the query is unusable
- * (empty or invalid) and the caller should fall back to its positional listing.
- */
+/** Return null for empty/invalid queries so tab sections can use positional listings. */
 export function preparePaletteTabQuery(
   query: string
 ): Extract<PreparedPaletteQuery, { state: 'ready' }> | null {
@@ -109,7 +106,6 @@ export type PaletteTabRankInputs = {
   activity: PaletteActivityRank
 }
 
-/** Shared semantic, bucketed-recency, placement, position, and identity order. */
 export function comparePaletteTabResults(a: PaletteTabRankInputs, b: PaletteTabRankInputs): number {
   return comparePaletteEntityRanks(
     { rank: a.rank, activity: a.activity, position: a.positionScore, identity: a.identity },

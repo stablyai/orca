@@ -1,8 +1,6 @@
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 
-/** Start time of the newest completed turn, counting turns already folded into history.
- *  Why: batched publications coalesce done→working→done into a single store notification,
- *  so the done EDGE survives only in stateHistory; comparing `state` alone misses it. */
+/** Read completed turns from history too: batched done→working→done publications can hide the edge from state alone. */
 export function resolveLatestAgentDoneStartedAt(
   entry: AgentStatusEntry | undefined
 ): number | undefined {

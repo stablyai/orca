@@ -1,15 +1,4 @@
-/**
- * Per-host automation cache with a three-part commit fence.
- *
- * A response may only land if the entry's request generation, the owning
- * authority's catalog generation, and the authority's connection generation all
- * still match what the request captured. That is what stops a slow answer from
- * a re-paired runtime, a re-registered SSH target, or a host the user has since
- * left from overwriting rows that now belong to a different incarnation.
- *
- * Removal tombstones need no separate check: a target leaving the catalog
- * advances that authority's catalog generation, which the same fence rejects.
- */
+/** Commit only while request, authority-catalog and connection generations match. This rejects stale answers after re-pair, re-registration or host changes; removal tombstones advance the same catalog fence. */
 
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { hostStableKey } from '../../../../shared/automation-owner-key'
@@ -63,11 +52,7 @@ export type AutomationHostCache = {
   /** Same fence bump for a replacement request, but it keeps the retry budget spent so far. */
   supersede: (ref: StableAutomationCatalogRef) => void
   invalidateKey: (stableKey: string) => void
-  /**
-   * Drops what a host answered under a previous incarnation of itself, keeping
-   * its display slot. The stable key survives a re-adoption, so nothing else
-   * distinguishes those rows — and the TTL would otherwise report them fresh.
-   */
+  /** Discard prior-incarnation rows but retain the display slot; unchanged stable keys/TTL cannot detect re-adoption. */
   discardIncarnation: (stableKey: string) => void
   invalidateAuthority: (authority: StableAutomationAuthorityRef) => readonly string[]
   keysForAuthority: (authority: StableAutomationAuthorityRef) => readonly string[]
@@ -145,8 +130,7 @@ export function createAutomationHostCache(
     catalogGenerationOf(record.ref.authority) === fence.catalogGeneration &&
     connectionGenerationOf(record.ref.authority) === fence.connectionGeneration
 
-  // Returns false for an evicted entry too: either way the answer arrived too
-  // late to land, and the caller counts that as a discard.
+  // Evicted entries reject settlement too; count their late answers as discarded.
   const settle = (
     fence: AutomationHostRequestFence,
     apply: (record: CacheRecord) => void
@@ -202,9 +186,7 @@ export function createAutomationHostCache(
       if (!record || record.requestGeneration !== fence.requestGeneration) {
         return
       }
-      // Why bump rather than only clear the marker: the marker may not be published
-      // yet when the job is abandoned, and only a stale generation refuses it later.
-      // A left-behind marker reads as in flight and skips the host on every plan.
+      // Advance generation even before the request marker is published; merely clearing it could leave stale work marked in flight forever.
       bump(record, true)
       notify()
     },
@@ -244,8 +226,7 @@ export function createAutomationHostCache(
       if (!record) {
         return
       }
-      // Bumped as well as emptied: work captured under the old incarnation is
-      // still in flight, and its marker would otherwise skip the host forever.
+      // Bump as well as empty: pending old-incarnation work must not retain its in-flight marker.
       bump(record)
       record.data = []
       record.fetchedAt = null
@@ -277,9 +258,7 @@ export function createAutomationHostCache(
         return
       }
       bump(record)
-      // Retirement exists to fence, not to display: the generations stay, the
-      // payload goes, or the retired pool holds up to 256 stale row arrays. A
-      // revived host reads as missing and refetches instead of showing old rows.
+      // Retain generations to fence late work, but release row payloads; revived hosts refetch rather than reuse retired arrays.
       record.data = []
       record.fetchedAt = null
       record.error = null

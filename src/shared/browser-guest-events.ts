@@ -56,8 +56,34 @@ export type BrowserContextMenuRequestedEvent = {
   selectionText: string
   canGoBack: boolean
   canGoForward: boolean
+  /** Null unless the click landed in an editable field. */
+  editable: {
+    canUndo: boolean
+    canRedo: boolean
+    canCut: boolean
+    canCopy: boolean
+    canPaste: boolean
+    canSelectAll: boolean
+    spelling: ContextMenuSpelling
+  } | null
+  /** Null unless the click landed on an image. `url` is the raw src, which may be data: or blob:. */
+  image: { url: string; canCopy: boolean } | null
+}
+
+export type ContextMenuSpelling = {
+  suggestions: string[]
+  /** Empty when the word under the cursor is spelled correctly. */
+  misspelledWord: string
 }
 
 export type BrowserContextMenuDismissedEvent = {
   browserPageId: string
+}
+
+export type BrowserTargetUrlChangedEvent = {
+  browserPageId: string
+  /** Link under the pointer or keyboard focus; empty when it leaves the link. */
+  url: string
+  screenX: number
+  screenY: number
 }

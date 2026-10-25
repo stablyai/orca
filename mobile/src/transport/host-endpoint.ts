@@ -1,7 +1,4 @@
-// Why: mobile host profiles store a single websocket endpoint fixed at pair
-// time. Edit-host lets the user rewrite host/port without re-pairing; this
-// helper accepts phone-friendly input (bare IP, host:port, or full ws URL)
-// and normalizes to the ws(s):// form RpcClient expects.
+// Normalize Edit Host input to a websocket authority without requiring re-pairing.
 
 export type NormalizeHostEndpointResult =
   | { ok: true; endpoint: string }
@@ -24,8 +21,7 @@ const NUMERIC_IPV4_CANDIDATE = /^(?:0[xX][0-9a-fA-F]+|\d+)(?:\.(?:0[xX][0-9a-fA-
 export function displayHostEndpoint(endpoint: string): string {
   try {
     const url = new URL(endpoint)
-    // Why: some URL parsers leave IPv6 brackets on hostname, others strip them.
-    // Normalize once so round-trip through normalizeHostEndpoint stays stable.
+    // Normalize IPv6 brackets because URL implementations differ.
     const host = formatHostForUrl(unwrapHostname(url.hostname))
     const port = resolveWebsocketUrlPort(endpoint, url)
     if (port.kind === 'invalid') {
@@ -41,12 +37,7 @@ function unwrapHostname(hostname: string): string {
   return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname
 }
 
-/**
- * Recover an explicitly written port from a ws(s) URL authority.
- * Why: `new URL('ws://host:80').port` and `wss://host:443` are empty — the
- * URL parser hides scheme-default ports, so callers that need the user's
- * literal :80/:443 must re-parse the original string.
- */
+// Re-read authority ports because URL.port hides explicit scheme-default :80/:443.
 function extractExplicitPortFromWebsocketUrl(input: string): string | null {
   const withoutScheme = input.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
   if (withoutScheme.startsWith('[')) {
@@ -68,8 +59,7 @@ function extractExplicitPortFromWebsocketUrl(input: string): string | null {
 
 function resolveWebsocketUrlPort(input: string, url?: URL): WebsocketUrlPortResolution {
   const explicit = extractExplicitPortFromWebsocketUrl(input)
-  // Why: missing and invalid are different states. Treating both as null lets
-  // an explicit :0/:99999 silently inherit fallbackPort on permissive parsers.
+  // Reject explicit invalid ports rather than treating them as missing and silently using fallbackPort.
   if (explicit !== null && !isValidPort(explicit)) {
     return { kind: 'invalid' }
   }
@@ -169,9 +159,7 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
     return { ok: false, error: 'Missing hostname.' }
   }
 
-  // Why: edit-host persists a bare host:port WebSocket endpoint. Path/query/
-  // userinfo are not part of the pairing contract — reject rather than strip
-  // so typos like desk/path or desk?route cannot be saved silently.
+  // Reject path/query/userinfo instead of silently stripping address typos.
   if (url.username || url.password) {
     return { ok: false, error: 'Not a valid address.' }
   }
@@ -180,8 +168,7 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
   }
 
   const hostname = unwrapHostname(url.hostname)
-  // Why: WHATWG URL accepts legacy aliases and rewrites them to a different
-  // IPv4 address. Only an already-canonical raw dotted quad may become IPv4.
+  // Reject legacy IPv4 aliases that WHATWG URL would rewrite to a different address.
   if (rawAuthority.hostname && isCanonicalIpv4(hostname) && rawAuthority.hostname !== hostname) {
     return { ok: false, error: 'Not a valid hostname.' }
   }
@@ -190,8 +177,7 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
     return { ok: false, error: hostError }
   }
 
-  // Why: keep explicit :80/:443 (URL.port is empty for scheme defaults) instead
-  // of rewriting them to fallbackPort (usually 6768).
+  // Preserve explicit default ports; URL.port would otherwise replace them with fallbackPort.
   const resolvedPort = resolveWebsocketUrlPort(input, url)
   if (resolvedPort.kind === 'invalid') {
     return { ok: false, error: 'Port must be 1–65535.' }
@@ -256,7 +242,6 @@ function normalizeHostPort(
       host = input.slice(0, firstColon)
       port = input.slice(firstColon + 1)
     } else {
-      // No port, or bare IPv6 (multiple colons, no brackets).
       host = input
     }
   }
@@ -266,8 +251,7 @@ function normalizeHostPort(
     return { ok: false, error: 'Missing hostname.' }
   }
 
-  // Why: bare input is not a URL, so characters that only make sense in a URL
-  // (path, query, fragment, whitespace) must not be treated as hostname bytes.
+  // Validate bare hosts too; URL-only delimiters must never become hostname bytes.
   const hostError = validateHostname(host)
   if (hostError) {
     return { ok: false, error: hostError }
@@ -288,15 +272,10 @@ function formatHostForUrl(host: string): string {
   return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
 }
 
-/**
- * Reject hostnames that would be illegal or ambiguous in a websocket URL.
- * Allows DNS labels, `.local` mDNS, IPv4, and IPv6 hex forms.
- */
 function validateHostname(host: string): string | null {
   if (!host) {
     return 'Missing hostname.'
   }
-  // Spaces, path/query/fragment separators, userinfo separators, brackets.
   if (/[\s/?#@[\]]/.test(host)) {
     return 'Not a valid hostname.'
   }
@@ -305,8 +284,7 @@ function validateHostname(host: string): string | null {
     return numericIpv4Error
   }
   if (host.includes(':')) {
-    // Why: a hex/colon regex accepts malformed forms such as two `::` runs.
-    // Reuse the URL parser that WebSocket will ultimately use.
+    // Use the WebSocket URL parser to reject malformed IPv6 that a hex/colon regex accepts.
     if (!/^[0-9a-fA-F:]+$/.test(host)) {
       return 'Not a valid hostname.'
     }
@@ -317,7 +295,6 @@ function validateHostname(host: string): string | null {
     }
     return null
   }
-  // DNS / IPv4 / mDNS: labels of alnum and hyphen, dots between, no empty labels.
   if (
     !/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
       host

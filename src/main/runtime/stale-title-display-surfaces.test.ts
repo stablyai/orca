@@ -8,21 +8,27 @@ import {
   store,
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
+import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
 
 async function psStatus(runtime: OrcaRuntimeService): Promise<string | undefined> {
   return (await runtime.getWorktreePs()).worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
     ?.status
 }
 
-// Synthetic titles: display surfaces must show what the tab shows once the stale-working timer
-// clears a title, although the runtime keeps the agent's own title as evidence.
+// Display must reflect stale-title clears while runtime retains native titles as evidence; these titles are synthetic.
 describe('display surfaces after the stale-working title clear', () => {
   it('worktree ps and the phone show the cleared status for a terminal with no renderer pane', async () => {
     vi.useFakeTimers()
     try {
-      const runtime = new OrcaRuntimeService(store)
+      // Its own copy: layout-owner builds bind the created pane into this store's session.
+      const runtime = new OrcaRuntimeService({ ...store })
       runtime.setPtyController({
-        spawn: vi.fn().mockResolvedValue({ id: 'bg-pty' }),
+        spawn: committingSpawn(
+          runtime,
+          vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+            id: 'bg-pty'
+          }))
+        ),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -111,7 +117,7 @@ describe('display surfaces after the stale-working title clear', () => {
     vi.useFakeTimers()
     try {
       const sshPtyId = 'ssh:conn-1@@relay-9'
-      const runtime = new OrcaRuntimeService(store)
+      const runtime = new OrcaRuntimeService({ ...store })
       runtime.setPtyController({
         write: () => true,
         kill: () => true,
@@ -120,7 +126,7 @@ describe('display surfaces after the stale-working title clear', () => {
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       const register = () =>
-        runtime.registerPty(sshPtyId, TEST_WORKTREE_ID, 'conn-1', {
+        registerBoundPty(runtime, sshPtyId, TEST_WORKTREE_ID, 'conn-1', {
           tabId: 'tab-1',
           leafId: HEADLESS_LEAF_ID,
           incarnationId: 'inc-1'

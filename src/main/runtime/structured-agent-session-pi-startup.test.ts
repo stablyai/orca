@@ -100,7 +100,6 @@ it('attaches Pi at spawn and holds the opening send until the provider answers i
   expect(script.prompts()).toEqual([])
   script.releaseHandshake()
   await vi.waitFor(() => expect(script.prompts()).toEqual(['hello while Pi is starting']))
-  // The chat keeps the model and effort Pi ran its first turn on.
   await vi.waitFor(() =>
     expect(peekOpenedAgentSessionRecordStore()?.getRecord(HOST_TEST_SESSION)?.options).toEqual({
       model: 'scripted/model-1',

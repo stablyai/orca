@@ -1,15 +1,9 @@
-// The rail's tick set: one entry per user message in the conversation.
-//
-// Loaded messages come from slots rather than messages because the rail's whole
-// job is to point at a row, and a message that takes no slot has no row to point
-// at. Slot indexes are also what the virtualizer counts, so an entry can be
-// compared against a virtual item without a second lookup table. Messages older
-// than the loaded window come from the host's outline and have no slot yet.
+// Index loaded prompts by virtualizer slots; older outline prompts have no slot until paging loads them.
 
 import {
   nativeChatTurnReplyPreviews,
   nativeChatUserMessagePreview
-} from '../../../../shared/agent-session-conversation-outline'
+} from '../../../../shared/agent-session/agent-session-conversation-outline'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
@@ -19,9 +13,7 @@ export const NATIVE_CHAT_RAIL_ROOMY_TICKS = 20
 const RAIL_TIGHT_PITCH_PX = 7
 const RAIL_VIEWPORT_SHARE = 0.7
 
-/** How many ticks the rail may draw. A tick is the only way to its message, so
- *  the rail packs as many as a share of the viewport holds before sampling any
- *  away: a rail taller than that cannot be read at a glance. */
+/** Fit ticks within the viewport share before sampling; never shrink below roomy capacity. */
 export function nativeChatRailTickCapacity(viewportHeight: number): number {
   return Math.max(
     NATIVE_CHAT_RAIL_ROOMY_TICKS,
@@ -31,8 +23,7 @@ export function nativeChatRailTickCapacity(viewportHeight: number): number {
 
 export type NativeChatRailItem = {
   id: string
-  /** Index into the slot list, i.e. the virtualizer's own index. Null while the
-   *  message is known only from the outline: older history that is not loaded. */
+  /** Virtualizer slot index, or null for unloaded outline-only history. */
   slotIndex: number | null
   /** Preview prose, whitespace collapsed. Empty when the message is images only. */
   text: string
@@ -52,17 +43,13 @@ export type NativeChatRailOutlineEntry = {
   turnKey?: string
 }
 
-/** The transcript's rows and each one's turn, as the slots are built from them:
- *  before folding, so a folded turn still has its reply to read. */
+/** Read turn rows before folding so hidden activity still supplies reply previews. */
 export type NativeChatRailTurnRows = {
   messages: readonly NativeChatMessage[]
   turnKeys: readonly (string | undefined)[]
 }
 
-/** What the agent answered a rail item's turn with, read when its preview opens:
- *  carried on every item, a streaming reply would rebuild the rail on each frame.
- *  Loaded rows are authoritative for the turns they hold, including the tail of a
- *  turn whose prompt is no longer loaded; the host's reply covers the rest. */
+/** Resolve replies only on preview to avoid rebuilding ticks on every stream frame; loaded turn tails outrank host previews. */
 export function nativeChatRailReplyPreview(
   { messages, turnKeys }: NativeChatRailTurnRows,
   items: readonly NativeChatRailItem[],
@@ -70,8 +57,7 @@ export function nativeChatRailReplyPreview(
 ): string {
   const row = messages.findIndex((message) => message.id === id)
   const item = items.find((candidate) => candidate.id === id)
-  // An unloaded prompt is its turn's key unless the host names another: a steer's
-  // turn is the one it was sent into.
+  // Unloaded prompts default to their own turn; steers use the host’s opener key.
   const turnKey = row === -1 ? (item?.turnKey ?? id) : turnKeys[row]
   const loaded =
     turnKey === undefined
@@ -86,9 +72,7 @@ export function buildNativeChatRailItems(
 ): readonly NativeChatRailItem[] {
   const items: NativeChatRailItem[] = []
   for (const [slotIndex, slot] of slots.entries()) {
-    // A send a Stop took back is no tick, as the host's outline of older history leaves it
-    // out. Nor is a subagent's prompt, drawn while its section is open: the rail maps
-    // the conversation, and must not change with what the reader has expanded.
+    // Exclude withdrawn sends and subagent prompts so rail contents do not depend on section expansion.
     if (
       slot.kind !== 'message' ||
       slot.depth !== 0 ||
@@ -114,8 +98,7 @@ export function buildNativeChatRailItems(
     : items
 }
 
-/** Outline entries first, then the loaded items, so the rail maps the whole thread.
- *  A loaded item replaces its outline entry: it carries the slot a jump needs. */
+/** Merge outline then loaded items, replacing outline copies with jump-capable slot identities. */
 export function mergeNativeChatRailOutline(
   outline: readonly NativeChatRailOutlineEntry[] | null,
   loaded: readonly NativeChatRailItem[]
@@ -133,10 +116,7 @@ export function mergeNativeChatRailOutline(
   return unloaded.length === 0 ? loaded : [...unloaded, ...loaded]
 }
 
-/** Evenly spaced ticks across the whole thread, always including both ends and
- *  the kept ones: the tick the reader is on, and any they are previewing or have
- *  focused. Keeping the ends fixed is what makes the rail read as a map of the
- *  conversation rather than a window onto part of it. */
+/** Sample evenly while keeping both ends, the active tick and every focused/previewed tick. */
 export function selectNativeChatRailTicks({
   items,
   keepIds = [],
@@ -168,8 +148,7 @@ export function selectNativeChatRailTicks({
       continue
     }
     sampled.add(keep)
-    // Drop the nearest neighbour that is not itself kept, never an end: losing one
-    // would make the rail claim the thread starts or stops somewhere it doesn't.
+    // Evict only unkept interior neighbors so sampling cannot imply a false thread start/end.
     let evict: number | null = null
     let evictDistance = Number.POSITIVE_INFINITY
     for (const index of sampled) {

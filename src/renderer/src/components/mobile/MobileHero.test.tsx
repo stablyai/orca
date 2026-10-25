@@ -400,8 +400,6 @@ describe('HeroFlow height', () => {
     expect(field).toHaveAttribute('data-id', 'mobile-hero-machine-name')
     const qr = screen.getByRole('img', { name: 'Pairing QR' })
     expect(field.compareDocumentPosition(qr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // Why: the field lives inside the copy cell, so the web client, where it renders nothing,
-    // leaves no empty grid track behind.
     expect(field.parentElement).toHaveClass('mp-pairing-copy')
     expect(field).toHaveClass('mp-pairing-machine')
   })
@@ -478,8 +476,6 @@ describe('HeroFlow height', () => {
     }
     render(<MobileHeroPairingStep {...props} />)
     expect(screen.getByText('Network')).toBeVisible()
-    // Why: a trigger here could not collapse the pinned-open row, so it would be
-    // a dead control advertising aria-expanded it does not own.
     expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
   })
 })

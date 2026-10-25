@@ -6,7 +6,7 @@ import { resolveComposerManualBranchNameChange } from '../../../src/shared/compo
 import { resolveGitHubWorkItemIdentity } from '../../../src/shared/new-workspace/github-work-item-identity'
 import { getForkPushWarning } from '../../../src/shared/new-workspace/fork-push-warning'
 import type { RpcClient } from '../transport/rpc-client'
-import type { JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import {
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
@@ -48,12 +48,10 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
   const [reuseSelectedBranch, setReuseSelectedBranch] = useState(false)
   const [forkPushWarning, setForkPushWarning] = useState<string | null>(null)
   const [resolvingBase, setResolvingBase] = useState(false)
-  // Set when the "Create branch <name>" row is picked, so the typed name (which
-  // may contain slashes) is kept verbatim as the git branch (folder is sanitized).
+  // New-by-name preserves the typed git branch, including slashes; only the folder is sanitized.
   const [branchCreateIntent, setBranchCreateIntent] = useState(false)
 
   const branchSelectionRef = useRef<{ refName: string; localBranchName: string } | null>(null)
-  // Guards async base resolution: only the latest selection applies its result.
   const resolveTokenRef = useRef(0)
 
   const { name, setName, setNameState, lastAutoNameRef, applyAutoName, isNameAutoManaged } =
@@ -66,14 +64,10 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     setReuseEligibleBranch(null)
     setReuseSelectedBranch(false)
     setForkPushWarning(null)
-    // Why: a superseding selection bumps the resolve token, so an in-flight base
-    // resolve's token-gated finally can no longer clear this — reset it here so
-    // resolvingBase never sticks true after switching sources.
+    // Superseding the token retires the old finally, so clear resolvingBase here to avoid a stuck spinner.
     setResolvingBase(false)
   }, [])
 
-  // Applies an async PR/MR base resolution guarded by the current token so only
-  // the latest selection wins; failures clear the base and surface the error.
   const runBaseResolve = useCallback(
     (token: number, resolve: Promise<ComposerHostedBase>) => {
       setResolvingBase(true)
@@ -101,7 +95,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     [onError]
   )
 
-  // A cross-repo selection can precede the selectedRepoId update.
+  // Cross-repo selection can precede selectedRepoId committing.
   const selectHostedItem = useCallback(
     (args: {
       item: {
@@ -178,12 +172,11 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     [selectHostedItem]
   )
 
-  // Jira and Linear issues share the same naming and base-reset rules.
   const selectIdentifiedIssue = useCallback(
     (args: { linked: MobileLinkedWorkItem; suggested: string; identifier: string }) => {
       resolveTokenRef.current += 1
       setLinkedWorkItem(args.linked)
-      // A bare issue key is lookup text, so it can adopt the issue's name.
+      // Lookup-query text may adopt the resolved issue’s name.
       const identifierTyped =
         !linkedWorkItem && name.trim().toLowerCase() === args.identifier.toLowerCase()
       if (identifierTyped && args.suggested) {
@@ -243,8 +236,6 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     [name, worktreeBranches]
   )
 
-  // Picking "Create branch <name>": name the workspace and mark a new-branch
-  // intent so the typed (possibly slashy) name is kept verbatim as the git branch.
   const handleSmartCreateBranch = useCallback(
     (branchName: string) => {
       resolveTokenRef.current += 1

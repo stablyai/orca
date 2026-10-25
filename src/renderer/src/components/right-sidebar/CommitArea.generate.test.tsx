@@ -105,7 +105,6 @@ describe('CommitArea AI generation', () => {
 
     const button = buttonByLabel(markup, 'Generate commit message with AI')
     expect(hasDisabledAttribute(button)).toBe(false)
-    // Why: single Radix tooltip only — native title removed to avoid duplicate tooltips.
     expect(button).not.toContain('title=')
   })
 

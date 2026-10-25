@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
@@ -77,14 +77,12 @@ async function openHost(): Promise<void> {
     claimKeyId: 'key',
     now: () => clock,
     mintSpawnToken: () => `spawn-${acquisitions}`,
-    // The owners a restarted host finds died with the process that started them, unless a test says otherwise.
     probeOwner: async () => ownerProbe
   })
   hosts.push(host)
 }
 
-/** A crash and relaunch: the next host opens what the dying one had written, and nothing after.
- *  `olderBuild` edits that state first, as an older build would have left it. */
+/** Relaunch over crash-time persisted state, optionally converted to an older build’s shape. */
 async function restartHost(
   olderBuild?: (persisted: PersistedTestAgentSessionStore) => void
 ): Promise<void> {
@@ -131,7 +129,7 @@ beforeEach(async () => {
           linkId: `link-${acquisitions}`,
           mintedAtFence: input.fence,
           observedAt: HOST_TEST_NOW,
-          // A start with no thread to resume creates one, whatever its fence.
+          // A missing resume handle creates a thread even at a later fence.
           origin:
             input.fence > 1 && input.identity.providerHandle
               ? ('resumed' as const)

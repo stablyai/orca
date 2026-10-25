@@ -1,6 +1,4 @@
-// One space after a bracketed image paste so later typed/sent text cannot glue
-// onto the path (`…pngadd` → `…png add`). Desktop terminal drops already do this
-// when an image is followed by a non-image path.
+// Separate later text from pasted image paths (pngadd → png add), matching desktop mixed-path drops.
 export const IMAGE_PASTE_FOLLOWING_TEXT_SEPARATOR = ' '
 
 export function separateImagePasteFromFollowingText(

@@ -1,20 +1,16 @@
-/**
- * A move the host's server refuses because it already holds a different copy of something this
- * desktop moves. Retrying never clears that, so the connect names what conflicts and the way out.
- */
+/** Name conflicting server-owned state and recovery steps; retries cannot resolve different copies. */
 const CONFLICT =
   /orcad_migration_(repository_path|repository_id|project_group_id|folder_workspace_id|dormant_id|dormant_focus|client_state|close_intent_destination|snapshot_destination)_conflict(?::(.+))?/
 
 const LINKED_PROJECT_TERMINALS = /orcad_migration_linked_project_terminals:(.+)/
 const UNOWNED_TERMINALS = /orcad_migration_linked_project_unowned_terminals:(.+)/
 
-/** A link refused only because a bridged relay terminal runs in that project; the bridge serves it. */
 export function isBridgedTerminalLinkConflict(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return LINKED_PROJECT_TERMINALS.test(message) || UNOWNED_TERMINALS.test(message)
 }
 
-/** Null for anything that is not such a conflict, including a transient staged claim. */
+/** Exclude transient staged claims from permanent-conflict guidance. */
 export function orcadMigrationConflictGuidance(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error)
   const terminals = LINKED_PROJECT_TERMINALS.exec(message)

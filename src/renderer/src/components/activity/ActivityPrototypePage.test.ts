@@ -48,8 +48,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
           `00000000-0000-4000-8000-${String(paneIndex + 1).padStart(12, '0')}`
         )
         tabs.push(makeTabWithIds(tabId, worktree.id, `Agent ${paneIndex}`))
-        // Why: later pane indexes are older, so the pre-fix global 80-event cap
-        // would drop the final panes entirely when every pane had five events.
+        // Older final panes expose the old global-cap bug when every pane contributes five events.
         const newestTimestamp = 100_000 - paneIndex * 1_000
         entries[paneKey] = {
           state: 'done',

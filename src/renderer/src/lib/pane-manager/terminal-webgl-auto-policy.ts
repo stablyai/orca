@@ -87,8 +87,7 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
   }
 
   if (readRendererDisplayServer() === 'wayland') {
-    // Why: #5319 can wedge terminal input during xterm WebGL context creation
-    // on Linux Wayland before xterm reports a recoverable context-loss event.
+    // Linux Wayland context creation can wedge input before xterm emits recoverable context loss (#5319).
     cachedDecision = {
       allowWebgl: false,
       reason: 'linux-wayland',
@@ -110,8 +109,7 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
   }
 
   if (!rendererInfo.hasRendererInfo) {
-    // Why: the Linux corruption path can leave WebGL alive while glyphs are bad;
-    // without renderer identity we cannot distinguish hardware from software GL.
+    // Corrupted Linux glyphs can coexist with live WebGL; record renderer identity to distinguish hardware/software GL.
     cachedDecision = {
       allowWebgl: false,
       reason: 'linux-renderer-unavailable',

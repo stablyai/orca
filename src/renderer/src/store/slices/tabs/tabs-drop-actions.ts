@@ -1,7 +1,7 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TabGroup } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { isPaneColumnSplitDropNoOp } from '../pane-column-split-drop-no-op'
+import { isPaneColumnSplitDropNoOp } from '../../../../../shared/workspace-layout/pane-column-split-drop-no-op'
 import {
   collapseGroupLayout,
   buildSplitNode,

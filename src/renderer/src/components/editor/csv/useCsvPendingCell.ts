@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { registerPendingEditorFlush } from '../editor-pending-flush'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../editor-autosave'
+import { isEditorSavedEventFor } from '../editor-saved-event-view'
 import type { CsvTextDocument } from './csv-text-document'
 import { editCsvTextCells } from './csv-text-cell-edits'
 import type { CsvCellEditSession } from './csv-grid-interaction'
@@ -53,8 +54,7 @@ export function useCsvPendingCell({
       if (
         typeof detail !== 'object' ||
         detail === null ||
-        !('fileId' in detail) ||
-        detail.fileId !== fileId ||
+        !isEditorSavedEventFor(detail, fileId) ||
         !('content' in detail)
       ) {
         return
@@ -80,7 +80,7 @@ export function useCsvPendingCell({
   )
 }
 
-/** Writes the cell being edited into the draft, past the preview limits commit enforces. */
+/** Preserve active cell text as a draft even when normal commit refuses preview limits. */
 function preservePendingCell(
   editingRef: RefObject<CsvCellEditSession | null>,
   snapshot: { document: CsvTextDocument | null; onContentChange?: (content: string) => void }

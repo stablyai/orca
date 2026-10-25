@@ -12,10 +12,7 @@ type InPlaceTabState = Pick<
   | 'unifiedTabsByWorktree'
 >
 
-/**
- * A restored tab that only changes host inside its own workspace keeps its group, position and
- * focus; only its ids change. The cross-workspace move would append it to a group as a new tab.
- */
+/** Reown inside a workspace by ID change only, preserving group/order/focus; cross-workspace moves append as new tabs. */
 export function rekeyRestoredEditorTabsInPlace(
   s: InPlaceTabState,
   worktreeId: string,

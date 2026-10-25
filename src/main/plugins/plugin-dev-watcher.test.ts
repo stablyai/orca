@@ -4,12 +4,12 @@ import type * as Fs from 'node:fs'
 import { mkdir, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { subscribeViaWatcherProcess } from '../ipc/parcel-watcher-process'
+import { subscribeViaWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks
-} from '../ipc/parcel-watcher-process-subscription'
-import type { WatcherProcessSubscribeOptions } from '../ipc/parcel-watcher-process-protocol'
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
+import type { WatcherProcessSubscribeOptions } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
 import {
   createAliasedWatcherRoot as createNativeAliasedWatcherRoot,
   removeAliasedWatcherRoot,
@@ -18,7 +18,9 @@ import {
 import { PluginDevWatcher } from './plugin-dev-watcher'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 
-vi.mock('../ipc/parcel-watcher-process', () => ({ subscribeViaWatcherProcess: vi.fn() }))
+vi.mock('../ipc/filesystem/watcher-process/parcel-watcher-process', () => ({
+  subscribeViaWatcherProcess: vi.fn()
+}))
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof Fs>('node:fs')
   return { ...actual, statSync: vi.fn(actual.statSync) }
@@ -38,7 +40,7 @@ type PluginWatchSubscription = {
 
 const devPath = resolve('plugins', 'demo')
 
-/** The catch-up refresh a live subscription schedules; later counts start after it. */
+/** Exclude the subscription's initial catch-up from later refresh counts. */
 async function flushCatchUpRefresh(refresh: ReturnType<typeof vi.fn>): Promise<void> {
   await vi.advanceTimersByTimeAsync(300)
   expect(refresh).toHaveBeenCalledOnce()
@@ -640,7 +642,6 @@ describe('PluginDevWatcher', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     await vi.waitFor(() => expect(subscribeMock).toHaveBeenCalledTimes(2))
     await vi.advanceTimersByTimeAsync(300)
-    // The rebind refresh, then the replacement root's one catch-up.
     expect(refresh).toHaveBeenCalledTimes(2)
     expect(root.unsubscribe).toHaveBeenCalledOnce()
     expect(subscriptions.map((item) => ({ path: item.path, options: item.options }))).toEqual([

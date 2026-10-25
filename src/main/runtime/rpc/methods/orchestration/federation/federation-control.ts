@@ -90,9 +90,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
-      // Why `=== 'exited'` rather than `!== 'live'`: the other non-live
-      // statuses are already covered by the two guards, and an unverifiable
-      // terminal is still readable — losing stop-contact is not an exit.
+      // Only exited proves death; an unverifiable terminal may still be readable after stop-contact loss.
       if (!observation.exact || !observation.terminal || observation.status === 'exited') {
         throw new OrchestrationError(
           'worker_identity_changed',

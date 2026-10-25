@@ -14,13 +14,13 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionLaunchCancelledError,
   type StructuredAgentLaunchReceipt
-} from './structured-agent-session-launch-recovery'
+} from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners,
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
@@ -71,10 +71,7 @@ function repliesFor(state: StructuredLaunchState): Map<string, OptionReply> {
   return replies
 }
 
-/**
- * Records a pick made while the launch has no fence to send it against. Null once the launch
- * has published or is gone: the pick then goes through the session like any other.
- */
+/** Hold picks only before publication; published/missing launches use the normal session option path. */
 export function holdStructuredAgentSessionLaunchOption(
   sessionId: string,
   id: string,
@@ -180,8 +177,7 @@ export function holdStructuredLaunchCreatePicks(
   createHeld.set(state, held)
 }
 
-/** Selections included in the durable create are already the host's option intent; a pick the
- *  create carried in another form settles too, and a newer pick stays held. */
+// Durable-create picks already count as host intent; settle carried values while retaining newer choices.
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
   options: Readonly<Record<string, string>>
@@ -193,11 +189,7 @@ export function settleStructuredLaunchCreateOptions(
   }
 }
 
-/**
- * Applies the picks held during launch against the create receipt's fence, model first so an
- * effort lands under the model it was picked against, until none is left. A refused pick is
- * reported to its picker and never keeps the launch from publishing.
- */
+/** Apply held picks against the create fence until drained, model before effort. Report refusals to pickers without blocking launch publication. */
 export async function applyStructuredLaunchHeldOptions(
   state: StructuredLaunchState,
   receipt: StructuredAgentLaunchReceipt

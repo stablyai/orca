@@ -23,8 +23,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -404,7 +404,6 @@ describe('CodexAccountService config sync', () => {
       createRuntimeHome() as never
     )
 
-    // The orphan pending attempt wedges the target-scoped default reset until removal.
     await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
 
     await service.removeAccount('account-1')

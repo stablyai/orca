@@ -41,9 +41,7 @@ type WorktreeTitleInlineRenameProps = {
   wrapTitle?: boolean
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
-  // Why: lets a parent (e.g. the workspace.rename shortcut via WorktreeCard)
-  // open the editor imperatively. The parent clears its trigger in
-  // onBeginEditingConsumed so the request fires exactly once.
+  // Parents request editing once and clear the trigger through onBeginEditingConsumed.
   beginEditing?: boolean
   onBeginEditingConsumed?: () => void
 }
@@ -94,12 +92,10 @@ export function WorktreeTitleInlineRename({
       removeTitleResizeListenerRef.current?.()
       removeTitleResizeListenerRef.current = null
 
-      // Why: rename can resolve after this inline title unmounts; the rendered
-      // root owns that stale-write guard without a mount-only Effect.
+      // Track rendered-root attachment so rename completions cannot update an unmounted title.
       mountedRef.current = node !== null
       titleElementRef.current = node
-      // Why: wrapped titles render in full and never truncate, so skip the measure +
-      // ResizeObserver entirely — for that mode it could only churn unused state.
+      // Wrapped titles cannot truncate; skip measurements and observers that would only churn unused state.
       if (!node || editingRef.current || wrapTitle) {
         measureTitleTruncated(null)
         return
@@ -114,8 +110,7 @@ export function WorktreeTitleInlineRename({
         return
       }
 
-      // Why: compact sidebar width changes can make a readable title become
-      // clipped; the tooltip should track the rendered geometry, not just text.
+      // Width changes can clip unchanged text; track rendered geometry for the tooltip.
       const observer = new ResizeObserver(updateTitleTruncated)
       observer.observe(node)
       titleResizeObserverRef.current = observer
@@ -123,11 +118,9 @@ export function WorktreeTitleInlineRename({
     [measureTitleTruncated, wrapTitle]
   )
 
-  // Why: remounts the rendered title so truncation is measured again. The editor must
-  // not share it — an unread flip would remount the input and reselect what was typed.
+  // Re-key only the display title for measurement; sharing the key would remount/reselect an active editor on unread changes.
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
-  // Why: the sidebar row needs a text-only editor to avoid layout jumps; the
-  // hovercard can use a compact field that reads more like native rename UI.
+  // Inline rows need text-only editing to avoid layout shifts; hovercards can afford the field style.
   const editingInputClassName =
     editingPresentation === 'field'
       ? 'h-6 rounded-sm border border-input bg-input/40 px-1.5 py-0 shadow-xs selection:bg-[Highlight] selection:text-[HighlightText] focus-visible:border-ring focus-visible:ring-[1px] focus-visible:ring-ring/50 dark:bg-input/30'
@@ -145,13 +138,12 @@ export function WorktreeTitleInlineRename({
         measureTitleTruncated(null)
       }
       setEditing(nextEditing)
-      // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
+      // Notify synchronously so parents disable drag before the next editing commit.
       onEditingChange?.(nextEditing)
     },
     [measureTitleTruncated, onEditingChange]
   )
 
-  // Why: double-click and the shortcut both open here, so neither can skip a step.
   const openRenameEditor = useCallback(() => {
     setValue(displayName)
     setEditingMode(true)
@@ -163,13 +155,10 @@ export function WorktreeTitleInlineRename({
       return
     }
     input.focus()
-    // Why: double-click rename should make replacing the workspace title a one-keystroke action.
     input.select()
   }, [])
 
-  // Why: open the editor when a parent requests it (the workspace.rename
-  // shortcut). Always consume the request so the parent's trigger can't linger;
-  // skip the actual open when disabled or already editing.
+  // Always consume shortcut requests, including disabled/already-editing states, so parent triggers cannot linger.
   useEffect(() => {
     if (!beginEditing) {
       return
@@ -246,8 +235,7 @@ export function WorktreeTitleInlineRename({
       if (emojiInput.handleKeyDown(event)) {
         return
       }
-      // Why: an Enter that only confirms a CJK IME candidate must not commit the
-      // rename; wait for a non-composition Enter.
+      // Composition Enter confirms an IME candidate; rename requires a later non-composition Enter.
       if (isImeCompositionKeyDown(event)) {
         return
       }

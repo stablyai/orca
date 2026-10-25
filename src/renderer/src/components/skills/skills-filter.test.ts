@@ -37,8 +37,7 @@ describe('skills filtering', () => {
       })
     ]
 
-    // Why: the owning agent comes from the root a skill was found in, not from
-    // its provider list, which flattens ten agents into "agent-skills".
+    // Root provenance preserves individual agent ownership that coarse provider tags collapse.
     const agentByRootPath = new Map([
       ['/home/dev/.codex/skills', 'codex'],
       ['/repo/.claude/skills', 'claude']

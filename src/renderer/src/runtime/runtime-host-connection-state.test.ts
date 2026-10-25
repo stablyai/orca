@@ -30,8 +30,7 @@ const windowClosedStatus = makeStatus({
 
 describe('runtime host connection state', () => {
   it('counts connected remote servers as connected hosts', () => {
-    // Why: "connected" = attached/reachable (active-agnostic), matching Settings.
-    // There is no separate "available" state — a reachable host is just Connected.
+    // Connected means reachable, independent of active/default host; there is no separate available state.
     expect(runtimeStatusForOverall('connected')).toBe('connected')
     expect(isConnectedRuntimeHostState('connected')).toBe(true)
   })
@@ -56,8 +55,7 @@ describe('runtime host connection state', () => {
   })
 
   it('still counts a workspace-window-closed remote server as a connected host', () => {
-    // Why: the transport is healthy, so demoting it to disconnected would be a lie
-    // in the other direction — only the wording changes (#12350).
+    // Healthy transport remains connected; degraded runtime changes only wording (#12350).
     expect(runtimeStatusForOverall('workspace-window-closed')).toBe('connected')
     expect(isConnectedRuntimeHostState('workspace-window-closed')).toBe(true)
   })
@@ -136,8 +134,7 @@ describe('runtime host connection state', () => {
   })
 
   it('reports a cleanly closed control channel as disconnected even with no error', () => {
-    // Why: a clean close (server restart, host sleep, network blip) leaves lastError null.
-    // Requiring an error string to call it disconnected paints a dead host green.
+    // Clean close can leave lastError null; requiring an error paints dead hosts green.
     expect(
       runtimeHostConnectionState({
         hasStatusEntry: true,
@@ -147,8 +144,7 @@ describe('runtime host connection state', () => {
   })
 
   it('does not call a half-open handshake connected', () => {
-    // Why: the socket is up but the runtime has not completed ready/auth, so nothing
-    // can run there yet. Green here is the same lie as a closed channel reading connected.
+    // Socket without completed ready/auth cannot run work and must not look connected.
     for (const state of ['awaiting_ready', 'awaiting_authenticated'] as const) {
       expect(
         runtimeHostConnectionState({
@@ -264,8 +260,7 @@ describe('snapshot transport evidence', () => {
     transport
   })
 
-  // Enumerated rather than spot-checked: the destructive verdict must be reachable
-  // only from transport evidence that actually proves the host is gone.
+  // Enumerate destructive verdicts so only evidence proving lost transport can reach them.
   it.each([
     ['disconnected', 'unavailable', 'reconnecting'],
     ['disconnected', 'checking', 'reconnecting'],
@@ -276,8 +271,7 @@ describe('snapshot transport evidence', () => {
     ['unknown', 'checking', 'checking'],
     // Was 'disconnected': a transport still being established fell through to the default.
     ['connecting', 'unavailable', 'checking'],
-    // Deliberately unchanged: 'unknown' means no transport was ever attempted, which is the
-    // permanent state of an unreachable paired host. See the affordance test below.
+    // Unknown means never attempted; unreachable paired hosts can remain here permanently. Preserve Connect affordance.
     ['unknown', 'unavailable', 'disconnected']
   ] as const)('reads transport=%s verification=%s as %s', (transport, verification, expected) => {
     expect(
@@ -288,10 +282,7 @@ describe('snapshot transport evidence', () => {
     ).toBe(expected)
   })
 
-  // A paired host that is simply switched off never gets a shared-control connection, so its
-  // transport stays 'unknown' for the whole session. Calling that 'checking' withdrew the row's
-  // Connect action (RuntimeHostStatusRow returns no label for it) and held the status-bar
-  // segment in 'connecting', leaving the user a permanent spinner and nothing to click.
+  // Powered-off paired hosts stay unknown forever; checking would hide Connect and leave a permanent status-bar spinner.
   it('keeps a never-contacted host actionable after its probe fails', () => {
     const state = runtimeHostConnectionStateForEntry({
       status: null,

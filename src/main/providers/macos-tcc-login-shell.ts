@@ -15,29 +15,18 @@ const MACOS_PRINTF_PATH = '/usr/bin/printf'
 const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
 const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
-// Why: the death-watch probe runs off the spawn path, so it can afford a bound
-// that outlasts a PAM stack answering slowly rather than misreading it as a hang.
+// Off the spawn path, the death watch can outwait a slow PAM stack without delaying terminal creation.
 const LOGIN_SESSION_WATCH_PROBE_TIMEOUT_MS = 4_000
 const LOGIN_PREFLIGHT_MARKER = 'ORCA_LOGIN_PREFLIGHT_OK'
 const LOGIN_PREFLIGHT_MAX_BUFFER_BYTES = 1024
 const LOGIN_PREFLIGHT_RETRY_BASE_MS = 5_000
 const LOGIN_PREFLIGHT_RETRY_MAX_MS = 5 * 60_000
-// Why: daemons live for weeks across app updates, so a rejected verdict must not
-// disable TCC attribution forever; re-verify on a slow cadence (#9756).
+// Long-lived daemons must recheck rejected PAM capability rather than disable attribution forever (#9756).
 const LOGIN_PREFLIGHT_REJECTED_REVALIDATE_MS = 30 * 60_000
 
-/**
- * Env escape hatch to force the plain (unwrapped) spawn. Set to `1`/`true` if a
- * user's environment misbehaves under login(1); terminals fall back to today's
- * direct-spawn behavior.
- */
 const DISABLE_ENV_VAR = 'ORCA_DISABLE_MACOS_LOGIN_SHELL'
 
-/**
- * Result of one PAM probe. `conclusive` marks a real PAM verdict (accept or
- * reject) that may be cached; an inconclusive probe (our own timeout/SIGKILL,
- * maxBuffer, or spawn error) proves nothing about PAM and must not stick.
- */
+// Cache only actual PAM verdicts; timeout, output-cap and spawn failures remain retryable.
 let cachedLoginPreflightResult: boolean | null = null
 let cachedRejectionAtMs: number | null = null
 let loginPreflightInFlight: Promise<LoginPreflightOutcome> | null = null
@@ -58,9 +47,7 @@ function loginPreflightRetryDelayMs(failureCount: number): number {
   )
 }
 
-// Fidelity limit: the probe runs over pipes while production shells run under a
-// real PTY, so a tty-sensitive PAM stack could diverge. It fails safe — a probe
-// pass with a prod failure only degrades to today's direct spawn (no wrapper).
+// Pipes can differ from production PTYs; later wrapper spawn failures still degrade to a direct shell.
 async function runLoginPreflight(
   username: string,
   accountHome: string,
@@ -71,8 +58,7 @@ async function runLoginPreflight(
     const result = await runProcess({
       program: MACOS_LOGIN_PATH,
       args: ['-flpq', username, MACOS_PRINTF_PATH, LOGIN_PREFLIGHT_MARKER],
-      // Why: detached daemons can outlive their launch worktree. The PAM
-      // probe must not inherit a deleted cwd before PTY spawn repairs it.
+      // Detached daemons may outlive their worktree; probe from the account home.
       cwd: accountHome,
       maxOutputBytes: LOGIN_PREFLIGHT_MAX_BUFFER_BYTES,
       signal,
@@ -87,8 +73,7 @@ async function runLoginPreflight(
     if (result.code !== 0) {
       return { ok: false, conclusive: true, reason: 'rejected' }
     }
-    // login(1) can return zero after an EOF-driven failed prompt, so only the
-    // requested child program's output plus a clean exit proves PAM accepted it.
+    // login(1) can return zero after failed EOF prompting; require clean exit plus child marker.
     return result.stdout === LOGIN_PREFLIGHT_MARKER
       ? { ok: true, conclusive: true, reason: 'accepted' }
       : { ok: false, conclusive: true, reason: 'rejected' }
@@ -157,12 +142,10 @@ function loginPreflightSucceeds(
   }
   if (!loginPreflightInFlight) {
     const cacheEpoch = loginPreflightCacheEpoch
-    // Why: simultaneous pane restores share one PAM child instead of multiplying
-    // subprocesses at exactly the point terminal startup is already busiest.
+    // Coalesce pane restores so startup bursts share one PAM subprocess.
     loginPreflightInFlight = runLoginPreflight(username, accountHome).then(async (pipeOutcome) => {
       const outcome = await verifyRejectedLoginPreflightUnderPty(username, accountHome, pipeOutcome)
-      // Why: cache only a conclusive PAM verdict; a killed/timed-out probe is
-      // environmental and must be retried next spawn, not stuck forever (F1).
+      // Environmental failures cannot become cached PAM verdicts; retry through bounded backoff.
       const mayUpdateCache = !loginSessionProbeInFlight && cacheEpoch === loginPreflightCacheEpoch
       if (outcome.conclusive && mayUpdateCache) {
         cacheConclusiveLoginPreflightOutcome(outcome)
@@ -176,8 +159,7 @@ function loginPreflightSucceeds(
       if (!outcome.ok) {
         console.warn('[pty] macOS login(1) preflight failed; spawning shells directly')
       }
-      // Why: release the in-flight slot so an inconclusive probe can re-run on the
-      // next spawn instead of pinning every terminal to the degraded outcome.
+      // Release the in-flight slot so future spawns can retry inconclusive outcomes.
       loginPreflightInFlight = null
       return outcome
     })
@@ -185,19 +167,8 @@ function loginPreflightSucceeds(
   return loginPreflightInFlight
 }
 
-/**
- * Resolves the cached PAM capability check before a fresh PTY is spawned.
- * Accepted spawn verdicts stay cached unless the login-session watch observes
- * a newer state; rejected verdicts are re-verified after
- * {@link LOGIN_PREFLIGHT_REJECTED_REVALIDATE_MS}.
- * Callers await this at their async request boundary so existing terminals and
- * the Electron main thread remain responsive while login(1) runs.
- *
- * Returns the probe outcome when a probe actually ran this call, or `null` when
- * short-circuited (non-macOS, disabled, already cached, no login binary). The
- * daemon uses the return to emit a structured degrade record, since detached
- * daemons destroy stderr and never surface the console.warn above (F2).
- */
+/** Await asynchronously to keep main responsive; null means no probe ran.
+ * Rejections expire; accepted state changes through the health watch. Return outcomes for detached-daemon telemetry. */
 export async function prepareMacosTccLoginShell(): Promise<LoginPreflightOutcome | null> {
   if (process.platform !== 'darwin' || isDisabledByEnv()) {
     return null
@@ -239,15 +210,8 @@ export function resetMacosLoginShellPreflightForTests(): void {
   loginSessionAcceptedInProcess = false
 }
 
-/**
- * Fresh PAM probe for login-session death detection (#7936): bypasses the
- * cached verdict and the transient backoff, and writes any conclusive verdict
- * back into the cache — so a daemon whose login session died stops wrapping
- * spawns in `login(1)` (which would only mint "Login incorrect" zombies) even
- * before retirement completes. Escalates ambiguous probes—and negative probes
- * after this process accepted a login session—to the production-shaped PTY
- * oracle. Returns null when the wrapper doesn't apply.
- */
+/** Fresh death-watch check bypasses spawn cache/backoff and updates conclusive verdicts (#7936).
+ * Ambiguous results or rejection after prior acceptance require PTY confirmation; null means wrapping does not apply. */
 export async function probeMacosLoginSessionAlive(
   signal?: AbortSignal
 ): Promise<LoginPreflightOutcome | null> {
@@ -294,33 +258,12 @@ export async function probeMacosLoginSessionAlive(
   return outcome
 }
 
-/**
- * Wrap a macOS shell spawn in `/usr/bin/login -flpq <user> …` so terminal children
- * get their own TCC identity instead of collapsing into Orca's bundle id — signed
- * CLIs like `op` otherwise re-prompt every launch because tccd attributes the grant
- * to Orca and never persists it (#6996, #8985).
- *
- * A clean bash trampoline restores SHELL after login(1) overwrites it, then replaces
- * itself with the configured shell. Values stay positional so custom paths and
- * arguments are never interpreted as shell source.
- *
- * No-op off macOS, when already wrapped, when disabled via {@link DISABLE_ENV_VAR},
- * or when the login(1) PAM preflight rejects this process's user.
- */
-/**
- * Whether a PTY spawned on `file` reports its own child's exit status.
- *
- * login(1) forks the shell, waits, then exits with its own status — it forwards
- * neither the shell's exit code nor its signal. Proved with node-pty: a raw
- * `sh -c 'exit 42'` reports `{exitCode: 42}` and a self-SIGKILL reports
- * `{signal: 9}`, while the same commands behind this wrapper both report
- * `{exitCode: 0, signal: 0}`. Callers must not read a status from a wrapped
- * spawn — say `unknown` instead (STA-4536).
- */
+/** login(1) reports its own status, losing shell exit codes/signals; wrapped outcomes must be unknown (STA-4536). */
 export function hostReportsChildExitStatus(file: string): boolean {
   return file !== MACOS_LOGIN_PATH
 }
 
+/** login(1) gives signed terminal CLIs independent TCC grants; positional trampoline args cannot become shell source. */
 export function wrapShellSpawnForMacosTccAttribution(
   file: string,
   args: string[],
@@ -345,21 +288,19 @@ export function wrapShellSpawnForMacosTccAttribution(
   if (!username) {
     return { file, args }
   }
-  // Why: an unprepared or failed host must fail open to a usable direct shell;
-  // production fresh-spawn boundaries await prepareMacosTccLoginShell first.
+  // Unprepared/rejected hosts still need usable shells; fresh-spawn callers prepare asynchronously first.
   if (cachedLoginPreflightResult !== true) {
     return { file, args }
   }
 
   const shellEnvValue = env?.SHELL || file
-  // Why: Bash ignores --rcfile when argv[0] marks it as a login shell; Orca's
-  // rcfile already reproduces login startup and must remain the active wrapper.
+  // Login argv[0] disables Bash --rcfile; the Orca rcfile already implements login startup.
   const trampoline =
     basename(file).toLowerCase() === 'bash' && args.includes('--rcfile')
       ? DIRECT_SHELL_TRAMPOLINE
       : LOGIN_SHELL_TRAMPOLINE
 
-  // Why: -p blocks login(1)-preserved BASH_ENV and imported functions before the fixed trampoline runs.
+  // -p blocks inherited BASH_ENV and imported functions before the fixed positional trampoline.
   return {
     file: MACOS_LOGIN_PATH,
     args: [

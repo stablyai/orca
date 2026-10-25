@@ -37,9 +37,9 @@ export type { ProfileStateDocument } from './profile-state-document-validation'
 
 export type ImportProfileStateOptions = {
   now?: () => number
-  /** Hash of the exact legacy JSON bytes accepted by this import. */
+  /** Hash exact accepted legacy bytes. */
   acceptedLegacyJsonHash?: string
-  /** Revision observed by the caller before constructing this replacement. */
+  /** Fence the revision observed before constructing the replacement. */
   expectedRevision?: number
 }
 
@@ -54,7 +54,7 @@ export type ProfileStateParsedSnapshot = {
   state: Record<string, unknown>
 }
 
-/** Import a complete JSON document set atomically into one profile database. */
+/** Atomically import a complete domain set. */
 export function importProfileStateJson(
   db: Database.Database,
   rawJson: string,
@@ -145,12 +145,11 @@ export function hashProfileStateJson(rawJson: string): string {
   return hashProfileStatePayload(rawJson)
 }
 
-/** Validate that retained legacy JSON is the exact export accepted by this database. */
 export function profileStateJsonMatchesAcceptance(db: Database.Database, rawJson: string): boolean {
   return readAcceptedProfileStateSnapshot(db, rawJson) !== undefined
 }
 
-/** Validate the retained JSON and return the same database snapshot used for acceptance. */
+/** Validate retained JSON and return the same snapshot that established acceptance. */
 export function readAcceptedProfileStateSnapshot(
   db: Database.Database,
   rawJson: string
@@ -182,7 +181,7 @@ function readAcceptedSnapshot<T extends { revision: number }>(
   })
 }
 
-/** Transfer independently validated values without constructing another whole-profile string. */
+/** Transfer validated values without another whole-profile serialization. */
 export function readProfileStateParsedSnapshot(db: Database.Database): ProfileStateParsedSnapshot {
   return withProfileStateReadSnapshot(db, () => {
     const revision = readProfileStateRevision(db)
@@ -197,12 +196,11 @@ export function readProfileStateParsedSnapshot(db: Database.Database): ProfileSt
   })
 }
 
-/** Export the row set as JSON accepted by the current loader. */
 export function exportProfileStateJson(db: Database.Database): string {
   return readProfileStateSnapshot(db).json
 }
 
-/** Read revision, rows, and their JSON projection under one SQLite snapshot. */
+/** Read revision and rows under one SQLite snapshot. */
 export function readProfileStateSnapshot(db: Database.Database): ProfileStateSnapshot {
   return withProfileStateReadSnapshot(db, () => {
     const revision = readProfileStateRevision(db)
@@ -210,9 +208,7 @@ export function readProfileStateSnapshot(db: Database.Database): ProfileStateSna
     return {
       revision,
       documents,
-      // Every payload was already hash- and JSON-validated above. Reusing the
-      // validated fragments avoids parsing and stringifying the full profile a
-      // second time before Store parses it at its domain boundary.
+      // Reuse validated fragments to avoid a full-profile parse/stringify before Store parses its domains.
       json: `{${documents
         .map((document) => `${JSON.stringify(document.domain)}:${document.payload}`)
         .join(',')}}`
@@ -220,7 +216,7 @@ export function readProfileStateSnapshot(db: Database.Database): ProfileStateSna
   })
 }
 
-/** Validate the complete snapshot without retaining state that recovery callers discard. */
+/** Validate without retaining payloads recovery callers discard. */
 export function validateProfileStateSnapshot(db: Database.Database): number {
   return withProfileStateReadSnapshot(db, () => {
     const revision = readProfileStateRevision(db)

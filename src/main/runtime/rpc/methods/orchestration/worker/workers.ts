@@ -7,6 +7,7 @@ import {
   readWorkerStartModeSettings
 } from '../../orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
+import { assertHelperStartScope, resolveWorkerStartRun } from './worker-start-authority'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -38,19 +39,21 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         callerEvidence: orchestrationCompatibilityEvidence,
         callerSession: orchestrationCaller
       })
-      const run = coordinator ? db.getCurrentRunForCoordinator(coordinator) : undefined
-      if (!run || (params.run && params.run !== run.id)) {
-        throw new OrchestrationError(
-          'consumer_fenced',
-          'worker-start requires the coordinator terminal currently bound to the Task Run.'
-        )
-      }
+      const { run, helperCreator } = resolveWorkerStartRun(runtime, {
+        coordinator,
+        from: params.from,
+        callerSession: orchestrationCaller,
+        runId: params.run
+      })
       const existingTask = params.task ? db.getTask(params.task) : undefined
       if (params.task && (!existingTask || existingTask.run_id !== run.id)) {
         throw new OrchestrationError(
           'task_not_found',
           `Task ${params.task} was not found in Run ${run.id}.`
         )
+      }
+      if (helperCreator) {
+        assertHelperStartScope(db, helperCreator, { task: existingTask, params })
       }
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
       const mode = decideWorkerStartMode({
@@ -66,8 +69,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         )
       }
       if (params.on) {
-        // A remote worker is always a terminal agent; the mode receipt rides along so the
-        // coordinator still learns why its structured default did not apply.
+        // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
         const receipt = await startFederatedWorker({
           params,
           runtime,
@@ -88,7 +90,8 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         callerSession: orchestrationCaller,
         existingTask,
         orchestrationMutation,
-        mode
+        mode,
+        helperCreator
       })
     }
   })

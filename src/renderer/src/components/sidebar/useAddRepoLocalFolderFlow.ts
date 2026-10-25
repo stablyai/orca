@@ -182,8 +182,7 @@ export function useAddRepoLocalFolderFlow({
           }
           await onGitRepoReady(repo.id, source, ownerOptions.executionHostId)
         } else {
-          // Why: folder repos skip the Git default-checkout handoff and activate
-          // their synthetic root workspace in the folder add flow.
+          // Folder projects activate their synthetic root through the add flow instead of Git checkout completion.
           closeModal()
         }
         return { status: 'completed', repo }

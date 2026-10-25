@@ -59,8 +59,7 @@ describe('createPanelWatchdog visibility parking', () => {
     vi.advanceTimersByTime(20_000)
     expect(sendPing).toHaveBeenCalledTimes(1)
 
-    // Real user input while the document still claims hidden proves the occlusion
-    // tracker is stale; the watchdog must start pinging again without a visibilitychange.
+    // Input proves hidden occlusion state is stale; resume pings without waiting for visibilitychange.
     document.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
     expect(sendPing).toHaveBeenCalledTimes(2)
 

@@ -1,7 +1,4 @@
-/**
- * The desktop's journal of one local WSL project move (mover design, section 4.4). Kept outside the
- * profile store, in its own directory, so a build that knows only SSH journals never reads one.
- */
+/** Keep local WSL move journals outside the profile store so SSH-only builds never read them (mover design §4.4). */
 import { z } from 'zod'
 import { parseOrcadMigrationManifest } from '../orcad-migration/orcad-migration-manifest-validation'
 import type {
@@ -26,7 +23,7 @@ export const WSL_MOVE_CUTOVER_PHASES = [
 
 export type WslMoveCutoverPhase = (typeof WSL_MOVE_CUTOVER_PHASES)[number]
 
-// Why not strict: a newer build's optional field must not make every journal unreadable here.
+// Accept newer optional fields without making journals unreadable.
 const WslMoveCutoverSchema = z.object({
   version: z.literal(WSL_MOVE_CUTOVER_VERSION),
   migrationId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),

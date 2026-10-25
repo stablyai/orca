@@ -1,7 +1,4 @@
-// A paired server's layout frames under the ids this desktop already gives that server's tabs (the
-// session.tabs mirror's), so a workspace moves between the two sources without a remount. The one
-// place server ids become desktop ids; layout.apply maps back through the same rules. Frames carry
-// no terminal handle: a pane binds the handle session.tabs gives its (host tab, leaf) surface.
+// Translate server layout IDs into existing mirror IDs without remount; layout.apply uses the inverse rules. Frames lack handles, so bind each (host tab, leaf) from session.tabs.
 
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -166,21 +163,25 @@ export function serverTabIdOf(desktopTabId: string): string {
   return isWebTerminalSurfaceTabId(desktopTabId) ? toHostSessionTabId(desktopTabId) : desktopTabId
 }
 
-/** A desktop editor tab's file id as the server knows it: its own file, owned by no environment. */
-function serverEditorEntityId(entityId: string, layout: PublishedWorkspaceLayout): string {
-  const file = layout.editorFiles.find(
+/** A desktop editor file id as the server knows it: its own file, owned by no environment; unchanged
+ *  when no record names it (`desktopEditorEntityId` then hands it back unchanged too). */
+export function serverEditorFileId(
+  fileId: string,
+  worktreeId: string,
+  files: readonly Pick<PublishedEditorFile, 'filePath' | 'runtimeEnvironmentId'>[]
+): string {
+  const file = files.find(
     (candidate) =>
-      ownedEditorFileId(candidate.filePath, layout.worktreeId, candidate.runtimeEnvironmentId) ===
-      entityId
+      ownedEditorFileId(candidate.filePath, worktreeId, candidate.runtimeEnvironmentId) === fileId
   )
-  return file ? ownedEditorFileId(file.filePath, layout.worktreeId, undefined) : entityId
+  return file ? ownedEditorFileId(file.filePath, worktreeId, undefined) : fileId
 }
 
-/**
- * A desktop-shaped workspace under the server's ids: the inverse of `serverLayoutForDesktop`, except
- * that an editor tab the server named by path comes back under the server's owned id for that file.
- * Panes keep no terminal: the desktop binds handles, which the server never takes.
- */
+function serverEditorEntityId(entityId: string, layout: PublishedWorkspaceLayout): string {
+  return serverEditorFileId(entityId, layout.worktreeId, layout.editorFiles)
+}
+
+/** Inverse desktop-to-server layout mapping; path-named editors return as server-owned file IDs. Clear pane handles: desktop binds them, server never accepts them. */
 export function desktopLayoutForServer(layout: PublishedWorkspaceLayout): PublishedWorkspaceLayout {
   return {
     ...layout,
@@ -218,15 +219,15 @@ export type ServerLayoutFrameTranslator = {
   rebind: (key: string) => WorkspaceLayoutRecordsFrame | null
   /** The workspaces the server's stream holds now. */
   keys: () => string[]
+  /** A desktop tab id as this server's latest frames name it; null when they hold no such tab. */
+  serverTabId: (key: string, desktopTabId: string) => string | null
+  /** A server tab id under desktop ids; unchanged when the frames hold no such tab. */
+  desktopTabId: (key: string, serverTabId: string) => string
   /** A workspace as the server publishes it, under the server's ids. */
   serverLayout: (key: string) => PublishedWorkspaceLayout | undefined
 }
 
-/**
- * Translates one server stream's frames in order. It keeps the server's copy of each workspace, so
- * a records frame is re-diffed under desktop ids: a record's key can depend on another record (a
- * group names terminal tabs by their kind), which one frame alone may not carry.
- */
+/** Retain server workspace copies and re-diff under desktop IDs; group/tab references depend on records a single delta may omit. */
 export function createServerLayoutFrameTranslator(
   environmentId: string,
   handleOf: (worktreeId: string) => ServerTerminalHandleOf
@@ -294,6 +295,15 @@ export function createServerLayoutFrameTranslator(
       }
     },
     keys: () => [...server.keys()],
+    // Both copies list the same tabs in the same order (serverLayoutForDesktop maps one to one).
+    serverTabId: (key, desktopTabId) => {
+      const index = desktop.get(key)?.layout.tabs.findIndex((tab) => tab.id === desktopTabId) ?? -1
+      return index < 0 ? null : (server.get(key)?.tabs[index]?.id ?? null)
+    },
+    desktopTabId: (key, serverTabId) => {
+      const index = server.get(key)?.tabs.findIndex((tab) => tab.id === serverTabId) ?? -1
+      return index < 0 ? serverTabId : (desktop.get(key)?.layout.tabs[index]?.id ?? serverTabId)
+    },
     serverLayout: (key) => server.get(key),
     rebind: (key) => {
       const layout = server.get(key)

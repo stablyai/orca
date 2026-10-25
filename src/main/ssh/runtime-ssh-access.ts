@@ -25,6 +25,9 @@ import {
 } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyRuntimeEnvironmentSshTunnel } from './runtime-ssh-access-verification'
 import { fingerprintRuntimeSshTarget } from './runtime-ssh-target-fingerprint'
+import { orcadTargetBlockerMessage } from './targets/ssh-target-orcad-claims'
+import { dependentStateSummary } from './targets/ssh-target-orcad-dependents'
+import type { OrcadMigrationBlocker } from '../../shared/orcad-migration/orcad-migration-preflight'
 
 type TargetClaims = ReturnType<typeof requireManagedOrcadInfrastructure>['claims']
 
@@ -40,6 +43,26 @@ function requireTarget(claims: TargetClaims, targetId: string): SshTarget & { ge
   return { ...target, generation }
 }
 
+// Give link-specific recovery steps; bare codes and host-conversion wording are unhelpful here.
+function sshAccessBlockerMessage(targetId: string, blocker: OrcadMigrationBlocker): string {
+  switch (blocker.code) {
+    case 'orcad_migration_dependent_state':
+      return `This SSH target is still used by saved Orca state: ${dependentStateSummary(blocker.dependencies)}. Remove it, or link SSH access through an SSH target with nothing saved.`
+    case 'orcad_migration_direct_ssh_repositories':
+    case 'orcad_migration_direct_ssh_folder_workspaces':
+      return 'This SSH target already has direct SSH projects. Remove them, or link SSH access through another SSH target.'
+    case 'orcad_migration_direct_ssh_terminal_leases':
+      return 'This SSH target still owns terminal sessions. Close them before linking SSH access.'
+    case 'orcad_migration_saved_port_forwards':
+      return 'This SSH target has saved port forwards. Remove them, or link SSH access through another SSH target.'
+    case 'orcad_migration_target_not_found':
+    case 'orcad_migration_target_owned':
+    case 'orcad_migration_owner_unrecorded':
+    case 'orcad_migration_dependency_unverifiable':
+      return orcadTargetBlockerMessage(targetId, blocker)
+  }
+}
+
 function requireAccessOnlyTarget(claims: TargetClaims, targetId: string, environmentId: string) {
   const target = requireTarget(claims, targetId)
   // Omitting the environment bypasses the same-owner shortcut and rechecks direct authority.
@@ -53,7 +76,9 @@ function requireAccessOnlyTarget(claims: TargetClaims, targetId: string, environ
         )
     )
   if (blockers.length) {
-    throw new Error(`SSH access cannot claim direct SSH authority: ${blockers[0].code}`)
+    throw new Error(
+      `SSH access cannot claim direct SSH authority: ${blockers[0].code}. ${sshAccessBlockerMessage(targetId, blockers[0])}`
+    )
   }
   return target
 }
@@ -130,7 +155,7 @@ export function linkRuntimeSshAccess(
       await claims.flush()
       requireAccessOnlyTarget(claims, target.id, environmentId)
       requireFence(claims, environmentId, fence, true)
-      // Why recorded: the durable link intent above names this target and environment.
+      // The durable link intent already binds this target to the environment.
       claims.claim(target.id, environmentId, { ownerRecorded: true })
       await claims.flush()
       let tunnelStarted = false

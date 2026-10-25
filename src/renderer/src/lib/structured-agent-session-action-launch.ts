@@ -3,21 +3,23 @@ import { translate } from '@/i18n/i18n'
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import type { Tab } from '../../../shared/tab-types'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
-import type { ProvisionalLaunchArgs } from './structured-agent-session-provisional-tab'
+import type { ProvisionalLaunchArgs } from './agent-session/structured-agent-session-provisional-tab'
 import { insertUnifiedTabAfterAnchor } from './unified-tab-anchor-insertion'
 import { useAppStore } from '@/store'
 import type { OpenedAgentSessionTab } from './structured-agent-session-tab-open-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import {
+  declinedTerminalCanOpen,
   notifyHostDeclined,
   openDeclinedStructuredLaunchTerminal,
   type StructuredLaunchTerminal
 } from '@/lib/structured-agent-session-launch-admission'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
@@ -56,12 +58,18 @@ export function opensAtAction(args: ProvisionalLaunchArgs): boolean {
 export async function openTerminalForDeclinedChat(
   args: ProvisionalLaunchArgs,
   worktreeId: string,
-  target: RuntimeClientTarget,
+  { executionHostId, target }: { executionHostId: ExecutionHostId; target: RuntimeClientTarget },
   tab: OpenedAgentSessionTab,
   settlement: StructuredAgentLaunchSettlement
 ): Promise<StructuredAgentLaunchSettlement> {
   if (
     args.plan.requestedSurface === 'chat' ||
+    !declinedTerminalCanOpen(
+      args.plan.agent,
+      worktreeId,
+      executionHostId,
+      args.declinedOpensCallerSurface
+    ) ||
     settlement.kind !== 'failed' ||
     !(settlement.error instanceof StructuredAgentSessionCreateRefusalError) ||
     settlement.error.code !== 'structured_agent_session_unsupported'

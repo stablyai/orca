@@ -308,8 +308,7 @@ describe('useGrabMode', () => {
     harness.effects[1]?.effect()
     const handleKeyDown = addEventListener.mock.calls[0]?.[1] as (event: KeyboardEvent) => void
 
-    // Why: a button in the edit row isn't itself editable, so only the
-    // annotation-edit closest() clause (not isEditableKeyboardTarget) exempts it.
+    // Only the annotation-edit ancestor exempts this non-editable button from the grab shortcut.
     const editRow = document.createElement('div')
     editRow.setAttribute('data-slot', 'annotation-edit')
     const cancelButton = document.createElement('button')

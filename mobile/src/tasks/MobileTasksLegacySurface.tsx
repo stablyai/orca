@@ -181,8 +181,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
       {renderMobileTasksListSurface(model)}
 
-      {/* Why: Tasks stacks sheets (an issue detail under Create Workspace or a confirm), and iOS
-          refuses a native modal over a presented sibling, so they share one Modal, ordered by zIndex. */}
+      {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
       <BottomDrawerModalHost>
         {renderMobileTasksProviderPicker(model)}
 

@@ -90,11 +90,7 @@ function answered(entry: PendingRow, installed: DesktopSidebarFeed): boolean {
   return entry.answeredBy !== null && installed.readId >= entry.answeredBy
 }
 
-/**
- * Main answers a write to its own rows only after applying it, so a read sent after the answer
- * shows it. A paired server's row reaches main by the server's own change event, later, so that
- * write holds until main's row echoes it.
- */
+/** Local writes answer after main applies them, so post-answer reads show them. Server rows arrive later through change events; retain optimistic writes until their values echo. */
 function writeShown(write: PendingRowWrite, installed: DesktopSidebarFeed): boolean {
   return (
     answered(write, installed) &&
@@ -196,11 +192,7 @@ function supersede(
   })
 }
 
-/**
- * Switch point. Shows the window's own row writes before main's feed has caught up: each is laid
- * over main's rows from its start until main shows it, so main's value wins afterwards whether
- * main took the write or not.
- */
+/** Overlay this window’s pending row writes until main catches up; main then wins, including refusal outcomes. */
 export function withPendingSidebarRowWrites<T>(
   readWrites: () => readonly SidebarRowWrite[],
   operation: () => Promise<T>

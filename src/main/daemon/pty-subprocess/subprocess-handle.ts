@@ -11,11 +11,19 @@ import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
 import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
+import type { ConptyStartupEvents } from './conpty-startup-input-reader'
 
 type DisposableNativePty = pty.IPty & {
   destroy?: () => void
   signalProcess?: (signal: string) => void
+  // node-pty emits these when its master stream retires; writes then become silent no-ops.
+  on?: (event: 'close' | 'error', listener: (error?: unknown) => void) => void
+  // False once node-pty's _close() retired the master; Windows never emits 'close' for that.
+  _writable?: boolean
 }
+
+// Normal exit also retires the master first; let the exit report win before calling input closed.
+export const MASTER_CLOSE_EXIT_GRACE_MS = 1_000
 
 export function createDaemonPtySubprocessHandle(args: {
   process: pty.IPty
@@ -27,6 +35,8 @@ export function createDaemonPtySubprocessHandle(args: {
   requestedCwd?: string
   sessionId: string
   startupAgentRecognition: RecognizedAgentProcess | null
+  /** Output and exit buffered before this handle subscribed; replayed ahead of live events. */
+  startupEvents?: ConptyStartupEvents
 }): SubprocessHandle {
   const reportsChildExitStatus = args.reportsChildExitStatus
   const shellPath = args.shellPath
@@ -39,6 +49,28 @@ export function createDaemonPtySubprocessHandle(args: {
   let ioFailed = false
   let disposed = false
   let nodePtyKillIssued = false
+  let masterRetired = false
+  let masterError: string | null = null
+  let masterRetiredTimer: ReturnType<typeof setTimeout> | null = null
+  let inputClosedNotified = false
+  let inputClosedListener: ((reason: string) => void) | null = null
+  const notifyInputClosed = (reason: string): void => {
+    if (dead || inputClosedNotified) {
+      return
+    }
+    inputClosedNotified = true
+    inputClosedListener?.(reason)
+  }
+  const failIo = (operation: 'write' | 'resize'): void => {
+    ioFailed = true
+    notifyInputClosed(`${operation}_failed`)
+  }
+  const clearMasterRetiredTimer = (): void => {
+    if (masterRetiredTimer) {
+      clearTimeout(masterRetiredTimer)
+      masterRetiredTimer = null
+    }
+  }
   const foreground = createPtyForegroundProcessTracker({
     process: proc,
     shellPath: args.shellPath,
@@ -48,15 +80,41 @@ export function createDaemonPtySubprocessHandle(args: {
     isDead: () => dead
   })
 
-  proc.onData((data) => {
+  const acceptData = (data: string): void => {
     foreground.recordOutput(data)
     events.acceptData(data)
+  }
+  args.startupEvents?.data.forEach(acceptData)
+  proc.onData(acceptData)
+  const retireMaster = (): void => {
+    masterRetired = true
+    if (dead || masterRetiredTimer) {
+      return
+    }
+    masterRetiredTimer = setTimeout(() => {
+      masterRetiredTimer = null
+      notifyInputClosed(masterError ? `master_closed: ${masterError}` : 'master_closed')
+    }, MASTER_CLOSE_EXIT_GRACE_MS)
+    masterRetiredTimer.unref?.()
+  }
+  nativeProc.on?.('error', (error) => {
+    // node-pty's own handler ran first; only errors that retired the master are input loss.
+    if (nativeProc._writable === false) {
+      masterError = error instanceof Error ? error.message : String(error)
+      retireMaster()
+    }
   })
-  proc.onExit(({ exitCode, signal }) => {
+  nativeProc.on?.('close', retireMaster)
+  // node-pty may have retired its master while Windows startup was confirmed, before these listeners.
+  if (args.startupEvents && nativeProc._writable === false) {
+    retireMaster()
+  }
+  const acceptExit = ({ exitCode, signal }: { exitCode: number; signal?: number }): void => {
     // Exit listeners may re-enter cleanup; retire signal authority before notifying them.
     dead = true
+    clearMasterRetiredTimer()
     foreground.markDead()
-    // Why: neutralize kill synchronously so a later async socket-close SIGHUP cannot hit a recycled pid.
+    // Neutralize kill before an async socket-close SIGHUP can target a recycled PID.
     if (process.platform !== 'win32') {
       nativeProc.kill = () => {}
     }
@@ -65,12 +123,19 @@ export function createDaemonPtySubprocessHandle(args: {
       signal,
       hostReportsChildExitStatus: reportsChildExitStatus
     })
-  })
+  }
+  if (args.startupEvents?.exit) {
+    acceptExit(args.startupEvents.exit)
+  } else {
+    proc.onExit(acceptExit)
+  }
 
   const slavePath = readPtySlavePath(proc)
   return {
     pid: proc.pid,
     processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
+    // Only the login(1) wrapper hides the shell's exit status, and it forks the shell as its child.
+    shellIsRootChild: !reportsChildExitStatus,
     ...(process.platform === 'win32'
       ? {
           inspectChildProcesses: (fresh?: boolean, ignoreDetached?: boolean) =>
@@ -88,23 +153,27 @@ export function createDaemonPtySubprocessHandle(args: {
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
     write: (data) => {
-      if (dead || ioFailed) {
+      if (dead || ioFailed || masterRetired) {
         return
       }
       try {
         proc.write(data)
       } catch {
-        ioFailed = true
+        failIo('write')
       }
     },
+    isInputClosed: () => dead || ioFailed || masterRetired,
+    onInputClosed: (cb) => {
+      inputClosedListener = cb
+    },
     resize: (cols, rows) => {
-      if (dead || ioFailed || !isValidPtySize(cols, rows)) {
+      if (dead || ioFailed || masterRetired || !isValidPtySize(cols, rows)) {
         return
       }
       try {
         proc.resize(cols, rows)
       } catch {
-        ioFailed = true
+        failIo('resize')
       }
     },
     // WindowsTerminal also wires _socket to the ConPTY conout pipe, so pausing backpressures the child.
@@ -114,9 +183,7 @@ export function createDaemonPtySubprocessHandle(args: {
       }
       try {
         proc.pause()
-      } catch {
-        // Native handle already torn down; flow control is best-effort.
-      }
+      } catch {}
     },
     resume: () => {
       if (dead) {
@@ -124,9 +191,7 @@ export function createDaemonPtySubprocessHandle(args: {
       }
       try {
         proc.resume()
-      } catch {
-        // Native handle already torn down; flow control is best-effort.
-      }
+      } catch {}
     },
     clear: () => {
       if (dead || ioFailed) {
@@ -134,9 +199,7 @@ export function createDaemonPtySubprocessHandle(args: {
       }
       try {
         proc.clear()
-      } catch {
-        // A clear on a just-exited PTY is best-effort.
-      }
+      } catch {}
     },
     kill: () => {
       if (dead) {
@@ -182,17 +245,13 @@ export function createDaemonPtySubprocessHandle(args: {
       if (nativeProc.signalProcess) {
         try {
           nativeProc.signalProcess(sig)
-        } catch {
-          /* The process may have exited. */
-        }
+        } catch {}
         return
       }
       const signalRootPid = (): void => {
         try {
           process.kill(proc.pid, sig)
-        } catch {
-          // Process may already be dead.
-        }
+        } catch {}
       }
       // SIGWINCH belongs to the tty foreground group; destructive signals keep the root-pid target.
       if (sig === 'SIGWINCH') {
@@ -209,6 +268,8 @@ export function createDaemonPtySubprocessHandle(args: {
       }
       disposed = true
       dead = true
+      clearMasterRetiredTimer()
+      inputClosedListener = null
       events.clear()
       // POSIX destroy() can asynchronously signal a recycled pid; Windows needs kill() to close ConPTY.
       if (process.platform !== 'win32') {
@@ -218,9 +279,7 @@ export function createDaemonPtySubprocessHandle(args: {
       }
       try {
         nativeProc.destroy?.()
-      } catch {
-        // Native handle was already torn down.
-      }
+      } catch {}
     }
   }
 }

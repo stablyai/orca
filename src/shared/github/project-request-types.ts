@@ -1,10 +1,6 @@
-// Why: the request half of the Project IPC contract, consumed mainly by main
-// and preload; kept apart from the ProjectV2 data model in `./project-types`
-// so renderer components importing domain shapes don't pull in arg payloads.
+// Keep Project request payloads separate from ProjectV2 domain shapes so renderer domain imports do not pull IPC arguments.
 import type { GitHubProjectFieldMutationValue, GitHubProjectOwnerType } from './project-types'
 import type { GitHubIssueUpdate } from '../issue-mutation-types'
-
-// ─── IPC arg shapes (shared between main, preload, renderer) ──────────
 
 export type GetProjectViewTableArgs = {
   owner: string
@@ -12,15 +8,11 @@ export type GetProjectViewTableArgs = {
   projectNumber: number
   /** GitHub host (e.g. GHES); absent means github.com. */
   host?: string
-  /** View selection precedence: viewId > viewNumber > viewName > first
-   *  TABLE_LAYOUT view. */
+  /** View selection: viewId > viewNumber > viewName > first TABLE_LAYOUT. */
   viewId?: string
   viewNumber?: number
   viewName?: string
-  /** Ephemeral GitHub-search-syntax query that replaces the view's filter for
-   *  this fetch only. The view's stored filter on GitHub is not modified.
-   *  `undefined` uses the view's saved filter; `''` explicitly clears it for
-   *  this fetch and gets a distinct renderer cache key. */
+  /** Fetch-only GitHub search override; never mutates the saved view filter. Undefined uses the saved filter, while empty clears it and has a distinct cache key. */
   queryOverride?: string
 }
 

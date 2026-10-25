@@ -16,18 +16,15 @@ import type {
 } from './external-automation-scope-client'
 import { externalAutomationActionKey } from './external-automation-scope-keys'
 
-// Why: act(...) warnings are silenced by opting this module into the React act
-// environment, matching how the renderer mounts under test.
+// Enable React’s act environment for these renderer mounts.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-// Why: the run table fetches from the external automation store; stub it so the
-// test stays focused on the row controls (switch + action cluster).
+// Stub external run fetching to isolate row controls.
 vi.mock('./ExternalAutomationRunTable', () => ({
   ExternalAutomationRunTable: () => <div data-testid="run-table" />
 }))
 
-// Why: Tooltip needs a TooltipProvider mounted higher in the real app; stub the
-// primitives so the row renders standalone and the span trigger stays inspectable.
+// Stub TooltipProvider-dependent primitives so standalone row triggers stay inspectable.
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -204,10 +201,9 @@ describe('ExternalAutomationManagers toggle', () => {
     expect(getSwitch().disabled).toBe(true)
   })
 
-  it('shows the sibling spinner only while a pause/resume targets this row', () => {
+  it('shows the sibling spinner for a matching resume key on an enabled row', () => {
     const entry = scoped({ jobs: [makeJob({ id: 'job-1', enabled: true })] })
-    // Keyed for the resume action even though the job is enabled — the spinner
-    // must match either pause or resume so it does not vanish when enabled flips.
+    // Match both pause/resume keys because enabled can flip before the action settles.
     renderManagers([entry], {
       runningActionKey: externalAutomationActionKey(entry.scope, 'job-1', 'resume')
     })
@@ -215,11 +211,7 @@ describe('ExternalAutomationManagers toggle', () => {
   })
 
   it('spins only the host whose action is in flight when two authorities share a manager ID', () => {
-    // Both hosts report `openclaw:local` with the same job ID, because that ID
-    // names a provider and a target kind but no authority. The page keys the
-    // in-flight action by scope, so the component must too — matching on
-    // manager and job alone would spin the wrong host's row, and a user would
-    // watch a machine they never touched appear to run their automation.
+    // Manager/job IDs collide across authorities; scope the in-flight key so another host cannot show this action’s spinner.
     const local = { id: 'openclaw:local', jobs: [makeJob({ id: 'job-1', enabled: true })] }
     const desktop = scoped(local, makeScope())
     const runtime = scoped(local, makeScope('env-7'))
@@ -228,8 +220,7 @@ describe('ExternalAutomationManagers toggle', () => {
       runningActionKey: externalAutomationActionKey(runtime.scope, 'job-1', 'pause')
     })
 
-    // The spinner sits beside the switch it belongs to, so the switch it shares a
-    // parent with is the row the component considers in flight.
+    // The spinner’s sibling switch identifies which host row is in flight.
     const spinners = container.querySelectorAll('.animate-spin')
     expect(spinners).toHaveLength(1)
     expect(spinners[0]?.parentElement?.contains(getSwitch(1))).toBe(true)
@@ -240,8 +231,7 @@ describe('ExternalAutomationManagers toggle', () => {
     const local = { id: 'openclaw:local', jobs: [makeJob({ id: 'job-1' })] }
     renderManagers([scoped(local, makeScope()), scoped(local, makeScope('env-7'))])
 
-    // A name element ID built from manager and job alone would repeat, and the
-    // second switch's aria-labelledby would resolve to the first host's name.
+    // Scope name IDs too so aria-labelledby cannot resolve to another host’s row.
     expect(getSwitch(0).getAttribute('aria-labelledby')).not.toBe(
       getSwitch(1).getAttribute('aria-labelledby')
     )
@@ -257,8 +247,7 @@ describe('ExternalAutomationManagers toggle', () => {
       getSwitch(1).click()
     })
 
-    // The scope reaches the handler from the row, so a pause on the runtime's
-    // row can never be replayed against the desktop's identically named cron job.
+    // Carry row scope into actions so matching remote/local job IDs cannot misroute pause.
     expect(onAction).toHaveBeenCalledTimes(1)
     expect(onAction.mock.calls[0]?.[3]).toEqual(runtime.scope)
   })

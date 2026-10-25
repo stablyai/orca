@@ -1,10 +1,4 @@
-/**
- * `agent.launch` makes a chat only for a caller that can show it. `agent.launch.v2` vouches for
- * Claude and Codex chats; any other agent's chat needs the client to read it, by the rule tabs and
- * restart offers use, else it gets a terminal. The host's own callers (CLI, orchestration over the
- * runtime socket) carry no capability list and are unaffected. With the structured-chat setting
- * off, every agent, Grok included, opens as a terminal.
- */
+/** agent.launch.v2 vouches for Claude/Codex chat rendering; other agents need explicit client support, host callers need none, and disabled structured chat always uses a terminal. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {

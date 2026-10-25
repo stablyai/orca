@@ -18,10 +18,7 @@ export function ChecksPanelEmptyContent({
 }: {
   model: ChecksPanelEmptyContentModel
 }): React.JSX.Element | null {
-  // Why: the auto-retry line and the retry-disabled window are the only readers,
-  // and both are populated solely by a GitHub refresh error — so an idle panel
-  // (and every folder workspace, which never reaches them) stays tick-free
-  // rather than re-rendering the create composer once a second.
+  // Tick only for GitHub retry timing; idle/folder composers must not rerender every second.
   const now = useNow(
     1000,
     model.prRefreshState?.nextAutoRetryAt !== undefined ||
@@ -95,7 +92,6 @@ export function ChecksPanelEmptyContent({
     stackParentReview,
     suppressedGitHubPR
   } = model
-  // ── Empty state ──
   if (!activeWorktree) {
     return (
       <div className="px-4 py-6">
@@ -155,7 +151,7 @@ export function ChecksPanelEmptyContent({
   }
 
   if (!activeReview) {
-    // Why: mid rebase/merge/cherry-pick HEAD is detached, so "No pull request found" misleads — the PR still exists on the original branch.
+    // Detached HEAD during Git operations does not mean the original branch lost its PR.
     const operationInProgress = conflictOperation !== 'unknown'
     const operationLabel =
       conflictOperation === 'rebase'
@@ -179,7 +175,7 @@ export function ChecksPanelEmptyContent({
           hasUpstream: publishActionRemoteStatus?.hasUpstream,
           hasCurrentBranch: Boolean(branch)
         }))
-    // Feed refresh state only for GitHub; surface a sticky hard error so its card and composer suppression persist across retries.
+    // Keep GitHub hard errors sticky so retry state cannot briefly restore the composer.
     const emptyRefreshInput = !isGitHubReviewContext
       ? undefined
       : checksPanelHasHardRefreshError && hardRefreshError
@@ -208,7 +204,7 @@ export function ChecksPanelEmptyContent({
       reviewLookup: checksPanelReviewLookup,
       openReviewUrl: checksPanelReviewLookupResult.openReviewUrl,
       eligibilityBlockedReason: hostedReviewCreation?.blockedReason,
-      // Confirmed readiness (not the live create gate) drives composer mode to match preserved-composer semantics.
+      // Preserved-composer mode uses confirmed readiness rather than the live create gate.
       confirmedReadiness: confirmedReadiness.confirmed,
       confirmedNeedsPush: confirmedReadiness.needsPush,
       refresh: emptyRefreshInput,
@@ -228,14 +224,12 @@ export function ChecksPanelEmptyContent({
     const reviewRecoveryRetryDisabled =
       reviewState.retryDisabledUntil !== undefined && now < reviewState.retryDisabledUntil
     const reviewRecoveryLabelIsRefresh = reviewState.recovery.includes('refresh')
-    // Only offer Retry/Refresh when the selector's recovery set includes it; some states expose none.
     const reviewShowRetryOrRefresh =
       reviewState.recovery.includes('retry') || reviewRecoveryLabelIsRefresh
     const reviewShowOpenReview =
       reviewState.recovery.includes('open_review') && Boolean(reviewState.openReviewUrl)
-    // A `needs_sync` create blocker must expose Sync Branch, not just guidance copy.
     const reviewShowSyncBranch = reviewState.workflowAction === 'sync_branch'
-    // Recovery actions render independently of the composer so a preserved composer still exposes Retry during a transient failure.
+    // Keep recovery actions independent so preserved composers still expose Retry after transient failures.
     const reviewShowActionRow =
       canPublishBranch ||
       reviewShowSyncBranch ||

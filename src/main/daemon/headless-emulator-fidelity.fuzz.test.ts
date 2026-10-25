@@ -19,19 +19,13 @@ import {
   writeChunksToTerminal
 } from '../../shared/terminal-restore-parity-fixture'
 
-// Differential garble gate for the hidden-terminal contract: a hidden pane gets nothing, so main's
-// HeadlessEmulator is source of truth and reveal repaints from the snapshot. This fuzz asserts the
-// serialize→replay round trip matches an always-visible renderer twin — any diff = a garble bug on reveal.
-//
-// Runtime knobs:
-//   FUZZ_ITERATIONS=5000  deep/nightly mode (default 300, keeps combined suite runtime <60s)
-//   FUZZ_SEED=1234        re-run exactly one seed (repro from a failure log)
+// Compare hidden-pane snapshots with a visible renderer; replay a failure with FUZZ_SEED or increase FUZZ_ITERATIONS.
 
 const DEFAULT_ITERATIONS = 300
 const FIXED_SEED = readPositiveIntEnv('FUZZ_SEED')
 const ITERATIONS =
   FIXED_SEED !== null ? 1 : (readPositiveIntEnv('FUZZ_ITERATIONS') ?? DEFAULT_ITERATIONS)
-// Matches HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS in pty-connection.ts — the reveal restore's scrollback budget.
+// Match the reveal scrollback budget in pty-connection.ts.
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 
 function readPositiveIntEnv(name: string): number | null {
@@ -91,7 +85,6 @@ async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | n
     }
     await writeChunksToTerminal(control.terminal, chunks)
 
-    // Stage 1 — model fidelity: the emulator's screen must match the renderer twin before any serialization.
     const modelDiff = firstDiff(
       'model-visible (HeadlessEmulator vs renderer twin)',
       visibleRows(control.terminal),
@@ -101,7 +94,6 @@ async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | n
       return modelDiff
     }
 
-    // Stage 2 — reveal round trip: serialize like serializeHiddenOutputRecoveryBuffer, replay like applyMainBufferSnapshot, compare to the always-visible twin.
     const alt = emulator.isAlternateScreen
     const snapshot = emulator.getSnapshot({
       scrollbackRows: alt ? 0 : HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS
@@ -133,7 +125,7 @@ async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | n
         control.terminal.modes.bracketedPasteMode,
         restored.terminal.modes.bracketedPasteMode
       ),
-      // alt excludes both comparisons below by design: alt forces scrollbackRows=0 (no normal-buffer history) and reports applicationCursor=false (rehydrate omits ?1h).
+      // Alternate snapshots omit normal history and application-cursor rehydration.
       alt
         ? null
         : firstDiff(
@@ -161,7 +153,7 @@ async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | n
   }
 }
 
-/** Greedy op-drop minimizer: shrinks a failing case to the smallest still-diverging op list (with its seed for FUZZ_SEED replay). */
+/** Greedily drop operations while preserving the failure and seed. */
 async function minimizeFailure(testCase: FidelityCase): Promise<FidelityCase> {
   let current = { ...testCase, chunked: false }
   if ((await runFidelityCase(current)) === null) {
@@ -195,7 +187,7 @@ function formatFailure(minimized: FidelityCase, diff: FidelityDiff | null): stri
 }
 
 describe('headless emulator snapshot fidelity fuzz', () => {
-  // Known-legitimate divergence: SerializeAddon never re-emits OSC 8, so byte-replay drops the link underline; production carries the ranges out-of-band in snapshot.oscLinks.
+  // SerializeAddon omits OSC 8; production carries link ranges in snapshot metadata.
   it('drops OSC 8 underline from byte replay but preserves the range in snapshot metadata', async () => {
     const emulator = new HeadlessEmulator({ cols: 60, rows: 10 })
     const restored = createRendererParityTerminal({ cols: 60, rows: 10 })
@@ -265,7 +257,7 @@ describe('headless emulator snapshot fidelity fuzz', () => {
     const control = createRendererParityTerminal({ cols: 20, rows: 6 })
     const restored = createRendererParityTerminal({ cols: 20, rows: 6 })
     try {
-      // Wrap a 28-char line, then erase its entire first (source) row: cursor up twice, EL 2.
+      // Wrap, then erase the source row of the wrapped line.
       const bytes = ['ABCDEFGHIJKLMNOPQRSTUVWXYZ12\r\n', '\x1b[2A\x1b[2K']
       for (const chunk of bytes) {
         await emulator.write(chunk)
@@ -288,13 +280,12 @@ describe('headless emulator snapshot fidelity fuzz', () => {
     }
   })
 
-  // Bug B guard: upstream emitted 1;22m and SGR 22 clears both bold and dim, dropping bold; fixed by the intensity-group reorder in the addon-serialize patch. notes/garble-fuzz-divergences.md
+  // SGR 22 clears bold and dim; the patched serializer must clear before setting bold.
   it('preserves bold when serializing a dim cell followed by a bold-only cell', async () => {
     const emulator = new HeadlessEmulator({ cols: 20, rows: 4 })
     const control = createRendererParityTerminal({ cols: 20, rows: 4 })
     const restored = createRendererParityTerminal({ cols: 20, rows: 4 })
     try {
-      // 'A' dim, 'B' bold-only; patched serializer emits 22;1 for B (clear before re-set).
       const bytes = ['\x1b[2mA\x1b[22m\x1b[1mB\x1b[0m']
       for (const chunk of bytes) {
         await emulator.write(chunk)
@@ -314,13 +305,11 @@ describe('headless emulator snapshot fidelity fuzz', () => {
     }
   })
 
-  // Bug C guard: upstream serialize lands the cursor one col short (wrap-pending); fixed by absolute-CUP epilogue (serializeWithAbsoluteCursor). notes/garble-fuzz-divergences.md
   it('restores the cursor exactly when the last content row fills the right margin', async () => {
     const emulator = new HeadlessEmulator({ cols: 10, rows: 4 })
     const control = createRendererParityTerminal({ cols: 10, rows: 4 })
     const restored = createRendererParityTerminal({ cols: 10, rows: 4 })
     try {
-      // Fill row 0 to the margin (wrap-pending), then CUP to a lower row; live cursor is (x=4, y=2).
       const bytes = ['0123456789\x1b[3;5H']
       for (const chunk of bytes) {
         await emulator.write(chunk)

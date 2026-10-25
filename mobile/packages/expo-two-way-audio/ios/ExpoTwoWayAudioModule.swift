@@ -149,7 +149,6 @@ public class ExpoTwoWayAudioModule: Module {
             )
         }
 
-        // Define the events that can be emitted
         Events([
             ON_MIC_DATA_EVENT_NAME,
             ON_INPUT_VOLUME_LEVEL_EVENT_NAME,

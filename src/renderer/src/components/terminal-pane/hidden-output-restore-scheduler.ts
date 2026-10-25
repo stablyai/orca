@@ -1,7 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 
-/** The pane's terminal, used only as the queue's identity key — no member is ever read, so a
- *  bare stand-in is a valid target. */
+/** Opaque queue identity; no terminal members are read. */
 type HiddenOutputRestoreTarget = Partial<Terminal>
 
 type HiddenOutputRestorePriority = 'active' | 'inactive'
@@ -13,8 +12,7 @@ type HiddenOutputRestoreEntry = {
   requestRestore: HiddenOutputRestoreRequest
 }
 
-// Why: one inactive xterm scrollback replay per frame keeps tab return focused
-// on the active pane while still catching watched split panes up quickly.
+// Replay one inactive pane per frame so tab return prioritizes the active pane.
 const INACTIVE_RESTORE_INTERVAL_MS = 16
 
 const inactiveRestoreQueue = new Map<HiddenOutputRestoreTarget, HiddenOutputRestoreEntry>()
@@ -37,9 +35,7 @@ function scheduleInactiveRestoreDrain(): void {
 
 function drainInactiveRestoreQueue(): void {
   inactiveRestoreTimer = null
-  // Why the loop: an entry whose pane went hidden, was disposed, or had its restore
-  // superseded replays nothing, so charging it a whole frame only delays the next
-  // on-screen pane. Still at most one real replay per frame; the skips are guard reads.
+  // Skip disposed/hidden/superseded guards for free; charge the frame only when a replay actually starts.
   let remaining = inactiveRestoreQueue.size
   while (remaining > 0) {
     remaining -= 1

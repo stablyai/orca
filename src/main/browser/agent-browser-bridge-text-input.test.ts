@@ -26,8 +26,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -206,8 +208,7 @@ function createContentEditableEvalEnvironment(initialText: string) {
     })
   }
   const execCommand = vi.fn((command: string, _showUi: boolean, value: string) => {
-    // Chromium treats an empty insertText as a successful no-op; deletion is
-    // required to clear a selected contenteditable through the input pipeline.
+    // Empty insertText succeeds without clearing a selection; simulate Chromium requiring delete.
     if (command === 'delete') {
       if (!selected) {
         return false
@@ -535,8 +536,6 @@ describe('AgentBrowserBridge', () => {
     expect(chunks).toEqual(['z'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'qq'])
   })
 
-  // ── Cross-worktree text-injection guard ──
-
   describe('scoped target for text-mutating commands', () => {
     function twoWorktreeBridge(): AgentBrowserBridge {
       const tabs = new Map([
@@ -570,15 +569,13 @@ describe('AgentBrowserBridge', () => {
       'refuses %s when worktrees are ambiguous instead of routing to the global active tab',
       async (_name, run) => {
         const b = twoWorktreeBridge()
-        // Why: simulates the user viewing worktree B's tab, which sets the global
-        // active webContents — the bug would route the agent's text there.
+        // Simulate the user viewing worktree B's tab, which sets the global target.
         b.onTabChanged(2, 'wt-2')
         succeedWith({ inserted: true })
 
         await expect(run(b)).rejects.toMatchObject({
           code: 'browser_target_ambiguous'
         })
-        // Must not have dispatched the command to worktree B's session.
         expect(sessionNamesUsed()).not.toContain('orca-tab-tab-b')
       }
     )
@@ -605,8 +602,6 @@ describe('AgentBrowserBridge', () => {
 
     it('keeps read-only snapshot on the lenient global active-tab fallback', async () => {
       const b = twoWorktreeBridge()
-      // Why: read/navigation commands intentionally keep the global fallback so
-      // discovery still works without a worktree; only text writes are guarded.
       b.onTabChanged(2, 'wt-2')
       succeedWith({ snapshot: 'tree' })
 

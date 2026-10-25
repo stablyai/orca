@@ -11,19 +11,7 @@ import {
   setTerminalTabs
 } from './terminal-recovery-ledger-test-store'
 
-/**
- * The deliberate softening, stressed.
- *
- * An aged-out `pending` is NOT read as an observed failure. That is a choice:
- * `spawn-left-pane-unbound` mounts a pane with no PTY binding, so a remount
- * that succeeds goes down the fresh-spawn path, which reaches no reattach
- * handler and therefore reports no `success`. Treating the timeout as failure
- * would refuse that reason forever on the one pane kind that cannot report.
- *
- * What bounds it instead is the cooldown and the window cap. These tests pin
- * that bound, the breadcrumb it leaves, and — the part that matters most —
- * which triggers can still move a tab whose pane never reports anything.
- */
+/** Aged pending is not observed failure: fresh-spawn recovery cannot report reattach success. Cooldown/window cap bound silent panes, while new evidence can reopen admission. */
 
 vi.mock('@/store', async () => {
   const store = await import('./terminal-recovery-ledger-test-store')
@@ -60,24 +48,20 @@ afterEach(() => {
 
 describe('a pane that never reports an outcome', () => {
   it('bounds a never-settling tab at three remounts per window and says so', async () => {
-    // t=0 admits: no ledger yet.
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
 
-    // Inside the settlement bound, past the cooldown: only the unsettled
-    // attempt refuses this, and nothing has been observed to justify a retry.
+    // Cooldown elapsed, but the unsettled attempt has no new evidence permitting retry.
     vi.setSystemTime(16_000)
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
 
-    // Past 31s the pending ages out. NOT an observed failure — it falls
-    // through to the cooldown, which has elapsed, so a second remount lands.
+    // After settlement timeout, pending expires without counting as failure and cooldown permits another remount.
     vi.setSystemTime(31_000)
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
     vi.setSystemTime(62_000)
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
 
-    // The backstop. Every further ask inside the window is refused, loudly.
     for (const now of [93_000, 124_000, 200_000, 299_000]) {
       vi.setSystemTime(now)
       expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
@@ -88,8 +72,7 @@ describe('a pane that never reports an outcome', () => {
       { tabId: 'tab-1', reason: 'spawn-left-pane-unbound' }
     )
 
-    // And it is a rolling window, not a permanent stop: once the first attempt
-    // ages out of it the tab may heal again.
+    // Rolling expiry eventually permits recovery again; cap cannot become permanent.
     vi.setSystemTime(301_000)
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(4)
@@ -100,8 +83,7 @@ describe('a pane that never reports an outcome', () => {
     vi.setSystemTime(16_000)
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
 
-    // Retry in the error toast: the user asking IS the new evidence, so it
-    // clears the unsettled refusal AND the cooldown.
+    // Explicit Retry is new evidence and clears unsettled/cooldown refusal.
     expect(await requestTerminalPaneRecovery({ ...NEVER_SETTLES, trigger: 'user' })).toBe(true)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
   })
@@ -111,7 +93,6 @@ describe('a pane that never reports an outcome', () => {
     vi.setSystemTime(16_000)
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
 
-    // An authoritative attach lands: reattach-result-handler settles 'success'.
     settleCurrentRecovery('tab-1', 'success')
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
@@ -122,7 +103,6 @@ describe('a pane that never reports an outcome', () => {
     vi.setSystemTime(16_000)
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
 
-    // SSH authority rotation / activation respawn bumps tab.generation.
     bumpTabGeneration('tab-1')
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
@@ -135,17 +115,13 @@ describe('a pane that never reports an outcome', () => {
     }
     vi.setSystemTime(93_000)
 
-    // The backstop is deliberately unconditional: a user Retry and an authority
-    // rotation both still hit it, or anything bumping generation each cycle
-    // would lift the ceiling along with it.
+    // User Retry and generation changes must still hit the unconditional cap or a self-bumping loop escapes it.
     expect(await requestTerminalPaneRecovery({ ...NEVER_SETTLES, trigger: 'user' })).toBe(false)
     bumpTabGeneration('tab-1')
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
 
-    // Host hydration remounts every live pane and writes no ledger, so it is
-    // the one trigger above the cap — and it cannot itself loop, because it
-    // only fires on a lifecycle event.
+    // Host hydration bypasses the ledger/cap but fires only on lifecycle events, preventing a self-sustaining loop.
     const external = captureTerminalPaneRecoveryGeneration('tab-1')
     expect(external).toBeGreaterThan(0)
     expect(await requestTerminalPaneRecovery({ ...NEVER_SETTLES, trigger: 'external' })).toBe(true)

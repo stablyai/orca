@@ -53,7 +53,6 @@ describe('isWslDistroRunning', () => {
 
     probe = () => Promise.reject(new Error('wsl.exe wedged'))
     await expect(isWslDistroRunning('Ubuntu')).resolves.toBe(false)
-    // Inside the backoff window the cache still holds Ubuntu; the gate must not trust it.
     await expect(isWslDistroRunning('Ubuntu')).resolves.toBe(false)
   })
 })

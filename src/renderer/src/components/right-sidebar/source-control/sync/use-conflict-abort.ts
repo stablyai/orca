@@ -12,9 +12,6 @@ import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 
-/**
- * Aborts an in-progress merge or rebase behind a destructive confirmation.
- */
 export function useSourceControlConflictAbort({
   activeRepoTarget,
   activeWorktreeId,
@@ -72,7 +69,7 @@ export function useSourceControlConflictAbort({
       setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       try {
         const context = {
-          // Why: route the abort by the repo OWNER host, not the focused runtime.
+          // Abort on the repo owner, which may differ from the focused host.
           target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: activeWorktreeId,
           worktreePath,

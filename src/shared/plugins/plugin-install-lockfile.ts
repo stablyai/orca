@@ -1,13 +1,8 @@
 import { z } from 'zod'
 import { isQualifiedPluginKey } from './plugin-manifest'
 
-/**
- * Install lockfile: records where each installed plugin came from, the exact
- * commit it resolved to, the content hash of the installed tree, and the
- * consent fingerprint the user was shown. A reinstall/update that does not
- * match is a visible change, never a silent one. Adapted from community PR
- * #5801's SHA-256 + lockfile installer pieces.
- */
+/** Lock source, exact commit, content hash and reviewed consent so mismatching updates are visible.
+ * Adapted from community PR #5801’s SHA-256/lockfile installer. */
 
 /** Install content hash: legacy 128-bit SHA-256 prefix or the full digest. */
 export const PLUGIN_CONTENT_HASH_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{64})$/
@@ -60,9 +55,7 @@ export const pluginInstallSourceSchema = z.discriminatedUnion('kind', [
 
 export type PluginInstallSource = z.infer<typeof pluginInstallSourceSchema>
 
-/** System Git supports executable remote helpers (`ext::`, custom `foo::`
- * transports). P0 accepts network Git only over HTTPS or SSH so installing a
- * source cannot turn URL parsing into arbitrary command execution. */
+/** Allow HTTPS/SSH only: Git remote helpers (ext:: or custom transports) can execute arbitrary commands during URL handling. */
 export function isAllowedPluginGitUrl(value: string): boolean {
   const url = value.trim()
   if (/^[^\s@/:]+@[A-Za-z0-9.-]+:[^\s]+$/.test(url)) {
@@ -127,10 +120,7 @@ export const pluginLockfileSchema = z
 
 export type PluginLockfile = z.infer<typeof pluginLockfileSchema>
 
-/**
- * Lockfile v1 called this opaque value `capabilityHash`. Keep writing that
- * field so rollback to an older host does not make the whole lockfile unreadable.
- */
+/** Keep writing v1 capabilityHash so older rollback hosts can still read lockfiles. */
 export function serializePluginLockfile(lock: PluginLockfile): unknown {
   return {
     version: 1,
@@ -159,7 +149,6 @@ export function removePluginLock(lock: PluginLockfile, pluginKey: string): Plugi
 
 export function parsePluginLockfile(raw: unknown): PluginLockfile {
   const parsed = pluginLockfileSchema.safeParse(raw)
-  // A corrupt lockfile must not brick installs; integrity of installed trees
-  // is independently anchored by their hash-addressed directory names.
+  // Corrupt lockfiles must not block installs; hash-addressed directories independently anchor tree integrity.
   return parsed.success ? parsed.data : emptyPluginLockfile()
 }

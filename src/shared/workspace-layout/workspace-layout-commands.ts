@@ -1,5 +1,4 @@
-// applyLayoutCommand: every layout change a client can ask for, applied to the model in one step.
-// Pure and synchronous, so the runtime applies commands in arrival order on one thread.
+// Apply pure layout commands synchronously so runtime arrival order remains authoritative.
 
 import {
   closeBrowserPage,
@@ -28,6 +27,7 @@ import {
 import { renameEditorFiles } from './workspace-layout-editor-rekey'
 import { openSimulatorTab } from './workspace-layout-simulator-tab'
 import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
+import { runDroppedLeafStep } from './workspace-layout-dropped-leaves'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import {
   closePane,
@@ -60,7 +60,6 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'openSimulatorTab'
 ])
 
-/** A `renameTabs` as the `renameTab` each of its titles is. */
 export function renameTabCommandsOf(command: RenameTabsCommand): CommandOf<'renameTab'>[] {
   return command.renames.map(({ workspace, tabId, title, replaceExisting }) => ({
     type: 'renameTab',
@@ -78,7 +77,16 @@ export function applyLayoutCommand(
   context: LayoutContext
 ): Applied {
   const result = applyCommand(model, command, context)
-  return result.ok ? { ...result, model: updateLegacyPersistence(model, result.model) } : result
+  if (!result.ok) {
+    return result
+  }
+  const next = updateLegacyPersistence(model, result.model)
+  return {
+    ...result,
+    model: context.droppedLeafReason
+      ? runDroppedLeafStep(model, next, context.droppedLeafReason, context.now())
+      : next
+  }
 }
 
 function applyCommand(

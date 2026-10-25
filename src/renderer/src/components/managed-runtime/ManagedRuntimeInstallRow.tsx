@@ -19,10 +19,7 @@ import { ManagedRuntimeLinkButton } from './ManagedRuntimeLinkButton'
 // Parts are joined by ' · ', so a sentence followed by another part drops its full stop.
 const said = (text: string, last: boolean): string => (last ? text : text.replace(/[.。]$/u, ''))
 
-/** Settings' one-line install state for the runtime Orca provides an agent, on the host it runs
- *  on, with Cancel and retries as links. A first Install button, and the ⋯ menu with Update,
- *  Reinstall and Remove, are what the caller places at its row's end. A chat's install card shows
- *  the same host answer, so either one's action moves both. */
+/** Use the host’s shared install snapshot so Settings and chat agree; the caller owns first-install and menu actions. */
 export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
@@ -103,7 +100,6 @@ export function ManagedRuntimeInstallRow(props: {
   if (view.note) {
     parts.push(<span key="note">{view.note}</span>)
   }
-  // The line keeps its height while the first read is out, so nothing shifts when it lands.
   const line = (
     <div
       role="status"

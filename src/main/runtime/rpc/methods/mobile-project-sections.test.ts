@@ -8,7 +8,7 @@ import { PROJECT_SECTION_PARITY_SERVED } from '../../../../shared/project-sectio
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads no runtime member; the dispatcher only stamps the runtime id.
 const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
 
-// Why fresh modules: the snapshot is process state, so each test starts with nothing published.
+// Reset modules because the published snapshot is process state.
 beforeEach(() => {
   vi.resetModules()
 })

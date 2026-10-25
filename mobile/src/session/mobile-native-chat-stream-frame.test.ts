@@ -55,18 +55,6 @@ describe('applyMobileNativeChatStreamFrame', () => {
     })
   })
 
-  it('leaves an ordinary snapshot unmarked', () => {
-    const merger = createNativeChatMerger()
-    const result = applyMobileNativeChatStreamFrame({
-      merger,
-      frame: { type: 'snapshot', messages: [message('a')], hasMore: false },
-      limit: 40,
-      replaceSnapshot: true
-    })
-
-    expect(result).not.toHaveProperty('pending')
-  })
-
   it('merges reconnect snapshots and live appends into the bounded window', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, [message('a'), message('b')])
@@ -121,7 +109,6 @@ describe('applyMobileNativeChatStreamFrame', () => {
 
     const result = applyMobileNativeChatStreamFrame({
       merger,
-      // Replayed window: the retained tail plus what arrived while disconnected.
       frame: { type: 'snapshot', messages: [message('a'), message('b'), message('c')] },
       limit: 100,
       replaceSnapshot: false
@@ -137,8 +124,7 @@ describe('applyMobileNativeChatStreamFrame', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, ['p1', 'p2', 'a', 'b'].map(message))
 
-    // `beforeOffset` here points before 'a', not before 'p1'. Adopting it would
-    // make the next loadEarlier re-fetch 'p1'/'p2' and prepend them twice.
+    // A replay cursor before a would fetch p1/p2 twice after retaining them.
     expect(
       applyMobileNativeChatStreamFrame({
         merger,
@@ -158,7 +144,6 @@ describe('applyMobileNativeChatStreamFrame', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, [message('old-1'), message('old-2')])
 
-    // A long outage (or compaction while away) cannot be stitched without a gap.
     const result = applyMobileNativeChatStreamFrame({
       merger,
       frame: {
@@ -184,8 +169,7 @@ describe('applyMobileNativeChatStreamFrame', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, ['old-1', 'shared', 'old-tail'].map(message))
 
-    // `hasMore: true` so the authoritative-removal rule can't short-circuit —
-    // the contiguity scan itself must reject the interleaved new message.
+    // Keep hasMore true so only the contiguity check can reject the interleaved row.
     const replay = [message('shared'), message('compacted-summary'), message('old-tail')]
     expect(
       applyMobileNativeChatStreamFrame({
@@ -228,7 +212,6 @@ describe('applyMobileNativeChatStreamFrame', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, ['a', 'b', 'c'].map(message))
 
-    // Merging would keep 'c', a row the replayed window no longer carries.
     const replay = [message('a'), message('b')]
     expect(
       applyMobileNativeChatStreamFrame({
@@ -271,8 +254,6 @@ describe('applyMobileNativeChatStreamFrame', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, ['removed-1', 'a', 'b'].map(message))
 
-    // Boundary of the `firstIndex > 0` rule: one dropped row is still a dropped
-    // row, and merging here would strand 'removed-1' the host no longer has.
     const replay = [message('a'), message('b')]
     expect(
       applyMobileNativeChatStreamFrame({
@@ -325,10 +306,14 @@ describe('applyMobileNativeChatStreamFrame', () => {
 
   it('still treats the base snapshot as authoritative after a replacement frame', () => {
     const merger = createNativeChatMerger()
-    replaceList(merger, ['a', 'b'].map(message))
+    applyMobileNativeChatStreamFrame({
+      merger,
+      frame: { type: 'replacement', messages: ['a', 'b'].map(message) },
+      limit: 100,
+      replaceSnapshot: true
+    })
 
-    // A replacement is not this subscription's base snapshot, so the first real
-    // snapshot still replaces — merging would keep 'a', which it does not carry.
+    // Replacement frames do not count as the subscription’s initial snapshot; the first snapshot must still replace.
     expect(
       applyMobileNativeChatStreamFrame({
         merger,

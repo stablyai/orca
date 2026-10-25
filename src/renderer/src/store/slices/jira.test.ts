@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { JiraConnectionStatus, JiraIssue, JiraViewer } from '../../../../shared/jira-types'
+import type {
+  JiraConnectionStatus,
+  JiraIssue,
+  JiraViewer
+} from '../../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
@@ -863,8 +867,7 @@ describe('createJiraSlice credential errors', () => {
     })
     jiraListIssues.mockRejectedValueOnce(new Error('Forbidden'))
 
-    // A non-auth failure must reject so the Tasks panel can show a real error
-    // instead of a misleading empty list, while keeping the session connected.
+    // Non-auth failures reject to show real Tasks errors without disconnecting the session or pretending empty results.
     await expect(store.getState().listJiraIssues('assigned', 30)).rejects.toThrow('Forbidden')
 
     expect(store.getState().jiraStatus.connected).toBe(true)

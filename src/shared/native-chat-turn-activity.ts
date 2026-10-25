@@ -3,7 +3,10 @@ import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import type { AgentSessionTurnActivity } from './agent-session-wire'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { normalizePromptField } from './agent-status-field-normalization'
-import { describeActiveToolCall, formatActiveToolLabel } from './native-chat-tool-activity'
+import {
+  describeActiveToolCall,
+  formatActiveToolLabel
+} from './native-chat/tools/native-chat-tool-activity'
 
 export type NativeChatTurnActivity = { kind: 'description'; text: string }
 

@@ -1,5 +1,3 @@
-// A runtime Orca installs for an agent only when the person asks, as its host reports it.
-
 // The host answers managedRuntime.subscribe, managedRuntime.install and managedRuntime.cancel.
 export const MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY = 'managed-runtime.install.v1' as const
 // Why separate: a host that installs may predate managedRuntime.remove.

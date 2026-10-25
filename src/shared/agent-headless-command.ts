@@ -9,12 +9,7 @@ import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-comma
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TerminalAgent } from './terminal-agent'
 
-// Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share
-// the same `--print` one-shot contract, Ante's `--prompt` form, Prime Agent's
-// `--mode` forms, Muse's `exec` subcommand, and ZCode's `--prompt`/`--target` forms need
-// their own matchers. DSH's entry is wider than a one-shot: `dsh` also boots a web server
-// and JSON-RPC stdio profiles, and none of those can answer a prompt in the pane either,
-// which is what this table gates.
+// Agent-specific one-shot forms cannot accept pane prompts; DSH server/JSON-RPC modes must be excluded too.
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   Record<TerminalAgent, (tokens: readonly string[]) => boolean>
 > = {

@@ -78,11 +78,7 @@ export function useTerminalLiveAccessoryInputCommit({
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, heldText, sentText })
       switch (decision.kind) {
         case 'send-now': {
-          // Why: raw accessory bytes must wait behind any in-flight mirror send
-          // so composed Hangul reaches the PTY before follow-up controls. A control
-          // that ends the line ends the field's editing session with the same call
-          // the held-text branch below makes — without it the echoed text stayed in
-          // the field and the next keystrokes appended to it.
+          // Order controls behind mirror sends; line-ending controls also end the field session so later input cannot reuse stale text.
           const ready = terminalLiveAccessoryInputEndsLine(input.bytes)
             ? await flushPendingLiveInputText(activeHandle)
             : await waitForPendingLiveInputFlush()
@@ -93,11 +89,10 @@ export function useTerminalLiveAccessoryInputCommit({
             localEdit: decision.localEdit,
             fieldText: sentText + heldText
           })
-          // Why: accessory buttons do not emit native TextInput edits, so the
-          // field is edited here and the mirror diff syncs the PTY echo.
+          // Accessory buttons emit no native edits; change the field so mirror diffs synchronize PTY echo.
           setLiveInputCapture(editedText)
           writeTerminalLiveInputText(liveInputRef, editedText)
-          // Preserve undefined so Android's heuristic hold still settles on its timer.
+          // Undefined composition enables Android’s timed heuristic hold.
           const sent = await applyLiveInputMirror(
             activeHandle,
             editedText,

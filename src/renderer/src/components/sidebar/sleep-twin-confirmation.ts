@@ -8,10 +8,7 @@ import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-i
 import type { Worktree } from '../../../../shared/worktree/types'
 import { collectHostTwinPurgeScopes } from '@/store/slices/worktrees/teardown/host-twin-worktree-purge'
 
-/**
- * Hosts whose copy of a selected workspace the sleep also reaches without being named: a twin
- * shares one id, so sleeping either copy sleeps the whole workspace.
- */
+/** Sleeping a workspace ID also sleeps its host twins; collect the additional hosts for confirmation. */
 export function collectTwinHostsAlsoSlept(
   state: AppState,
   worktrees: readonly Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>[]

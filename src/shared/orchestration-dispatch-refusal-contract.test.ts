@@ -34,8 +34,7 @@ describe('buildInjectRejectionMessage', () => {
   })
 })
 
-// Why: these strings are published receipts; they are pinned as literals, independent of the
-// builders, so a refactor cannot silently rewrite them together with the expectation.
+// Pin published receipt literals independently so refactors cannot change builders and expectations together.
 describe('dispatch refusal receipts keep their published messages', () => {
   it('leaves the message exactly as each call site supplies it', () => {
     expect(taskNotFoundRefusal('Task not found: task_1', { taskId: 'task_1' }).message).toBe(

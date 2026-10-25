@@ -45,7 +45,6 @@ async function cleanupFailedProvider(
   throw startupError
 }
 
-/** Splits the two failures apart: a wrong path and a forgotten chmod +x need different fixes. */
 async function probeExecutable(path: string): Promise<ExecutableProbe> {
   const mode = process.platform === 'win32' ? constants.F_OK : constants.X_OK
   try {
@@ -96,7 +95,6 @@ export function installedElectronCandidates(
   ]
 }
 
-/** The .deb/AppImage CLI shims (`orca-ide` on PATH) are bash scripts, not Electron. */
 async function isScriptShim(path: string): Promise<boolean> {
   try {
     const handle = await open(await realpath(path), 'r')
@@ -112,7 +110,7 @@ async function isScriptShim(path: string): Promise<boolean> {
   }
 }
 
-/** Only paths with stable installer ownership qualify; never guess arbitrary AppImage locations. */
+/** Require installer-owned paths; arbitrary AppImage locations cannot establish ownership. */
 export async function resolveInstalledElectronExecutable(
   candidates: string[] = installedElectronCandidates(process.platform, homedir(), process.env)
 ): Promise<string | null> {
@@ -177,7 +175,6 @@ async function startElectronServeProvider(
   }
 }
 
-/** Resolve once at startup: Electron first, then the operator-supplied Chromium. */
 export async function resolveOrcadBrowserProvider(
   options: OrcadBrowserProviderOptions
 ): Promise<OrcadBrowserProvider | null> {
@@ -198,8 +195,7 @@ export async function resolveOrcadBrowserProvider(
   if (options.signal?.aborted) {
     return null
   }
-  // Why held rather than reported now: Chromium may still resolve, and if it does not, its
-  // own concrete fault is the more actionable one for an operator who set the env var.
+  // Defer Electron failure: configured Chromium may succeed or provide a more actionable cause.
   let electronFailure: RuntimeBrowserUnavailableCause | null = null
   if (installedElectronExecutable) {
     try {
@@ -217,9 +213,7 @@ export async function resolveOrcadBrowserProvider(
     }
   }
 
-  // Why the env var is read before the driver: with it set, a missing driver is a driver
-  // problem, not an unconfigured host. Telling someone to set ORCA_BROWSER_EXECUTABLE when
-  // they already did is the misdirection this ordering exists to prevent.
+  // Read configuration before probing drivers so missing drivers cannot look like missing configuration.
   const chromiumExecutable = environment.ORCA_BROWSER_EXECUTABLE?.trim()
   if (!chromiumExecutable) {
     return declined(electronFailure ?? { reason: 'unconfigured' })

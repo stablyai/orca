@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -14,10 +14,21 @@ const probe = vi.hoisted(() =>
 )
 vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
 const servers: AgentHookServer[] = []
+const temporaryPaths: string[] = []
+
+function createUserDataPath(prefix: string): string {
+  const path = mkdtempSync(join(tmpdir(), prefix))
+  temporaryPaths.push(path)
+  return path
+}
 afterEach(() => {
   for (const server of servers.splice(0)) {
     server.stop()
   }
+  for (const path of temporaryPaths.splice(0)) {
+    rmSync(path, { recursive: true, force: true })
+  }
+  vi.restoreAllMocks()
   probe.mockReset()
   probe.mockResolvedValue('unverifiable')
 })
@@ -180,7 +191,7 @@ describe('host-owned hook presence', () => {
       },
       'ssh-1'
     )
-    // The relay has no identity resolution, so it can hand the nested Claude ownership.
+    // Relays cannot resolve process identity and may initially attribute the pane to nested Claude.
     server.ingestRemote(
       {
         ...base,
@@ -257,7 +268,7 @@ describe('host-owned hook presence', () => {
   })
 
   it('checks each pane once after replaying its spooled hooks', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-presence-spool-'))
+    const userDataPath = createUserDataPath('orca-presence-spool-')
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
@@ -291,6 +302,10 @@ describe('host-owned hook presence', () => {
     servers.push(restarted)
     await restarted.start({ env: 'production', userDataPath })
     expect(probe).toHaveBeenCalledOnce()
+    expect(restarted.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
+      toolName: 'Bash',
+      toolInput: 'ls'
+    })
   })
 
   it('keeps unanswered reads and clears only a positive process exit', async () => {
@@ -366,14 +381,15 @@ describe('host-owned hook presence', () => {
     expect(probe).not.toHaveBeenCalled()
     expect(visible(server)).toBe(true)
     await hook(server, 'SessionStart', 'relaunch', undefined, 4002)
-    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
-    await vi.waitFor(() => expect(visible(server)).toBe(false))
+    expect(probe).toHaveBeenCalledOnce()
+    expect(
+      server.getStatusSnapshot().find((row) => row.paneKey === PANE)?.providerSession?.id
+    ).toBe('relaunch')
     await hook(server, 'UserPromptSubmit', 'relaunch', undefined, 4002)
     expect(state(server)).toBe('working')
   })
 })
 
-// #24353: a remote worker's liveness reads the exit after the hook store has reconciled the row.
 describe('retained agent exit', () => {
   it('keeps a SessionEnd exit readable after the row is reconciled', async () => {
     const server = await createServer()
@@ -398,6 +414,7 @@ describe('retained agent exit', () => {
     const server = await createServer()
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     expect(await server.checkAgentPresenceSince(PANE, Date.now() + 60_000)).toBeNull()
   })
 
@@ -459,6 +476,7 @@ describe('retained agent exit', () => {
     const attachedAt = Date.now() - 1
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     await hook(server, 'UserPromptSubmit', 'replacement', undefined, null)
     expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBeNull()
   })
@@ -468,6 +486,7 @@ describe('retained agent exit', () => {
     const attachedAt = Date.now() - 1
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     server.ingestTerminalStatus({
       paneKey: PANE,
       tabId: 'tab-1',
@@ -505,9 +524,11 @@ describe('retained agent exit', () => {
           finish = resolve
         })
     )
-    await hook(server, 'SessionStart', 'replacement', undefined, 4002)
+    const replacement = hook(server, 'SessionStart', 'replacement', undefined, 4002)
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
     const overlapping = server.checkAgentPresenceSince(PANE, attachedAt)
     finish('exited')
+    await replacement
     expect(await overlapping).not.toBe('exited')
   })
 
@@ -525,6 +546,7 @@ describe('retained agent exit', () => {
     const attachedAt = Date.now() - 1
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     const response = await postHookEvent(
       server,
       buildBody({ hook_event_name: 'before_agent_start', prompt: 'next' }),
@@ -539,6 +561,7 @@ describe('retained agent exit', () => {
     const attachedAt = Date.now() - 1
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     const response = await postHookEvent(
       server,
       buildBody({ hook_event_name: 'agent_start', prompt: 'next' }),
@@ -549,12 +572,12 @@ describe('retained agent exit', () => {
   })
 
   it('keeps a persisted exit through a spooled start written before it', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-presence-exit-spool-'))
+    const userDataPath = createUserDataPath('orca-presence-exit-spool-')
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
     const attachedAt = Date.now() - 1
-    // Spool stamps are whole seconds, so only one a full second before the exit predates it.
+    // Spool timestamps have whole-second precision.
     const spooledAt = Date.now() - 5_000
     await hook(first, 'SessionStart')
     await hook(first, 'SessionEnd', 'session-a', 'prompt_input_exit')
@@ -568,7 +591,6 @@ describe('retained agent exit', () => {
         paneKey: PANE,
         source: 'claude',
         receivedAt: spooledAt,
-        // An obsolete owner identity must not be installed over the proven exit.
         agentProcess: JSON.stringify({
           pid: 4009,
           platform: process.platform,
@@ -584,13 +606,16 @@ describe('retained agent exit', () => {
   })
 
   it('lets a successor start spooled in the exit second clear the exit', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-presence-exit-same-second-'))
+    const userDataPath = createUserDataPath('orca-presence-exit-same-second-')
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
-    const attachedAt = Date.now() - 1
+    const exitedAt = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(exitedAt)
+    const attachedAt = exitedAt - 1
     await hook(first, 'SessionStart')
     await hook(first, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await first.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     first.flushStatusPersistSync()
     first.stop()
     const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
@@ -600,7 +625,7 @@ describe('retained agent exit', () => {
       `\n${JSON.stringify({
         paneKey: PANE,
         source: 'pi',
-        receivedAt: Math.floor(Date.now() / 1000) * 1000,
+        receivedAt: Math.floor(exitedAt / 1000) * 1000,
         payload: { hook_event_name: 'before_agent_start', prompt: 'next' }
       })}\n`
     )
@@ -615,6 +640,7 @@ describe('retained agent exit', () => {
     const attachedAt = Date.now() - 1
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     await hook(server, 'Stop', 'session-a', undefined, null)
     probe.mockResolvedValue('live')
     await hook(server, 'PreToolUse', 'replacement', undefined, 4002)
@@ -622,7 +648,7 @@ describe('retained agent exit', () => {
   })
 
   it('keeps the exit readable after the hook store restarts', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-presence-exit-'))
+    const userDataPath = createUserDataPath('orca-presence-exit-')
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
@@ -641,6 +667,7 @@ describe('retained agent exit', () => {
     const server = await createServer()
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     server.forgetAgentExit(PANE)
     expect(await server.checkAgentPresenceSince(PANE, 0)).toBeNull()
   })
@@ -650,6 +677,7 @@ describe('retained agent exit', () => {
     const attachedAt = Date.now() - 1
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
     await hook(server, 'SessionStart', 'relaunch', undefined, 4002)
     probe.mockResolvedValue('live')
     expect(await server.checkAgentPresenceSince(PANE, attachedAt)).toBe('live')
@@ -689,7 +717,7 @@ describe('retained agent exit lifetime', () => {
     expect(await server.checkAgentPresenceSince(moved, 0)).toBeNull()
   })
 
-  // Why: a finished shell command retires launch authority while the PTY, and the exit's meaning, survive.
+  // Launch authority can retire while the PTY and retained exit remain valid.
   it('keeps the exit when only the pane launch authority retires', async () => {
     const server = await serverWithExit()
     server.retirePaneAuthority(PANE)
@@ -699,7 +727,7 @@ describe('retained agent exit lifetime', () => {
   it('prunes an exit older than the hydrate window when saving', async () => {
     const server = new AgentHookServer()
     servers.push(server)
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-presence-exit-prune-'))
+    const userDataPath = createUserDataPath('orca-presence-exit-prune-')
     await server.start({ env: 'production', userDataPath })
     await hook(server, 'SessionStart')
     await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
@@ -713,7 +741,7 @@ describe('retained agent exit lifetime', () => {
         clock.mockRestore()
       }
     }
-    // The retained resume row still names the session, so its exit must stay with it.
+    // A retained resume row keeps its session exit.
     expect(server.getStatusSnapshot().some((row) => row.paneKey === PANE)).toBe(true)
     saveEightDaysLater()
     expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')

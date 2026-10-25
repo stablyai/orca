@@ -100,8 +100,7 @@ function registerChatViewTab(covered: boolean): {
   return { focus, setActivePane }
 }
 
-// Why: a legacy native chat is a terminal tab with viewMode 'chat' — the xterm stays mounted
-// under the chat portal, so focusing it drags the caret out of the composer (#9939 twin).
+// Legacy chat keeps xterm mounted under its portal; focusing it steals the composer caret (#9939 twin).
 describe('focusRuntimeTerminalSurface on a chat-view pane', () => {
   afterEach(() => {
     document.body.replaceChildren()
@@ -113,8 +112,7 @@ describe('focusRuntimeTerminalSurface on a chat-view pane', () => {
   it('claims focus without touching the covered xterm', () => {
     const { focus } = registerChatViewTab(true)
 
-    // Why true, not false: false routes the caller to the DOM fallback, which for a structured
-    // tab id finds no [data-terminal-tab-id] element and focuses an unrelated tab's xterm.
+    // Return true or DOM fallback finds no structured tab and focuses unrelated xterm.
     expect(focusRuntimeTerminalSurface(TAB_ID, null, WORKTREE_ID)).toBe(true)
     expect(focus).not.toHaveBeenCalled()
   })

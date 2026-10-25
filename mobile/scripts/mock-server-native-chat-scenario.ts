@@ -10,15 +10,11 @@ import type {
 } from '../../src/shared/runtime-types'
 import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
 
-// Why: native chat needs a live agent tab, an empty-but-subscribed transcript,
-// and a terminal send path whose acceptance can be flipped mid-session.
-// Restarting the server re-keys E2EE (forcing a re-pair), so send behaviour is
-// read from a control file on every request instead of an env var.
+// Read send behavior from control file per request: restarting mock rekeys E2EE and forces re-pair, preventing mid-session native chat repros.
 const SEND_MODE_FILE = process.env.MOCK_SEND_MODE_FILE ?? join(tmpdir(), 'orca-mock-send-mode')
 const TERMINAL_LIST_MODE_FILE =
   process.env.MOCK_TERMINAL_LIST_MODE_FILE ?? join(tmpdir(), 'orca-mock-terminal-list-mode')
-// Write `dead` here to reproduce a gone PTY: the host answers with `subscribed`
-// then `end`, which is the shape the rearm bound and terminal prune react to.
+// Write dead to model subscribed→end for gone PTY, exercising rearm bound and terminal pruning.
 const TERMINAL_STREAM_MODE_FILE =
   process.env.MOCK_TERMINAL_STREAM_MODE_FILE ?? join(tmpdir(), 'orca-mock-terminal-stream-mode')
 const TERMINAL_HANDLE = 'chat-term-1'
@@ -35,7 +31,6 @@ function readControl(file: string): string {
   try {
     return readFileSync(file, 'utf-8').trim()
   } catch {
-    // Default to the happy path when the control file is absent.
     return ''
   }
 }
@@ -73,8 +68,7 @@ function buildTab(): RuntimeMobileSessionTerminalClientTab {
   }
 }
 
-// Versions are per-worktree and only advance on real content change, so the
-// mock can't fake a re-render heartbeat the runtime would never send.
+// Advance per-worktree versions only on content changes; runtime has no fake rerender heartbeat.
 function buildTabsResult(worktree: string): RuntimeMobileSessionTabsResult {
   const result: RuntimeMobileSessionTabsResult = {
     worktree,
@@ -108,9 +102,7 @@ function worktreeOf(request: RpcRequest): string {
   return typeof raw === 'string' ? raw : 'id:mock-worktree'
 }
 
-// Why: shapes mirror what the runtime's omp decoder emits for a real session
-// (thinking→text on the assistant turn, toolCall blocks, toolResult turns), so
-// the phone exercises the same render path a live omp pane would.
+// Mirror OMP decoder’s thinking/text/toolCall/toolResult shapes so phone exercises production render path.
 function mockTranscript(): NativeChatMessage[] {
   if (CHAT_AGENT !== 'omp') {
     return []
@@ -153,8 +145,7 @@ function mockTranscript(): NativeChatMessage[] {
   ]
 }
 
-// Why: unsubscribe correlates by worktree, not request id, and a socket that
-// navigates A->B->A would otherwise stack one push loop per subscribe.
+// Cancel by worktree, not request id, so A→B→A navigation cannot stack push loops.
 const tabsPushLoops = new Map<WebSocket, Map<string, ReturnType<typeof setInterval>>>()
 
 function stopTabsPushLoop(ws: WebSocket, worktree: string): void {
@@ -193,10 +184,7 @@ type Respond = (response: RpcResponse) => void
 type Success = (id: string, result: unknown, streaming?: boolean) => RpcResponse
 type Failure = (id: string, code: string, message: string) => RpcResponse
 
-/** Mock backend for the native-chat surface: session tabs, a fixture transcript
- *  snapshot, terminal send, and image upload. Opt-in via MOCK_NATIVE_CHAT=1
- *  because it replaces the default terminal fixtures. No transcript or terminal
- *  output frames are pushed. Returns false for methods it does not own. */
+// Opt-in MOCK_NATIVE_CHAT=1 replaces terminal fixtures with native chat tabs/transcript/send/upload; pushes no transcript/output frames. Return false for unowned methods.
 export function handleMockNativeChatRequest(
   request: RpcRequest,
   respond: Respond,
@@ -235,9 +223,7 @@ export function handleMockNativeChatRequest(
       return true
 
     case 'terminal.list': {
-      // `omit` = empty list; `other` = a live list that just doesn't name the
-      // chat handle (what the runtime returns when the handle is scoped to a
-      // different worktree id than the one mobile queries).
+      // omit means empty list; other means live list without this handle, matching a handle scoped to another worktree.
       const mode = readControl(TERMINAL_LIST_MODE_FILE)
       const worktreeId = worktreeOf(request).replace(/^id:/, '')
       const entry = (handle: string) => ({

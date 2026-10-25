@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { act, create } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
 import {
@@ -17,15 +17,12 @@ const router = vi.hoisted(() => ({
   dismissTo: vi.fn(),
   prefetch: vi.fn(),
   back: vi.fn(),
-  /** Not a target-taker, so it must arrive through the spread untouched. */
   setParams: vi.fn(),
-  /** What the page's own stack answers. One entry is what the entry's `replaceState` leaves. */
   canGoBack: vi.fn(() => false)
 }))
 
 vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
-// The web file re-exports the screen hooks through the provider module, and reaching the real ones
-// imports the Expo runtime this test does not have. Nothing below calls one.
+// Stub re-exported hooks to avoid importing Expo; these tests call none of them.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -36,7 +33,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import { useRouteHandoff, WRAPPED_HREF_MEMBERS } from './route-handoff.web'
+import { useRouteHandoff } from './route-handoff.web'
 
 const INIT = {
   v: BRIDGE_PROTOCOL_VERSION,
@@ -55,6 +52,9 @@ const INIT = {
   pageRoutes: ['/h/[hostId]']
 }
 
+const trees: ReactTestRenderer[] = []
+const clients: BridgeRpcClient[] = []
+
 const held: { handoff: RouteHandoff | null } = { handoff: null }
 
 function Screen(): null {
@@ -62,13 +62,21 @@ function Screen(): null {
   return null
 }
 
-function installChannel(): { posted: string[]; deliver: (frame: unknown) => void } {
+function installChannel(): {
+  posted: string[]
+  deliver: (frame: unknown) => void
+  failPosts: () => void
+} {
+  let failed = false
   const posted: string[] = []
   const channel: {
     postMessage: (json: string) => void
     onmessage: ((event: { data: string }) => void) | null
   } = {
     postMessage: (json) => {
+      if (failed) {
+        throw new Error('page port unavailable')
+      }
       posted.push(json)
     },
     onmessage: null
@@ -76,28 +84,31 @@ function installChannel(): { posted: string[]; deliver: (frame: unknown) => void
   Object.defineProperty(globalThis, 'orcaBridge', { value: channel, configurable: true })
   return {
     posted,
+    failPosts: () => {
+      failed = true
+    },
     deliver: (frame) => {
       channel.onmessage?.({ data: JSON.stringify(frame) })
     }
   }
 }
 
-/** The page as the entry leaves it: one client, already holding a session. */
-function mount(init: unknown): { posted: string[]; handoff: RouteHandoff } {
+function mount(init: unknown): { posted: string[]; handoff: RouteHandoff; failPosts: () => void } {
   const channel = installChannel()
   const client = createShellPageClient()
   if (client === null) {
     throw new Error('no channel installed')
   }
+  clients.push(client)
   channel.deliver(init)
   act(() => {
-    create(render(client))
+    trees.push(create(render(client)))
   })
   const handoff = held.handoff
   if (handoff === null) {
     throw new Error('no screen mounted')
   }
-  return { posted: channel.posted, handoff }
+  return { posted: channel.posted, handoff, failPosts: channel.failPosts }
 }
 
 function render(client: BridgeRpcClient): ReactElement {
@@ -120,7 +131,6 @@ function backs(posted: readonly string[]): unknown[] {
     .filter((frame: { name?: string }) => frame.name === BRIDGE_NAVIGATE_BACK_NOTIFY)
 }
 
-/** What the page said about a target it would not open. One entry per warn, in order. */
 const warned: unknown[][] = []
 let restoreWarn: (() => void) | null = null
 
@@ -147,6 +157,14 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  act(() => {
+    for (const tree of trees.splice(0)) {
+      tree.unmount()
+    }
+  })
+  for (const client of clients.splice(0)) {
+    client.close()
+  }
   restoreWarn?.()
   restoreWarn = null
   vi.useRealTimers()
@@ -178,15 +196,12 @@ describe('a route the page does not render', () => {
   it('reads the path and not the query, so a target with params is still matched', () => {
     const { posted, handoff } = mount(INIT)
     handoff.push('/h/host-b?from=list')
-    // `/h/host-b` is a page route; the query is not part of what the pattern matches.
     expect(navigations(posted)).toEqual([])
     expect(router.push).toHaveBeenCalledWith('/h/host-b?from=list', undefined)
   })
 })
 
-// `undefined` is asserted rather than elided below: each wrapper forwards `(href, options)` whole,
-// so a caller that passed none reaches the router with the second argument present and undefined,
-// which is what expo-router reads as absent.
+// Assert the explicit undefined options argument too; wrappers forward both arguments and Expo treats it as absent.
 describe('a route the page does render', () => {
   it('stays in this document rather than re-entering the shell for it', () => {
     const { posted, handoff } = mount(INIT)
@@ -223,9 +238,7 @@ describe('the members that stay inside this document', () => {
 
 describe('a shell that granted no navigate', () => {
   it('stays where it is rather than mounting a screen this page does not serve', () => {
-    // The bundle carries every route under `app/h`, so a local push here does not paint Unmatched:
-    // it mounts the native screen on React Native Web, inside the shell. A tap that goes nowhere
-    // and says why is the better of the two, and the route policy keeps the case off a device.
+    // A local fallback would mount an unsupported native screen under RN Web because the bundle contains app/h; refusal must stay put.
     const { posted, handoff } = mount({
       ...INIT,
       grants: { ...INIT.grants, native: [] },
@@ -246,16 +259,10 @@ describe('a shell that granted no navigate', () => {
   })
 })
 
-/**
- * Two hrefs the page actually builds that the shell would have dropped.
- *
- * `notifyNavigate` answers whether the frame left the page, never whether the shell took it, so
- * both of these used to suppress the local fallback and leave a dead tap.
- */
+// Validate hrefs before posting: notifyNavigate reports send handoff, not whether the shell accepted its target.
 describe('a target the shell would refuse', () => {
   it('resolves the object form the Connection-log link builds, rather than posting [object Object]', () => {
     const { posted, handoff } = mount(INIT)
-    // host-workspace-list.tsx renders this whenever a host is reconnecting with three attempts.
     handoff.push({ pathname: '/connection-log', params: { hostId: 'host a/b' } })
     expect(navigations(posted)).toEqual([
       {
@@ -285,16 +292,12 @@ describe('a target the shell would refuse', () => {
     for (const href of [
       '/h/host-a/tasks#top',
       '/h/host-a/../tasks',
-      // The same climb the shell's reader refuses percent-encoded, which both sides get from the
-      // one segment rule they share.
       '/h/host-a/%2e%2e/tasks',
       '/h/a\\b/tasks'
     ]) {
       router.push.mockClear()
       const { posted, handoff } = mount(INIT)
       handoff.push(href)
-      // Posted whole before C5.1: `pathnameOf` strips the fragment to match, and the unstripped
-      // href went on the wire and was dropped by the shell's reader.
       expect(navigations(posted), href).toEqual([])
       expect(router.push, href).not.toHaveBeenCalled()
     }
@@ -315,18 +318,10 @@ describe('a target the shell would refuse', () => {
   })
 })
 
-/**
- * The Back button the page could not serve.
- *
- * The document holds the one history entry the entry wrote with `replaceState`, so `history.back()`
- * goes nowhere and the Tasks header's `onPress={() => router.back()}`
- * (`src/tasks/mobile-tasks-screen-chrome.tsx`) is dead inside the page. The stack that has
- * somewhere to go is the native one the shell pushed this page onto.
- */
+// The initial document has one history entry; Back must ask the native stack unless the page has pushed its own screens.
 describe('a back this document cannot serve', () => {
   it('hands the pop to the shell rather than going nowhere', () => {
     const { posted, handoff } = mount(INIT)
-    // Exactly the call the Tasks header makes from its own tap handler.
     handoff.back()
     expect(backs(posted)).toEqual([
       { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }
@@ -346,30 +341,41 @@ describe('a back this document cannot serve', () => {
   })
 
   it('does not throw out of a tap handler when there is nowhere to post', () => {
-    const { handoff } = mount({ ...INIT, grants: { ...INIT.grants, native: [] } })
+    const { posted, handoff, failPosts } = mount(INIT)
+    failPosts()
     expect(() => handoff.back()).not.toThrow()
+    expect(backs(posted)).toEqual([])
+    expect(router.back).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(warned)).toContain('send-failed')
   })
 })
 
-/**
- * The members the spread hands through, which is everything this file does not name.
- *
- * `navigate` and `prefetch` sat here unwrapped through C5.1: both take a target, both reached
- * expo-router directly, and `navigate` to a route outside `pageRoutes` would have pushed it into
- * this document — the hole the tri-state exists to close, under a name nobody had looked at.
- */
+// Wrap every href-taking router member; spreading navigate/prefetch untouched would bypass page-route policy.
 describe('every member that takes a target', () => {
   it('is replaced rather than handed through, all of them', () => {
-    const { handoff } = mount(INIT)
-    for (const member of WRAPPED_HREF_MEMBERS) {
-      expect(typeof handoff[member], member).toBe('function')
-      expect(handoff[member], member).not.toBe(router[member])
+    const options = { withAnchor: false }
+    for (const member of ['push', 'replace', 'navigate', 'dismissTo'] as const) {
+      router[member].mockClear()
+      const { posted, handoff } = mount(INIT)
+      handoff[member]('/h/host-b', options)
+      expect(router[member], member).toHaveBeenCalledExactlyOnceWith('/h/host-b', options)
+      router[member].mockClear()
+      handoff[member]('/h/host-a/session/wt-1')
+      expect(navigations(posted), member).toEqual([
+        {
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: 'navigate',
+          href: '/h/host-a/session/wt-1'
+        }
+      ])
+      handoff[member]('/h/host-a/tasks#top')
+      expect(navigations(posted), member).toHaveLength(1)
+      expect(router[member], member).not.toHaveBeenCalled()
     }
   })
 
   it('leaves a member that takes no target exactly as the router had it', () => {
-    // Without this the assertion above would pass on a hook that wrapped everything, which would
-    // be a different bug and not this one.
     const { handoff } = mount(INIT)
     expect(handoff.setParams).toBe(router.setParams)
   })
@@ -405,12 +411,7 @@ describe('navigate, which is a push that may collapse onto an existing screen', 
   })
 })
 
-/**
- * Prefetch is the one target-taker that must never reach the shell.
- *
- * It is a background load, and the only thing the shell can be told is `navigate` — so handing one
- * over would open a screen nobody asked for. Dropping it costs a chunk that is fetched later.
- */
+// Never hand prefetch to native navigate: a background optimization must not open a screen.
 describe('prefetch', () => {
   it('warms a route this document renders, which is what the chunk split makes worth doing', () => {
     const { handoff } = mount(INIT)
@@ -433,14 +434,7 @@ describe('prefetch', () => {
   })
 })
 
-/**
- * The second argument expo-router's target-takers accept.
- *
- * `push`, `replace`, `navigate` and `dismissTo` are `(href, options?)`, and the wrappers took only
- * the href: a local push that asked for `{ withAnchor: false }` reached the router without it, so
- * the page silently did something other than what the caller wrote. Nothing in this tree passes
- * one today, which is why it went unnoticed and why it has to be pinned rather than left.
- */
+// Preserve options for every local target-taker so future callers cannot silently lose router behavior.
 describe('navigation options', () => {
   const options = { withAnchor: false }
 
@@ -463,8 +457,7 @@ describe('navigation options', () => {
   it('do not cross to the shell, which the notify has no room for', () => {
     const { posted, handoff } = mount(INIT)
     handoff.push('/h/host-a/session/wt-1', options)
-    // The frame carries an href and nothing else, so a handed-off target loses them. That is the
-    // native stack's push to configure, not this document's.
+    // Bridge navigation carries href only; native stack policy owns options after handoff.
     expect(navigations(posted)).toEqual([
       {
         v: BRIDGE_PROTOCOL_VERSION,
@@ -476,15 +469,7 @@ describe('navigation options', () => {
   })
 })
 
-/**
- * An in-page hop only to a route this session's grants already cover.
- *
- * Grants are resolved once, from the route the shell opened, so a push kept local runs the target
- * under the opener's list. On a wide layout the sidebar reaches the tasks page from every `/h`
- * route, so keeping that hop local runs tasks without `native.clipboard.write` and its copy actions
- * refuse with nothing on screen to say why. Handing it to the shell opens it as its own session,
- * with its own grants.
- */
+// Local targets run under the opener’s grants; hand off any target needing more so its own session receives the required capabilities.
 describe('an in-page hop the session cannot cover', () => {
   const TASKS = '/h/host-a/tasks'
   const PAIRS = [
@@ -520,8 +505,7 @@ describe('an in-page hop the session cannot cover', () => {
   })
 
   it("hands off when the session lacks any one of the target's grants, not the clipboard alone", () => {
-    // The tasks route declares five grants and this session holds four. Without a case that
-    // withholds `externalLink` alone, a rule reading only the verb grants would pass every case.
+    // Withhold externalLink alone too so a check covering only native verbs cannot pass.
     const { posted, handoff } = mount(
       withPairs(['navigate', 'storage', 'haptics', 'native.clipboard.write'])
     )
@@ -533,7 +517,6 @@ describe('an in-page hop the session cannot cover', () => {
   })
 
   it('keeps a hop whose target declares a subset, which is C3.1 without its pairwise pin', () => {
-    // explorer ⊇ preview: the opener was granted more than the target asks for.
     const { posted, handoff } = mount({
       ...INIT,
       grants: { ...INIT.grants, native: ['navigate', 'storage', 'externalLink', 'haptics'] },
@@ -556,7 +539,7 @@ describe('an in-page hop the session cannot cover', () => {
   })
 
   it('keeps the old rule when the shell named no grants, so an older shell is unchanged', () => {
-    // Absent, not empty: a shell that says nothing cannot be read as "this route needs nothing".
+    // Absent pairs preserve older-shell behavior; absence does not declare an empty grant list.
     const { posted, handoff } = mount({
       ...INIT,
       grants: { ...INIT.grants, native: ['navigate', 'storage', 'haptics'] },
@@ -568,8 +551,7 @@ describe('an in-page hop the session cannot cover', () => {
   })
 
   it('hands off a target the shell lists with no entry of its own', () => {
-    // Listed as renderable but absent from the pairs: the page cannot show it is covered, and a
-    // hop it cannot justify goes to the shell rather than running on the opener's grants.
+    // Listed but unpaired targets cannot prove grant coverage and must hand off.
     const { posted, handoff } = mount({
       ...withPairs(['navigate', 'storage', 'haptics']),
       pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }]

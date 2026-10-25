@@ -27,13 +27,12 @@ export type PullRequestPageProps = {
   sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   backLabel?: string
-  /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
     itemKey: { id: string; repoId: string },
     reviewRequests: GitHubAssignableUser[]
   ) => void
   onClose: () => void
-  /** Optional Project-origin context; when set, slug-addressed IPCs route writes to the row's repo instead of `repoPath` (both may be set — slug wins for writes). */
+  /** Project-origin slug routing overrides repoPath for writes to the row’s repo. */
   projectOrigin?: PullRequestPageProjectOrigin
 }

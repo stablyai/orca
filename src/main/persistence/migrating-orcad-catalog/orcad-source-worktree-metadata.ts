@@ -46,7 +46,7 @@ export function inspectOrcadSourceWorktreeMetadata(
       continue
     }
     if (isDanglingAlias(state, identities) && orcadMigrationOwnerMatchesScope(alias, scope)) {
-      continue // Names no metadata (its legacy row, if any, moves instead): nothing to move.
+      continue // Dangling aliases carry no metadata; any legacy row migrates separately.
     }
     const meta = identities.length === 1 ? state.worktreeMetaByIdentity?.[identities[0]] : undefined
     const worktreeId = unqualifyOrcadMigrationOwnerKey(alias)
@@ -96,7 +96,7 @@ export function subtractOrcadSourceWorktreeMetadata(
     repos: state.repos
   })
   const entries = manifest.payload.dormantState?.worktreeMeta ?? []
-  // Rows a downgraded build added in a moved project go too: the server's copy of it wins.
+  // The server owns moved projects, including rows added later by downgraded builds.
   const added = inspectOrcadSourceWorktreeMetadata(state, scope).rows.map((row) => row.sourceKey)
   const sourceKeys = new Set([...entries.map((entry) => entry.sourceKey), ...added])
   const worktreeIds = new Set([
@@ -118,7 +118,6 @@ export function subtractOrcadSourceWorktreeMetadata(
   pruneUnreferencedWorktreeIdentityMeta(state, removedIdentities)
 }
 
-/** An alias whose identities hold no metadata, as a profile that lost them leaves behind. */
 function isDanglingAlias(state: PersistedState, identities: readonly string[]): boolean {
   return identities.every((identity) => {
     const meta = state.worktreeMetaByIdentity?.[identity]

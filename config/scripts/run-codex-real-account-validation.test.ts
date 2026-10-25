@@ -76,8 +76,12 @@ describe('Codex real-account validation harness', () => {
     )
     cleanupPaths.push(layout.tempRoot)
 
-    expect(snapshot.throwawayCodex.auth.sha256).toMatch(/^[a-f0-9]{64}$/)
-    expect(snapshot.managedHomes[0].auth.sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(snapshot.throwawayCodex.auth.sha256).toBe(
+      '31f4bbbaf084b1f0219648dd7be0161d92207bf3361edec55c7b5c81ecefa14c'
+    )
+    expect(snapshot.managedHomes[0].auth.sha256).toBe(
+      '0ceece50035d895227dec8d4c57df22e1a666cce3d8f56687b212d64d5d82ab6'
+    )
     expect(JSON.stringify(snapshot)).not.toContain('system-secret')
     expect(JSON.stringify(snapshot)).not.toContain('never-report-me')
   })
@@ -148,9 +152,7 @@ describe('Codex real-account validation harness', () => {
   })
 
   it('builds via process.execPath and the repo-local electron-vite entry, not npx', () => {
-    // Why: raw `npx` resolves to a .cmd shim on Windows that execFileSync cannot
-    // launch (ENOENT), so the build command must use the current Node binary and
-    // the repository-local electron-vite JS entry to stay cross-platform.
+    // Build with current Node/local electron-vite JS because Windows npx.cmd is not directly executable.
     const { command, args, entry } = runValidationModule<{
       command: string
       args: string[]

@@ -112,5 +112,15 @@ describe('AutomationListSearchField', () => {
     input?.dispatchEvent(shiftEnter)
     expect(shiftEnter.defaultPrevented).toBe(false)
     expect(onEnter).toHaveBeenCalledTimes(1)
+
+    const composingEnter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      isComposing: true,
+      bubbles: true,
+      cancelable: true
+    })
+    input?.dispatchEvent(composingEnter)
+    expect(composingEnter.defaultPrevented).toBe(false)
+    expect(onEnter).toHaveBeenCalledTimes(1)
   })
 })

@@ -26,5 +26,3 @@ export function requestSourceControlEditorRevealFrame(
     frameIds.current.push(frameId)
   }
 }
-
-// The primary-action state machine now lives in ./source-control-primary-action.ts, imported directly by callers.

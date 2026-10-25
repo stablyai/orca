@@ -26,8 +26,7 @@ function claudeRecord(): NativeChatSessionOptionRecord {
 }
 
 describe('buildNativeChatSessionOptionSnapshot', () => {
-  // The producer names its lane once, here; `dispatched` is emitted by both and
-  // is not evidence of which one, so the descriptor has to carry the answer.
+  // Both lanes emit dispatched; only an explicit transport distinguishes their descriptors.
   it.each(['catalog', 'agent-session'] as const)(
     'stamps every descriptor with the %s transport it was built for',
     (liveTransport) => {
@@ -86,8 +85,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
   })
 
   it('renders exactly the models it is given, without self-healing the tracked one', () => {
-    // The builder no longer appends the tracked model itself — reconciling it is
-    // the caller's job (withTrackedNativeChatModel), so every row is a real choice.
+    // Callers reconcile tracked models with withTrackedNativeChatModel; builders must list actual choices only.
     const record = claudeRecord()
     record.model = { value: 'experimental-model', source: 'reported' }
     const snapshot = buildNativeChatSessionOptionSnapshot({
@@ -207,9 +205,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     })
 
     it('re-injects a grok seed model an authoritative discovery dropped', () => {
-      // Reconciliation alone never un-picks: the PTY surface untracks a retired id
-      // when an authoritative discovery lands (see native-chat-pty-session-options),
-      // while this shared layer keeps a pre-discovery persisted pick labelled.
+      // PTY retires picks after authoritative discovery; shared reconciliation retains labeled pre-discovery selections.
       const record = createNativeChatSessionOptionRecord('grok')
       record.model = { value: 'grok-4.5', source: 'dispatched' }
       const discovered = mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
@@ -296,16 +292,14 @@ describe('defaults on load', () => {
   })
 
   it('offers the effort row under that default model without naming its value', () => {
-    // `grok --help` documents no default for --reasoning-effort, and with no model
-    // picked the launch sends the flag nowhere, so grok's own choice is unknowable.
+    // Grok documents no effort default and unpicked launches emit no flag, so the CLI choice is unknown.
     const effort = grokDraft().find((descriptor) => descriptor.id === 'effort')
     expect(effort).toMatchObject({ valueSource: 'unknown' })
     expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeUndefined()
   })
 
   it('names the CLI default in a live session too, where the picker actually renders', () => {
-    // No tracked model means no `-m` was emitted, so the CLI is running its own
-    // default — as true of a running session as of a draft.
+    // No tracked model means no -m was sent; the running CLI uses its own default too.
     const live = grokDraft(GROK_SESSION_OPTION_CATALOG.models, 'live')
     expect(live[0]).toMatchObject({ id: 'model', valueSource: 'default' })
     expect(live[0]!.kind.type === 'select' ? live[0]!.kind.currentValue : null).toBe('grok-4.7')
@@ -345,8 +339,7 @@ describe('defaults on load', () => {
   })
 
   it('shows no default for an agent whose isDefault is only decorative', () => {
-    // Claude's real default comes from the account and the user's settings, and an
-    // untouched draft sends no --model, so naming the seed's `sonnet` would be a guess.
+    // Claude’s account/settings choose its real default; untouched launches send no --model, so seeded sonnet is unproven.
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -380,8 +373,7 @@ describe('defaults on load', () => {
 })
 
 describe('a boolean option always carries a value to render', () => {
-  // `thinking` is the sharp case: its catalog default is `true`, so a descriptor
-  // that omits the value renders a switch that says the opposite of the catalog.
+  // Cursor defaults thinking true; omitting the display value would falsely render the switch off.
   function cursorSnapshot(mode: 'draft' | 'live'): SessionOptionDescriptor[] {
     const record = createNativeChatSessionOptionRecord('cursor')
     record.model = { value: 'claude-opus-4-8', source: 'reported' }
@@ -398,16 +390,14 @@ describe('a boolean option always carries a value to render', () => {
     cursorSnapshot(mode).find((descriptor) => descriptor.id === 'thinking')
 
   it('resolves an unreported live boolean to the catalog default, not to off', () => {
-    // A switch has no third position: leaving this unset rendered `thinking` off
-    // while the catalog — and every composed dispatch — treats it as on.
+    // Switches cannot display unknown; resolve to the same default used by composed dispatch.
     const thinking = thinkingOf('live')
     expect(thinking?.kind.type).toBe('boolean')
     expect(thinking?.kind.type === 'boolean' ? thinking.kind.currentValue : null).toBe(true)
   })
 
   it('keeps provenance on its own track when it resolves that value', () => {
-    // The value renders; nothing reported it. Collapsing these would let a pill
-    // name a value the agent never confirmed.
+    // Resolved display values are not agent confirmation; keep provenance unknown/default for pills.
     expect(thinkingOf('live')).toMatchObject({ valueSource: 'unknown' })
     expect(thinkingOf('draft')).toMatchObject({ valueSource: 'default' })
   })
@@ -438,8 +428,7 @@ describe('a boolean option always carries a value to render', () => {
   })
 
   it('does not let the resolved display value reach the composed --model argument', () => {
-    // Invariant pin, not a regression arm: the composed model is built from the
-    // caller's picks, never from a descriptor, so resolving display cannot move it.
+    // Composed model uses caller picks, never display descriptors; resolving a switch cannot alter dispatch.
     expect(resolveAgentSessionOptionLaunch('cursor', { model: 'claude-opus-4-8' })).toEqual({
       args: ['--model', 'claude-opus-4-8-thinking-high'],
       appliedValues: { model: 'claude-opus-4-8', thinking: true, effort: 'high' }

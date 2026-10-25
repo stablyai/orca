@@ -30,6 +30,7 @@ import {
 } from '../../../../../shared/workspace-statuses'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
+import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
@@ -200,9 +201,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           })(),
           dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
           ...hydrateUnexpectedSignoutDismissal(s, ui.dismissedUnexpectedSignoutVersion),
-          // Why: a persisted value from a build that knew a different channel set
-          // would otherwise survive as-is; activeChannel only falls back on null,
-          // so an unknown string reaches listBuilds and the segmented control.
+          // Reject channels unknown to this build; activeChannel falls back only on null, otherwise leaking invalid values to listBuilds/controls.
           releaseChannelOverride: isReleaseChannel(ui.releaseChannelOverride)
             ? ui.releaseChannelOverride
             : null,
@@ -212,6 +211,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
           browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
           browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
+          browserDevToolsDock: normalizeBrowserDevToolsDockLayout(ui.browserDevToolsDock),
           taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
           featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
           featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
@@ -251,10 +251,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals
           ),
-          // Why the normalizer rather than a cast: this blob is hand-editable and
-          // may come from an older or newer build; it degrades field by field
-          // instead of bricking the cleanup dialog.
-          // Why: a sync broadcast can carry stale browse state while its writer is debounced.
+          // Normalize hand-editable mixed-version cleanup state fieldwise; sync broadcasts must preserve locally debounced browse edits.
           workspaceCleanupBrowse:
             source === 'startup'
               ? normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse)
@@ -264,16 +261,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
           persistedUIReady: true
         }
-        // The incoming payload is authoritative for the writer-owned fields, so it becomes the
-        // writer's new diff baseline — but fields with an unflushed local edit (mirror diverged
-        // from the previous baseline) keep the local value so a broadcast arriving inside the
-        // writer's debounce window can't silently revert what the user just toggled (STA-5781).
-        // Order matters: capture the baseline BEFORE overlaying pending edits, or the baseline
-        // would equal the pending value, the diff would go empty, and the toggle would be dropped.
-        // Note the width sanitizers above fall back to the CURRENT store value only for
-        // non-numeric input (numbers are clamped in place), so a captured width can differ
-        // from what main holds only for garbage payloads; at worst main keeps an
-        // out-of-range width until the next drag re-writes it.
+        // Capture authoritative baseline before overlaying dirty/in-flight local fields or their diff vanishes (STA-5781). Nonnumeric width fallback may differ from main until the next drag.
         const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
         const previousBaseline = s.persistedUIWriteBaseline
         if (previousBaseline) {
@@ -290,14 +278,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ;(hydrated as Record<string, unknown>)[field] = s[field]
           }
         }
-        // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.
-        // The baseline must still advance when it moved (a remote same-field write during an in-flight
-        // ack pins the only visibly differing field, and our own echo precedes every ack) — but only
-        // the two baseline keys, or every ordinary write's echo would churn the store's collection
-        // identities and re-render identity-compared selectors once per write.
-        // Why the generation bumps only on baseline movement: an unrelated-field
-        // broadcast during an in-flight write would otherwise void that write's
-        // fold and cost a redundant trailing re-send of identical values.
+        // Identical hydration preserves root identity; advance only baseline keys on baseline movement so acks cannot erase remote edits or spur redundant resends.
         const writeBaselineMoved =
           !previousBaseline ||
           Object.keys(diffPersistedUIWriteFields(nextWriteBaseline, previousBaseline)).length > 0

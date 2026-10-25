@@ -26,8 +26,7 @@ export default function ArtifactsPage(): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const confirm = useConfirmationDialog()
-  // Why: publishing is off by default, so "ask your agent to share" is a dead end until the
-  // capability is granted. Only claim that once settings have actually loaded.
+  // Claim publishing is blocked only after settings load; sharing requires explicit capability opt-in.
   const publishingBlocked = settings ? settings.artifactSharingEnabled !== true : false
   const [deleting, setDeleting] = useState<{ identity: string; slug: string } | null>(null)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)

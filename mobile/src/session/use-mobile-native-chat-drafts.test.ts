@@ -207,8 +207,7 @@ describe('useMobileNativeChatDrafts', () => {
       })
       expect(state?.composerText).toBe('')
 
-      // A relay drop can stall the transcript stream past the deadline; the
-      // delivered prompt must not reappear in the composer when it recovers.
+      // Transcript recovery after a lost ack must not restore a delivered prompt as draft text.
       act(() => {
         vi.advanceTimersByTime(25_000)
       })
@@ -255,10 +254,8 @@ describe('useMobileNativeChatDrafts', () => {
         state?.acceptSend(origin, '', ['file:///a.jpg'])
       }
     })
-    // The echo carries the preview thumbnail and has no text to match against.
     expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///a.jpg']])
 
-    // An agent reply grows the transcript but must NOT clear the photo echo early.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
@@ -269,8 +266,6 @@ describe('useMobileNativeChatDrafts', () => {
     )
     expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///a.jpg']])
 
-    // The user's own image echo landing (Claude records it as an
-    // `[Image: source: …]` turn) clears it.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
@@ -304,8 +299,6 @@ describe('useMobileNativeChatDrafts', () => {
     })
     expect(state?.pending).toHaveLength(2)
 
-    // The text echo lands first: it must clear only the text pending — a user
-    // turn that is not an image echo cannot reconcile the photo.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
@@ -346,8 +339,6 @@ describe('useMobileNativeChatDrafts', () => {
     })
     expect(state?.pending).toHaveLength(1)
 
-    // Claude echoes a captioned image send as a source turn plus a caption
-    // carrying `[Image #1]`; the pending must still match.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
@@ -520,7 +511,6 @@ describe('useMobileNativeChatDrafts', () => {
           createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
         )
       )
-      // Image-only send: empty text, so it can only reconcile against a new user turn.
       const origin = state?.captureSendOrigin('')
       const onUnconfirmed = vi.fn()
       act(() => {
@@ -529,7 +519,6 @@ describe('useMobileNativeChatDrafts', () => {
         }
       })
 
-      // An agent reply must not confirm it...
       await act(async () =>
         renderer?.update(
           createElement(Harness, {
@@ -538,7 +527,6 @@ describe('useMobileNativeChatDrafts', () => {
           })
         )
       )
-      // ...but the user's own turn landing does, so the deadline never warns.
       await act(async () =>
         renderer?.update(
           createElement(Harness, {
@@ -576,7 +564,6 @@ describe('useMobileNativeChatDrafts', () => {
     })
     expect(state?.pending).toHaveLength(2)
 
-    // Only one image echo has landed — exactly one photo reconciles.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {

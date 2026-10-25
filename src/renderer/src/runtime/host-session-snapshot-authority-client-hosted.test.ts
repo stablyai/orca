@@ -11,8 +11,7 @@ describe('reading whether a snapshot answers for client-hosted pages', () => {
     ).toBe(true)
   })
 
-  // A runtime that just restarted republishes rehydrated terminals under a real epoch and version:
-  // that frame is authoritative for what it owns, but not for browser rows its hosts still hold.
+  // Restarted runtime’s real epoch/version affirms its terminals, not client-hosted browser pages awaiting reconciliation.
   it('does not affirm a restarted runtime that has not heard from its hosts yet', () => {
     expect(
       hostSnapshotAffirmsClientHostedPages({

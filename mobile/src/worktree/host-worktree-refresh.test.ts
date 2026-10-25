@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
 import { startHostWorktreeRefresh } from './host-worktree-refresh'
 
 const appState = vi.hoisted(() => ({
@@ -18,12 +17,14 @@ const AppState = {
   }
 }
 
+type RefreshArgs = Parameters<typeof startHostWorktreeRefresh>[0]
+
 describe('startHostWorktreeRefresh', () => {
   let eventListener: ((payload: unknown) => void) | null
-  let fetchWorktrees: ReturnType<typeof vi.fn>
-  let fetchRepoMetadata: ReturnType<typeof vi.fn>
-  let syncViewSettings: ReturnType<typeof vi.fn>
-  let unsubscribe: ReturnType<typeof vi.fn>
+  let fetchWorktrees: ReturnType<typeof vi.fn<RefreshArgs['fetchWorktrees']>>
+  let fetchRepoMetadata: ReturnType<typeof vi.fn<RefreshArgs['fetchRepoMetadata']>>
+  let syncViewSettings: ReturnType<typeof vi.fn<RefreshArgs['syncViewSettings']>>
+  let unsubscribe: ReturnType<typeof vi.fn<() => void>>
   let stop: (() => void) | null
 
   beforeEach(() => {
@@ -32,10 +33,10 @@ describe('startHostWorktreeRefresh', () => {
     appState.listener = null
     appState.remove.mockClear()
     eventListener = null
-    fetchWorktrees = vi.fn().mockResolvedValue(undefined)
-    fetchRepoMetadata = vi.fn().mockResolvedValue(undefined)
-    syncViewSettings = vi.fn().mockResolvedValue(undefined)
-    unsubscribe = vi.fn()
+    fetchWorktrees = vi.fn<RefreshArgs['fetchWorktrees']>().mockResolvedValue(undefined)
+    fetchRepoMetadata = vi.fn<RefreshArgs['fetchRepoMetadata']>().mockResolvedValue(undefined)
+    syncViewSettings = vi.fn<RefreshArgs['syncViewSettings']>().mockResolvedValue(undefined)
+    unsubscribe = vi.fn<() => void>()
     stop = null
   })
 
@@ -49,7 +50,7 @@ describe('startHostWorktreeRefresh', () => {
           return unsubscribe
         }
       )
-    } as unknown as RpcClient
+    } satisfies Parameters<typeof startHostWorktreeRefresh>[0]['client']
     stop = startHostWorktreeRefresh({
       client,
       fetchWorktrees,
@@ -76,6 +77,15 @@ describe('startHostWorktreeRefresh', () => {
     appState.currentState = 'active'
     await vi.advanceTimersByTimeAsync(3_000)
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
+
+    stop?.()
+    stop = null
+    fetchWorktrees.mockClear()
+    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(appState.remove).toHaveBeenCalledOnce()
   })
 
   it('refreshes both snapshots immediately on foreground return', () => {
@@ -92,16 +102,13 @@ describe('startHostWorktreeRefresh', () => {
 
   it('polls repo metadata on the interval while foregrounded and skips it while backgrounded', async () => {
     start()
-    // Mount force-fetch.
     expect(fetchRepoMetadata).toHaveBeenCalledTimes(1)
 
-    // Foregrounded: repo.list rides the interval as a convergence safety-net for hosts on an
-    // older build, whose Settings edits emit no runtime reposChanged (the callee self-throttles).
+    // Older desktops emit no reposChanged for settings edits, so retain the throttled foreground poll.
     await vi.advanceTimersByTimeAsync(9_000)
     expect(fetchWorktrees).toHaveBeenCalledTimes(4)
     expect(fetchRepoMetadata).toHaveBeenCalledTimes(4)
 
-    // Backgrounded: neither snapshot is polled.
     fetchWorktrees.mockClear()
     fetchRepoMetadata.mockClear()
     appState.currentState = 'background'

@@ -2,7 +2,10 @@ import type { IDisposable, ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
-import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
+import {
+  TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES,
+  type TerminalPathExistsCache
+} from './terminal-path-exists-cache'
 import { getConnectionId } from '@/lib/connection-context'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -11,6 +14,7 @@ import {
   createProvider,
   createProviderSetup,
   makeBufferLine,
+  makeExistsCache,
   makePane
 } from './terminal-link-provider-buffer-fixtures'
 import {
@@ -46,23 +50,18 @@ installTerminalLinkTestEnvironment(doubles)
 
 describe('createFilePathLinkProvider range bounds', () => {
   it('underlines only the filename itself, not the column padding from `ls`', async () => {
-    // ls pads each column with trailing spaces. Regression: the provider used
-    // to report `end.x = endIndex + 1`, which in xterm's 1-based *inclusive*
-    // convention overshoots the last filename cell by one, underlining the
-    // trailing space as well ("package.json ").
+    // xterm end.x is inclusive and 1-based; endIndex + 1 incorrectly underlines ls padding after the filename.
     const line = 'CLAUDE.md      package.json     README.md'
     const links = await collectLinks(line)
     const byText = new Map(links.map((link) => [link.text, link]))
 
     const claude = byText.get('CLAUDE.md')
     expect(claude, 'CLAUDE.md should be linkified').toBeDefined()
-    // 'CLAUDE.md' occupies cols 1..9 (inclusive, 1-based). end.x must be 9.
     expect(claude!.range.start.x).toBe(1)
     expect(claude!.range.end.x).toBe('CLAUDE.md'.length)
 
     const pkg = byText.get('package.json')
     expect(pkg, 'package.json should be linkified').toBeDefined()
-    // 'package.json' starts at index 15 → col 16; inclusive end at col 15+12 = 27.
     const pkgStartIndex = line.indexOf('package.json')
     expect(pkg!.range.start.x).toBe(pkgStartIndex + 1)
     expect(pkg!.range.end.x).toBe(pkgStartIndex + 'package.json'.length)
@@ -84,8 +83,7 @@ describe('createFilePathLinkProvider range bounds', () => {
   })
 
   it('recovers with no links when a path-existence probe rejects (SSH teardown)', async () => {
-    // Regression: a rejected probe used to escape the void Promise.all as an
-    // unhandled rejection the crash-breadcrumb buffer retained, leaking heap (#8260).
+    // Contain rejected probes so crash breadcrumbs do not retain unhandled rejections and leak heap (#8260).
     const shellPathExists = vi.mocked(window.api.shell.pathExists)
     shellPathExists.mockRejectedValueOnce(new Error('Remote connection dropped/reconnecting'))
     const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')], new Map())
@@ -112,7 +110,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     setPlatform('Macintosh')
     const { provider } = createProviderSetup(
       [makeBufferLine('/repo/unknown-dir/')],
-      new Map([['active\0/repo/unknown-dir', true]])
+      makeExistsCache([['active\0/repo/unknown-dir', true]])
     )
 
     const links = await new Promise<ILink[]>((resolve) => {
@@ -140,9 +138,13 @@ describe('createFilePathLinkProvider range bounds', () => {
   })
 
   it('bounds the terminal path-exists cache while preserving recent probes', async () => {
-    const pathExistsCache = new Map<string, boolean>()
+    const pathExistsCache = makeExistsCache()
     for (let index = 0; index < TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES; index += 1) {
-      pathExistsCache.set(`active\0/repo/old-${index}.ts`, true)
+      pathExistsCache.set(`active\0/repo/old-${index}.ts`, {
+        exists: true,
+        checkedAt: Date.now(),
+        sequence: 0
+      })
     }
     const pane = makePane([makeBufferLine('fresh.ts')])
     const managerRef = {
@@ -169,12 +171,76 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(links.map((link) => link.text)).toEqual(['fresh.ts'])
     expect(pathExistsCache.size).toBe(TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES)
     expect(pathExistsCache.has('active\0/repo/old-0.ts')).toBe(false)
-    expect(pathExistsCache.get('active\0/repo/fresh.ts')).toBe(true)
+    expect(pathExistsCache.get('active\0/repo/fresh.ts')?.exists).toBe(true)
   })
+
+  it('expires a cached missing path even when the provider scans it repeatedly', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(5_000)
+    const cacheKey = 'active\0/repo/eventually-created.ts'
+    const pathExistsCache: TerminalPathExistsCache = new Map([
+      [cacheKey, { exists: false, checkedAt: 1_000, sequence: 0 }]
+    ])
+    const { provider } = createProviderSetup(
+      [makeBufferLine('eventually-created.ts')],
+      pathExistsCache
+    )
+
+    const firstLinks = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+    expect(firstLinks).toEqual([])
+    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+    expect(pathExistsCache.get(cacheKey)?.checkedAt).toBe(1_000)
+
+    now.mockReturnValue(11_000)
+    const refreshedLinks = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(refreshedLinks.map((link) => link.text)).toEqual(['eventually-created.ts'])
+    expect(window.api.shell.pathExists).toHaveBeenCalledOnce()
+    expect(pathExistsCache.get(cacheKey)).toMatchObject({ exists: true, checkedAt: 11_000 })
+    now.mockRestore()
+  })
+
+  it.each([12_000, 11_000])(
+    'keeps a newer found result when an older missing probe resolves last (newer starts at %i)',
+    async (newerStartedAt) => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(11_000)
+      const cacheKey = 'active\0/repo/eventually-created.ts'
+      const pathExistsCache: TerminalPathExistsCache = new Map()
+      const { provider } = createProviderSetup(
+        [makeBufferLine('eventually-created.ts')],
+        pathExistsCache
+      )
+      const olderProbe = createDeferred<boolean>()
+      vi.mocked(window.api.shell.pathExists)
+        .mockImplementationOnce(() => olderProbe.promise)
+        .mockResolvedValueOnce(true)
+
+      const olderLinks = new Promise<ILink[]>((resolve) => {
+        provider.provideLinks(1, (provided) => resolve(provided ?? []))
+      })
+      await flushAsyncWork()
+      now.mockReturnValue(newerStartedAt)
+      const newerLinks = await new Promise<ILink[]>((resolve) => {
+        provider.provideLinks(1, (provided) => resolve(provided ?? []))
+      })
+      olderProbe.resolve(false)
+
+      expect(await olderLinks).toEqual([])
+      expect(newerLinks.map((link) => link.text)).toEqual(['eventually-created.ts'])
+      expect(pathExistsCache.get(cacheKey)).toMatchObject({
+        exists: true,
+        checkedAt: newerStartedAt
+      })
+      now.mockRestore()
+    }
+  )
 
   it('does not reuse SSH path-exists cache entries across connections', async () => {
     setPlatform('Macintosh')
-    const pathExistsCache = new Map<string, boolean>()
+    const pathExistsCache = makeExistsCache()
     const rows = [makeBufferLine('shared.ts')]
     const pane = makePane(rows)
     const managerRef = {

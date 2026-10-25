@@ -48,6 +48,35 @@ describe('applyNativeChatReportedSessionOptions', () => {
 })
 
 describe('matchNativeChatCatalogModelId', () => {
+  it.each(['gpt-6.1-sol', 'gpt-5.5-custom', 'custom/Model-v2'])(
+    'keeps the exact unlisted selector %s only when requested',
+    (reported) => {
+      expect(matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, reported)).not.toBe(
+        reported
+      )
+      expect(
+        matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, reported, {
+          allowUnlisted: true
+        })
+      ).toBe(reported)
+    }
+  )
+
+  it('retains known labels and rejects blank or free text as unlisted selectors', () => {
+    expect(
+      matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, ' GPT-5.5 ', {
+        allowUnlisted: true
+      })
+    ).toBe('gpt-5.5')
+    for (const reported of ['', '  ', 'unknown model', 'unknown\nmodel']) {
+      expect(
+        matchNativeChatCatalogModelId(CODEX_SESSION_OPTION_CATALOG, reported, {
+          allowUnlisted: true
+        })
+      ).toBeNull()
+    }
+  })
+
   it('prefers the longest contained id and keeps catalog order for ties', () => {
     const catalog = {
       ...CLAUDE_SESSION_OPTION_CATALOG,
@@ -58,8 +87,7 @@ describe('matchNativeChatCatalogModelId', () => {
   })
 
   it('keeps the reported selector as-is for a catalog that seeds no models', () => {
-    // Why: OMP's hook reports `provider/id`, the exact form `/model` accepts back,
-    // and an empty seed has nothing that could outrank it.
+    // OMP’s unseeded catalog cannot outrank its exact hook-reported provider/id selector.
     const unseeded = { ...CLAUDE_SESSION_OPTION_CATALOG, models: [] }
     expect(matchNativeChatCatalogModelId(unseeded, ' deepseek/deepseek-v4-pro ')).toBe(
       'deepseek/deepseek-v4-pro'

@@ -65,7 +65,7 @@ import {
   settle,
   setDocumentVisibility,
   tabIds
-} from './host-session-mirror-frame-ordering-harness'
+} from './host-session-mirror-frame-ordering-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   clearHostSessionMirrorHydration,
@@ -90,8 +90,7 @@ describe('a global singular frame whose patch never lands', () => {
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-patch-throw')
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // Acceptance bookkeeping dies after the frame passed its recovery gates but
-    // before its patch reached the store: nothing landed, so nothing may settle.
+    // Acceptance bookkeeping fails before patch commit; nothing landed, so nothing settles.
     mocks.queueAcceptedSnapshot.mockImplementation(() => {
       throw new Error('accepted-handle queue failed')
     })
@@ -104,8 +103,7 @@ describe('a global singular frame whose patch never lands', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
 
-    // The next frame lands cleanly, so the parked pane is decided on evidence
-    // that is actually in the store — the latch healed rather than wedged.
+    // The next committed frame releases recovery on actual store evidence, healing the latch.
     mocks.queueAcceptedSnapshot.mockImplementation(() => {})
     await publish(findSubscription('session.tabs.subscribeAll'), {
       type: 'snapshot',
@@ -123,8 +121,7 @@ describe('a global singular frame whose patch never lands', () => {
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-apply-throw')
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // A malformed 'ready' tab without a terminal handle blows up inside the
-    // store write itself: no receipt may exist for a commit that never was.
+    // Malformed ready-without-handle fails inside store write; no commit means no receipt.
     const malformed = makeHostSnapshot(
       WT,
       OTHER_HOST_SURFACE_ID,
@@ -169,8 +166,7 @@ describe('a stale frame against a newer accepted view', () => {
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-stale-settle')
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // An older frame races in. Rejecting it is itself backed by the accepted
-    // v2 view, so the worktree settles even though nothing new landed.
+    // Rejecting a late older frame can settle using the already accepted v2 view.
     await publish(findSubscription('session.tabs.subscribeAll'), {
       type: 'snapshot',
       ...makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
@@ -209,8 +205,7 @@ describe('a deferred visibility-resume repair patch', () => {
     })
     await act(settle)
 
-    // The resume inventory omits the background worktree, and recovery drops
-    // the one snapshot it did publish — so the inventory itself settles nothing.
+    // Recovery drops the inventory’s only published snapshot, so omission cannot settle background work.
     mocks.recoverSnapshot.mockImplementation(
       async (_state: unknown, snapshot: RuntimeMobileSessionTabsResult) =>
         snapshot.worktree === WT ? null : snapshot
@@ -257,9 +252,7 @@ describe('the eager post-create list answers for its worktree', () => {
   })
 
   it('does not resurrect a worktree the stream retracted while the list was in flight', async () => {
-    // The refresh path is a production apply path (close, create, activation, split, PTY
-    // reconnect) that reached `decide` with no place in receipt order at all. A list the host
-    // answered before the close then landed after the retraction and put the tab back.
+    // Refresh applies from close/create/activation/split/reconnect need receipt order too; a pre-close list once landed after retraction and resurrected the tab.
     renderHook(() => useWebSessionTabsSync())
     await act(settle)
 
@@ -358,12 +351,7 @@ describe('the eager post-create list answers for its worktree', () => {
   })
 })
 
-/**
- * The floating workspace is a LOCAL synthetic terminal, so the mirror discards
- * every host frame for it. That discard is NOT the staleness a settle may rest
- * on: no accepted view of it ever reached the store, so a settle here would
- * drain parked resume work against state nobody wrote.
- */
+// Floating workspace is local synthetic state: discarded host frames have no accepted view to back settlement, unlike stale-frame rejection.
 describe('a host frame for a workspace the mirror never writes', () => {
   installFrameOrderingHarness()
 
@@ -388,8 +376,7 @@ describe('a host frame for a workspace the mirror never writes', () => {
     renderHook(() => useWebSessionTabsSync())
     await act(settle)
 
-    // Dropping one worktree keeps the inventory from upgrading to an
-    // environment-wide verdict, so it has to name worktrees one by one.
+    // Dropping any worktree prevents environment-wide settlement; name accepted worktrees individually.
     mocks.recoverSnapshot.mockImplementation(
       async (_state: unknown, snapshot: RuntimeMobileSessionTabsResult) =>
         snapshot.worktree === BG_WT ? null : snapshot
@@ -459,8 +446,7 @@ describe('a host frame for a workspace the mirror never writes', () => {
     const paneKey = seedSleepingRecord(BG_MIRROR_TAB_ID, BG_WT, 'codex-session-floating-member')
     expect(resumeSleepingAgentSessionsForWorktree(BG_WT)).toBe(0)
 
-    // Every published snapshot the mirror speaks for reached the store, so
-    // absence of the background workspace is still the host answering.
+    // All published snapshots committed, so omission still answers for the background workspace.
     await publish(findSubscription('session.tabs.subscribeAll'), {
       type: 'snapshots',
       snapshots: [
@@ -478,11 +464,7 @@ describe('a host frame for a workspace the mirror never writes', () => {
   })
 })
 
-/**
- * zustand commits before it notifies, so a subscriber that dies afterwards is
- * a failure of something reading the store, not of the write. The receipt has
- * to survive it — but only because `patchCommitted` proves the write happened.
- */
+// Zustand commits before notification; subscriber failure must retain the receipt only when patchCommitted proves the write happened.
 describe('a store subscriber that throws after the commit', () => {
   installFrameOrderingHarness()
 
@@ -493,8 +475,7 @@ describe('a store subscriber that throws after the commit', () => {
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-subscriber-throw')
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // Why: throw exactly once — the drain this releases writes to the same
-    // store, and a subscriber that kept throwing would take those writes down.
+    // Throw once: the released drain also writes this store and must not hit the same subscriber failure.
     let threw = false
     const unsubscribe = useAppStore.subscribe(() => {
       if (threw) {
@@ -512,8 +493,7 @@ describe('a store subscriber that throws after the commit', () => {
       unsubscribe()
     }
 
-    // Without these the settle assertion would pass on a frame that never
-    // entered the catch at all — the branch under test would go unexercised.
+    // Require catch evidence or settle could pass without exercising the failure branch.
     expect(threw).toBe(true)
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('a store subscriber failed after the patch landed'),

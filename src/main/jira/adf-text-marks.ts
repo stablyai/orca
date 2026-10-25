@@ -76,7 +76,7 @@ export function applyAdfTextMarks(text: string, marksValue: unknown): string {
   const href = linkHrefFromMarks(marks)
   const linkedText = href ? text.replace(/\r\n?|\n/g, ' ') : text
   let formatted = linkedText
-  // Why: code spans cannot nest other Markdown; apply code before bold/em/strike.
+  // Code spans cannot nest other Markdown; apply code before other marks.
   if (marks.some((mark) => markType(mark) === 'code')) {
     let longestBacktickRun = 0
     for (const match of linkedText.matchAll(/`+/g)) {
@@ -104,7 +104,6 @@ export function applyAdfTextMarks(text: string, marksValue: unknown): string {
   }
 
   const safeUrl = escapeMarkdownLinkDestination(href)
-  // Unsafe destinations retain the label without becoming clickable.
   if (!safeUrl) {
     return formatted
   }

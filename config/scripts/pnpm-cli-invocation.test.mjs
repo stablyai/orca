@@ -87,8 +87,7 @@ describe('resolvePnpmCliInvocation', () => {
     }
   })
 
-  // Why: `npmExecPath: undefined` would hit the destructuring default and read the ambient
-  // npm_execpath, so an explicit empty string is the only env-independent way to force this branch.
+  // Pass empty npmExecPath to force branch independently of env; undefined activates the destructuring default.
   it('falls back to PATH pnpm when npm_execpath is empty', () => {
     expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'darwin' })).toEqual(
       { command: 'pnpm', prefixArgs: [], shell: false }

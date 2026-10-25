@@ -69,8 +69,7 @@ export function terminalFileLinkRangesOverlap(
   range: DetectedTerminalFileLinkRange,
   claimedRanges: readonly [number, number][]
 ): boolean {
-  // Why: generated terminal lines can contain thousands of file-looking tokens;
-  // overlap checks must stay logarithmic instead of scanning every prior range.
+  // Generated lines can contain thousands of file-like tokens; keep overlap lookup logarithmic.
   let low = 0
   let high = claimedRanges.length
   while (low < high) {

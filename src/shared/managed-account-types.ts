@@ -40,9 +40,7 @@ export type CodexManagedAccountSummary = {
   lastAuthenticatedAt: number
 }
 
-/** Live, read-only identity of the user's real ~/.codex used by the
- *  system-default (activeAccountId:null) Codex account. Orca reads this to
- *  display and attribute the system default; it never writes ~/.codex. */
+/** Read-only identity of real ~/.codex for system-default (activeAccountId:null) display/attribution; this path never writes it. */
 export type CodexSystemDefaultIdentity = {
   /** True when ~/.codex/auth.json exists (signed in via a token file). */
   hasAuth: boolean
@@ -59,8 +57,7 @@ export type CodexRateLimitAccountsState = {
   accounts: CodexManagedAccountSummary[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
-  /** Resolved identity of the host system-default (real ~/.codex) account.
-   *  Omitted for runtimes where it is not resolved (e.g. per-distro WSL). */
+  /** Host’s real ~/.codex identity; omitted where unresolved, such as per-distro WSL. */
   systemDefault?: CodexSystemDefaultIdentity
 }
 

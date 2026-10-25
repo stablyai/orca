@@ -27,8 +27,7 @@ export function updateAutoSaveDelayDraftState(
   draft: string
 ): AutoSaveDelayDraftState {
   return {
-    // Why: settings persistence is async, so a committed draft must stay tied
-    // to the current source until the persisted value reloads.
+    // Keep committed drafts tied to their source until asynchronous persistence reloads.
     ...resolveAutoSaveDelayDraftState(state, editorAutoSaveDelayMs),
     draft
   }

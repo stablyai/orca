@@ -89,11 +89,7 @@ describe('pr-refresh queue growth bounds', () => {
       _getPRRefreshQueueSizeForTests
     } = await import('./pr-refresh-coordinator')
 
-    // A linked-PR refreshKey ignores the branch, so one entry survives every
-    // branch switch, and each switch used to add an alias that only the next
-    // drain could shed — so the fan-out tracked branch churn instead of the one
-    // live branch. (Draining between switches caps the unfixed count in the low
-    // single digits here; the parked-entry case below is where it really piles up.)
+    // A linked-PR key survives branch changes; coalescing must retire stale branch aliases.
     for (let i = 0; i < 300; i += 1) {
       reportVisiblePRRefreshCandidates(
         [
@@ -136,8 +132,7 @@ describe('pr-refresh queue growth bounds', () => {
     getPRForBranchOutcomeMock.mockImplementation(async () => {
       if (!switched) {
         switched = true
-        // The entry is already out of the queue here, so this re-enqueue creates the
-        // entry the in-flight request's stale follow-up aliases merge back into.
+        // Re-enqueue after dequeue so the older in-flight snapshot merges into a newer queued entry.
         reportVisiblePRRefreshCandidates([churnCandidate(2)], 2, 1)
       }
       return {
@@ -227,8 +222,7 @@ describe('pr-refresh queue growth bounds', () => {
     const { enqueuePRRefresh, _getPRRefreshAliasCountForTests, _getPRRefreshQueueSizeForTests } =
       await import('./pr-refresh-coordinator')
 
-    // No timer advance: the entry stays queued, so every enqueue lands on the same
-    // alias map and the coalescing bound is what keeps it from growing.
+    // Keep one entry parked so every enqueue exercises its alias bound.
     for (let i = 0; i < 200; i += 1) {
       enqueuePRRefresh(
         makeCandidate({
@@ -267,8 +261,7 @@ describe('pr-refresh queue growth bounds', () => {
         cachedFetchedAt: null
       })
 
-    // A manual refresh merges its alias into its own copy of the entry's map and
-    // writes that map back, so the coalescing bound has to hold on re-entry too.
+    // Manual refresh writes a copied alias map back, so re-entry must enforce the same bound.
     reportVisiblePRRefreshCandidates([churnCandidate(0)], 1, 1)
     await vi.advanceTimersByTimeAsync(1_000)
     for (let i = 1; i <= 30; i += 1) {

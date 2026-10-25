@@ -1,7 +1,7 @@
 import {
   parseJiraFavouriteFilterList,
   type JiraFavouriteFilterList
-} from '../../../shared/jira-favourite-filters'
+} from '../../../shared/jira/jira-favourite-filters'
 import { JiraFavouriteFilterParams } from '../../../shared/rpc-contract/jira-favourite-filter-params'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callRuntimeRpc } from './runtime-rpc-client'

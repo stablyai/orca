@@ -1,9 +1,4 @@
-/**
- * The desktop's only way into a WSL distro's orcad (design D2): a loopback listener whose every
- * accepted socket rides its own `wsl.exe` child running the stdio bridge on the distro's pinned
- * Node. WSL localhost forwarding is never used: it refuses connections for 0.2–1 s after a listen
- * and depends on the distro's networking mode.
- */
+/** D2: each accepted loopback socket owns a pinned-Node wsl.exe stdio bridge. Avoid WSL localhost forwarding, whose startup refusal window and network-mode dependence make it unreliable. */
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import {
   ORCAD_STDIO_BRIDGE_DEPENDENCIES,

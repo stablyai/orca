@@ -59,8 +59,7 @@ async function collectSessionTabsInventory(
   changeSequence: number
 }> {
   const { runtime, pairedDeviceId, signal } = context
-  // Why: a failed census degrades inside the runtime to the same scan without
-  // the authoritative label, so no client ever pays a second full collection.
+  // Census failure reuses its scan without authority, never collecting twice.
   if (!includeChangeSequence) {
     const inventory = runtime.supportsAuthoritativeSessionTabsInventory()
       ? await runtime.listAllMobileSessionTabsInventory(pairedDeviceId, signal)
@@ -232,7 +231,7 @@ export async function subscribeSessionTabsInventory(
   }
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
   try {
-    // Why: restore after registering, so an unsubscribe or socket close while it runs still finds the stream.
+    // Register before restore so unsubscribe/socket close can find the stream during its awaits.
     const restoring = restoreStructuredTabsIfSupported(context)
     if (restoring) {
       await restoring

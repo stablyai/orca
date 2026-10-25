@@ -1,6 +1,3 @@
-// The phone draws a send a Stop took back before the agent started it where it was sent, with the
-// one row after it, and gives neither a turn of its own.
-
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'

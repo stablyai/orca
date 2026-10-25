@@ -1,3 +1,4 @@
+import { chatWorkspaceByTabId } from '@/lib/structured-chat-tab-index'
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
 import {
   parseExplicitFileLinkTarget,
@@ -41,26 +42,7 @@ export function findTerminalTabWorktreeId(
   tabsByWorktree: NativeChatFileLinkState['tabsByWorktree'],
   terminalTabId: string
 ): string | null {
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    // Why: tabsByWorktree stores TerminalTab records; unified tabs carry
-    // entityId, but the terminal owner lookup must use the backing tab id.
-    if (tabs.some((tab) => tab.id === terminalTabId)) {
-      return worktreeId
-    }
-  }
-  return null
-}
-
-function findStructuredTabWorktreeId(
-  unifiedTabsByWorktree: NativeChatFileLinkState['unifiedTabsByWorktree'],
-  tabId: string
-): string | null {
-  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
-    if (tabs.some((tab) => tab.id === tabId && tab.contentType === 'agent-session')) {
-      return worktreeId
-    }
-  }
-  return null
+  return chatWorkspaceByTabId(tabsByWorktree, terminalTabId)
 }
 
 /** The workspace that owns a native chat tab, independent of whether its directory is known. */
@@ -70,7 +52,7 @@ export function findNativeChatTabOwnerWorktreeId(
 ): string | null {
   return (
     findTerminalTabWorktreeId(state.tabsByWorktree, tabId) ??
-    findStructuredTabWorktreeId(state.unifiedTabsByWorktree, tabId)
+    chatWorkspaceByTabId(state.unifiedTabsByWorktree, tabId)
   )
 }
 
@@ -136,8 +118,7 @@ function resolvePathText(
   if (!parsed) {
     return null
   }
-  // Native chat hrefs are explicit agent-authored links, so avoid the terminal
-  // detector's conservative extension/filename filters.
+  // Explicit agent-authored hrefs bypass automatic terminal-detection filename filters.
   const resolved = resolveExplicitFileLinkTarget(parsed, context.worktreePath)
   if (!resolved) {
     return null

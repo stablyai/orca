@@ -12,8 +12,7 @@ type ArtifactPackLoadResult<Entry> =
   | { pluginKey: string; entries: Entry[] }
   | { pluginKey: string; error: string }
 
-/** Loads one data contribution family from verified plugin trees. A plugin whose content fails
- *  verification or parsing contributes nothing and reports one error. */
+/** Reject all contributions from a plugin if any declared content fails verification or parsing. */
 export class PluginArtifactPackRegistry<Contribution, Entry> {
   private entries: Entry[] = []
   private readonly errors = new Map<string, string>()

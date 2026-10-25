@@ -109,7 +109,7 @@ describe('detectAgentPermission', () => {
     const long = `Do you want to proceed? ${'x'.repeat(300)}`
     const result = detectAgentPermission({ state: 'waiting', lastAssistantMessage: long })
     expect(result).not.toBeNull()
-    expect((result?.detail ?? '').length).toBeLessThanOrEqual(160)
+    expect(result?.detail).toBe(`Do you want to proceed? ${'x'.repeat(135)}…`)
   })
 
   it('shortens long numbered option labels', () => {
@@ -120,7 +120,7 @@ describe('detectAgentPermission', () => {
     })
     const second = result?.options[1]
     expect(second?.send).toBe('2')
-    expect((second?.label ?? '').length).toBeLessThanOrEqual(40)
+    expect(second?.label).toBe('No, and explain in great detail exactly…')
   })
 })
 

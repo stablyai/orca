@@ -63,8 +63,7 @@ describe('buildSetupRunnerCommand', () => {
   })
 
   it('never hands a batch runner to bash, even from a Git Bash pane', () => {
-    // Regression: a Git Bash terminal with a batch-syntax setup script gets a .cmd runner,
-    // so the launch shell being POSIX must not be read as "the runner is a shell script".
+    // Runner syntax follows its file, not the terminal: POSIX panes still execute batch scripts through cmd.
     const command = buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.cmd', 'windows', {
       family: 'posix'
     })
@@ -74,8 +73,7 @@ describe('buildSetupRunnerCommand', () => {
   })
 
   it('avoids the bare /c switch when a POSIX pane launches a batch runner', () => {
-    // Regression (#6896): MSYS rewrites `cmd.exe /c` into a drive path inside Git Bash, so cmd
-    // opens interactively and the runner payload never executes.
+    // MSYS rewrites bare cmd.exe /c into a drive path, leaving an interactive cmd instead of executing (#6896).
     const command = buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.cmd', 'windows', {
       family: 'posix'
     })
@@ -87,8 +85,7 @@ describe('buildSetupRunnerCommand', () => {
   })
 
   it('keeps the batch runner path in native form for a POSIX pane launch', () => {
-    // Why: the PowerShell launcher hands the path to cmd, which cannot read /c/... MSYS paths;
-    // marker and completion paths derive from this value too.
+    // cmd cannot read /c/... MSYS paths; retain native runner spelling, also used for markers.
     expect(
       resolveSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.cmd', 'windows', {
         family: 'posix'

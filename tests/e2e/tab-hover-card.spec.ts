@@ -40,7 +40,7 @@ test('whole-tab hover cards wait independently on every hover', async ({
 
     // The left padding and icon used to sit outside the terminal title's trigger.
     await orcaPage.mouse.move(firstBox.x + 3, firstBox.y + firstBox.height / 2)
-    await orcaPage.waitForTimeout(600)
+    await orcaPage.waitForTimeout(300)
     await expect(card).toHaveCount(0)
     await expect(cardTitle).toHaveText('Build and test the hover cards')
     const program = card.locator('[data-tab-hover-card-program]')
@@ -50,7 +50,7 @@ test('whole-tab hover cards wait independently on every hover', async ({
     const programBox = await program.boundingBox()
     expect(programBox?.y).toBeGreaterThan((titleBox?.y ?? 0) + (titleBox?.height ?? 0))
     await orcaPage.mouse.move(secondBox.x + 3, secondBox.y + secondBox.height / 2)
-    await orcaPage.waitForTimeout(600)
+    await orcaPage.waitForTimeout(300)
     await expect(card).toHaveCount(0)
     await expect(cardTitle).toHaveText('Review changes')
 
@@ -64,7 +64,7 @@ test('whole-tab hover cards wait independently on every hover', async ({
     await expect(card).toHaveCount(0)
 
     await orcaPage.mouse.move(firstBox.x + 3, firstBox.y + firstBox.height / 2)
-    await orcaPage.waitForTimeout(600)
+    await orcaPage.waitForTimeout(300)
     await expect(card).toHaveCount(0)
     await expect(cardTitle).toHaveText('Build and test the hover cards')
 
@@ -72,7 +72,7 @@ test('whole-tab hover cards wait independently on every hover', async ({
     await orcaPage.mouse.move(firstBox.x + 3, firstBox.y + firstBox.height + 100)
     await expect(card).toHaveCount(0)
     await orcaPage.mouse.move(firstBox.x + 3, firstBox.y + firstBox.height / 2)
-    await orcaPage.waitForTimeout(600)
+    await orcaPage.waitForTimeout(300)
     await expect(card).toHaveCount(0)
     await expect(cardTitle).toHaveText('Build and test the hover cards')
 

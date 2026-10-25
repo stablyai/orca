@@ -13,6 +13,7 @@ import type { TerminalPaneSplitSource } from '../../shared/feature-education-tel
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type {
@@ -44,6 +45,7 @@ export type RuntimeNotifier = {
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
+  browserProfilesChanged?(): void
   activateWorktree(
     repoId: string,
     worktreeId: string,
@@ -128,10 +130,7 @@ export type RuntimeNotifier = {
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
-  /**
-   * Acts only on the host's own window: 'host'/'all' move it, 'caller'/'clients' open without moving
-   * it, absent keeps the original switch. Paired clients are never navigated (intended; 'all' == 'host').
-   */
+  /** Host window only: host/all move it; caller/clients open without moving it; absence keeps legacy switching. Paired clients never navigate (all means host). */
   openFile?(
     worktreeId: string,
     filePath: string,
@@ -158,11 +157,9 @@ export type RuntimeNotifier = {
     tabId: string,
     options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }
   ): Promise<void>
-  sleepWorktree(worktreeId: string): void
-  // Why: a phone opening a worktree wakes its slept agents by asking the host
-  // renderer to run its own navigation-free wake (experimental agent sleep);
-  // the runtime has no in-memory sleeping records or wake authority. Optional to
-  // match the many renderer-backed notifier methods only the real bridge wires.
+  /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
+  workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
+  // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
   resumeSleepingAgents?(worktreeId: string): void
   terminalFitOverrideChanged(
     ptyId: string,
@@ -170,12 +167,7 @@ export type RuntimeNotifier = {
     cols: number,
     rows: number
   ): void
-  // Why: presence-based lock signal — desktop renderer mounts the lock
-  // banner when `driver.kind === 'mobile'` and unmounts otherwise. The
-  // structured payload (vs a `locked: boolean`) carries the active mobile
-  // actor's clientId so the renderer can disambiguate multi-phone scenarios
-  // and so a future write coordinator can use the same signal as scheduling
-  // input. See docs/mobile-presence-lock.md.
+  // Publish driver/clientId so the lock banner distinguishes mobile actors; boolean lock state loses identity (docs/mobile-presence-lock.md).
   terminalDriverChanged(ptyId: string, driver: DriverState): void
   nativeChatLaunchDraftResolved?(
     tabId: string,

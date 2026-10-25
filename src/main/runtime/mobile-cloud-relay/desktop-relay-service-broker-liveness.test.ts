@@ -10,7 +10,6 @@ const fakes = vi.hoisted(() => ({
 vi.mock('./relay-auth-context', () => ({ readRelayAuthContext: fakes.readRelayAuthContext }))
 
 vi.mock('./relay-session-broker', () => {
-  // Mirrors the real broker: a control that died rejects with relay_control_not_active.
   class RelaySessionBroker {
     live = true
     readonly hostId = 'relay-host-1'
@@ -74,8 +73,7 @@ function service(): DesktopRelayService {
 
 describe('DesktopRelayService broker liveness', () => {
   it('pairs through a replacement when the owned broker control died', async () => {
-    // Why: ownership stays 'valid' after a control socket dies, so the stale
-    // handle otherwise reaches create_pairing_relay and fails the pairing.
+    // Ownership can remain valid after control death; reject stale brokers before pairing mint.
     const relayService = service()
     try {
       await expect(relayService.createPairingRelay('device-1')).resolves.toMatchObject({

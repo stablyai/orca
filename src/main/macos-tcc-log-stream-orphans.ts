@@ -7,31 +7,25 @@ import {
 } from './opencode/opencode-client-sweep'
 import { LOG_PREDICATE } from './macos-tcc-prompt-watch'
 
-/** The exact argv that Orca builds before the sh wrapper spawned `log stream` directly. */
+// Match legacy builds that spawned log stream without a lifetime wrapper.
 const LEGACY_LOG_STREAM_COMMAND = splitCommandLineArgv(
   ['/usr/bin/log', 'stream', '--predicate', LOG_PREDICATE, '--info', '--style', 'compact'].join(' ')
 ).join(' ')
 
-// Why: `etime` has 1 s resolution and two reads of it can straddle a tick.
+// etime has one-second resolution; separate snapshots may straddle a tick.
 const START_TIME_TOLERANCE_MS = 2_000
 
 function isLegacyOrphan(row: ProcessIdentityRow): boolean {
   return row.ppid === 1 && row.argv.join(' ') === LEGACY_LOG_STREAM_COMMAND
 }
 
-/**
- * Why: older builds left this `log stream` running under launchd whenever Orca died
- * uncleanly, and those orphans outlive every later launch. A live watcher's
- * `log stream` is parented by its wrapper, so only launchd's children (ppid 1) match.
- * `executable` comes from a later `ps` than argv, so a pid recycled between them fails.
- */
+/** Only legacy streams reparented to launchd qualify; live streams belong to their wrapper. */
 export function findOrphanedTccLogStreams(
   rows: readonly ProcessIdentityRow[]
 ): ProcessIdentityRow[] {
   return rows.filter((row) => row.executable === '/usr/bin/log' && isLegacyOrphan(row))
 }
 
-/** One-snapshot re-read of a single pid, so its ppid, start time and argv agree. */
 async function readProcessIdentity(pid: number): Promise<ProcessIdentityRow | null> {
   const result = await runProcess({
     program: 'ps',
@@ -59,8 +53,7 @@ export async function reclaimOrphanedTccLogStreams(
     await (deps.sweep ?? sweepProcessIdentities)()
   )) {
     try {
-      // Why: the sweep joins two `ps` snapshots, so re-read right before signalling
-      // and skip anything whose identity changed or can no longer be confirmed.
+      // Recheck identity immediately before signalling; the sweep joins separate ps snapshots.
       const current = await readProcess(candidate.pid)
       if (
         !current ||
@@ -71,9 +64,7 @@ export async function reclaimOrphanedTccLogStreams(
       }
       kill(candidate.pid, 'SIGTERM')
       reclaimed++
-    } catch {
-      // Already gone, or another user's process.
-    }
+    } catch {}
   }
   if (reclaimed > 0) {
     console.info(`[tcc-prompt-watch] reclaimed ${reclaimed} orphaned log stream process(es)`)

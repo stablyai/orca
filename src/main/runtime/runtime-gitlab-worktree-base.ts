@@ -4,6 +4,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { requireRepoLocalGitRoute } from '../repo-execution-host'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import { gitExecFileAsync } from '../git/runner'
+import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import { getProjectRefForRemote, getWorkItemByProjectRef } from '../gitlab/client'
 import { getGlabKnownHosts } from '../gitlab/gl-utils'
 import {
@@ -45,7 +46,7 @@ export async function resolveRuntimeGitLabWorktreeBase(
   if (isFolderRepo(repo)) {
     return { error: 'Folder mode does not support creating worktrees.' }
   }
-  // Why the shared gate: a row may name its SSH host only as `executionHostId`.
+  // Use shared host gating: executionHostId may be a row's only SSH marker.
   requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(deps.store, repo)
@@ -107,7 +108,10 @@ export async function resolveRuntimeGitLabWorktreeBase(
   }
   const compareBaseRef = targetBranch ? `refs/remotes/${remote}/${targetBranch}` : undefined
   const fetchRemoteTrackingRef = async (branch: string, ref: string): Promise<void> => {
-    await gitExec(['fetch', remote, `+refs/heads/${branch}:${ref}`])
+    await gitExecFileAsync(['fetch', remote, `+refs/heads/${branch}:${ref}`], {
+      ...localGitExecOptions,
+      timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS
+    })
   }
   const fetchCompareBaseRef = (): Promise<boolean> =>
     fetchCompareBaseRefWithLocalFallback({

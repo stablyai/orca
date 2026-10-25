@@ -24,10 +24,7 @@ type SessionTreeProps = {
   onToggle: (ptyId: string, checked: boolean) => void
 }
 
-/**
- * The running Claude sessions a switch can restart, grouped by workspace: the native-chat resume
- * dialog's tree rows, so both read the same.
- */
+/** Reuse native-chat resume rows to keep workspace-grouped restart sessions consistent. */
 export function ClaudeAccountSwitchSessionTree({
   sessions,
   selected,

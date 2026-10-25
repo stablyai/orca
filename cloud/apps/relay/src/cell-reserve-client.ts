@@ -2,15 +2,14 @@ import {
   CELL_DEMOTE_PATH,
   CELL_RESERVE_MAX_ITEMS,
   CELL_RESERVE_PATH,
+  DemoteResponseSchema,
   ReserveResponseSchema,
   type DemoteRequest,
   type ReserveItem
 } from './cell-reserve-contract.js'
 import type { ReserveAttempt } from './reserve-placement.js'
 
-// The director's calls to cells. Bookings for one cell batch for up to 5 ms or 64 items;
-// a cell that does not answer within the timeout is unverifiable, and every item in the
-// batch reads `unreachable` (one of the request's three tries).
+// Batch bookings per cell for 5ms/64 items; unreadable replies mark the whole batch unreachable for one of the request’s three tries.
 export const CELL_RESERVE_FLUSH_MS = 5
 export const CELL_RESERVE_TIMEOUT_MS = 1_000
 
@@ -46,14 +45,18 @@ export class CellReserveClient {
     })
   }
 
-  // The cell treats repeats as one; a failure is only logged, and the next poll retries.
-  async demote(target: ReserveTarget, request: DemoteRequest): Promise<boolean> {
+  // The cell treats repeats as one. Null: no answer the director can read; the next poll retries.
+  async demote(target: ReserveTarget, request: DemoteRequest): Promise<string | null> {
     try {
       const response = await this.post(target, CELL_DEMOTE_PATH, request)
-      await response.body?.cancel().catch(() => undefined)
-      return response.ok
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined)
+        return null
+      }
+      const body = DemoteResponseSchema.safeParse(await response.json().catch(() => null))
+      return body.success ? body.data.outcome : null
     } catch {
-      return false
+      return null
     }
   }
 

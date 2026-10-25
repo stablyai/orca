@@ -1,6 +1,4 @@
-// A CLI-started terminal the window never mounted reads as unowned to the host's census. With the
-// layout-owner switch on, main shows it (placeUnshownLiveTerminals) and names its pane; every path
-// that finds it shows exactly main's one tab for it, and the window never asks main to adopt it.
+/** CLI terminals can look unowned before mount; layout-owner main places/names them, and every finder must show that one tab without asking another adoption. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'

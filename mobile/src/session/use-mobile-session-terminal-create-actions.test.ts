@@ -61,12 +61,13 @@ function terminalCreateResponse(): RpcResponse {
 
 function createScope(client: RpcClient) {
   const sessionTabs: MobileSessionTab[] = []
+  const hostCapabilities: string[] = []
   return {
     nativeChatController: { setTabView: vi.fn() },
     hostId: 'host-1',
     worktreeId: 'workspace-1',
     client,
-    hostCapabilities: [],
+    hostCapabilities,
     connState: 'connected',
     setTerminals: vi.fn(),
     terminalsRef: { current: [] },
@@ -137,12 +138,10 @@ describe('mobile + Codex tab creation routing', () => {
       'session.tabs.createTerminal',
       expect.anything()
     )
-    // The chat's tab is found by its session in the next snapshot, never by a predicted id.
     expect(scope.pendingSelectionRef.current).toEqual(
       launchedSelection(expect.any(String), { sessionId: 'codex_session_1' })
     )
     expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
-    // The open terminal stays live until the chat's tab lands, rather than blanking beside it.
     expect(scope.setActiveHandle).not.toHaveBeenCalled()
     expect(scope.unsubscribeTerminal).not.toHaveBeenCalled()
     expect(scope.activeSessionTabTypeRef.current).toBe('terminal')
@@ -301,8 +300,6 @@ describe('mobile + Codex tab creation routing', () => {
       expect(scope.showToast).toHaveBeenCalledWith('create outcome ambiguous', 1800)
     }
   )
-  // Why: pty exhaustion, a disabled agent and an unresolved worktree owner all arrived as the
-  // same 'Failed to create terminal', leaving the empty session with nothing to act on.
   it('surfaces the host reason instead of a generic terminal-create error', async () => {
     const client = clientReturning({
       ok: false,
@@ -410,6 +407,56 @@ describe('phone chat CLI fork creation owner', () => {
     })
     expect(resolution?.showNativeChat).toBe(true)
     expect(resolution?.isTabChatView('ordinary-tab')).toBe(true)
+  })
+
+  it('reports the strict saved-conversation refusal without opening a terminal or fallback', async () => {
+    const scope = createScope(
+      clientReturning({
+        ok: false,
+        error: { code: 'chat_fork_source_unavailable', message: 'chat_fork_source_unavailable' }
+      })
+    )
+    scope.hostCapabilities = [SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY]
+    scope.sessionTabsRef.current = [
+      {
+        type: 'agent-session',
+        id: 'chat-tab',
+        title: 'Chat',
+        sessionId: 'chat-1',
+        agent: 'claude',
+        isActive: true
+      }
+    ]
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      expect(
+        await actions?.handleCreateTerminal(undefined, {
+          sourceChatFork: { sessionId: 'chat-1', agent: 'claude' }
+        })
+      ).toBe('reported-failure')
+    })
+    expect(scope.client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(scope.client.sendRequest).toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.objectContaining({
+        sourceChatFork: { sessionId: 'chat-1' }
+      }),
+      { timeoutMs: 120_000 }
+    )
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
+    expect(scope.setActiveHandle).not.toHaveBeenCalled()
+    expect(scope.setSessionTabs).not.toHaveBeenCalled()
+    expect(scope.nativeChatController.setTabView).not.toHaveBeenCalled()
+    expect(scope.setCreateError).toHaveBeenCalledWith(
+      "Could not open Claude in a new CLI. Check that the chat has a saved conversation and review the agent's command and settings on the host, then try again."
+    )
   })
 
   it('reports a busy create before sending the chat intent', async () => {
@@ -538,8 +585,7 @@ describe('optimistic placement of a created tab', () => {
     await createTerminal(scope)
 
     expect(scope.setSessionTabs).toHaveBeenCalled()
-    // The request anchored on the active tab, so the paint must land in the same slot the host
-    // splices into; appending here is what made the tab jump on the next snapshot.
+    // Match the host’s anchored insertion order or the next snapshot visibly moves the new tab.
     expect(tabIdsAfterCreate(scope, [{ id: 'existing-tab' }, { id: 'trailing-tab' }])).toEqual([
       'existing-tab',
       'terminal-tab-1',

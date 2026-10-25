@@ -27,7 +27,7 @@ export function writeClaudeTerminalFailure(
 ): void {
   const turnItemId = agentJournalItemKey(identity)
   const failureIdentity = claudeTerminalFailureIdentity(turnItemId)
-  const options = { turnScope: { kind: 'turn' as const, turnItemId } }
+  const options = { turnScope: { kind: 'turn' as const, turnItemId }, lifecycle: true }
   const revise = sink.tryReviseResolvedItemAndPublish
   if (!revise) {
     sink.appendItem(failureIdentity, body, options)
@@ -117,7 +117,7 @@ export function refineClaudeQuotaTurnEnd(
         reservedBytes
       )
     },
-    { turnScope: { kind: 'thread' } }
+    { turnScope: { kind: 'thread' }, lifecycle: true }
   )
   return true
 }

@@ -1,17 +1,7 @@
 import type { ILinkProvider, Terminal } from '@xterm/xterm'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 
-/**
- * Wrap a link provider so a synchronous throw inside `provideLinks` is reported
- * as "no links" instead of escaping to `window.onerror`.
- *
- * Why: xterm's web-links `LinkComputer._getWindowedLineStrings` can raise
- * `RangeError: Invalid array length` while scanning a pathological wrapped line
- * (e.g. agent CLI output with very wide/control-mangled buffers). That throw
- * propagates out of the synchronously-invoked provider and wedges the renderer,
- * which Chromium then kills (`killed` exit 1). Degrading to "no link this hover"
- * keeps the renderer alive; the user can retry by moving the mouse.
- */
+/** Convert synchronous provideLinks errors to no-link results. Pathological wrapped lines can make web-links LinkComputer throw RangeError into window.onerror and kill the renderer; degrading one hover preserves retry on mouse movement. */
 export function guardLinkProvider(provider: ILinkProvider, label: string): ILinkProvider {
   return {
     provideLinks(bufferLineNumber, callback) {
@@ -29,8 +19,7 @@ export function guardLinkProvider(provider: ILinkProvider, label: string): ILink
           errorName: error instanceof Error ? error.name : typeof error,
           errorMessage: error instanceof Error ? error.message : String(error)
         })
-        // Why: only resolve the link request if the provider threw before it
-        // already delivered links, so we never double-invoke the callback.
+        // Resolve only if the throwing provider has not delivered already; callbacks must remain single-shot.
         if (!callbackInvoked) {
           callback(undefined)
         }
@@ -39,15 +28,9 @@ export function guardLinkProvider(provider: ILinkProvider, label: string): ILink
   }
 }
 
-/**
- * Patch `terminal.registerLinkProvider` so every provider registered afterward
- * — including xterm addons' internal providers loaded via `loadAddon` (notably
- * the web-links `LinkComputer`) — is wrapped by {@link guardLinkProvider}.
- * Must run before any `loadAddon`/`registerLinkProvider` call for the terminal.
- */
+/** Wrap registration before any provider/addon loads, including internal web-links providers, so all pass through guardLinkProvider. */
 export function installGuardedLinkProviderRegistration(terminal: Terminal): void {
-  // Why: never let the guard itself break pane creation if a Terminal stub or a
-  // future xterm build lacks registerLinkProvider.
+  // Missing future/stub registerLinkProvider must not prevent pane creation.
   if (typeof terminal.registerLinkProvider !== 'function') {
     return
   }

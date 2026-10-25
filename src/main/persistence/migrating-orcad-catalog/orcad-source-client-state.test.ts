@@ -331,7 +331,6 @@ describe('source client-state migration', () => {
       current.workspaceSession
     )
 
-    // The unrelated close stays with this client; it does not block.
     expect(result.blockedCount).toBe(0)
     expect(result.payload?.clientHostedBrowserCloseIntents).toEqual([
       {

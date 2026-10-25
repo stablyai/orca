@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-// Why: the executor must yield through the shared helper by default, not a local setTimeout(0)
-// that Chromium clamps once nested. Mocking the module pins the default's identity without
-// depending on the helper's Vitest-only setTimeout fallback.
+// Require shared yield by default; local nested setTimeout is Chromium-clamped, while the shared helper’s unit fallback obscures that distinction.
 const { events, yieldToEventLoop } = vi.hoisted(() => {
   const events: string[] = []
   return {

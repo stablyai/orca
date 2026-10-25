@@ -1,6 +1,4 @@
-// The live turn's tail line, as desktop and mobile both draw it: whether it draws, what it says,
-// and which open reasoning block it discloses. One value, so a block's row is hidden exactly while
-// the line that shows it draws.
+// Desktop/mobile share live-line visibility and disclosed reasoning so its block row hides exactly while the line presents it.
 
 import {
   selectNativeChatLiveReasoning,

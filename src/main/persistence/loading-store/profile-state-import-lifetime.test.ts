@@ -1,4 +1,4 @@
-import { createSqliteTestStore } from '../../persistence-test-harness'
+import { createSqliteTestStore } from '../persistence-test-harness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

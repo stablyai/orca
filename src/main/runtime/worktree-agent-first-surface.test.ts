@@ -26,6 +26,7 @@ const {
 await import('./orca-runtime-test-lifecycle.spec')
 const { makeRuntimeStoreWithWorkspaceSession, store } =
   await import('./orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./bind-first-pane.test-fixture')
 
 const DEFAULTS = {
   runCommands: true,
@@ -73,7 +74,7 @@ function chatCreateRuntime(args: {
     return { id: ptyId }
   })
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -152,7 +153,6 @@ describe('host-created workspaces awaiting their agent chat', () => {
     }
   )
 
-  // The phone creates through agent.launch; a reported bug left a plain "Terminal 1" beside Setup.
   it('gives a paired-device chat launch Setup and the chat with no plain shell', async () => {
     const { runtime, spawn } = chatCreateRuntime({
       setupScriptLaunchMode: 'new-tab',

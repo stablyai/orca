@@ -126,8 +126,7 @@ type AgentChildWorkFactKey = Exclude<
   'kind' | 'state' | 'membership' | 'observedAt' | 'stoppable' | 'provenance'
 >
 
-/** Every fact is listed, so a request field added without a parse and a merge rule fails to
- *  compile. `undefined` means the observation did not say it. */
+/** Require parse/merge rules for every new request fact at compile time; undefined means unreported. */
 type AgentChildWorkFacts = {
   [K in AgentChildWorkFactKey]-?: AgentChildWorkObservationFields[K] | undefined
 }
@@ -158,9 +157,7 @@ function parseObservedOperation(
     : undefined
 }
 
-/** Provider facts are untrusted: each becomes a value the record codec accepts, or "not said".
- *  A malformed fact is dropped here so it can neither reject the observation nor erase what
- *  the record already knows. */
+/** Drop malformed provider facts before codec validation so they neither reject an observation nor erase known values. */
 function parseObservationFacts(
   request: AgentChildWorkObservationFields,
   host: Pick<AgentChildWorkHostFields, 'childWorkId' | 'firstObservedAt'>
@@ -196,8 +193,7 @@ function parseObservationFacts(
   }
 }
 
-/** A sparse observation never erases what the record knows (a roster omission knows only "it is
- *  gone"). `run` is the stored record only when this observation continues its invocation. */
+/** Sparse observations preserve known facts; run supplies the stored record only for the same invocation. */
 function mergeObservationFacts(
   said: AgentChildWorkFacts,
   prior: AgentChildWorkRecord | undefined,
@@ -225,8 +221,7 @@ function mergeObservationFacts(
   }
 }
 
-/** Builds the record admission writes: parse the observation, merge it over `prior` (the stored
- *  record on update and resume), and let the codec check the invariants. */
+/** Parse and merge observations over prior (including resume), then check record invariants through the codec. */
 export function buildAgentChildWork(
   request: AgentChildWorkObservationFields & {
     parent: AgentStatusSubject

@@ -313,7 +313,6 @@ describe('resolution receipts', () => {
 
       fireEvent.click(toggle)
       expect(toggle).toHaveAttribute('aria-expanded', 'true')
-      // The count stays on the line; the list opens outside the button, as prose.
       expect(toggle).toHaveTextContent('2 questions')
       const items = screen.getAllByRole('listitem')
       expect(items.map((item) => item.textContent)).toEqual([FIRST, SECOND])

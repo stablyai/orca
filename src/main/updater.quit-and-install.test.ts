@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PRE_COMMIT_INSTALL_FAILURE } from './updater-test-harness'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const {
   nativeUpdaterMock,
@@ -231,10 +232,8 @@ describe('updater', () => {
   it('allows a required profile export to finish beyond the optional cleanup budget', async () => {
     vi.useFakeTimers()
     const onBeforeQuit = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 5_000)))
-    const mainWindow = { webContents: { send: vi.fn() } }
     const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: updater only reads the mocked webContents.send in this lifecycle test.
-    setupAutoUpdater(mainWindow as never, { onBeforeQuit, onBeforeQuitFailure: 'abort' })
+    setupAutoUpdater(updaterMainWindow(vi.fn()), { onBeforeQuit, onBeforeQuitFailure: 'abort' })
     quitAndInstall()
     await vi.advanceTimersByTimeAsync(2_600)
     expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
@@ -322,7 +321,7 @@ describe('updater', () => {
     vi.useFakeTimers()
 
     autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      // Why: BaseUpdater dispatches 'error' synchronously inside install() for the common "no staged update filepath" path.
+      // BaseUpdater dispatches missing-file errors synchronously inside install.
       autoUpdaterMock.emit(
         'error',
         new Error("No update filepath provided, can't quit and install")
@@ -340,15 +339,12 @@ describe('updater', () => {
 
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     expect(isQuittingForUpdate()).toBe(false)
-    // Why: destructive prep runs only after quitAndInstall returns still in progress; sync recovery clears flags first so PTYs stay alive.
     expect(killAllPtyMock).not.toHaveBeenCalled()
     expect(sendMock).toHaveBeenCalledWith(
       'updater:status',
       expect.objectContaining({
         state: 'error',
-        // Why: a pre-commit install failure is not fixed by restarting, so the copy must not
-        // suggest it — except on macOS, where quitting does re-stage a Squirrel update.
-        // The updater's own text is appended because it is the only record of why the install never ran.
+        // Preserve the native cause; restart advice is useful only where quitting re-stages the update.
         message: `${PRE_COMMIT_INSTALL_FAILURE} (No update filepath provided, can't quit and install)`
       })
     )
@@ -372,7 +368,6 @@ describe('updater', () => {
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
-    // Why: reach the downloaded state so a late post-commit error isn't mistaken for a download/install UI failure.
     await vi.waitFor(() => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
         state: 'available',
@@ -384,7 +379,7 @@ describe('updater', () => {
     autoUpdaterMock.emit('download-progress', { percent: 100 })
     autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
-    // Why: on macOS install commits only once Squirrel is ready; mark it ready so this test covers the post-commit path on all platforms.
+    // Native Squirrel readiness is required to reach the committed path on macOS.
     if (process.platform === 'darwin') {
       const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
         ([eventName]) => eventName === 'update-downloaded'
@@ -411,7 +406,6 @@ describe('updater', () => {
     autoUpdaterMock.emit('error', new Error('late post-commit install error'))
 
     expect(isQuittingForUpdate()).toBe(true)
-    // Why: handoff still owns the process after commit — no recovery message or check/download error status.
     expect(sendMock).not.toHaveBeenCalled()
   })
 
@@ -441,7 +435,7 @@ describe('updater', () => {
     })
 
     autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
-    // Why: on macOS install commits only once Squirrel is ready; mark it ready so this test covers the committed path on all platforms.
+    // Native Squirrel readiness is required to reach the committed path on macOS.
     if (process.platform === 'darwin') {
       const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
         ([eventName]) => eventName === 'update-downloaded'
@@ -457,7 +451,6 @@ describe('updater', () => {
       expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     })
 
-    // Why: the installer (ShipIt/NSIS) waits for this process to exit; the watchdog prevents a wedged async shutdown from stranding the update.
     expect(armExitWatchdogMock).toHaveBeenCalledTimes(1)
   })
 
@@ -480,7 +473,6 @@ describe('updater', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(isQuittingForUpdate()).toBe(false)
-    // Why: recovery leaves the app running; a live watchdog would force-exit a healthy session 20s later.
     expect(armExitWatchdogMock).not.toHaveBeenCalled()
     expect(disarmExitWatchdogMock).toHaveBeenCalled()
   })
@@ -511,7 +503,6 @@ describe('updater', () => {
     expect(isQuittingForUpdate()).toBe(true)
 
     sendMock.mockClear()
-    // Why: unrelated error during pre-quit cleanup must not clear quittingForUpdate or emit install-recovery status (native not invoked).
     autoUpdaterMock.emit('error', new Error('pre-native concurrent error'))
 
     expect(isQuittingForUpdate()).toBe(true)

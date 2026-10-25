@@ -1,6 +1,3 @@
-// Restart/reinstall timer policy for WSL hook relay states. Owns the two
-// self-recovery timers so the manager's state machine stays declarative:
-// WHEN to retry lives here, WHAT retrying means stays in the manager.
 export type WslRelayRecoveryState = {
   distro: string
   cooldownUntil: number
@@ -12,7 +9,6 @@ export type WslRelayRecoveryIo = {
   isDistroRunning: (distro: string) => Promise<boolean>
   warn: (message: string) => void
   isDisposed: () => boolean
-  /** True while this state object is still the one in the manager's map. */
   isCurrent: (state: WslRelayRecoveryState) => boolean
   restart: (distro: string) => void
   dropState: (state: WslRelayRecoveryState) => void
@@ -21,9 +17,7 @@ export type WslRelayRecoveryIo = {
 export class WslRelayRecovery {
   constructor(private io: WslRelayRecoveryIo) {}
 
-  /** Arms the restart timer for the state's cooldown. The probe gate matters:
-   *  `wsl -d` BOOTS a stopped distro, so recovery must never resurrect a VM
-   *  the user shut down — a stopped distro has no live agents anyway. */
+  /** Check distro liveness before restarting so recovery cannot boot a stopped VM. */
   scheduleRestart(state: WslRelayRecoveryState): void {
     if (this.io.isDisposed() || state.restartTimer) {
       return
@@ -63,9 +57,7 @@ export class WslRelayRecovery {
       return
     }
     const running = await this.io.isDistroRunning(state.distro)
-    // Why: a fresh ensure() may have replaced this state during the probe
-    // await — dropping/restarting here would then act on the replacement,
-    // orphaning its live relay child outside the manager's map.
+    // The probe await may outlive state replacement; never drop or restart the replacement relay.
     if (this.io.isDisposed() || !this.io.isCurrent(state)) {
       return
     }

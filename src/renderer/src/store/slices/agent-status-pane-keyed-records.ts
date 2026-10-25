@@ -28,10 +28,7 @@ function boundLruKeyRecord<Value extends true | string>(
   return next
 }
 
-// The rebuild is a no-op only when nothing would be evicted and the additions are
-// already the tail of `existing` in that same relative order. A matching key SET is
-// not enough: re-adding a key moves it to the tail, and that order decides which key
-// the cap evicts next, so a stale-order hit would un-fence a recently retired pane.
+/** No-op requires no eviction and additions already ordered at the tail. Equal key sets with stale order would evict recently retired panes. */
 function isLruKeyRecordUnchanged<Value extends true | string>(
   existing: Record<string, Value>,
   additions: ReadonlySet<string>,
@@ -96,11 +93,7 @@ export function removePaneKeys<T>(
   record: Record<string, T>,
   paneKeys: ReadonlySet<string>
 ): Record<string, T> {
-  // Probe the requested keys instead of enumerating the record, and copy only once a key
-  // actually matches: pane retirement calls this across a dozen records that usually hold
-  // none of the retired keys, so the no-op path must stay allocation-free and keep returning
-  // the same reference. `propertyIsEnumerable` is own-only, so inherited keys such as
-  // `toString` or `__proto__` are never deletable.
+  // Probe requested own enumerable keys and clone on first match. Retirement touches many usually-empty records; retain no-op identity and exclude inherited toString/__proto__.
   let next: Record<string, T> | null = null
   for (const key of paneKeys) {
     if (!Object.prototype.propertyIsEnumerable.call(record, key)) {

@@ -39,7 +39,6 @@ function call(id: string, name = 'shell'): NativeChatMessage {
   }
 }
 
-/** Agent words with a call folded under them, as `foldToolMessages` hands them over. */
 function lead(id: string): NativeChatMessage {
   return { ...call(id), blocks: [{ type: 'text', text: `${id} says` }, ...call(id).blocks] }
 }
@@ -69,13 +68,11 @@ function build(
   }).filter((slot): slot is NativeChatMessageSlot => slot.kind === 'message')
 }
 
-/** Each slot as its id, or its members' ids when it draws a work run. */
 function rows(slots: NativeChatMessageSlot[]): (string | string[])[] {
   return slots.map((slot) => slot.workRun?.map((message) => message.id) ?? slot.message.id)
 }
 
 describe('work runs', () => {
-  // A model that thinks before every call: one row, not one per thought and one per call.
   it('draws thoughts and the calls between them as one row', () => {
     const slots = build([
       text('u', 'go', 'user'),
@@ -92,8 +89,6 @@ describe('work runs', () => {
     expect(rows(slots)).toEqual(['u', ['r1', 'a', 'r2', 'b', 'r3'], ['x', 'r4', 'd'], 'y'])
   })
 
-  // The words a call was folded under head the run, so their calls and the ones after a
-  // thought read as one run, not two.
   it('lets the agent words that carry calls head the run, but never join one', () => {
     expect(
       rows(
@@ -158,15 +153,13 @@ describe('work runs', () => {
     expect(rows(slots)).toEqual(['u', ['a', 'b'], 'approval', 'c'])
   })
 
-  // The thought the live line is showing draws no row; it joins once it ends.
   it('keeps the run open across the thought the live line shows', () => {
     const messages = [text('u', 'go', 'user'), call('a'), thought('r1'), call('b'), thought('r2')]
     expect(rows(build(messages, { liveReasoningId: 'r2' }))).toEqual(['u', ['a', 'r1', 'b']])
     expect(rows(build(messages))).toEqual(['u', ['a', 'r1', 'b', 'r2']])
   })
 
-  // At the top level the live line owns the open thought; once it lets go (a Stop in flight),
-  // the thought joins at once rather than standing alone until the turn ends.
+  // Once the live line releases open reasoning, fold it immediately instead of waiting for turn completion.
   it('folds an open thought the live line let go of straight into the run', () => {
     const open: NativeChatMessage = { ...thought('r2'), state: 'running', completedAt: undefined }
     const messages = [text('u', 'go', 'user'), call('a'), thought('r1'), call('b'), open]
@@ -187,7 +180,6 @@ describe('work runs', () => {
     expect(slots[1]?.trailingRun).toBe(true)
   })
 
-  // The row draws (and takes a slot), so it joins; inside the run it draws nothing.
   it('lets a thought with no visible text join rather than split the run', () => {
     const blank: NativeChatMessage = { ...thought('w'), blocks: [{ type: 'text', text: '\n' }] }
     expect(rows(build([text('u', 'go', 'user'), call('a'), blank, call('b')]))).toEqual([
@@ -229,7 +221,6 @@ describe('work runs with an edit in their turn', () => {
     call('c')
   ]
 
-  // The rollup draws under the turn's newest row, which is the run's own last member while live.
   it('keeps the newest row in the live run, which carries the rollup', () => {
     const slots = build(turn, {
       liveTurnKey: 'u',
@@ -262,7 +253,6 @@ describe('work runs with an edit in their turn', () => {
 })
 
 describe('work run height', () => {
-  // Collapsed, a run draws one header: its thoughts' text reserves nothing until it opens.
   it('reserves one tool row for a collapsed run however long its thoughts are', () => {
     const long = (id: string): NativeChatMessage => ({
       ...thought(id),

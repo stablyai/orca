@@ -2,8 +2,7 @@
 import { performance } from 'node:perf_hooks'
 import { createJiti } from 'jiti'
 
-// jiti, not a bare `node` import: type-stripping cannot resolve the extensionless
-// relative imports inside the module graph under test.
+// Use jiti: Node type stripping cannot resolve graph’s extensionless imports.
 const jiti = createJiti(import.meta.url)
 const { planWorktreeSortOrderUpdates } = await jiti.import(
   '../../src/shared/worktree/sort-order-update.ts'

@@ -198,8 +198,7 @@ describe('terminal scroll intent', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 20 })
     markTerminalPinnedViewport(terminal)
 
-    // At scrollback capacity xterm keeps baseY fixed and walks viewportY up
-    // as old rows trim, preserving the visible content without app help.
+    // At scrollback capacity baseY stays fixed while trimming shifts viewportY up, preserving content natively.
     terminal.buffer.active.viewportY = 5
     syncTerminalScrollIntentFromViewport(terminal)
     terminal.buffer.active.viewportY = 0
@@ -592,8 +591,7 @@ describe('terminal scroll intent', () => {
     const host = new TestElement() as unknown as HTMLElement
     const disposable = attachTerminalScrollIntentTracking(terminal, host)
 
-    // A sub-row trackpad delta or a wheel consumed by a mouse-reporting TUI:
-    // the wheel event fires but xterm's viewport never moves.
+    // Sub-row/mouse-reporting-TUI wheels can emit events without moving xterm’s viewport.
     const wheelUp = new Event('wheel') as WheelEvent
     Object.defineProperty(wheelUp, 'deltaY', { value: -2 })
     host.dispatchEvent(wheelUp)
@@ -647,7 +645,6 @@ describe('terminal scroll intent', () => {
 
     for (let batch = 1; batch <= 2; batch += 1) {
       const snapshot = captureTerminalStructuralScrollIntent(terminal)
-      // xterm follows output during the write because the viewport was at bottom.
       terminal.buffer.active.baseY += 25
       terminal.buffer.active.viewportY = terminal.buffer.active.baseY
       restoreTerminalStructuralScrollIntent(terminal, snapshot)
@@ -673,7 +670,6 @@ describe('terminal scroll intent', () => {
     const terminal = createTerminal({ viewportY: 550, baseY: 600 })
     markTerminalPinnedViewport(terminal)
 
-    // Snapshot replay rebuilds a shorter, renumbered buffer.
     terminal.buffer.active.baseY = 200
     terminal.buffer.active.viewportY = 200
     enforceTerminalCurrentScrollIntent(terminal)
@@ -687,12 +683,10 @@ describe('terminal scroll intent', () => {
     markTerminalPinnedViewport(terminal)
     const snapshot = captureTerminalStructuralScrollIntent(terminal)
 
-    // Snapshot replay cleared the buffer; enforcement races the async parse.
     terminal.buffer.active.baseY = 0
     terminal.buffer.active.viewportY = 0
     restoreTerminalStructuralScrollIntent(terminal, snapshot)
 
-    // The replay finishes parsing and the scrollback regrows past the pin.
     terminal.buffer.active.baseY = 284
     terminal.buffer.active.viewportY = 284
     enforceTerminalCurrentScrollIntent(terminal)
@@ -705,8 +699,7 @@ describe('terminal scroll intent', () => {
     const terminal = createTerminal({ viewportY: 248, baseY: 254 })
     markTerminalPinnedViewport(terminal)
 
-    // A structural capture sees the rebuilt buffer while it is still empty;
-    // the at-bottom(0/0) reading is transient and must not convert the pin.
+    // Transient 0/0 during rebuild must not convert a durable reading pin to follow-output.
     terminal.buffer.active.baseY = 0
     terminal.buffer.active.viewportY = 0
     const snapshot = captureTerminalStructuralScrollIntent(terminal)
@@ -724,7 +717,6 @@ describe('terminal scroll intent', () => {
     expect(captureTerminalStructuralScrollIntent(terminal)).toBeNull()
     enforceTerminalCurrentScrollIntent(terminal)
 
-    // A live streaming batch lands while the replay is partially parsed.
     terminal.buffer.active.baseY = 284
     terminal.buffer.active.viewportY = 0
     restoreTerminalStructuralScrollIntent(terminal, preReplay)

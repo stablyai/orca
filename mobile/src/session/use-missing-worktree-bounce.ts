@@ -9,9 +9,7 @@ export function shouldBounceMissingWorktree(
   return resolution === 'missing' && !isSyntheticWorkspaceRoute(worktreeId)
 }
 
-/** Sends the route back to the host index once the host has *proven* the worktree is gone —
- *  a workspace deleted on the desktop while the phone held the link (Resume, a notification,
- *  a cold deep link) otherwise lands on a session screen whose every RPC fails. */
+// Bounce only after proven deletion so stale links cannot strand the session screen or transient failures eject it.
 export function useMissingWorktreeBounce(args: {
   hostId: string
   worktreeId: string
@@ -19,12 +17,10 @@ export function useMissingWorktreeBounce(args: {
   bounce: (hostId: string) => void
 }): void {
   const { hostId, worktreeId, resolution } = args
-  // Why: navigation takes effect after this render, so without a latch the renders before
-  // unmount would each fire again — and it lets callers pass an inline bounce closure.
+  // Latch before navigation takes effect so intervening renders cannot bounce repeatedly.
   const bouncedRef = useRef<string | null>(null)
   const bounceRef = useRef(args.bounce)
-  // Why: synced in an effect (render must stay pure); declared first so the
-  // bounce effect below always sees the freshest closure in the same commit.
+  // Sync the callback before the bounce effect so it sees the newest closure without mutating refs during render.
   useEffect(() => {
     bounceRef.current = args.bounce
   })

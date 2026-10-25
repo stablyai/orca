@@ -1,10 +1,6 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 
-/**
- * Tab ids owned by more than one host partition. Legacy alias keys (`tabId:1`) and acknowledgement
- * keys (`tabId:leafId`) carry no host segment, so such a tab id resolves to whichever partition was
- * migrated last — routing one host's pane at another host's terminal. Rewrite neither instead.
- */
+/** Hostless legacy/acknowledgement keys cannot disambiguate shared tab IDs; rewrite neither host. */
 export function findCrossHostPaneTabIds(state: PersistedState): ReadonlySet<string> {
   const seenTabIds = new Set<string>()
   const collidingTabIds = new Set<string>()

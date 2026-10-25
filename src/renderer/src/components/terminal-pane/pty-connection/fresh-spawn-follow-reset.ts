@@ -8,7 +8,7 @@ import {
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   buildKittyKeyboardRestore
 } from '../../../../../shared/terminal-mode-reset-profiles'
-import { buildFreshShellViewportBlankingSequence } from '../terminal-restored-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../../../shared/terminal-fresh-shell-viewport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import {
   getTerminalScrollIntentKind,
@@ -52,8 +52,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     }
     tryResetNativeFollow()
     if (!nativeFollowResetComplete) {
-      // Why: xterm's browser viewport can reject scrolling while its renderer
-      // is detached; the first render/resize is the earliest safe native retry.
+      // Detached xterm viewports may reject scrolling; retry natively at first render/resize.
       session.freshSpawnFollowResetDisposables = [
         session.pane.terminal.onRender(tryResetNativeFollow),
         session.pane.terminal.onResize(tryResetNativeFollow)
@@ -79,8 +78,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
         return ''
       }
     }
-    // Why: keep the head — a suffix slice of an oversized parameter run drops
-    // the `\x1b[` the next scan needs to recognize the carried sequence.
+    // Keep oversized escape prefixes intact; suffix slicing would lose the CSI introducer needed by the next scan.
     return tail.slice(0, TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
   }
 
@@ -96,14 +94,11 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     return prefersRefresh
   }
 
-  // The replay path uses the guard so xterm auto-replies to embedded query
-  // sequences don't leak into the shell. xterm.write() buffers internally
-  // regardless of DOM visibility and the guard stays engaged via the
-  // write-completion callback until xterm finishes parsing.
+  // Hold replay guard through xterm’s parse callback so queued query replies cannot leak into shell stdin.
   session.writeReplayData = (data: string): void => {
-    // Why: drain any queued background bytes BEFORE the replay paint, so the
-    // scheduler's deferred drain cannot land older bytes on top of the replay.
+    // Drain old background bytes before replay so deferred writes cannot overwrite the new image.
     flushTerminalOutput(session.pane.terminal)
+    data = session.idleCursorReset.processOutput(data)
     replayIntoTerminal(session.pane, session.deps.replayingPanesRef, data, {
       breadcrumbIdentity: {
         tabId: session.deps.tabId,
@@ -116,9 +111,9 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
   }
 
   session.writeReplayDataAsync = (data: string): Promise<void> => {
-    // Why: WebGL must be rebuilt after xterm has parsed replay bytes, not
-    // merely after the write was queued.
+    // Rebuild WebGL after replay parses, rather than when it is merely queued.
     flushTerminalOutput(session.pane.terminal)
+    data = session.idleCursorReset.processOutput(data)
     return replayIntoTerminalAsync(session.pane, session.deps.replayingPanesRef, data, {
       breadcrumbIdentity: {
         tabId: session.deps.tabId,
@@ -158,11 +153,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     isAlternateScreen?: boolean,
     terminalOwner?: 'shell'
   ): string => {
-    // Why a cold restore overrides the agent signal: liveness is read from the
-    // pane's status and title, both of which are persisted, so after a cold
-    // restore they describe the process that died. Preserving "its" modes arms
-    // mouse, focus and paste reporting against the fresh shell that replaces it,
-    // which then prints the reports as junk at the prompt (#12101).
+    // Cold restore replaces the dead process despite persisted agent titles/status; clear stale mouse/focus/paste modes before the fresh shell (#12101).
     if (ownerProcessEnded) {
       return POST_REPLAY_MODE_RESET
     }
@@ -174,8 +165,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (session.shouldPreserveAgentReattachModes()) {
       return buildPostReplayLiveAgentReattachReset(payload)
     }
-    // Why: an alt-screen pane is a live TUI Orca just does not recognise as an agent, and the
-    // replay already re-armed its mouse modes — keep them instead of wiping them (#8291).
+    // Alt-screen panes can be live unrecognized TUIs; preserve mouse modes the replay restored (#8291).
     return (isAlternateScreen ?? session.kittyKeyboardModes.isAlternateScreen)
       ? POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
       : POST_REPLAY_REATTACH_RESET
@@ -194,8 +184,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
       return
     }
-    // Why: fresh Windows ConPTY output paints at screen coordinates, so
-    // restored rows must leave the viewport before the first prompt redraw.
+    // Move restored rows into scrollback before coordinate-based Windows ConPTY prompt output.
     session.writeFreshShellViewportBlanking()
   }
 }

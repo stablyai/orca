@@ -52,8 +52,7 @@ export type AutomationDraft = {
   time: string
   dayOfWeek: string
   customSchedule: string
-  // The cadence this record was opened with, or null for a new one. The strict schedule gate
-  // judges new input; a saved cadence that still runs is not re-judged against it.
+  // Validate new input strictly; do not re-judge a saved cadence that still runs.
   savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
@@ -143,8 +142,7 @@ export function AutomationEditorDialog({
           event.preventDefault()
         }}
         onEscapeKeyDown={(event) => {
-          // Why: Radix listens on document, so currentTarget is not the
-          // dialog. Use the content ref to scope find to this prompt editor.
+          // Radix listens on document; scope editor lookup through the dialog ref rather than currentTarget.
           const dialog =
             dialogContentRef.current ??
             (event.target instanceof Element

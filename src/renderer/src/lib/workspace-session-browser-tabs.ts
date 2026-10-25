@@ -49,9 +49,7 @@ export function buildPersistedBrowserPagesByWorkspace(
   )
 }
 
-/** The half of the remote page handle a relaunch can rebuild from: which host page this row is,
- *  and whether this desktop was hosting it. Restored rows carry the marker before the host has
- *  republished a placement, so a second quit must read it from there too. */
+// Persist host page identity/client-hosted status before republished placement arrives; restored markers must survive a second quit too.
 function persistedRemoteBrowserPageIdentity(
   handle: RemoteBrowserPageHandle | undefined
 ): Pick<BrowserPage, 'remoteBrowserPageId' | 'remoteBrowserPageClientHosted'> {

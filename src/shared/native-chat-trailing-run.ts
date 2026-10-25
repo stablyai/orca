@@ -1,5 +1,4 @@
-// Which of an agent's rows is its live frontier: the last one where it spoke or acted.
-// A tool run stays live until a later row of the same agent moves past it.
+// A tool run remains live until a later row from the same agent speaks or acts beyond it.
 
 import { isToolCallBlock, type NativeChatMessage } from './native-chat-types'
 import { deriveNativeChatRowContent } from './native-chat-row-content'

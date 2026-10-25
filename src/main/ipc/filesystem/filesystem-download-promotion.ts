@@ -8,7 +8,7 @@ export function decodeDownloadedFileContent(content: string, encoding: 'utf8' | 
 }
 
 export function createSiblingTransferPath(destinationPath: string, suffix: string): string {
-  // Why: promotion renames must stay on the destination volume, so transfer paths remain siblings.
+  // Keep staging beside destination so promotion rename stays on one volume.
   return join(dirname(destinationPath), `.${randomUUID()}.${suffix}`)
 }
 

@@ -127,8 +127,7 @@ function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSnapshot
       connectionId: 'conn-runtime-census-race',
       requestId: 'req-runtime-census-race',
       pairedDeviceId: 'paired-runtime-census-race',
-      // A client that cannot read structured sessions has no restore ahead of its census, which
-      // is the timing these microtask-ordered cases are written against.
+      // Legacy clients skip structured restore; these interleavings follow their census timing.
       clientKind: 'runtime',
       clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
     },

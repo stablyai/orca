@@ -1,19 +1,5 @@
-/**
- * E2E regression for #8459 — Resource Manager force-killed live daemon sessions as "orphans".
- *
- * The incident: a packaged `orca serve` still owned live AI terminals after the GUI quit. On
- * relaunch the renderer's binding map had not caught up, so those sessions rendered as unbound.
- * "Kill orphan terminals" then destroyed them with no confirmation dialog.
- *
- * The unit tests in `resource-session-bindings.test.ts` cover the binding gap directly. This suite
- * covers the part unit tests structurally cannot: that a real warm-reattached session, surviving a
- * real quit/relaunch against a real daemon, is not classified as killable before restore completes.
- *
- * What it deliberately does not cover:
- *   - The SSH deferred-reattach path itself. That needs a remote host; the unit test drives that
- *     input shape directly.
- *   - Clicking through the confirmation dialog. Covered by the component's own tests.
- */
+// #8459: quit/relaunch with a real warm daemon session and require ownership binding before Resource Manager can classify it as killable.
+// resource-session-bindings units cover SSH deferred binding; component tests cover confirmation.
 
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -32,10 +18,7 @@ import {
 } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
-/**
- * Every binding source Resource Manager consults, mirroring buildResourceSessionBindingIndex. A
- * session missing from all of them is what the popover calls an orphan.
- */
+// Mirror every buildResourceSessionBindingIndex source so no missing binding can masquerade as an orphan.
 async function collectBoundSessionIds(page: Page): Promise<string[]> {
   const [ptyIdsByTabId, tabsByWorktree, layouts, deferredSsh] = await Promise.all([
     getStoreState<Record<string, string[]>>(page, 'ptyIdsByTabId'),
@@ -116,8 +99,7 @@ test.describe('Resource Manager unbound-session safety', () => {
       secondApp = secondLaunch.app
       await waitForSessionReady(secondLaunch.page)
 
-      // The session must still be alive on the daemon; otherwise the assertion below would pass
-      // for the wrong reason.
+      // Require daemon liveness first so absent sessions cannot satisfy binding safety.
       await expect
         .poll(
           async () =>
@@ -132,8 +114,7 @@ test.describe('Resource Manager unbound-session safety', () => {
         )
         .toBe(true)
 
-      // The real assertion: once restore reports ready, a live session must be bound. An unbound
-      // live session is precisely what "Kill orphan terminals" would have destroyed.
+      // At restore readiness, the live session must be bound before orphan cleanup can target it.
       await expect
         .poll(async () => getStoreState<boolean>(secondLaunch.page, 'workspaceSessionReady'), {
           timeout: 30_000,
@@ -150,9 +131,7 @@ test.describe('Resource Manager unbound-session safety', () => {
         'A live warm-reattached session was unbound after restore completed; orphan cleanup would target it'
       ).toBe(true)
 
-      // Ownership evidence must survive the real IPC boundary, not just the unit-test mock: a
-      // structured-clone drop or preload contract mismatch would surface here as undefined.
-      // Asserting the exact arm matters — a stub returning a constant would satisfy a typeof check.
+      // Assert exact ownership evidence through IPC; clone/preload mismatches and constant stubs must fail.
       const ownership = await secondLaunch.page.evaluate(async (expected: string) => {
         const sessions = await window.api.pty.listSessions()
         return sessions.filter((s) => s.id === expected).map((s) => s.agentOwnership)
@@ -166,8 +145,7 @@ test.describe('Resource Manager unbound-session safety', () => {
         'agentOwnership crossed IPC as an unrecognized value'
       ).toContain(ownership[0])
 
-      // A plain shell under the live local provider must be PROVEN unowned, not merely unknown —
-      // otherwise the tri-state would be reporting "unknown" for everything and proving nothing.
+      // Positive control: a plain local shell must be proven unowned so unknown-for-everything cannot pass.
       expect(
         ownership[0],
         'The live local provider reported non-authoritative ownership for its own session'

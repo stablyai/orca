@@ -8,10 +8,7 @@ export type AutomationHostPickerGroup = {
   entries: AutomationHostCatalogEntry[]
 }
 
-/**
- * Groups by authority while preserving the one deterministic catalog order, so
- * the picker and the All-hosts list never disagree about position.
- */
+/** Preserve deterministic catalog order across authority groups so picker and All-hosts positions agree. */
 export function groupAutomationHostEntriesByAuthority(
   entries: readonly AutomationHostCatalogEntry[]
 ): AutomationHostPickerGroup[] {

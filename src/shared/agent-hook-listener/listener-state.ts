@@ -43,7 +43,7 @@ export type HookListenerState = {
   ampCompletedCacheKeys: Set<string>
   /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
-  /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `outcome` persists so the eventual done still carries it. Published on every row as `mainAgent`. */
+  /** Lead-only state published as mainAgent; retain verdict through child churn until final done. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
   /** One-normalization provenance marker for a status backed only by restored child state. */
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
@@ -55,9 +55,7 @@ export type HookListenerState = {
   claudeLaunchedBackgroundTasksByPaneKey: Map<string, ClaudeLaunchedBackgroundTasks>
   /** Compact whose completion each pane already applied, so relay duplicates can't refresh the row. */
   claudeConsumedCompactPromptIdByPaneKey: Map<string, string>
-  /** Claude `session_id` that last reported on the pane from a LEAD event. A different id means the
-   *  conversation was replaced (/clear, relaunch, resume), so claims the old session owned are void
-   *  even when no SessionStart arrives — the backstop for the exits that emit no terminating hook. */
+  /** Lead session_id changes retire replaced-conversation claims even without SessionStart (/clear/relaunch/resume). */
   claudeSessionOwnerByPaneKey: Map<string, string>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
@@ -65,21 +63,28 @@ export type HookListenerState = {
   codexSubagentTranscriptByPaneKey: Map<string, CodexSubagentTranscriptState>
   /** Root Codex state/model, kept separate from child hook traffic. */
   codexLeadStateByPaneKey: Map<string, CodexLeadTurnState>
+  /** Ephemeral forked Codex threads (/side) per pane; they never own the pane's status. */
+  codexEphemeralForkSessionsByPaneKey: Map<string, string[]>
   /** Newest Grok turn per pane, used to reject end reports that arrive after a replacement prompt. */
   grokActiveTurnByPaneKey: Map<string, GrokActiveTurn>
   /** The Grok main agent's own state as last published, so its clock keeps continuity across events. */
   grokMainAgentStatusByPaneKey: Map<string, AgentMainAgentStatus>
   /** Muse child-session filter and session-log cursor per pane. */
   musePaneStateByPaneKey: Map<string, MusePaneState>
-  /**
-   * OpenCode session id -> owning pane, observed from the client side. The
-   * shared v2 server stamps every post with its own frozen pane, so ingest
-   * reattributes bound sessions before disposition. Not a state claim itself —
-   * it names no row — so paneHasStateClaims ignores it.
-   */
+  /** Client-observed OpenCode1 session ownership replaces frozen shared-server stamps before ingest. This map names owners, not status claims. */
   opencodeSessionPaneBySessionId: Map<string, OpenCodeSessionBinding>
   /** Last launch token seen per pane; a rewritten shared-server post needs the bound pane's live token to pass its fence. */
   lastLaunchTokenByPaneKey: Map<string, string>
+  /** Hermes turn per pane, so tool hooks from its post-turn background review can be ignored. */
+  hermesTurnByPaneKey: Map<string, HermesPaneTurn>
+}
+
+export type HermesPaneTurn = {
+  ended: boolean
+  /** `delegate_task` children run their own turns, under their own session ids, inside the parent's. */
+  childSessionIds: Set<string>
+  /** The pane's own session, which its children's hooks must not replace. */
+  sessionId: string
 }
 
 export type MusePaneState = {
@@ -129,11 +134,13 @@ export function createHookListenerState(
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map(),
+    codexEphemeralForkSessionsByPaneKey: new Map(),
     grokActiveTurnByPaneKey: new Map(),
     grokMainAgentStatusByPaneKey: new Map(),
     musePaneStateByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
-    lastLaunchTokenByPaneKey: new Map()
+    lastLaunchTokenByPaneKey: new Map(),
+    hermesTurnByPaneKey: new Map()
   }
   legacyStatusAdapterByState.set(state, adapter)
   return state
@@ -221,20 +228,16 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.codexSubagentRosterByPaneKey.delete(paneKey)
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
+  state.codexEphemeralForkSessionsByPaneKey.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
   state.musePaneStateByPaneKey.delete(paneKey)
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
+  state.hermesTurnByPaneKey.delete(paneKey)
 }
 
-/** Does this pane still hold anything that can ASSERT a state — a stored row, or a Claude latch that
- *  `resolveClaudePaneStatus` would re-gate `working` from on the pane's next event?
- *
- *  Deliberately lives next to `clearPaneCacheState` above and enumerates the claim-bearing subset of
- *  what that function deletes: the two must be edited together, and keeping them three lines apart in
- *  one file is what makes that obvious. Prompt/tool/transcript caches are excluded — they render a
- *  row, they never create one. */
+/** Keep claim-bearing caches aligned with clearPaneCacheState: stored rows and latches can assert state; prompt/tool/transcript caches only render it. */
 export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
   return (
     state.lastStatusByPaneKey.has(paneKey) ||
@@ -274,11 +277,13 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.codexEphemeralForkSessionsByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokActiveTurnByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokMainAgentStatusByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.musePaneStateByPaneKey, fromPaneKey, toPaneKey)
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.hermesTurnByPaneKey, fromPaneKey, toPaneKey)
 }
 
 export function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -311,8 +316,11 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.codexSubagentRosterByPaneKey.clear()
   state.codexSubagentTranscriptByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()
+  state.codexEphemeralForkSessionsByPaneKey.clear()
   state.grokActiveTurnByPaneKey.clear()
   state.grokMainAgentStatusByPaneKey.clear()
+  state.musePaneStateByPaneKey.clear()
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
+  state.hermesTurnByPaneKey.clear()
 }

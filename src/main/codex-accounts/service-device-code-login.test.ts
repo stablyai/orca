@@ -21,8 +21,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // oxlint-disable-line typescript/consistent-type-imports -- vi.importActual needs an inline import() type
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -32,7 +32,7 @@ vi.mock('node:os', async () => {
 const DEVICE_OUTPUT =
   '1. Open this link in your browser and sign in to your account\n   \u001b[94mhttps://auth.openai.com/codex/device\u001b[0m\n\n2. Enter this one-time code \u001b[90m(expires in 15 minutes)\u001b[0m\n   \u001b[94mABCD-EFGH1\u001b[0m\n\n'
 
-// Device auth is refused on Windows hosts, whose codex login needs its own console.
+// Windows device login requires a dedicated console.
 describe.skipIf(process.platform === 'win32')('CodexAccountService device-code sign-in', () => {
   registerCodexAccountsTestHomes()
 
@@ -48,7 +48,7 @@ describe.skipIf(process.platform === 'win32')('CodexAccountService device-code s
         })
         const loginHome = options.env.CODEX_HOME!
         queueMicrotask(() => child.stdout.write(DEVICE_OUTPUT))
-        // The person enters the code elsewhere; codex then writes the login and exits.
+
         void vi
           .waitFor(() => expect(prompted).toBe(true))
           .then(() => {
@@ -102,7 +102,7 @@ describe.skipIf(process.platform === 'win32')('CodexAccountService device-code s
       needsCode: false
     })
     expect(state.accounts.map((account) => account.email)).toEqual(['remote@example.com'])
-    // The desktop's own login-link notice is for its local login, not this one.
+
     expect(service.getPendingLoginUrl()).toBeNull()
   })
 })

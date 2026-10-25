@@ -120,8 +120,7 @@ export function SourceControlTextGenerationDialogForm({
     settings,
     customAgentCommand: baseParams?.customAgentCommand
   })
-  // Why: chip previews only. The plan below stays synthetic so a workspace-empty
-  // `{linkedIssue}` cannot disable Save/Generate for a repo- or global-scoped recipe.
+  // Only chips use workspace previews; synthetic planning keeps empty linkedIssue from blocking repo/global recipe saves.
   const variablePreviews = useMemo(() => {
     const previews: Record<string, string> = {}
     if (basePromptPreview) {

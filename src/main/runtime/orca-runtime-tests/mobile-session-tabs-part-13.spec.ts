@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -47,7 +48,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       closeTerminal: vi.fn(),
       closeSessionTab: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -161,7 +161,7 @@ describe('OrcaRuntimeService', () => {
       const spawn = vi.fn().mockResolvedValue({ id: 'pty-materialized' })
       const runtime = new OrcaRuntimeService(store)
       runtime.setPtyController({
-        spawn,
+        spawn: committingSpawn(runtime, spawn),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -177,7 +177,6 @@ describe('OrcaRuntimeService', () => {
         renameTerminal: vi.fn(),
         closeTerminal,
         closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
@@ -289,11 +288,10 @@ describe('OrcaRuntimeService', () => {
         renameTerminal: vi.fn(),
         closeTerminal,
         closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
-      // Why: reply with a tabId but never sync a surface graph, so waitForMobileTerminalSurface times out and rollback runs.
+      // Reply without a surface graph to drive timeout rollback.
       const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
@@ -332,7 +330,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const pendingLeafId = '99999999-9999-4999-8999-999999999999'
       const closeTerminal = vi.fn()
-      // Why: #7587 rescue is gated on a live PTY, not on a mere surface — else this handle-less failed-spawn dead shell would resolve as success.
+      // A surface without a live PTY must not rescue a failed spawn (#7587).
       const spawn = vi.fn().mockRejectedValue(new Error('spawn failed'))
       const runtime = new OrcaRuntimeService(store)
       runtime.setPtyController({
@@ -367,7 +365,6 @@ describe('OrcaRuntimeService', () => {
       )
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-      // Only the tab shell publishes (no ptyId → never ready); no PTY ever binds.
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
@@ -393,7 +390,6 @@ describe('OrcaRuntimeService', () => {
         ]
       })
 
-      // Ready-fallback (1s) expires → materialize runs → spawn rejects → catch.
       await vi.advanceTimersByTimeAsync(2_000)
       const outcome = await settled
 
@@ -411,7 +407,7 @@ describe('OrcaRuntimeService', () => {
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
       runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
-      // Why: reply with a tabId but never sync a matching graph, reproducing a renderer that spawns the PTY but stalls graph-sync past the surface timeout (#7587).
+      // The PTY spawns, but renderer graph sync stalls beyond the surface timeout (#7587).
       const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
@@ -438,7 +434,7 @@ describe('OrcaRuntimeService', () => {
       })
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-      // A shell-only snapshot can win the first race but omit launch props; the later PTY rescue must fill the explicit mode.
+      // A later PTY rescue must fill launch props missing from the shell-only snapshot.
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
@@ -464,13 +460,11 @@ describe('OrcaRuntimeService', () => {
         ]
       })
 
-      // The renderer's PTY spawn registers with the tab binding (as the pty IPC layer now does) after the shell-only snapshot.
-      runtime.registerPty('pty-alive', TEST_WORKTREE_ID, null, {
+      registerBoundPty(runtime, 'pty-alive', TEST_WORKTREE_ID, null, {
         tabId: 'tab-alive',
         leafId
       })
 
-      // Resolves promptly, well under MOBILE_TERMINAL_SURFACE_TIMEOUT_MS (10s).
       await vi.advanceTimersByTimeAsync(50)
       const result = await settledCreate
 
@@ -496,10 +490,10 @@ describe('OrcaRuntimeService', () => {
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
       runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
-      // Why: spawn and tabCreate reply are independent IPC channels; here the PTY registers before the reply, so the pre-wait check resolves it.
+      // PTY registration can precede the independent tabCreate reply.
       const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
-        runtime.registerPty('pty-early', TEST_WORKTREE_ID, null, {
+        registerBoundPty(runtime, 'pty-early', TEST_WORKTREE_ID, null, {
           tabId: 'tab-early',
           leafId
         })
@@ -526,7 +520,6 @@ describe('OrcaRuntimeService', () => {
       })
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-      // Resolves via the immediate pre-wait rescue, well under the 10s timeout (not the catch path).
       await vi.advanceTimersByTimeAsync(50)
       expect(settled).toBe(true)
       const result = await settledCreate
@@ -568,7 +561,7 @@ describe('OrcaRuntimeService', () => {
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         // Why: the pane spawned before its startup queue landed (the #7587
         // renderer-stall class), so no spawn command is recorded for the PTY.
-        runtime.registerPty('pty-bare', TEST_WORKTREE_ID, null, { tabId: 'tab-bare', leafId })
+        registerBoundPty(runtime, 'pty-bare', TEST_WORKTREE_ID, null, { tabId: 'tab-bare', leafId })
         ipcMain.emit(
           'terminal:tabCreateReply',
           { sender: webContents },

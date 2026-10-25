@@ -10,7 +10,6 @@ const PATH = '/target/docs/readme.md'
 const NEW_ID = `editor:${encodeURIComponent(TO)}:local:${encodeURIComponent(PATH)}`
 const FILE = { filePath: PATH, relativePath: 'docs/readme.md', language: 'markdown' }
 
-/** The source holds a terminal and the restored editor tab; the target one editor tab. */
 function twoWorkspaces() {
   const ctx = testContext()
   const source = build(ctx, [
@@ -68,7 +67,6 @@ describe('moveTabToWorkspace', () => {
   it("appends the tab to the window's group under its new ids, and moves the file's record", () => {
     const { ctx, model, terminal } = twoWorkspaces()
 
-    // `build` also checks every structural rule on the result.
     const moved = build(ctx, [move()], model)
 
     expect(moved.results[0]).toEqual({ tabId: NEW_ID, groupId: 'target-group' })
@@ -193,7 +191,6 @@ describe('moveTabToWorkspace', () => {
     expect(moved.model.workspaces[WS]!.editorViews).toEqual({})
     expect(moved.model.workspaces[TO]!.editorViews).toEqual({ [NEW_ID]: view })
 
-    // The window's view under the new owner replaces the one the tab had.
     const renamed = { ...view, file: { ...FILE, relativePath: 'renamed.md' } }
     const withNewView = applyLayoutCommand(
       withView,
@@ -226,7 +223,6 @@ describe('moveTabToWorkspace', () => {
 
       const moved = build(ctx, [move()], shown.model)
 
-      // The moved tab lands as the kept one; the source gives it up.
       expect(moved.results[0]).toEqual({ tabId: 'shown-tab', groupId: 'target-group' })
       expect(tabsOf(moved.model, TO)).toEqual([
         {

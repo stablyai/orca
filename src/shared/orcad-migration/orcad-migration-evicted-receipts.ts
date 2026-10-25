@@ -1,7 +1,4 @@
-/**
- * What survives of an import receipt once it ages out of the bounded receipt list: enough to keep
- * answering "committed" for that migration. The rest of a receipt is derived from its manifest.
- */
+/** Keep enough of evicted receipts to answer committed; derive the remaining receipt from its manifest. */
 import { isRecord } from './orcad-migration-manifest-fields'
 
 export const MAX_ORCAD_MIGRATION_EVICTED_RECEIPTS = 4_096

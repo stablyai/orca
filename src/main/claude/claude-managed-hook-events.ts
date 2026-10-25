@@ -7,8 +7,7 @@ import {
 } from './claude-hook-event-versions'
 
 export const CLAUDE_EVENTS = [
-  // Why: SessionStart is the only event a resumed/idle session emits before the
-  // first prompt; without it the sidebar row can't exist until the user types (STA-3386).
+  // SessionStart creates sidebar rows for resumed or idle sessions before the first prompt.
   {
     eventName: 'SessionStart',
     definition: { hooks: [{ type: 'command', command: '' }] }
@@ -21,16 +20,12 @@ export const CLAUDE_EVENTS = [
     eventName: 'Stop',
     definition: { hooks: [{ type: 'command', command: '' }] }
   },
-  // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
-  // StopFailure instead; without this hook Orca leaves the turn spinning.
+  // OpenClaude emits StopFailure instead of Stop after API or model errors.
   {
     eventName: 'StopFailure',
     definition: { hooks: [{ type: 'command', command: '' }] }
   },
-  // Why: subagent/teammate lifecycle feeds the sidebar's child rows and keeps
-  // a pane 'working' while background children outlive the lead's turn.
-  // TeammateIdle parks turn-based teammates without trusting their permanently
-  // "running" background_tasks entry to gate the pane.
+  // Child lifecycles track background work; TeammateIdle parks teammates whose rosters stay running.
   {
     eventName: 'SubagentStart',
     definition: { hooks: [{ type: 'command', command: '' }] }
@@ -43,8 +38,6 @@ export const CLAUDE_EVENTS = [
     eventName: 'TeammateIdle',
     definition: { hooks: [{ type: 'command', command: '' }] }
   },
-  // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
-  // (name + input preview) before it completes.
   {
     eventName: 'PreToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
@@ -61,10 +54,8 @@ export const CLAUDE_EVENTS = [
     eventName: 'PermissionRequest',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
   },
-  // Why: a manual /compact ends at an idle prompt without emitting Stop, so PostCompact is the only
-  // signal that can clear the pane (STA-2915). PreCompact is deliberately NOT registered: it fires
-  // before the compact is validated, and an aborted compact emits it alone — mapping it to 'working'
-  // would strand the pane exactly as this registration is meant to prevent (STA-4613).
+  // Manual /compact may omit Stop; PostCompact clears the pane after completion.
+  // PreCompact can fire on abort, so treating it as working would leave the pane stuck.
   {
     eventName: 'PostCompact',
     definition: { hooks: [{ type: 'command', command: '' }] }
@@ -73,12 +64,28 @@ export const CLAUDE_EVENTS = [
 
 const CLAUDE_SESSION_END_EVENT = {
   eventName: 'SessionEnd',
-  // Why: Claude knows SessionEnd from 1.0.85, but 2.1.261 is the only version its delivery was measured on.
+  // Gate SessionEnd on measured delivery in 2.1.261, despite schema support since 1.0.85.
   installFrom: '2.1.261',
   definition: { hooks: [{ type: 'command', command: '' }] }
 } as const
 
-export const CLAUDE_MANAGED_EVENTS = [...CLAUDE_EVENTS, CLAUDE_SESSION_END_EVENT] as const
+// MCP elicitation dialogs block on the person (#25020); matcher is the MCP server name.
+const CLAUDE_ELICITATION_EVENTS = [
+  {
+    eventName: 'Elicitation',
+    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'ElicitationResult',
+    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  }
+] as const
+
+export const CLAUDE_MANAGED_EVENTS = [
+  ...CLAUDE_EVENTS,
+  ...CLAUDE_ELICITATION_EVENTS,
+  CLAUDE_SESSION_END_EVENT
+] as const
 
 export type ManagedHookEvent = {
   eventName: string
@@ -87,13 +94,12 @@ export type ManagedHookEvent = {
 
 export type ClaudeManagedHookPlan = {
   install: readonly ManagedHookEvent[]
-  /** Events whose Orca entry must go; user entries under them always stay. */
+  /** Retire only Orca entries, preserving user hooks. */
   retire: readonly ManagedHookEvent[]
-  /** Orca's statusLine usage feed; `retire` removes only Orca's own, `leave` never touches the slot. */
+  /** Retire removes only Orca's entry; leave preserves the entire slot. */
   statusLine: 'install' | 'retire' | 'leave'
 }
 
-/** What to write for a Claude of this version; see claude-hook-event-versions.ts. */
 export function getClaudeManagedHookPlan(
   claudeVersion: string | null | undefined
 ): ClaudeManagedHookPlan {
@@ -102,8 +108,7 @@ export function getClaudeManagedHookPlan(
       claudeKnowsHookEvent(claudeVersion, event.eventName) &&
       (!('installFrom' in event) || claudeVersionReaches(claudeVersion, event.installFrom))
   )
-  // Why: an unresolved version (e.g. a probe timeout) is no evidence of an old Claude, so it must
-  // not strip entries an install that knew the version wrote; only a known version retires events.
+  // A failed version probe must not retire entries installed using a known version.
   const retire =
     parseClaudeCliVersion(claudeVersion) === null
       ? []
@@ -115,8 +120,7 @@ export function getClaudeManagedHookPlan(
   }
 }
 
-// Why: OpenClaude reads its own settings file and accepts every event Orca writes. The statusline
-// usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
+// OpenClaude statusline data would be misattributed to Claude; leave its slot alone.
 export const OPENCLAUDE_MANAGED_HOOK_PLAN: ClaudeManagedHookPlan = {
   install: CLAUDE_EVENTS,
   retire: [CLAUDE_SESSION_END_EVENT],

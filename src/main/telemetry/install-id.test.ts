@@ -3,9 +3,7 @@ import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { generateInstallId, readInstallId } from './install-id'
 
-// Minimal in-memory store stand-in. The real `Store` pulls in Electron + fs,
-// which is overkill for testing the install-id read/write contract. We only
-// need the two methods install-id.ts consumes.
+// Fake only install-id settings reads/writes; real Store imports Electron/filesystem machinery.
 function makeFakeStore(initial: Partial<GlobalSettings>): Store {
   let settings = { ...initial } as GlobalSettings
   const store = {
@@ -22,7 +20,6 @@ describe('install-id', () => {
   describe('generateInstallId', () => {
     it('produces a UUID v4 string', () => {
       const id = generateInstallId()
-      // RFC 4122 v4: 8-4-4-4-12 hex with version nibble `4` and variant nibble 8/9/a/b.
       expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     })
 

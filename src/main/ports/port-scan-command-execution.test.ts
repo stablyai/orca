@@ -12,12 +12,10 @@ vi.mock('child_process', () => ({
   execFile: execFileMock
 }))
 
-// Why (#11161): must outlast the whole watchdog budget, otherwise a watchdog
-// armed before execFile still survives the stall and the ordering goes unpinned.
+// Exceed the whole watchdog budget so arming it before uv_spawn would fail (#11161).
 const SPAWN_STALL_MS = PORT_SCAN_COMMAND_TIMEOUT_MS + WATCHDOG_GRACE_MS + 200
 const LSOF_OUTPUT = ['p123', 'cnode', 'n127.0.0.1:5173'].join('\n')
 
-/** Emulates a hooked CreateProcessW: blocks the calling thread inside uv_spawn. */
 function blockCallingThread(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
@@ -32,7 +30,6 @@ describe('runPortScanCommandInProcess', () => {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, callback: unknown) => {
         blockCallingThread(SPAWN_STALL_MS)
-        // The command itself is healthy once it finally starts.
         setTimeout(() => (callback as (e: null, out: string) => void)(null, LSOF_OUTPUT), 5)
         return { kill: vi.fn() }
       }
@@ -42,9 +39,7 @@ describe('runPortScanCommandInProcess', () => {
 
     expect(result.stdout).toBe(LSOF_OUTPUT)
     expect(result.spawnMs).toBeGreaterThanOrEqual(SPAWN_STALL_MS - 100)
-    // Why the explicit budget: the stall is deliberately longer than the whole
-    // watchdog budget (5.2s), so on vitest's 5s default this test could never
-    // pass -- it has been red since #12217 landed.
+    // The deliberate >5s stall requires a longer test deadline.
   }, 15_000)
 
   it('kills the child and times out when the callback never arrives', async () => {

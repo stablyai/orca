@@ -2,13 +2,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { isSharedPackageDir } from './native-build-entry.cjs'
 
-/**
- * node_modules dirs above the global virtual store's `links` root, given one store slot's path.
- *
- * Node resolves upward from a slot, so a stray `~/node_modules` (or `/tmp/node_modules`) above
- * the store hands every package dependencies it never declared and hides exactly the bugs the
- * isolated layout exists to surface.
- */
+// Find ancestor node_modules above global-store links root: upward Node resolution can inject undeclared dependencies and hide isolation bugs.
 export function nodeModulesAboveStore(slotPackageDir, exists = existsSync) {
   let storeRoot = slotPackageDir
   while (basename(storeRoot) !== 'links') {

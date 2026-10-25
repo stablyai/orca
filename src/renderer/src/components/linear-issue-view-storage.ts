@@ -4,9 +4,7 @@ import {
   type LinearIssueViewResumeState
 } from '../../../shared/linear/issue-view-resume-state'
 
-// Why: issue-list layout is a per-device view preference, not host state. Routing it
-// through `ui.set` put it inside a strict nested schema, where a host that predates
-// the field silently discarded the WHOLE taskResumeState — github and jira included.
+// Keep per-device layout local; older hosts’ strict ui.set schemas can discard all taskResumeState when this field is unknown.
 const STORAGE_KEY = 'orca.linear.issue-view.v1'
 
 export function loadLinearIssueView(): LinearIssueViewResumeState {
@@ -20,8 +18,7 @@ export function loadLinearIssueView(): LinearIssueViewResumeState {
 
 export function saveLinearIssueView(view: LinearIssueViewResumeState): void {
   try {
-    // Normalization returns undefined for an all-defaults view, so resetting the
-    // list clears the key instead of pinning today's defaults against a future change.
+    // Remove all-default state so today’s defaults cannot override future default changes.
     const normalized = normalizeLinearIssueViewResumeState(view)
     if (!normalized) {
       localStorage.removeItem(STORAGE_KEY)

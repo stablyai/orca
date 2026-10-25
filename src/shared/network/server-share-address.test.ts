@@ -5,8 +5,14 @@ import { parseServerShareAddress } from './server-share-address'
 describe('parseServerShareAddress', () => {
   it('accepts a bare hostname or IP', () => {
     expect(parseServerShareAddress('my-host')).toEqual({ ok: true, value: 'my-host' })
-    expect(parseServerShareAddress('my-mac.tail-abcd.ts.net').ok).toBe(true)
-    expect(parseServerShareAddress('192.168.1.50').ok).toBe(true)
+    expect(parseServerShareAddress('my-mac.tail-abcd.ts.net')).toEqual({
+      ok: true,
+      value: 'my-mac.tail-abcd.ts.net'
+    })
+    expect(parseServerShareAddress('192.168.1.50')).toEqual({
+      ok: true,
+      value: '192.168.1.50'
+    })
   })
 
   it('rejects empty, whitespace-containing, and malformed input', () => {

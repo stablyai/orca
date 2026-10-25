@@ -107,7 +107,6 @@ describe('runtime environment store under interleaved writers and unreadable rec
       items.length === 0 ? undefined : items[Math.floor(rand() * items.length)]
     let clock = 1_000
     let nextId = 0
-    // The model: what every write must leave on disk.
     let readable = new Map<string, PersistedRuntimeEnvironment>()
     const unreadable: unknown[] = []
     const unreadableEntries: Json = {}
@@ -220,7 +219,6 @@ describe('runtime environment store under interleaved writers and unreadable rec
         }
       }
 
-      // No readable record is lost or duplicated beyond last-writer-wins.
       const records = readEnvironmentStoreRecords(userDataPath)
       expect(records.environments.map((entry) => entry.id).sort(), label).toEqual(
         [...readable.keys()].sort()
@@ -228,17 +226,15 @@ describe('runtime environment store under interleaved writers and unreadable rec
       expect(new Map(records.environments.map((entry) => [entry.id, entry])), label).toEqual(
         readable
       )
-      // Unreadable records survive verbatim and in order.
       expect(
         records.unreadable.map((record) => record.raw),
         label
       ).toEqual(unreadable)
-      // Unreadable sidecar entries and links owned by unreadable records are never pruned.
+      // Never prune unreadable sidecars or sidecars whose owning record is unreadable.
       const entries = sidecarEntries()
       for (const [id, value] of Object.entries({ ...foreignEntries, ...unreadableEntries })) {
         expect(entries[id], `${label} sidecar ${id}`).toEqual(value)
       }
-      // A server whose link is unreadable is never connectable.
       const listed = new Set(listEnvironments(userDataPath).map((entry) => entry.id))
       for (const [id, environment] of readable) {
         const hidden = id in unreadableEntries

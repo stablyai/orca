@@ -1,7 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { structuredChatTabBySessionId } from '@/lib/structured-chat-tab-index'
+import {
+  structuredChatTabBySessionId,
+  structuredChatWorkspacesBySessionId
+} from '@/lib/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
 import {
   structuredAgentSessionOwnerForTab,
@@ -9,7 +12,7 @@ import {
   executionHostIdForStructuredTarget
 } from '@/runtime/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { AgentMessageSender } from '../../../../shared/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { Tab } from '../../../../shared/tab-types'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
@@ -23,7 +26,7 @@ function findChatTab(
   executionHostId: string | null
 ): Tab | undefined {
   const tabsByWorktree = state.unifiedTabsByWorktree
-  for (const worktreeId in tabsByWorktree) {
+  for (const worktreeId of structuredChatWorkspacesBySessionId(tabsByWorktree, sessionId)) {
     const tab = structuredChatTabBySessionId(tabsByWorktree, worktreeId, sessionId)
     if (tab && structuredAgentSessionOwnerForTab(state, tab) === executionHostId) {
       return tab

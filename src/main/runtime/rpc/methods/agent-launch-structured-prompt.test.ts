@@ -1,10 +1,4 @@
-/**
- * The commit half of launch-prompt delivery: what the host sends, and what it is willing to claim.
- *
- * The assertions that matter are that the send is shaped like every other client's — the entry's
- * operation id IS the client message id, and the fingerprint is computed over the same body — and
- * that no failure mode can return an id, because an id is what the caller reads as "committed".
- */
+/** Use client-shaped message identity/fingerprint and return an id only for a proven commit; claiming an uncommitted send loses text. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'

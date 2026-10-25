@@ -33,13 +33,9 @@ type JiraConnectDialogProps = {
 
 type ConnectState = 'idle' | 'connecting' | 'error'
 type JiraInstanceType = 'cloud' | 'server'
-// Self-hosted Jira accepts either a personal access token (Bearer) or classic
-// username + password (Basic); older Server/DC instances predate PATs.
+// Support Basic auth for older Server/DC instances that predate personal access tokens.
 type ServerAuthMethod = 'pat' | 'basic'
 
-// Why: mirrors the inline Jira connect dialog in TaskPage so the onboarding
-// "Connect integrations" step can reuse the same site URL + email + API token
-// flow without depending on TaskPage's local state.
 export function JiraConnectDialog({
   open,
   onOpenChange,
@@ -70,9 +66,7 @@ export function JiraConnectDialog({
   const [connectState, setConnectState] = useState<ConnectState>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
 
-  // Start every open with a clean slate so a previously-typed secret, stale
-  // instance/auth-method selection, or old error can't linger across reopens.
-  // Runs before paint so a stale credential never renders for a frame.
+  // Clear secrets, modes and errors before paint on each open so prior credentials cannot flash or persist.
   useLayoutEffect(() => {
     if (!open) {
       return
@@ -87,9 +81,7 @@ export function JiraConnectDialog({
   }, [open])
 
   const isServer = instanceType === 'server'
-  // `needsIdentity` folds "Cloud Atlassian email" and "self-hosted Basic
-  // username" — the identity slot that keys/labels the stored site. PAT auth
-  // uses no identity, so the email field is hidden and left empty.
+  // Cloud email and Server Basic username share the identity slot; PAT auth has no identity.
   const isServerBasic = isServer && serverAuthMethod === 'basic'
   const needsIdentity = !isServer || isServerBasic
   const requiresIdentity = isServerBasic || (!isServer && !supportsScopedTokens)
@@ -109,10 +101,7 @@ export function JiraConnectDialog({
     }
   }
 
-  // A Cloud email, a Server username, a PAT, and an account password are
-  // different secrets; drop the credential fields when the deployment or auth
-  // method changes so one can't be submitted as another (e.g. a password
-  // silently riding along as a Bearer PAT).
+  // Clear credentials on auth/deployment changes so passwords cannot be submitted as PATs or other secret types.
   const clearCredentialsOnModeSwitch = (): void => {
     setEmail('')
     setApiToken('')
@@ -125,8 +114,7 @@ export function JiraConnectDialog({
     }
   }
 
-  // Why: a stray backdrop click must not discard typed credentials. Mode switches clear the
-  // credential fields, so a toggle alone is not dirty. Escape / Cancel / × stay explicit.
+  // Keep typed credentials on backdrop clicks; mode switches clear them, while explicit dismissal remains available.
   const isDraftDirty = (): boolean => siteUrl !== '' || email !== '' || apiToken !== ''
   const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
 
@@ -147,8 +135,7 @@ export function JiraConnectDialog({
     try {
       const result = await connectJira({
         siteUrl: trimmedSite,
-        // Cloud sends the Atlassian email; self-hosted Basic sends the username;
-        // PAT sends nothing, so a stale email can't key/label the stored site.
+        // PAT auth must not inherit a stale identity used to key or label the stored site.
         email: needsIdentity ? trimmedEmail : '',
         apiToken: trimmedToken,
         authType: instanceType

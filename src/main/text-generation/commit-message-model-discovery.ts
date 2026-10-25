@@ -43,7 +43,7 @@ type DiscoverModelsLocalInput = {
   options: CommitMessageModelDiscoveryLocalOptions
   backslash: CommandTemplateBackslash
   spawnAgent: SpawnSourceControlAgent
-  /** The command actually spawned, when the caller replaces the plan's; a missing one is typed. */
+  /** Actual spawned command when it differs from the plan; missing binaries return a typed failure. */
   binary?: string
 }
 
@@ -195,7 +195,6 @@ async function discoverModelsOnce(
       }
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
-        // A supervised spawn failure reads as the same failure a direct spawn reports.
         const spawnFailure = outputLimitExceeded
           ? null
           : supervisedProviderSpawnFailure(code, stderr)

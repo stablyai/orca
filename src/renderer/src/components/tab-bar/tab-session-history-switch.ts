@@ -1,4 +1,4 @@
-// Resolves a tab to its Agent Session History row so both menus offer the same surface switches.
+// Resolve tab conversations through Session History so both surfaces share switch eligibility.
 
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
@@ -45,8 +45,7 @@ import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session-launch
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 
-/** What a tab's history row is found by: a native chat tab by the chat it shows, a terminal tab by
- *  the provider conversation its agent reported. */
+/** Find native chats by Orca session ID and terminal tabs by their provider conversation. */
 export type TabSessionHistorySubject = {
   workspaceId: string
   /** The panel's own list request for this workspace, so both share one cached list. */
@@ -73,8 +72,7 @@ function canHostOfferTabSessionMove(
   if (hostScope === LOCAL_EXECUTION_HOST_ID) {
     return true
   }
-  // Resume-in-chat refuses any row not recorded on this machine. A chat's row is owned only where an
-  // Orca host projects chat ownership: this machine or a runtime server, never an SSH relay.
+  // CLI resume requires local recording; chat ownership can also be projected by paired runtimes, never SSH relays.
   return kind === 'chat' && parseExecutionHostId(hostScope)?.kind === 'runtime'
 }
 
@@ -113,6 +111,33 @@ export type NativeChatTabSession = {
   agent: AgentType | undefined
 }
 
+export type NativeChatCliForkIdentity = {
+  workspaceId: string
+  sessionId: string
+  executionHostScope: ExecutionHostScope
+}
+
+export function resolveNativeChatCliForkIdentity(
+  state: AppState,
+  args: { tab: Pick<TerminalTab, 'id' | 'worktreeId'>; nativeChat: NativeChatTabSession }
+): NativeChatCliForkIdentity | null {
+  const { nativeChat, tab } = args
+  if (
+    !nativeChat.agent ||
+    !agentForksConversations(nativeChat.agent) ||
+    !resolveAiVaultTargetWorkspacePath(state, tab.worktreeId)
+  ) {
+    return null
+  }
+  const executionHostScope = resolveAiVaultHostScopeDefaults(
+    getAiVaultResumeWorkspaceExecutionHostId(state, tab.worktreeId),
+    tab.worktreeId
+  ).defaultExecutionHostScope
+  return canHostOfferTabSessionMove('chat', executionHostScope)
+    ? { workspaceId: tab.worktreeId, sessionId: nativeChat.sessionId, executionHostScope }
+    : null
+}
+
 export function resolveTabSessionHistorySubject(
   state: AppState,
   args: {
@@ -134,15 +159,20 @@ export function resolveTabSessionHistorySubject(
   }
   if (args.nativeChat) {
     // A chat tab's only move is opening a copy in its CLI.
-    const target =
-      args.nativeChat.agent && agentForksConversations(args.nativeChat.agent)
-        ? workspace(args.tab.worktreeId, 'chat')
-        : null
-    return target ? { ...target, kind: 'chat', sessionId: args.nativeChat.sessionId } : null
+    const identity = resolveNativeChatCliForkIdentity(state, {
+      ...args,
+      nativeChat: args.nativeChat
+    })
+    return identity
+      ? {
+          kind: 'chat',
+          workspaceId: identity.workspaceId,
+          sessionId: identity.sessionId,
+          request: resolveAiVaultPanelSessionListRequest(state, identity.workspaceId)
+        }
+      : null
   }
-  // The pane-to-conversation mapping tab titles use, for the agents a chat can take over, limited to
-  // agents still running: once the agent exits, the tab title keeps its conversation but the move is
-  // no longer offered.
+  // Match the title’s pane-conversation identity, but require a running agent before offering a move.
   const conversation = args.paneKey
     ? resolvePaneAgentConversation(
         state,
@@ -175,8 +205,7 @@ export function findTabSessionHistoryRow(
       if (subject.kind === 'chat') {
         return session.structuredSession?.sessionId === subject.sessionId
       }
-      // A chat-owned row still matches: the move's gate refuses it, and the caller can open that chat.
-      // By the chats that take it over: an OpenCode 2.x pane reports `opencode`, its row `opencode2`.
+      // Match chat-owned rows so callers can reveal them; normalize OpenCode 1.x/2.x identity through the adoption rules.
       return (
         adoptsCliConversations(session.agent) &&
         cliConversationRowsShareAgent(session.agent, subject.agent) &&
@@ -186,8 +215,7 @@ export function findTabSessionHistoryRow(
   )
 }
 
-/** The row's move under the Session History gate, with the tab's own workspace standing in for the
- *  active one. A chat tab only forks into a CLI; a CLI tab only resumes into a chat. */
+/** Apply the History move gate in this tab’s workspace: chat forks to CLI, while CLI resumes into chat. */
 export function resolveTabSessionSwitch(
   state: AppState,
   session: AiVaultSession,
@@ -228,10 +256,7 @@ export function resolveTabSessionSwitch(
     : null
 }
 
-/** Reads the row through the panel's own list request. It never uses the panel's renderer cache:
- *  cached rows miss chat ownership the host projects per reply, and a write here would let a
- *  later-opened panel paint this pre-launch list without asking the host.
- *  Resolves `undefined` when it got no answer (cancelled), as opposed to `null` for "no row". */
+/** Read fresh host-projected ownership without touching the panel cache; undefined means cancelled, null means no row. */
 export async function lookupTabSessionHistoryRow(
   subject: TabSessionHistorySubject,
   listSessions: (args: AiVaultListArgs) => Promise<AiVaultListResult>,
@@ -252,9 +277,7 @@ export async function lookupTabSessionHistoryRow(
   if (row && isAiVaultSessionResumableContent(row)) {
     return row
   }
-  // The host caches the list for a minute, so a conversation newer than that needs a fresh scan,
-  // taken from the panel's forced-rescan budget so right-clicks cannot amplify full scans. A closed
-  // menu checks first: its cancel may have landed before this scan was registered.
+  // Spend the panel’s forced-scan budget for newer conversations, checking cancellation before scanning.
   if (
     options.isCancelled() ||
     request.executionHostScope !== LOCAL_EXECUTION_HOST_ID ||

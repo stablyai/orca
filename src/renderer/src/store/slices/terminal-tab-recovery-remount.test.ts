@@ -79,9 +79,7 @@ describe('remountTerminalTabForRecovery', () => {
   })
 })
 
-// Crash b5cfc6ca: recovery released its per-tab remount budget from getTab, which
-// reads unifiedTabsByWorktree. That index can drop a tab this one still holds, and
-// the release then erased the budget each remount had just consumed.
+// Recovery budget must follow the terminal-row index; temporary unified-index absence previously released the budget on every remount (b5cfc6ca).
 describe('isTerminalTabPresent as the recovery existence check', () => {
   it('answers true for a tab remountTerminalTabForRecovery can still remount', () => {
     const store = createTestStore()
@@ -121,12 +119,7 @@ describe('isTerminalTabPresent as the recovery existence check', () => {
   })
 })
 
-// Not every workspace is a repository checkout. The ledger is keyed to the tab
-// ROW and resolved through locateTerminalTab, which scans every bucket in
-// tabsByWorktree — so a folder workspace and the floating-terminal bucket must
-// behave identically without a single branch for them. The predecessor kept the
-// budget in a module map keyed by tabId, and its row patcher made the caller
-// name the bucket, which is where a non-worktree key could go wrong.
+// Recovery ledger follows tab rows across worktree, folder and floating buckets; no repository-only lookup may strand it.
 describe.each([
   ['a repository worktree', WORKTREE_ID],
   ['a folder workspace', folderWorkspaceKey('fw-1')],
@@ -151,7 +144,6 @@ describe.each([
 
     const first = store.getState().remountTerminalTabForRecovery(tabId, AUTOMATIC)
     expect(first.remounted).toBe(true)
-    // The ledger landed on the row in this bucket, not in a worktree-keyed map.
     expect(row()?.recovery).toMatchObject({ outcome: 'pending', reason: 'write-stalled' })
 
     // Unsettled blocks the next automatic ask, even past the cooldown.
@@ -189,10 +181,7 @@ describe.each([
   })
 })
 
-// Why this suite exists: TerminalPane snapshots pendingStartupByTabId in a useState initializer,
-// so whatever is missing there at mount is missing for good. The command must therefore survive
-// every store event that can precede its owning pane's fresh spawn, or a quick command leaves the
-// user a titled tab sitting at a bare prompt (STA-4876).
+// Pane mount snapshots startup commands once; recovery must retain queued commands until owning-pane spawn or leave quick commands at a bare prompt (STA-4876).
 describe('queued startup command retention', () => {
   it('survives a recovery remount so the next mount can still deliver it', () => {
     const store = createTestStore()
@@ -204,9 +193,7 @@ describe('queued startup command retention', () => {
     expect(store.getState().pendingStartupByTabId[tabId]).toEqual({ command: 'echo hi' })
   })
 
-  // Why: binding is pane-scoped but this map is tab-scoped. A tab routinely runs several panes
-  // (setup/issue splits land on the same tabId), and the sibling often binds first — if a bind
-  // spent the command, the pane that actually owns it would find an empty slot on remount.
+  // Commands are tab-scoped but binds are pane-scoped; a sibling’s earlier bind must not consume the owner’s remount command.
   it('is not spent by a sibling pane binding a pty to the same tab', () => {
     const store = createTestStore()
     const tabId = seedWorktreeWithTab(store)

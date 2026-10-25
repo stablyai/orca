@@ -31,8 +31,7 @@ describe('alternateScreenFixtureScript', () => {
 })
 
 describe('hidden pressure fixture', () => {
-  // Ratchet: entering the alternate screen and exiting is the dead-TUI shape the
-  // recovery barrier deliberately dismisses, which silently emptied these panes.
+  // Entering alternate screen then exiting triggers dead-TUI recovery, silently erasing fixture content.
   it.each(PRESSURE_MODES)(
     'keeps mode %s alive exactly when it enters the alternate screen',
     (mode) => {

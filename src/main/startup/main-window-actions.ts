@@ -25,7 +25,7 @@ import {
 } from '../window/renderer-recovery-prompt'
 import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
 
-// The window module injects this callback to avoid a cycle between actions and lifecycle code.
+// Inject the opener to avoid an actions/lifecycle import cycle.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
 export function setMainWindowOpener(
   opener: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -38,8 +38,7 @@ export function focusExistingWindow(): void {
     app,
     getWindow: () => state.mainWindow,
     openWindow,
-    // Why: a 20s blank launch invites a second double-click, and the repair is rewriting
-    // the per-file DACLs a fresh renderer would read. The gated launch opens the window.
+    // Repair rewrites renderer DACLs; second-click activation during a blank launch must wait for the gated opener.
     canOpenWindow: () => !isBlockingInstallDirAclRepairInFlight(),
     warn: console.warn
   })
@@ -66,14 +65,10 @@ export function openSettingsFromSystemMenu(): void {
   state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
 }
 
-/**
- * A user Quit (menu, tray, renderer-recovery prompt). Under `orca serve` the process is the
- * server its paired clients use, so a user Quit only closes the desktop windows (#15537);
- * signals, supervisor stops and update installs still quit through app.quit().
- */
+/** On serve, user Quit closes desktop windows while paired clients keep the server (#15537); signals/supervisor/updates still quit the process. */
 export function quitFromUserCommand(): void {
   if (state.isServeMode) {
-    // Why not getAllWindows(): offscreen browser-automation windows belong to the runtime.
+    // Offscreen automation windows belong to the runtime and must survive desktop-window close.
     for (const window of [state.mainWindow, getDashboardPopoutWindow()]) {
       if (window && !window.isDestroyed()) {
         if (window === state.mainWindow) {
@@ -151,7 +146,7 @@ export function createSystemTrayDeferred(
 }
 
 function resolveMenuTargetRenderer(targetWindow?: BrowserWindow | null): WebContents | undefined {
-  // Why: a native browser popup is a BrowserWindow hosting a web page, not Orca's renderer.
+  // Native browser popups host web pages rather than Orca renderer actions.
   return targetWindow && !targetWindow.isDestroyed() && !isNativeBrowserPopupWindow(targetWindow)
     ? targetWindow.webContents
     : state.mainWindow?.webContents
@@ -169,7 +164,7 @@ export function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   resolveMenuTargetRenderer(targetWindow)?.send('ui:openCrashReport')
 }
 
-// Why: once auto-recovery gives up the window stays blank, so a main-process dialog is the only retry/quit surface.
+// After automatic recovery stops, only main-process dialogs can offer retry/quit on a blank window.
 export async function showRendererRecoveryPrompt(
   recentRecoveryCount: number,
   failure?: RendererRecoveryPromptFailure,
@@ -194,9 +189,7 @@ export async function showRendererRecoveryPrompt(
         return
       }
       recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
-      // Why: leave the breaker open so a re-crash re-raises this prompt instead of resuming the auto-reload loop.
-      // Why watched: Reload is the dialog's default button, and an unwatched retry that stalls returns the user to
-      // the same silent hang with no further prompt — the watchdog re-raises this dialog instead.
+      // Keep the breaker open after manual retry; watchdog stalled retries so the default Reload cannot return users to a silent hang.
       if (retry) {
         retry()
         return

@@ -20,16 +20,12 @@ export type OrcadMigrationSourceScope = {
   hostId: ReturnType<typeof toSshExecutionHostId>
   repoIds: ReadonlySet<string>
   folderWorkspaceKeys: ReadonlySet<string>
-  /**
-   * Catalog repo ids another host registers too. A legacy unqualified key, or a bare repo id, for
-   * one of these cannot say whose it is, so it never matches: it is neither moved nor subtracted.
-   */
+  /** Shared bare repo IDs cannot prove host ownership, so never move or subtract them. */
   sharedRepoIds: ReadonlySet<string>
-  /** The session partition being read: an unqualified key there belongs to that partition's host. */
+  /** Unqualified keys inherit this partition's host. */
   partitionHostId?: string
 }
 
-/** The scope as seen from one session partition. */
 export function orcadMigrationPartitionScope(
   scope: OrcadMigrationSourceScope,
   partitionHostId: string
@@ -40,7 +36,7 @@ export function orcadMigrationPartitionScope(
 export function createOrcadMigrationSourceScope(args: {
   source: OrcadMigrationManifestSource
   catalog: OrcadMigrationCatalogPayload
-  /** The profile's repo rows, read for ids another host shares. */
+  /** Detect repo IDs shared by other hosts. */
   repos: readonly Repo[]
 }): OrcadMigrationSourceScope {
   const repoIds = new Set(args.catalog.repositories.map((repo) => repo.id))
@@ -63,7 +59,6 @@ export function createOrcadMigrationSourceScope(args: {
   }
 }
 
-/** A bare repo id the source owns alone; one another host shares cannot be attributed. */
 export function orcadMigrationOwnsRepoId(
   scope: OrcadMigrationSourceScope,
   repoId: string | null | undefined
@@ -80,7 +75,7 @@ export function orcadMigrationOwnerMatchesScope(
   if (!value) {
     return false
   }
-  // Why: a repo id may repeat across hosts; only the qualifier, the partition or the row says whose.
+  // Repeated repo IDs require host proof from a qualifier, partition or row.
   const qualified = isWorktreeHostIdentity(value)
   const ownerHost = qualified
     ? getExecutionHostIdFromWorktreeHostIdentity(value)

@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 
-// A chat whose start the host refused has no host session, so nothing publishes its row. The
-// bridge marks it failed from the launch's own outcome, so the tab and the workspace row show it
-// to a user looking elsewhere, until a retry starts it or the tab closes.
+// Refused creates publish no host session; bridge launch failures into tab/workspace rows until retry or closure.
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
@@ -65,15 +64,29 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn(async () => [])
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: mocks.retryIntent,
     restoreStructuredAgentSessionLaunchIntent: mocks.restoreIntent,
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
@@ -83,8 +96,8 @@ import {
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
 } from '@/lib/structured-agent-session-launch'
-import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import {
   resetTerminalTabActivityFlagsCacheForTest,
@@ -143,7 +156,6 @@ function rows(): AgentStatusEntry[] {
   return Object.values(store().getState().agentStatusByPaneKey)
 }
 
-/** What the chat's own tab shows, resolved as the tab bar resolves a structured tab. */
 function tabStatus(): string {
   const state = store().getState()
   return resolveTerminalTabActivityStatus({
@@ -170,7 +182,7 @@ async function connect(): Promise<(event: AgentSessionStatusEvent) => void> {
   return (event) => act(() => emit(event))
 }
 
-/** A restart keeps the saved launch and the acknowledgements, but no rows and no launch in memory. */
+/** Preserve saved launches/acknowledgments across restart; drop live rows and launch memory. */
 async function restart(): Promise<void> {
   const { acknowledgedAgentsByPaneKey } = store().getState()
   cleanup()
@@ -201,7 +213,6 @@ async function failStart(): Promise<void> {
   mocks.createIntent.mockReturnValueOnce(intent)
   mocks.launch.mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('refused'))
   failedStarts += 1
-  // Each failed start stands for its own user action.
   const launch = startStructuredAgentLaunch(WORKTREE_ID, 'claude', {
     requestId: `request-${failedStarts}`
   })

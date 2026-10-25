@@ -24,7 +24,7 @@ import { sourceControlActionRecipeMatchesTarget } from './source-control-action-
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 import { translate } from '@/i18n/i18n'
 
-/** What the dialog shows before it starts an agent: only an error the user can fix. */
+/** Expose only delivery errors the user can fix before launch. */
 export type SourceControlAgentActionDeliveryPlanState =
   | { status: 'idle' }
   | { status: 'error'; error: string }
@@ -118,8 +118,7 @@ export function SourceControlAgentActionDialogForm({
       }
     : null
   const selectedSaveTarget = sourceControlLaunchSaveTargetFromValue(saveTargetValue, repo)
-  // Why: start/save only writes the selected target, so the dialog copy must not
-  // depend on whether other available targets also match.
+  // Copy describes only the selected save target, which is the only one start/save writes.
   const selectedLaunchRecipeAlreadySaved = Boolean(
     selectedRecipe &&
     selectedSaveTarget &&

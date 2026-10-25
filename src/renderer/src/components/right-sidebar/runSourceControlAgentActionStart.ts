@@ -1,6 +1,7 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -14,6 +15,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
+import { admitSourceControlRecovery } from './source-control-recovery-admission'
 
 type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
@@ -32,6 +34,8 @@ type RunSourceControlAgentActionStartArgs = {
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource
+  recoveryContext?: RuntimeGitContext | null
+  signal?: AbortSignal
   onStart?: (args: {
     agent: TuiAgent
     commandInput: string
@@ -43,12 +47,7 @@ type RunSourceControlAgentActionStartArgs = {
     actionId: SourceControlLaunchActionId,
     recipe: SourceControlActionRecipe
   ) => void | Promise<void>
-  /**
-   * Fires as soon as the agent tab/session is created, before deferred
-   * submit-after-ready prompt delivery finishes. Reversible bookkeeping only —
-   * irreversible side effects (posting host replies, resolving threads) belong in
-   * onLaunched, which only fires once the prompt actually reached the agent.
-   */
+  /** Tab creation permits reversible bookkeeping; irreversible host writes belong in onLaunched after prompt delivery. */
   onLaunchAccepted?: () => void
   /** Fires when a launch that already reported onLaunchAccepted failed to deliver its prompt. */
   onLaunchAborted?: () => void
@@ -72,6 +71,8 @@ export async function runSourceControlAgentActionStart({
   promptDelivery,
   launchPlatform,
   launchSource,
+  recoveryContext,
+  signal,
   onStart,
   onSaveAgentDefault,
   onLaunchAccepted,
@@ -79,11 +80,20 @@ export async function runSourceControlAgentActionStart({
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
+  // Detection and delivery planning can outlive the state that opened the composer.
+  if (signal?.aborted) {
+    return false
+  }
+  if (recoveryContext && !(await admitSourceControlRecovery(recoveryContext, signal))) {
+    return false
+  }
+  if (signal?.aborted) {
+    return false
+  }
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false
-  // Why: `undefined` is what makes the launch fall back to the global Agents arguments;
-  // an empty string would beat that fallback and silently suppress them.
+  // Undefined selects global agent arguments; empty string would suppress that fallback.
   const launchAgentArgs = agentArgsApply ? agentArgs : undefined
   const notifyLaunchAccepted = (): void => {
     if (launchAcceptedNotified) {
@@ -117,8 +127,7 @@ export async function runSourceControlAgentActionStart({
     if (result?.surface.kind === 'local-terminal') {
       focusTerminalTabSurface(result.surface.tabId)
     }
-    // Why: lets callers park launch-scoped state before submit-after-ready finishes
-    // (can take tens of seconds); host mutations still wait for delivery below.
+    // Park launch state before slow submit-after-ready completes; host writes still wait for delivery.
     if (launched) {
       notifyLaunchAccepted()
     }
@@ -168,12 +177,13 @@ export async function runSourceControlAgentActionStart({
     try {
       await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
     } catch (error) {
-      // Why: the prompt already reached the agent; a failed recipe save must not strand the
-      // caller's accepted-launch bookkeeping (neither onLaunched nor onLaunchAborted would fire).
+      // Prompt delivery succeeded; recipe-save failure must not prevent accepted-launch callbacks from settling.
       console.error('onSaveAgentDefault failed', error)
     }
   }
   onLaunched?.()
-  onClose()
+  if (!signal?.aborted) {
+    onClose()
+  }
   return true
 }

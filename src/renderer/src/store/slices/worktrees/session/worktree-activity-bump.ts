@@ -25,8 +25,7 @@ export function createBumpWorktreeActivity(
     const now = Date.now()
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
-      // Why: folder meta lives on the FolderWorkspace record — persistWorktreeMeta would write a
-      // worktreeMeta['folder:…'] row that folderWorkspaces:list never reads back (#10251).
+      // FolderWorkspace owns folder metadata; worktreeMeta folder keys are write-only to folder listings (#10251).
       const folderWorkspaceId = workspaceScope.folderWorkspaceId
       let shouldPersist = false
       set((s) => {
@@ -55,8 +54,7 @@ export function createBumpWorktreeActivity(
         return s
       }
       shouldPersist = true
-      // Why: skip sortEpoch bump for the active worktree — its PTY events are click side-effects (reorder-on-click bug, PR #209).
-      // lastActivityAt is still persisted so the next background-driven sortEpoch bump includes this worktree's score.
+      // Active-worktree PTY side effects must not reorder selection; persist activity for the next background sort (PR #209).
       const isActive = s.activeWorktreeId === worktreeId
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
         lastActivityAt: now

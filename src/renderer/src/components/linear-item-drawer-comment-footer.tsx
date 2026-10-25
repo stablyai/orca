@@ -39,8 +39,7 @@ export function LinearIssueCommentFooter({
   const mountedRef = useRef(true)
 
   const handleFooterRef = useCallback((node: HTMLDivElement | null): void => {
-    // Why: comment submission can resolve after the footer unmounts; the root
-    // ref keeps that completion from writing stale local state without an Effect.
+    // Track the footer’s attached lifetime so late submissions cannot write stale local state.
     mountedRef.current = node !== null
   }, [])
 

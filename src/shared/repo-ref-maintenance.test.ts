@@ -117,12 +117,7 @@ function yieldToIo(): Promise<void> {
   return new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-/**
- * Spins the real event loop until `predicate` holds, so filesystem completions
- * can land while `setTimeout` is faked. Bounded by wall clock rather than by a
- * turn count: a loaded CI runner exhausts a fixed number of turns long before
- * the I/O finishes, which fails as a confusing assertion somewhere else.
- */
+/** Yield real I/O while timers are faked; wall-clock bounds tolerate loaded CI better than fixed turn counts. */
 async function until(predicate: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 10_000
   while (!predicate() && Date.now() < deadline) {
@@ -133,11 +128,7 @@ async function until(predicate: () => boolean, what: string): Promise<void> {
   }
 }
 
-/**
- * Like `until`, but for conditions that also need a scheduled retry to fire:
- * spinning the real loop alone can never satisfy them, because `setTimeout` is
- * faked. Alternates advancing the fake clock with yielding to real I/O.
- */
+/** Alternate fake-clock retries and real I/O; yielding alone cannot fire the faked retry timer. */
 async function untilWithTimers(predicate: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 10_000
   while (!predicate() && Date.now() < deadline) {
@@ -427,13 +418,11 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
       paused = true
     })
     await vi.advanceTimersByTimeAsync(1)
-    // Blocked while the rewrite window is open...
     expect(paused).toBe(false)
     expect(finished).toBe(false)
 
     release?.()
     await until(() => paused, 'pause() to resolve')
-    // ...and released without the pack ever being cancelled.
     expect(paused).toBe(true)
     expect(finished).toBe(true)
   })
@@ -543,9 +532,7 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
   })
 
   it('counts a pack that could not lock every ref as a success', async () => {
-    // Field-observed on a machine running several Orca sessions: a branch moved
-    // mid-pack, Git reported an error, and 36,688 loose refs still became 3.
-    // Retrying that aggressively would be wrong -- the backlog is gone.
+    // Observed concurrent branch movement: Git reported failure while packing 36,688 loose refs down to 3; do not retry a cleared backlog.
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, spans } = createHarness()
     const repo = target('local::/raced/.git', refs, async () => {
@@ -562,7 +549,6 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
       'git.loose_ref_count_after': 0
     })
 
-    // And it serves the full post-pack cooldown rather than retrying.
     maintenance.arm(repo)
     await elapseQuietPeriod(maintenance)
     expect(spans).toHaveLength(1)

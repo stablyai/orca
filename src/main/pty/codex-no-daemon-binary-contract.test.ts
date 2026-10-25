@@ -6,9 +6,7 @@ import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { CODEX_NO_DAEMON_SKIP_ARGS } from '../../shared/codex-shell-function'
 
-// Why: Orca's codex shell wrapper puts --no-daemon first for every subcommand but
-// agents/queue (src/shared/codex-shell-function.ts). Its tests use a fake codex, so
-// only the real binary can catch a renamed flag or a new subcommand rejecting it.
+// Fake binaries cannot detect renamed flags or subcommands rejecting the wrapper's --no-daemon rule.
 
 const execFileAsync = promisify(execFile)
 const binary = process.env.ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY
@@ -30,7 +28,7 @@ describe.runIf(binary)('codex --no-daemon binary contract', { timeout: 120_000 }
   let help: string
 
   beforeAll(async () => {
-    // Why a disposable home: never read or start anything under the user's ~/.codex.
+    // Keep probes away from the user's real ~/.codex.
     home = mkdtempSync(join(tmpdir(), 'orca-codex-no-daemon-contract-'))
     const version = await run(['--version'])
     expect(version.stdout.trim()).toBe(`codex-cli ${expectedVersion}`)
@@ -59,12 +57,12 @@ describe.runIf(binary)('codex --no-daemon binary contract', { timeout: 120_000 }
 
   it('accepts --no-daemon first for every listed subcommand the wrapper does not skip', async () => {
     const subcommands = listedSubcommands()
-    // Why a floor: a help layout change must fail here, not shrink the check to nothing.
+    // A changed help layout must fail rather than silently shrink coverage.
     expect(subcommands.length).toBeGreaterThan(20)
     expect(subcommands).toEqual(expect.arrayContaining(['exec', 'resume', 'agents', 'queue']))
     const rejected: string[] = []
     for (const subcommand of subcommands.filter((name) => !WRAPPER_SKIPPED_SUBCOMMANDS.has(name))) {
-      // Why bare `help`: clap's help subcommand treats `--help` as a command name.
+      // clap treats help --help as a command-name lookup; bare help prints its own usage.
       const args = subcommand === 'help' ? ['help'] : [subcommand, '--help']
       await run(['--no-daemon', ...args]).catch((error: { stderr?: string }) =>
         rejected.push(`${subcommand}: ${error.stderr?.trim() ?? String(error)}`)

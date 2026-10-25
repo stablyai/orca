@@ -13,10 +13,7 @@ export type WorktreeIdentity = Omit<WorktreeIdentityRef, 'worktreeId'> & {
   key: string
 }
 
-/**
- * Canonical exact identity for one worktree occupant.
- * The locator is deliberately excluded so a folder rename preserves identity.
- */
+/** Exclude the mutable locator so folder renames preserve occupant identity. */
 export function canonicalWorktreeIdentity(ref: WorktreeIdentityRef): string {
   return `wt2:${encodeURIComponent(ref.executionHostId)}:${encodeURIComponent(ref.instanceId)}`
 }

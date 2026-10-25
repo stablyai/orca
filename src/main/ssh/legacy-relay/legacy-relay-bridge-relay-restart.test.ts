@@ -1,7 +1,4 @@
-/**
- * A legacy relay that restarts at the same socket numbers its shells from pty-1 again, so a pane's
- * identity is its endpoint plus the incarnation its relay listed.
- */
+/** Relay restarts reuse socket and pty-1 ids; identify panes by endpoint plus relay-reported incarnation. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'

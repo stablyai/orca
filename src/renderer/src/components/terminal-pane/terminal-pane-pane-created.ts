@@ -2,7 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { createOsc52OscHandler } from './osc52-clipboard'
+import { createOsc52OscHandler } from '../../../../shared/osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
   showOsc52ClipboardFailedToast
@@ -34,7 +34,6 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 
 export type PaneCreatedSetupContext = TerminalPaneManagerOptionsContext
 
-/** Creates the PaneManager `onPaneCreated` callback. */
 export function createTerminalPaneCreatedHandler(
   context: PaneCreatedSetupContext
 ): (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void {
@@ -68,8 +67,7 @@ export function createTerminalPaneCreatedHandler(
         }
       }
     } else {
-      // A restored PTY or explicit spawn hint is authoritative; an older
-      // deferred record must not be claimed by a later remount.
+      // Restored PTY or explicit spawn hints outrank older deferred records on remount.
       discardDeferredSplitPaneHandoffForKey(paneKey)
     }
     const handoffForInput = deferredSplitHandoff
@@ -110,8 +108,7 @@ export function createTerminalPaneCreatedHandler(
     }
     if (effectiveSpawnHints?.cwdPromise) {
       const cwdPromise = effectiveSpawnHints.cwdPromise
-      // A rejected lookup keeps the seed cwd; either way the settled identity
-      // stays until bind/failure so a stale cleanup cannot clear a newer lookup.
+      // Failed cwd lookup keeps the seed; settled identity remains until bind/failure so stale cleanup cannot erase a newer lookup.
       const applySettledCwd = (cwd: string | null): void => {
         const current = paneCwdRef.current.get(pane.id)
         if (!current || current.confirmed || current.pendingCwd !== cwdPromise) {

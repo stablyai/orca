@@ -5,7 +5,7 @@ import type {
   WorktreeActivationStore
 } from '@/lib/worktree-activation-store-contract'
 
-// Why: accept either a main-generated runner script or a plain TaskPage command string, so callers needn't synthesize a runner file.
+// Accept main runner files and expanded TaskPage commands without synthesizing another script.
 export type IssueCommandLaunch =
   | WorktreeSetupLaunch
   | { command: string; env?: Record<string, string> }
@@ -33,15 +33,14 @@ export function queueSetupAndIssueCommands(
       ...(opts?.activateCreatedTabs === false ? { activate: false } : {}),
       pendingStartup: setupCommand
     })
-    // Why: createTab auto-activates the new tab; revert so focus stays on the primary terminal while Setup runs in the background.
+    // createTab auto-activates; restore primary focus while Setup runs in background.
     if (opts?.activateCreatedTabs !== false && terminalTabId) {
       store.setActiveTab(terminalTabId)
     }
-    // Why: customTitle overrides the auto "Terminal N" label everywhere the tab renders, so it's the authoritative label source.
     store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
   }
 
-  // Why: issue automation runs in its own split, queued independently from setup so both can start in parallel (separate concerns).
+  // Queue issue work independently in its own split so setup and automation run in parallel.
   if (issueCommand && terminalTabId) {
     // Why: WorktreeSetupLaunch carries a runner-script file to shell out to; the TaskPage variant is already an expanded command string.
     const queuedIssueCommand =

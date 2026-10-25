@@ -1,12 +1,3 @@
-/**
- * Revealing a persisted chat, for both structured providers.
- *
- * The reveal path is the only way an Agent Session History row reaches a chat whose tab this
- * process never published — a chat closed cleanly, or one this process has not opened since
- * launch. It opens the conversation through the host's accessor and starts no agent; what it must
- * get right is which records it accepts and what it answers when the journal cannot be opened.
- */
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -46,8 +37,7 @@ describe('the host answer a client acts on', () => {
   it.each(['claude', 'codex'] as const)(
     "answers a %s chat with the record's own workspace and provider, never a caller's",
     async (provider) => {
-      // The security property: a client sends only a session id, so the tab cannot be aimed at
-      // another workspace by asking for one.
+      // Session ID lookup must not let callers redirect publication to another workspace.
       const stored = record(provider, 'workspace-from-record')
       const open = vi.fn(async () => undefined)
 
@@ -91,7 +81,6 @@ describe('the host answer a client acts on', () => {
   })
 
   it('answers not-readable without refusing when the journal could not be opened', async () => {
-    // The tab is still worth publishing: the chat shows the failure and keeps retrying the read.
     await expect(
       revealStructuredAgentSession(
         {

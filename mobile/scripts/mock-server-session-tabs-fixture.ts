@@ -2,22 +2,16 @@ import { randomUUID } from 'node:crypto'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
 
-// Why: the client's snapshot-acceptance gate keys on the publisher epoch, so it
-// must stay stable for the process and change on restart like a real publisher —
-// hence a uuid, not a clock read two restarts could land on.
-// The `mobile-local:` prefix is reserved for phone-local writes — never use it.
+// Publisher epoch must be stable until restart and change on restart: use UUID, not clock. Never use reserved phone-local mobile-local: prefix.
 const PUBLICATION_EPOCH = `mock-server:${randomUUID()}`
 const GROUP_ID = 'group-1'
 const PARENT_TAB_ID = 'tab-1'
-// The host only ever publishes terminal-layout UUIDs here; pane-key parsing
-// rejects any other shape, so a placeholder would mask pane-attribution bugs.
+// Use terminal-layout UUIDs: pane-key parser rejects placeholders, which would mask attribution bugs.
 const LEAF_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 // The host publishes terminal surfaces as `${parentTabId}::${leafId}`.
 const SURFACE_TAB_ID = `${PARENT_TAB_ID}::${LEAF_ID}`
 
-/** One ready terminal tab bound to the `term-1` fixture. Mirrors the full
- *  `session.tabs.list` contract so mock-server repros of tab, split-pane, and
- *  pane-attribution bugs aren't shape-incomplete. */
+// Complete session.tabs.list fixture for term-1 so tab/split/pane repros do not pass against incomplete contract shapes.
 function createMockSessionTabs(worktreeId: string): RuntimeMobileSessionTabsResult {
   return {
     worktree: worktreeId,
@@ -50,14 +44,12 @@ function createMockSessionTabs(worktreeId: string): RuntimeMobileSessionTabsResu
   }
 }
 
-/** Default session-tabs backend: without it the session screen hangs on
- *  'Loading tabs'. Returns false for methods it does not own. */
+// Provide session.tabs.list or screen hangs on Loading tabs; return false for unowned methods.
 export function handleMockSessionTabsRequest(
   request: RpcRequest,
   respond: (response: RpcResponse) => void,
   success: (id: string, result: unknown, streaming?: boolean) => RpcResponse,
-  // Shared with `terminal.list` so both surfaces agree on which worktree an
-  // absent or `id:`-prefixed selector means.
+  // Share selector resolution with terminal.list so absent/id:-prefixed selectors name same worktree.
   resolveWorktreeId: (selector: unknown) => string | undefined
 ): boolean {
   if (request.method === 'session.tabs.list') {
@@ -66,9 +58,7 @@ export function handleMockSessionTabsRequest(
     return true
   }
   if (request.method === 'session.tabs.subscribe') {
-    // Without a live stream the client's health loop keeps invalidating list
-    // fetches mid-flight (barrier bump on the failed probe), so the session
-    // screen never leaves 'Loading tabs'. snapshot then updated => 'live'.
+    // Emit snapshot→updated to reach live; otherwise failed health probes invalidate list fetches mid-flight and leave Loading tabs.
     const worktreeId = resolveWorktreeId(request.params?.worktree) ?? 'mock'
     const snapshot = createMockSessionTabs(worktreeId)
     respond(success(request.id, { type: 'snapshot', ...snapshot }, true))

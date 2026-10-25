@@ -2,7 +2,6 @@ import { Keyboard, Pressable, StyleSheet } from 'react-native'
 import { ChevronDown, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 
-/** A prompt card's header action: Cancel where the lane can cancel, else a Collapse that writes nothing. */
 export function MobileNativeChatCardHeaderAction<Prompt>({
   prompt,
   onCancel,

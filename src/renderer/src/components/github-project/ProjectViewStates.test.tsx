@@ -17,8 +17,6 @@ describe('ProjectItemsEmptyState', () => {
     expect(screen.queryByText(UNFILTERED_COPY)).toBeNull()
   })
 
-  // #12648: an unfiltered board that momentarily reads back empty must not be
-  // reported as a filter miss — that reads as data loss.
   it.each(['', '   ', '\n\t'])('reports an unfiltered view as empty for filter %j', (filter) => {
     render(<ProjectItemsEmptyState filter={filter} />)
     expect(screen.getByText(UNFILTERED_COPY)).toBeTruthy()

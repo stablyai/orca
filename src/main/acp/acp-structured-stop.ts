@@ -1,17 +1,12 @@
-// How a running ACP turn ends before its child does, for a Stop and a requested close alike: the
-// cancel goes out once, and the agent gets a bounded grace, counted from it, to end its turn.
-
 import type { AcpStructuredSession } from './acp-structured-session'
 
 type AcpStoppableSession = Pick<AcpStructuredSession, 'connection' | 'lane' | 'prompts' | 'turns'>
 
-/** A turn a cancel can end: Orca's prompt, or one the agent opened itself. */
 function acpTurnInFlight(session: AcpStoppableSession): boolean {
   return session.turns.running || session.lane.openTurnId !== null
 }
 
-/** As a Stop: held steers and the agent's open requests are withdrawn, then the cancel is written,
- *  never awaited; a failed write leaves the grace to run out. */
+/** Do not await the cancel write; grace expiry must still close an unresponsive child. */
 export function interruptAcpTurn(session: AcpStoppableSession): void {
   session.turns.stop(Date.now())
   if (!acpTurnInFlight(session)) {
@@ -21,7 +16,7 @@ export function interruptAcpTurn(session: AcpStoppableSession): void {
   void session.connection.cancel().catch(() => undefined)
 }
 
-/** Resolves once the running turn ended, or `graceMs` after `stoppedAt` (`Date.now()` time). */
+/** Wait for turn completion or grace expiry using the Date.now clock. */
 export async function awaitAcpTurnEnd(
   session: AcpStoppableSession,
   stoppedAt: number,
@@ -45,8 +40,7 @@ export async function awaitAcpTurnEnd(
   }
 }
 
-/** Before a requested close: a running turn is cancelled, unless a Stop already did, and waited on
- *  within the grace that cancel started. */
+/** Reuse an earlier Stop's grace deadline rather than starting a new one. */
 export async function windDownAcpTurn(
   session: AcpStoppableSession,
   graceMs: number

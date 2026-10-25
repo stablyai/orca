@@ -1,5 +1,4 @@
-// The session a layout-owner build's main writes for a representative set of layout commands
-// (layout-owner-written-session-golden.test.ts), which a switch-off build must restore unchanged.
+// Layout-owner main writes this command fixture; switch-off builds must restore it unchanged.
 
 import { join } from 'node:path'
 

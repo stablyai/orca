@@ -10,10 +10,7 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: vi.fn()
 }))
 
-// Why: lib-layer WebGL code records through the shared sink because it may not
-// import the components-layer ring. Importing terminal-freeze-breadcrumbs wires
-// that sink to the ring at module load; this pins that the WebGL crumbs land in
-// the same one-paste report as delivery/visibility history.
+// Import diagnostics bootstrap to route lib-layer shared-sink WebGL crumbs into the same freeze history as delivery/visibility.
 describe('WebGL diagnostics → freeze breadcrumb ring', () => {
   beforeEach(() => {
     resetTerminalFreezeBreadcrumbsForTesting()
@@ -34,9 +31,7 @@ describe('WebGL diagnostics → freeze breadcrumb ring', () => {
     expect(crumbs[1]?.detail).toEqual({ managers: 1 })
   })
 
-  // Why: the freeze ring is DevTools-only (window.n()), so a renderer that dies
-  // takes its WebGL history with it. Windows crash F0BKR84AHEH had three GPU
-  // deaths in the 65s before its renderer OOM and zero WebGL evidence.
+  // Mirror into crash reports: renderer death loses the DevTools-only ring and previously hid GPU-death evidence.
   it('mirrors WebGL crumbs into the crash report so a dead renderer still reports them', () => {
     recordTerminalWebglDiagnostic('webgl-context-loss', { paneId: 3 })
 

@@ -10,7 +10,6 @@ function regenerateLabel(naming: NativeChatNamingFailureControls): string {
     : translate('tabHoverCard.namingFailure.regenerate', 'Regenerate name')
 }
 
-/** The hover card's block for a chat whose name could not be generated. */
 export function NativeChatNamingErrorBlock({
   naming
 }: {

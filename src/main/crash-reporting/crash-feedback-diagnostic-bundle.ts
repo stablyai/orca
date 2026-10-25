@@ -47,8 +47,7 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
       arch: os.arch(),
       osRelease: os.release(),
       orcaChannel: resolveDiagnosticOrcaChannel(),
-      // Why: Help > Report Crash is often used after relaunch, long after the
-      // default 30 minute support bundle window would miss the failure context.
+      // Reports after relaunch need logs older than the default 30-minute support window.
       lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES
     })
   } catch (error) {

@@ -3,11 +3,11 @@ import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { RuntimeStore } from '../runtime-store-contract'
+import { partialRuntimeStore } from '../runtime-store-partial-fixture'
 
 function catalogEventsFor(repo: Repo): RuntimeClientEvent[] {
   const store: Pick<RuntimeStore, 'getRepos'> = { getRepos: () => [repo] }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog notification reads only repos.
-  const runtime = new OrcaRuntimeService(store as RuntimeStore)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   const events: RuntimeClientEvent[] = []
   runtime.onClientEvent((event) => events.push(event))
   runtime.notifyWorktreeCatalogChangedForRemoteClients(repo.id)

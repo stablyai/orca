@@ -1,7 +1,6 @@
-// Real-Git coverage for a delete Git fails partway: `git worktree remove --force` drops the
-// registration even when it cannot delete a file, so Orca must keep the leftover listed and
-// retryable itself. macOS only: `chflags uchg` is the portable way to make a file undeletable for
-// the file's owner; worktree-failed-removal.test.ts covers the same rules with Git mocked.
+import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
+// Real Git may unregister before file deletion fails; retain leftovers as retryable Orca rows.
+// macOS chflags uchg makes owner files undeletable; worktree-failed-removal.test.ts covers the same rules with mocked Git.
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
@@ -231,8 +230,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     const error = await failStartupFinish()
 
     expect(String(error)).toMatch(/Operation not permitted/)
-    // What Git left: no registration, but the checkout and Orca's record. The merged branch went
-    // with the failed delete, as its finish would have deleted it.
+    // Git removed registration and merged branch but left checkout files and Orca metadata.
     expect(await isRegistered(worktreePath)).toBe(false)
     expect(existsSync(lockedFile)).toBe(true)
     expect(await git(['branch', '--list', 'feature'])).toBe('')
@@ -323,7 +321,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
       { path: worktreePath, removalError: expect.stringMatching(/Operation not permitted/) }
     ])
 
-    // The listing ends the record once the folder is gone; nothing of the delete is left owed.
+    // Once the folder is gone, listing finishes the remaining record.
     await setImmutable(false)
     await rm(worktreePath, { recursive: true })
     expect(await listedRows()).toEqual([])
@@ -525,3 +523,5 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     expect(await listedRows()).toEqual([])
   })
 })
+
+installRealWorkerThreadChildProcesses()

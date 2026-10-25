@@ -16,14 +16,14 @@ describe('agent session account home', () => {
     ).toBe('{"variable":"CODEX_HOME","path":"/home/dev/.codex"}')
   })
 
-  // Whether the variable is the record's own agent's is decided when its agent would start, since
-  // it becomes the child's environment (structured-agent-session-drivability.test.ts).
+  // Validate agent-specific env ownership at launch, when this binding becomes the child environment.
   it('reads any well-formed variable, and sets aside one that is not a variable name', () => {
     const record = encodeAgentSessionRecord(agentSessionRecordFixture())
     const withVariable = (variable: string) =>
       isPersistedAgentSessionRecord({ ...record, accountHome: { variable, path: '/tmp/x' } })
     expect(withVariable('CODEX_HOME')).toBe(true)
     expect(withVariable('GROK_HOME')).toBe(true)
+    expect(withVariable('X'.repeat(128))).toBe(true)
     for (const malformed of ['', 'A B', '1HOME', 'HOME=x', 'X'.repeat(129)]) {
       expect(withVariable(malformed)).toBe(false)
     }
@@ -40,6 +40,20 @@ describe('agent session account home', () => {
     expect(isPersistedAgentSessionRecord({ ...record, accountHome: unmanaged })).toBe(true)
     expect(agentSessionAccountHomesEqual(managed, unmanaged)).toBe(false)
     expect(agentSessionAccountHomesEqual(managed, { ...managed })).toBe(true)
+    expect(
+      agentSessionAccountHomesEqual(managed, {
+        ...managed,
+        locator: { ...managed.locator, managedProfileId: '223e4567-e89b-42d3-a456-426614174000' }
+      })
+    ).toBe(false)
+    for (const managedProfileId of ['', 'not-a-profile-id']) {
+      expect(
+        isPersistedAgentSessionRecord({
+          ...record,
+          accountHome: { ...managed, locator: { ...managed.locator, managedProfileId } }
+        })
+      ).toBe(false)
+    }
     expect(agentSessionAccountHomesEqual(unmanaged, { ...unmanaged })).toBe(true)
     expect(
       isPersistedAgentSessionRecord({

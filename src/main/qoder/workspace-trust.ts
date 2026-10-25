@@ -33,7 +33,7 @@ export function markQoderWorkspaceTrusted(
   try {
     canonicalPath = realpathSync.native(workspacePath)
   } catch {
-    /* Keep the supplied path when absent. */
+    // Missing paths retain their supplied spelling.
   }
   const configPath = join(home, configDirName, 'settings.json')
   const config = readHooksJson(configPath)

@@ -23,7 +23,6 @@ export function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-/** Delay the authority boundary while retaining real SQLite and Store serialization. */
 export class DelayedAuthority implements AsyncProfileStateAuthority {
   readonly asynchronous = true
   private next:
@@ -37,7 +36,6 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
 
   constructor(readonly inner: ProfileStateSqliteAuthority) {}
 
-  /** Fail the next profile write the way a full disk would, after any paused gate opens. */
   failNextWrite() {
     this.failNext = true
   }
@@ -149,7 +147,7 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
   return { store, authority, readState }
 }
 
-/** The runtime writes a pane before it spawns; a runtime spawn commit binds only that pane. */
+// Runtime spawns bind only a pane admitted before the process starts.
 export async function admitRuntimeSpawnPane(
   store: Store,
   pane: { worktreeId: string; tabId: string; leafId: string },

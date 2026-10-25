@@ -10,7 +10,6 @@ import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-ses
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
-// These suites isolate synchronous acknowledgement and layout behavior.
 vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentAutoAckPresence>()),
   createAutoAckPresenceCheck: (_read: unknown, onPresent: () => void) => ({
@@ -99,8 +98,7 @@ describe('useReadOnScreenAttention — floating workspace panel visibility', () 
     expect(selectFloatingWorkspaceHasUnread(useAppStore.getState())).toBe(false)
   })
 
-  // Why: the only case where the scan acks two targets, and acking the first re-enters the scan
-  // synchronously — so this is the path where a stale mid-loop snapshot would surface.
+  // Acknowledging the first visible target synchronously reenters scanning; a stale loop snapshot would re-ack the second.
   it('clears both the active terminal tab and the floating tab in one pass', () => {
     useAppStore.setState({
       activeView: 'terminal',

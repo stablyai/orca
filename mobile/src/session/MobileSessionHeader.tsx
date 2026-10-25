@@ -14,7 +14,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     hostId,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
-    connState,
+    presentedConnState,
     forceReconnectHost,
     worktreeName,
     activePanel,
@@ -66,7 +66,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             accessibilityRole={showConnectionRetry ? 'button' : undefined}
             accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
           >
-            <StatusDot state={connState} />
+            <StatusDot state={presentedConnState} />
             <Text style={styles.sessionMetaText} numberOfLines={1}>
               {terminalSummary}
             </Text>

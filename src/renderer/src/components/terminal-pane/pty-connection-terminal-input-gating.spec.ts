@@ -23,7 +23,6 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
-/** What remountTerminalTabForRecovery answers now that it reports admission. */
 const REMOUNTED = { remounted: true as const, generation: 1 }
 const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
 
@@ -197,8 +196,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-live'] },
-        // Why: the record survives a dismissal as launch-account memory, so the
-        // input gate has to read the marker rather than the record's existence.
+        // Dismissal retains launch-account memory, so stale-input gating must inspect its marker rather than record existence.
         codexRestartNoticeByPtyId: {
           'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B', dismissed: true }
         }
@@ -265,8 +263,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       transportFactoryQueue.push(transport)
       mockStoreState = {
         ...mockStoreState,
-        // Why: `tab.ptyId` is whichever pane bound last, so a sibling's unanswered
-        // notice would otherwise kill this pane's keyboard with no prompt of its own.
+        // tab.ptyId may name a sibling; its unanswered notice must not block this pane without its own prompt.
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-sibling' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-dismissed', 'pty-sibling'] },
         codexRestartNoticeByPtyId: {
@@ -283,8 +280,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       }) as typeof pane.terminal.onData)
       const manager = createManager(1)
       const deps = createDeps({
-        // Why: the sibling already holds `tab.ptyId`, which is what makes this a
-        // split rather than this pane adopting the tab's binding.
+        // Bind the sibling first so this pane is a split instead of adopting the tab PTY.
         paneTransportsRef: { current: new Map([[2, createMockTransport('pty-sibling')]]) }
       })
 
@@ -345,8 +341,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       transportFactoryQueue.push(transport)
       mockStoreState = {
         ...mockStoreState,
-        // Why: a requested restart hides the prompt, so blocking this record-less
-        // pane through `tab.ptyId` would leave a dead keyboard and nothing to answer.
+        // Restart hides the prompt; a recordless pane must not stay blocked by a sibling’s tab-level notice.
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-sibling' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-plain-shell', 'pty-sibling'] },
         codexRestartNoticeByPtyId: {
@@ -390,8 +385,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-live'] },
-        // Why: unlike a dismissal, a queued restart leaves the pane running under
-        // the old account until it actually relaunches.
+        // Queued restart retains the old account until relaunch, unlike dismissal.
         codexRestartNoticeByPtyId: {
           'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B', restartRequested: true }
         }
@@ -474,7 +468,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('does not infer interrupts when mobile presence lock blocks terminal input', async () => {
+    it('blocks terminal writes while mobile presence lock owns the PTY', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
@@ -702,7 +696,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('remounts a connected pane when main reports its daemon write unavailable', async () => {
+    it('requests a connected pane remount when main reports its daemon write unavailable', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
@@ -751,8 +745,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       await flushAsyncTicks(6)
       expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
 
-      // The surviving tail of `echo hi; rm -rf x`: reaching the fresh shell would
-      // let the user's own Enter run `rm -rf x` (#10065 follow-up).
+      // A stale paste tail could let the next Enter execute its destructive suffix in the fresh shell (#10065).
       sendTerminalInputThroughPane(pane, 'cho hi; rm -rf x')
       expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('cho hi; rm -rf x')
       // A program that queries during reattach hangs if its reply is dropped.
@@ -760,7 +753,6 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[3;1R')
       sendTerminalInputThroughPane(pane, '\r')
       expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\r')
-      // The terminator disarmed it, so the next real command reaches the shell.
       sendTerminalInputThroughPane(pane, 'ls\r')
       expect(transport.sendInput).toHaveBeenCalledWith('ls\r', 'query-reply')
       _resetTerminalPaneRecoveryForTests()
@@ -791,7 +783,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       await flushAsyncTicks()
 
       expect(transport.sendInput).toHaveBeenCalledWith('x', 'query-reply')
-      expect(pane.terminal.write).toHaveBeenCalledWith('', expect.any(Function))
+      expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
       expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
       binding.dispose()
     })
@@ -820,7 +812,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       await flushAsyncTicks()
 
       expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
-      expect(pane.terminal.write).not.toHaveBeenCalledWith('', expect.any(Function))
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
       binding.dispose()
     })
 

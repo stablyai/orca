@@ -1,8 +1,7 @@
 import { MarkdownHeadingSlugger } from './markdown-heading-slug'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
-// Why: duplicate headings need the same stateful suffixes as the preview
-// renderer (foo, foo-1, foo-2) or anchor links can jump to the wrong heading.
+// Match preview suffixes for duplicate headings so anchors resolve to the same heading.
 export function scrollToAnchorInEditor(root: HTMLElement | null, anchor: string): void {
   if (!root || !anchor) {
     return

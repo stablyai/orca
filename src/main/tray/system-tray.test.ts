@@ -142,8 +142,7 @@ function builtMenuItems(): MenuItem[] {
   return menuFromTemplateMock.mock.calls.at(-1)?.[0] as MenuItem[]
 }
 
-// Why: tray image/tooltip writes are deferred off the caller's stack to keep the
-// NSStatusItem scene update out of AppKit's dispatch; run the pending turn.
+// Flush the deferred native scene mutation after the AppKit caller stack returns.
 function flushTraySceneMutation(): void {
   vi.advanceTimersByTime(0)
 }
@@ -419,8 +418,7 @@ describe('setTrayAttention', () => {
     flushTraySceneMutation()
     expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false)
     expect(composeAttentionMock).toHaveBeenCalledWith(tintedMacImage)
-    // Why: the attention image is rebuilt from 1x pixels, so the @2x
-    // representation must be re-added or the glyph blurs on Retina.
+    // Bitmap rebuild starts at 1x; re-add 2x or attention glyphs blur on Retina.
     expect(tintTemplateMock).toHaveBeenCalledWith(baseMacImage, false, 2)
     expect(attentionImage.addRepresentation).toHaveBeenCalledWith({
       scaleFactor: 2,
@@ -447,7 +445,7 @@ describe('setTrayAttention', () => {
     nativeThemeMock.shouldUseDarkColors = true
 
     themeState.updatedListener?.()
-    // Why: appearance changes arrive on an AppKit dispatch too, so the recompose defers.
+    // Appearance events also arrive from AppKit; defer their native writes.
     expect(tintTemplateMock).not.toHaveBeenCalled()
 
     flushTraySceneMutation()
@@ -485,8 +483,7 @@ describe('setTrayAttention', () => {
     created.setImage.mockClear()
     created.setToolTip.mockClear()
 
-    // Why: show/restore call this from AppKit's window-state dispatch; a scene
-    // update sent there self-deadlocks the main thread on macOS 26.
+    // Native scene writes inside AppKit window-state dispatch can deadlock main on macOS 26.
     setTrayAttention(true)
     expect(created.setImage).not.toHaveBeenCalled()
     expect(created.setToolTip).not.toHaveBeenCalled()

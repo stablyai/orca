@@ -49,8 +49,7 @@ function recordId(raw: unknown): string | undefined {
 }
 
 function parseRecord(raw: unknown): PersistedRuntimeEnvironment | undefined {
-  // Why: a `kind` marks a record type this build predates; reading it as a plain pairing would
-  // strip the kind and rewrite it as one.
+  // Preserve future kind records unread: parsing as plain pairings would strip their type on rewrite.
   if (typeof raw === 'object' && raw !== null && 'kind' in raw) {
     return undefined
   }

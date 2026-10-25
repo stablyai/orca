@@ -1,4 +1,3 @@
-// Step for AddRepoDialog (orca#763), split out so create-project state stays scoped.
 import React, { useMemo, useState } from 'react'
 import { ChevronDown, GitBranch, Loader2 } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -15,8 +14,6 @@ import {
   joinCreateProjectPath,
   type GitAvailability
 } from './create-project-defaults'
-
-// ── UI helpers ───────────────────────────────────────────────────────
 
 const CREATE_PROJECT_NAME_PLACEHOLDER = 'project-name'
 
@@ -57,12 +54,10 @@ export function CreateStep({
   onCreate
 }: CreateStepProps): React.JSX.Element {
   const [browsingParent, setBrowsingParent] = useState(false)
-  // Why: server hosts need a typed host path; hiding that field behind the
-  // collapsed defaults makes the create flow look impossible.
+  // Remote hosts need typed paths; expose Location so creation does not appear blocked.
   const [advancedOpen, setAdvancedOpen] = useState(manualParentEntry)
 
-  // Why: a failed probe reports "unknown"; only a confirmed Git miss should block
-  // Git-only creation.
+  // Unknown probe results must not block creation; require a confirmed Git miss.
   const canSubmit =
     createName.trim().length > 0 &&
     createParent.trim().length > 0 &&
@@ -141,12 +136,8 @@ export function CreateStep({
         </DialogDescription>
       </DialogHeader>
 
-      {/* Why: DialogContent is a CSS grid; grid items default to min-width:auto
-        (= content size), so a long path inside the Location row would blow out
-        the dialog width even with flex + truncate on the row itself. min-w-0
-        here caps the grid track at the dialog's max-width. */}
+      {/* Grid children default to min-width:auto; min-w-0 prevents long paths widening the dialog despite row truncation. */}
       <div className="space-y-3.5 pt-1 min-w-0">
-        {/* Name. Monospaced because it ends up as a directory name. */}
         <div className="space-y-1">
           <label
             htmlFor="create-project-name"
@@ -169,9 +160,6 @@ export function CreateStep({
             spellCheck={false}
           />
         </div>
-
-        {/* Summary card doubles as the disclosure for the uncommon settings, so the
-          defaults and the controls to change them live in one place. */}
         <div className="min-w-0 rounded-md border border-border bg-muted/30">
           <button
             type="button"

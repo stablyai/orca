@@ -112,8 +112,7 @@ export function shouldActivateTabDragFromDistanceSample({
   elapsedMs: number
   overThresholdSampleCount: number
 }): boolean {
-  // Why: one immediate over-threshold sample can be stale/coalesced after
-  // window focus; a second sample or a short grace period confirms real motion.
+  // Require another sample or a short grace period because the first post-focus motion can be stale/coalesced.
   return (
     elapsedMs >= TAB_DRAG_EARLY_MOVE_CONFIRMATION_MS ||
     overThresholdSampleCount >= TAB_DRAG_CONFIRMED_DISTANCE_SAMPLE_COUNT

@@ -17,7 +17,7 @@ import { UpdaterInstallSupport } from './updater-install-support'
 const LINUX_PACKAGE_RECOVERY_MESSAGES: Record<LinuxPackageRecoveryUnavailableReason, string> = {
   missing:
     'The downloaded package is no longer in the update cache. Download the update again, or get it from the official release page.',
-  // Why: this reason also covers a path that left the cache (traversal or symlinked parent), so the copy must not promise the file merely changed type.
+  // Also covers traversal/symlink escape from cache; do not claim only file type changed.
   'not-regular':
     'The downloaded package is no longer a valid file in the update cache. Download the update again, or get it from the official release page.',
   'hash-mismatch':
@@ -28,12 +28,12 @@ const LINUX_PACKAGE_RECOVERY_MESSAGES: Record<LinuxPackageRecoveryUnavailableRea
     'No sudo command was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.',
   'no-package-manager':
     'No supported package manager was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.',
-  // Defensive: capture only ever tracks absolute cache paths, so this reports a bug rather than a machine state.
+  // Capture tracks absolute cache paths; invalid paths indicate a bug.
   'invalid-package-path':
     'The downloaded package is not at a usable path, so Orca cannot build a safe install command. Show the package and install it with your package manager.'
 }
 
-// Why: clearing the artifact alone would leave the renderer's actions enabled; the status must lose its recovery too.
+// Clear status recovery with the artifact or renderer actions stay enabled.
 const RECOVERY_CLEARING_REASONS: LinuxPackageRecoveryUnavailableReason[] = [
   'missing',
   'not-regular',
@@ -109,8 +109,7 @@ export abstract class UpdaterPackageRecovery extends UpdaterInstallSupport {
     })
     const result = await resolveLinuxPackageInstallInstructions(recovery)
     if (!result.ok) {
-      // Why: the renderer must distinguish "this machine has no package manager" (keep the card, promote
-      // Show Package) from "the artifact is gone" (recovery is cleared and the card unmounts).
+      // Missing tools keep the card with Show Package; missing artifacts clear recovery and unmount it.
       if (result.reason === 'no-sudo' || result.reason === 'no-package-manager') {
         this.assertCurrentLinuxPackageRecovery(recovery, artifact)
         this.recordLinuxPackageRecoveryUnavailable(recovery, result.reason)
@@ -142,7 +141,7 @@ export abstract class UpdaterPackageRecovery extends UpdaterInstallSupport {
       this.failLinuxPackageRecovery(recovery, artifact, result.reason)
     }
     this.assertCurrentLinuxPackageRecovery(recovery, artifact)
-    // Why: this cache path belongs to the installed app host, not a workspace's SSH or WSL host.
+    // The installed app host owns this path, independent of workspace SSH/WSL hosts.
     try {
       shell.showItemInFolder(result.path)
     } catch {

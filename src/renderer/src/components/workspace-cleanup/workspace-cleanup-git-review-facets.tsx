@@ -29,7 +29,6 @@ import {
 } from './workspace-cleanup-facet-labels'
 import type { WorkspaceCleanupFacetGroupProps } from './workspace-cleanup-facet-panel-model'
 
-/** Git, review/PR, tickets, location/host, and safety blockers. */
 export function WorkspaceCleanupGitReviewFacets({
   filters,
   counts,

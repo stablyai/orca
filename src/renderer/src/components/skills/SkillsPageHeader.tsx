@@ -34,9 +34,7 @@ export function SkillsPageHeader({
   hostLabel: string | null
   onClose: () => void
   onStartShare: () => void
-  /** False while the target is unresolved or the host predates the delete
-   *  capability, so the entry disables with a reason rather than routing a
-   *  request nothing on that host answers. */
+  /** Disable deletion with a reason until the target and host capability are known. */
   deleteSupported: boolean
   deleteUnsupportedReason: string | null
   onStartDelete: () => void

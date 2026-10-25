@@ -35,8 +35,6 @@ describe('isDuplicateSshTargetAlias', () => {
     ).toBe(true)
   })
 
-  // Parity with the picker: it greys out an alias that matches either field, so saving
-  // that same alias must be blocked rather than creating a second target for one host.
   it('matches an existing label even when that target has a different configHost', () => {
     expect(
       isDuplicateSshTargetAlias({

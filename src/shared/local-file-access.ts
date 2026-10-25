@@ -1,7 +1,4 @@
-/**
- * The kind of file access a desktop request declares, which decides what main checks. Absent means the path must
- * be inside a project root main recognises.
- */
+/** Declared access determines main’s checks; absent means the path must lie in a recognized project root. */
 export type LocalFileAccess =
   /** A single file the user named (gesture or persisted tab): read in place, regular files only. */
   | { kind: 'user-file' }
@@ -16,7 +13,7 @@ export type LocalFileAccess =
 export const PATH_OUTSIDE_ALLOWED_DIRECTORIES =
   'Access denied: path resolves outside allowed directories'
 
-// Why match the message: IPC errors cross to the renderer as plain messages, without their class.
+// IPC preserves error messages without their classes.
 export function isPathOutsideAllowedDirectoriesError(error: unknown): boolean {
   return error instanceof Error && error.message.includes(PATH_OUTSIDE_ALLOWED_DIRECTORIES)
 }

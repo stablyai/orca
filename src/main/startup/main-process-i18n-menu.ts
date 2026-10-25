@@ -19,6 +19,7 @@ import {
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
+import { browserManager } from '../browser/browser-manager'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
@@ -42,6 +43,7 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
     onOpenSettings: openSettingsFromSystemMenu,
+    toggleFocusedPageDevTools: (focused) => browserManager.toggleDevToolsOfFocusedPage(focused),
     onOpenSetupGuide: (targetWindow) => {
       recordCrashBreadcrumb('setup_guide_opened')
       sendOpenSetupGuide(targetWindow instanceof BrowserWindow ? targetWindow : null)
@@ -52,11 +54,10 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     },
     onOpenFeatureTour: (targetWindow) => {
       recordCrashBreadcrumb('feature_tour_opened')
-      // Why: use the invoking BrowserWindow so hidden/E2E and multi-window flows route to the right renderer, not global focus.
+      // Route to the invoking renderer so hidden tests/multiple windows do not depend on global focus.
       sendOpenFeatureTour(targetWindow instanceof BrowserWindow ? targetWindow : null)
     },
-    // Why: menu zoom must act on the window the user is looking at — routing to
-    // the main window while the dashboard pop-out is focused zooms behind it.
+    // Zoom the focused popout rather than changing the main window behind it.
     onZoomIn: () => {
       if (!zoomDashboardPopoutIfFocused('in') && !zoomWorkspaceSpaceWindowIfFocused('in')) {
         state.mainWindow?.webContents.send('terminal:zoom', 'in')
@@ -76,12 +77,12 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     onToggleRightSidebar: () => state.mainWindow?.webContents.send('ui:toggleRightSidebar'),
     onToggleAppearance: (key) => {
       if (key === 'statusBarVisible') {
-        // Why: status bar visibility lives in persisted UI state (not settings) and the renderer owns the toggle — forward the event, let it flip + store.
+        // Renderer owns this persisted UI-state toggle; forward it rather than write settings.
         state.mainWindow?.webContents.send('ui:toggleStatusBar')
         return
       }
       const current = store.getSettings()
-      // Why: these appearance settings are default-on, so a missing persisted value must toggle from visible -> hidden.
+      // Missing default-on values must toggle from visible to hidden.
       const next = getNextDefaultOnAppearanceSettingValue(current[key])
       store.updateSettings({ [key]: next }, { notifyListeners: true })
       rebuildAppMenu()

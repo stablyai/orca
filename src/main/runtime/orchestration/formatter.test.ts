@@ -54,7 +54,6 @@ describe('formatMessageBanner', () => {
   it('omits body line when body is empty', () => {
     const banner = formatMessageBanner(makeMessage({ body: '' }))
     const lines = banner.split('\n')
-    // Subject line should be immediately followed by Reply hint (no empty body line)
     const subjectIdx = lines.findIndex((l) => l.startsWith('Subject:'))
     expect(lines[subjectIdx + 1]).toMatch(/^\[Reply:/)
   })

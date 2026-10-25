@@ -3,9 +3,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 
-// Every per-page retention term reaches the guest as a prop on BrowserPagePane, where a wrong value
-// parks the webview display:none. The threading itself had no coverage: a mutant hardcoding any of
-// the three to false left the whole suite green.
+// Verify each retention term reaches its page; a wrong prop parks the guest with display:none.
 type MockAppState = {
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   remoteBrowserPageHandlesByPageId: Record<string, never>

@@ -5,10 +5,7 @@ import type { RetainedAgentEntry } from './agent-status'
 import { RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './agent-status'
 import { createTestStore } from './store-test-helpers'
 
-// Why: dropAgentStatus and dismissRetainedAgentsByWorktree mirror the renderer-
-// side dismissal to the main-process hook cache via window.api.agentStatus.drop
-// so the on-disk last-status file evicts dismissed paneKeys. Without this, a
-// dismissed row would re-appear after Orca restart from the hydrated cache.
+// Propagate renderer dismissal to main’s persisted hook cache or restart resurrects dismissed paneKeys.
 
 const originalWindow = (globalThis as { window?: unknown }).window
 
@@ -51,10 +48,7 @@ describe('dropAgentStatus → IPC fan-out', () => {
   })
 
   it('still fires drop on a no-op dismissal so a stale on-disk entry is cleaned up defensively', () => {
-    // Why: the renderer cannot know whether the main-process cache has an
-    // entry for this paneKey (it might have one from a hydrated session). A
-    // no-op renderer dismissal must still propagate so stale on-disk state
-    // is purged; the main-process dropStatusEntry is itself idempotent.
+    // Main may hold hydrated rows unknown to renderer; propagate even local no-op drops (main deletion is idempotent).
     const { drop } = stubWindowApi()
     const store = createTestStore()
     store.getState().dropAgentStatus('tab-missing:0')
@@ -117,8 +111,7 @@ describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
 
     const closed = store.getState().recentlyClosedAgentStatusTabIds
     expect(Object.keys(closed)).toHaveLength(cap)
-    // Oldest evicted, most-recent retained (a status event for a tab closed
-    // >cap tabs ago cannot still arrive, so suppression is unaffected).
+    // Evict oldest closed-tab markers; events beyond the cap cannot still arrive.
     expect(closed['tab-0']).toBeUndefined()
     expect(closed['tab-4']).toBeUndefined()
     expect(closed[`tab-${cap + 4}`]).toBe(true)
@@ -159,7 +152,6 @@ describe('dismissRetainedAgentsByWorktree → IPC fan-out', () => {
     expect(drop).toHaveBeenCalledTimes(2)
     const calls = drop.mock.calls.map((c) => c[0]).sort()
     expect(calls).toEqual(['tab-a:0', 'tab-b:0'])
-    // Why: the other worktree's retained row must remain.
     expect(store.getState().retainedAgentsByPaneKey['tab-c:0']).toBeDefined()
   })
 

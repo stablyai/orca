@@ -103,8 +103,7 @@ describe('useMobileNativeChatAskDismiss', () => {
   })
 
   it('keeps a dismissal taken on-chat across a chat→terminal→chat toggle', async () => {
-    // The common case: answer the card, then toggle to the terminal. The prompt
-    // derives to null while hidden, and that null must not retire the dismissal.
+    // Hidden chat derives null without observing the prompt; preserve its dismissal.
     await mount({ prompt: first })
     act(() => state?.dismissAsk())
     expect(state?.showAsk).toBe(false)
@@ -116,8 +115,7 @@ describe('useMobileNativeChatAskDismiss', () => {
   })
 
   it('keeps a dismissal across a chat→terminal→chat toggle', async () => {
-    // While the chat surface is hidden the prompt derives to null; that null
-    // proves nothing about the agent and must not reset the dismissal.
+    // A hidden prompt’s null proves nothing about agent state.
     await mount({ prompt: first })
     const acceptedDismiss = state!.dismissAsk
 
@@ -132,7 +130,6 @@ describe('useMobileNativeChatAskDismiss', () => {
     await mount({ prompt: first })
     act(() => state?.dismissAsk())
 
-    // Agent moved on: the prompt cleared with chat visible.
     await update({ prompt: null, observing: true })
     await update({ prompt: first, observing: true })
 
@@ -143,13 +140,11 @@ describe('useMobileNativeChatAskDismiss', () => {
     await mount({ prompt: first, scopeKey: 'tab-1' })
     act(() => state?.dismissAsk())
 
-    // The same question on another tab is a different pending prompt.
     await update({ prompt: first, scopeKey: 'tab-2' })
     expect(state?.showAsk).toBe(true)
     act(() => state?.dismissAsk())
     expect(state?.showAsk).toBe(false)
 
-    // Dismissing tab 2 must not overwrite tab 1's dismissal.
     await update({ prompt: first, scopeKey: 'tab-1' })
     expect(state?.showAsk).toBe(false)
 
@@ -177,10 +172,7 @@ describe('useMobileNativeChatAskDismiss', () => {
 
     await update({ prompt: replacement })
 
-    // One render for the prop change and no more: the reset effect must hand back
-    // the same Map when this scope has no dismissal, or every observed prompt
-    // change commits a fresh one. The hook sits on the session route, so that
-    // wasted commit re-renders the whole session surface.
+    // Preserve Map identity on no-op resets; this route-level hook otherwise rerenders the entire session.
     expect(renders).toBe(afterMount + 1)
   })
 

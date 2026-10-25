@@ -42,8 +42,7 @@ export {
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
-// Why: typing-latency specs must type into xterm's helper textarea, not the
-// page body — keyboard.type only reaches the PTY when that textarea has focus.
+// Focus xterm’s helper textarea so keyboard.type reaches its PTY.
 export async function focusActiveTerminalInput(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()

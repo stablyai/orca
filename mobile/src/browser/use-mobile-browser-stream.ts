@@ -136,8 +136,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       ) {
         return current
       }
-      // Why: rotation/layout changes can shrink the legal pan range while the
-      // current zoom state still points at the previous viewport geometry.
+      // Clamp pan after rotation/layout shrink so zoom state cannot retain invalid previous geometry.
       zoomRef.current = next
       return next
     })
@@ -169,8 +168,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       busyRef.current = false
       setBusy(false)
       if (!binaryScreencastGranted) {
-        // Before the desktop's answer, because this one is about the app in the user's hand and no
-        // desktop update can change it.
+        // Check app-local limitation before desktop reply; desktop updates cannot change phone build.
         setError('Update the Orca app to stream browser tabs here.')
       } else if (screencastSupported === false) {
         setError('Update desktop Orca to stream browser tabs on mobile.')

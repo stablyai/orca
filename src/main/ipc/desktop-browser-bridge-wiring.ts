@@ -1,7 +1,4 @@
-/**
- * Production wiring for the desktop browser bridge: which managed SSH hosts may attach, how to
- * reach their orcad over the paired encrypted connection, and how a forwarded command runs here.
- */
+/** Route eligible SSH hosts through their paired orcad connection to this desktop's browser bridge. */
 import { randomUUID } from 'node:crypto'
 import { webContents, type BrowserWindow } from 'electron'
 import {
@@ -63,12 +60,12 @@ export function listDesktopBrowserBridgeCandidates(
     if (connections?.getState(target.id)?.status !== 'connected') {
       continue
     }
-    // Why first: with the switch on by default, every plain host reaches here; only managed ones qualify.
+    // Only managed hosts qualify even when the global switch defaults on.
     const environmentId = getManagedOrcadFenceEnvironmentId(target)
     if (!environmentId || isRuntimeEnvironmentManuallyDisconnected(environmentId)) {
       continue
     }
-    // Why: an unrouted host's pages egress from this desktop, so it must not stay attached at all.
+    // Detached routing must not retain desktop egress authority.
     if (!isSshTargetBrowsingRouted(target.id)) {
       continue
     }
@@ -100,7 +97,7 @@ export function installDesktopBrowserBridge(options: {
   const getDispatcher = (): RpcDispatcher => {
     dispatcher ??= new RpcDispatcher({
       runtime,
-      // Why a registry of only these methods: even a bug upstream cannot reach anything else.
+      // Restrict the registry even if an upstream caller misroutes a method.
       methods: ALL_RPC_METHODS.filter((method) => isDesktopBrowserBridgeMethod(method.name)),
       callerScope: { kind: 'runtime-paired', grants: [] }
     })
@@ -176,9 +173,8 @@ export function installDesktopBrowserBridge(options: {
       ),
     log
   })
-  // Why: turning routing off for a host must detach it (and cancel its waiting commands) at once.
+  // Routing changes must immediately detach hosts and cancel pending commands.
   stopWatchingRoutingSettings?.()
-  // Why optional: test doubles of the store omit the listener API.
   stopWatchingRoutingSettings =
     persistedStore?.onSettingsChanged?.((updates) => {
       if (
@@ -195,7 +191,6 @@ export function installDesktopBrowserBridge(options: {
   manager.reconcile()
 }
 
-// Mirrors the renderer's route eligibility: routing on globally and not opted out for this host.
 function isSshTargetBrowsingRouted(targetId: string): boolean {
   const settings = persistedStore?.getSettings()
   return (

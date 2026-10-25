@@ -50,7 +50,7 @@ describe('openBrowserTab under the window’s ids', () => {
     expect(saved.browserTabsByWorktree?.[WS]?.at(-1)).toMatchObject({ pageIds: ['page-1'] })
   })
 
-  // Why: the window's next save carries its own timestamps; main's copy must hold the same ones.
+  // Match window-created timestamps so its next save agrees with main’s copy.
   it('keeps the times the window drew the entry and the record at', () => {
     const { model } = build(testContext(), [
       { ...WINDOW_OPEN, createdAt: 1_700_000_000_001, browserCreatedAt: 1_700_000_000_000 }

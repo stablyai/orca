@@ -1,14 +1,15 @@
 import { useEffect, useRef } from 'react'
-import { Terminal } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { bundledSkillTargetKey } from '@/lib/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
-  isOrcaSkillLockSource,
-  skillPlacementParticipatesInGlobalFreshness
-} from '../../../../shared/skill-freshness'
+  bundledSkillNudgeKey,
+  summarizeBundledSkillPlan
+} from '../../../../shared/bundled-skill-summary'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
@@ -20,17 +21,10 @@ type ActiveFreshnessNudge = {
   persistDismissal: boolean
 }
 
-function candidateKey(args: {
-  physicalIdentity: string
-  name: string
-  currentPackageDigest: string
-}): string {
-  return [args.physicalIdentity, args.name, args.currentPackageDigest].join('\0')
-}
-
 export function SkillFreshnessNudge(): null {
-  const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const state = useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)
+  const target = useActiveProjectSkillRuntime().bundledSkillTarget
+  const targetKey = target ? bundledSkillTargetKey(target) : null
+  const state = useSkillFreshness(target)
   const settingsLoaded = useAppStore((store) => store.settings !== null)
   const dismissed = useAppStore(
     (store) => store.settings?.dismissedSkillFreshnessNudges ?? NO_DISMISSED_FRESHNESS_NUDGES
@@ -41,7 +35,7 @@ export function SkillFreshnessNudge(): null {
   const activeNudgeRef = useRef<ActiveFreshnessNudge | null>(null)
 
   useEffect(() => {
-    if (!activeSkillRuntime.canUseLocalSkillFreshness) {
+    if (!targetKey) {
       const active = activeNudgeRef.current
       if (active) {
         active.persistDismissal = false
@@ -50,61 +44,32 @@ export function SkillFreshnessNudge(): null {
       }
       return
     }
-    const inventory = state.inventory
+    const plan = state.plan
     if (!settingsLoaded) {
       return
     }
-    if (!inventory) {
+    if (!plan) {
       const active = activeNudgeRef.current
       if (state.error && active) {
-        // Why: a failed re-check cannot keep advertising authority derived from
-        // old bytes; retract without turning the scan failure into a dismissal.
+        // Retract authority based on old bytes after a failed recheck without persisting a user dismissal.
         active.persistDismissal = false
         activeNudgeRef.current = null
         toast.dismiss(active.id)
       }
       return
     }
-    const eligibleNames = new Set(inventory.eligibleUpdateNames)
-    const candidates = inventory.installations.flatMap((installation) =>
-      // Why: a project copy the global update never touches must not enter the dismissal
-      // fingerprint, or re-checking out that repo re-raises a nudge the user already
-      // dismissed — and spends the bounded dismissal budget on copies Orca cannot update.
-      skillPlacementParticipatesInGlobalFreshness(installation) &&
-      installation.status === 'outdated' &&
-      eligibleNames.has(installation.name) &&
-      // Why: a same-named skill from somewhere else is listed in the dialog, never nudged.
-      isOrcaSkillLockSource(installation.lockSource) &&
-      installation.physicalIdentity
-        ? [
-            {
-              key: candidateKey({
-                physicalIdentity: installation.physicalIdentity,
-                name: installation.name,
-                currentPackageDigest: installation.currentPackageDigest
-              }),
-              name: installation.name
-            }
-          ]
-        : []
-    )
-    const dismissedKeys = new Set(dismissed)
-    const unseen = candidates.filter((candidate) => !dismissedKeys.has(candidate.key))
-    if (unseen.length === 0) {
+    // Fingerprint host, counted skills and offered bytes so changed bundles can prompt again.
+    const fingerprint = bundledSkillNudgeKey(targetKey, plan)
+    if (!fingerprint || dismissed.includes(fingerprint)) {
       const active = activeNudgeRef.current
       if (active) {
-        // Why: a resolved/replaced nudge is stale presentation, not an explicit
-        // user dismissal, so retract it without persisting its tuple keys.
+        // Retracting a resolved/replaced nudge is not an explicit user dismissal.
         active.persistDismissal = false
         activeNudgeRef.current = null
         toast.dismiss(active.id)
       }
       return
     }
-    const fingerprint = unseen
-      .map((candidate) => candidate.key)
-      .sort((left, right) => left.localeCompare(right, 'en'))
-      .join('\n')
     const active = activeNudgeRef.current
     if (active?.fingerprint === fingerprint) {
       return
@@ -125,16 +90,17 @@ export function SkillFreshnessNudge(): null {
       }
       persistedFingerprints.current.add(fingerprint)
       const current = useAppStore.getState().settings?.dismissedSkillFreshnessNudges ?? []
-      const next = [...new Set([...current, ...unseen.map((candidate) => candidate.key)])].slice(
-        -MAX_DISMISSED_FRESHNESS_NUDGES
-      )
+      const next = [...new Set([...current, fingerprint])].slice(-MAX_DISMISSED_FRESHNESS_NUDGES)
       void updateSettings({ dismissedSkillFreshnessNudges: next }).catch(() => {
         persistedFingerprints.current.delete(fingerprint)
       })
     }
-    const names = new Set(unseen.map((candidate) => candidate.name))
-    // Why: name the outdated skills so the nudge is actionable without opening
-    // the modal; the sentence is translatable but the identifiers interpolate as-is.
+    const names = new Set(
+      summarizeBundledSkillPlan(plan)
+        .skills.filter((skill) => skill.state === 'update' || skill.state === 'repair')
+        .map((skill) => skill.name)
+    )
+    // Name outdated skills directly; translate the sentence while interpolating identifiers unchanged.
     const outdatedNames = [...names]
       .sort((left, right) => left.localeCompare(right, 'en'))
       .join(', ')
@@ -160,11 +126,9 @@ export function SkillFreshnessNudge(): null {
           'Update {{value0}} so agents follow the current instructions for this version of Orca.',
           { value0: outdatedNames }
         ),
-        // Why: the nudge lingers until the user acts. Ignoring it (app quit)
-        // records nothing, so a still-outdated skill may prompt once next launch.
+        // Keep the nudge until action; quitting records no dismissal, allowing one prompt next launch.
         duration: Number.POSITIVE_INFINITY,
-        // Why: only an explicit dismissal (the close button) records the keys;
-        // opening the review dialog is engagement, not a decision to hide it.
+        // Persist only explicit close-button dismissal; opening review is engagement.
         onDismiss: () => {
           if (nextActive.persistDismissal) {
             persistDismissal()
@@ -176,7 +140,7 @@ export function SkillFreshnessNudge(): null {
         action: {
           label: (
             <span className="inline-flex items-center gap-1.5">
-              <Terminal className="size-3.5" />
+              <RefreshCw className="size-3.5" />
               {names.size === 1
                 ? translate('auto.components.skills.SkillFreshnessNudge.updateOne', 'Update skill')
                 : translate(
@@ -186,8 +150,7 @@ export function SkillFreshnessNudge(): null {
             </span>
           ),
           onClick: () => {
-            // Sonner closes action toasts without onDismiss; clear ownership so
-            // a later inventory cannot treat the already-closed toast as active.
+            // Sonner action closure skips onDismiss; clear ownership so later inventory cannot retain a closed toast.
             nextActive.persistDismissal = false
             if (activeNudgeRef.current === nextActive) {
               activeNudgeRef.current = null
@@ -198,14 +161,7 @@ export function SkillFreshnessNudge(): null {
       }
     )
     activeNudgeRef.current = nextActive
-  }, [
-    activeSkillRuntime.canUseLocalSkillFreshness,
-    dismissed,
-    settingsLoaded,
-    state.error,
-    state.inventory,
-    updateSettings
-  ])
+  }, [targetKey, dismissed, settingsLoaded, state.error, state.plan, updateSettings])
 
   return null
 }

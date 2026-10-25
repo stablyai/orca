@@ -87,8 +87,7 @@ describe('measureTerminalGroupGridSizes', () => {
     // Neither the floating panel's body nor a hidden workspace's body is another group here.
     groupBody('floating', 600, 400)
     groupBody('hidden', 0, 0, content)
-    // The lone body's inset (1, 36) is remembered and applied to the content area, so later
-    // measurements on a split workspace still know what a single-group workspace gets.
+    // Remember lone-group inset for later split-workspace estimates of single-group capacity.
     expect(measureTerminalGroupGridSizes(14)?.singleGroupWorkspace).toEqual({ cols: 238, rows: 80 })
 
     document.body.replaceChildren()

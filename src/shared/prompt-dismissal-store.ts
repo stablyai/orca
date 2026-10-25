@@ -1,6 +1,4 @@
-// Dismissed prompt occurrences per chat scope, kept outside any view so a remount cannot reshow
-// one. Both apps own one store each; entries die when a view observes their prompt change, or by
-// the bound.
+// App-owned chat-scope dismissals survive view remounts; prompt changes or capacity bounds retire entries.
 import { setBoundedScopeCacheEntry } from './native-chat-scope-cache'
 
 export type PromptDismissalStore<T> = {

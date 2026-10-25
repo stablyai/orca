@@ -117,8 +117,7 @@ export function EditorFileTabContextMenu({
           }
           skipMenuFocusRestoreRef.current = false
           event.preventDefault()
-          // Why: opening the input in onSelect lets the still-closing menu reclaim
-          // focus, and the resulting blur commits the rename away before the user types.
+          // Open rename after menu autofocus closes; onSelect would let menu focus restoration blur-commit it immediately.
           onActivate()
           onOpenRenameInput()
         }}

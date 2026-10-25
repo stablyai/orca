@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
@@ -64,16 +65,31 @@ vi.mock('@/lib/agent-catalog', () => ({
   getAgentLabel: () => 'Codex',
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
   class StructuredAgentSessionOwnerUnresolvedError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError, StructuredAgentSessionOwnerUnresolvedError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     retryStructuredAgentSessionLaunchIntent: vi.fn(),
     abandonStructuredAgentSessionLaunchIntent: vi.fn(),
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError,
-    StructuredAgentSessionOwnerUnresolvedError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError,
+    StructuredAgentSessionOwnerUnresolvedError:
+      launchErrorMocks.StructuredAgentSessionOwnerUnresolvedError
   }
 })
 // Each pick opens its chat once its host admits it; here this machine admits at once.
@@ -161,14 +177,14 @@ import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   type StructuredAgentSessionProvisionalLaunch
-} from './structured-agent-session-provisional-tab'
+} from './agent-session/structured-agent-session-provisional-tab'
 import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-session-launch'
 import {
   discardStructuredLaunchPrompts,
   hasStagedStructuredLaunchPrompt
 } from './structured-agent-session-launch-prompt'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
 import {
@@ -222,10 +238,7 @@ function published(...sessionIds: string[]): RuntimeMobileSessionTabsResult[] {
 
 let main: TabsDrawnFromMain | null = null
 
-/**
- * Switch on: the split workspace in a real store, drawn from main's frames. Main keeps no empty
- * group, so each side holds a terminal.
- */
+// Frame-drawn split workspace: each side needs a terminal because main drops empty groups.
 async function drawSplitFromMain(): Promise<void> {
   const real = createTestStore()
   const side = (groupId: string): Tab => ({
@@ -281,7 +294,6 @@ async function openedChats(): Promise<Tab[]> {
 const first = launchIntent('session-first')
 const second = launchIntent('session-second')
 
-/** A pick from the + menu, new-tab search or the new-agent shortcut: its own action, no text. */
 function pick(
   requestId: string,
   overrides: {

@@ -1,5 +1,7 @@
-import { OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission } from '../wait/terminal-wait-permission'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
+import type {
+  AgentPromptExpectedBinding,
+  RuntimeAgentPromptWriteOptions
+} from '../../runtime-terminal-contracts'
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
@@ -13,23 +15,54 @@ import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
   AGENT_PROMPT_SUBMIT,
   agentPromptSubmitJoinsPasteFrame,
+  getAgentPromptHeldSubmitBudgetMs,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
 } from '../../../../shared/agent-prompt-injection'
-import type { AgentPromptWaitTextCache } from '../../agent-prompt-submission-verification'
+import type {
+  AgentPromptActivity,
+  AgentPromptWaitTextCache
+} from '../../agent-prompt-submission-verification'
 import {
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
+import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
 
-export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
+export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResubmitHeldAgentPrompt {
   protected abstract createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number
   ): { arm: () => void; wait: () => Promise<void>; dispose: () => void } | null
+
+  protected assertAgentPromptExpectedBinding(
+    handle: string,
+    expected: AgentPromptExpectedBinding | undefined
+  ): void {
+    if (!expected) {
+      return
+    }
+    const current = this.getTerminalPromptRequestBinding(handle)
+    if (
+      current.ptyId !== expected.ptyId ||
+      current.processIncarnation !== expected.processIncarnation
+    ) {
+      throw new Error('terminal_handle_stale')
+    }
+  }
+
+  /** Under `wait`, a pre-paste refusal is the hold's to resume rather than the caller's to see. */
+  private throwIfAgentPromptPermissionReturned(
+    baseline: AgentPromptActivity,
+    current: AgentPromptActivity
+  ): void {
+    if (this.isAgentPromptPermissionBlocked(baseline, current)) {
+      throw new AgentPromptPermissionReturnedError()
+    }
+  }
 
   protected async writeTerminalAgentPrompt(
     handle: string,
@@ -41,19 +74,19 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
+    if (options.onPermission === 'wait') {
+      this.throwIfAgentPromptPermissionReturned(permissionBaseline, permissionBaseline)
+    }
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
-    // OMP treats a large bracketed paste as a menu unless submit arrives in the same PTY write.
-    // Once a foreground agent is known, it is the process that will consume the bytes;
-    // launchAgent is only the fallback during startup before process detection settles.
+    // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
     const submitWithPaste = agentPromptSubmitJoinsPasteFrame(
       pty?.foregroundAgent ?? pty?.launchAgent
     )
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
-    // Why no gate for a ready composer: a live Claude never settles it, so Enter always waited out
-    // its 8 s cap, where the desktop's own paste submitted in about 2 s.
+    // A ready Claude composer never settles this gate, adding its full 8s cap; desktop paste submits in about 2s.
     const renderGate = options.composerReady
       ? null
       : this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
@@ -67,16 +100,25 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       await options.beforeWrite?.(ptyId)
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
+      this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
+      if (options.onPermission === 'wait') {
+        this.throwIfAgentPromptPermissionReturned(
+          permissionBaseline,
+          this.getAgentPromptActivity(handle, ptyId)
+        )
+      }
       this.assertAgentPromptPermissionSafe(
         permissionBaseline,
         this.getAgentPromptActivity(handle, ptyId)
       )
-      // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
-      // beginning when a large frame is split into independently processed chunks.
+      // Claude can lose the start of a large bracketed paste split across writes; send the whole frame together.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
+      }
+      if (submitWithPaste) {
+        options.onSubmitWritten?.()
       }
     } catch (error) {
       renderGate?.dispose()
@@ -124,11 +166,21 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
+      options.onSubmitWritten?.()
     }
-    const submits =
-      options.composerReady && !submitWithPaste
-        ? 1 + (await this.resubmitAgentPromptAfterRetryDelay(ptyId, generation, options))
-        : 1
+    const submits = submitWithPaste
+      ? 1
+      : 1 +
+        (await this.resubmitHeldAgentPrompt(ptyId, generation, options, {
+          baseline,
+          readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+          prompt: options.promptForSchedule,
+          heldBudgetMs: getAgentPromptHeldSubmitBudgetMs(
+            writeHostPlatform,
+            this.getPtyAgent(ptyId),
+            pastePayload
+          )
+        }))
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
@@ -161,13 +213,11 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const checkpoint: RuntimeTerminalSend = {
       handle,
       accepted: true,
-      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
+      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + submits,
       prompt: inputAccepted
     }
     options.onInputAccepted?.(checkpoint)
-    // Providers without a lifecycle verifier still get an honest accepted
-    // receipt; they must not fail a Dispatch merely because Orca cannot prove
-    // submission through hooks.
+    // Without a lifecycle verifier, report accepted input; inability to prove submission must not fail Dispatch.
     if (!settlementAgent) {
       return { submits, prompt: inputAccepted }
     }
@@ -215,30 +265,6 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         }
       }
       throw error
-    }
-  }
-
-  /**
-   * The desktop draft paste's second Enter, for agents whose composer can render before Enter is
-   * live (`submitRetryDelayMs`). Best effort: it never fails a prompt the first Enter submitted.
-   */
-  private async resubmitAgentPromptAfterRetryDelay(
-    ptyId: string,
-    generation: number,
-    options: RuntimeAgentPromptWriteOptions
-  ): Promise<number> {
-    const agent = this.getPtyAgent(ptyId)
-    const retryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
-    if (retryDelayMs === undefined) {
-      return 0
-    }
-    try {
-      await waitForAgentPromptDelay(retryDelayMs, options.signal)
-      this.assertAgentPromptGeneration(ptyId, generation)
-      await options.beforeWrite?.(ptyId)
-      return this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind) ? 1 : 0
-    } catch {
-      return 0
     }
   }
 }

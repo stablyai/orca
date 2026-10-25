@@ -13,8 +13,7 @@ export function transitionHookPresence(
   const recorded = previous?.agentPresence
   const owner = recorded && !recorded.ended && !previous?.providerSessionOnly ? recorded : undefined
   const sender = incoming.agentPresence?.process
-  // Why: only an admitted exit is marked ended (Claude's process-ending SessionEnd, or a host-proved
-  // exit); other agents' SessionEnd hooks are ordinary status updates.
+  // Only admitted process-ending SessionEnd or host-proved exits mark ended; other SessionEnd events update status.
   const exit = incoming.agentPresence?.ended === true
   if (owner && (exit || !owner.suspended)) {
     if (exit) {
@@ -28,7 +27,10 @@ export function transitionHookPresence(
         : undefined
     }
     if (sender && owner.process && isSameAgentProcess(sender, owner.process)) {
-      return incoming
+      const session = owner.session
+      return session
+        ? { ...incoming, agentPresence: { ...owner, ...incoming.agentPresence, session } }
+        : incoming
     }
     // Why: nested agents inherit ORCA_PANE_KEY; their hooks update status, never ownership.
     return incoming.agentPresence === owner ? incoming : { ...incoming, agentPresence: owner }
@@ -48,8 +50,14 @@ export function transitionHookPresence(
   if (!agent || agent === 'unknown') {
     return incoming.agentPresence ? { ...incoming, agentPresence: undefined } : incoming
   }
+  const session = incoming.agentPresence?.session ?? incoming.providerSession?.id
   return {
     ...incoming,
-    agentPresence: { ...incoming.agentPresence, agent, ...(sender ? { process: sender } : {}) }
+    agentPresence: {
+      ...incoming.agentPresence,
+      agent,
+      ...(sender ? { process: sender } : {}),
+      ...(session ? { session } : {})
+    }
   }
 }

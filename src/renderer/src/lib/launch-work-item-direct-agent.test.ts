@@ -111,9 +111,7 @@ describe('notifyDirectWorkItemAgentStartTimeout', () => {
   })
 })
 
-// Why: the Source Control AI dialogs hide the CLI arguments field on launches that cannot apply
-// it, and then send nothing. Only `undefined` reaches the global Agents arguments here — an
-// empty string is an explicit "no arguments" that would silently suppress the user's setting.
+// Omitted hidden arguments must stay undefined to inherit settings; empty string explicitly clears them.
 describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => {
   const withGlobalArgs = {
     ...settings,

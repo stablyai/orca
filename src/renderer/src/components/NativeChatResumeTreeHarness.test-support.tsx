@@ -1,4 +1,4 @@
-// The resume tree mounted with selection state, as the dialog owns it, for the tree's tests.
+// Mount the resume tree with dialog-owned selection for group-toggle tests.
 
 import { useState } from 'react'
 import { ResumeOnRestartGroups } from './NativeChatResumeOnRestartGroups'

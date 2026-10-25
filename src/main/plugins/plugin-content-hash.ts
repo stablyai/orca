@@ -4,13 +4,7 @@ import { lstat, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { pluginPathSegmentError } from '../../shared/plugins/plugin-path-safety'
 
-/**
- * Deterministic hash of a plugin's file tree. The hash names the immutable
- * install directory (`<userData>/plugins/<publisher>.<id>/<hash>/`), so two
- * installs of identical content share a name and a mutated install is
- * detectable. Hashes relative paths + file bytes in sorted order; symlinks
- * are refused outright (installed trees must be self-contained).
- */
+// Immutable installs use sorted path/content hashes and reject symlinks to stay self-contained.
 
 export const MAX_PLUGIN_FILES = 2_000
 export const MAX_PLUGIN_TOTAL_BYTES = 50 * 1024 * 1024
@@ -28,8 +22,7 @@ async function collectFiles(
   counters: { entries: number; bytes: number }
 ): Promise<string | null> {
   const entries = await readdir(dir, { withFileTypes: true })
-  // Why: localeCompare ordering varies with host locale/ICU data; content
-  // addresses must sort identically on macOS, Linux, and Windows.
+  // localeCompare varies by locale/ICU; content identities must match across hosts.
   entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0))
   for (const entry of entries) {
     if (dir === root && entry.name === '.git') {
@@ -94,8 +87,7 @@ export async function hashPluginTree(root: string): Promise<PluginTreeHashResult
       return { ok: false, error }
     }
     const hash = createHash('sha256')
-    // Why: every record is length-framed so path/content delimiters inside a
-    // plugin file cannot make two different trees share one hash preimage.
+    // Length framing prevents delimiter-containing paths/bytes from sharing a hash preimage.
     hash.update('orca-plugin-tree-v1\0')
     let totalBytes = 0
     for (const file of files) {

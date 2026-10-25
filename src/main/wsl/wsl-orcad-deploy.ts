@@ -1,8 +1,4 @@
-/**
- * Deploys and starts orcad inside one WSL distro (design D1, D2b, D8), reusing the SSH host's
- * install, activation fence/journal and version admission over the `wsl.exe` transport.
- * No pairing here: the stdio bridge (C5) connects to the loopback port this reports.
- */
+/** D1/D2b/D8 reuse SSH installation, activation journals/fences and admission over wsl.exe. C5 pairs through the reported loopback port. */
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { PairingOffer } from '../../shared/pairing'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../shared/orcad-managed-runtime'
@@ -137,10 +133,10 @@ async function launchOverTransport(
         `Convert it with: wsl --set-version ${name} 2`
     )
   }
-  // Before the launch: without a holder WSL stops an idle distro and orcad with it.
+  // Acquire a holder before launch or WSL can idle-stop orcad's distro.
   const holder = options.holder ?? createWslDistroHolder({ userDataPath: userDataPath() })
   const held = await holder.ensureHeld(name)
-  // Read alongside the deploy; a failed read only leaves the record without a GUID.
+  // Read GUID alongside deploy; failure leaves the record without one.
   const distroId = (options.readRegistryId ?? readWslDistroRegistryIdShared)(name).catch(() => null)
   let context = await resolveOrcadRemoteContext(target, conn, signal)
   const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT, signal)
@@ -151,7 +147,7 @@ async function launchOverTransport(
   if (recovery.outcome === 'recovered') {
     context = { ...context, activationRecord: await readOrcadActivationRecord(slot) }
   }
-  // Before deploy or wake: an orcad the record does not name would keep the instance lock.
+  // Adopt unrecorded orcad before deploy/wake or its instance lock blocks launch.
   const adoption = await adoptUnrecordedWslOrcad(slot, context.activationRecord)
   if (adoption.outcome === 'adopted') {
     context = { ...context, activationRecord: adoption.record }
@@ -177,7 +173,7 @@ async function launchOverTransport(
   }
   context = { ...context, activationRecord: admitted }
   const incumbentVersion = context.activationRecord.active
-  // Only an update asks the incumbent: the same version is a no-op deploy on every connect.
+  // Only version changes need incumbent census; same-version connects deploy as no-ops.
   const incumbent: WslOrcadIncumbent | null =
     incumbentVersion && incumbentVersion !== candidateVersion
       ? await (options.readIncumbent ?? readWslOrcadIncumbent)({
@@ -216,7 +212,7 @@ async function launchOverTransport(
     recordWslOrcadUpdateFailure(failureHost, incumbentVersion, failure)
     const restored = incumbentVersion && failure ? await readRestoredRecord(incumbentVersion) : null
     if (restored) {
-      // The rejected candidate was undone, so serve the restored incumbent on this connect too.
+      // After rollback proof, serve the restored incumbent on this connect too.
       const retried = await admit(restored, 'connect')
       if ('outcome' in retried) {
         return retried
@@ -230,12 +226,12 @@ async function launchOverTransport(
         isForceableOrcadDeferral(deployed.code) ||
         deployed.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
-    // Waiting (e.g. live terminals) is not broken: the incumbent serves until Update or Force.
+    // Live-terminal deferrals keep the incumbent serving until Update/Force.
     if (
       incumbentVersion &&
       incumbent?.readiness &&
       isWaitingOrcadUpdateDeferral(deployed.code) &&
-      // Another client may have activated a build since the census; then this one is stale.
+      // Another client may have activated since census; refuse stale incumbent assumptions.
       (await readOrcadActivationRecord(slot)).active === incumbentVersion
     ) {
       const serving = {
@@ -267,7 +263,7 @@ async function launchOverTransport(
 
   /** The record only once the incumbent is back and no journal awaits recovery; else null. */
   async function readRestoredRecord(incumbent: string): Promise<OrcadActivationRecord | null> {
-    // An unreadable host is not proof of a restore: keep the rejection as reported.
+    // Unreadable transaction state proves no restoration; preserve the rejection.
     if (await readOrcadActivationTransaction(slot).catch(() => true)) {
       return null
     }

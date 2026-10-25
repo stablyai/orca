@@ -54,8 +54,7 @@ export function UntitledFileRenameDialog({
   const setNameInputNode = useCallback(
     (node: HTMLInputElement | null): void => {
       if (!node) {
-        // Why: on a quick close, Radix may unmount the input before the
-        // deferred focus frame runs. Cancel it from the ref cleanup path.
+        // Radix may unmount before deferred focus runs; cancel from ref cleanup.
         cancelFocusFrame()
       }
       nameInputRef.current = node
@@ -63,8 +62,7 @@ export function UntitledFileRenameDialog({
     [cancelFocusFrame]
   )
 
-  // Why: seed the drafts before the open dialog paints; focus is handled by
-  // Radix's open lifecycle below so this does not need a post-render Effect.
+  // Seed before painting; Radix’s open lifecycle owns focus without a post-render effect.
   if (open) {
     const seeded = seededOpenStateRef.current
     if (!seeded.open || seeded.baseName !== baseName || seeded.worktreePath !== worktreePath) {

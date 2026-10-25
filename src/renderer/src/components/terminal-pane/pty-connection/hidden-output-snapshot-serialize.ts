@@ -83,13 +83,7 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     }
   }
 
-  // Why: hidden/parked panes used to mark hidden only at the first
-  // session.dataCallback sync, leaving a spawn-time window where neither side
-  // answered queries (the spawn-time DA1 loss). Declaring hidden on the
-  // spawn IPC lets main mark the PTY before its first byte — including
-  // codex spawns: the model responder answers their startup probes from
-  // byte zero now that the 10s renderer query window is gone.
-  // Remote-runtime PTYs are never gate-markable (no local main transit).
+  // Declare hidden before spawn bytes so main answers startup queries from byte zero; remote-runtime streams never transit this gate.
   session.shouldDeclareHiddenAtSpawn = function (): boolean {
     return (
       session.hiddenDeliveryGateActive &&
@@ -99,11 +93,7 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     )
   }
 
-  // ── Hidden-delivery gate sync (Phase 4) ─────────────────────────────
-  // Why: marks this pane's PTY hidden in main while no visible view needs
-  // its bytes; main then drops delivery after model ingestion and reveal
-  // restores from the snapshot. The marked id is tracked locally so PTY
-  // changes (reattach/restart) can never leave a stale id gated.
+  // Track hidden claims per PTY so reattach/restart cannot leave old IDs gated; reveal restores bytes main withheld after ingestion.
   session.hiddenDeliverySyncedPtyId = null
   session.releaseHiddenDeliveryClaim = null
   session.modelRestoreSubscribedPtyId = null
@@ -113,10 +103,7 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     return Date.now() < session.hiddenOutputRestoreFloodSuppressedUntil
   }
 
-  // True when a drop/gap signal on a visible pane is attributable to this
-  // pane's OWN restore backpressure (a restore is replaying right now, or
-  // one was just cut off for outrunning the stream). Such signals must not
-  // re-arm restores — that is the rc.7.perf feedback loop.
+  // Own-restore backpressure markers must defer to quiet repaint rather than re-arm the rc.7.perf fetch loop.
   session.isForegroundRestoreBackpressureContext = function (): boolean {
     return (
       shouldWritePtyOutputForeground(session.deps.isVisibleRef.current) &&

@@ -1,5 +1,4 @@
-// Layout-owner build: a pane main is starting a terminal for waits and then attaches to it, and a
-// start that failed shows why. Neither starts a terminal of its own.
+// Wait for main’s terminal start and attach, or show its failure; the window cannot spawn a replacement.
 
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -16,10 +15,7 @@ const waiting = new WeakMap<ConnectPanePtySession, PaneStartWait>()
 const gated = (status: PaneStartStatus | undefined): boolean =>
   status === 'starting' || status === 'resuming' || status === 'failed'
 
-/**
- * Whether the pane waits on main's start; every waiter's `connect` runs once main's start for it
- * ends, and `onFailed` runs when main shows the start failed.
- */
+/** Call connect after main’s start ends, or onFailed on its published failure. */
 export function waitsForMainPaneStart(
   session: ConnectPanePtySession,
   connect: () => void,

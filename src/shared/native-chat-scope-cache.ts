@@ -1,10 +1,5 @@
-// Shared LRU bound for the native-chat composer's per-scope caches (draft text
-// and image attachments), both keyed by stable pane identity. The
-// caches exist so an in-progress message survives the composer unmounting on a
-// TUI/GUI toggle, but a scope key for a permanently-removed pane is never
-// revisited, so without a bound its unsent entry would linger for the renderer's
-// whole session. delete-then-set keeps the actively-edited scope most-recent so
-// eviction only sheds the oldest untouched scopes.
+// Bound pane-keyed draft/image caches: TUI/chat toggles need retention, but removed panes are never revisited.
+// Delete-then-set keeps edited scopes recent; evict only the oldest untouched drafts.
 export const NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX = 128
 
 export function setBoundedScopeCacheEntry<T>(

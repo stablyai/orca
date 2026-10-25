@@ -22,9 +22,7 @@ type TerminalLiveInputKeyPressEvent = {
   }
 }
 
-/** `isComposing` is the text system's marked-text range, forwarded by the pinned
- *  react-native patch on iOS; `onChangeText` would drop the payload entirely.
- *  Absent means the platform reports no range — not "not composing". */
+// Preserve the patched iOS marked-text payload; absence means unreported composition, not not-composing.
 type TerminalLiveInputChangeEvent = {
   readonly nativeEvent: {
     readonly text: string
@@ -72,7 +70,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const liveInputInteractionGenerationRef = useRef(0)
-  // Why: the click's stale-echo guard compares against the field text it cleared.
+  // Click guards compare against the field text cleared before the cursor moved.
   const liveInputTextRef = useRef('')
   const endedSessionTextRef = useRef<{
     readonly handle: string
@@ -109,7 +107,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   })
 
   useEffect(() => {
-    // Why: what reached the PTY is unknowable across an outage — stale mirror state corrupts the first post-reconnect send.
+    // Outages make delivered echo unknown; reset mirror state or the next send may corrupt PTY text.
     if (!connected) {
       clearPendingLiveInputCommit()
     }
@@ -120,9 +118,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     if (!pendingHandle) {
       return
     }
-    // Why: a lagging mobile tab list briefly yields no active tab object; a
-    // null/undefined type is "unknown", not "left the terminal" — flush guards
-    // still block sends if the tab truly changed.
+    // Null tab type during list lag is unknown; only a known switch retires input, while flush guards still reject stale targets.
     if (
       !activeHandle ||
       pendingHandle !== activeHandle ||
@@ -141,8 +137,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         clearPendingLiveInputCommit()
         return waitForPendingLiveInputFlush()
       }
-      // Why: external bytes (dictation/paste) land after the field's echo on the
-      // PTY; the field session must fully end or later diffs would erase them.
+      // External bytes follow field echo; end the field session so later diffs cannot erase dictation/paste.
       if (pendingHandle === handle) {
         return flushPendingLiveInputText(handle)
       }
@@ -156,7 +151,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     ]
   )
 
-  // The mirror assumes the cursor follows its text, so a click starts a new editing session.
+  // Clicks move the cursor away from the mirror’s assumed end; start a new editing session.
   const sendLiveInputClick = useCallback(
     (handle: string, bytes: string): Promise<boolean> => {
       advanceLiveInputInteractionGeneration()
@@ -168,7 +163,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     [advanceLiveInputInteractionGeneration, endLiveInputSessionThenSend]
   )
 
-  // Replaying the cleared field's native echo would retype it at the clicked cursor.
+  // Ignore the cleared field’s native echo or it would retype old text at the new cursor.
   const dropEndedSessionEcho = useCallback(
     (text: string): boolean => {
       const endedSession = endedSessionTextRef.current
@@ -184,7 +179,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         writeTerminalLiveInputText(liveInputRef, '')
         return true
       }
-      // The clear's own empty echo keeps the guard; the first new input ends it.
+      // Ignore the clear’s empty echo until actual new input arrives.
       if (text.length > 0) {
         endedSessionTextRef.current = null
       }
@@ -199,11 +194,9 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         clearPendingLiveInputCommit()
         return
       }
-      // Why: iOS kills an active dictation/IME session when JS writes a value
-      // that differs from the native field text, so the controlled capture must
-      // echo the field verbatim; only the PTY mirror sees normalized text.
+      // Echo native field text verbatim so iOS keeps dictation/IME alive; normalize only the PTY mirror.
       advanceLiveInputInteractionGeneration()
-      // DOM input identifies a fresh edit even when a mobile keyboard omits key events.
+      // DOM input signals fresh edits even when mobile keyboards omit key events.
       if (nativeEvent.inputType) {
         endedSessionTextRef.current = null
       } else if (dropEndedSessionEcho(nativeEvent.text)) {

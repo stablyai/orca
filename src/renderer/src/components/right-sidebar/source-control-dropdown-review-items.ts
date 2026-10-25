@@ -1,5 +1,4 @@
-// Why: the two review-creation rows share one blocked-reason string, so the "Push first" hint on
-// Create PR and the tooltip on Push-before-PR can never disagree.
+// Share creation blockers so Create and Push-before-PR tooltips cannot disagree.
 
 import { translate } from '@/i18n/i18n'
 import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'

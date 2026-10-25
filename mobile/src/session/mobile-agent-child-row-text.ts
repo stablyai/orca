@@ -1,6 +1,3 @@
-// The phone's words for one child row: the shared row model decides what it says (name, detail,
-// lead order); this only puts each detail kind into English, as desktop's agent rows phrase it.
-
 import {
   agentChildRowLeadTrail,
   agentChildRowName
@@ -15,12 +12,11 @@ import {
 } from '../../../src/shared/background-task-roster'
 import { agentStateLabel } from '../worktree/agent-row-display'
 
-// Mobile's agent-row words for every state they cover; only child rows reach `unverifiable`.
 export function mobileAgentChildStateLabel(state: AgentChildDisplayState): string {
   return state === 'unverifiable' ? 'No recent update' : agentStateLabel(state)
 }
 
-/** Coarse `34m` / `2h` / `3d`, floored so it never overstates the gap (desktop's no-update form). */
+// Floor coarse durations so the no-update label never overstates the gap.
 function compactDuration(deltaMs: number): string {
   const minutes = Math.max(0, Math.floor(deltaMs / 60_000))
   if (minutes < 60) {

@@ -111,8 +111,7 @@ describe('registerQuartoLanguage', () => {
   })
 
   it('closes a cell only on a fence at least as long as the one that opened it', () => {
-    // Why: markdown's own code-block states close on exactly three backticks, so a
-    // ````-fenced cell used to run to the end of the file.
+    // Honor longer closing fences; Markdown’s built-in three-backtick state could otherwise consume the whole file.
     expect(
       embedsFor(
         [
@@ -135,8 +134,7 @@ describe('registerQuartoLanguage', () => {
   })
 
   it('routes long plain fences through the same fence-aware states', () => {
-    // Why: ````-fenced blocks are how a Quarto document shows a ``` fence, and
-    // markdown's own fence rules stop at three backticks.
+    // Four-backtick Quarto blocks can contain literal triple fences; built-in Markdown rules stop too early.
     const lines = tokenizeQuarto(
       [LONG_FENCE, `${FENCE}r`, 'x', FENCE, LONG_FENCE, '## After'].join('\n')
     )

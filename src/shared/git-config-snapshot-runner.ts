@@ -2,8 +2,7 @@ type GitCommandRunner = (args: string[]) => Promise<{ stdout: string }>
 
 type GitConfigSnapshot = Map<string, string[]>
 
-// Why: mirror `git config --get`'s exit-1-on-absent-key so an intercepted miss
-// rejects (matching real git) instead of resolving an empty success value.
+// Mirror config --get exit 1 for absent keys; empty success changes caller behavior.
 export class GitConfigSnapshotKeyNotFoundError extends Error {
   constructor(key: string) {
     super(`git config --get found no value for '${key}'`)
@@ -32,8 +31,7 @@ function parseGitConfigListSnapshot(stdout: string): GitConfigSnapshot {
       continue
     }
 
-    // Why: config values may contain newlines, so only the first newline
-    // separates git's emitted key from its value.
+    // Values may contain newlines; only the first separates key and value.
     const separatorIndex = record.indexOf('\n')
     const key = separatorIndex === -1 ? record : record.slice(0, separatorIndex)
     const value = separatorIndex === -1 ? '' : record.slice(separatorIndex + 1)
@@ -54,8 +52,7 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
       return Promise.resolve(snapshot)
     }
     if (!snapshotPromise) {
-      // Why: upstream resolvers read config keys with Promise.all; the first
-      // caller must publish the in-flight snapshot before any await.
+      // Publish the shared promise before any await so parallel resolvers coalesce.
       try {
         snapshotPromise = runGit(['config', '--list', '-z'])
           .then(({ stdout }) => {
@@ -63,8 +60,7 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
             return snapshot
           })
           .catch(() => {
-            // Why: a snapshot failure should preserve existing real-git
-            // behavior for this round instead of failing the config lookup.
+            // Fall back to real Git this round if snapshot loading fails.
             interceptionDisabled = true
             snapshotPromise = null
             return null
@@ -91,13 +87,11 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
     const key = args[2] ?? ''
     const values = configSnapshot.get(canonicalizeGitConfigLookupKey(key))
     if (!values?.length) {
-      // Why: real `git config --get` exits non-zero for an absent key (it does
-      // not return empty success), so reject here to stay a faithful drop-in —
-      // callers branch on the rejection just as they would for real git.
+      // Missing keys must reject like real config --get; callers branch on rejection.
       throw new GitConfigSnapshotKeyNotFoundError(key)
     }
 
-    // Why: git config --get resolves multivar keys using the last occurrence.
+    // Multivar reads use the last occurrence, matching config --get.
     return { stdout: values.at(-1) ?? '' }
   }
 }

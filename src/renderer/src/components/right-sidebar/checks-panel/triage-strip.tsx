@@ -42,9 +42,7 @@ export function PRTriageStrip({
   fixChecksDisabledReason?: string
 }): React.JSX.Element {
   const resolvedReview = review ?? pr
-  // Why: the whole strip reads one shared summary so it cannot contradict the checks pill — a
-  // `{status: completed, conclusion: null}` check used to spin here as "1 pending" forever while
-  // the pill two panes away called it unresolved.
+  // Share the pill's classifier so completed checks without conclusions remain unresolved rather than spinning.
   const summary = summarizeProviderChecks(checks)
   const failingCount = summary.failed
   const pendingCount = summary.pending
@@ -129,8 +127,7 @@ export function PRTriageStrip({
     )
   }
 
-  // Why: nothing passed, failed or is still running — a green tick here would contradict the grey
-  // "Unresolved checks" pill reading the same list.
+  // An all-unresolved list must match the grey pill, not show a green tick.
   if (summary.state === 'neutral') {
     return (
       <div className="border-b border-border px-3 py-2">

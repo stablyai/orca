@@ -62,8 +62,7 @@ test('creates a worktree, keeps its terminal isolated, and switches back @golden
     await expect(
       orcaPage.locator(`[role="option"][data-worktree-id="${originalWorktreeId}"]`)
     ).toHaveAttribute('aria-current', 'page', { timeout: 20_000 })
-    // Why: sidebar aria-current can land before the store/terminal remount.
-    // Mac release goldens then wait 30s on a child tab whose PaneManager is gone.
+    // Wait for store activation too: sidebar aria-current can precede the child terminal’s manager remount.
     await expect
       .poll(() => getActiveWorktreeId(orcaPage), {
         timeout: 20_000,

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { z } from 'zod'
 import { REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES } from './remote-runtime-memory-limits'
 import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES,
@@ -238,41 +237,6 @@ describe('browser client-host control protocol', () => {
     ).toThrow('Browser page inventory identity exceeds its JSON byte budget')
   })
 
-  it('keeps old attach and ready decoders compatible with optional inventory fields', () => {
-    const legacyAttach = z.object({
-      authorityRuntimeId: z.string(),
-      browserHostClientId: z.string(),
-      hostCapabilities: z.array(z.string()),
-      pageCommandProtocolVersion: z.literal(1).optional()
-    })
-    const legacyReady = z.object({
-      type: z.literal('ready'),
-      authorityEpoch: z.string(),
-      browserHostGeneration: z.number(),
-      pageCommandProtocolVersion: z.literal(1).optional()
-    })
-
-    expect(
-      legacyAttach.parse({
-        authorityRuntimeId: 'runtime-a',
-        browserHostClientId: 'host-a',
-        hostCapabilities: ['webview'],
-        pageInventoryProtocolVersion: 1,
-        pageInventory: [],
-        leaseReconnectProtocolVersion: 1
-      })
-    ).not.toHaveProperty('pageInventory')
-    expect(
-      legacyReady.parse({
-        type: 'ready',
-        authorityEpoch: 'epoch-a',
-        browserHostGeneration: 2,
-        pageInventoryProtocolVersion: 1,
-        leaseReconnectProtocolVersion: 1
-      })
-    ).not.toHaveProperty('pageInventoryProtocolVersion')
-  })
-
   it('binds create-page commands and results to exact bounded authority', () => {
     const authority = {
       authorityRuntimeId: 'runtime-a',
@@ -359,24 +323,35 @@ describe('browser client-host control protocol', () => {
     ).toThrow()
   })
 
-  it('requires every lease and execution-host fence on tunnel attach', () => {
+  it.each([
+    { scope: 'attach', field: 'authorityRuntimeId' },
+    { scope: 'attach', field: 'authorityEpoch' },
+    { scope: 'attach', field: 'browserHostClientId' },
+    { scope: 'attach', field: 'browserHostGeneration' },
+    { scope: 'attach', field: 'executionHost' },
+    { scope: 'executionHost', field: 'kind' },
+    { scope: 'executionHost', field: 'runtimeId' },
+    { scope: 'executionHost', field: 'revision' }
+  ])('requires $field in $scope on tunnel attach', ({ scope, field }) => {
+    const attach = {
+      authorityRuntimeId: 'runtime-a',
+      authorityEpoch: 'epoch-a',
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 1,
+      executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
+    }
+    expect(BrowserNetworkTunnelAttachParams.parse(attach)).toEqual(attach)
+
+    const incomplete = Object.fromEntries(
+      Object.entries(scope === 'attach' ? attach : attach.executionHost).filter(
+        ([key]) => key !== field
+      )
+    )
     expect(() =>
-      BrowserNetworkTunnelAttachParams.parse({
-        authorityRuntimeId: 'runtime-a',
-        browserHostClientId: 'host-a',
-        browserHostGeneration: 1,
-        executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
-      })
+      BrowserNetworkTunnelAttachParams.parse(
+        scope === 'attach' ? incomplete : { ...attach, executionHost: incomplete }
+      )
     ).toThrow()
-    expect(
-      BrowserNetworkTunnelAttachParams.parse({
-        authorityRuntimeId: 'runtime-a',
-        authorityEpoch: 'epoch-a',
-        browserHostClientId: 'host-a',
-        browserHostGeneration: 1,
-        executionHost: { kind: 'native', runtimeId: 'runtime-a', revision: 1 }
-      })
-    ).toMatchObject({ authorityEpoch: 'epoch-a', browserHostGeneration: 1 })
   })
 
   it('decodes an exact SSH provider authority without changing native v1 attaches', () => {

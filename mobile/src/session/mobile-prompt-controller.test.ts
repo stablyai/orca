@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { buildAskAnswerKeys, type AskPrompt } from '../../../src/shared/native-chat-ask'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask'
 import {
   visible,
   handleRef,
@@ -103,7 +103,6 @@ describe('prompt cards through the production controller, send contract and view
       questions: [{ question: 'Answer?', options: [{ label: 'A' }], multiSelect: false }]
     }
     const selections = [{ indices: [], other: 'custom answer' }]
-    const groups = buildAskAnswerKeys(prompt, selections)
     vi.mocked(client.sendRequest).mockResolvedValue(response(true, 'legacy'))
     await render({
       tab: {
@@ -129,9 +128,9 @@ describe('prompt cards through the production controller, send contract and view
       .mock.calls.filter(([method]) => method === 'terminal.send')
       .map(([, params]) => params)
     expect(writes).toEqual(
-      groups.map((group) =>
+      ['2', 'custom answer', '\r'].map((text) =>
         expect.objectContaining({
-          text: 'raw' in group ? group.raw : group.text,
+          text,
           enter: false,
           requireWriteSettlement: true
         })
@@ -231,7 +230,6 @@ describe('prompt cards through the production controller, send contract and view
     act(() => {
       getTree().root.findByProps({ accessibilityLabel: 'Collapse' }).props.onPress()
     })
-    // Still mounted under the strip, so a partly made choice survives.
     expect(getController().nativeChatPermission).not.toBe(null)
     expect(getController().nativeChatCollapsedPrompt?.title).toBeTruthy()
     expect(getTree().root.findAllByProps({ testID: 'native-chat-prompt-strip' })).toHaveLength(1)

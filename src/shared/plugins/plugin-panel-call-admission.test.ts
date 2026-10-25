@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createPluginPanelCallAdmission } from './plugin-panel-call-admission'
 
 describe('createPluginPanelCallAdmission', () => {
-  it('shares the rate budget across panel sessions for one plugin', () => {
+  it('shares the rate budget across calls for one plugin', () => {
     let now = 0
     const admission = createPluginPanelCallAdmission({
       limits: { maxMessages: 2, perMs: 1_000 },

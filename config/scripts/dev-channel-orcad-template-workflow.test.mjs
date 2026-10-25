@@ -2,8 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
-// Why: every SSH host runs orcad, deployed from the template inside the desktop build, so a
-// dev-channel build without it cannot connect to any SSH host.
+// Every SSH host needs template-deployed orcad; missing dev-channel templates break all SSH connections.
 function readWorkflow(name) {
   return parse(readFileSync(new URL(`../../.github/workflows/${name}`, import.meta.url), 'utf8'))
 }
@@ -33,7 +32,11 @@ describe.each(channels)('$name build ships the orcad template', (channel) => {
   it('builds the template from the commit the app is built from', () => {
     const template = jobs['orcad-template']
     expect(template.uses).toBe('./.github/workflows/node-server-tests.yml')
-    expect(template.with).toEqual({ ref: channel.pinnedSha, build_template: true })
+    expect(template.with).toEqual({
+      ref: channel.pinnedSha,
+      build_template: true,
+      fast_runners: true
+    })
     expect(template.permissions).toEqual({ contents: 'read', actions: 'read' })
     expect(template.secrets).toBeUndefined()
     expect(mac.steps.find((step) => step.name === 'Checkout').with.ref).toBe(channel.pinnedSha)

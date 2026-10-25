@@ -25,7 +25,6 @@ describe('useMobileNativeChatSendError', () => {
   }): null {
     const api = useMobileNativeChatSendError({ scopeKey, showToast })
     api.bannerMountedRef.current = bannerMounted
-    // As the route does each render, with what the chat shows.
     api.keepWhile(causes)
     apiRef.current = api
     return null
@@ -73,7 +72,6 @@ describe('useMobileNativeChatSendError', () => {
 
     await showing({ working: false, prompt: false })
     expect(api().message).toBeNull()
-    // Dropped, not hidden: the agent working again is not what that press was refused for.
     await showing({ working: true, prompt: false })
     expect(api().message).toBeNull()
   })
@@ -108,7 +106,11 @@ describe('useMobileNativeChatSendError', () => {
     expect(api().message).toBe('a')
 
     await act(async () => {
-      vi.advanceTimersByTime(4000)
+      vi.advanceTimersByTime(3999)
+    })
+    expect(api().message).toBe('a')
+    await act(async () => {
+      vi.advanceTimersByTime(1)
     })
     expect(api().message).toBeNull()
   })
@@ -121,7 +123,6 @@ describe('useMobileNativeChatSendError', () => {
     })
     await act(async () => api().show('b'))
 
-    // The first failure's timer must not survive to clear the second message.
     await act(async () => {
       vi.advanceTimersByTime(3000)
     })
@@ -166,7 +167,6 @@ describe('useMobileNativeChatSendError', () => {
     await act(async () => {
       renderer = create(createElement(Harness, { scopeKey: 'terminal-1', bannerMounted: false }))
     })
-    // A deferred failure landing after the user left chat must still be seen.
     await act(async () => api().show('Delivery unconfirmed'))
 
     expect(showToast).toHaveBeenCalledWith('Delivery unconfirmed', 1600)
@@ -175,7 +175,6 @@ describe('useMobileNativeChatSendError', () => {
 
   it('toasts a deferred failure that resolves after the user switched tabs', async () => {
     await render('terminal-1')
-    // Captured while tab A was live; a 20s unconfirmed send resolves much later.
     const showFromTabA = api().show
 
     await act(async () => {
@@ -183,7 +182,6 @@ describe('useMobileNativeChatSendError', () => {
     })
     await act(async () => showFromTabA('Message not sent'))
 
-    // The banner belongs to terminal-2 now, so A's failure must not paint there.
     expect(api().message).toBeNull()
     expect(showToast).toHaveBeenCalledWith('Message not sent', 1600)
   })
@@ -196,7 +194,6 @@ describe('useMobileNativeChatSendError', () => {
       renderer?.update(createElement(Harness, { scopeKey: 'terminal-2' }))
     })
     await act(async () => api().show('b'))
-    // An accepted card action from tab A resolving late must not retire B's warning.
     await act(async () => clearFromTabA())
 
     expect(api().message).toBe('b')
@@ -208,35 +205,18 @@ describe('useMobileNativeChatSendError', () => {
 
     act(() => renderer?.unmount())
     renderer = null
-    // The route writes bannerMountedRef during render, so an unmount leaves it
-    // stuck true — the failure would target a banner that no longer exists.
+    // Unmount must clear the render-written mounted ref so late failures can fall back to toast.
     await act(async () => showWhileMounted('Delivery unconfirmed'))
 
     expect(showToast).toHaveBeenCalledWith('Delivery unconfirmed', 1600)
   })
 
-  it('does not fire the hold timer after unmount', async () => {
+  it('cancels the pending hold timer on unmount', async () => {
     await render()
     await act(async () => api().show('a'))
-
-    const errors: unknown[] = []
-    const original = console.error
-    const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      errors.push(args[0])
-      original(...args)
-    })
-    try {
-      act(() => renderer?.unmount())
-      renderer = null
-      act(() => {
-        vi.advanceTimersByTime(4000)
-      })
-    } finally {
-      spy.mockRestore()
-    }
-    expect(errors).toEqual([])
+    expect(vi.getTimerCount()).toBe(1)
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

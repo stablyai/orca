@@ -1,7 +1,4 @@
-// A gated poll and a poll that simply found nobody to move both produce zero
-// candidates and no attempt row, so an operator watching a stalled rollout
-// cannot tell them apart. One aggregated line a minute per director names the
-// gate and prices the selection, at a rate a 50-polls-a-minute worker can afford.
+// Zero candidates/attempts hides gated vs idle polls; one aggregate line/min prices selection and names the gate without logging every ~50/min poll.
 export type RegionalRehomePollGate =
   | 'open'
   | 'cohort-zero'

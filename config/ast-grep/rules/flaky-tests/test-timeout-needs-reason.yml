@@ -1,0 +1,86 @@
+# Ratcheted by config/scripts/check-flaky-test-pattern-ratchet.mjs; info severity keeps
+# `pnpm lint:ast-grep` quiet about the grandfathered baseline.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: test-timeout-needs-reason
+language: typescript
+severity: info
+message: A per-test timeout bump hides slow or hanging tests. Put a comment directly above it saying why this test needs more time.
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/tests/e2e/**'
+utils:
+  test-call:
+    has:
+      field: function
+      regex: '^(it|test|describe|suite)(\.(concurrent|sequential|serial))?$'
+rule:
+  any:
+    # it('title', fn, 20_000)
+    - all:
+        - kind: call_expression
+        - matches: test-call
+        - has: { field: arguments, has: { nthChild: 3, not: { kind: comment } } }
+    # it('title', { timeout: 20_000 }, fn)
+    - all:
+        - kind: call_expression
+        - matches: test-call
+        - has:
+            field: arguments
+            has:
+              kind: object
+              has: { kind: pair, has: { field: key, regex: '^timeout$' } }
+    - pattern: test.setTimeout($$$)
+    - pattern: test.slow($$$)
+    - pattern: testInfo.setTimeout($$$)
+  not:
+    any:
+      # The reason may sit inside the call, beside the timeout argument.
+      - has: { field: arguments, has: { kind: comment } }
+      - inside:
+          kind: expression_statement
+          follows:
+            stopBy: { not: { kind: comment } }
+            kind: comment
+---
+id: test-timeout-needs-reason-tsx
+language: tsx
+severity: info
+message: A per-test timeout bump hides slow or hanging tests. Put a comment directly above it saying why this test needs more time.
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/tests/e2e/**'
+utils:
+  test-call:
+    has:
+      field: function
+      regex: '^(it|test|describe|suite)(\.(concurrent|sequential|serial))?$'
+rule:
+  any:
+    # it('title', fn, 20_000)
+    - all:
+        - kind: call_expression
+        - matches: test-call
+        - has: { field: arguments, has: { nthChild: 3, not: { kind: comment } } }
+    # it('title', { timeout: 20_000 }, fn)
+    - all:
+        - kind: call_expression
+        - matches: test-call
+        - has:
+            field: arguments
+            has:
+              kind: object
+              has: { kind: pair, has: { field: key, regex: '^timeout$' } }
+    - pattern: test.setTimeout($$$)
+    - pattern: test.slow($$$)
+    - pattern: testInfo.setTimeout($$$)
+  not:
+    any:
+      # The reason may sit inside the call, beside the timeout argument.
+      - has: { field: arguments, has: { kind: comment } }
+      - inside:
+          kind: expression_statement
+          follows:
+            stopBy: { not: { kind: comment } }
+            kind: comment

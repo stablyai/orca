@@ -14,7 +14,6 @@ import type { WorktreeSidebarLineageDropTarget } from './row-state'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
 
-// Nesting and un-nesting are the two lineage mutations a sidebar drag can commit.
 export function useWorktreeLineageDropCommit(args: {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>

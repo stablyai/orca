@@ -32,6 +32,7 @@ export type RuntimePtySpawnState = {
   args: RuntimePtySpawnArgs
   codexHomeLaunchStartedAt: Date | undefined
   codexHomeLaunchStartedSequence: number | undefined
+  spawnRequestedAt: number
   preAdoptedStablePane: AdoptStablePaneResult | null
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   cwd: string | undefined
@@ -123,7 +124,7 @@ export type RuntimePtySpawnArgs = {
   leafId?: string
   sessionId?: string
   shellOverride?: string
-  /** The agent launch's runtime fact; when present the PTY shell comes only from it. */
+  /** Planned command quoting determines the PTY runtime shell. */
   launchRuntime?: AgentLaunchRuntime
   isNewSession?: boolean
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
@@ -142,7 +143,7 @@ export type RuntimePtySpawnArgs = {
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   onPtySpawnCommitted?: () => void
-  /** Layout-owner build: whether a fresh start resumed its agent, told before its bind is written. */
+  /** Publish fresh resume outcome before writing its pane binding. */
   onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
   paneSpawnOperation?: PaneSpawnOperation
   adoptedStablePane?: {
@@ -167,6 +168,7 @@ export function createRuntimePtySpawnState(
     args,
     codexHomeLaunchStartedAt: undefined,
     codexHomeLaunchStartedSequence: undefined,
+    spawnRequestedAt: Date.now(),
     preAdoptedStablePane: null,
     reattachedCodexHomeRoutes: new Map(),
     cwd: undefined,

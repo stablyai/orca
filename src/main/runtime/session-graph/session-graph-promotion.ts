@@ -19,6 +19,16 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
+  protected abstract mainDecidesLiveness(worktreeId: string): boolean
+
+  /** Main-owned panes do not prove liveness or override certified exits; terminal records decide (L80). */
+  protected graphLeafConnected(ptyId: string | null, worktreeId: string): boolean {
+    if (ptyId === null || this.getPtyLivenessVerdict(ptyId)?.status === 'exited') {
+      return false
+    }
+    return !this.mainDecidesLiveness(worktreeId) || this.ptysById.get(ptyId)?.connected === true
+  }
+
   /** The group each workspace shows, as the attached window last reported it (syncWindowGraph). */
   protected readonly activeGroupViewFacts = new ActiveGroupViewFacts()
 
@@ -120,6 +130,8 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
     ...args: Parameters<RecordPtyWorktreeMethods['recordPtyWorktree']>
   ): ReturnType<RecordPtyWorktreeMethods['recordPtyWorktree']>
 
+  protected abstract followExportedPaneKeys(): void
+
   protected abstract scheduleMobileSessionTabsChanged(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['scheduleMobileSessionTabsChanged']>
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['scheduleMobileSessionTabsChanged']>
@@ -136,8 +148,7 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
       ) {
         return
       }
-      // Why: promotion is a renderer reload of the same graph owner, not a new
-      // runtime; stale handles must transition before the real window publishes.
+      // Promotion reloads the same owner; transition stale handles before its real window publishes.
       this.persistWindowlessPtyBindingsForDesktopAttach()
       this.pendingHeadlessPromotionWindowId = windowId
       this.authoritativeWindowId = windowId
@@ -145,8 +156,7 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
       return
     }
     if (this.authoritativeWindowId === null) {
-      // Why: a promoted serve can close and later reopen its window while new
-      // background PTYs keep arriving; every windowless gap needs this handoff.
+      // Every windowless gap needs handoff: promoted serve windows can close while new PTYs arrive.
       this.persistWindowlessPtyBindingsForDesktopAttach()
       this.authoritativeWindowId = windowId
     }
@@ -158,51 +168,55 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
     }
     const partitions = new Map<
       ExecutionHostId,
-      { session: WorkspaceSessionState; ptys: RuntimePtyWorktreeRecord[] }
+      {
+        session: WorkspaceSessionState
+        ptys: { pty: RuntimePtyWorktreeRecord; tabId: string }[]
+      }
     >()
     for (const pty of this.ptysById.values()) {
-      if (!pty.connected || !pty.tabId) {
+      const tabId = pty.connected ? this.paneOfPty(pty).tabId : null
+      if (!pty.connected || !tabId) {
         continue
       }
       const hostId = this.getWorkspaceSessionHostIdForWorktree(pty.worktreeId)
       const session = this.store.getWorkspaceSession(hostId)
       const tab = session.tabsByWorktree[pty.worktreeId]?.find(
-        (candidate) => candidate.id === pty.tabId
+        (candidate) => candidate.id === tabId
       )
       if (!tab) {
         continue
       }
       const layoutPtyIds = Object.values(
-        session.terminalLayoutsByTabId[pty.tabId]?.ptyIdsByLeafId ?? {}
+        session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
       )
       if (tab.ptyId !== pty.ptyId && !layoutPtyIds.includes(pty.ptyId)) {
         continue
       }
       const partition = partitions.get(hostId) ?? { session, ptys: [] }
-      partition.ptys.push(pty)
+      partition.ptys.push({ pty, tabId })
       partitions.set(hostId, partition)
     }
 
     for (const [hostId, { session, ptys }] of partitions) {
-      // Why: windowless SSH PTYs must be handed to the desktop through their SSH partition, never the local session.
+      // Hand windowless SSH PTYs to desktop through their SSH partition, never the local session.
       const activeWorktreeIdsOnShutdown = [
         ...new Set([
           ...(session.activeWorktreeIdsOnShutdown ?? []),
-          ...ptys.map((pty) => pty.worktreeId)
+          ...ptys.map(({ pty }) => pty.worktreeId)
         ])
       ]
       const activeConnectionIdsAtShutdown = [
         ...new Set([
           ...(session.activeConnectionIdsAtShutdown ?? []),
           ...ptys
-            .map((pty) => pty.connectionId)
+            .map(({ pty }) => pty.connectionId)
             .filter((connectionId): connectionId is string => connectionId !== null)
         ])
       ]
       const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
-      for (const pty of ptys) {
-        if (pty.connectionId && pty.tabId) {
-          remoteSessionIdsByTabId[pty.tabId] = pty.ptyId
+      for (const { pty, tabId } of ptys) {
+        if (pty.connectionId && tabId) {
+          remoteSessionIdsByTabId[tabId] = pty.ptyId
         }
       }
 

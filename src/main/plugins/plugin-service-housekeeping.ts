@@ -1,6 +1,5 @@
 import { PluginDevWatcher } from './plugin-dev-watcher'
 
-/** Starts and stops lifecycle maintenance as the feature flag and dev paths change. */
 export class PluginServiceHousekeeping {
   private readonly devWatcher = new PluginDevWatcher()
   private reapTimer: ReturnType<typeof setInterval> | null = null

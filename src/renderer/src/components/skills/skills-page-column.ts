@@ -1,4 +1,2 @@
-/** Every band on the Skills page aligns to this column so the header, filters,
- *  and rows share one left edge. Full-bleed like Artifacts: the page owns the
- *  content area, so capping the width would waste it on wide windows. */
+/** Align Skills header, filters and rows on a full-width column instead of wasting wide-window space. */
 export const SKILLS_PAGE_COLUMN = 'w-full px-5 md:px-8'

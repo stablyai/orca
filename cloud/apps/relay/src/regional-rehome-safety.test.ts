@@ -27,8 +27,7 @@ function safety(overrides: Partial<Parameters<typeof regionalRehomeSafetyFailure
 
 describe('regionalRehomeSafetyFailure', () => {
   it('passes the measured healthy-fleet baseline of pool micro-waits', () => {
-    // Every production cell idles at 1-2 peak waiters resolved in ~1ms; a
-    // zero-tolerance bar here disables the worker on its first tick.
+    // Zero tolerance rejects measured healthy-fleet micro-waits (1–2 waiters, ~1ms).
     expect(
       regionalRehomeSafetyFailure(
         safety({ databasePoolWaitersMax: 2, databasePoolWaitMsMax: 1 }),
@@ -45,9 +44,7 @@ describe('regionalRehomeSafetyFailure', () => {
   })
 
   it('passes asia-scale pool pressure, which excludes a cell rather than the fleet', () => {
-    // Measured 2026-09-16 on the asia-east2 cells: a client pool too narrow for
-    // a 176ms round trip, with 0.2ms server-side execution. The fleet snapshot
-    // is a Math.max, so gating on it here stops every region.
+    // Asia’s 176ms RTT caused ~2000ms pool waits despite 0.2ms SQL; fleet Math.max must not gate all regions on that cell.
     expect(
       regionalRehomeSafetyFailure(
         safety({ databasePoolWaitersMax: 150, databasePoolWaitMsMax: 2_005 }),
@@ -55,7 +52,6 @@ describe('regionalRehomeSafetyFailure', () => {
         19
       )
     ).toBeNull()
-    // Every other bar still fails closed at that same pool pressure.
     for (const [overrides, reason] of [
       [{ sqlFailures: REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1 }, 'sql_failures'],
       [{ controlActivityRecoveryFailures: 1 }, 'control_recovery_failures'],
@@ -90,8 +86,7 @@ describe('regionalRehomeSafetyFailure', () => {
   })
 
   it('passes ambient 55P03 retry noise', () => {
-    // Fleet-wide retried lock timeouts peaked at 82 counted failures per
-    // minute over Aug 25-28; the combined snapshot can span two windows.
+    // Ambient retries peaked at 82/min; combined snapshots can span two windows.
     expect(regionalRehomeSafetyFailure(safety({ sqlFailures: 164 }), NOW, 19)).toBeNull()
   })
 
@@ -103,12 +98,10 @@ describe('regionalRehomeSafetyFailure', () => {
         19
       )
     ).toBe('sql_failures')
-    // Literal storm magnitude (measured 2026-08-28) pins the bar itself: the
-    // limit must sit below real storm scale, not merely exist.
+    // Measured storm magnitude pins the threshold below real storms.
     expect(regionalRehomeSafetyFailure(safety({ sqlFailures: 395 }), NOW, 19)).toBe(
       'sql_failures'
     )
-    // The bar is exclusive: exactly at the limit still passes.
     expect(
       regionalRehomeSafetyFailure(
         safety({ sqlFailures: REGIONAL_REHOME_SQL_FAILURES_LIMIT }),

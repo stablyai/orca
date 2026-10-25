@@ -20,8 +20,7 @@ vi.mock('./combined-diff-file-tree-row', async (importOriginal) => {
   }
   const react = await import('react')
   const Row = actual.CombinedDiffFileTreeRow
-  // Why: memo with React's default shallow compare, so this counts exactly the render commits
-  // the real memo'd row would have performed.
+  // Use React’s default memo comparison so counts reflect the real row’s render decisions.
   const CountingRow = react.memo((props: React.ComponentProps<typeof Row>) => {
     rowRenders.count += 1
     react.useEffect(() => {
@@ -72,7 +71,6 @@ afterEach(() => {
 
 type TestSection = { key: string; loading: boolean }
 
-/** `fileCount` files spread over `directoryCount` directories, in the viewer's own tree order. */
 function buildEntries(fileCount: number, directoryCount: number): GitBranchChangeEntry[] {
   const raw: GitBranchChangeEntry[] = Array.from({ length: fileCount }, (_, index) => ({
     path: `src/dir${String(index % directoryCount).padStart(2, '0')}/file-${String(index).padStart(4, '0')}.ts`,
@@ -87,10 +85,7 @@ function buildSections(entries: readonly GitBranchChangeEntry[]): TestSection[] 
 
 let loadSectionAt: (index: number) => void = () => {}
 
-/**
- * Mirrors how both PR viewers feed the tree: an on-demand section load replaces the sections
- * array, and the navigate callback closes over the section index map.
- */
+/** Match viewer loads: replace sections and regenerate navigation callbacks from the section index map. */
 function TreeHarness({
   entries,
   initialSections,
@@ -150,7 +145,7 @@ function renderHarness(
   })
 }
 
-/** One section load per commit, the way lazy loads land while the user scrolls. */
+/** Commit section loads separately, matching lazy scroll-time delivery. */
 function runScrollPass(loadCount: number): number {
   rowRenders.count = 0
   for (let index = 0; index < loadCount; index += 1) {

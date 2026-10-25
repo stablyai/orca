@@ -2,10 +2,7 @@ import { PairingOfferSchema, type PairingOffer } from './types'
 import { normalizePairingBase64 } from '../../../src/shared/mobile-pairing-base64'
 import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/mobile-pairing-protocol-limits'
 
-// Why: this file mirrors src/shared/pairing.ts (which is covered by CI
-// vitest) but uses atob/btoa because Metro/Hermes don't ship Node's
-// Buffer. Keep the parsing semantics in sync — when one changes, update
-// the other.
+// Keep parsing aligned with src/shared/pairing.ts; use mobile base64 APIs instead of Node Buffer.
 
 export function decodePairingUrl(url: string): PairingOffer | null {
   try {
@@ -19,9 +16,7 @@ export function decodePairingUrl(url: string): PairingOffer | null {
   }
 }
 
-// Why: system camera apps hand us the raw custom-scheme URL. Keeping
-// extraction here makes QR scan, paste, and external deep-link flows
-// accept the same URL shapes.
+// Share custom-scheme extraction across camera, paste and external deep-link pairing.
 export function extractPairingCodeFromUrl(url: string): string | null {
   if (url.length > PAIRING_INPUT_MAX_CHARACTERS) {
     return null
@@ -54,9 +49,6 @@ export function extractPairingCodeFromUrl(url: string): string | null {
   return null
 }
 
-// Why: accept either an `orca://pair?...` URL or the bare base64
-// string so the paste-pair flow can take whichever the user actually
-// copied from desktop.
 export function parsePairingCode(input: string): PairingOffer | null {
   if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
     return null
@@ -76,8 +68,7 @@ export function parsePairingCode(input: string): PairingOffer | null {
 }
 
 function decodePairingBase64(base64url: string): PairingOffer {
-  // Why: desktop intentionally strips base64 padding from QR payloads. Some
-  // mobile JS runtimes reject unpadded atob input, so restore it before decode.
+  // Restore desktop-stripped QR padding for runtimes that reject unpadded atob input.
   const json = atob(normalizePairingBase64(base64url))
   return PairingOfferSchema.parse(JSON.parse(json))
 }
