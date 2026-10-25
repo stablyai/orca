@@ -17,7 +17,7 @@ export const serverScriptPath = path.join(
 // Why: a detached server outlives edits to these scripts; clients restart it on mismatch.
 export function fixtureServerCodeStamp() {
   const scriptDir = path.dirname(serverScriptPath)
-  const configPath = path.join(repoRoot, 'vite.fixtures.config.ts')
+  const configPath = path.join(repoRoot, 'config', 'vite.fixtures.config.ts')
   const files = [...readdirSync(scriptDir).map((name) => path.join(scriptDir, name)), configPath]
   return String(Math.max(...files.map((file) => statSync(file).mtimeMs)))
 }

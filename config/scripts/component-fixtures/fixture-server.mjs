@@ -168,7 +168,7 @@ async function main() {
   browserPromise.catch(() => {})
   const session = { runner: null, lastActivity: Date.now(), stop: () => {} }
   const vite = await createViteServer({
-    configFile: 'vite.fixtures.config.ts',
+    configFile: 'config/vite.fixtures.config.ts',
     clearScreen: false,
     logLevel: 'warn',
     // Why no HMR: the runner reloads its page on change, so pushed updates would only race it.

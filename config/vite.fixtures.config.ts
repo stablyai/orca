@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { mergeConfig } from 'vite'
-import webConfig from './vite.web.config'
+import webConfig from '../vite.web.config'
 
 // Dev-only component fixture explorer; never part of a production build input.
 export default mergeConfig(webConfig, {

@@ -41,7 +41,7 @@ pnpm fixtures:shot --stop
 
 PNGs go to `.cache/fixtures/` (override with `--out`), and the command prints their paths. Read them with your image viewer tool. Render errors and page console errors are printed for each fixture, and any failure makes the command exit non-zero.
 
-The first call starts a detached server: Vite (`vite.fixtures.config.ts`, which extends `vite.web.config.ts`) plus one headless Chromium. The first call takes 10–20 seconds. After that, each shot takes about 100 ms. The first shot after a source edit takes 1–2 seconds because the page reloads. The server restarts itself when the fixture scripts change and exits after 20 idle minutes.
+The first call starts a detached server: Vite (`config/vite.fixtures.config.ts`, which extends `vite.web.config.ts`) plus one headless Chromium. The first call takes 10–20 seconds. After that, each shot takes about 100 ms. The first shot after a source edit takes 1–2 seconds because the page reloads. The server restarts itself when the fixture scripts change and exits after 20 idle minutes.
 
 Chromium resolution order: `ORCA_FIXTURES_BROWSER` (an executable path), then the Playwright-managed `chromium-headless-shell`, then an installed Chrome or Edge. Every option runs headless, so screenshots never open a window or take focus.
 
