@@ -261,14 +261,15 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
   return probe
 }
 
-/** Canonical guest path of an existing directory; Windows cannot follow guest symlinks over 9P. */
+/** Canonical guest path of a directory; Windows cannot follow guest symlinks over 9P. */
 export async function resolveWslGuestRealDirAsync(
   distro: string,
   guestDir: string
 ): Promise<string | null> {
   try {
+    // -m: a session's folder may not exist yet, but the profile symlink above it does.
     const realDir = (
-      await runWslExe(buildWslExecArgs(distro, ['realpath', '-e', '--', guestDir]))
+      await runWslExe(buildWslExecArgs(distro, ['realpath', '-m', '--', guestDir]))
     ).trim()
     return realDir.startsWith('/') ? realDir : null
   } catch {
