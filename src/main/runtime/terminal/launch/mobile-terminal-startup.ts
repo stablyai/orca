@@ -91,7 +91,8 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       ...resolveResumeLaunchRecipe(launchConfig),
       platform: launchRuntime.platform,
       shell: agentLaunchQuotingShell(launchRuntime),
-      isRemote: Boolean(workspace.connectionId)
+      isRemote: Boolean(workspace.connectionId),
+      launchCwd: workspace.path
     })
     if (!startupPlan) {
       return null

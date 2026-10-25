@@ -41,6 +41,8 @@ export type AgentProviderSessionMetadata = {
   id: string
   /** Prefer hook-reported transcript paths: recent Claude filenames differ from session_id. Claude/Codex still resume by ID; Pi uses session_file as its --session locator. */
   transcriptPath?: string
+  /** Folder the agent ran in; resume runs there, not the pane's start folder (#16960). */
+  cwd?: string
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -131,8 +133,8 @@ function readSessionId(record: Record<string, unknown>, keys: readonly string[])
   return null
 }
 
-/** Read the hook-reported transcript path; recent Claude filenames cannot be reconstructed from session ID. */
-function readTranscriptPathFromKeys(
+/** Read a hook-reported path; recent Claude transcript filenames cannot be reconstructed from session ID. */
+export function readPathFromKeys(
   record: Record<string, unknown>,
   keys: readonly string[]
 ): string | undefined {
@@ -154,7 +156,7 @@ function withTranscriptPath(
   payload: Record<string, unknown>,
   keys: readonly string[] = ['transcript_path', 'transcriptPath']
 ): AgentProviderSessionMetadata {
-  const transcriptPath = readTranscriptPathFromKeys(payload, keys)
+  const transcriptPath = readPathFromKeys(payload, keys)
   return transcriptPath ? { ...metadata, transcriptPath } : metadata
 }
 
@@ -176,8 +178,22 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
     return null
   }
   // Persisted/relay paths cross trust boundaries too; reject controls as for hook paths.
-  const transcriptPath = readTranscriptPathFromKeys(record, ['transcriptPath'])
-  return transcriptPath ? { key, id, transcriptPath } : { key, id }
+  const transcriptPath = readPathFromKeys(record, ['transcriptPath'])
+  const cwd = readPathFromKeys(record, ['cwd'])
+  return {
+    key,
+    id,
+    ...(transcriptPath ? { transcriptPath } : {}),
+    ...(cwd ? { cwd } : {})
+  }
+}
+
+/** Older hosts' strict ensureAgentSession schema rejects the newer `cwd` field. */
+export function agentProviderSessionForEnsure(
+  providerSession: AgentProviderSessionMetadata
+): AgentProviderSessionMetadata {
+  const { cwd: _cwd, ...identity } = providerSession
+  return identity
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.

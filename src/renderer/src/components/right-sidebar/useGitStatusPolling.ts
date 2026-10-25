@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeById } from '@/store/selectors'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getConnectionId } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
@@ -10,7 +9,7 @@ import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
 } from '@/lib/passive-macos-app-data-access'
-import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useStaleConflictOperationPolling } from './stale-conflict-operation-poll'
@@ -127,23 +126,19 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         return
       }
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        const target = getWorktreeGitOwnerTarget(activeWorktreeId)
-        if (!target) {
+        // Why one resolution: a same-path twin must not get this copy's transport, SSH target or answer.
+        const copy = resolveWorktreeGitCopyNow(activeWorktreeId)
+        if (!copy) {
           return
         }
         await refreshGitStatusForWorktree({
-          target,
+          target: copy.transport,
+          ownerHostId: copy.hostId,
           worktreeId: activeWorktreeId,
           worktreePath,
-          connectionId,
+          connectionId: copy.connectionId,
           pushTarget: activePushTarget,
-          deps: {
-            setGitStatus,
-            updateWorktreeGitIdentity,
-            setUpstreamStatus,
-            fetchUpstreamStatus
-          },
+          deps: { setGitStatus, updateWorktreeGitIdentity, setUpstreamStatus, fetchUpstreamStatus },
           request: {
             admissionTier: admissionTierForGitStatusRefreshReason(request.reason),
             ...(request.reason === 'safety' ? { reuseLineStats: true } : {}),

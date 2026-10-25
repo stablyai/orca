@@ -111,13 +111,28 @@ export function normalizeClaudeEvent(
   const isAskUserQuestion = eventName === 'PreToolUse' && isAskUserQuestionWait
   // Manual PostCompact ends at idle without Stop; auto compaction stays in-turn, and PreCompact alone can be aborted (STA-2915).
   const isManualCompactCompletion = eventName === 'PostCompact' && hookPayload.trigger === 'manual'
+  // An answered MCP dialog restores the displaced state; a server can elicit outside any turn.
+  if (eventName === 'ElicitationResult') {
+    if (previousLead?.state !== 'waiting' || previousLead.waitingAgentId !== eventAgentId) {
+      return null
+    }
+    const restored = setClaudeMainAgentTurnState(
+      state,
+      paneKey,
+      previousLead.stateBeforeWait ?? { state: 'working' }
+    )
+    return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+      ...resolveClaudePaneStatus(state, paneKey, restored),
+      updateToolSnapshot: true
+    })
+  }
   const reportedStateName =
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
     eventName === 'PostToolUseFailure' ||
     (eventName === 'PreToolUse' && !isAskUserQuestion)
       ? 'working'
-      : eventName === 'PermissionRequest' || isAskUserQuestion
+      : eventName === 'PermissionRequest' || eventName === 'Elicitation' || isAskUserQuestion
         ? 'waiting'
         : isTurnBoundary || isManualCompactCompletion
           ? 'done'
@@ -224,21 +239,24 @@ export function normalizeClaudeEvent(
   }
   // Preserve the original lead stash through multiple child waits.
   const stateBeforeWait =
-    isWaitingInducing && eventAgentId && previousLead
-      ? previousLead.state === 'waiting'
-        ? previousLead.stateBeforeWait
-        : {
-            state: previousLead.state,
-            // Child waits must retain the lead's verdict and clock.
-            ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
-            stateStartedAt: previousLead.stateStartedAt,
-            ...(previousLead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
-            // Keep the displaced lead end time so later child drain belongs to the same turn.
-            ...(previousLead.turnCompletedAt !== undefined
-              ? { turnCompletedAt: previousLead.turnCompletedAt }
-              : {})
-          }
-      : undefined
+    // Without a lead record there is no turn to resume; an answered dialog must not invent work.
+    eventName === 'Elicitation' && !previousLead
+      ? { state: 'done' as const, stateStartedAt: Date.now() }
+      : isWaitingInducing && (eventAgentId || eventName === 'Elicitation') && previousLead
+        ? previousLead.state === 'waiting'
+          ? previousLead.stateBeforeWait
+          : {
+              state: previousLead.state,
+              // Child waits must retain the lead's verdict and clock.
+              ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
+              stateStartedAt: previousLead.stateStartedAt,
+              ...(previousLead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
+              // Keep the displaced lead end time so later child drain belongs to the same turn.
+              ...(previousLead.turnCompletedAt !== undefined
+                ? { turnCompletedAt: previousLead.turnCompletedAt }
+                : {})
+            }
+        : undefined
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
 
   if (isManualCompactCompletion) {

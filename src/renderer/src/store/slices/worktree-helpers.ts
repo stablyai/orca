@@ -289,9 +289,11 @@ export type WorktreeSlice = {
   purgeStaleRuntimeHostState: (removedEnvironmentIds: Iterable<string>) => void
   /** Move worktree-scoped maps/pointers on path-derived ID rename, preserving live tabs/selection; equal IDs are inert. */
   migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => void
+  /** `ownerHostId` names the copy git answered for; null patches only an id no twin shares. */
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string | null }
+    identity: { head?: string; branch?: string | null },
+    ownerHostId: ExecutionHostId | null
   ) => void
   updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
   updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void

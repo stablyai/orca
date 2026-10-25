@@ -17,7 +17,13 @@ import {
   getFolderWorkspaceCandidateRepos,
   getFolderWorkspaceConnectionId
 } from './folder-workspace-connection'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorkspaceByHostTarget,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 type ConnectionOwnerState = Pick<
   AppState,
@@ -127,4 +133,33 @@ export function getConnectionIdForFileFromState(
       .map(({ repo }) => repo.connectionId ?? null)
   )
   return connectionIds.size === 1 ? ([...connectionIds][0] ?? null) : undefined
+}
+
+/**
+ * The SSH connectionId of one host's copy of `worktreeId`. Ids repeat across hosts, so the bare-id
+ * lookup above answers `undefined` for a same-path twin; naming the copy's host resolves it.
+ */
+export function getConnectionIdForWorktreeCopy(
+  state: ConnectionOwnerState,
+  worktreeId: string,
+  hostId: ExecutionHostId
+): string | null | undefined {
+  const row = selectWorkspaceByHostTarget(
+    {
+      worktreesByRepo: selectWorktreesByRepo(state),
+      folderWorkspaces: selectFolderWorkspaces(state)
+    },
+    hostWorktreeTarget({ id: worktreeId, hostId })
+  )
+  if (!row) {
+    return undefined
+  }
+  const resolution = resolveWorktreeExecutionHost(
+    {
+      byId: (id) => resolveIndexedRepoOwner(state.repos, id),
+      byHost: (id, repoHostId) => findIndexedRepoOwnerForHost(state.repos, id, repoHostId)
+    },
+    { repoId: row.repoId, hostId: row.hostId ?? hostId }
+  )
+  return resolution.kind === 'resolved' ? resolution.connectionId : undefined
 }

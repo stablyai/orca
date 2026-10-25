@@ -58,7 +58,8 @@ export function launchSleepingAgentSession(
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     ...resolveResumeLaunchRecipe(launchConfig),
     platform: resumeTarget.platform,
-    shell: resumeTarget.shell
+    shell: resumeTarget.shell,
+    launchCwd: state.getKnownWorktreeById(record.worktreeId)?.path
   })
   if (!startupPlan) {
     toast.error(

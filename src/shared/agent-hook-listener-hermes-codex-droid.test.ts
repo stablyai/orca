@@ -5,7 +5,7 @@ import {
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
-import { PANE_KEY } from './agent-hook-listener-test-harness'
+import { normalizeAndAccept, PANE_KEY } from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -232,6 +232,23 @@ describe('shared agent-hook-listener', () => {
     )
     expect(working?.payload.state).toBe('working')
     expect(working?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('records the new folder when Codex forks a thread elsewhere (/cd, /worktree)', () => {
+    normalizeAndAccept(state, 'codex', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'thread-a',
+      prompt: 'go',
+      cwd: '/repo/a'
+    })
+    const forked = normalizeAndAccept(state, 'codex', {
+      hook_event_name: 'SessionStart',
+      session_id: 'thread-b',
+      source: 'startup',
+      cwd: '/repo/b'
+    })
+
+    expect(forked?.providerSession).toMatchObject({ id: 'thread-b', cwd: '/repo/b' })
   })
 
   it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
