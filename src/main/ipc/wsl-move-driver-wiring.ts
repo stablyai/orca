@@ -117,7 +117,7 @@ export function createWslMoveDriverDeps(
   const userDataPath = app.getPath('userData')
   const facts: WslMoveGateFactSources = {
     listTerminals: (workspaceIds) => runtime.listWslMoveLiveTerminals(workspaceIds),
-    paneKeyForPty: (ptyId) => ptyPaneKey.get(ptyId) ?? null,
+    paneKeyForPty: (ptyId) => ptyPaneKey.get(ptyId) ?? runtime.wslMovePaneKeyForPty(ptyId),
     inspect: async (ptyId) => {
       const provider = tryGetProviderForPty(ptyId)
       if (!provider) {
