@@ -145,8 +145,11 @@ function workspaceOptionsChip(page) {
 }
 
 describeDrawer('the bottom drawer on the page', () => {
-  for (const engine of ENGINES) {
-    it(`slides the sheet onto the screen in ${engine.name}`, async () => {
+  for (const [index, engine] of [
+    ...ENGINES,
+    ...Array.from({ length: 120 }, () => ENGINES[1])
+  ].entries()) {
+    it(`slides the sheet onto the screen in ${engine.name} REPRO ${String(index)}`, async () => {
       const browser = await engine.launch()
       try {
         // Motion on, stated rather than inherited. Under `prefers-reduced-motion: reduce`
