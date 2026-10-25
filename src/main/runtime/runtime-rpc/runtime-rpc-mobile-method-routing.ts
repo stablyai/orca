@@ -1,3 +1,4 @@
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
 
@@ -208,7 +209,9 @@ export const EXECUTION_HOST_METHODS = [
   'worktree.rm',
   'worktree.set',
   'worktree.show',
-  'worktree.sleep'
+  'worktree.sleep',
+  // Switch point: a phone's away/back report goes to the host holding its sessions.
+  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? (['sidebarInputs.reportView'] as const) : [])
 ] as const
 
 export const MOBILE_RPC_METHOD_ROUTES: ReadonlyMap<string, MobileRpcMethodRoute> = new Map([

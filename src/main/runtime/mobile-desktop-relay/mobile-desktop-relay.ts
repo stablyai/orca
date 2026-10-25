@@ -61,6 +61,8 @@ class RelayLink {
  */
 export class MobileDesktopRelay {
   private readonly links = new Map<string, RelayLink>()
+  /** Each (phone connection, server)'s last presence report, replayed first on a reopened link. */
+  private readonly presenceFrames = new Map<string, string>()
   private readonly grants: DelegatedPhoneGrantCache
   private readonly stopRetirementWatch: () => void
 
@@ -113,6 +115,9 @@ export class MobileDesktopRelay {
       return
     }
     const link = this.linkFor(phone, environmentId)
+    if (request.method === 'sidebarInputs.reportView') {
+      this.presenceFrames.set(linkKey(phone.connectionId, environmentId), frame)
+    }
     link.replies.noteForwarded(request.id)
     link.opened.then(
       ({ socket, hostToken }) => {
@@ -138,31 +143,41 @@ export class MobileDesktopRelay {
   /** Mirrors a phone's capability update to every server socket that phone has open. */
   forwardClientCapabilities(connectionId: string, frame: string): void {
     for (const link of this.links.values()) {
-      if (link.phone.connectionId !== connectionId) {
-        continue
+      if (link.phone.connectionId === connectionId) {
+        this.sendOwnFrame(link, 'relay-capabilities', (hostToken, id) =>
+          declareRelayedPhoneCapabilities(
+            rewriteRelayedPhoneRequest(frame, link.phone.deviceToken, hostToken, id)
+          )
+        )
       }
-      // Why a fresh id: the phone already has the desktop's answer to its own id.
-      const id = `relay-capabilities:${randomUUID()}`
-      link.replies.noteForwarded(id, { swallowReplies: true })
-      link.opened.then(
-        ({ socket, hostToken }) => {
-          if (
-            this.isCurrent(link) &&
-            !socket.send(
-              declareRelayedPhoneCapabilities(
-                rewriteRelayedPhoneRequest(frame, link.phone.deviceToken, hostToken, id)
-              )
-            )
-          ) {
-            this.endLink(link, unavailable('The server connection could not take the request.'))
-          }
-        },
-        () => {}
-      )
     }
   }
 
+  /** Sends a frame the phone did not ask for now, so its reply is swallowed. */
+  private sendOwnFrame(
+    link: RelayLink,
+    idPrefix: string,
+    build: (hostToken: string, id: string) => string
+  ): void {
+    // Why a fresh id: the phone already has the desktop's answer to its own id.
+    const id = `${idPrefix}:${randomUUID()}`
+    link.replies.noteForwarded(id, { swallowReplies: true })
+    link.opened.then(
+      ({ socket, hostToken }) => {
+        if (this.isCurrent(link) && !socket.send(build(hostToken, id))) {
+          this.endLink(link, unavailable('The server connection could not take the request.'))
+        }
+      },
+      () => {}
+    )
+  }
+
   closePhoneConnection(connectionId: string): void {
+    for (const key of this.presenceFrames.keys()) {
+      if (key.startsWith(`${connectionId}\0`)) {
+        this.presenceFrames.delete(key)
+      }
+    }
     for (const link of this.links.values()) {
       if (link.phone.connectionId === connectionId) {
         this.endLink(link, null)
@@ -215,6 +230,13 @@ export class MobileDesktopRelay {
       )
     })
     this.links.set(key, link)
+    // Why: a new server connection counts the phone present; a backgrounded phone sends nothing new.
+    const presence = this.presenceFrames.get(key)
+    if (presence) {
+      this.sendOwnFrame(link, 'relay-presence', (hostToken, id) =>
+        rewriteRelayedPhoneRequest(presence, phone.deviceToken, hostToken, id)
+      )
+    }
     return link
   }
 

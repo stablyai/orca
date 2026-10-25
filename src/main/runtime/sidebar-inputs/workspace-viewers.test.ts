@@ -41,14 +41,67 @@ describe('WorkspaceViewers', () => {
 
   it('sees every pane of a workspace a phone holds open, by any spelling of its path', () => {
     const { viewers: v } = viewers()
-    const first = v.openPhoneSession('repo-1::/tmp/a/')
-    const second = v.openPhoneSession(WT)
+    const first = v.openPhoneSession('phone', 'repo-1::/tmp/a/')
+    const second = v.openPhoneSession('phone', WT)
     expect(v.isViewing(WT, OTHER_PANE)).toBe(true)
     first()
     first()
     expect(v.isViewing(WT, PANE)).toBe(true)
     second()
     expect(v.isViewing(WT, PANE)).toBe(false)
+  })
+
+  it('stops seeing a phone’s session while it reports away, and again when it returns', () => {
+    const { viewers: v } = viewers()
+    v.openPhoneSession('phone', WT)
+    v.openPhoneSession('phone', 'repo-1::/tmp/a/')
+    expect(v.showsWorkspace('phone', WT)).toBe(true)
+    v.reportClientView('phone', { workspaceIds: [], tabIds: [], presentForMs: 0 })
+    expect(v.isViewing(WT, PANE)).toBe(false)
+    expect(v.showsWorkspace('phone', WT)).toBe(false)
+    expect(v.shownPhoneSessions('phone')).toEqual([])
+    v.reportClientView('phone', { workspaceIds: [], tabIds: [], presentForMs: null })
+    expect(v.isViewing(WT, PANE)).toBe(true)
+    expect(v.shownPhoneSessions('phone')).toEqual([WT])
+  })
+
+  it('sees only the session a phone names as focused, not one it left behind another screen', () => {
+    const { viewers: v } = viewers()
+    const OTHER = 'repo-1::/tmp/b'
+    v.openPhoneSession('phone', WT)
+    v.openPhoneSession('phone', OTHER)
+    v.reportClientView('phone', { workspaceIds: [OTHER], tabIds: [], presentForMs: null })
+    expect(v.isViewing(WT, PANE)).toBe(false)
+    // Every pane of the named session's workspace, not just tabs a window would list.
+    expect(v.isViewing(OTHER, PANE)).toBe(true)
+    expect(v.shownPhoneSessions('phone')).toEqual([OTHER])
+    expect(v.showsWorkspace('phone', 'repo-1::/tmp/a/')).toBe(false)
+    // The session route behind settings: away, though the app is in the foreground.
+    v.reportClientView('phone', { workspaceIds: [], tabIds: [], presentForMs: 0 })
+    expect(v.isViewing(OTHER, PANE)).toBe(false)
+  })
+
+  it('keeps an older phone that never reports as looking until its session closes', () => {
+    const { clock, viewers: v } = viewers()
+    const close = v.openPhoneSession('old-phone', WT)
+    clock.now += 24 * 60 * 60 * 1000
+    expect(v.isViewing(WT, PANE)).toBe(true)
+    close()
+    expect(v.isViewing(WT, PANE)).toBe(false)
+  })
+
+  it('judges each phone by its own presence', () => {
+    const { viewers: v } = viewers()
+    v.openPhoneSession('away-phone', WT)
+    v.reportClientView('away-phone', { workspaceIds: [], tabIds: [], presentForMs: 0 })
+    expect(v.isViewing(WT, PANE)).toBe(false)
+    const close = v.openPhoneSession('here-phone', WT)
+    expect(v.isViewing(WT, PANE)).toBe(true)
+    close()
+    expect(v.isViewing(WT, PANE)).toBe(false)
+    // A connection with no id (in-process) cannot report, so it is always present.
+    v.openPhoneSession(null, WT)
+    expect(v.isViewing(WT, PANE)).toBe(true)
   })
 
   it('counts everything as seen while an older desktop that raises the flag itself is connected', () => {

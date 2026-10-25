@@ -13,6 +13,7 @@ import {
   useMobileTerminalInventoryRecovery,
   type MobileTerminalInventoryRefreshOptions
 } from './use-mobile-terminal-inventory-recovery'
+import { usePhonePresenceReport } from './use-phone-presence-report'
 
 type Params<Result, Tab> = {
   client: RpcClient | null
@@ -152,6 +153,8 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     },
     [controller, suspendTerminalInventoryRecovery]
   )
+
+  usePhonePresenceReport(client, connState, worktreeId)
 
   useEffect(() => {
     if (!client || !controller || connState !== 'connected') {

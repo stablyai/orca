@@ -18,6 +18,7 @@ import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
 import { SortStampsProducer } from './sort-stamps-producer'
 import { writeUnreadFlag } from './sort-stamp-records'
 import { WorkspaceViewers } from './workspace-viewers'
+import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-workspace-view-params'
 import { clientRaisesUnreadFlagItself } from '../../../shared/workspace-unread-raise-capability'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { TerminalUseProducer } from './terminal-use-producer'
@@ -181,7 +182,27 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
   }
 
   /** A phone holding the workspace's session open has it on screen: its flag is read and stays down. */
-  readAndHoldPhoneSession(worktreeId: string): () => void {
+  readAndHoldPhoneSession(worktreeId: string, connectionId: string | null): () => void {
+    // Why: a page re-subscribes a session route it left behind another screen, or while away.
+    if (connectionId === null || this.workspaceViewers.showsWorkspace(connectionId, worktreeId)) {
+      this.markWorkspaceRead(worktreeId)
+    }
+    return this.workspaceViewers.openPhoneSession(connectionId, worktreeId)
+  }
+
+  /** A client's view; a phone session it now shows, and did not before, has been read. */
+  reportClientWorkspaceView(connectionId: string, view: ClientWorkspaceView): boolean {
+    const shown = new Set(this.workspaceViewers.shownPhoneSessions(connectionId))
+    const first = this.workspaceViewers.reportClientView(connectionId, view)
+    for (const worktreeId of this.workspaceViewers.shownPhoneSessions(connectionId)) {
+      if (!shown.has(worktreeId)) {
+        this.markWorkspaceRead(worktreeId)
+      }
+    }
+    return first
+  }
+
+  private markWorkspaceRead(worktreeId: string): void {
     const hostId = this.workspaceHostId(worktreeId)
     const workspace = {
       worktreeId,
@@ -193,7 +214,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       this.sortStampNotices.cancel(worktreeId)
       this.notifySortStampsChanged(worktreeId)
     }
-    return this.workspaceViewers.openPhoneSession(worktreeId)
   }
 
   private isTwinRepoWorkspace(worktreeId: string): boolean {

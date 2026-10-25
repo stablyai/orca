@@ -145,6 +145,9 @@ export class DirectRpcClient implements RpcClient {
     return this.streams.subscribe(method, params, onData, options)
   }
 
+  setSessionPreamble: RpcClient['setSessionPreamble'] = (key, method, params, options) =>
+    this.streams.setPreamble(key, { method, params, envelope: options?.envelope })
+
   updateTerminalSubscriptionViewport(
     terminal: string,
     viewport: { cols: number; rows: number }

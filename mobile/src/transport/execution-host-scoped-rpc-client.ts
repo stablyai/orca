@@ -53,6 +53,16 @@ export function routeRpcClientCalls(
       client.sendRequest(method, params, onExecutionHost(options, hostOf(params))),
     subscribe: (method, params, onData, options) =>
       client.subscribe(method, params, onData, onExecutionHost(options, hostOf(params))),
+    // Keyed by host too: each host the client reaches holds its own preamble.
+    setSessionPreamble:
+      client.setSessionPreamble &&
+      ((key, method, params, options) =>
+        client.setSessionPreamble?.(
+          `${hostOf(params) ?? ''}\0${key}`,
+          method,
+          params,
+          onExecutionHost(options, hostOf(params))
+        )),
     updateTerminalSubscriptionViewport: (terminal, viewport) =>
       client.updateTerminalSubscriptionViewport(terminal, viewport),
     getState: () => client.getState(),

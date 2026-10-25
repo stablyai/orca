@@ -20,6 +20,7 @@ import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { RpcClient } from './rpc-client'
+import { toError } from './mobile-endpoint-supervisor-support'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
 const RELAY_PROBE_TIMEOUT_MS = 4_000
@@ -123,6 +124,9 @@ export function connectMobileRelayRpcSession(args: {
       }
       return streams.subscribe(method, params, listener, options)
     },
+    // One session per object, joined only once authenticated (migrateTo): it is sent now or never.
+    setSessionPreamble: (_key, method, params, options) =>
+      void sendRpc(method, params, requestTimeoutMs, false, options?.envelope).catch(() => {}),
 
     updateTerminalSubscriptionViewport(terminal, viewport) {
       streams.updateTerminalViewport(terminal, viewport)
@@ -210,7 +214,7 @@ export function connectMobileRelayRpcSession(args: {
       livenessWatchdog.start(livenessIdentity)
       publishState('connected')
     } catch (error) {
-      fail(asError(error))
+      fail(toError(error))
     }
   }
 
@@ -317,8 +321,4 @@ export function connectMobileRelayRpcSession(args: {
     pending.rejectAll(error)
     publishState(error instanceof MobileE2EEAuthenticationError ? 'auth-failed' : 'disconnected')
   }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error))
 }

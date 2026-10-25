@@ -9,6 +9,7 @@ import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
 import type { RelayHostReachability } from './relay-host-reachability'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import type { RpcSessionPreamble } from './rpc-session-preambles'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -77,6 +78,7 @@ export function createStableLogicalRpcClient(
   let nextSubscriptionId = 0
   let activeStateUnsubscribe: (() => void) | null = null
   const subscriptions = new Map<number, SubscriptionRecord>()
+  const preambles = new Map<string, RpcSessionPreamble>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
   const connectionPath = new LogicalClientConnectionPath(() => state === 'connected')
@@ -138,6 +140,14 @@ export function createStableLogicalRpcClient(
         record.disposePhysical?.()
         record.disposePhysical = null
         subscriptions.delete(id)
+      }
+    },
+
+    setSessionPreamble(key, method, params, options) {
+      const preamble = { method, params: projectMobileRpcRequestParams(method, params), ...options }
+      preambles.set(key, preamble)
+      if (!suspended) {
+        activeSession.setSessionPreamble?.(key, preamble.method, preamble.params, preamble)
       }
     },
 
@@ -249,6 +259,10 @@ export function createStableLogicalRpcClient(
       const previousStateUnsubscribe = activeStateUnsubscribe
       const nextGeneration = generation + 1
 
+      // Why: the replacement is a new host session; it learns these before any subscription.
+      for (const [key, preamble] of preambles) {
+        nextSession.setSessionPreamble?.(key, preamble.method, preamble.params, preamble)
+      }
       // Why: replay on the authenticated replacement before closing the old
       // session, but fence callbacks until the generation becomes current.
       for (const record of subscriptions.values()) {

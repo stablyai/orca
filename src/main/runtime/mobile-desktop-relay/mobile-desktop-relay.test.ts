@@ -225,6 +225,44 @@ describe('MobileDesktopRelay', () => {
     await vi.waitFor(() => expect(sockets[1]!.closed).toBe(true))
   })
 
+  it("replays the phone's last presence report first when a server link reopens, until the phone leaves", async () => {
+    sockets.length = 0
+    const { relay, phone, replies } = relayWithPhone()
+    const away = JSON.stringify({
+      id: 'p1',
+      deviceToken: 'desktop-token',
+      method: 'sidebarInputs.reportView',
+      params: { workspaceIds: [], tabIds: [], presentForMs: 0 }
+    })
+    relay.forward(phone, 'env-1', { id: 'p1', method: 'sidebarInputs.reportView' }, away)
+    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+    sockets[0]!.callbacks.onText('{"id":"p1","ok":true,"result":{},"_meta":{"runtimeId":"h"}}')
+    sockets[0]!.callbacks.onClose(
+      new RemoteRuntimeClientError('remote_runtime_unavailable', 'gone')
+    )
+
+    // The page's stream retry re-subscribes over a new link while the phone is still away.
+    relay.forward(phone, 'env-1', { id: 's1', method: 'session.tabs.subscribe' }, '{"id":"s1"}')
+    await vi.waitFor(() => expect(sockets[1]?.sent).toHaveLength(2))
+    const replayed = JSON.parse(sockets[1]!.sent[0]!)
+    expect(replayed).toMatchObject({
+      method: 'sidebarInputs.reportView',
+      params: { presentForMs: 0 }
+    })
+    expect(replayed.id).not.toBe('p1')
+    expect(JSON.parse(sockets[1]!.sent[1]!)).toMatchObject({ id: 's1' })
+    sockets[1]!.callbacks.onText(
+      JSON.stringify({ id: replayed.id, ok: true, result: {}, _meta: { runtimeId: 'h' } })
+    )
+    expect(replies.map((frame) => JSON.parse(frame).id)).toEqual(['p1'])
+
+    // A new phone connection starts present; nothing is replayed for it.
+    relay.closePhoneConnection('conn-1')
+    relay.forward(phone, 'env-1', { id: 's2', method: 'session.tabs.subscribe' }, '{"id":"s2"}')
+    await vi.waitFor(() => expect(sockets[2]?.sent).toHaveLength(1))
+    expect(JSON.parse(sockets[2]!.sent[0]!)).toMatchObject({ id: 's2' })
+  })
+
   it('treats a server whose sync failed as unavailable, and syncs again on the next request', async () => {
     sockets.length = 0
     let failing = true
