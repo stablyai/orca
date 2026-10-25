@@ -3,8 +3,10 @@ import {
   extractExecutableToken,
   isSafeOverrideExecutableToken
 } from '../../shared/managed-agent-command-token'
-import { MANAGED_AGENT_HOOK_TARGETS } from '../../shared/managed-agent-hook-targets'
-import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import {
+  MANAGED_AGENT_HOOK_TARGETS,
+  normalizeHookDisabledTuiAgents
+} from '../../shared/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgentDetectionCommand } from '../../shared/tui-agent-detection-commands'
 import { parseClaudeCliVersion } from '../claude/claude-hook-event-versions'
@@ -17,7 +19,7 @@ export function buildManagedHookDetectionCommands(
   settings: ManagedHookDetectionSettings,
   platform: NodeJS.Platform
 ): TuiAgentDetectionCommand[] {
-  const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
+  const disabled = new Set(normalizeHookDisabledTuiAgents(settings?.disabledTuiAgents))
   return MANAGED_AGENT_HOOK_TARGETS.filter((target) => !disabled.has(target.tuiAgent)).flatMap(
     (target) => {
       const commands = new Set(target.executableCandidates)

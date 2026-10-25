@@ -18,6 +18,7 @@ import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
 } from './pi-compatible-synthetic-title'
+import { getOmhSyntheticAgentLabel } from './omh-synthetic-title'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import type { TerminalAgent } from './terminal-agent'
@@ -195,6 +196,10 @@ function computeAgentLabel(title: string): string | null {
   if (piCompatibleSyntheticAgentLabel) {
     return piCompatibleSyntheticAgentLabel
   }
+  const omhSyntheticAgentLabel = getOmhSyntheticAgentLabel(title)
+  if (omhSyntheticAgentLabel) {
+    return omhSyntheticAgentLabel
+  }
   // Why: Pi working titles include a braille spinner prefix, which would be
   // mistaken for Claude Code if we checked `isClaudeAgent` first.
   if (isPiAgentTitle(title)) {
@@ -285,6 +290,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',
+  OMH: 'omh',
   'DeepSeek Build': 'dsb',
   Pi: 'pi',
   OMP: 'omp'

@@ -46,6 +46,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'qwen-code',
   'rovo',
   'hermes',
+  'omh',
   'devin',
   'openclaw',
   'codebuddy',

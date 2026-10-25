@@ -47,6 +47,34 @@ export function OmpIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   )
 }
 
+export function OmhIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  const gradientId = `${React.useId().replace(/:/g, '')}-omh-gradient`
+
+  // Hand-authored mark: a hex ring around a core, for a harness wrapping its agent.
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="oklch(0.82 0.15 85)" />
+          <stop offset="1" stopColor="oklch(0.64 0.2 30)" />
+        </linearGradient>
+      </defs>
+      <path
+        fill={`url(#${gradientId})`}
+        fillRule="evenodd"
+        d="M32 5 55.38 18.5v27L32 59 8.62 45.5v-27zm0 11-13.86 8v16L32 48l13.86-8V24z"
+      />
+      <circle cx="32" cy="32" r="6.5" fill={`url(#${gradientId})`} />
+    </svg>
+  )
+}
+
 export function KiloIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   // SVG sourced from Kilo-Org/kilocode:packages/kilo-vscode/assets/icons/kilo-light.svg.
   // Why: the Google favicon for kilo.ai is black-on-black at small sizes and

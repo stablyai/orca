@@ -43,6 +43,7 @@ const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   omp: 'tui-idle',
   droid: 'tui-idle',
   hermes: 'tui-idle',
+  omh: 'tui-idle',
   devin: 'tui-idle',
   claude: 'tui-idle',
   'claude-agent-teams': 'tui-idle',

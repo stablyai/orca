@@ -82,7 +82,7 @@ export function normalizeHermesEvent(
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: isNewTurnEvent('hermes', eventName)
     }),
-    agentType: 'hermes',
+    agentType: hookPayload.orca_agent === 'omh' ? 'omh' : 'hermes',
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,

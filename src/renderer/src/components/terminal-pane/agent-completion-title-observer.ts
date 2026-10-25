@@ -3,6 +3,7 @@ import {
   titleHasExplicitAgentIdentity,
   titleIsInconclusiveNativeDroidTitle
 } from './title-agent-identity'
+import { getOmhSyntheticAgentLabel } from '../../../../shared/omh-synthetic-title'
 type TitleObserverOptions = {
   getLastStatus: () => AgentStatus | null
   setLastStatus: (status: AgentStatus | null) => void
@@ -49,6 +50,9 @@ export function createAgentCompletionTitleObserver({
     }
     if (/\bdroid\b/.test(normalized)) {
       return 'droid'
+    }
+    if (getOmhSyntheticAgentLabel(title)) {
+      return 'omh'
     }
     if (/\bhermes\b/.test(normalized)) {
       return 'hermes'

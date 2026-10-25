@@ -292,10 +292,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: Hermes delivers the prompt via its startup-query contract, submitting only after the composer is ready.
     promptInjectionMode: 'hermes-query'
   },
-  openclaw: {
-    detectCmd: 'openclaw',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  // Why: bare `omh` opens its TUI over `hermes --tui` and accepts no prompt argument.
+  omh: { detectCmd: 'omh', promptInjectionMode: 'stdin-after-start' },
+  openclaw: { detectCmd: 'openclaw', promptInjectionMode: 'stdin-after-start' },
   copilot: {
     detectCmd: 'copilot',
     // Why: `--prompt` exits on completion (kills the hosted session); `-i/--interactive` keeps it interactive.

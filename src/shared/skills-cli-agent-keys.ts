@@ -48,6 +48,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   'qwen-code': 'qwen-code',
   rovo: 'rovodev',
   hermes: 'hermes-agent',
+  // Why: OMH loads skills from the Hermes home it wraps.
+  omh: 'hermes-agent',
   openclaw: 'openclaw',
   copilot: 'github-copilot',
   grok: 'grok',
