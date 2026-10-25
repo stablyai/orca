@@ -14,6 +14,7 @@ import {
 import { wslMoveRewriteScope } from '../persistence/moving-wsl-projects/wsl-move-rewrite-scope'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+import { getWslHostService } from '../wsl/wsl-host-service-instance'
 
 export type WslMoveUndoPorts = {
   stopHostCopies: (move: WslMoveCutover) => Promise<WslMoveHostCopyStop>
@@ -39,6 +40,15 @@ export function createWslMoveUndoPorts(store: Store, userDataPath: string): WslM
       const hostIds = [...new Set(Object.keys(local.tabsByWorktree).filter(scope.inScope))].map(
         (id) => scope.worktreeId(id)
       )
+      // The user asked for this, so a host with no open work after a relaunch connects first.
+      if (hostIds.length > 0) {
+        try {
+          await getWslHostService()?.ensureForUserRequest(move.destinationEnvironmentId)
+        } catch (error) {
+          console.warn('[wsl-move] The host did not connect for undo:', error)
+          return 'unreachable'
+        }
+      }
       const call = async (method: string, params: unknown, timeoutMs: number) => {
         try {
           return await callRuntimeEnvironment(
