@@ -7294,15 +7294,15 @@
           "932ff1fbff": "Thème",
           "0f28e7b30c": "Choisissez l'apparence d'Orca dans la fenêtre de l'app.",
           "leftSidebarAppearance": {
-            "title": "Apparence de la barre latérale gauche",
-            "rowDescription": "Accordez la barre latérale gauche à votre terminal, gardez-la par défaut ou appliquez une teinte.",
+            "title": "Apparence des barres latérales et panneaux",
+            "rowDescription": "Accordez les barres latérales, la barre d'onglets et le panneau latéral à votre terminal, gardez-les par défaut ou appliquez une teinte.",
             "default": "Par défaut",
             "matchTerminal": "Comme le terminal",
             "tinted": "Teintée",
             "tintColor": "Teinte de la barre latérale",
-            "tintColorDescription": "Couleur mélangée à la surface de la barre latérale gauche.",
+            "tintColorDescription": "La couleur mélangée aux surfaces des barres latérales, de la barre d'onglets et du panneau latéral.",
             "tintOpacity": "Intensité de la teinte",
-            "tintOpacityDescription": "Contrôle l'intensité avec laquelle la teinte est mélangée à la barre latérale."
+            "tintOpacityDescription": "Contrôle l'intensité avec laquelle la teinte est mélangée aux surfaces des barres latérales, de la barre d'onglets et du panneau latéral."
           },
           "workspaceCardLayoutGuidance": "Géré depuis la barre latérale des espaces de travail.",
           "interfaceDefaultFont": "Police par défaut",
@@ -9807,12 +9807,14 @@
               "translation": "traduction"
             },
             "leftSidebarAppearance": {
-              "title": "Apparence de la barre latérale gauche",
-              "description": "Accordez la barre latérale gauche à votre terminal, gardez-la par défaut ou appliquez une teinte.",
+              "title": "Apparence des barres latérales et panneaux",
+              "description": "Accordez les barres latérales, la barre d'onglets et le panneau latéral à votre terminal, gardez-les par défaut ou appliquez une teinte.",
               "project": "projet",
               "terminal": "Terminal",
               "background": "arrière-plan",
-              "tint": "teinte"
+              "tint": "teinte",
+              "tabs": "onglets",
+              "panel": "panneau"
             },
             "workspaceCardLayout": {
               "title": "Disposition des cartes d'espace de travail",

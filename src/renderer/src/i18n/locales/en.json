@@ -7442,15 +7442,15 @@
           "932ff1fbff": "Theme",
           "0f28e7b30c": "Choose how Orca looks in the app window.",
           "leftSidebarAppearance": {
-            "title": "Left Sidebar Appearance",
-            "rowDescription": "Make the left sidebar match your terminal, stay default, or use a tint.",
+            "title": "Sidebar & Panel Appearance",
+            "rowDescription": "Make the sidebars, tab bar, and side panel match your terminal, stay default, or use a tint.",
             "default": "Default",
             "matchTerminal": "Match Terminal",
             "tinted": "Tinted",
             "tintColor": "Sidebar Tint",
-            "tintColorDescription": "The color mixed into the left sidebar surface.",
+            "tintColorDescription": "The color mixed into the sidebar, tab bar, and side panel surfaces.",
             "tintOpacity": "Tint Strength",
-            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
+            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar, tab bar, and side panel surfaces."
           },
           "workspaceCardLayoutGuidance": "Managed from the workspace sidebar.",
           "interfaceDefaultFont": "Default font",
@@ -9962,12 +9962,14 @@
               "translation": "translation"
             },
             "leftSidebarAppearance": {
-              "title": "Left Sidebar Appearance",
-              "description": "Make the left sidebar match your terminal, stay default, or use a tint.",
+              "title": "Sidebar & Panel Appearance",
+              "description": "Make the sidebars, tab bar, and side panel match your terminal, stay default, or use a tint.",
               "project": "project",
               "terminal": "terminal",
               "background": "background",
-              "tint": "tint"
+              "tint": "tint",
+              "tabs": "tabs",
+              "panel": "panel"
             },
             "workspaceCardLayout": {
               "title": "Workspace Card Layout",

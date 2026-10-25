@@ -25,6 +25,10 @@ vi.mock('../../store', () => ({
   ) => useAppStoreMock(selector)
 }))
 
+vi.mock('@/hooks/use-chrome-appearance-style', () => ({
+  useChromeAppearanceStyle: () => undefined
+}))
+
 vi.mock('./TabGroupPanel', () => ({
   default: (props: unknown) => ({ __mock: 'TabGroupPanel', props })
 }))

@@ -7147,15 +7147,15 @@
           "932ff1fbff": "Tema",
           "0f28e7b30c": "Elige cómo se ve Orca en la ventana de la aplicación.",
           "leftSidebarAppearance": {
-            "title": "Apariencia de la barra lateral izquierda",
-            "rowDescription": "Haz que la barra lateral izquierda coincida con tu terminal, mantén el valor predeterminado o usa un tinte.",
+            "title": "Apariencia de barras laterales y paneles",
+            "rowDescription": "Haz que las barras laterales, la barra de pestañas y el panel lateral coincidan con tu terminal, mantenlos predeterminados o usa un tinte.",
             "default": "Predeterminado",
             "matchTerminal": "Coincidir con el terminal",
             "tinted": "Con tinte",
             "tintColor": "Tinte de la barra lateral",
-            "tintColorDescription": "El color que se mezcla en la superficie de la barra lateral izquierda.",
+            "tintColorDescription": "El color que se mezcla en las superficies de las barras laterales, la barra de pestañas y el panel lateral.",
             "tintOpacity": "Intensidad del tinte",
-            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral."
+            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en las superficies de las barras laterales, la barra de pestañas y el panel lateral."
           },
           "workspaceCardLayoutGuidance": "Gestionado desde la barra lateral del espacio de trabajo.",
           "872af9556e": "Bandeja del sistema",
@@ -9619,12 +9619,14 @@
               "translation": "traducción"
             },
             "leftSidebarAppearance": {
-              "title": "Apariencia de la barra lateral izquierda",
-              "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte.",
+              "title": "Apariencia de barras laterales y paneles",
+              "description": "Haz que las barras laterales, la barra de pestañas y el panel lateral coincidan con tu terminal, mantenlos predeterminados o usa un tinte.",
               "project": "proyecto",
               "terminal": "Terminal",
               "background": "fondo",
-              "tint": "tinte"
+              "tint": "tinte",
+              "tabs": "pestañas",
+              "panel": "panel"
             },
             "workspaceCardLayout": {
               "title": "Diseño de tarjetas de espacios de trabajo",

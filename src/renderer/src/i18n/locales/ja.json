@@ -7116,15 +7116,15 @@
           "932ff1fbff": "テーマ",
           "0f28e7b30c": "アプリウィンドウで Orca がどのように見えるかを選択します。",
           "leftSidebarAppearance": {
-            "title": "左サイドバーの外観",
-            "rowDescription": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
+            "title": "サイドバーとパネルの外観",
+            "rowDescription": "サイドバー、タブバー、サイドパネルをターミナルに合わせるか、デフォルトのままにするか、色合いを付けます。",
             "default": "デフォルト",
             "matchTerminal": "ターミナルに合わせる",
             "tinted": "色合い",
             "tintColor": "サイドバーの色合い",
-            "tintColorDescription": "左サイドバーの表面に混ぜる色です。",
+            "tintColorDescription": "サイドバー、タブバー、サイドパネルの表面に混ぜる色。",
             "tintOpacity": "色合いの強さ",
-            "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
+            "tintOpacityDescription": "サイドバー、タブバー、サイドパネルの表面に色合いをどの程度強く混ぜるかを調整します。"
           },
           "workspaceCardLayoutGuidance": "ワークスペースサイドバーで管理されます。",
           "872af9556e": "システムトレイ",
@@ -9625,12 +9625,14 @@
               "translation": "翻訳"
             },
             "leftSidebarAppearance": {
-              "title": "左サイドバーの外観",
-              "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
+              "title": "サイドバーとパネルの外観",
+              "description": "サイドバー、タブバー、サイドパネルをターミナルに合わせるか、デフォルトのままにするか、色合いを付けます。",
               "project": "プロジェクト",
               "terminal": "ターミナル",
               "background": "背景",
-              "tint": "色合い"
+              "tint": "色合い",
+              "tabs": "タブ",
+              "panel": "パネル"
             },
             "workspaceCardLayout": {
               "title": "ワークスペースカードのレイアウト",
