@@ -89,6 +89,8 @@ export default function WorkspaceKanbanSheet({
         data-workspace-board-sheet=""
         data-workspace-board-drag-preview={dragPreview ? 'true' : undefined}
         onOpenAutoFocus={(event) => event.preventDefault()}
+        // The panel restores its toggle opener only while the search field still owns focus.
+        onCloseAutoFocus={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={keepOpenForOutsideEvent}
         onInteractOutside={keepOpenForOutsideEvent}

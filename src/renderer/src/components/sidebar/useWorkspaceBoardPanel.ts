@@ -30,6 +30,7 @@ export type WorkspaceBoardPanelState = {
   workspaceBoardRenderedOpen: boolean
   workspaceBoardDragPreviewOpen: boolean
   workspaceBoardMenuOpen: boolean
+  workspaceBoardSearchRef: (input: HTMLInputElement | null) => void
   openWorkspaceBoard: () => void
   closeWorkspaceBoard: () => void
   toggleWorkspaceBoard: () => void
@@ -46,8 +47,19 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
   const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
   const workspaceBoardOpenRef = useRef(workspaceBoardOpen)
   const workspaceBoardDragPreviewOpenRef = useRef(workspaceBoardDragPreviewOpen)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const searchFocusPendingRef = useRef(false)
+  const searchOpenerRef = useRef<HTMLElement | null>(null)
   workspaceBoardOpenRef.current = workspaceBoardOpen
   workspaceBoardDragPreviewOpenRef.current = workspaceBoardDragPreviewOpen
+
+  const workspaceBoardSearchRef = useCallback((input: HTMLInputElement | null) => {
+    searchInputRef.current = input
+    if (input && searchFocusPendingRef.current && workspaceBoardOpenRef.current) {
+      searchFocusPendingRef.current = false
+      input.focus({ preventScroll: true })
+    }
+  }, [])
 
   const openWorkspaceBoard = useCallback(() => {
     if (workspaceBoardOpenRef.current) {
@@ -66,6 +78,12 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
   }, [])
 
   const closeWorkspaceBoard = useCallback(() => {
+    const opener = searchOpenerRef.current
+    searchOpenerRef.current = null
+    searchFocusPendingRef.current = false
+    if (document.activeElement === searchInputRef.current && opener?.isConnected) {
+      opener.focus({ preventScroll: true })
+    }
     workspaceBoardOpenRef.current = false
     workspaceBoardDragPreviewOpenRef.current = false
     setWorkspaceBoardOpen(false)
@@ -89,7 +107,14 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
       closeWorkspaceBoard()
       return
     }
+    searchOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    searchFocusPendingRef.current = true
     openWorkspaceBoard()
+    if (searchInputRef.current) {
+      searchFocusPendingRef.current = false
+      searchInputRef.current.focus({ preventScroll: true })
+    }
   }, [closeWorkspaceBoard, openWorkspaceBoard])
 
   const previewWorkspaceBoardFromDrag = useCallback(() => {
@@ -161,6 +186,7 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     workspaceBoardRenderedOpen: workspaceBoardOpen || workspaceBoardDragPreviewOpen,
     workspaceBoardDragPreviewOpen: workspaceBoardDragPreviewOpen && !workspaceBoardOpen,
     workspaceBoardMenuOpen,
+    workspaceBoardSearchRef,
     openWorkspaceBoard,
     closeWorkspaceBoard,
     toggleWorkspaceBoard,

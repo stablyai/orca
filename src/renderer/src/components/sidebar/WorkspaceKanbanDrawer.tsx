@@ -24,6 +24,7 @@ import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 type WorkspaceKanbanDrawerProps = {
+  searchInputRef?: React.RefCallback<HTMLInputElement>
   leftSidebarStyle?: React.CSSProperties
   open: boolean
   statusBarVisible: boolean
@@ -45,6 +46,7 @@ export default function WorkspaceKanbanDrawer(
 }
 
 function WorkspaceKanbanDrawerContent({
+  searchInputRef,
   leftSidebarStyle,
   open,
   statusBarVisible,
@@ -248,6 +250,7 @@ function WorkspaceKanbanDrawerContent({
       sidebarWidth={sidebarWidth}
       statusBarVisible={statusBarVisible}
       headerProps={{
+        searchInputRef,
         selectedCount: renderedSelectedWorktrees.length,
         query,
         isFiltering: hasQuery,

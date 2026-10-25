@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ const OVERLAY_GAP_PX = 4
 const MAX_OVERLAY_RESERVE = '55%'
 
 type WorkspaceKanbanSearchFieldProps = {
+  searchInputRef?: React.RefCallback<HTMLInputElement>
   query: string
   /** False for text that never narrows the board (whitespace-only, over-bound). */
   isFiltering: boolean
@@ -47,6 +48,7 @@ function formatAnnouncement(matchCount: number, totalCount: number): string {
 }
 
 export default function WorkspaceKanbanSearchField({
+  searchInputRef,
   query,
   isFiltering,
   isTooLarge,
@@ -59,6 +61,13 @@ export default function WorkspaceKanbanSearchField({
   const hasText = query !== ''
   const counterText = isFiltering ? `${matchCount} / ${totalCount}` : null
   const inputRef = useRef<HTMLInputElement>(null)
+  const setInputRef = useCallback(
+    (input: HTMLInputElement | null) => {
+      inputRef.current = input
+      searchInputRef?.(input)
+    },
+    [searchInputRef]
+  )
   const [announcement, setAnnouncement] = useState('')
 
   const tooLargeMessage = isTooLarge
@@ -93,7 +102,7 @@ export default function WorkspaceKanbanSearchField({
     <div className="relative flex min-w-0 max-w-xs flex-1 items-center">
       <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
-        ref={inputRef}
+        ref={setInputRef}
         value={query}
         aria-label={translate(
           'auto.components.sidebar.WorkspaceKanbanSearchField.c0cd6bdf6c',
