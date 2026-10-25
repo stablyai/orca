@@ -1,4 +1,5 @@
 import { readFileSync, rmSync, statSync } from 'node:fs'
+import { parseLinuxProcessState } from '../../shared/linux-process-state'
 
 // X server lock and socket files under /tmp, and what they say about who owns a display.
 
@@ -29,13 +30,25 @@ export function probeDisplayLock(displayNumber: number): DisplayLockProbe {
   try {
     // signal 0 probes existence without affecting the process.
     process.kill(pid, 0)
-    return 'alive'
   } catch (error) {
     // EPERM means the PID exists under another uid — a root-owned X server is still live.
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EPERM'
-      ? 'alive'
-      : 'dead'
+    if (
+      !(typeof error === 'object' && error !== null && 'code' in error && error.code === 'EPERM')
+    ) {
+      return 'dead'
+    }
   }
+  if (process.platform === 'linux') {
+    try {
+      // signal 0 also succeeds for an unreaped child, which cannot serve X11 requests.
+      if (parseLinuxProcessState(readFileSync(`/proc/${pid}/stat`, 'utf8'), pid) === 'Z') {
+        return 'dead'
+      }
+    } catch {
+      // An unavailable proc record does not disprove the signal-0 evidence.
+    }
+  }
+  return 'alive'
 }
 
 /**
