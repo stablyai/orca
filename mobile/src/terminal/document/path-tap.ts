@@ -263,7 +263,8 @@ function hasReachedWrapWidth(
       ? nextBreakIndex + 1
       : next.leadingToken.length
     : 0
-  if (prev.visualEnd + wrapSlack < 35) {
+  const minWrapWidth = terminalCols && terminalCols < 35 ? Math.max(12, terminalCols - 1) : 35
+  if (prev.visualEnd + wrapSlack < minWrapWidth) {
     return false
   }
   if (!terminalCols || terminalCols <= 35) {

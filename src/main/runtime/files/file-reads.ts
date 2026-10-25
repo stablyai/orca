@@ -1,5 +1,5 @@
 import { open, stat } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { extname, win32 } from 'node:path'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
@@ -207,6 +207,18 @@ export class RuntimeFileReads {
   }
 }
 
+const WINDOWS_DRIVE_PATH = /^[a-zA-Z]:[\\/]/
+
+// Why: Windows accepts both separators. Compare only drive-letter paths so POSIX
+// names containing a backslash never match a different file.
+function sameWindowsDrivePath(left: string, right: string): boolean {
+  return (
+    WINDOWS_DRIVE_PATH.test(left) &&
+    WINDOWS_DRIVE_PATH.test(right) &&
+    win32.normalize(left) === win32.normalize(right)
+  )
+}
+
 function findPersistedOpenFilePath(
   store: RuntimeStore,
   worktreeId: string,
@@ -217,7 +229,9 @@ function findPersistedOpenFilePath(
     ?.openFilesByWorktree?.[worktreeId]?.find(
       (candidate) =>
         !candidate.externalSshTargetId &&
-        (candidate.relativePath === relativePath || candidate.filePath === relativePath)
+        (candidate.relativePath === relativePath ||
+          candidate.filePath === relativePath ||
+          sameWindowsDrivePath(candidate.filePath, relativePath))
     )
   if (!openFile) {
     return null
