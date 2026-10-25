@@ -117,6 +117,7 @@ const MAIN_PROCESS_INTERCEPTED_ACTIONS: Partial<
   'workspace.openBoard': 'afterBrowserChords',
   'view.tasks': 'afterBrowserChords',
   'dashboard.toggle': 'afterBrowserChords',
+  'workspace.nextAttention': 'afterBrowserChords',
   'tab.previousRecent': 'beforeBrowserChords',
   'workspace.selectByIndex': 'afterBrowserChords',
   'tab.selectByIndex': 'afterBrowserChords',
