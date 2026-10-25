@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { logWslSpawnOrigin, rememberSpawnCaller } from './daemon-spawn-origin-log'
+import {
+  logWslSpawnOrigin,
+  probeWslColdRestoreScreen,
+  rememberSpawnCaller
+} from './daemon-spawn-origin-log'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -31,4 +35,26 @@ it('logs caller frames beyond the default stack limit and restores the limit', (
   const logged: { caller: string[] } = JSON.parse(String(info.mock.calls[0]?.[1]))
   expect(logged.caller.length).toBeGreaterThan(20)
   expect(logged.caller.filter((frame) => frame.includes('nested')).length).toBeGreaterThan(10)
+})
+
+it('logs the daemon screen a WSL cold restore left, after the first prompt', async () => {
+  vi.useFakeTimers()
+  try {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    probeWslColdRestoreScreen('wsl-session', async () => ({
+      snapshotAnsi: 'old$ new$ ',
+      scrollbackLines: 0,
+      rows: 58,
+      cols: 119
+    }))
+    expect(info).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(info).toHaveBeenCalledWith('[wsl-cold-restore-screen]', expect.any(String))
+    const logged: { scrollbackLines: number; tail: string } = JSON.parse(
+      String(info.mock.calls[0]?.[1])
+    )
+    expect(logged).toMatchObject({ scrollbackLines: 0, tail: JSON.stringify('old$ new$ ') })
+  } finally {
+    vi.useRealTimers()
+  }
 })

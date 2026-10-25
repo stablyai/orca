@@ -33,6 +33,8 @@ export function logWslSpawnOrigin(spawn: {
   attachOnly: boolean
   spawnIntent: SpawnIntent | undefined
   coldRestore: boolean
+  /** Seed shape: verify-13's `$ $` needs to know whether the fresh-shell blanking reached the daemon. */
+  seed?: { segments: number; rows: number | undefined; tail: string; seeded: boolean | undefined }
 }): void {
   if (!spawn.wslDistro) {
     return
@@ -40,4 +42,32 @@ export function logWslSpawnOrigin(spawn: {
   const caller = callersBySessionId.get(spawn.sessionId) ?? []
   callersBySessionId.delete(spawn.sessionId)
   console.info('[wsl-spawn-origin]', JSON.stringify({ ...spawn, caller }))
+}
+
+const COLD_RESTORE_SCREEN_PROBE_MS = 3_000
+
+/** After the new shell's first prompt, log what the daemon's own screen holds for a WSL cold restore. */
+export function probeWslColdRestoreScreen(
+  sessionId: string,
+  readSnapshot: () => Promise<
+    { snapshotAnsi: string; scrollbackLines: number; rows: number; cols: number } | null | undefined
+  >
+): void {
+  const timer = setTimeout(() => {
+    void readSnapshot()
+      .then((snapshot) => {
+        console.info(
+          '[wsl-cold-restore-screen]',
+          JSON.stringify({
+            sessionId,
+            rows: snapshot?.rows,
+            cols: snapshot?.cols,
+            scrollbackLines: snapshot?.scrollbackLines,
+            tail: JSON.stringify(snapshot?.snapshotAnsi.slice(-400) ?? null)
+          })
+        )
+      })
+      .catch(() => {})
+  }, COLD_RESTORE_SCREEN_PROBE_MS)
+  timer.unref?.()
 }
