@@ -14,13 +14,6 @@ describe('the host list a page has', () => {
     await expect(loadHosts()).resolves.toEqual([{ ...HOST, deviceToken: '', publicKeyB64: '' }])
   })
 
-  it('holds no credential, because the bridge already carries the connection', async () => {
-    publishPageHostProfile(HOST)
-    const [profile] = await loadHosts()
-    expect(profile?.deviceToken).toBe('')
-    expect(profile?.publicKeyB64).toBe('')
-  })
-
   it('is empty before init, rather than a host the page invented', async () => {
     await expect(loadHosts()).resolves.toEqual([])
     await expect(loadHostCatalog()).resolves.toEqual([])

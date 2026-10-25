@@ -66,14 +66,14 @@ describe('pane manager registry', () => {
     const first = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-reset')),
       clearWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-clear')),
-      presentForcedViewports: vi.fn<() => void>(() => order.push('first-present')),
+      presentViewports: vi.fn<() => void>(() => order.push('first-present')),
       refreshAllPanes: vi.fn<() => void>(() => order.push('first-refresh')),
       isVisibleForAtlasRecovery: () => true
     }
     const second = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-reset')),
       clearWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-clear')),
-      presentForcedViewports: vi.fn<() => void>(() => order.push('second-present')),
+      presentViewports: vi.fn<() => void>(() => order.push('second-present')),
       refreshAllPanes: vi.fn<() => void>(() => order.push('second-refresh')),
       isVisibleForAtlasRecovery: () => true
     }
@@ -93,7 +93,7 @@ describe('pane manager registry', () => {
     const visible = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       clearWebglTextureAtlases: vi.fn<() => void>(),
-      presentForcedViewports: vi.fn<() => void>(),
+      presentViewports: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>(),
       isVisibleForAtlasRecovery: () => true
     }
@@ -102,7 +102,7 @@ describe('pane manager registry', () => {
     const hidden = Array.from({ length: 64 }, () => ({
       resetWebglTextureAtlases: vi.fn<() => void>(),
       clearWebglTextureAtlases: vi.fn<() => void>(),
-      presentForcedViewports: vi.fn<() => void>(),
+      presentViewports: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>(),
       isVisibleForAtlasRecovery: () => false
     }))
@@ -114,13 +114,11 @@ describe('pane manager registry', () => {
     resetAndRefreshAllTerminalWebglAtlases()
 
     expect(visible.clearWebglTextureAtlases).toHaveBeenCalledOnce()
-    expect(visible.presentForcedViewports).toHaveBeenCalledOnce()
+    expect(visible.presentViewports).toHaveBeenCalledOnce()
     expect(
       hidden.every((manager) => manager.clearWebglTextureAtlases.mock.calls.length === 0)
     ).toBe(true)
-    expect(hidden.every((manager) => manager.presentForcedViewports.mock.calls.length === 0)).toBe(
-      true
-    )
+    expect(hidden.every((manager) => manager.presentViewports.mock.calls.length === 0)).toBe(true)
   })
 
   it('continues reset-and-refresh recovery when one manager throws', () => {

@@ -6,26 +6,23 @@ import type {
   AgentJournalQuestionItem
 } from '../../shared/agent-session-journal-types'
 import { formatToolInput, truncateToolDetail } from '../../shared/native-chat-tool-summary'
+import { isPlanApprovalSubject } from '../../shared/agent-session-approval-subject'
 import { boundJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import {
-  CLAUDE_APPROVAL_DECISIONS,
   encodeClaudeQuestionOptionId,
-  type ClaudeApprovalDecision,
   type ClaudePendingPrompt
 } from './claude-structured-prompt-replies'
 
-const APPROVAL_LABELS: Record<ClaudeApprovalDecision, string> = {
-  allow: 'Allow',
-  allowForSession: 'Allow for this session',
-  deny: 'Deny',
-  cancel: 'Stop'
-}
+const APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
+  { id: 'allow', label: 'Allow' },
+  { id: 'allowForSession', label: 'Allow for this session' },
+  { id: 'deny', label: 'Deny' }
+]
 
 const PLAN_APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
   { id: 'allow', label: 'Approve plan' },
-  { id: 'deny', label: 'Keep planning' },
-  { id: 'cancel', label: 'Stop' }
+  { id: 'deny', label: 'Keep planning' }
 ]
 
 const PENDING = {
@@ -48,7 +45,7 @@ export function claudePromptIdentity(input: {
 }
 
 export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
-  const planSubject = prompt.subject?.kind === 'plan' ? prompt.subject : null
+  const planSubject = isPlanApprovalSubject(prompt.subject) ? prompt.subject : null
   const detail = truncateToolDetail(planSubject?.text ?? formatToolInput(prompt.input))
   return boundJournalPromptBody({
     kind: 'approval',
@@ -60,12 +57,9 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     ...(prompt.matchedAskRule ? { matchedAskRule: prompt.matchedAskRule } : {}),
     ...(prompt.subject ? { subject: prompt.subject } : {}),
     detail: detail || null,
-    options: planSubject
-      ? PLAN_APPROVAL_OPTIONS.map((option) => ({ ...option }))
-      : CLAUDE_APPROVAL_DECISIONS.map((decision) => ({
-          id: decision,
-          label: APPROVAL_LABELS[decision]
-        })),
+    options: (planSubject ? PLAN_APPROVAL_OPTIONS : APPROVAL_OPTIONS).map((option) => ({
+      ...option
+    })),
     resolution: { ...PENDING }
   })
 }

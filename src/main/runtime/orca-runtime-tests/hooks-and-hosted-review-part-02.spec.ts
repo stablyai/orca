@@ -19,7 +19,6 @@ import {
   getPRForBranchOutcomeMock,
   listWorktrees,
   mergeGitHubPRMock,
-  registerSshGitProvider,
   removeGitHubPRReviewersMock,
   requestGitHubPRReviewersMock,
   rerunGitHubPRChecksMock,
@@ -27,12 +26,16 @@ import {
   setGitHubPRAutoMergeMock,
   setGitHubPRFileViewedMock,
   setPlatform,
-  unregisterSshGitProvider,
   updateGitHubPRDetailsMock,
   updateGitHubPRStateMock,
   updateGitHubPRTitleMock
 } from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
+import {
+  TEST_REPO_ID,
+  TEST_REPO_PATH,
+  makeWorktreeMeta,
+  store
+} from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('routes runtime GitHub PR details and actions through the selected WSL project runtime', async () => {
@@ -583,29 +586,16 @@ describe('OrcaRuntimeService', () => {
           connectionId: 'ssh-1'
         }
       ],
+      // Why: this process serves no SSH git, so the SSH repo resolves from its stored rows.
+      getAllWorktreeMeta: () => ({
+        [`${TEST_REPO_ID}::/remote/repo`]: makeWorktreeMeta()
+      }),
       getWorktreeMeta: () => null
     }
-    const gitProvider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: '/remote/repo',
-          head: 'abc',
-          branch: 'feature/foo',
-          isBare: false,
-          isMainWorktree: true
-        }
-      ])
-    }
-    registerSshGitProvider('ssh-1', gitProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
-    try {
-      await expect(runtime.probeWorktreeDrift('path:/remote/repo')).resolves.toBeNull()
-    } finally {
-      unregisterSshGitProvider('ssh-1')
-    }
+    await expect(runtime.probeWorktreeDrift('path:/remote/repo')).resolves.toBeNull()
 
-    expect(gitProvider.listWorktrees).toHaveBeenCalledWith('/remote/repo')
     expect(getBaseRefDefault).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
   })

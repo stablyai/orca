@@ -11,9 +11,9 @@ describe('createPtyPreconnectInputBuffer', () => {
     const acceptedWrite = createDeferred<boolean>()
     const buffer = createPtyPreconnectInputBuffer()
     const delivered: string[] = []
-    const accepted = buffer.enqueueAccepted('first')
-    expect(buffer.enqueue('second', 'ordinary')).toBe(true)
-    expect(buffer.enqueue('third', 'immediate')).toBe(true)
+    const accepted = buffer.enqueueAccepted('first', 'driving')
+    expect(buffer.enqueue('second', 'ordinary', 'driving')).toBe(true)
+    expect(buffer.enqueue('third', 'immediate', 'driving')).toBe(true)
     const writer = {
       isCurrent: () => true,
       sendInput: (data: string) => {
@@ -52,9 +52,9 @@ describe('createPtyPreconnectInputBuffer', () => {
       const writeStarted = createDeferred<void>()
       const buffer = createPtyPreconnectInputBuffer()
       const sendInput = vi.fn(() => true)
-      const accepted = buffer.enqueueAccepted('first')
-      const laterAccepted = buffer.enqueueAccepted('third')
-      expect(buffer.enqueue('second', 'ordinary')).toBe(true)
+      const accepted = buffer.enqueueAccepted('first', 'driving')
+      const laterAccepted = buffer.enqueueAccepted('third', 'driving')
+      expect(buffer.enqueue('second', 'ordinary', 'driving')).toBe(true)
       const flushing = buffer.flush({
         isCurrent: () => true,
         sendInput,
@@ -72,7 +72,7 @@ describe('createPtyPreconnectInputBuffer', () => {
       await expect(laterAccepted).resolves.toBe(false)
       await expect(flushing).resolves.toBeUndefined()
       expect(sendInput).not.toHaveBeenCalled()
-      expect(buffer.enqueue('after-clear', 'ordinary')).toBe(false)
+      expect(buffer.enqueue('after-clear', 'ordinary', 'driving')).toBe(false)
 
       if (lateOutcome === 'resolve') {
         acceptedWrite.resolve(true)
@@ -91,7 +91,8 @@ describe('createPtyPreconnectInputBuffer', () => {
     const codeUnitWriteStarted = createDeferred<void>()
     const codeUnitBuffer = createPtyPreconnectInputBuffer()
     const codeUnitAccepted = codeUnitBuffer.enqueueAccepted(
-      'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS)
+      'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS),
+      'driving'
     )
     const codeUnitFlush = codeUnitBuffer.flush({
       isCurrent: () => true,
@@ -104,7 +105,7 @@ describe('createPtyPreconnectInputBuffer', () => {
     })
     await codeUnitWriteStarted.promise
 
-    expect(codeUnitBuffer.enqueue('overflow', 'ordinary')).toBe(false)
+    expect(codeUnitBuffer.enqueue('overflow', 'ordinary', 'driving')).toBe(false)
 
     codeUnitBuffer.clear()
     codeUnitWrite.resolve(true)
@@ -114,9 +115,9 @@ describe('createPtyPreconnectInputBuffer', () => {
     const entryWrite = createDeferred<boolean>()
     const entryWriteStarted = createDeferred<void>()
     const entryBuffer = createPtyPreconnectInputBuffer()
-    const entryAccepted = entryBuffer.enqueueAccepted('first')
+    const entryAccepted = entryBuffer.enqueueAccepted('first', 'driving')
     for (let index = 1; index < PTY_PRECONNECT_INPUT_MAX_ENTRIES; index += 1) {
-      expect(entryBuffer.enqueue('', 'ordinary')).toBe(true)
+      expect(entryBuffer.enqueue('', 'ordinary', 'driving')).toBe(true)
     }
     const entryFlush = entryBuffer.flush({
       isCurrent: () => true,
@@ -129,7 +130,7 @@ describe('createPtyPreconnectInputBuffer', () => {
     })
     await entryWriteStarted.promise
 
-    expect(entryBuffer.enqueue('', 'ordinary')).toBe(false)
+    expect(entryBuffer.enqueue('', 'ordinary', 'driving')).toBe(false)
 
     entryBuffer.clear()
     entryWrite.resolve(true)
@@ -141,12 +142,13 @@ describe('createPtyPreconnectInputBuffer', () => {
     const entryBuffer = createPtyPreconnectInputBuffer(
       Array.from({ length: PTY_PRECONNECT_INPUT_MAX_ENTRIES + 1 }, () => ({
         data: '',
-        kind: 'ordinary' as const
+        kind: 'ordinary' as const,
+        inputKind: 'driving' as const
       }))
     )
     let entryWrites = 0
 
-    expect(entryBuffer.enqueue('', 'ordinary')).toBe(false)
+    expect(entryBuffer.enqueue('', 'ordinary', 'driving')).toBe(false)
     await entryBuffer.flush({
       isCurrent: () => true,
       sendInput: () => {
@@ -158,12 +160,16 @@ describe('createPtyPreconnectInputBuffer', () => {
     expect(entryWrites).toBe(PTY_PRECONNECT_INPUT_MAX_ENTRIES)
 
     const codeUnitBuffer = createPtyPreconnectInputBuffer([
-      { data: 'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS), kind: 'ordinary' },
-      { data: 'overflow', kind: 'ordinary' }
+      {
+        data: 'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS),
+        kind: 'ordinary',
+        inputKind: 'driving'
+      },
+      { data: 'overflow', kind: 'ordinary', inputKind: 'driving' }
     ])
     const codeUnitWrites: number[] = []
 
-    expect(codeUnitBuffer.enqueue('new', 'ordinary')).toBe(false)
+    expect(codeUnitBuffer.enqueue('new', 'ordinary', 'driving')).toBe(false)
     await codeUnitBuffer.flush({
       isCurrent: () => true,
       sendInput: (data) => {
@@ -179,7 +185,7 @@ describe('createPtyPreconnectInputBuffer', () => {
     // Regression: an abandoned deferred spawn never reaches connect(), so nothing
     // drained the buffer and a paste awaiting sendInputAccepted hung forever.
     const buffer = createPtyPreconnectInputBuffer()
-    const pastePending = buffer.enqueueAccepted('pasted text')
+    const pastePending = buffer.enqueueAccepted('pasted text', 'driving')
     let settled = false
     void pastePending.then(() => {
       settled = true

@@ -1,26 +1,14 @@
-// Journaling ONE Claude message envelope: its body, tool calls, tool results,
-// reasoning, and the unmodeled content that falls back to a generic row.
-//
-// Split out of the translator when that file reached its line budget. The body
-// moved unchanged; the only edit is that what were closure variables are now
-// read off an explicit context, so the open turn and the collaborators it
-// writes through stay owned by the translator.
-
+import { writeClaudeTerminalFailure } from './claude-terminal-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
-import type { ClaudeForwardedToolRegistry } from './claude-forwarded-tool-registry'
+import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
 import {
   claudeRecord,
   claudeMessageBody,
   claudeMessageIdentity,
   claudeOutputEnvelope,
-  claudeThinkingIdentity,
-  claudeThinkingText,
   claudeToolBody,
   claudeToolIdentity,
   claudeToolResults,
@@ -34,22 +22,31 @@ import {
 } from './claude-structured-provider-fallback'
 import type { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import type { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
-import type { ClaudeSubagentRoster } from './claude-subagent-roster'
+import type { ClaudeStreamedThinking } from './claude-streamed-thinking'
+import type { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
+import type { ClaudeSubagentIdentities } from './claude-subagent-identities'
 import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
+import type { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import type { ClaudeUsageLimits } from './claude-usage-limits'
+import type { ClaudeThreadGoal } from './claude-thread-goal'
 
 export type ClaudeMessageJournalContext = {
   sink: StructuredAgentSessionEventSink
   tools: Map<string, ClaudeToolUse>
   streamedBlocks: ReturnType<typeof createClaudeStreamedBlockRegistry>
   streamedText: ReturnType<typeof createClaudeStreamedTextCheckpoints>
-  subagents: ClaudeSubagentRoster
-  forwardedTools: ClaudeForwardedToolRegistry
+  streamedThinking: ClaudeStreamedThinking
+  subagents: ClaudeSubagentIdentities
+  toolOrigins: ClaudeToolOriginRegistry
   backgroundTasks: ClaudeBackgroundTaskRows
   providerFallback: ClaudeProviderFrameFallback
-  /** The session's open turn. Sole owner of turn identity and of the reopen
-   *  latch; this module asks it rather than tracking a copy. */
+  /** Stamp producer identity and retain rows needing later identity corrections. */
+  corrections: ClaudeProvisionalRowCorrections
   turn: ClaudeOpenTurn
+  authenticationFailures: ClaudeAuthenticationFailures
+  usageLimits: ClaudeUsageLimits
+  threadGoal: ClaudeThreadGoal
 }
 
 export function journalClaudeMessage(
@@ -65,58 +62,103 @@ export function journalClaudeMessage(
     return false
   }
   let changed = false
-  if (envelope.parentToolUseId) {
-    ctx.subagents.observeChildActivity(envelope.parentToolUseId)
-  }
+  const results = claudeToolResults(envelope)
+  // Tool results belong to their caller, including child callers; preserve its reference for later corrections.
+  // Other rows belong to the envelope producer so child output cannot become root activity.
+  const producedByCaller = results.some((result) => result.toolUseId === envelope.parentToolUseId)
+  const producerRef =
+    producedByCaller && envelope.parentToolUseId !== null
+      ? ctx.toolOrigins.childOwnerRef(envelope.parentToolUseId)
+      : envelope.parentToolUseId
+  const stamp = ctx.corrections.stampFor(producerRef)
   const outputEnvelope = claudeOutputEnvelope(envelope)
-  const body = claudeMessageBody(outputEnvelope)
-  const identity =
-    (body && envelope.role === 'assistant' ? ctx.streamedBlocks.reconcile(envelope) : null) ??
-    claudeMessageIdentity(envelope)
-  ctx.streamedText.forget(agentJournalItemKey(identity))
-  const thinking = claudeThinkingText(outputEnvelope)
+  ctx.threadGoal.observe(message)
   const source: ClaudeTurnSource = {
     sessionId: envelope.sessionId,
     uuid: envelope.uuid,
     assistant: envelope.role === 'assistant'
   }
   const openOutputTurn = (): void => ctx.turn.ensureOpen(message, source, observedAt)
+  const messageBody = claudeMessageBody(outputEnvelope)
+  const ordinaryFailure =
+    typeof message.api_error === 'string' && message.api_error !== 'usage_limit_reached'
+      ? {
+          kind: 'status' as const,
+          tone: 'error' as const,
+          ...agentSessionFailureWords(
+            { kind: 'providerRejected' },
+            { agentName: 'Claude', provider: 'claude', surface: 'row' }
+          )
+        }
+      : null
+  const terminal =
+    envelope.role === 'assistant' &&
+    producerRef === null &&
+    (typeof message.api_error === 'string' || message.error === 'rate_limit')
+  if (
+    envelope.role === 'assistant' &&
+    (messageBody || typeof message.api_error === 'string' || message.error === 'rate_limit')
+  ) {
+    openOutputTurn()
+  }
+  const usageLimit = ctx.usageLimits.assistant(message, ctx.turn)
+  const body =
+    ctx.authenticationFailures.assistant(message) ??
+    usageLimit ??
+    ctx.threadGoal.report(message, claudeMessageIdentity(envelope), observedAt) ??
+    messageBody ??
+    ordinaryFailure
+  const terminalIdentity = terminal && ctx.turn.identity && usageLimit ? ctx.turn.identity : null
+  const identity =
+    (body && envelope.role === 'assistant'
+      ? ctx.streamedBlocks.reconcile(envelope)?.identity
+      : null) ?? claudeMessageIdentity(envelope)
+  ctx.streamedText.forget(agentJournalItemKey(identity))
+  const thinking = ctx.streamedThinking.finalize(outputEnvelope, observedAt)
   if (body) {
-    // Opening before the append is what brackets a turn around its own first
-    // output; a reader that scans back to the turn record and stops would
-    // otherwise look straight past the row that opened it.
+    // Open before appending so backward scans include the turn's first output.
     ctx.turn.ensureOpen(message, source, observedAt)
-    ctx.sink.appendItem(identity, body)
+    if (terminalIdentity) {
+      writeClaudeTerminalFailure(ctx.sink, terminalIdentity, body)
+    } else {
+      ctx.sink.appendItem(identity, body, { ...stamp(identity, body), lifecycle: true })
+    }
     changed = true
   }
   for (const tool of claudeToolUses(outputEnvelope)) {
     ctx.turn.ensureOpen(message, source, observedAt)
     ctx.tools.set(tool.id, tool)
-    // Only a TOP-LEVEL call can be the parent of a top-level task row; a
-    // sidechain's own tool ids never reach the transcript.
-    if (!envelope.parentToolUseId) {
-      ctx.forwardedTools.record(tool.id)
+    // Record child-owned calls here: grandchild frames name their tool IDs, absent from the root transcript.
+    if (envelope.parentToolUseId) {
+      ctx.toolOrigins.recordChildOwned(tool.id, envelope.parentToolUseId)
+    } else {
+      ctx.toolOrigins.recordTopLevel(tool.id)
     }
-    ctx.sink.appendItem(claudeToolIdentity(envelope.sessionId, tool.id), claudeToolBody({ tool }))
+    const toolIdentity = claudeToolIdentity(envelope.sessionId, tool.id)
+    const toolBody = claudeToolBody({ tool })
+    ctx.sink.appendItem(toolIdentity, toolBody, {
+      ...stamp(toolIdentity, toolBody),
+      lifecycle: true
+    })
     changed = true
   }
-  const results = claudeToolResults(envelope)
   for (const result of results) {
     const tool = ctx.tools.get(result.toolUseId) ?? {
       id: result.toolUseId,
       name: 'tool',
       input: null
     }
-    ctx.sink.appendItem(
-      claudeToolIdentity(envelope.sessionId, result.toolUseId),
-      claudeToolBody({ tool, result })
-    )
-    ctx.subagents.observeToolResult(result.toolUseId, result.failed)
+    const resultIdentity = claudeToolIdentity(envelope.sessionId, result.toolUseId)
+    const resultBody = claudeToolBody({ tool, result })
+    ctx.sink.appendItem(resultIdentity, resultBody, {
+      ...stamp(resultIdentity, resultBody),
+      lifecycle: true
+    })
     if (
       results.length === 1 &&
       envelope.parentToolUseId === null &&
       tool.name === 'Monitor' &&
-      ctx.forwardedTools.has(result.toolUseId)
+      ctx.toolOrigins.has(result.toolUseId)
     ) {
       ctx.backgroundTasks.observeMonitorToolResult(claudeRecord(message.tool_use_result)?.taskId)
     }
@@ -125,18 +167,17 @@ export function journalClaudeMessage(
   }
   if (thinking) {
     ctx.turn.ensureOpen(message, source, observedAt)
-    ctx.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
-      kind: 'message',
-      role: 'reasoning',
-      blocks: [
-        { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
-      ]
+    // Preserve this terminal write under pressure so the thinking row cannot stay open.
+    ctx.sink.appendItem(thinking.identity, thinking.body, {
+      ...stamp(thinking.identity, thinking.body),
+      ...(thinking.startedAt === undefined ? {} : { observedAt: thinking.startedAt }),
+      lifecycle: true
     })
     changed = true
   }
   changed =
-    appendUnmodeledContent(ctx.providerFallback, outputEnvelope, message, openOutputTurn) || changed
-  // The send's turn is anchored to the user row journaled just above it.
+    appendUnmodeledContent(ctx.providerFallback, outputEnvelope, message, openOutputTurn, stamp) ||
+    changed
   const sendEchoTurn = claudeTurnOpenedBySendEcho({
     envelope,
     frame: message,

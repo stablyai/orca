@@ -15,20 +15,19 @@ export function resolveTerminalDropTargetShell({
   activeRuntimeEnvironmentId,
   worktreePath,
   connectionId,
-  remotePlatform,
   userAgent
 }: {
   activeRuntimeEnvironmentId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId: string | null | undefined
-  remotePlatform?: NodeJS.Platform | null
   userAgent?: string
 }): TerminalTargetShell {
   if (activeRuntimeEnvironmentId?.trim() && worktreePath) {
     return getTerminalTargetShellForWorktreePath(worktreePath)
   }
+  // Why: only a relay-era SSH row still has a connectionId, and its pane cannot accept input.
   if (typeof connectionId === 'string') {
-    return remotePlatform === 'win32' ? 'windows' : 'posix'
+    return 'posix'
   }
   if (worktreePath && isWslUncPath(worktreePath)) {
     return 'posix'

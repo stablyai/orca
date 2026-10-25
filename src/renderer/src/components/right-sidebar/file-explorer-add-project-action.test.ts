@@ -45,28 +45,19 @@ describe('file explorer add project action', () => {
     expect(canShowAddAsProjectAction(folderNode, null)).toBe(false)
   })
 
-  it('preserves the selected folder path and active SSH connection', () => {
+  it('hides the action in an SSH-owned folder, which only a paired server can add from', () => {
     expect(
-      buildAddProjectFromFolderModalData(folderNode, {
+      canShowAddAsProjectAction(folderNode, {
         ...folderRepo,
-        connectionId: 'ssh-target-1'
+        connectionId: 'ssh-1'
       })
-    ).toEqual({
-      folderPath: '/projects/child-project',
-      connectionId: 'ssh-target-1'
-    })
-  })
-
-  it('routes an execution-host-only SSH project subfolder to its SSH target', () => {
+    ).toBe(false)
     expect(
-      buildAddProjectFromFolderModalData(folderNode, {
+      canShowAddAsProjectAction(folderNode, {
         ...folderRepo,
-        executionHostId: 'ssh:ssh-target-1'
+        executionHostId: 'ssh:ssh-1'
       })
-    ).toEqual({
-      folderPath: '/projects/child-project',
-      connectionId: 'ssh-target-1'
-    })
+    ).toBe(false)
   })
 
   it('routes a local project subfolder explicitly to local', () => {

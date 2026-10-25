@@ -1,6 +1,7 @@
 import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../../shared/agent-session-host-authority'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { RuntimeRpcCallError, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
 
 export async function runRemoteAgentSessionLaunch<TResult>(args: {

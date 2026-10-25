@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { isBuiltin } from 'node:module'
 import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
 
@@ -16,15 +17,39 @@ type OutputChunk = Rollup.OutputChunk
 // electron, and smoke-loads daemon-entry under plain Node to prove its module
 // graph still resolves.
 
-// Entries executed as plain Node (ELECTRON_RUN_AS_NODE / no electron runtime):
-// forked daemon, parcel-watcher, WSL filesystem and computer sidecars, and the CLI-run
-// agent-hooks entry. require("electron") throws MODULE_NOT_FOUND in all of them.
+// The CLI loads these paths after electron-vite replaces out/main.
+export const CLI_MAIN_ENTRY_NAMES = [
+  'agent-hooks/managed-agent-hook-controls',
+  'gitlab/project-ref-parser',
+  'orca-profiles/profile-index-store',
+  'claude-accounts/keychain',
+  'skills/bundled-skill-install/cli-entry',
+  'macos-tree-clone',
+  'orcad/orcad-stale-lock-reclaim',
+  ...[
+    'access',
+    'active-location',
+    'storage-classification',
+    'offline-settings',
+    'backup-path',
+    'database-recovery',
+    'domain-reader',
+    'recovery-command'
+  ].map((module) => `persistence/profile-state/profile-state-${module}`),
+  'persistence/profile-state/legacy-json/profile-state-export-path',
+  'persistence/profile-state/legacy-json/profile-state-recovery',
+  'startup/http1-compatibility-marker'
+] as const
+
+// Plain-Node processes and CLI modules cannot load Electron's API.
 const PLAIN_NODE_ENTRY_NAMES = [
   'daemon-entry',
   'parcel-watcher-process-entry',
+  'session-scanner-service-entry',
   'computer-sidecar',
   'wsl-transcript-fs-process-entry',
-  'agent-hooks/managed-agent-hook-controls'
+  'orcad/orcad-local-serve-selection-entry',
+  ...CLI_MAIN_ENTRY_NAMES
 ] as const
 
 // Entries executed as worker threads of the main process. Electron's module is
@@ -37,11 +62,15 @@ const PLAIN_NODE_ENTRY_NAMES = [
 const WORKER_THREAD_ENTRY_NAMES = [
   'stt-worker',
   'warp-theme-parser-worker',
-  'session-scanner-opencode-sqlite-worker-entry',
-  'session-scanner-worker-entry',
+  'foreign-sqlite-reader-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
-  'usage-scan-worker-entry'
+  'worker-thread-child-process-entry',
+  'usage-scan-worker-entry',
+  'workspace-space-scan-worker-entry',
+  'claude-profile-setup-worker-entry',
+  'profile-state-backup-worker-entry',
+  'profile-state-writer-worker-entry'
 ] as const
 
 export const GUARDED_ENTRY_NAMES = [
@@ -102,16 +131,59 @@ function assertNoElectronRequire(
   entryName: string,
   entry: OutputChunk,
   byFileName: Map<string, OutputChunk>,
+  electronFreeChunkCode: Map<OutputChunk, string>,
   runtime: EntryRuntime = 'plain-Node process'
 ): void {
   for (const chunk of collectReachableChunks(entry, byFileName)) {
-    if (ELECTRON_REQUIRE_RE.test(chunk.code)) {
+    const code = chunk.code
+    if (electronFreeChunkCode.get(chunk) === code) {
+      continue
+    }
+    if (ELECTRON_REQUIRE_RE.test(code)) {
       throw new Error(
         `[plain-node-entry-guard] "${entryName}" reaches chunk "${chunk.fileName}" that ` +
           `requires electron. "${entryName}" runs as a ${runtime}, where ` +
           `require("electron") throws MODULE_NOT_FOUND and kills it at startup (the ` +
           `v1.4.129-rc.1 daemon outage). Keep electron imports out of its module graph.`
       )
+    }
+    electronFreeChunkCode.set(chunk, code)
+  }
+}
+
+// Why: on packaged Windows the daemon runs from a relocated daemon-host copy that mirrors only
+// these packages (src/main/daemon/daemon-host-manifest.ts). Any other bare require in its graph
+// resolves in the install dir but throws MODULE_NOT_FOUND in the copy, and the desktop silently
+// falls back to an unrelocated daemon that the next update kills.
+const DAEMON_HOST_MIRRORED_PACKAGES = [
+  '@orca/process-host',
+  'node-pty',
+  '@vscode/windows-process-tree'
+]
+const BARE_REQUIRE_RE = /require\(\s*["'`]([^"'`./][^"'`]*)["'`]\s*\)/g
+
+function packageOfSpecifier(specifier: string): string {
+  const parts = specifier.split('/')
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]!
+}
+
+function assertDaemonExternalsAreMirrored(
+  entry: OutputChunk,
+  byFileName: Map<string, OutputChunk>
+): void {
+  for (const chunk of collectReachableChunks(entry, byFileName)) {
+    for (const match of chunk.code.matchAll(BARE_REQUIRE_RE)) {
+      const specifier = match[1]!
+      if (specifier.startsWith('node:') || isBuiltin(specifier)) {
+        continue
+      }
+      if (!DAEMON_HOST_MIRRORED_PACKAGES.includes(packageOfSpecifier(specifier))) {
+        throw new Error(
+          `[plain-node-entry-guard] "daemon-entry" reaches chunk "${chunk.fileName}" that ` +
+            `requires "${specifier}", which the relocated Windows daemon-host does not mirror ` +
+            `(daemon-host-manifest.ts). Keep it out of the daemon graph, or mirror it there.`
+        )
+      }
     }
   }
 }
@@ -252,18 +324,36 @@ export function createPlainNodeEntryGuardPlugin(
         }
       }
 
+      const electronFreeChunkCode = new Map<OutputChunk, string>()
       for (const entryName of PLAIN_NODE_ENTRY_NAMES) {
         const entry = entryByName.get(entryName)
         if (entry) {
-          assertNoElectronRequire(entryName, entry, byFileName, 'plain-Node process')
+          assertNoElectronRequire(
+            entryName,
+            entry,
+            byFileName,
+            electronFreeChunkCode,
+            'plain-Node process'
+          )
         }
       }
 
       for (const entryName of WORKER_THREAD_ENTRY_NAMES) {
         const entry = entryByName.get(entryName)
         if (entry) {
-          assertNoElectronRequire(entryName, entry, byFileName, 'worker thread')
+          assertNoElectronRequire(
+            entryName,
+            entry,
+            byFileName,
+            electronFreeChunkCode,
+            'worker thread'
+          )
         }
+      }
+
+      const daemonEntry = entryByName.get('daemon-entry')
+      if (daemonEntry) {
+        assertDaemonExternalsAreMirrored(daemonEntry, byFileName)
       }
 
       if (entryByName.has('daemon-entry') && options.dir) {

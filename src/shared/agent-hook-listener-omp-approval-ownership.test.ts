@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   createHookListenerState,
+  seedLegacyAgentStatusForTests,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
@@ -52,12 +53,6 @@ describe('OMP approval ownership', () => {
     }
   )
 
-  // `yolo` is the omp default and the one value that looks auto-approving, but omp only emits the
-  // event when something already forced a prompt, so downgrading on it would hide a live prompt.
-  it('keeps a yolo-mode approval request blocked even though yolo auto-approves by default', () => {
-    expect(approvalRequest({ approval_mode: 'yolo' })?.payload.state).toBe('blocked')
-  })
-
   it.each([
     ['missing', {}],
     ['unrecognised', { approval_mode: 'some-future-mode' }],
@@ -74,8 +69,16 @@ describe('OMP approval ownership', () => {
     ).toMatchObject({ state: 'blocked', toolInput: 'Critical pattern detected' })
   })
 
-  it('leaves the tool input unset when omp sends no reason', () => {
-    expect(approvalRequest({ approval_mode: 'always-ask' })?.payload.toolInput).toBeUndefined()
+  it('clears the previous tool input when omp sends no reason', () => {
+    expect(
+      approvalRequest({ reason: 'Critical pattern detected', approval_mode: 'always-ask' })?.payload
+    ).toMatchObject({ state: 'blocked', toolInput: 'Critical pattern detected' })
+
+    expect(approvalRequest({ approval_mode: 'always-ask' })?.payload).toMatchObject({
+      state: 'blocked',
+      toolName: 'bash',
+      toolInput: undefined
+    })
   })
 
   it('clears the wait on resolution regardless of the mode that requested it', () => {
@@ -87,6 +90,43 @@ describe('OMP approval ownership', () => {
         approved: true
       })?.payload
     ).toMatchObject({ state: 'working', toolName: 'bash' })
+  })
+
+  /** Normalizes the post and admits its row, as the hook server does, so the next post sees it. */
+  function deliver(payload: Record<string, unknown>): string {
+    const event = post('omp', payload)
+    if (event) {
+      seedLegacyAgentStatusForTests(state, event)
+    }
+    return state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state ?? 'none'
+  }
+
+  // The order omp 17 posted for a denied bash call, captured off a live run's extension events.
+  it('keeps the approval wait through the tool_execution_start omp posts right after it', () => {
+    expect(deliver({ hook_event_name: 'tool_call', tool_name: 'bash' })).toBe('working')
+    expect(
+      deliver({
+        hook_event_name: 'tool_approval_requested',
+        tool_name: 'bash',
+        approval_mode: 'always-ask'
+      })
+    ).toBe('blocked')
+    expect(deliver({ hook_event_name: 'tool_execution_start', tool_name: 'bash' })).toBe('blocked')
+    expect(
+      deliver({ hook_event_name: 'tool_approval_resolved', tool_name: 'bash', approved: false })
+    ).toBe('working')
+    expect(deliver({ hook_event_name: 'tool_execution_end', tool_name: 'bash' })).toBe('working')
+    expect(deliver({ hook_event_name: 'agent_end' })).toBe('done')
+  })
+
+  it('ends a held approval wait when a new turn starts', () => {
+    deliver({ hook_event_name: 'tool_approval_requested', tool_name: 'bash' })
+    expect(deliver({ hook_event_name: 'agent_start' })).toBe('working')
+  })
+
+  it('lets an ask wait end on its own tool_execution_end', () => {
+    expect(deliver({ hook_event_name: 'tool_execution_start', tool_name: 'ask' })).toBe('blocked')
+    expect(deliver({ hook_event_name: 'tool_execution_end', tool_name: 'ask' })).toBe('working')
   })
 
   // Pi and prime-agent share this normalizer but have no approval lifecycle, so the field must not

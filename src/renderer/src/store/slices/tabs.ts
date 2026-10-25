@@ -1,11 +1,12 @@
 export type {
   TabSplitDirection,
+  TabSplitTarget,
   TabsSlice,
   TabsSliceGet,
   TabsSliceSet
 } from './tabs/tabs-slice-contract'
 export { createTabsSlice } from './tabs/create-tabs-slice'
-export { findSiblingGroupId } from './tabs/tabs-layout'
+export { findSiblingGroupId } from '../../../../shared/workspace-layout/tab-group-layout-tree'
 export {
   type WorktreeTabModelReconciliation,
   projectWorktreeTabModelReconciliation

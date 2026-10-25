@@ -21,9 +21,7 @@ import {
 } from './orchestration-worker-start-mode'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
+  experimentalNativeChat: true
 } as const
 
 function structuredReceipt(): WorkerStartModeReceipt {
@@ -74,7 +72,7 @@ describe('worker-start mode receipt wording', () => {
     ],
     [
       'agent with no structured session',
-      { agent: 'grok' },
+      { agent: 'gemini' },
       'agent_without_structured_session',
       'this agent has no structured session'
     ]
@@ -84,20 +82,6 @@ describe('worker-start mode receipt wording', () => {
       preferred: 'structured',
       reason,
       detail: downgradeSentence(why)
-    })
-  })
-
-  it('names a custom TUI launch command as the downgrade', () => {
-    expect(
-      decideWorkerStartMode({
-        params: { agent: 'claude' },
-        settings: { ...STRUCTURED_PREFERENCE, agentCmdOverrides: { claude: 'claude-wrapper' } }
-      })
-    ).toEqual({
-      mode: 'terminal',
-      preferred: 'structured',
-      reason: 'tui_launch_command',
-      detail: downgradeSentence('this agent has a custom launch command that only a terminal runs')
     })
   })
 

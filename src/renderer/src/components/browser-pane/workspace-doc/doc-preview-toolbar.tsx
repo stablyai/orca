@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import {
   BrowserChromeToolbar,
-  type BrowserChromeElementTools
+  type BrowserChromeElementTools,
+  type BrowserChromeShareControl
 } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 import { BrowserReloadControl } from '@/components/browser-pane/assemble-chrome/browser-reload-control'
 import { translate } from '@/i18n/i18n'
@@ -19,7 +20,6 @@ export function DocPreviewToolbar({
   previewId,
   worktreeId,
   history,
-  loading,
   onReload,
   onHardReload,
   onCopyPath,
@@ -29,14 +29,14 @@ export function DocPreviewToolbar({
   elementTools,
   markupActive,
   onToggleMarkup,
-  markupDisabled
+  markupDisabled,
+  shareControl
 }: {
   identity: DocPreviewDocumentIdentity
   /** The browser page this preview is open in — what an address commit converts. */
   previewId: string
   worktreeId: string
   history: DocPreviewHistory
-  loading: boolean
   onReload: () => void
   /** Drops the grant and mints a new one — the preview's equivalent of ignoring every cache. */
   onHardReload: () => void
@@ -48,6 +48,8 @@ export function DocPreviewToolbar({
   markupActive: boolean
   onToggleMarkup: () => void
   markupDisabled: boolean
+  /** Absent for documents a share link can't render. */
+  shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
 }): React.JSX.Element {
   const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
   const reloadLabel = translate(
@@ -60,7 +62,6 @@ export function DocPreviewToolbar({
       controls={{
         canGoBack: history.canGoBack,
         canGoForward: history.canGoForward,
-        loading,
         goBack: history.goBack,
         goForward: history.goForward,
         reload: onReload,
@@ -75,7 +76,6 @@ export function DocPreviewToolbar({
           menuOpen={reloadMenuOpen}
           onMenuOpenChange={setReloadMenuOpen}
           label={reloadLabel}
-          loading={loading}
           showShortcutHint={false}
           reloadShortcut=""
           hardReloadShortcut=""
@@ -97,12 +97,14 @@ export function DocPreviewToolbar({
         // be the one who spends it.
         canShowDiscoveryHint: false
       }}
+      shareControl={shareControl}
       viewSource={{
         onSelect: onOpenSource,
         label: translate(
           'auto.components.editor.HtmlDocPreview.openSourceControl',
           'Open source file'
-        )
+        ),
+        alreadyInOverflowMenu: true
       }}
       openExternal={{
         onSelect: onOpenExternally,
@@ -111,15 +113,16 @@ export function DocPreviewToolbar({
           'Open with default app'
         )
       }}
-      overflowMenu={
+      overflowMenu={(overflow) => (
         <DocPreviewOverflowMenu
           onReload={onReload}
           onHardReload={onHardReload}
           onOpenSource={onOpenSource}
           onCopyPath={onCopyPath}
           onCopyRelativePath={onCopyRelativePath}
+          overflow={overflow}
         />
-      }
+      )}
     />
   )
 }

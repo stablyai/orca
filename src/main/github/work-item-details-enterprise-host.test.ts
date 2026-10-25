@@ -1,3 +1,4 @@
+import type * as WorkItemDetailsTestLookup from './work-item-details-test-lookup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RateLimitGuardResult =
@@ -47,8 +48,11 @@ vi.mock('./gh-utils', () => ({
   release: vi.fn()
 }))
 
-vi.mock('./client', () => ({
+vi.mock('./client', async () => ({
   getWorkItem: getWorkItemMock,
+  getWorkItemWithRepository: (
+    await vi.importActual<typeof WorkItemDetailsTestLookup>('./work-item-details-test-lookup')
+  ).makeWorkItemDetailsLookupMock(getWorkItemMock),
   getWorkItemByOwnerRepo: getWorkItemByOwnerRepoMock,
   getPRChecks: getPRChecksMock,
   getPRComments: getPRCommentsMock
@@ -69,8 +73,6 @@ import { getWorkItemDetails } from './work-item-details'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -286,9 +288,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
   })
 
   it('surfaces a found SSH PR without any default-host gh call when the repository is unresolved', async () => {
-    // Why: this is the regression under test — a *found* PR whose owner/repo
-    // cannot be resolved to an Enterprise host must not silently fall back to
-    // github.com. With no prRepo, origin resolution runs and returns null.
+    // A found PR without a resolved Enterprise host must not fall back to github.com.
     getWorkItemMock.mockResolvedValueOnce({
       id: 'pr:7',
       type: 'pr',
@@ -304,8 +304,6 @@ describe('getWorkItemDetails Enterprise host routing', () => {
 
     const details = await getWorkItemDetails('/remote/repo', 7, 'pr', 'ssh-1')
 
-    // The item is still surfaced, but no host-qualified (or default-host) gh
-    // request is made because the execution repository never resolved.
     expect(details?.item.id).toBe('pr:7')
     expect(getWorkItemByOwnerRepoMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()

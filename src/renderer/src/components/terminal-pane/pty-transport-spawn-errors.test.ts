@@ -190,8 +190,8 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(onError).not.toHaveBeenCalled()
-    // undefined, not a sessionExpired result: the reattach handler's no-pty-id branch routes an
-    // SSH pane to recoverUnverifiableDirectSshReattach (remount + reattach, no shell restart).
+    // undefined, not a sessionExpired result: an unaddressable id is unverifiable, never a
+    // licence to restart the shell.
     expect(result).toBeUndefined()
   })
 
@@ -259,5 +259,24 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(onError).toHaveBeenCalledWith(createTerminalSessionStateSaveFailureMessage())
+  })
+
+  it('keeps every line of a multi-line spawn failure for the pane toast (#20386)', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const diagnosis =
+      'Remote terminals are unavailable: make and a C++ compiler are not installed. Install them on the remote host, then reconnect:\n' +
+      '  sudo apt-get install -y build-essential python3\n' +
+      'Host: linux/x64, glibc 2.36, Node v22.12.0 (ABI 127), prebuild slot linux-x64-glibc.'
+    vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(
+      new Error(`Error invoking remote method 'pty:spawn': Error: ${diagnosis}`)
+    )
+
+    const onError = vi.fn()
+    await createIpcPtyTransport({ connectionId: 'ssh-1' }).connect({
+      url: '',
+      callbacks: { onError }
+    })
+
+    expect(onError).toHaveBeenCalledWith(diagnosis)
   })
 })

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { encodeNdjson } from './ndjson'
+import { ptySpawnHealthPlatformCoverage } from './daemon-health-identity'
+import { daemonSocketDirIsTrusted } from './daemon-socket-endpoint-path'
 import {
   PROTOCOL_VERSION,
   type HelloMessage,
@@ -11,25 +13,44 @@ import {
 
 const HEALTH_CHECK_TIMEOUT_MS = 3_000
 const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
-// Why: e2e forces the failed-health preserve path without SIGSTOP races —
-// a stopped daemon also blocks listSessions, so the unhealthy guard cannot
-// verify live sessions until SIGCONT, which is flaky under CI load.
+// SIGSTOP also blocks listSessions; inject failure so e2e can test preserving live sessions reliably.
 export const E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV = 'ORCA_E2E_FORCE_DAEMON_HEALTH_UNREACHABLE'
 
-// 'rejected' means the daemon answered and refused the handshake (bad token,
-// foreign protocol) — it can never be adopted, unlike 'unreachable', which
-// also covers a live-but-wedged daemon that simply missed the RPC budget.
+// Rejected means handshake refusal or malformed reply; unreachable includes live but slow daemons.
 export type DaemonHealth = 'healthy' | 'unreachable' | 'rejected' | 'pty-spawn-unhealthy'
 
-export function checkDaemonHealth(socketPath: string, tokenPath: string): Promise<DaemonHealth> {
+export type DaemonHealthCheck = {
+  verdict: DaemonHealth
+  coverage: 'pty-spawn' | 'handshake'
+}
+
+function readPtySpawnHealthCoverage(
+  payload: unknown,
+  fallback: DaemonHealthCheck['coverage']
+): DaemonHealthCheck['coverage'] {
+  if (typeof payload !== 'object' || payload === null) {
+    return fallback
+  }
+  const coverage = 'coverage' in payload ? payload.coverage : undefined
+  return coverage === 'pty-spawn' || coverage === 'handshake' ? coverage : fallback
+}
+
+export function checkDaemonHealthWithCoverage(
+  socketPath: string,
+  tokenPath: string
+): Promise<DaemonHealthCheck> {
   return new Promise((resolve) => {
+    // Missing coverage from older Windows daemons proves only the handshake, never PTY spawning.
+    const fallbackCoverage = ptySpawnHealthPlatformCoverage()
+    const resolveVerdict = (verdict: DaemonHealth): void =>
+      resolve({ verdict, coverage: fallbackCoverage })
     if (process.env[E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV] === '1') {
-      resolve('unreachable')
+      resolveVerdict('unreachable')
       return
     }
 
     if (process.platform !== 'win32' && !existsSync(socketPath)) {
-      resolve('unreachable')
+      resolveVerdict('unreachable')
       return
     }
 
@@ -37,13 +58,13 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
     try {
       token = readFileSync(tokenPath, 'utf8').trim()
     } catch {
-      resolve('unreachable')
+      resolveVerdict('unreachable')
       return
     }
 
     let settled = false
     let sock: Socket | null = null
-    const settle = (result: DaemonHealth): void => {
+    const settle = (result: DaemonHealthCheck): void => {
       if (settled) {
         return
       }
@@ -58,7 +79,7 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
       sock?.off('connect', onConnect)
       sock?.off('data', onData)
     }
-    const onError = (): void => settle('unreachable')
+    const onError = (): void => settle({ verdict: 'unreachable', coverage: fallbackCoverage })
     const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
@@ -89,30 +110,38 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
         try {
           message = JSON.parse(line) as Record<string, unknown>
         } catch {
-          settle('rejected')
+          settle({ verdict: 'rejected', coverage: fallbackCoverage })
           return
         }
 
         if (message.type === 'hello') {
           if (!(message as HelloResponse).ok) {
-            settle('rejected')
+            settle({ verdict: 'rejected', coverage: fallbackCoverage })
             return
           }
-          // Why: a protocol-live daemon with a stale cwd or node-pty helper
-          // will answer ping but cannot create terminals, so reuse must check
-          // the PTY spawn prerequisites too.
+          // Ping cannot detect stale cwd or PTY-helper failures; check spawn prerequisites before reuse.
           sock?.write(encodeNdjson({ id: 'health-1', type: 'ptySpawnHealth' }))
           continue
         }
 
         if (message.id === 'health-1') {
-          settle(message.ok === true ? 'healthy' : 'pty-spawn-unhealthy')
+          settle({
+            verdict: message.ok === true ? 'healthy' : 'pty-spawn-unhealthy',
+            coverage: readPtySpawnHealthCoverage(message.payload, fallbackCoverage)
+          })
           return
         }
       }
     }
-    const timer = setTimeout(() => settle('unreachable'), HEALTH_CHECK_TIMEOUT_MS)
+    const timer = setTimeout(
+      () => settle({ verdict: 'unreachable', coverage: fallbackCoverage }),
+      HEALTH_CHECK_TIMEOUT_MS
+    )
 
+    if (!daemonSocketDirIsTrusted(socketPath)) {
+      settle({ verdict: 'unreachable', coverage: fallbackCoverage })
+      return
+    }
     sock = connect({ path: socketPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)
@@ -120,6 +149,13 @@ export function checkDaemonHealth(socketPath: string, tokenPath: string): Promis
     let buffer = ''
     sock.on('data', onData)
   })
+}
+
+export async function checkDaemonHealth(
+  socketPath: string,
+  tokenPath: string
+): Promise<DaemonHealth> {
+  return (await checkDaemonHealthWithCoverage(socketPath, tokenPath)).verdict
 }
 
 export async function healthCheckDaemon(socketPath: string, tokenPath: string): Promise<boolean> {
@@ -210,8 +246,7 @@ export function getMacDaemonSystemResolverHealth(
             settle('unknown')
             return
           }
-          // Why: the daemon must report health from inside its own process;
-          // external launchctl bsexec probes can misclassify healthy PTYs.
+          // Probe inside the daemon: external launchctl bsexec can misclassify its resolver health.
           sock?.write(
             encodeNdjson({
               id: 'resolver-health-1',
@@ -234,6 +269,10 @@ export function getMacDaemonSystemResolverHealth(
     }
     const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
 
+    if (!daemonSocketDirIsTrusted(socketPath)) {
+      settle('unknown')
+      return
+    }
     sock = connect({ path: socketPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)

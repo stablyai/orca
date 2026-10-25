@@ -97,6 +97,8 @@ describe('trim pipeline', () => {
     const image = solidSquareWithInset(100, 60)
     const cropped = cropImage(image, findOpaqueBounds(image))
     expect(cropped.width).toBe(60)
+    expect(cropped.height).toBe(60)
+    expect(cropped.data).toEqual(solidSquareWithInset(60, 60).data)
     const squared = squareWithMargin(cropped, 0.04)
     // Glyph (60) plus ~4% margin per side keeps it near-full-bleed.
     expect(glyphFillFraction(squared)).toBeGreaterThanOrEqual(0.9)
@@ -108,6 +110,12 @@ describe('trim pipeline', () => {
     const filled = squareWithMargin(cropImage(image, findOpaqueBounds(image)))
     const small = resizeImage(filled, 32, 32)
     expect(small.width).toBe(32)
+    const edge = {
+      width: 2,
+      height: 1,
+      data: Buffer.from([200, 100, 50, 255, 0, 0, 0, 0])
+    }
+    expect(resizeImage(edge, 1, 1).data).toEqual(Buffer.from([200, 100, 50, 128]))
     expect(glyphFillFraction(small)).toBeGreaterThanOrEqual(0.9)
   })
 })

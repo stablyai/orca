@@ -3,24 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
 import { nativeChatAttachmentOwnerUnchanged } from './native-chat-resolved-path-ownership'
-import type { NativeChatSshAttachmentOwner } from './native-chat-attachment-upload'
-
-function ssh(overrides: Partial<NativeChatSshAttachmentOwner> = {}): NativeChatSshAttachmentOwner {
-  return {
-    kind: 'ssh',
-    connectionId: 'conn-1',
-    worktreePath: '/remote/wt',
-    expectedExecutionHostId: 'ssh:conn-1',
-    expectedSshTargetId: 'conn-1',
-    expectedSshConnectionGeneration: 4,
-    ...overrides
-  }
-}
-
 describe('nativeChatAttachmentOwnerUnchanged', () => {
-  it('keeps same-kind local and runtime owners', () => {
+  it('keeps same-kind local and remote owners', () => {
     expect(nativeChatAttachmentOwnerUnchanged({ kind: 'local' }, { kind: 'local' })).toBe(true)
-    expect(nativeChatAttachmentOwnerUnchanged({ kind: 'runtime' }, { kind: 'runtime' })).toBe(true)
+    expect(nativeChatAttachmentOwnerUnchanged({ kind: 'remote' }, { kind: 'remote' })).toBe(true)
+    expect(nativeChatAttachmentOwnerUnchanged({ kind: 'local' }, { kind: 'remote' })).toBe(false)
   })
 
   it('never treats an unknown owner as the same owner', () => {
@@ -29,13 +16,25 @@ describe('nativeChatAttachmentOwnerUnchanged', () => {
     )
     expect(nativeChatAttachmentOwnerUnchanged({ kind: 'local' }, { kind: 'not-ready' })).toBe(false)
   })
-
-  it('rejects an SSH reconnect that keeps the same connection id', () => {
-    expect(nativeChatAttachmentOwnerUnchanged(ssh(), ssh())).toBe(true)
-    expect(
-      nativeChatAttachmentOwnerUnchanged(ssh(), ssh({ expectedSshConnectionGeneration: 5 }))
-    ).toBe(false)
-    expect(nativeChatAttachmentOwnerUnchanged(ssh(), ssh({ connectionId: 'conn-2' }))).toBe(false)
-    expect(nativeChatAttachmentOwnerUnchanged(ssh(), ssh({ worktreePath: '/other' }))).toBe(false)
-  })
 })
+
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { resolveNativeChatRuntimeSessionAttachmentOwner } from './native-chat-attachment-upload'
+it.each([false, true])(
+  'accepts an upload after re-pair only with proven host continuity=%s',
+  (sameHost) => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'e1', createdAt: 1, pairingRevision: 7 }])
+    const resolve = () =>
+      resolveNativeChatRuntimeSessionAttachmentOwner({
+        sessionId: 's1',
+        runtimeEnvironmentId: 'e1'
+      })
+    const captured = resolve()
+    replaceRuntimeEnvironmentRevisions([{ id: 'e1', createdAt: 1, pairingRevision: 8 }], {
+      retired: sameHost ? [] : ['e1'],
+      sameHost: sameHost ? [{ id: 'e1', fromRevision: 7, toRevision: 8 }] : []
+    })
+    expect(nativeChatAttachmentOwnerUnchanged(captured, resolve())).toBe(sameHost)
+    replaceRuntimeEnvironmentRevisions([])
+  }
+)

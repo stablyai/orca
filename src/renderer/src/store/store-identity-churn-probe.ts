@@ -18,6 +18,7 @@
  * double-invoke it or hand it a stale state.
  */
 import type { StateCreator } from 'zustand'
+import type { StoreSetArgs } from './react-commit-cascade-write-probe'
 
 export const storeIdentityChurnProbe = { armed: false, captureSites: false }
 
@@ -177,30 +178,41 @@ export function withStoreIdentityChurnProbe<TState>(
   createState: StateCreator<TState, [], []>
 ): StateCreator<TState, [], []> {
   return (set, get, api) => {
-    const wrapped = ((partial: unknown, replace?: unknown): void => {
-      if (!storeIdentityChurnProbe.armed) {
-        ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
-        return
+    const probe = (write: typeof set): typeof set => {
+      const forward = (args: StoreSetArgs<TState>): void => {
+        if (args[1] === true) {
+          write(...args)
+        } else {
+          write(...args)
+        }
       }
-      const previous = get() as Record<string, unknown>
-      // Why the write is passed through untouched: zustand owns when and how an
-      // updater runs. The probe only compares the states on either side of it.
-      ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
-      try {
-        const next = get() as Record<string, unknown>
-        if (next === previous) {
+      return (...args: StoreSetArgs<TState>): void => {
+        if (!storeIdentityChurnProbe.armed) {
+          forward(args)
           return
         }
-        const fields =
-          replace !== true && partial !== null && typeof partial === 'object'
-            ? Object.keys(partial)
-            : Object.keys(next)
-        recordWrite(previous, next, fields)
-      } catch {
-        // A diagnostic on the app's universal write path must never break writes.
+        const previous = get()
+        // Why the write is passed through untouched: zustand owns when and how an
+        // updater runs. The probe only compares the states on either side of it.
+        forward(args)
+        try {
+          const next = get()
+          if (next === previous || !isPlainRecord(previous) || !isPlainRecord(next)) {
+            return
+          }
+          const [partial, replace] = args
+          const fields =
+            replace !== true && partial !== null && typeof partial === 'object'
+              ? Object.keys(partial)
+              : Object.keys(next)
+          recordWrite(previous, next, fields)
+        } catch {
+          // A diagnostic on the app's universal write path must never break writes.
+        }
       }
-    }) as typeof set
-    api.setState = wrapped as typeof api.setState
-    return createState(wrapped, get, api)
+    }
+    // Why separately: an outer middleware may hand slices a different `set` than api.setState.
+    api.setState = probe(api.setState)
+    return createState(probe(set), get, api)
   }
 }

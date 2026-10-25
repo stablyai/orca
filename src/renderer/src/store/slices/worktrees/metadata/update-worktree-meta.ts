@@ -1,12 +1,23 @@
+import {
+  hasExplicitWorkspaceReviewSelection,
+  getWorkspaceReviewPersistenceUpdates,
+  getWorkspaceReviewRefreshHints
+} from './workspace-attachment-review-selection'
+import {
+  getWorkspaceAttachments,
+  normalizeWorkspaceAttachmentUpdate
+} from '../../../../../../shared/workspace-attachments'
+import { normalizeGitHubPRSuppressionUpdate } from '../../../../../../shared/worktree/github-pr-suppression'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
-import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../github-cache-key'
+import { getGitHubPRCacheKeyCandidates } from '../../../../../../shared/github/github-cache-key'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById,
@@ -14,28 +25,25 @@ import {
 } from '../listing/detected-worktree-meta'
 import {
   bumpHostedReviewLinkMutationGeneration,
-  getHostedReviewLinkForMetaRefresh,
   hasChangedHostedReviewLinkUpdates,
   hasHostedReviewLinkUpdates
 } from './hosted-review-link-mutation'
-import { normalizeHostedReviewLinkReplacementUpdates } from './hosted-review-link-update-normalization'
 import {
   getHostedReviewPushTargetLookup,
   resolveGitHubReviewPushTarget
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
+import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
-import {
-  settingsForWorktreeOwner,
-  trySettingsForWorktreeOwner
-} from '../listing/worktree-owner-settings'
+import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 
 import { findRepoForHost } from '../../repo-host-identity'
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeMeta'] {
-  return async (worktreeId, updates, options) => {
+  const update: WorktreeSlice['updateWorktreeMeta'] = async (worktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
     const requestedHostId = options?.executionHostId
     const existingWorktree = findKnownWorktreeById(get(), worktreeId, requestedHostId)
@@ -46,9 +54,19 @@ export function createUpdateWorktreeMeta(
     if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
       return { ok: true }
     }
+    const mutationUpdates =
+      updates.linkedItems === undefined
+        ? updates
+        : {
+            ...updates,
+            linkedItems: updates.linkedItems,
+            linkedItemsBase: updates.linkedItemsBase ?? getWorkspaceAttachments(existingWorktree),
+            linkedItemsSelectionChanged:
+              updates.linkedItemsSelectionChanged ?? hasExplicitWorkspaceReviewSelection(updates)
+          }
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
-      const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
+      const folderUpdates = getFolderWorkspaceMetaUpdates(mutationUpdates)
       if (Object.keys(folderUpdates).length === 0) {
         return { ok: true }
       }
@@ -57,7 +75,8 @@ export function createUpdateWorktreeMeta(
         // reporting ok would show the dialog a save that silently undid itself.
         const updated = await get().updateFolderWorkspace(
           workspaceScope.folderWorkspaceId,
-          folderUpdates
+          folderUpdates,
+          { executionHostId }
         )
         return updated
           ? { ok: true }
@@ -73,44 +92,52 @@ export function createUpdateWorktreeMeta(
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     }
-    const normalizedUpdates = normalizeHostedReviewLinkReplacementUpdates(updates, existingWorktree)
+    let normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existingWorktree, mutationUpdates)
     // Why: manual PR linking supplies only the number; resolve the head branch so Push targets the review branch.
     const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
       ? normalizedUpdates.linkedPR
       : null
     // Why: an ambiguous owner must not throw past this update's { ok, error } contract — skip the lookup instead.
-    const pushTargetOwnerSettings =
+    const pushTargetOwner =
       linkedPrForPushTarget !== null &&
       normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
       !existingWorktree.pushTarget
-        ? trySettingsForWorktreeOwner(get(), worktreeId, executionHostId)
+        ? runtimeTargetForWorkspaceOwner(get(), {
+            workspaceId: worktreeId,
+            ...(executionHostId ? { hostId: executionHostId } : {})
+          })
         : null
     const resolvedPushTarget =
-      pushTargetOwnerSettings && existingWorktree && linkedPrForPushTarget !== null
+      pushTargetOwner && existingWorktree && linkedPrForPushTarget !== null
         ? await resolveGitHubReviewPushTarget(
-            pushTargetOwnerSettings,
+            pushTargetOwner,
             existingWorktree.repoId,
             linkedPrForPushTarget
           )
         : undefined
-    const existingHostedReviewPushTargetLookup = existingWorktree
-      ? getHostedReviewPushTargetLookup(existingWorktree)
-      : null
-    const nextHostedReviewPushTargetLookup = existingWorktree
-      ? getHostedReviewPushTargetLookup({ ...existingWorktree, ...normalizedUpdates })
-      : null
-    // Why: a pushTarget derived from a linked review must not keep steering pushes after it's unlinked or replaced.
-    const shouldClearStaleHostedReviewPushTarget =
-      Boolean(existingWorktree?.pushTarget) &&
-      normalizedUpdates.pushTarget === undefined &&
-      resolvedPushTarget === undefined &&
-      existingHostedReviewPushTargetLookup !== null &&
-      existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
     const worktreeForUpdate = get().getKnownWorktreeById(worktreeId, executionHostId)
     if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
       return { ok: true }
     }
+    normalizedUpdates = normalizeGitHubPRSuppressionUpdate(
+      normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates)
+    )
+    const currentResolvedPushTarget =
+      normalizedUpdates.linkedPR === linkedPrForPushTarget ? resolvedPushTarget : undefined
+    const existingHostedReviewPushTargetLookup = worktreeForUpdate
+      ? getHostedReviewPushTargetLookup(worktreeForUpdate)
+      : null
+    const nextHostedReviewPushTargetLookup = worktreeForUpdate
+      ? getHostedReviewPushTargetLookup({ ...worktreeForUpdate, ...normalizedUpdates })
+      : null
+    // A lookup can finish after another editor changes the selected review.
+    const shouldClearStaleHostedReviewPushTarget =
+      Boolean(worktreeForUpdate?.pushTarget) &&
+      normalizedUpdates.pushTarget === undefined &&
+      currentResolvedPushTarget === undefined &&
+      existingHostedReviewPushTargetLookup !== null &&
+      existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
     const shouldRefreshHostedReview = Boolean(
       worktreeForUpdate && hasChangedHostedReviewLinkUpdates(normalizedUpdates, worktreeForUpdate)
     )
@@ -127,8 +154,8 @@ export function createUpdateWorktreeMeta(
       'displayName' in normalizedUpdates
         ? { displayNameIsPinned: displayNameUpdatePinsLabel(normalizedUpdates.displayName) }
         : {}
-    const targetEnriched = resolvedPushTarget
-      ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: resolvedPushTarget }
+    const targetEnriched = currentResolvedPushTarget
+      ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: currentResolvedPushTarget }
       : shouldClearStaleHostedReviewPushTarget
         ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: undefined }
         : { ...normalizedUpdates, ...displayNameProvenance }
@@ -140,8 +167,11 @@ export function createUpdateWorktreeMeta(
             firstAgentMessageRenameError: null
           }
         : targetEnriched
+    // Switch point: a comment edit is not a Recent event once the host owns the stamps.
     const enriched =
-      'comment' in renameCleared ? { ...renameCleared, lastActivityAt: Date.now() } : renameCleared
+      'comment' in renameCleared && !ORCA_SIDEBAR_INPUTS_IS_MAIN
+        ? { ...renameCleared, lastActivityAt: Date.now() }
+        : renameCleared
 
     let didApply = false
     set((s) => {
@@ -176,26 +206,9 @@ export function createUpdateWorktreeMeta(
               true
             )
           : null
-      const prCacheKey =
-        reviewRepo && reviewBranch
-          ? getGitHubPRCacheKey(
-              reviewRepo.path,
-              reviewRepo.id,
-              reviewBranch,
-              s.settings,
-              reviewRepo.connectionId,
-              reviewRepo.executionHostId,
-              true
-            )
-          : null
       const prCacheKeys =
-        reviewRepo && reviewBranch
-          ? [
-              prCacheKey,
-              getLegacyGitHubPRCacheKey(reviewRepo.path, reviewRepo.id, reviewBranch),
-              getLegacyGitHubPRCacheKey(reviewRepo.path, undefined, reviewBranch)
-            ].filter((key): key is string => Boolean(key))
-          : []
+        reviewRepo && reviewBranch ? getGitHubPRCacheKeyCandidates(reviewRepo, reviewBranch) : []
+      const prCacheKey = prCacheKeys[0] ?? null
       const hostedReviewCache = s.hostedReviewCache ?? {}
       const prCache = s.prCache ?? {}
       if (
@@ -247,9 +260,9 @@ export function createUpdateWorktreeMeta(
 
     try {
       await persistWorktreeMeta(
-        settingsForWorktreeOwner(get(), worktreeId, executionHostId),
+        runtimeTargetForWorktreeOwner(get(), worktreeId, executionHostId),
         worktreeId,
-        enriched,
+        getWorkspaceReviewPersistenceUpdates(mutationUpdates, enriched),
         executionHostId ?? existingWorktree?.hostId,
         worktreeForUpdate?.identity?.key
       )
@@ -263,31 +276,7 @@ export function createUpdateWorktreeMeta(
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
           repoOwnerExecutionHostId: executionHostId ?? worktreeForUpdate?.hostId,
-          linkedGitHubPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedPR'
-          ),
-          linkedGitLabMR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedGitLabMR'
-          ),
-          linkedBitbucketPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedBitbucketPR'
-          ),
-          linkedAzureDevOpsPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedAzureDevOpsPR'
-          ),
-          linkedGiteaPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedGiteaPR'
-          ),
+          ...getWorkspaceReviewRefreshHints(targetEnriched, worktreeForUpdate),
           force: true
         })
       }
@@ -310,4 +299,19 @@ export function createUpdateWorktreeMeta(
     }
     return { ok: true }
   }
+  // A conditional write may not apply, so only an unconditional one shows ahead of main.
+  return (worktreeId, updates, options) =>
+    options?.shouldApply
+      ? update(worktreeId, updates, options)
+      : withPendingSidebarRowWrites(
+          () => [
+            {
+              worktreeId,
+              updates,
+              executionHostId:
+                options?.executionHostId ?? findKnownWorktreeById(get(), worktreeId)?.hostId
+            }
+          ],
+          () => update(worktreeId, updates, options)
+        )
 }

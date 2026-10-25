@@ -1,8 +1,17 @@
-import { useMemo, useRef } from 'react'
+import { watchSnapshotInputs } from './useDashboardPopoutBridge'
+import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
+import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
+import { useChatProgramFactsVersion } from '@/lib/host-chat-program-acquisition'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
+import { selectAgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 /**
  * Builds the dashboard snapshot directly from the live renderer store for the
@@ -14,7 +23,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const rowsCacheRef = useRef<ReturnType<typeof createWorktreeAgentRowsCache>>(undefined!)
   rowsCacheRef.current ??= createWorktreeAgentRowsCache()
   const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
@@ -40,10 +49,10 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   // bytes for the host the pty used to run on. All are low-frequency (each
   // writer bails out when nothing changed) next to agentStatusByPaneKey, which
   // already rebuilds this memo on every status ping.
-  const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
+  const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   // Why: a folder workspace is not a git worktree — its host resolves through
   // these two instead of worktreesByRepo.
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const projectGroups = useAppStore((s) => s.projectGroups)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -62,6 +71,19 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   // Why: freshness can flip a bucket without any backing map changing; the epoch
   // ticks on the freshness boundary so the memo re-derives stale-decayed cards.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  // Why: launch options read only this view, so any route input change rebuilds them.
+  const launchRouteStore = useAppStore(selectAgentLaunchRouteView)
+  useEffect(() => {
+    const holds = createDashboardChatProgramHolds()
+    const reconcile = (): void => holds.reconcile(useAppStore.getState())
+    const stopWatching = watchSnapshotInputs(reconcile)
+    reconcile()
+    return () => {
+      stopWatching()
+      holds.release()
+    }
+  }, [])
+  const chatProgramFactsVersion = useChatProgramFactsVersion()
 
   return useMemo(
     // Why: Date.now() is read inside the memo (not a dep) so stale-decay
@@ -108,7 +130,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
         Date.now(),
         // Why: unchanged worktrees reuse their row pipeline; card assembly still runs
         // fresh against the review/host/status slices this memo subscribes to.
-        { rowsCache: rowsCacheRef.current, rowsGeneration: agentStatusEpoch }
+        { rowsCache: rowsCacheRef.current, rowsGeneration: agentStatusEpoch, launchRouteStore }
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -143,6 +165,8 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       detectedAgentIds,
       remoteDetectedAgentIds,
       runtimeDetectedAgentIds,
+      chatProgramFactsVersion,
+      launchRouteStore,
       agentStatusEpoch
     ]
   )

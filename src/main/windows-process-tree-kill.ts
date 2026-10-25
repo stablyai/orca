@@ -6,26 +6,17 @@ export type WindowsTreeKiller = (rootPid: number, deps?: { site?: string }) => P
 /** Bound hung taskkill so killRoot still runs in killWithDescendantSweep. */
 export const WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 5_000
 
-/**
- * Force-kill a Windows process and every descendant (`taskkill /T /F`).
- * Best-effort: missing/already-dead roots still resolve so callers can finish
- * their own handle cleanup via killRoot.
- *
- * Most main-process taskkills run through here; the families that keep their own
- * spawn (account-login teardowns, codex app-server deadline, git-command abort,
- * notebook and precheck timeouts) share the same gate, so the refusal and the
- * breadcrumb live in `admitSelfInitiatedTreeKill` rather than in this function.
- */
+/** Best-effort tree kill; resolves true only when taskkill exits successfully. */
 export function terminateWindowsProcessTree(
   rootPid: number,
   deps: { execFileImpl?: typeof execFile; site?: string } = {}
-): Promise<void> {
+): Promise<boolean> {
   if (!Number.isInteger(rootPid) || rootPid <= 0) {
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   const site = deps.site ?? 'windows-process-tree-kill'
   if (!admitSelfInitiatedTreeKill({ pid: rootPid, site, scope: 'win-taskkill-tree' })) {
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   const run = deps.execFileImpl ?? execFile
   return new Promise((resolve) => {
@@ -33,12 +24,11 @@ export function terminateWindowsProcessTree(
       'taskkill',
       ['/pid', String(rootPid), '/T', '/F'],
       {
-        // Why: a wedged taskkill must not block killRoot forever (#10004 review).
         timeout: WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,
         windowsHide: true
       },
-      () => {
-        resolve()
+      (error) => {
+        resolve(error === null)
       }
     )
   })

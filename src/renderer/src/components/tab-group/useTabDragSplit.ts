@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from 'react'
+import { useCallback, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   closestCenter,
   pointerWithin,
@@ -13,13 +13,9 @@ import {
 } from '@dnd-kit/core'
 import type { TabGroup } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
+import type { TabDragActivationSnapshot } from '../../store/slices/tabs/tabs-slice-contract'
 import { useHoveredTabInsertion, type HoveredTabInsertion } from './tab-insertion'
-import {
-  captureTabDragActivationSnapshot,
-  restoreSourceGroupActiveTabAfterCrossGroupDrop,
-  restoreTabDragActivationSnapshot,
-  type TabDragActivationSnapshot
-} from './tab-drag-preview-activation'
+import { captureTabDragActivationSnapshot } from './tab-drag-preview-activation'
 import { getDragPointer } from './tab-drag-pointer'
 import { TabDragPointerSensor } from './tab-drag-pointer-sensor'
 import {
@@ -131,9 +127,13 @@ export function useTabDragSplit({
   // useSensors(ptr) / useSensors(), because dnd-kit internally spreads
   // the sensors array into a useEffect dependency list — changing its
   // length between renders violates React's rules of hooks.
-  const pointerSensor = useSensor(TabDragPointerSensor, {
-    activationConstraint: { distance: getTabDragActivationDistance(enabled) }
-  })
+  const activationDistance = getTabDragActivationDistance(enabled)
+  // Why memoized: fresh options rebuild every tab's drag listeners and wake every tab through dnd-kit's context.
+  const pointerSensorOptions = useMemo(
+    () => ({ activationConstraint: { distance: activationDistance } }),
+    [activationDistance]
+  )
+  const pointerSensor = useSensor(TabDragPointerSensor, pointerSensorOptions)
   const sensors = useSensors(pointerSensor)
 
   const clearDragState = useCallback(() => {
@@ -158,7 +158,7 @@ export function useTabDragSplit({
     if (!snapshot) {
       return
     }
-    restoreTabDragActivationSnapshot(worktreeId, snapshot)
+    useAppStore.getState().restoreDragActivationSnapshot(worktreeId, snapshot)
   }, [worktreeId])
 
   const restoreSourceGroupAfterCrossGroupDrop = useCallback(
@@ -167,7 +167,7 @@ export function useTabDragSplit({
       if (!snapshot) {
         return
       }
-      restoreSourceGroupActiveTabAfterCrossGroupDrop({
+      useAppStore.getState().restoreSourceGroupActiveTabAfterDrop({
         worktreeId,
         snapshot,
         sourceGroupId: activeData.groupId,

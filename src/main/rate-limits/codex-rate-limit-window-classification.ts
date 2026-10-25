@@ -13,6 +13,12 @@ export type CodexRateWindowSnapshot = {
 export type CodexRateLimitWindowsSnapshot = {
   primary?: CodexRateWindowSnapshot | null
   secondary?: CodexRateWindowSnapshot | null
+  /** Pay-as-you-go credit balance, when the app-server reports one. */
+  credits?: {
+    hasCredits?: boolean
+    unlimited?: boolean
+    balance?: string | number
+  } | null
 }
 
 type MappableCodexRateWindowSnapshot = CodexRateWindowSnapshot & { usedPercent: number }

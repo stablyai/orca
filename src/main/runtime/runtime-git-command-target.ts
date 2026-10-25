@@ -1,14 +1,15 @@
+import type { SourceControlAiSettingsInput } from '../../shared/source-control-ai'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type { GitPushTarget, GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import {
   ExecutionHostNotDispatchableError,
   resolveGitRouteForHost
 } from '../providers/execution-host-provider-dispatch'
-import { SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from '../providers/ssh-git-dispatch'
-import type { SshGitProvider } from '../providers/ssh-git-provider'
+import type { createLocalGitProvider, LocalGitProvider } from '../providers/local-git-provider'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { PullRequestLinkedIssueMeta } from '../source-control/pull-request-linked-issue'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
@@ -37,7 +38,7 @@ export type RuntimeGitTarget = {
 
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
-  getRuntimeSettings(): GlobalSettings
+  getRuntimeSettings(): SourceControlAiSettingsInput
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
@@ -46,7 +47,10 @@ export type RuntimeGitCommandHost = {
    *  no store (avoids unrelated ownership-inheritance/refspec-migration side effects), so a
    *  lazily-minted remote still needs a way back into the store's `pushTarget.remoteCreated`
    *  for #17842's orphan sweep. Called only when materialize reports `remoteCreated: true`. */
-  persistMaterializedPushTarget?(worktreeId: string, pushTarget: GitPushTarget): void
+  persistMaterializedPushTarget?(
+    worktree: Pick<Worktree, 'id' | 'hostId'>,
+    pushTarget: GitPushTarget
+  ): void
 }
 
 /**
@@ -59,35 +63,39 @@ export type RuntimeGitCommandHost = {
  * same-named target in the wrong namespace, so it throws rather than routing.
  */
 export type RuntimeGitRoute =
-  | { kind: 'local' }
-  /** `provider: null` is "remote and currently unreachable" — never "run it here". */
-  | { kind: 'ssh'; connectionId: string; provider: SshGitProvider | null }
+  | { kind: 'local'; createProvider: typeof createLocalGitProvider }
+  /** An SSH target this process does not serve; it fails or reports unavailable, never runs here. */
+  | { kind: 'ssh'; connectionId: string }
 
 export function runtimeGitRouteForTarget(target: RuntimeGitTarget): RuntimeGitRoute {
   const route = resolveGitRouteForHost(target.executionHostId)
   switch (route.kind) {
     case 'local':
-      return { kind: 'local' }
+      return { kind: 'local', createProvider: route.createProvider }
     case 'ssh':
-      return { kind: 'ssh', connectionId: route.connectionId, provider: route.provider }
+      return { kind: 'ssh', connectionId: route.connectionId }
     case 'runtime':
       throw new ExecutionHostNotDispatchableError(route.hostId)
   }
 }
 
-/**
- * `null` means exactly one thing: the host is `local`, and this command runs here as free
- * functions. An unreachable SSH host and a `runtime:` host both throw.
- */
-export function requireRuntimeGitProvider(target: RuntimeGitTarget): SshGitProvider | null {
+/** The local route for work this process runs itself; `ssh:` and `runtime:` hosts throw. */
+export function requireLocalRuntimeGitRoute(
+  target: RuntimeGitTarget
+): Extract<RuntimeGitRoute, { kind: 'local' }> {
   const route = runtimeGitRouteForTarget(target)
-  if (route.kind === 'local') {
-    return null
+  if (route.kind === 'ssh') {
+    throw new SshHostNotServedError(route.connectionId)
   }
-  if (!route.provider) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-  }
-  return route.provider
+  return route
+}
+
+/** A provider for the target's own host; an `ssh:` host and a `runtime:` host both throw. */
+export function requireRuntimeGitProvider(target: RuntimeGitTarget): LocalGitProvider {
+  return requireLocalRuntimeGitRoute(target).createProvider({
+    ...localGitOptionsForTarget(target),
+    getSharedLinkPaths: () => (target.repo ? getWorktreeSharedLinkPaths(target.repo) : [])
+  })
 }
 
 export function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOptions {

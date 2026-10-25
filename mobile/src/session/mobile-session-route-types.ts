@@ -1,12 +1,16 @@
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { MobileFileMedia } from '../files/mobile-file-media'
+import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { RuntimeMobileSessionAgentTabStatus } from '../../../src/shared/runtime-types'
+import type { MirroredEvidenceReceipt } from '../../../src/shared/agent-status-observation'
 import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
+import type { MobileNativeChatIdentity } from './mobile-native-chat-eligibility'
 
 export type Terminal = TerminalRecord
 
@@ -25,6 +29,8 @@ export type MobileSessionTab =
       /** Agent Orca launched in this terminal, if any. This makes chat eligible
        *  before the first live agent-status update reaches the mobile client. */
       launchAgent?: TuiAgent
+      /** Client-only: the last chat identity seen on this handle (see withRememberedNativeChatIdentity). */
+      nativeChatIdentity?: MobileNativeChatIdentity
       /** Host-provided launch context still parked as an unsent TUI-input draft. */
       launchDraft?: string
       launchDraftCreatedAt?: number
@@ -36,7 +42,8 @@ export type MobileSessionTab =
       id: string
       title: string
       sessionId: string
-      agent: AgentSessionHandleProvider
+      agent: StructuredAgentId
+      chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
       isActive: boolean
     }
   | {
@@ -90,11 +97,16 @@ export type MarkdownDocState =
       stale?: boolean
       saving?: boolean
       saveError?: string
+      /** Changes only on phone edits and saves, not host metadata updates. */
+      localRevision?: number
       readOnlyReason?: string
+      truncated?: true
+      byteLength?: number
     }
   | { status: 'error'; message: string }
 
 export type FileDocState =
+  | { status: 'ready'; kind: 'media'; media: MobileFileMedia }
   | { status: 'loading' }
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
@@ -106,6 +118,8 @@ export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
 
 export type DiffCommentActions = {
   comments: DiffComment[]
+  /** Notes a new agent session is still being started with. */
+  sendingCommentIds: ReadonlySet<string>
   busy: boolean
   onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
   onDelete: (commentId: string) => Promise<void>
@@ -138,7 +152,8 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
+/** `other-runtime`: another Orca server owns the workspace, so the paired host cannot list its agents. */
+export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error' | 'other-runtime'
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 

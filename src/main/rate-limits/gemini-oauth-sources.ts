@@ -1,8 +1,9 @@
-import { readFile, writeFile, rename } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { net } from 'electron'
+import { getMainHttpClient } from '../network/http-client'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
+import { writeCredentialFileAtomic } from '../integration-credential-file'
 
 const API_TIMEOUT_MS = 10_000
 const OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')
@@ -77,10 +78,10 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
   }
 }
 
+// Why an explicit owner-only mode: the rename replaces Gemini's 0600 file, and orcad runs at the
+// login umask (#31125).
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
-  const tmpPath = `${OAUTH_CREDS_PATH}.${process.pid}.tmp`
-  await writeFile(tmpPath, JSON.stringify(creds, null, 2), 'utf-8')
-  await rename(tmpPath, OAUTH_CREDS_PATH)
+  writeCredentialFileAtomic(OAUTH_CREDS_PATH, Buffer.from(JSON.stringify(creds, null, 2), 'utf-8'))
 }
 
 export type RefreshTokenResult = {
@@ -94,7 +95,7 @@ export async function refreshAccessToken(
   clientId: string,
   clientSecret: string
 ): Promise<RefreshTokenResult> {
-  const res = await net.fetch(GOOGLE_TOKEN_URL, {
+  const res = await getMainHttpClient().fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -123,7 +124,7 @@ export async function refreshAccessToken(
 }
 
 export async function loadProjectId(accessToken: string): Promise<string> {
-  const res = await net.fetch(LOAD_CODE_ASSIST_URL, {
+  const res = await getMainHttpClient().fetch(LOAD_CODE_ASSIST_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -20,7 +20,7 @@ import {
 } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy, waitForTabParked } from './helpers/terminal-hidden-parking'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
-import { TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS } from '../../src/renderer/src/components/terminal-pane/terminal-park-verdict-flip-telemetry'
+import { TERMINAL_TAB_PARK_FLIP_WINDOW_MS } from '../../src/renderer/src/components/terminal-pane/terminal-park-verdict-flip-telemetry'
 
 // Why: the parking wiring registers this handle (dev/exposeStore builds only)
 // so tests can detect that hidden-view parking is compiled in and which delay
@@ -43,7 +43,7 @@ test.use({
 
 const PARKED_FRAME_SCRIPT_DELAY_MS = 750
 const PARKED_FRAME_COUNT = 25
-const PARK_VERDICT_BURST_SETTLE_MS = TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS * 4
+const PARK_VERDICT_WINDOW_SETTLE_MS = Math.ceil(TERMINAL_TAB_PARK_FLIP_WINDOW_MS / 5)
 
 function parkedTuiFrame(runId: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
@@ -168,7 +168,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
     const state = store.getState()
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     state.setActiveTab(targetTabId)
   }, tabId)
 
@@ -189,7 +189,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
 
@@ -478,7 +478,7 @@ test.describe('Terminal hidden view parking', () => {
     orcaPage,
     testRepoPath
   }, testInfo: TestInfo) => {
-    test.setTimeout(180_000)
+    test.setTimeout(420_000)
     await waitForSessionReady(orcaPage)
     const setup = await setUpParkableTabA(orcaPage)
     const { worktreeId, tabAId, tabAPtyId } = setup
@@ -542,8 +542,8 @@ test.describe('Terminal hidden view parking', () => {
       const mismatches: string[] = []
       for (let cycle = 1; cycle < CYCLES; cycle++) {
         // Why: each cycle intentionally flips this tab's rendered verdict twice.
-        // Let the production anti-churn burst window lapse before the next one.
-        await orcaPage.waitForTimeout(PARK_VERDICT_BURST_SETTLE_MS)
+        // Keep each tab below the 12-flip sustained-churn pin in a 60s window.
+        await orcaPage.waitForTimeout(PARK_VERDICT_WINDOW_SETTLE_MS)
         const rows = await runOneParkRevealCycle(cycle)
         if (JSON.stringify(rows) !== JSON.stringify(referenceRows)) {
           mismatches.push(

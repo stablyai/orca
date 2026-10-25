@@ -1,5 +1,6 @@
 import { BrowserGrabSessionController } from './browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
+import type { BrowserSiteDisplayController } from './browser-site-display-controller'
 import {
   createPageInitiatedTabBudget,
   type PageInitiatedTabBudget
@@ -7,9 +8,10 @@ import {
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import type { BrowserLoadError } from '../../shared/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
+import type { BrowserPagePromptTarget } from './browser-page-prompts'
 import type {
   ActiveDownload,
-  AuthUserAgentOverrideState,
+  CdpUserAgentOverrideState,
   PendingMainFrameNavigation,
   PendingPermissionEvent,
   PendingPopupEvent,
@@ -79,7 +81,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     browserTabId: string,
     reason?: 'page-closed' | 'guest-destroyed'
   ): void
-  protected abstract cancelDownloadInternal(downloadId: string, reason: string): void
+  protected abstract cancelDownloadInternal(
+    downloadId: string,
+    reason: string,
+    status?: 'canceled' | 'failed'
+  ): void
   protected abstract bindDownloadToTab(downloadId: string, browserTabId: string): void
   protected abstract flushDownloadSnapshot(downloadId: string): void
   protected abstract sendDownloadStarted(downloadId: string): void
@@ -115,27 +121,21 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       })
     | null = null
   protected readonly webContentsIdByTabId = new Map<string, number>()
-  // Why: reverse map gives O(1) guest→tab lookups on every mouse/load/permission/popup event.
   protected readonly tabIdByWebContentsId = new Map<number, string>()
   protected readonly popupOwnerContextByGuestId = new Map<number, PopupOwnerContext>()
-  // Why: keyed by the opener tree's root so named child popups can't each mint a fresh tab quota.
+  // A popup chain shares its root opener quota.
   protected readonly pageInitiatedTabBudgetByRootGuestId = new Map<number, PageInitiatedTabBudget>()
-  // Why: guests are keyed by page id but renderer visibility by workspace id; bridge the mismatch to activate the right tab before capture.
+  // Capture activates by workspace ID while guests are keyed by page ID.
   protected readonly workspaceIdByPageId = new Map<string, string>()
   protected readonly sessionProfileIdByPageId = new Map<string, string | null>()
-  // Why: serialize per-tab setViewportOverride so rapid toggles don't interleave CDP commands and leave emulation in a wrong state.
+  // Serialize viewport changes so rapid toggles cannot interleave CDP commands.
   protected readonly viewportOpsByTabId = new Map<string, Promise<unknown>>()
-  // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
-  // can re-issue it against the target URL's identity.
-  protected readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
-  // Why: the confirmed CDP identity outranks getUserAgent; pending intent keeps rapid navigations
-  // ordered without claiming a failed write was installed.
-  protected readonly authUserAgentOverrideStateByGuestId = new Map<
+  // Track pending and confirmed CDP identities without treating failed writes as installed.
+  protected readonly cdpUserAgentOverrideStateByGuestId = new Map<
     number,
-    AuthUserAgentOverrideState
+    CdpUserAgentOverrideState
   >()
-  // Why: the in-flight main-frame navigation target, held only until commit or failure — getURL()
-  // still reports the outgoing page until then. See resolveTabNavigationUrl.
+  // getURL() names the outgoing page until commit; retain the in-flight target separately.
   protected readonly pendingNavigationByGuestId = new Map<number, PendingMainFrameNavigation>()
   protected readonly contextMenuCleanupByTabId = new Map<string, () => void>()
   protected readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
@@ -147,10 +147,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly offscreenGuestIds = new Set<number>()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
-  // Why: did-start-navigation hides the overlay optimistically; stash the cleared error so did-fail-load(-3) can restore an aborted nav.
+  // Restore the optimistically hidden error if navigation aborts.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
+  protected siteDisplayController: BrowserSiteDisplayController | null = null
   protected shouldForwardDictationShortcut: (() => boolean) | null = null
   protected readonly pendingLoadFailuresByGuestId = new Map<
     number,
@@ -174,6 +175,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.certificateTrustController = controller
   }
 
+  setSiteDisplayController(controller: BrowserSiteDisplayController): void {
+    this.siteDisplayController = controller
+  }
+
   installCertificateRequestGuard(session: Electron.Session): void {
     this.certificateTrustController?.installSessionRequestGuard(session)
   }
@@ -191,12 +196,14 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.settingsResolver = resolver
   }
 
-  // Why: a debugger detach clears every CDP override Chromium holds, including the Google auth-host
-  // UA override, so the confirmed-override record must be dropped or the next auth navigation
-  // believes the identity is still installed and skips the write.
-  protected trackDebuggerDetachForAuthUserAgent(guest: Electron.WebContents): () => void {
+  // Detaching clears UA and device metrics; invalidate both cached records.
+  protected trackDebuggerDetachForCdpOverrides(guest: Electron.WebContents): () => void {
     const onDetach = (): void => {
-      this.authUserAgentOverrideStateByGuestId.delete(guest.id)
+      this.cdpUserAgentOverrideStateByGuestId.delete(guest.id)
+      const browserTabId = this.tabIdByWebContentsId.get(guest.id)
+      if (browserTabId) {
+        this.recordAppliedViewportOverride(browserTabId, guest.id, null)
+      }
     }
     try {
       guest.debugger.on('detach', onDetach)
@@ -212,6 +219,32 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     }
   }
 
+  getRendererContextForGuest(
+    guestWebContentsId: number
+  ): { browserPageId: string; renderer: Electron.WebContents } | null {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    if (!browserPageId) {
+      return null
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    return renderer ? { browserPageId, renderer } : null
+  }
+
+  resolvePagePromptTarget(guest: Electron.WebContents): BrowserPagePromptTarget | null {
+    const context = this.getRendererContextForGuest(guest.id)
+    if (context) {
+      return context
+    }
+    // Loading can start before renderer registration.
+    const awaitingRegistration =
+      this.policyAttachedGuestIds.has(guest.id) &&
+      !this.tabIdByWebContentsId.has(guest.id) &&
+      !this.popupOwnerContextByGuestId.has(guest.id) &&
+      !this.offscreenGuestIds.has(guest.id) &&
+      guest.getType() === 'webview'
+    return awaitingRegistration ? 'awaiting-registration' : null
+  }
+
   protected resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
     return this.resolvePopupOwnerContext(guestWebContentsId)?.browserTabId ?? null
   }
@@ -221,8 +254,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     if (browserTabId) {
       return { browserTabId, rootGuestWebContentsId: guestWebContentsId }
     }
-    // Route popups live in an Orca-built window, so they never pass through did-create-window and
-    // have no inherited context; their owning page comes from the route popup registry instead.
+    // Custom route popups skip did-create-window; resolve ownership through their registry.
     const routeOpenerWebContentsId = resolveBrowserRouteGuestPopupOpener(guestWebContentsId)
     if (routeOpenerWebContentsId !== null) {
       const openerTabId = this.tabIdByWebContentsId.get(routeOpenerWebContentsId)
@@ -241,7 +273,6 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     return null
   }
 
-  /** Shared across the whole opener tree, so a chain of popups draws from one budget. */
   protected tryConsumePageInitiatedTab(rootGuestWebContentsId: number): boolean {
     let budget = this.pageInitiatedTabBudgetByRootGuestId.get(rootGuestWebContentsId)
     if (!budget) {

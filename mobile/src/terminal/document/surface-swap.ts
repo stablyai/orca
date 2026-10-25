@@ -1,6 +1,7 @@
+import { elementInRoot } from './document-host-seams'
 import { disposeTermObservers } from './write-queue'
 import { attachSurfaceEventHandlers } from './surface-touch-gestures'
-import { scope, type TerminalDocumentTerminal } from './document-scope'
+import type { TerminalDocumentScope, TerminalDocumentTerminal } from './document-scope'
 
 /** The surfaces and terminal a swap is replacing, handed back to whoever commits it. */
 export type TerminalSurfaceSwap = {
@@ -9,7 +10,7 @@ export type TerminalSurfaceSwap = {
   nextSurface: HTMLElement
 }
 
-export function beginTerminalSurfaceSwap() {
+export function beginTerminalSurfaceSwap(scope: TerminalDocumentScope) {
   // Why: a superseded hidden replacement must not remain between the last
   // painted surface and the newest one, or the newest commits below the viewport.
   if (scope.pendingSurface) {
@@ -29,21 +30,22 @@ export function beginTerminalSurfaceSwap() {
     oldSurface: scope.committedSurface,
     nextSurface: document.createElement('div')
   }
-  disposeTermObservers()
+  disposeTermObservers(scope)
   swap.nextSurface.id = 'terminal-surface'
   swap.nextSurface.style.visibility = 'hidden'
   swap.nextSurface.style.position = 'absolute'
   swap.nextSurface.style.left = '0'
   swap.nextSurface.style.top = '0'
-  document.getElementById('terminal-container')!.appendChild(swap.nextSurface)
+  elementInRoot(scope.root, 'terminal-container')!.appendChild(swap.nextSurface)
   scope.surface = swap.nextSurface
   scope.pendingSurface = swap.nextSurface
-  attachSurfaceEventHandlers(scope.surface)
+  attachSurfaceEventHandlers(scope, scope.surface)
   swap.oldSurface!.removeAttribute('id')
   return swap
 }
 
 export function commitTerminalSurfaceSwap(
+  scope: TerminalDocumentScope,
   swap: TerminalSurfaceSwap,
   nextTerm: TerminalDocumentTerminal
 ) {
@@ -64,6 +66,7 @@ export function commitTerminalSurfaceSwap(
 // Why: phone-fit startup can issue several init() calls before xterm finishes replaying, so the
 // last painted surface is tracked apart from its replacement — on the scope (ruling 21), because
 // the page mounts this module more than once and a second mount must not inherit the first's.
-export function startSurfaceSwap() {
+export function startSurfaceSwap(scope: TerminalDocumentScope) {
+  scope.surface = elementInRoot(scope.root, 'terminal-surface')
   scope.committedSurface = scope.surface
 }

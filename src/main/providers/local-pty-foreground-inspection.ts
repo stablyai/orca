@@ -1,19 +1,29 @@
 import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
-import { getProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
 import {
-  confirmShellForegroundProcess,
-  resolveAgentForegroundProcessWithAvailability
-} from './agent-foreground-process'
+  getProcessTableSnapshot,
+  getStrictProcessTableSnapshotWithAge
+} from '../../shared/process-table-snapshot-reader'
+import { confirmShellForegroundProcess } from './agent-foreground-process'
+import {
+  createPtyForegroundResolver,
+  ptyProcessNameIsSpawnFile
+} from '../daemon/pty-subprocess/spawn-file-foreground-process'
+import {
+  inspectSpawnFileChildProcessesFromRows,
+  inspectSpawnFileWindowsChildProcesses
+} from '../daemon/pty-subprocess/spawn-file-child-processes'
 import { buildPaneProcessFingerprint } from './posix-pane-foreground-fingerprint'
 import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
+import { ptyShellProcessId } from '../windows/windows-pty-job'
 import { resolveForegroundFallbackProcess } from './local-pty-launch-helpers'
 import {
   ptyAgentForegroundContextPaths,
   ptyLastRecognizedForeground,
   ptyProcesses,
-  ptyShellName
+  getPtyShellName,
+  ptyShellPath
 } from './local-pty-provider-state'
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import {
@@ -28,7 +38,11 @@ import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-
  * equals the recorded shell and would otherwise read as a real "nothing is running here". Ask the
  * descriptor before the name, because an unreadable PTY is not evidence that its children exited.
  */
-export function inspectLocalPtyChildProcesses(id: string): PtyChildProcessVerdict {
+export async function inspectLocalPtyChildProcesses(
+  id: string,
+  fresh = true,
+  ignoreDetached = false
+): Promise<PtyChildProcessVerdict> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     return 'no-children'
@@ -37,8 +51,27 @@ export function inspectLocalPtyChildProcesses(id: string): PtyChildProcessVerdic
     return 'unverifiable'
   }
   try {
+    if (process.platform === 'win32') {
+      const verdict = await inspectSpawnFileWindowsChildProcesses(
+        proc,
+        ptyShellPath.get(id) ?? '',
+        fresh,
+        ignoreDetached
+      )
+      return ptyProcesses.get(id) === proc ? verdict : 'unverifiable'
+    }
+    if (ptyProcessNameIsSpawnFile(proc)) {
+      const snapshot = await getStrictProcessTableSnapshotWithAge()
+      return ptyProcesses.get(id) === proc
+        ? inspectSpawnFileChildProcessesFromRows(
+            snapshot.rows,
+            proc.pid,
+            getPtyShellName(id) ?? null
+          )
+        : 'unverifiable'
+    }
     const foreground = proc.process
-    const shell = ptyShellName.get(id)
+    const shell = getPtyShellName(id)
     if (!shell) {
       return 'children'
     }
@@ -50,7 +83,7 @@ export function inspectLocalPtyChildProcesses(id: string): PtyChildProcessVerdic
 }
 
 export async function hasLocalPtyChildProcesses(id: string): Promise<boolean> {
-  return inspectLocalPtyChildProcesses(id) === 'children'
+  return (await inspectLocalPtyChildProcesses(id)) !== 'no-children'
 }
 
 /**
@@ -88,8 +121,8 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     return null
   }
   const fallbackProcess = resolveForegroundFallbackProcess(
-    proc.process || null,
-    ptyShellName.get(id)
+    ptyProcessNameIsSpawnFile(proc) ? (getPtyShellName(id) ?? null) : proc.process || null,
+    getPtyShellName(id)
   )
   const cachedEntry = ptyLastRecognizedForeground.get(id)
   const cachedAgent = cachedEntry?.name ?? null
@@ -111,7 +144,7 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
       const verdict = judgeCachedAgentJobEvidence({
         jobProcessIds: paneProcessIds,
         jobSupported: isWindowsPtyJobReadable(),
-        shellPid: proc.pid,
+        shellPid: ptyShellProcessId(proc) ?? proc.pid,
         anchorProcessId: cachedEntry?.pid ?? null,
         identityAgeMs: Date.now() - (cachedEntry?.at ?? 0)
       })
@@ -148,16 +181,12 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     return cachedAgent
   }
   try {
-    const resolution = await resolveAgentForegroundProcessWithAvailability(
-      proc.pid,
-      fallbackProcess,
-      {
-        contextPaths: ptyAgentForegroundContextPaths.get(id),
-        ...(cachedEntry?.pid != null
-          ? { anchorProcessId: cachedEntry.pid, anchorProcessName: cachedEntry.name }
-          : {})
-      }
-    )
+    const resolution = await createPtyForegroundResolver(proc)(proc.pid, fallbackProcess, {
+      contextPaths: ptyAgentForegroundContextPaths.get(id),
+      ...(cachedEntry?.pid != null
+        ? { anchorProcessId: cachedEntry.pid, anchorProcessName: cachedEntry.name }
+        : {})
+    })
     // Why: the scan can outlive PTY teardown/id reuse; stale results must not resurrect cache for a foreign id.
     if (ptyProcesses.get(id) !== proc) {
       return null
@@ -180,6 +209,10 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
         : resolution
     const stable = resolveStableForegroundProcess(stableResolution, lastRecognizedAgent)
     if (stable.lastRecognizedAgent && stableResolution.available) {
+      const steady = await readPosixSteadyState(proc.pid, fallbackProcess)
+      if (ptyProcesses.get(id) !== proc) {
+        return null
+      }
       // Only a positive recognition restarts the age bound.
       ptyLastRecognizedForeground.set(id, {
         name: stable.lastRecognizedAgent,
@@ -188,7 +221,7 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
             ? (resolution.processId ?? null)
             : null,
         at: Date.now(),
-        steady: await readPosixSteadyState(proc.pid, fallbackProcess)
+        steady
       })
     } else if (stable.lastRecognizedAgent && cachedAgentAliveInJob && !anchorContradicted) {
       // The anchor pid in the job is proof of life; restamp so the
@@ -233,9 +266,12 @@ export async function confirmLocalPtyForegroundProcess(id: string): Promise<stri
     return null
   }
   try {
-    const resolution = await resolveAgentForegroundProcessWithAvailability(
+    const resolution = await createPtyForegroundResolver(proc)(
       proc.pid,
-      resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+      resolveForegroundFallbackProcess(
+        ptyProcessNameIsSpawnFile(proc) ? (getPtyShellName(id) ?? null) : proc.process || null,
+        getPtyShellName(id)
+      ),
       {
         contextPaths: ptyAgentForegroundContextPaths.get(id),
         fresh: true,
@@ -264,8 +300,8 @@ export async function confirmLocalPtyShellForeground(id: string): Promise<boolea
     return false
   }
   const confirmed = await confirmShellForegroundProcess(
-    proc.pid,
-    ptyShellName.get(id),
+    ptyShellProcessId(proc),
+    ptyShellPath.get(id),
     process.platform === 'win32'
       ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(proc) }
       : {}

@@ -3,7 +3,7 @@ import type {
   CodexPaneAccountRegistryFile
 } from './codex-pane-account-registry-types'
 
-// Why: bounds both crash-leaked disk records and mutations retained while the file is unavailable.
+// Bound crash-leaked disk records and pending mutations during file outages.
 const MAX_TRACKED_PANES = 2000
 const RETRY_DELAYS_MS = [100, 1_000, 5_000, 30_000] as const
 
@@ -137,12 +137,7 @@ function recordsEqual(
   return (
     left?.selectionKey === right.selectionKey &&
     left.accountId === right.accountId &&
-    left.homeRoute === right.homeRoute &&
-    left.shellStartupHomeOverride?.home === right.shellStartupHomeOverride?.home &&
-    left.shellStartupHomeOverride?.shell === right.shellStartupHomeOverride?.shell &&
-    left.shellStartupHomeOverride?.configHome === right.shellStartupHomeOverride?.configHome &&
-    left.shellStartupHomeOverride?.codexHome === right.shellStartupHomeOverride?.codexHome &&
-    left.environmentHomeOverride?.codexHome === right.environmentHomeOverride?.codexHome
+    left.homeRoute === right.homeRoute
   )
 }
 

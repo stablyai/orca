@@ -46,6 +46,7 @@ export function shouldHandleAutomationDetailTabArrowKey(event: {
 
 export function shouldHandleAutomationDetailEscapeKey(event: {
   key: string
+  defaultPrevented?: boolean
   altKey: boolean
   ctrlKey: boolean
   metaKey: boolean
@@ -54,6 +55,7 @@ export function shouldHandleAutomationDetailEscapeKey(event: {
   target?: EventTarget | null
 }): boolean {
   if (
+    event.defaultPrevented ||
     event.key !== 'Escape' ||
     Boolean(event.nativeEvent?.isComposing) ||
     event.altKey ||

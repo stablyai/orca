@@ -1,19 +1,35 @@
-import { sha256 } from '@noble/hashes/sha256'
-import {
-  mobileWebBundleChunkRead,
-  mobileWebBundleManifestRead
-} from './mobile-web-bundle-operations'
+import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
+import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
 import type {
   MobileWebBundleAssetRead,
   MobileWebBundleManifestRead
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from './rpc-client'
+import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
+import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { runRpcOperation } from './rpc-operation'
+import {
+  mobileWebBundleWindowReader,
+  type MobileWebBundleWindowHeader
+} from './mobile-web-bundle-window-reader'
 
-/** The host refuses the fifth concurrent read on one connection with `mobile_web_bundle_read_limited`,
- *  so the client never offers a fifth. Paging inside one asset stays sequential: the next offset is
- *  only known to be wanted once the previous reply says it is not the last. */
-const MAX_CONCURRENT_ASSET_READS = 4
+/** A window is one byte span of an asset on the grid the manifest reply named: a 48 KiB chunk, or a
+ *  384 KiB range from a host that serves them.
+ *
+ *  The host refuses the fifth concurrent read on one connection with `mobile_web_bundle_read_limited`,
+ *  so the client never offers a fifth. The four are window reads across the whole manifest, not one
+ *  asset each: paging a large asset alone would put every one of its windows on the critical path. */
+const MAX_CONCURRENT_WINDOW_READS = 4
+
+/** The fetch fails when no window reply lands for this long. Timed per fetch, not per read: each
+ *  read's reply queues behind the others in flight, so on a slow link (Tailscale through a relay) a
+ *  per-read 30s clock failed downloads that were still moving (#29697). */
+export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
+/** A read's reply waits behind at most the other in-flight replies, each landing within the stall
+ *  budget or the fetch fails, so a moving fetch should not reach it. Kept that tight because a
+ *  stalled fetch's pending reads hold its reassembly buffers until they settle. */
+const WINDOW_READ_BACKSTOP_MS =
+  (MAX_CONCURRENT_WINDOW_READS + 1) * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
 
 export type MobileWebBundleFetchProgress = {
   readonly completedAssets: number
@@ -24,167 +40,333 @@ export type MobileWebBundleFetchProgress = {
 
 export type MobileWebBundleFetchResult = {
   readonly manifest: MobileWebBundleManifestRead
+  /** The assets read over the wire, verified. */
   readonly assets: ReadonlyMap<string, Uint8Array>
+  /** The assets left for the stage to copy from the host's cached generation instead: a contract
+   *  with `stageGeneration`, which copies each one and fails rather than stage a tree without it. */
+  readonly reused: readonly string[]
   readonly totalBytes: number
   readonly elapsedMs: number
 }
 
+type AssetReassembly = {
+  readonly entry: MobileWebBundleAssetRead
+  readonly whole: Uint8Array<ArrayBuffer>
+  outstandingWindows: number
+}
+
+type WindowRead = { readonly asset: AssetReassembly; readonly offset: number }
+
 /**
- * Reads the manifest, pages every asset, and returns the verified bytes.
+ * Where a download may take an asset from instead of the wire: the host's cached generation. A
+ * match is by content (hash and length). The cache was hash-verified when it was written and is
+ * never modified in place, so the stage's copy of a reused asset is the bytes the page already
+ * opens from it.
+ */
+export type MobileWebBundleReusableAssets = {
+  readonly has: (asset: MobileWebBundleAssetRead) => boolean
+  /** Whether the cached file is still on disk at its full length: a native stat, no bytes read.
+   *  False downloads it instead; never rejects. */
+  readonly check: (asset: MobileWebBundleAssetRead) => Promise<boolean>
+}
+
+/**
+ * Reads the manifest, pages every asset it cannot reuse, and returns the verified bytes.
  *
- * Nothing is cached and nothing is rendered: this is the Phase A proof that the pipe carries a whole
- * bundle intact. Every asset is checked against the manifest's own sha256 before it is returned, so
- * a truncated or reordered reassembly fails here rather than in a webview much later.
+ * Every asset read is checked against the manifest's own sha256 before it is returned, so a
+ * truncated or reordered reassembly fails here rather than in a webview much later. Progress
+ * counts only what crosses the wire: reused assets cost no wait, so counting them would fill most
+ * of the bar at once and then crawl.
  */
 export async function fetchMobileWebBundle(args: {
   client: RpcClient
   signal?: AbortSignal
   onProgress?: (progress: MobileWebBundleFetchProgress) => void
+  reusable?: MobileWebBundleReusableAssets
 }): Promise<MobileWebBundleFetchResult> {
   const startedAt = Date.now()
   const stopped = new AbortController()
-  throwIfStopped(args.signal, stopped.signal)
+  throwIfCallerAborted(args.signal)
   const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
   const manifest = opened.manifest
-  const pending = [...manifest.assets]
+  const reader = mobileWebBundleWindowReader(args.client, opened)
+  const reusable = args.reusable
+  const candidates = new Set(
+    reusable === undefined ? [] : manifest.assets.filter((entry) => reusable.has(entry))
+  )
+  const fetched = manifest.assets.filter((entry) => !candidates.has(entry))
   const assets = new Map<string, Uint8Array>()
+  const reused: string[] = []
   let receivedBytes = 0
-
-  const worker = async (): Promise<void> => {
-    try {
-      for (let asset = pending.shift(); asset !== undefined; asset = pending.shift()) {
-        const bytes = await readBundleAsset({
-          client: args.client,
-          asset,
-          buildId: manifest.buildId,
-          chunkBytes: opened.chunkBytes,
-          signal: args.signal,
-          stopped: stopped.signal
-        })
-        assets.set(asset.path, bytes)
-        receivedBytes += bytes.byteLength
-        args.onProgress?.({
-          completedAssets: assets.size,
-          totalAssets: manifest.assets.length,
-          receivedBytes,
-          totalBytes: manifest.totalBytes
-        })
-      }
-    } catch (error) {
-      // One failed asset stops the other three mid-asset, not just between assets: every chunk they
-      // would still ask for holds one of the host's four read slots against the caller's retry.
+  let downloadBytes = 0
+  let downloadAssets = 0
+  let downloadedAssets = 0
+  let stallTimer: ReturnType<typeof setTimeout> | null = null
+  let failStalled: (error: Error) => void = () => {}
+  const stalled = new Promise<never>((_, reject) => {
+    failStalled = reject
+  })
+  const disarmStallClock = (): void => {
+    if (stallTimer !== null) {
+      clearTimeout(stallTimer)
+      stallTimer = null
+    }
+  }
+  const armStallClock = (): void => {
+    disarmStallClock()
+    // A read that lands after the fetch settled must not leave a timer behind.
+    if (stopped.signal.aborted) {
+      return
+    }
+    stallTimer = setTimeout(() => {
       stopped.abort()
-      throw error
+      failStalled(
+        markRpcDeliveryUnknown(
+          new Error(
+            `mobile web bundle fetch stalled: no window arrived in ${MOBILE_WEB_BUNDLE_WINDOW_STALL_MS}ms`
+          )
+        )
+      )
+    }, MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
+  }
+  const reportProgress = (): void => {
+    args.onProgress?.({
+      completedAssets: downloadedAssets,
+      totalAssets: downloadAssets,
+      receivedBytes,
+      totalBytes: downloadBytes
+    })
+  }
+
+  const readWindow = async ({ asset, offset }: WindowRead): Promise<void> => {
+    const reply = await reader.read(
+      { buildId: manifest.buildId, path: asset.entry.path, offset },
+      { timeoutMs: WINDOW_READ_BACKSTOP_MS }
+    )
+    armStallClock()
+    // A sibling already failed the fetch; this reply is not worth checking, decoding or reporting.
+    if (stopped.signal.aborted) {
+      return
+    }
+    assertWindowDescribesAsset(reply.header, asset.entry, manifest.buildId, offset)
+    const bytes = reply.bytes(windowSlotBytes(asset.entry, offset, reader.windowBytes))
+    assertWindowFillsItsSlot(
+      asset.entry,
+      offset,
+      bytes.byteLength,
+      reply.header.eof,
+      reader.windowBytes
+    )
+    asset.whole.set(bytes, offset)
+    asset.outstandingWindows -= 1
+    if (asset.outstandingWindows === 0) {
+      const verified = await verifyReassembledAsset(asset)
+      // A sibling failed while this hashed; the fetch already rejected with that failure.
+      if (stopped.signal.aborted) {
+        return
+      }
+      assets.set(asset.entry.path, verified)
+      downloadedAssets += 1
+    }
+    // Per window, not per asset: the largest asset goes first, so asset completions bunch at the end.
+    receivedBytes += bytes.byteLength
+    reportProgress()
+  }
+
+  const readWindows = async (entries: readonly MobileWebBundleAssetRead[]): Promise<void> => {
+    const queue = planWindowReads(entries, reader.windowBytes)
+    if (queue.length === 0) {
+      return
+    }
+    const worker = async (): Promise<void> => {
+      try {
+        while (!stopped.signal.aborted) {
+          const read = queue.shift()
+          if (read === undefined) {
+            return
+          }
+          throwIfCallerAborted(args.signal)
+          await readWindow(read)
+        }
+      } catch (error) {
+        // One failed window stops every other read: each read a worker would still send holds one
+        // of the host's four slots against the caller's retry.
+        stopped.abort()
+        throw error
+      }
+    }
+    const workers = Math.min(MAX_CONCURRENT_WINDOW_READS, queue.length)
+    armStallClock()
+    try {
+      await Promise.race([Promise.all(Array.from({ length: workers }, () => worker())), stalled])
+    } finally {
+      disarmStallClock()
     }
   }
 
-  const workers = Math.min(MAX_CONCURRENT_ASSET_READS, pending.length)
-  await Promise.all(Array.from({ length: workers }, () => worker()))
-  return { manifest, assets, totalBytes: receivedBytes, elapsedMs: Date.now() - startedAt }
+  /** The candidates no longer whole in the cache, which are downloaded after all. */
+  const reuseCandidates = async (): Promise<MobileWebBundleAssetRead[]> => {
+    const missed: MobileWebBundleAssetRead[] = []
+    for (const entry of candidates) {
+      if (stopped.signal.aborted) {
+        break
+      }
+      throwIfCallerAborted(args.signal)
+      if (await reusable?.check(entry)) {
+        reused.push(entry.path)
+      } else {
+        missed.push(entry)
+      }
+    }
+    return missed
+  }
+
+  const countDownload = (entries: readonly MobileWebBundleAssetRead[]): void => {
+    downloadAssets += entries.length
+    downloadBytes += entries.reduce((sum, entry) => sum + entry.byteLength, 0)
+  }
+
+  try {
+    countDownload(fetched)
+    // The caption's total before any byte, when it is not the whole bundle the session assumed.
+    if (candidates.size > 0) {
+      reportProgress()
+    }
+    // Checked while the window reads are in flight: each is a native stat, and the download it
+    // would otherwise delay is waiting on the network.
+    const [, missed] = await Promise.all([readWindows(fetched), reuseCandidates()])
+    if (missed.length > 0 && !stopped.signal.aborted) {
+      countDownload(missed)
+      reportProgress()
+      await readWindows(missed)
+    }
+  } finally {
+    stopped.abort()
+    disarmStallClock()
+  }
+  // The final window sends nothing after its last reply, so no worker would see this abort.
+  throwIfCallerAborted(args.signal)
+  return { manifest, assets, reused, totalBytes: receivedBytes, elapsedMs: Date.now() - startedAt }
 }
 
-async function readBundleAsset(args: {
-  client: RpcClient
-  asset: MobileWebBundleAssetRead
-  buildId: string
-  chunkBytes: number
-  signal?: AbortSignal
-  stopped: AbortSignal
-}): Promise<Uint8Array> {
-  // Before the buffer, not after: an asset can be a tenth of the total ceiling, and a worker that
-  // picked one up after a sibling failed would otherwise allocate it only to drop it.
-  throwIfStopped(args.signal, args.stopped)
-  const whole = new Uint8Array(args.asset.byteLength)
-  let offset = 0
-  for (;;) {
-    throwIfStopped(args.signal, args.stopped)
-    const chunk = await runRpcOperation(args.client, mobileWebBundleChunkRead, {
-      buildId: args.buildId,
-      path: args.asset.path,
-      offset
-    })
-    assertChunkDescribesAsset(chunk, args.asset, args.buildId, offset)
-    const bytes = decodeBase64(chunk.dataBase64)
-    if (bytes.byteLength > args.chunkBytes) {
-      throw new Error(
-        `bundle chunk for ${args.asset.path} at ${offset} is ${bytes.byteLength} bytes, over the host's ${args.chunkBytes}`
-      )
+/** Largest asset first, so the biggest script's tail is never the last read left in flight. Offsets
+ *  are on the window grid, so every read is known up front; `eof` still comes from the reply. */
+function planWindowReads(
+  entries: readonly MobileWebBundleAssetRead[],
+  windowBytes: number
+): WindowRead[] {
+  const largestFirst = [...entries].sort((left, right) => right.byteLength - left.byteLength)
+  return largestFirst.flatMap((entry) => {
+    const count = Math.max(1, Math.ceil(entry.byteLength / windowBytes))
+    const asset: AssetReassembly = {
+      entry,
+      whole: new Uint8Array(entry.byteLength),
+      outstandingWindows: count
     }
-    if (offset + bytes.byteLength > whole.byteLength) {
-      throw new Error(`bundle asset ${args.asset.path} is longer than the manifest declares`)
-    }
-    whole.set(bytes, offset)
-    offset += bytes.byteLength
-    if (chunk.eof) {
-      break
-    }
-    // Without this a host that keeps answering an unchanged offset with no bytes pages forever.
-    if (bytes.byteLength === 0) {
-      throw new Error(`bundle asset ${args.asset.path} made no progress at ${offset}`)
-    }
+    return Array.from({ length: count }, (_, index) => ({ asset, offset: index * windowBytes }))
+  })
+}
+
+/** The bytes the grid slot at `offset` holds: a whole window, or the asset's tail. */
+function windowSlotBytes(
+  entry: MobileWebBundleAssetRead,
+  offset: number,
+  windowBytes: number
+): number {
+  return Math.min(windowBytes, entry.byteLength - offset)
+}
+
+/** Offsets are planned, so a reply is accepted only if it fills exactly its slot of the grid. */
+function assertWindowFillsItsSlot(
+  entry: MobileWebBundleAssetRead,
+  offset: number,
+  byteLength: number,
+  eof: boolean,
+  windowBytes: number
+): void {
+  const { path, byteLength: declared } = entry
+  const expected = windowSlotBytes(entry, offset, windowBytes)
+  if (byteLength === expected && eof === offset + windowBytes >= declared) {
+    return
   }
-  if (offset !== whole.byteLength) {
-    throw new Error(
-      `bundle asset ${args.asset.path} ended at ${offset} of ${whole.byteLength} declared bytes`
+  const end = offset + byteLength
+  if (byteLength > windowBytes) {
+    throw new MobileWebBundleFetchError(
+      'chunk-oversize',
+      `bundle window for ${path} at ${offset} is ${byteLength} bytes, over the ${windowBytes}-byte window`
     )
   }
-  const digest = toHex(sha256(whole))
-  if (digest !== args.asset.sha256) {
-    throw new Error(`bundle asset ${args.asset.path} hashed ${digest}, not ${args.asset.sha256}`)
+  if (byteLength > expected || (byteLength > 0 && !eof && end >= declared)) {
+    throw new MobileWebBundleFetchError(
+      'asset-overlong',
+      `bundle asset ${path} is longer than the manifest declares`
+    )
   }
-  return whole
+  if (!eof && byteLength === 0) {
+    throw new MobileWebBundleFetchError(
+      'asset-no-progress',
+      `bundle asset ${path} made no progress at ${offset}`
+    )
+  }
+  throw new MobileWebBundleFetchError(
+    'asset-short',
+    eof
+      ? `bundle asset ${path} ended at ${end} of ${declared} declared bytes`
+      : `bundle window for ${path} at ${offset} carried ${byteLength} of ${expected} bytes without ending the asset`
+  )
+}
+
+/** Every slot was accepted exactly once, so only the hash is left to say the bytes are right. */
+async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Array> {
+  // Native: hashing in JS held the JS thread for seconds, and React's progress renders waited on it.
+  const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, asset.whole)))
+  if (hashed !== asset.entry.sha256) {
+    throw new MobileWebBundleFetchError(
+      'asset-checksum-mismatch',
+      `bundle asset ${asset.entry.path} hashed ${hashed}, not ${asset.entry.sha256}`
+    )
+  }
+  return asset.whole
 }
 
 /**
- * Every chunk reply restates the build, path and offset it answers, and the whole asset's length and
+ * Every window reply restates the build, path and offset it answers, and the whole asset's length and
  * hash. Checking all five is what makes a misrouted or stale reply a failure here instead of a
- * corrupt reassembly: a desktop that auto-updates mid-download answers a later chunk from a
+ * corrupt reassembly: a desktop that auto-updates mid-download answers a later window from a
  * different build, and nothing else in the reply would say so.
  */
-function assertChunkDescribesAsset(
-  chunk: {
-    buildId: string
-    path: string
-    offset: number
-    assetByteLength: number
-    sha256: string
-  },
+function assertWindowDescribesAsset(
+  reply: MobileWebBundleWindowHeader,
   asset: MobileWebBundleAssetRead,
   buildId: string,
   offset: number
 ): void {
-  if (chunk.buildId !== buildId) {
-    throw new Error(`bundle build changed mid-fetch: asked ${buildId}, served ${chunk.buildId}`)
-  }
-  if (chunk.path !== asset.path || chunk.offset !== offset) {
-    throw new Error(
-      `bundle chunk answered ${chunk.path} at ${chunk.offset}, not ${asset.path} at ${offset}`
+  if (reply.buildId !== buildId) {
+    throw new MobileWebBundleFetchError(
+      'build-changed-mid-fetch',
+      `bundle build changed mid-fetch: asked ${buildId}, served ${reply.buildId}`
     )
   }
-  if (chunk.sha256 !== asset.sha256 || chunk.assetByteLength !== asset.byteLength) {
-    throw new Error(`bundle asset ${asset.path} no longer matches the manifest entry`)
+  if (reply.path !== asset.path || reply.offset !== offset) {
+    throw new MobileWebBundleFetchError(
+      'chunk-misrouted',
+      `bundle window answered ${reply.path} at ${reply.offset}, not ${asset.path} at ${offset}`
+    )
+  }
+  if (reply.sha256 !== asset.sha256 || reply.assetByteLength !== asset.byteLength) {
+    throw new MobileWebBundleFetchError(
+      'asset-entry-changed',
+      `bundle asset ${asset.path} no longer matches the manifest entry`
+    )
   }
 }
 
-/** The caller's abort is what it asked for; the internal one never leaves this module, because the
- *  asset that failed rejects first and is what `Promise.all` reports. */
-function throwIfStopped(caller: AbortSignal | undefined, stopped: AbortSignal): void {
+/** Only the caller's abort surfaces as `fetch-stopped`; an internal stop rejects with the failure
+ *  that caused it. */
+function throwIfCallerAborted(caller: AbortSignal | undefined): void {
   if (caller?.aborted === true) {
-    throw new Error('mobile web bundle fetch aborted')
+    throw new MobileWebBundleFetchError('fetch-stopped', 'mobile web bundle fetch aborted')
   }
-  if (stopped.aborted) {
-    throw new Error('mobile web bundle fetch stopped after an earlier asset failed')
-  }
-}
-
-/** Metro ships no Buffer; `atob` is the decoder the pairing and E2EE paths already run on Hermes. */
-function decodeBase64(value: string): Uint8Array {
-  const binary = atob(value)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-  return bytes
 }
 
 function toHex(bytes: Uint8Array): string {

@@ -1,11 +1,15 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   type AgentSubagentSnapshot
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
+import { readCodexSubagentIdentity } from './codex-subagent-identity'
+import {
+  agentChildWorkLiveness,
+  type AgentChildWorkLiveness
+} from './agent-status-child-work-liveness'
 
 const CODEX_SUBAGENT_ID_MAX_LENGTH = 64
 
@@ -17,6 +21,7 @@ type TrackedCodexSubagent = {
   model?: string
   state: 'working' | 'waiting'
   startedAt: number
+  identityTranscriptPath?: string
 }
 
 export function upsertCodexSubagent(
@@ -45,9 +50,6 @@ export function upsertCodexSubagent(
     existing.state = fields.state
     return
   }
-  if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
-    return
-  }
   roster.set(normalizedId, {
     agentType,
     description,
@@ -59,6 +61,25 @@ export function upsertCodexSubagent(
 
 export function finishCodexSubagent(roster: CodexSubagentRoster, id: string): void {
   roster.delete(id.trim())
+}
+
+export function enrichCodexSubagentIdentity(
+  roster: CodexSubagentRoster,
+  id: string,
+  transcriptPath: string | undefined
+): void {
+  const child = roster.get(id.trim())
+  if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
+    return
+  }
+  const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
+  if (!identity) {
+    return
+  }
+  child.identityTranscriptPath = transcriptPath
+  child.description =
+    normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
+    child.description
 }
 
 /**
@@ -123,17 +144,15 @@ export function codexRosterToSnapshots(
   return snapshots
 }
 
-export function codexRosterEffectiveState(
-  roster: CodexSubagentRoster | undefined,
-  leadState: 'working' | 'waiting' | 'done'
-): 'working' | 'waiting' | 'done' {
-  if (!roster || roster.size === 0) {
-    return leadState
-  }
-  for (const tracked of roster.values()) {
-    if (tracked.state === 'waiting') {
-      return 'waiting'
-    }
-  }
-  return leadState === 'done' ? 'working' : leadState
+/** The roster as child-work evidence for the shared fold. Every tracked child is a spawned
+ *  agent thread, classified by the one kind test the other lanes use, so a waiting child
+ *  reads `waiting` and a live one `working`; nothing here is a watch loop. */
+export function codexRosterChildWorkLiveness(
+  roster: CodexSubagentRoster | undefined
+): AgentChildWorkLiveness {
+  return agentChildWorkLiveness(
+    roster
+      ? Array.from(roster.values(), (tracked) => ({ kind: 'agent' as const, state: tracked.state }))
+      : undefined
+  )
 }

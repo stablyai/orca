@@ -173,4 +173,25 @@ describe('RpcSessionLivenessWatchdog', () => {
     watchdog.probeNow(identity)
     expect(terminate).toHaveBeenCalledWith(identity)
   })
+
+  it('ends the session on the first miss of a decisive probe', async () => {
+    const { identity, sendProbe, terminate, watchdog } = fixture()
+    watchdog.probeNow(identity, 3_000)
+
+    await vi.advanceTimersByTimeAsync(2_999)
+    expect(terminate).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(terminate).toHaveBeenCalledOnce()
+    expect(sendProbe).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a decisive probe alive when it is answered', async () => {
+    const { identity, terminate, watchdog } = fixture()
+    watchdog.probeNow(identity, 3_000)
+    await vi.advanceTimersByTimeAsync(1_000)
+    watchdog.noteAuthenticatedInbound(identity)
+
+    await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS - 1)
+    expect(terminate).not.toHaveBeenCalled()
+  })
 })

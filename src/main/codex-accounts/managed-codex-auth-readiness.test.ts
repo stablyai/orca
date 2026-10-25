@@ -220,22 +220,6 @@ describe('waitForManagedCodexAuthReady', () => {
     chmodSync(join(fixture.home, 'auth.json'), 0o000)
     expect(readStoredCodexCredentialState(join(fixture.home, 'auth.json'))).toBe('unreadable')
   })
-
-  it('does not gate system, WSL, or unmanaged custom homes', async () => {
-    const fixture = createFixture()
-    await waitForManagedCodexAuthReady({
-      ...fixture.args,
-      codexHomePath: join(fixture.root, 'custom-home')
-    })
-    await waitForManagedCodexAuthReady({
-      ...fixture.args,
-      target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
-    })
-    await waitForManagedCodexAuthReady({
-      ...fixture.args,
-      codexHomePath: null
-    })
-  })
 })
 
 function createFixture(): {

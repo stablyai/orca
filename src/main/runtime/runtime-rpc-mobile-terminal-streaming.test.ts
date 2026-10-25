@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,6 +24,7 @@ import {
   createEncryptedWsResponseReader
 } from './runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -46,7 +48,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService(makeStore() as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -159,7 +161,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const runtime = new OrcaRuntimeService(makeStore() as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'paired-laptop-pty' })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: (_ptyId, data) => {
         writes.push(data)
         return true
@@ -405,10 +407,12 @@ describe('OrcaRuntimeRpcServer', () => {
     // Why: a remote-host runtime proxy only implements RPC-forwarded methods;
     // activation is a local-host concern, so the proxy legitimately lacks
     // activateRecentPtyPathCandidateTracking and onReady must not throw.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proxy fake carries only the surface the auth and status paths under test read.
     const runtimeProxy = {
       configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'proxy-runtime-test',
       getStartedAt: () => 1,
+      machineNameReady: async () => undefined,
       getStatus: () => ({ graphStatus: 'unavailable' }),
       cleanupSubscriptionsForConnection: () => {},
       cancelMobileDictationForConnection: () => {},
@@ -532,7 +536,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const onError = vi.fn()
     const subscription = await subscribeRemoteRuntimeRequest(
-      pairing,
+      pairedRuntimeConnectionFromOffer(pairing),
       'terminal.multiplex',
       {},
       15_000,

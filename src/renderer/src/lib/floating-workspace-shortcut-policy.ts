@@ -14,7 +14,9 @@ type FloatingWorkspaceShortcutEvent = Partial<
 > &
   Pick<KeyboardEvent, 'target'> & { doubleTapModifier?: PhysicalModifierToken }
 
-const FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
+// Why the tab strips: they are the floating panel's titlebar, so panel shortcuts apply there too.
+export const FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR =
+  '[data-floating-terminal-shortcut-surface], [data-floating-terminal-panel] [data-tab-group-strip-id]'
 const FLOATING_WORKSPACE_PANEL_SHORTCUT_ACTIONS = [
   'tab.newTerminal',
   'tab.newBrowser',

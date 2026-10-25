@@ -1,6 +1,7 @@
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 
 type RuntimeEnvironmentSubscribeArgs = {
+  subscriptionId?: string
   selector: string
   method: string
   params?: unknown
@@ -42,11 +43,7 @@ type RuntimeEnvironmentSubscriptionIpc = {
 
 const SUBSCRIPTION_EVENT_CHANNEL = 'runtimeEnvironments:subscriptionEvent'
 
-// Why: each subscribe() previously attached its own channel listener that the
-// 'error' branch never detached, so reconnecting shared-control subscriptions
-// leaked listener closures that pinned renderer state. One active dispatcher per
-// ipc instance keeps listener retention O(1) while per-subscription state lives
-// only in this map.
+// Share one IPC listener so reconnects cannot accumulate listeners retaining renderer state.
 type RuntimeEnvironmentSubscriptionDispatcher = {
   callbacks: Map<string, RuntimeEnvironmentSubscriptionCallbacks>
   listener: (event: unknown, payload: RuntimeEnvironmentSubscriptionEvent) => void
@@ -98,13 +95,10 @@ function getOrCreateDispatcher(
     } else if (event.type === 'binary') {
       subscriptionCallbacks.onBinary?.(event.bytes)
     } else if (event.type === 'error') {
-      // Why: errors are non-terminal for shared-control subscriptions (they
-      // survive reconnects), so the entry stays mapped until the consumer
-      // unsubscribes.
+      // Shared-control subscriptions survive errors and reconnects.
       subscriptionCallbacks.onError?.({ code: event.code, message: event.message })
     } else {
-      // Why: close is terminal; release before the callback so a throwing or
-      // re-entrant onClose cannot keep renderer state mapped.
+      // Release first so a throwing or reentrant callback cannot retain renderer state.
       callbacks.delete(event.subscriptionId)
       releaseIdleDispatcher(ipc, callbacks, listener)
       subscriptionCallbacks.onClose?.()
@@ -130,13 +124,17 @@ export async function subscribeRuntimeEnvironmentFromPreload(
   callbacks: RuntimeEnvironmentSubscriptionCallbacks,
   createSubscriptionId = createRuntimeEnvironmentSubscriptionId
 ): Promise<RuntimeEnvironmentSubscriptionHandle> {
-  const subscriptionId = createSubscriptionId()
-  // Why: streaming RPCs can emit their first frame before ipcMain.handle()
-  // resolves, so the dispatcher must be routing this id before invoking.
+  const subscriptionId = args.subscriptionId ?? createSubscriptionId()
+  // Route before invoking: streaming RPCs can emit frames before the subscribe reply.
   const dispatcher = getOrCreateDispatcher(ipc)
+  if (dispatcher.callbacks.has(subscriptionId)) {
+    throw new Error('Runtime environment subscription id already exists')
+  }
   dispatcher.callbacks.set(subscriptionId, callbacks)
   const releaseCurrentSubscription = (): void => {
-    releaseSubscription(ipc, dispatcher, subscriptionId)
+    if (dispatcher.callbacks.get(subscriptionId) === callbacks) {
+      releaseSubscription(ipc, dispatcher, subscriptionId)
+    }
   }
   try {
     const result = (await ipc.invoke('runtimeEnvironments:subscribe', {

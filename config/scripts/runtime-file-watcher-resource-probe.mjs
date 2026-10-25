@@ -10,7 +10,9 @@ import { build } from 'esbuild'
 const ENTRY_PATH = resolve('out/main/parcel-watcher-process-entry.js')
 const POOL_SOURCE = resolve('src/main/ipc/runtime-watcher-process-pool.ts')
 const FAILURE_SOURCE = resolve('src/main/ipc/parcel-watcher-process-failure.ts')
-const REGISTRY_SOURCE = resolve('src/main/ipc/parcel-watcher-child-registry.ts')
+const REGISTRY_SOURCE = resolve(
+  'src/main/ipc/filesystem/watcher-process/parcel-watcher-child-registry.ts'
+)
 const MAX_CHILD_RSS_KIB = 128 * 1024
 const MAX_CHILD_CPU_PERCENT = 50
 const MAX_QUARANTINE_RSS_KIB = 512 * 1024
@@ -132,7 +134,7 @@ async function loadProbe(bundleDir) {
 
 function activeChildPids(pool) {
   return [...pool.activeSlots]
-    .map((slot) => slot.supervisor.child?.pid)
+    .map((slot) => (slot.supervisor.slot ?? slot.supervisor).child?.pid)
     .filter((pid) => Number.isInteger(pid))
 }
 

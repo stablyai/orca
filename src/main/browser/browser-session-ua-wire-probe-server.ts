@@ -156,7 +156,7 @@ function probePage(
   const dedicatedWorkerScriptText = crossContext
     ? `const dedicatedDone = message('dedicated-worker'); const dedicated = new Worker(${JSON.stringify(httpOrigin)} + '/dedicated-worker.js'); dedicated.onmessage = event => postMessage(event.data, '*')`
     : ''
-  return `<!doctype html><title>UA wire probe</title><script>
+  return `<!doctype html><title>UA wire probe</title><body><script>
   const identity = () => ({ userAgent: navigator.userAgent, userAgentData: navigator.userAgentData ? { brands: navigator.userAgentData.brands, mobile: navigator.userAgentData.mobile, platform: navigator.userAgentData.platform } : null })
   const report = context => fetch(${JSON.stringify(httpOrigin)} + '/report/' + context, { method: 'POST', body: JSON.stringify(identity()) })
   const fetchRoute = path => fetch(${JSON.stringify(httpOrigin)} + path).then(response => response.text())
@@ -181,7 +181,7 @@ function probePage(
     ])
     return true
   })()
-  </script>`
+  </script></body>`
 }
 function childPage(
   context: string,

@@ -47,11 +47,44 @@ describe('linear links', () => {
 
   it('parses bare Linear issue identifiers', () => {
     expect(parseLinearIssueInput('eng-123')).toEqual({ identifier: 'ENG-123' })
+    expect(parseLinearIssueInput('2eng-123')).toEqual({ identifier: '2ENG-123' })
+  })
+
+  it('parses Linear team keys that start with a digit', () => {
+    for (const identifier of ['2eng-123', '1pass-42', '3d-15', '4k-12']) {
+      expect(parseLinearIssueInput(`  ${identifier}  `)).toEqual({
+        identifier: identifier.toUpperCase()
+      })
+      expect(parseLinearIssueInput(`https://linear.app/acme/issue/${identifier}/notes`)).toEqual({
+        identifier: identifier.toUpperCase(),
+        organizationUrlKey: 'acme'
+      })
+    }
+  })
+
+  it('rejects numeric-only team keys in bare identifiers and URLs', () => {
+    for (const identifier of [
+      '2026-09',
+      '555-1234',
+      '8080-8090',
+      '123-456',
+      '1-1',
+      '007-42',
+      '1_2-3',
+      '1-800'
+    ]) {
+      expect(parseLinearIssueInput(identifier)).toBeNull()
+      expect(parseLinearIssueInput(`https://linear.app/acme/issue/${identifier}/notes`)).toBeNull()
+    }
   })
 
   it('parses Linear issue URLs with organization URL keys', () => {
     expect(parseLinearIssueInput('https://linear.app/acme/issue/eng-123/fix-auth')).toEqual({
       identifier: 'ENG-123',
+      organizationUrlKey: 'acme'
+    })
+    expect(parseLinearIssueInput('https://linear.app/acme/issue/2eng-123/fix-auth')).toEqual({
+      identifier: '2ENG-123',
       organizationUrlKey: 'acme'
     })
     expect(parseLinearIssueInput('https://linear.app/stably/issue/STA-335/test-issue')).toEqual({

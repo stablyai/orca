@@ -24,7 +24,7 @@ export function NewWorktreeFormSheet(props: {
   loading: boolean
   hasRepos: boolean
   project: Selection | null
-  runTarget: Selection | null
+  runTarget: (Selection & { hostId: string }) | null
   projectBadgeColor: string | null
   selectedRepoIsGit: boolean
   selectedRepoConnectionId: string | null

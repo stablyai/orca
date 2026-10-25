@@ -48,16 +48,22 @@ function isBoundedString(value: unknown): value is string {
 
 function copyJsonRecord(value: unknown): Record<string, unknown> | null {
   let serialized: string
+  let bounded: string
   try {
     serialized = JSON.stringify(value)
+    // Why: a pane's subagent roster has no count limit; each row's fields are bounded on their own.
+    bounded =
+      isRecord(value) && Object.hasOwn(value, 'subagents')
+        ? JSON.stringify({ ...value, subagents: undefined })
+        : serialized
   } catch {
     return null
   }
-  if (measureUtf8ByteLength(serialized, { stopAfterBytes: MAX_STATUS_BYTES }).exceededLimit) {
+  if (measureUtf8ByteLength(bounded, { stopAfterBytes: MAX_STATUS_BYTES }).exceededLimit) {
     return null
   }
   try {
-    assertJsonTextStructureWithinLimits(serialized, STATUS_STRUCTURE_LIMITS)
+    assertJsonTextStructureWithinLimits(bounded, STATUS_STRUCTURE_LIMITS)
     const parsed: unknown = JSON.parse(serialized)
     return isRecord(parsed) ? parsed : null
   } catch {

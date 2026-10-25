@@ -38,8 +38,11 @@ orca status --json
 ```
 orca worktree ps --json
 orca worktree create --repo id:<repoId> --name my-task --issue 123 --json
+orca worktree create --repo id:<repoId> --name review-pr-123 --pr 123 --json
 orca worktree current --json
 orca worktree set --worktree active --comment "reproduced bug" --json
+orca worktree set --worktree active --gitlab-issue 42 --gitlab-mr 77 --json
+orca worktree set --worktree active --pr null --json
 orca worktree rm --worktree id:<id> --force --json
 ```
 
@@ -60,7 +63,7 @@ For tracked multi-agent work, use [Orchestration](/docs/cli/orchestration) inste
 
 ## File commands
 
-Open files and diffs in the active Orca worktree from a shell:
+Open files and diffs as tabs in their Orca worktree from a shell. They open without changing what you are looking at; add `--focus` to be brought to the file:
 
 ```
 orca file open src/App.tsx

@@ -7,6 +7,7 @@ import {
   acquiredCodexAdapter,
   echoUserMessage,
   fakeCodexAppServer,
+  openAfterTurnStarts,
   startTurn,
   CODEX_TEST_THREAD_ID,
   CODEX_TEST_USER_MESSAGE,
@@ -44,28 +45,24 @@ function lifecycleRecorder(): {
 
 describe('codex dispatch admission', () => {
   it('admits a send queued behind a running turn and settles it when Codex echoes it', async () => {
-    // Measured on codex-cli 0.153.4: a `turn/start` issued while a turn runs is
-    // COALESCED into it -- same turn id back, no second `turn/started`, and the
-    // user message echoed only once the running turn reaches it.
+    // Steering joins the running turn; the echo arrives when Codex consumes the input.
     const codex = fakeCodexAppServer({
-      'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } })
+      'turn/steer': () => ({ turnId: 'turn-1' })
     })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
     startTurn(connection, 'turn-1')
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
+    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1' })
 
     const outcome = await send(adapter, 'client-2')
 
-    // No doubt: elapsed time is not evidence, so nothing invites a Retry.
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(settlements).toEqual([])
 
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u2', clientId: 'client-2' })
 
-    // Ordinal 1, not 0: the queued send is the SECOND user message of the turn
-    // it was coalesced into, which is the key a history replay computes for it.
+    // Match the ordinal history replay assigns to the second user message.
     expect(settlements).toEqual([
       {
         sessionId: 'session-1',
@@ -81,7 +78,7 @@ describe('codex dispatch admission', () => {
   })
 
   it('correlates each send by client message id, not queue order', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -90,12 +87,9 @@ describe('codex dispatch admission', () => {
     await send(adapter, 'client-1')
     await send(adapter, 'client-2')
 
-    // The echoes arrive in the opposite order to the sends.
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u2', clientId: 'client-2' })
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
 
-    // Ordinals follow the ECHO order, and each one lands on the send whose
-    // `clientId` it carried -- not on the send that was queued in that slot.
     expect(settlements).toEqual([
       {
         sessionId: 'session-1',
@@ -120,42 +114,44 @@ describe('codex dispatch admission', () => {
     ])
   })
 
-  it('settles nothing for a user message this session never sent', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+  it('settles a send only by the id its echo carries', async () => {
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
     startTurn(connection, 'turn-1')
     await send(adapter, 'client-1')
 
-    // A message another client sent on the same thread, and one Codex did not
-    // correlate at all.
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-x', clientId: 'someone-else' })
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-y' })
 
-    expect(settlements).toEqual([])
+    expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual(['someone-else'])
   })
 
-  it('rejects only when Codex answered and declined, and arms nothing for it', async () => {
-    const { CodexAppServerRequestError } = await import('./codex-app-server-connection')
+  it('rejects only when Codex answered and declined', async () => {
+    const { CodexAppServerRequestError } =
+      await import('./app-server/codex-app-server-request-error')
     const codex = fakeCodexAppServer({
       'turn/start': () => {
-        throw new CodexAppServerRequestError('turn/start', -32602, 'thread not found')
+        throw new CodexAppServerRequestError(
+          'turn/start',
+          -32602,
+          'codex app-server turn/start failed: thread not found',
+          'thread not found'
+        )
       }
     })
-    const settlements: LateSettlement[] = []
-    const adapter = await acquiredCodexAdapter({ codex, settlements })
-    const connection = codex.connections[0]!
-    startTurn(connection, 'turn-1')
+    const adapter = await acquiredCodexAdapter({ codex, settlements: [] })
 
     expect(await send(adapter, 'client-1')).toEqual({
       state: 'rejected',
-      reason: 'thread not found'
+      reason: "Codex didn't accept this message: thread not found.",
+      rejection: {
+        kind: 'providerRejected',
+        detail: { text: 'thread not found', audience: 'person' },
+        neverReachedAgent: true
+      }
     })
-
-    // A refused write is disarmed, so a later echo of that id settles nothing.
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
-    expect(settlements).toEqual([])
   })
 
   it('retains correlation when a request fails after its write may have landed', async () => {
@@ -167,9 +163,9 @@ describe('codex dispatch admission', () => {
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
-    startTurn(connection, 'turn-1')
 
     await expect(send(adapter, 'client-1')).rejects.toThrow('request timed out after write')
+    startTurn(connection, 'turn-1')
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
 
     expect(settlements).toEqual([
@@ -205,8 +201,9 @@ describe('codex dispatch admission', () => {
     await expect(send(adapter, 'client-unknown', 1_700_000_000_100)).rejects.toThrow(
       'request timed out after write'
     )
-    await send(adapter, 'client-later', 1_700_000_000_400)
-    startTurn(connection, 'turn-later')
+    const later = send(adapter, 'client-later', 1_700_000_000_400)
+    await openAfterTurnStarts(connection, 2, () => startTurn(connection, 'turn-later'))
+    await later
     echoUserMessage(connection, {
       turnId: 'turn-later',
       itemId: 'item-later',
@@ -238,7 +235,7 @@ describe('codex dispatch admission', () => {
 
   it('does not attribute a send armed after an autonomous turn started', async () => {
     const codex = fakeCodexAppServer({
-      'turn/start': () => ({ turn: { id: 'turn-resumed', status: 'inProgress' } })
+      'turn/steer': () => ({ turnId: 'turn-resumed' })
     })
     const settlements: LateSettlement[] = []
     const recorded = lifecycleRecorder()
@@ -262,16 +259,18 @@ describe('codex dispatch admission', () => {
 
   it('keeps the earliest dispatched origin across out-of-order echoes and a clock step', async () => {
     const codex = fakeCodexAppServer({
-      'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } })
+      'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } }),
+      'turn/steer': () => ({ turnId: 'turn-1' })
     })
     const settlements: LateSettlement[] = []
     const recorded = lifecycleRecorder()
     const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
     const connection = codex.connections[0]!
 
-    await send(adapter, 'client-opening', 1_700_000_000_600)
-    await send(adapter, 'client-queued', 1_700_000_000_200)
-    startTurn(connection, 'turn-1')
+    const opening = send(adapter, 'client-opening', 1_700_000_000_600)
+    const queued = send(adapter, 'client-queued', 1_700_000_000_200)
+    await openAfterTurnStarts(connection, 2, () => startTurn(connection, 'turn-1'))
+    await Promise.all([opening, queued])
     await send(adapter, 'client-mid-turn', 1_700_000_000_100)
 
     echoUserMessage(connection, {
@@ -315,8 +314,9 @@ describe('codex dispatch admission', () => {
     const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
     const connection = codex.connections[0]!
 
-    await send(adapter, 'client-late-echo', 1_700_000_000_100)
-    startTurn(connection, 'turn-1')
+    const sending = send(adapter, 'client-late-echo', 1_700_000_000_100)
+    await openAfterTurnStarts(connection, 1, () => startTurn(connection, 'turn-1'))
+    await sending
     connection.handlers.onNotification?.('turn/completed', {
       threadId: CODEX_TEST_THREAD_ID,
       turn: { id: 'turn-1' }
@@ -336,18 +336,19 @@ describe('codex dispatch admission', () => {
   })
 
   it('refuses overflow without discarding an older accepted send', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
     startTurn(connection, 'turn-1')
 
     for (let index = 0; index < MAX_CODEX_PENDING_DISPATCH_ECHOES; index += 1) {
-      expect(await send(adapter, `client-${index}`)).toEqual({ state: 'admitted' })
+      expect(await send(adapter, `client-${index}`)).toMatchObject({ state: 'admitted' })
     }
     expect(await send(adapter, 'client-overflow')).toEqual({
       state: 'rejected',
-      reason: 'codex structured dispatch queue is full'
+      reason: 'codex structured dispatch queue is full',
+      rejection: { kind: 'queueFull' }
     })
 
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u0', clientId: 'client-0' })
@@ -355,7 +356,7 @@ describe('codex dispatch admission', () => {
   })
 
   it('leaves no waiter behind when the session closes', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -363,20 +364,6 @@ describe('codex dispatch admission', () => {
     await send(adapter, 'client-1')
 
     await adapter.closeSession('session-1')
-
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
-    expect(settlements).toEqual([])
-  })
-
-  it('leaves no waiter behind when the child exits', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
-    const settlements: LateSettlement[] = []
-    const adapter = await acquiredCodexAdapter({ codex, settlements })
-    const connection = codex.connections[0]!
-    startTurn(connection, 'turn-1')
-    await send(adapter, 'client-1')
-
-    connection.handlers.onExit?.(new Error('codex app-server exited'))
 
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
     expect(settlements).toEqual([])

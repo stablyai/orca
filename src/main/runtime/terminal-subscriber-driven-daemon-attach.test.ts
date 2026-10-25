@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 /**
  * Subscriber-driven daemon attach (never-activated tab ingestion).
  *

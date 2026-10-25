@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ export function BrowserReloadControl({
   menuOpen,
   onMenuOpenChange,
   label,
-  loading,
+  showStop = false,
   showShortcutHint,
   reloadShortcut,
   hardReloadShortcut,
@@ -30,7 +30,8 @@ export function BrowserReloadControl({
   menuOpen: boolean
   onMenuOpenChange: Dispatch<SetStateAction<boolean>>
   label: string
-  loading: boolean
+  /** Only when the primary click stops the load; a reload-only caller keeps the reload icon. */
+  showStop?: boolean
   /** The chord maps to plain reload, which is not what Stop or Retry do — hint only when they match. */
   showShortcutHint: boolean
   reloadShortcut: string
@@ -71,11 +72,7 @@ export function BrowserReloadControl({
                 onMenuOpenChange(true)
               }}
             >
-              {loading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
+              {showStop ? <X className="size-4" /> : <RefreshCw className="size-4" />}
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

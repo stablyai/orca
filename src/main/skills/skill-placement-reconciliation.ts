@@ -57,6 +57,14 @@ async function createProviderAlias(
     await filesystem.createAlias(canonicalPath, destinationPath)
     return
   }
+  await createNativeSkillAlias(canonicalPath, destinationPath)
+}
+
+/** Windows junction (no privilege needed) or a POSIX link relative to the real parent. */
+export async function createNativeSkillAlias(
+  canonicalPath: string,
+  destinationPath: string
+): Promise<void> {
   const parent = dirname(destinationPath)
   await mkdir(parent, { recursive: true })
   if (process.platform === 'win32') {

@@ -1,9 +1,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { getProjectHeaderHostContexts } from '../rows/project-header-host-context'
 import { translate } from '@/i18n/i18n'
 import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
+import { useRepoSshGateResolver } from '@/hooks/use-repo-ssh-gate-resolver'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
 import { buildRenderableRows } from '../listing/renderable-rows'
 import { useFolderWorkspacePathStatusRows } from '../listing/use-folder-path-statuses'
@@ -58,6 +60,29 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const getRepoSshGate = useRepoSshGateResolver()
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const projectHeaderHostContexts = useMemo(
+    () =>
+      getProjectHeaderHostContexts({
+        rows,
+        visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
+        hosts: props.hostOptions ?? [],
+        runtimeEnvironments,
+        sshConnectionStates,
+        repoMap,
+        projectGrouping: props.projectGrouping
+      }),
+    [
+      rows,
+      props.visibleProjectRepoIdsBySection,
+      props.hostOptions,
+      repoMap,
+      props.projectGrouping,
+      runtimeEnvironments,
+      sshConnectionStates
+    ]
+  )
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
 
   const reveal = useSidebarRevealHighlight()
@@ -138,6 +163,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   })
 
   usePendingSidebarReveal({
+    occurrencePlan: props.occurrencePlan,
     pendingRevealWorktree: props.pendingRevealWorktree,
     pendingRevealSidebarRow: props.pendingRevealSidebarRow,
     clearPendingRevealWorktreeId: props.clearPendingRevealWorktreeId,
@@ -159,7 +185,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     prCache: props.prCache,
     workspaceStatuses,
     settings,
-    projectGroups,
+    projectGroups: props.visibleProjectGroups ?? projectGroups,
     projectGrouping: props.projectGrouping,
     flashRevealedRow: reveal.flashRevealedRow,
     markRevealScroll: scrollSuppression.markRevealScroll,
@@ -301,7 +327,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     measureVirtualRowElement,
     settings,
     worktreeVisibilityDefaultsByHost,
-    sshConnectionStates,
+    getRepoSshGate,
     newCardStyle,
     folderBackedProjectGroupIds,
     projectGroups,
@@ -312,6 +338,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     statusDrag,
     nativeDrag,
     headerDrag,
+    projectHeaderHostContexts,
     getCachedFolderWorkspacePathStatus,
     getLineageToggleHandler,
     toggleGroupWithScrollAnchor,

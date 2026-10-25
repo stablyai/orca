@@ -1,29 +1,40 @@
 import type { AppState } from '@/store/types'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   hasIndexedDetectedWorktree,
+  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import { onPairedWebClientHost } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
 } from './folder-workspace-runtime-owner'
 
-export { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
-
 export type WorktreeOperationRoute = {
   executionHostId: ExecutionHostId | null
   runtimeEnvironmentId: string | null
+}
+
+/** The floating workspace has no host record; its files always live on this machine. */
+export function getFloatingWorkspaceOperationRoute(
+  worktreeId: string
+): WorktreeOperationRoute | null {
+  return worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+    ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
+    : null
 }
 
 export type WorktreeOperationRouteResolution =
@@ -81,10 +92,10 @@ function ownerRecordsOnHost(
  * an `ssh:` host reached through a paired HUB names the target, not the HUB that proxies it. Keep
  * the selected host and recover the runtime owner from the matching owner rows (#11346).
  */
-export function resolveActiveWorkspaceRoute(
+function resolveActiveWorkspaceRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
-): WorktreeOperationRoute | null {
+): WorktreeOperationRouteResolution | null {
   const activeHost =
     state.activeWorktreeId === worktreeId
       ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
@@ -105,9 +116,7 @@ export function resolveWorktreeOperationRouteResultForHost(
 ): WorktreeOperationRouteResolution {
   const host = parseExecutionHostId(executionHostId)
   // Why: an unparseable qualifier is not evidence of an owner — fail closed.
-  return host
-    ? { kind: 'resolved', route: resolveSelectedHostRoute(state, worktreeId, host) }
-    : { kind: 'missing' }
+  return host ? resolveSelectedHostRoute(state, worktreeId, host) : { kind: 'missing' }
 }
 
 /**
@@ -124,35 +133,81 @@ export function resolveWorktreeOperationRouteForHost(
   return resolution.kind === 'resolved' ? resolution.route : null
 }
 
+/** A direct repo row backs a listing no row ties to a server, so a same-id proxy cannot claim it. */
+function isDirectListing(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId,
+  hubOwners: { environmentIds: Set<string> }
+): boolean {
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  return (
+    hubOwners.environmentIds.size === 0 &&
+    Boolean(
+      state.repos?.some(
+        (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
+      )
+    )
+  )
+}
+
+function collectHubOwnerEnvironmentIds(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): { environmentIds: Set<string>; hasAmbiguousOwner: boolean } {
+  const environmentIds = new Set<string>()
+  let hasAmbiguousOwner = false
+  for (const owner of ownerRecordsOnHost(state, worktreeId, executionHostId)) {
+    const resolution = resolveExactWorktreeRoute(state, owner)
+    hasAmbiguousOwner ||= resolution.kind === 'ambiguous'
+    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
+      environmentIds.add(resolution.route.runtimeEnvironmentId)
+    }
+  }
+  return { environmentIds, hasAmbiguousOwner }
+}
+
 /**
  * An authoritative host selection already names the target, so only the transport has to be
  * recovered — and only for `ssh:`, which a paired HUB can proxy. Rival HUBs projecting the same
- * host stay unresolved rather than guessing one.
+ * host, or rows that contradict each other about its transport, are `ambiguous`: a transport-less
+ * route would send the operation over this app's own SSH connection instead (review-5 #2).
  */
 function resolveSelectedHostRoute(
   state: WorktreeOperationRouteState,
   worktreeId: string,
   selectedHost: NonNullable<ReturnType<typeof parseExecutionHostId>>
-): WorktreeOperationRoute {
+): WorktreeOperationRouteResolution {
   if (selectedHost.kind === 'runtime') {
-    return { executionHostId: selectedHost.id, runtimeEnvironmentId: selectedHost.environmentId }
+    return {
+      kind: 'resolved',
+      route: { executionHostId: selectedHost.id, runtimeEnvironmentId: selectedHost.environmentId }
+    }
   }
   // Why: only an `ssh:` selection can hide a paired HUB owner, so local stays an O(1) hot path.
   if (selectedHost.kind !== 'ssh') {
-    return { executionHostId: selectedHost.id, runtimeEnvironmentId: null }
-  }
-  const environmentIds = new Set<string>()
-  for (const owner of ownerRecordsOnHost(state, worktreeId, selectedHost.id)) {
-    const resolution = resolveExactWorktreeRoute(state, owner)
-    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
-      environmentIds.add(resolution.route.runtimeEnvironmentId)
+    return {
+      kind: 'resolved',
+      route: onPairedWebClientHost(state, {
+        executionHostId: selectedHost.id,
+        runtimeEnvironmentId: null
+      })
     }
   }
-  const environmentId = environmentIds.values().next().value
+  const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, selectedHost.id)
+  if (
+    hubOwners.environmentIds.size > 1 ||
+    (hubOwners.hasAmbiguousOwner && !isDirectListing(state, worktreeId, selectedHost.id, hubOwners))
+  ) {
+    return { kind: 'ambiguous' }
+  }
   return {
-    executionHostId: selectedHost.id,
-    // Why: rival HUBs projecting the same host cannot be disambiguated by the host selection alone.
-    runtimeEnvironmentId: environmentIds.size === 1 && environmentId ? environmentId : null
+    kind: 'resolved',
+    route: onPairedWebClientHost(state, {
+      executionHostId: selectedHost.id,
+      runtimeEnvironmentId: hubOwners.environmentIds.values().next().value ?? null
+    })
   }
 }
 
@@ -204,9 +259,19 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
-  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
-  if (activeRoute) {
-    return { kind: 'resolved', route: activeRoute }
+  const resolution = resolveOwnerRouteResult(state, worktreeId)
+  return resolution.kind === 'resolved'
+    ? { kind: 'resolved', route: onPairedWebClientHost(state, resolution.route) }
+    : resolution
+}
+
+function resolveOwnerRouteResult(
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): WorktreeOperationRouteResolution {
+  const activeResolution = resolveActiveWorkspaceRouteResult(state, worktreeId)
+  if (activeResolution) {
+    return activeResolution
   }
   // Why: folder workspaces are not Git worktrees — they never appear in the worktree/repo
   // catalogs scanned below, so without this branch a plain local folder workspace reads as an
@@ -225,29 +290,14 @@ export function resolveWorktreeOperationRouteResult(
     resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
     hasDetectedWorktree
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const hasKnownRepo = state.repos?.some((repo) => repo.id === repoId) === true
+  const hasKnownRepo = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
   if (!hasKnownWorktree && !hasKnownRepo) {
     return { kind: 'missing' }
   }
 
-  // Why: pre-owner-projection runtimes published no host fields; terminal routing retains their single focused-runtime behavior.
-  const legacyRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  // Why no Active Server focus here: the client stamps every server row on arrival, so an
+  // unstamped row is never a server's.
   const savedRuntimeIds = state.runtimeEnvironments?.map((environment) => environment.id.trim())
-  const legacyRuntimeIsUnambiguous =
-    savedRuntimeIds === undefined ||
-    (savedRuntimeIds.length === 1 && savedRuntimeIds[0] === legacyRuntimeEnvironmentId)
-  if (legacyRuntimeEnvironmentId && !legacyRuntimeIsUnambiguous) {
-    return { kind: 'missing' }
-  }
-  if (legacyRuntimeEnvironmentId) {
-    return {
-      kind: 'resolved',
-      route: {
-        executionHostId: `runtime:${encodeURIComponent(legacyRuntimeEnvironmentId)}`,
-        runtimeEnvironmentId: legacyRuntimeEnvironmentId
-      }
-    }
-  }
   // Why: a found repo/worktree record is positive identity evidence, so keep terminal-owner
   // parity with the folder branch below. Every stamped row already routed above, so an unstamped
   // repo row here is a legacy pre-owner-projection row — local by construction, as
@@ -286,7 +336,7 @@ function resolveUnstampedLocalWorktreeRoute(
   state: WorktreeOperationRouteState,
   repoId: string
 ): WorktreeOperationRoute | null {
-  const hasUnstampedRepoRow = state.repos?.some((repo) => repo.id === repoId) ?? false
+  const hasUnstampedRepoRow = resolveIndexedRepoOwner(state.repos, repoId).kind !== 'missing'
   return hasUnstampedRepoRow
     ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
     : null
@@ -316,18 +366,4 @@ function resolveFolderWorkspaceOperationRoute(
       runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
     }
   }
-}
-
-/**
- * Projects the route's runtime environment onto settings so a routed operation runs against the
- * owner's environment rather than whichever one the UI has active; settings can still be absent
- * during early hydration, hence the synthesized fallback.
- */
-export function settingsForWorktreeOperationRoute(
-  settings: AppState['settings'],
-  route: WorktreeOperationRoute
-): AppState['settings'] {
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: route.runtimeEnvironmentId }
-    : ({ activeRuntimeEnvironmentId: route.runtimeEnvironmentId } as AppState['settings'])
 }

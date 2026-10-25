@@ -27,8 +27,7 @@ function fetchThroughProxy(
 ): Promise<{ status: number; body: string; headers: http.IncomingHttpHeaders }> {
   const url = new URL(labeledUrl)
   return new Promise((resolve, reject) => {
-    // Why: *.orca.localhost is not resolvable DNS; connect to the proxy on
-    // loopback and carry the label through the Host header instead.
+    // Bypass DNS with loopback; route the worktree label through Host.
     const request = http.request(
       {
         host: '127.0.0.1',
@@ -84,8 +83,6 @@ describe('localhost worktree label proxy', () => {
     const result = await fetchThroughProxy(url)
 
     expect(result.status).toBe(200)
-    // The proxy only relabels the hostname; the page is delivered verbatim
-    // with no injected favicon/title and the CSP header intact.
     expect(result.body).toBe('<html><head></head><body>hello</body></html>')
     expect(result.headers['content-security-policy']).toBe("default-src 'self'")
   })
@@ -149,7 +146,6 @@ describe('localhost worktree label proxy', () => {
 
     proxy.unregisterWorktree('wt-a')
 
-    // The removed worktree's label no longer routes; the other worktree is unaffected.
     expect((await fetchThroughProxy(a.url)).status).toBe(404)
     expect((await fetchThroughProxy(b.url)).status).toBe(200)
   })

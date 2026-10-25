@@ -79,10 +79,12 @@ vi.mock('lucide-react', async () =>
 )
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
 
 const defaultStoreState = {
+  unifiedTabsByWorktree: {},
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [],

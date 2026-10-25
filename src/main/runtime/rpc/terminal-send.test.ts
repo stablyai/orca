@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
@@ -181,6 +182,45 @@ describe('terminal send RPC', () => {
     expect(sendTerminal).toHaveBeenCalled()
   })
 
+  it('does not claim the viewport for a focus report or query reply (#26469)', async () => {
+    const refreshRemoteDesktopViewer = vi.fn().mockResolvedValue(true)
+    const sendTerminal = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      accepted: true,
+      bytesWritten: 3
+    })
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      refreshRemoteDesktopViewer,
+      sendTerminal
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const send = (text: string, suffix: { enter?: boolean } = {}) =>
+      dispatcher.dispatch(
+        makeRequest('terminal.send', {
+          terminal: 'terminal-1',
+          text,
+          ...suffix,
+          client: { id: 'desktop-1', type: 'desktop' },
+          viewport: { cols: 96, rows: 32 },
+          claimViewport: true
+        })
+      )
+
+    await expect(send('\x1b[I')).resolves.toMatchObject({ ok: true })
+    await expect(send('\x1b[O\x1b[I')).resolves.toMatchObject({ ok: true })
+    await expect(send('\x1b[?62;22c')).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).not.toHaveBeenCalled()
+    expect(sendTerminal).toHaveBeenCalledTimes(3)
+
+    await expect(send('\x1b[I', { enter: true })).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).toHaveBeenCalledTimes(1)
+
+    await expect(send('a')).resolves.toMatchObject({ ok: true })
+    expect(refreshRemoteDesktopViewer).toHaveBeenCalledWith('pty-1', 'desktop-1', 96, 32, true)
+  })
+
   it('accepts legacy clientless mobile input when the current driver is mobile', async () => {
     const write = vi.fn()
     const sendTerminal = vi.fn().mockImplementation(async (_handle, _action, options) => {
@@ -232,6 +272,7 @@ describe('terminal send RPC', () => {
         interrupt: false
       },
       {
+        inputKind: 'driving',
         beforeWrite: undefined,
         reserveWrite: expect.any(Function),
         afterWrite: expect.any(Function)
@@ -370,7 +411,7 @@ describe('terminal send RPC', () => {
     expect(runtime.sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: '\x1b[3;4R', enter: false, interrupt: false },
-      { beforeWrite: undefined }
+      { beforeWrite: undefined, inputKind: 'query-reply' }
     )
     expect(runtime.mobileTookFloor).not.toHaveBeenCalled()
   })
@@ -570,7 +611,7 @@ describe('terminal send RPC', () => {
         enter: false,
         interrupt: false
       },
-      { beforeWrite: undefined }
+      { inputKind: 'driving', beforeWrite: undefined }
     )
   })
 
@@ -653,7 +694,7 @@ describe('terminal send RPC', () => {
         enter: true,
         interrupt: false
       },
-      { beforeWrite: expect.any(Function) }
+      { inputKind: 'driving', beforeWrite: expect.any(Function) }
     )
   })
 

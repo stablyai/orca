@@ -21,7 +21,6 @@ describe('nativeMountingSubstitutes', () => {
     const store = importDefault(substitute('@react-native-async-storage/async-storage')).default
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the member is a function by construction; the test asserts what calling it throws.
     const getItem = (store as { getItem: () => unknown }).getItem
-    expect(typeof getItem).toBe('function')
     expect(() => getItem()).toThrow(
       'Native store reached during recording: @react-native-async-storage/async-storage.getItem'
     )
@@ -36,8 +35,8 @@ describe('nativeMountingSubstitutes', () => {
 
   it('throws on a member nobody substituted rather than recording an undefined native API', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read itself is the assertion; the proxy has no declared shape.
-    expect(() => (substitute('expo-crypto') as { digest?: unknown }).digest).toThrow(
-      'Unsubstituted native member: expo-crypto.digest'
+    expect(() => (substitute('expo-crypto') as { randomUUID?: unknown }).randomUUID).toThrow(
+      'Unsubstituted native member: expo-crypto.randomUUID'
     )
   })
 })

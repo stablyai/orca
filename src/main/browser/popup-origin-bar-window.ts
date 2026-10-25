@@ -1,11 +1,19 @@
 import { BaseWindow, WebContentsView } from 'electron'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import {
+  discardBrowserPopupContents,
+  prepareNativeBrowserPopup
+} from './browser-popup-native-window'
+import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
+import { describeCommittedPopupOrigin } from './popup-committed-origin'
+export { describePopupOrigin } from './popup-origin-description'
 
-// Why: Electron passes the pre-created popup WebContents through the
-// createWindow options (present at runtime, absent from the published d.ts).
-// Adopting it — instead of constructing fresh contents — is what preserves
-// window.opener and the inherited session that OAuth/SSO popups depend on.
+// Electron supplies an untyped webContents option; adopting it preserves OAuth opener/session state.
 export type PopupChildWindowOptions = Electron.BrowserWindowConstructorOptions & {
   webContents?: Electron.WebContents
+  nativeWindow?: Electron.BrowserWindow
+  // Cmd/Ctrl+Shift-click supplies no page; only GET requests can be reloaded by URL.
+  loadInitialUrl?: boolean
 }
 
 export type PopupOriginBarWindow = {
@@ -18,43 +26,8 @@ export const POPUP_ORIGIN_BAR_HEIGHT = 34
 
 const DEFAULT_POPUP_CONTENT_WIDTH = 800
 const DEFAULT_POPUP_CONTENT_HEIGHT = 600
-const MIN_POPUP_CONTENT_WIDTH = 360
-const MIN_POPUP_CONTENT_HEIGHT = 200
 
-// Why: http on loopback is a secure context (local OAuth callback servers are
-// common); only flag plain http to a real remote host.
-function isLoopbackHost(hostname: string): boolean {
-  return (
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname === '127.0.0.1' ||
-    hostname === '[::1]'
-  )
-}
-
-// Why: the bar must show only the origin — popup URLs routinely carry OAuth
-// codes and one-time tokens in path/query that must never reach UI surfaces.
-export function describePopupOrigin(rawUrl: string): { label: string; insecure: boolean } {
-  try {
-    const parsed = new URL(rawUrl)
-    if (parsed.origin !== 'null') {
-      return {
-        label: parsed.origin,
-        insecure: parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)
-      }
-    }
-    if (parsed.protocol === 'about:') {
-      return { label: 'about:blank', insecure: false }
-    }
-    return { label: parsed.protocol, insecure: false }
-  } catch {
-    return { label: 'unknown', insecure: true }
-  }
-}
-
-// Colors mirror the canonical tokens in src/renderer/src/assets/main.css
-// (--background/--foreground/--border/--destructive); a data: URL page cannot
-// import that stylesheet, so the values are inlined per theme here.
+// Inline main.css theme tokens because this data URL cannot import the renderer stylesheet.
 const ORIGIN_BAR_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
   :root { color-scheme: light dark; }
   body {
@@ -67,9 +40,7 @@ const ORIGIN_BAR_HTML = `<!doctype html><html><head><meta charset="utf-8"><style
   }
   #insecure { display: none; color: #e40014; font-weight: 600; }
   body.insecure #insecure { display: inline; }
-  /* Elide the START of long origins so the registrable domain stays visible
-     (Chrome elides the same side): rtl container puts clip+ellipsis on the
-     left; the bdi keeps the ASCII origin itself rendering LTR. */
+  /* Elide from the left to retain the registrable domain; bdi preserves LTR origin text. */
   #origin-clip { overflow: hidden; text-overflow: ellipsis; direction: rtl; }
   #origin { unicode-bidi: isolate; direction: ltr; }
   @media (prefers-color-scheme: dark) {
@@ -88,8 +59,7 @@ function clampPopupContentSize(options: PopupChildWindowOptions): {
   }
 }
 
-// Fail-closed teardown: the window never loads, and late onClosed listeners still fire so the
-// caller's popup bookkeeping cannot leak an entry for a window that no longer exists.
+// Notify late onClosed listeners too, so callers can release bookkeeping after this immediate close.
 function closeUnpreparedPopup(
   window: BaseWindow,
   contentWebContents: Electron.WebContents,
@@ -103,9 +73,8 @@ function closeUnpreparedPopup(
       listener()
     }
   })
-  if (!contentWebContents.isDestroyed()) {
-    contentWebContents.close()
-  }
+  // A plain close lets an adopted link's pending first request reach the server.
+  discardBrowserPopupContents(contentWebContents)
   if (!originBarWebContents.isDestroyed()) {
     originBarWebContents.close()
   }
@@ -129,44 +98,43 @@ function closeUnpreparedPopup(
   }
 }
 
-/**
- * Hosts a guest-opened popup inside an Orca-built window whose top strip is a
- * separate, Orca-controlled WebContentsView showing the popup's current
- * origin. A default Electron child window has no address bar, so arbitrary
- * web content could open windows whose destination the user cannot verify.
- */
+// Native child windows lack an address bar; untrusted popups need an Orca-controlled origin display.
 export function openPopupWithOriginBar(
   options: PopupChildWindowOptions,
   initialUrl: string,
-  // Why: the only point that provably precedes the popup's first load — per-WebContents policy
-  // that must hold before content runs (route-guest WebRTC) has to be applied here or not at all.
+  // Apply guest policies before the popup's first load.
   prepareContent?: (contents: Electron.WebContents) => boolean
 ): PopupOriginBarWindow {
+  if (options.nativeWindow) {
+    return prepareNativeBrowserPopup(options.nativeWindow, prepareContent)
+  }
   const { width, height } = clampPopupContentSize(options)
-  const initialOrigin = describePopupOrigin(initialUrl)
   const window = new BaseWindow({
     width,
     height: height + POPUP_ORIGIN_BAR_HEIGHT,
-    // Why: window.open features request a content size; without this the
-    // native frame eats into the popup's viewport.
+    // window.open requests content dimensions, excluding the native frame.
     useContentSize: true,
     ...(typeof options.x === 'number' && typeof options.y === 'number'
       ? { x: options.x, y: options.y }
       : {}),
     minWidth: MIN_POPUP_CONTENT_WIDTH,
     minHeight: MIN_POPUP_CONTENT_HEIGHT + POPUP_ORIGIN_BAR_HEIGHT,
-    title: initialOrigin.label
+    title: 'about:blank',
+    // Windows/Linux attach the app menu to web popups too.
+    autoHideMenuBar: true,
+    show:
+      Boolean(options.webContents || options.loadInitialUrl) &&
+      !isBackgroundLaunch() &&
+      options.show !== false
   })
 
-  // Why: the origin bar renders only Orca's own data: URL and must stay
-  // isolated from the (arbitrary) popup content below it.
+  // Isolate the trusted origin bar from the arbitrary web content below it.
   const originBarView = new WebContentsView({
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   })
   const originBarWebContents = originBarView.webContents
   const contentView = new WebContentsView({
-    // Why: Electron rejects an explicitly undefined webContents; omitting it
-    // lets WebContentsView create contents for Cmd/Ctrl-click popups.
+    // Electron rejects explicit undefined; omit it to let WebContentsView create contents.
     ...(options.webContents === undefined ? {} : { webContents: options.webContents }),
     webPreferences: options.webPreferences
   })
@@ -184,29 +152,27 @@ export function openPopupWithOriginBar(
     })
   }
   window.on('resize', layoutViews)
-  // Why: HTML5 fullscreen makes the whole window fullscreen. resize covers
-  // this on macOS, but re-pin on the explicit events too so the origin bar
-  // provably stays above fullscreen content on every platform.
+  // Revealing the menu bar shrinks the content area without resizing the window.
+  window.contentView.on('bounds-changed', layoutViews)
+  // Re-pin on explicit fullscreen events; resize alone does not cover every platform.
   window.on('enter-full-screen', layoutViews)
   window.on('leave-full-screen', layoutViews)
   layoutViews()
 
   const contentWebContents = contentView.webContents
-  if (prepareContent && !prepareContent(contentWebContents)) {
+  if (
+    (!options.webContents && !options.loadInitialUrl) ||
+    (prepareContent && !prepareContent(contentWebContents))
+  ) {
     return closeUnpreparedPopup(window, contentWebContents, originBarWebContents)
   }
-  let currentUrl = initialUrl
   const renderOrigin = (): void => {
-    const { label, insecure } = describePopupOrigin(currentUrl)
-    // Why: origin is the title only until the page supplies one — the bar
-    // below stays the trust surface, so the native title bar can show the
-    // page title (Chrome popup behavior) instead of doubling the origin.
-    // Re-asserting on navigation stops a stale title outliving its origin.
+    const { label, insecure } = describeCommittedPopupOrigin(contentWebContents)
+    // Reset stale titles on navigation; only the origin bar is trusted to identify the destination.
     if (!window.isDestroyed()) {
       window.setTitle(label)
     }
-    // Why: textContent + JSON encoding — the URL is attacker-controlled and
-    // must never be interpolated into the bar's markup.
+    // Use textContent and JSON encoding because the origin label comes from untrusted URLs.
     void originBarWebContents
       .executeJavaScript(
         `document.body.classList.toggle('insecure', ${insecure ? 'true' : 'false'});` +
@@ -219,25 +185,47 @@ export function openPopupWithOriginBar(
     `data:text/html;charset=utf-8,${encodeURIComponent(ORIGIN_BAR_HTML)}`
   )
 
-  const handleDidNavigate = (_event: Electron.Event, url: string): void => {
-    currentUrl = url
+  contentWebContents.on('did-navigate', renderOrigin)
+  const handleInPageNavigate = (
+    _event: Electron.Event,
+    _url: string,
+    isMainFrame: boolean
+  ): void => {
+    if (isMainFrame) {
+      renderOrigin()
+    }
+  }
+  contentWebContents.on('did-navigate-in-page', handleInPageNavigate)
+  const handleLoadFailure = (
+    _event: Electron.Event,
+    _errorCode: number,
+    _errorDescription: string,
+    _url: string,
+    isMainFrame: boolean
+  ): void => {
+    if (!isMainFrame) {
+      return
+    }
+    // Error documents omit did-navigate; read the committed frame, never the failed target.
     renderOrigin()
   }
-  contentWebContents.on('did-navigate', handleDidNavigate)
-  // Why: origin writes fail silently if the bar is mid-load; re-asserting at
-  // load completion means a dropped write can never leave a stale origin up
-  // for the lifetime of the page.
+  contentWebContents.on('did-fail-load', handleLoadFailure)
+  // Re-assert the committed origin after loads that may have dropped earlier writes.
   contentWebContents.on('did-finish-load', renderOrigin)
-  const handlePageTitleUpdated = (_event: Electron.Event, title: string): void => {
-    if (!window.isDestroyed() && title) {
+  const handlePageTitleUpdated = (event: Electron.Event, title: string): void => {
+    event.preventDefault()
+    if (
+      !window.isDestroyed() &&
+      title &&
+      describeCommittedPopupOrigin(contentWebContents).label !== 'about:blank'
+    ) {
       window.setTitle(title)
     }
   }
   contentWebContents.on('page-title-updated', handlePageTitleUpdated)
+  renderOrigin()
 
-  // Why: with no adopted contents there is no Chromium-driven navigation for
-  // this popup, so load the target ourselves (opener handle is already gone).
-  if (!options.webContents) {
+  if (options.loadInitialUrl && !options.webContents) {
     void contentWebContents.loadURL(initialUrl).catch(() => {})
   }
 
@@ -251,14 +239,15 @@ export function openPopupWithOriginBar(
   window.once('closed', () => {
     if (!contentWebContents.isDestroyed()) {
       contentWebContents.off('destroyed', handleContentDestroyed)
-      contentWebContents.off('did-navigate', handleDidNavigate)
+      contentWebContents.off('did-navigate', renderOrigin)
+      contentWebContents.off('did-navigate-in-page', handleInPageNavigate)
+      contentWebContents.off('did-fail-load', handleLoadFailure)
       contentWebContents.off('did-finish-load', renderOrigin)
       contentWebContents.off('page-title-updated', handlePageTitleUpdated)
-      // Why: close() (not destroy) so the page's unload handlers run — OAuth
-      // pages often notify the opener from unload.
+      // Use close so OAuth unload handlers can notify the opener.
       contentWebContents.close()
     }
-    // Why: BaseWindow does not destroy child WebContentsView contents when it closes.
+    // BaseWindow does not destroy child WebContentsView contents on close.
     if (!originBarWebContents.isDestroyed()) {
       originBarWebContents.close()
     }

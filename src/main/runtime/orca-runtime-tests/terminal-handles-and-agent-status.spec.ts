@@ -1,4 +1,6 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { registerLivePty } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   advertisedUrlWatcher,
@@ -20,7 +22,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     let process = {
       id: 'reused-pty-id',
       incarnationId: 'inc-old',
@@ -66,7 +70,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -86,6 +92,10 @@ describe('OrcaRuntimeService', () => {
           ptyId: 'visual-pty'
         }
       ]
+    })
+    registerLivePty(runtime, 'visual-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'occupied-tab',
+      leafId: HEADLESS_LEAF_ID
     })
     runtime.setPtyController({
       write: () => true,
@@ -156,7 +166,9 @@ describe('OrcaRuntimeService', () => {
         [`duplicate-b:${HEADLESS_SECOND_LEAF_ID}`]: 'inc-duplicate'
       }
     })
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -223,7 +235,7 @@ describe('OrcaRuntimeService', () => {
     expect(new Set(handles).size).toBe(handles.length)
 
     await expect(
-      runtime.sendTerminal('term_victim', { text: 'for victim' })
+      runtime.sendTerminal('term_victim', { text: 'for victim' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true })
     expect(writesByPty.get('pty-victim')).toEqual(['for victim'])
     expect(writesByPty.has('pty-imposter')).toBe(false)
@@ -253,7 +265,7 @@ describe('OrcaRuntimeService', () => {
     const listed = await runtime.listTerminals()
     expect(listed.terminals[0]?.handle).toBe('term_already_bound')
     await expect(
-      runtime.sendTerminal('term_already_bound', { text: 'still routed' })
+      runtime.sendTerminal('term_already_bound', { text: 'still routed' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true })
     expect(writes).toEqual(['still routed'])
     // the reported-but-not-adopted handle must not resolve to the live pty
@@ -340,7 +352,9 @@ describe('OrcaRuntimeService', () => {
       handle,
       tail: ['after unavailable']
     })
-    await expect(runtime.sendTerminal(handle, { text: 'still writable' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'still writable' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       handle,
       accepted: true
     })

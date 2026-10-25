@@ -51,6 +51,25 @@ describe('normalizeGitRemoteUrl', () => {
 })
 
 describe('deriveGitRemoteIdentity', () => {
+  it.each(['blob:none', 'blob:limit=1024', 'tree:0'])(
+    'prefers a partial-clone origin with filter %s over contributor remotes',
+    (filter) => {
+      expect(
+        deriveGitRemoteIdentity(
+          [
+            'amoaba\thttps://github.com/AmoabaKelvin/orca.git (fetch)',
+            `origin\thttps://github.com/stablyai/orca.git (fetch) [${filter}]`,
+            'origin\thttps://github.com/another/orca.git (push)'
+          ].join('\r\n')
+        )
+      ).toEqual({
+        canonicalKey: 'github.com/stablyai/orca',
+        remoteName: 'origin',
+        remoteUrl: 'https://github.com/stablyai/orca.git'
+      })
+    }
+  )
+
   it('prefers upstream, then origin, then the first named remote', () => {
     expect(
       deriveGitRemoteIdentity(

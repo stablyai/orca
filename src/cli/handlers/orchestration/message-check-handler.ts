@@ -13,7 +13,7 @@ import { startCheckKeepalive } from './check-keepalive'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { flushOrchestrationStdout, resolveCompatibilityCliCommand } from './runtime-compatibility'
-import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import { orchestrationCallerLabel, resolveOrchestrationTerminalHandle } from './terminal-identity'
 
 type CheckResult = {
   messages: MessageSummary[]
@@ -31,7 +31,7 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
   'orchestration check': async ({ flags, client, cwd, json }) => {
     const wait = flags.has('wait')
     const peek = flags.has('peek')
-    // Why: older runtimes strip unknown peek and run --unread --peek as destructive mark-read.
+    // Older runtimes ignore peek, making --unread --peek destructive.
     if ([flags.has('unread'), peek, flags.has('all')].filter(Boolean).length > 1) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -41,13 +41,17 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+    // Sessions use their injected id; inherited pane keys belong to a different caller.
+    const paneKey =
+      explicitTerminal || terminal === undefined ? undefined : process.env.ORCA_PANE_KEY
+    const callerLabel = orchestrationCallerLabel(terminal)
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
     try {
       result = await callOrchestrationMutation<CheckResult>(client, flags, 'orchestration.check', {
         terminal,
-        terminalPaneKey: explicitTerminal ? undefined : process.env.ORCA_PANE_KEY || undefined,
-        // Why: old runtimes degrade peek to non-consuming all mode instead of destructive mark-read.
+        terminalPaneKey: paneKey || undefined,
+        // unread:false makes hosts that ignore peek fall back to non-consuming all mode.
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
         all: flags.has('all') ? true : undefined,
@@ -68,9 +72,9 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     }
     result = {
       ...result,
-      result: prepareOrchestrationCheckOutput(result.result, terminal, flags.has('format'))
+      result: prepareOrchestrationCheckOutput(result.result, callerLabel, flags.has('format'))
     }
-    printResult(result, json, (value) => formatOrchestrationCheckText(value, terminal))
+    printResult(result, json, (value) => formatOrchestrationCheckText(value, callerLabel))
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
     if (compatibilityAck && compatibilityAck.length > 0) {
       await flushOrchestrationStdout()
@@ -95,7 +99,7 @@ function filterLegacyPeekResult(
   const rawRowCount = result.result.messages.length
   const unreadOnly = result.result.messages.filter((message) => message.read !== 1)
   const removedReadRows = unreadOnly.length !== rawRowCount
-  // Why: read rows prove a pre-peek runtime cannot honor wait, so fail instead of returning early.
+  // Read rows reveal an older runtime returning before the requested unread wait is satisfied.
   if (wait && removedReadRows && unreadOnly.length === 0) {
     throw new RuntimeClientError(
       'peek_wait_unsupported',
@@ -111,7 +115,7 @@ function filterLegacyPeekResult(
     ...result,
     result: {
       ...result.result,
-      // Why: a pre-peek runtime formats all rows, which no longer matches the filtered set.
+      // Filtered rows invalidate the older host's preformatted output.
       ...(removedReadRows ? { formatted: undefined } : {}),
       messages: unreadOnly,
       count: unreadOnly.length

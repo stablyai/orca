@@ -1,32 +1,7 @@
 import type { CrashReportDetailValue } from '../../shared/crash-reporting'
 import type { SwapVolumeFreeSpace } from './swap-volume-free-space'
 
-// ─── Host system memory for crash reports ───────────────────────────
-// Why: the system outlives the crashed process, so this IS sampleable at
-// process-gone — it separates "renderer grew huge" from "machine out of
-// memory/commit", which the per-process buckets alone cannot. The gone-time
-// caller reads AFTER the corpse returned its pages, so free/swapFree read
-// healthier than at kill time; the pre-gone sampler carries a live reading past
-// that.
-// Every reading is labelled `systemMemoryPressureSignal` so no report can be
-// read as a pressure verdict the platform never gave:
-//   win32  — swapFree is MEMORYSTATUSEX.ullAvailPageFile, i.e. available
-//     COMMIT, which pagefile growth can heal (a 127 MB commit floor healed to
-//     2029 MB mid-hold on the win-lowspec repro, killing nothing). Free space on
-//     the swap volume does NOT establish that it could: a fixed-size or disabled
-//     pagefile grows into no amount of empty disk, its maximum is unreadable
-//     here (needs a registry read), and the measured volume is only the DEFAULT
-//     pagefile drive. So a co-timed volume reading is context beside the commit
-//     number — `available-commit-volume-cotimed` — never a verdict. The one
-//     decisive win32 case is a commit limit at or below RAM: no pagefile exists
-//     to grow, so the floor cannot heal (`available-commit-hard-capped`).
-//   linux  — MemAvailable is the real signal; MemFree is not (it excludes page
-//     cache and other reclaimable memory).
-//   darwin — none. `free` stays low on healthy machines and
-//     fileBacked/purgeable are only a reclaimability proxy. The real signal
-//     needs `memory_pressure -Q`; Orca's reader for it
-//     (src/main/memory/host-memory.ts) is on-demand, and spawning a subprocess
-//     on a 10 s app-lifetime timer costs more than the gap it closes.
+// Post-exit memory can look healthier; pre-gone samples retain earlier pressure evidence.
 
 type CrashReportDetails = Record<string, CrashReportDetailValue>
 
@@ -49,7 +24,7 @@ type SystemMemoryInfoLike = {
 
 type SystemMemoryInfoReader = () => SystemMemoryInfoLike | null
 
-/** How far this reading may be read as a "was the host under pressure" verdict. */
+/** Describes the evidence this platform supplies, without inferring unmeasured pressure. */
 export type SystemMemoryPressureSignal =
   | 'available-commit-hard-capped'
   | 'available-commit-volume-cotimed'
@@ -81,7 +56,7 @@ function numericDetail(details: CrashReportDetails, suffix: string): number | un
   return typeof value === 'number' ? value : undefined
 }
 
-/** Windows commit limit = RAM + pagefile, so a limit at or below RAM has no pagefile behind it. */
+// Windows SwapTotal is the commit limit; compare it with RAM to detect the hard-capped case.
 function pagefileBacksCommit(details: CrashReportDetails): boolean | undefined {
   const total = numericDetail(details, 'TotalMB')
   const swapTotal = numericDetail(details, 'SwapTotalMB')
@@ -134,17 +109,7 @@ export function getSystemMemoryDetails(
   return details
 }
 
-/**
- * Merges the statfs-derived volume datum, which needs an await and so is only
- * reachable from the periodic sampler, and relabels the reading it sits beside.
- *
- * `coTimed` false means the statfs outlived the tick that issued it, so this
- * volume number and the commit number beside it describe different moments —
- * during a pagefile-growth storm that is exactly when they diverge, and a
- * pre-storm 40 GB printed next to 200 MB of commit reads as "the pagefile had
- * room", the opposite conclusion. The datum still ships (with its own age), but
- * only a co-timed one is named in the label.
- */
+/** Only co-timed volume reads qualify the current commit label. */
 export function withSwapVolumeFreeSpace(
   details: CrashReportDetails,
   volume: SwapVolumeFreeSpace,

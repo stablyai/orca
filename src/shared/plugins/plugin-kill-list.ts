@@ -51,10 +51,6 @@ export function isPluginKillListTooFarInFuture(
   return Date.parse(killList.generatedAt) > now + PLUGIN_KILL_LIST_FUTURE_SKEW_MS
 }
 
-export function killedPluginKeys(killList: PluginKillList): ReadonlySet<string> {
-  return new Set(killList.plugins.map((plugin) => plugin.pluginKey))
-}
-
 export function findKilledPlugin(
   killList: PluginKillList,
   pluginKey: string

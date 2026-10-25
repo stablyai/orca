@@ -3,6 +3,8 @@
 // and the host status feed compare with. Split out of `agent-session-wire.ts`
 // when that file reached its line budget; the definitions below are unchanged.
 
+import type { AgentChildWorkView } from './agent-status-child-work-view'
+
 /** Per-task run state, reusing the agent-state vocabulary the dashboard already
  *  renders. Optional on the wire: an old host sends none and clients fall back
  *  to kind-derived defaults. */
@@ -48,6 +50,16 @@ export type AgentSessionBackgroundTaskState = {
    *  read absence as "no stop" would hide a working control on those hosts.
    *  A host whose provider exposes no honest stop sends `false`. */
   supportsStopAll?: boolean
+  /** The host's child records for this session as views, live and recently settled; `tasks` and
+   *  `settledTasks` are derived from them. Absent from older hosts. A reader that does not
+   *  advertise `agent-session.background-task-child-views.v1` never receives a state whose only
+   *  rows are settled: to it, as before, the roster is live work. */
+  children?: AgentChildWorkView[]
+  /** Some of this session's running child work has no row (its record was refused, has not landed
+   *  yet, or a bounded frame dropped it), so what is listed is not all that runs; no row's absence
+   *  means it ended. A missing child stops counting once a later report of it is admitted or it
+   *  reports its own end, and the whole flag goes once the provider session ends. */
+  incomplete?: true
 }
 
 function backgroundTaskFieldsEqual(

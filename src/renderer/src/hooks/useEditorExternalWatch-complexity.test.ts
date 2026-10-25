@@ -45,7 +45,7 @@ import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
-import { createExternalWatchEventHandler } from './useEditorExternalWatch'
+import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 
 const EVENT_COUNT = 5_000
 const OPEN_FILE_COUNT = 100

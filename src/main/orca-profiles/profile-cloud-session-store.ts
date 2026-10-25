@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { safeStorage } from 'electron'
+import { guardedSafeStorage as safeStorage } from '../host/safe-storage-availability'
 import { isUnreadableError, writeSecureJsonFile } from '../../shared/secure-file'
 import type {
   OrcaCloudCapabilities,
@@ -9,13 +9,6 @@ import type {
 } from '../../shared/orca-profiles'
 import { getOrcaProfileDirectory } from './profile-storage-paths'
 import { allowsPlaintextOrcaCloudSession } from './profile-cloud-auth-config'
-import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
-import {
-  cloudSessionIdentity,
-  isCloudSessionMutationCurrent,
-  recordSuccessfulCloudSessionLogin,
-  type CloudSessionMutationSnapshot
-} from './profile-cloud-session-mutation'
 
 export type OrcaCloudSession = {
   accessToken: string
@@ -69,7 +62,7 @@ function rememberMemorySession(key: string, session: CachedOrcaCloudSession): vo
   }
 }
 
-function sessionCacheKey(profileId: string, userDataPath: string): string {
+export function orcaCloudSessionKey(profileId: string, userDataPath: string): string {
   return `${userDataPath}\0${profileId}`
 }
 
@@ -118,12 +111,19 @@ export function getOrcaCloudSessionPath(profileId: string, userDataPath: string)
   return join(getOrcaProfileDirectory(profileId, userDataPath), 'account-session.json.enc')
 }
 
-export function saveOrcaCloudSession(
+// Rotated sessions whose write failed. The token on disk is already spent, so each is retried
+// on the next read and at quit until it lands or the session changes.
+const unsavedRotations = new Map<
+  string,
+  { profileId: string; userDataPath: string; session: OrcaCloudSession }
+>()
+
+function writeOrcaCloudSession(
   profileId: string,
   userDataPath: string,
   session: OrcaCloudSession
 ): OrcaCloudSessionPersistence {
-  const cacheKey = sessionCacheKey(profileId, userDataPath)
+  const cacheKey = orcaCloudSessionKey(profileId, userDataPath)
   if (safeStorage.isEncryptionAvailable()) {
     const encrypted: PersistedEncryptedSession = {
       version: 1,
@@ -154,40 +154,63 @@ export function saveOrcaCloudSession(
   return 'memory-only'
 }
 
-export function saveOrcaCloudSessionExchange(
-  profileId: string,
-  userDataPath: string,
-  exchange: OrcaCloudSessionExchangeResponse
-): OrcaCloudSessionPersistence {
-  recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, exchange.cloud), userDataPath)
-  return saveOrcaCloudSession(profileId, userDataPath, {
-    accessToken: exchange.accessToken,
-    refreshToken: exchange.refreshToken,
-    expiresAt: exchange.expiresAt,
-    organizations: exchange.organizations,
-    capabilities: exchange.capabilities
-  })
-}
-
-export function saveOrcaCloudSessionIfCurrent(
+export function saveOrcaCloudSession(
   profileId: string,
   userDataPath: string,
   session: OrcaCloudSession,
-  snapshot: CloudSessionMutationSnapshot
-): OrcaCloudSessionPersistence | null {
-  // Why: the check and sync save share one main-process turn, so an async
-  // refresh captured before sign-out/org-switch cannot resurrect the session.
-  if (!isCloudSessionMutationCurrent(profileId, userDataPath, snapshot)) {
-    return null
+  options: { spentOnFailure?: boolean } = {}
+): OrcaCloudSessionPersistence {
+  const key = orcaCloudSessionKey(profileId, userDataPath)
+  try {
+    const persistence = writeOrcaCloudSession(profileId, userDataPath, session)
+    unsavedRotations.delete(key)
+    return persistence
+  } catch (error) {
+    // A failed non-rotating write throws as before and leaves any unsaved rotation pending.
+    if (!options.spentOnFailure) {
+      throw error
+    }
+    // Why: losing a rotated token makes the next refresh resend the spent one, which the
+    // server reads as reuse and revokes the whole family.
+    unsavedRotations.set(key, { profileId, userDataPath, session })
+    try {
+      rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
+    } catch {
+      // A spent token left on disk costs one sign-in after restart, never a loop.
+    }
+    return 'memory-only'
   }
-  return saveOrcaCloudSession(profileId, userDataPath, session)
+}
+
+function retryUnsavedRotation(key: string): void {
+  const unsaved = unsavedRotations.get(key)
+  if (!unsaved) {
+    return
+  }
+  try {
+    writeOrcaCloudSession(unsaved.profileId, unsaved.userDataPath, unsaved.session)
+    unsavedRotations.delete(key)
+  } catch {
+    // Still unsaved; the next read or the quit flush tries again.
+  }
+}
+
+export function flushUnsavedOrcaCloudSessions(): void {
+  for (const key of unsavedRotations.keys()) {
+    retryUnsavedRotation(key)
+  }
 }
 
 export function readOrcaCloudSession(
   profileId: string,
   userDataPath: string
 ): OrcaCloudSessionReadResult {
-  const cacheKey = sessionCacheKey(profileId, userDataPath)
+  const cacheKey = orcaCloudSessionKey(profileId, userDataPath)
+  retryUnsavedRotation(cacheKey)
+  const unsaved = unsavedRotations.get(cacheKey)
+  if (unsaved) {
+    return { status: 'found', session: unsaved.session, persistence: 'memory-only' }
+  }
   const memorySession = memorySessions.get(cacheKey)
   if (memorySession) {
     memorySessions.delete(cacheKey)
@@ -252,7 +275,9 @@ export function readOrcaCloudSession(
 }
 
 export function clearOrcaCloudSession(profileId: string, userDataPath: string): void {
-  memorySessions.delete(sessionCacheKey(profileId, userDataPath))
+  const key = orcaCloudSessionKey(profileId, userDataPath)
+  unsavedRotations.delete(key)
+  memorySessions.delete(key)
   rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
 }
 

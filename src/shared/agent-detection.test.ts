@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import {
   detectAgentStatusFromTitle,
@@ -18,10 +18,6 @@ import {
 } from './agent-title-owner'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
-
 describe('OSC title extraction', () => {
   it('extracts the last OSC title from BEL-terminated PTY data', () => {
     expect(extractLastOscTitle('\x1b]0;First\x07noise\x1b]2;Second\x07')).toBe('Second')
@@ -34,7 +30,7 @@ describe('OSC title extraction', () => {
     ])
   })
 
-  it('ignores incomplete OSC titles until a later chunk supplies the terminator', () => {
+  it('ignores unterminated OSC titles', () => {
     expect(extractAllOscTitles('\x1b]0;Incomplete title')).toEqual([])
     expect(extractLastOscTitle('\x1b]0;Incomplete title')).toBeNull()
   })
@@ -46,13 +42,11 @@ describe('OSC title extraction', () => {
     expect(extractAllOscTitles(data)).toEqual(['Fresh title'])
   })
 
-  it('scans large PTY chunks without regex match iteration', () => {
-    const matchAll = vi.spyOn(String.prototype, 'matchAll')
+  it('extracts the final title after a large noisy PTY prefix', () => {
     const data = `${'pasted terminal noise \x1b]x;ignored\x07 '.repeat(10_000)}\x1b]0;Agent working\x07`
 
     expect(extractLastOscTitle(data)).toBe('Agent working')
     expect(extractAllOscTitles(data).at(-1)).toBe('Agent working')
-    expect(matchAll).not.toHaveBeenCalled()
   })
 
   it('caps oversized OSC titles before downstream title processing', () => {

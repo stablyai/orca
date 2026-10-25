@@ -1,25 +1,23 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser'
-import {
-  resolveRemoteFailureExternalUrl,
-  toHttpsRecoveryUrl
-} from '../../../../../shared/browser-url'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
-import { toDisplayUrl } from '../describe-page/browser-page-url-display'
+import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
+import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
   canReconnectRemoteBrowserStream,
   type RemoteBrowserStreamStatus
@@ -44,8 +42,9 @@ export function RemoteBrowserPageViewport({
   worktreeId,
   runtimeWorktree,
   runtimeTarget,
-  onReload,
+  isActive,
   onGoto,
+  onNavigateToUrl,
   onReconnect,
   handleRemotePointerDown,
   handleRemotePointerUp,
@@ -68,8 +67,10 @@ export function RemoteBrowserPageViewport({
   worktreeId: string
   runtimeWorktree: string
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
-  onReload: () => void
-  onGoto: (url: string) => void
+  isActive: boolean
+  onGoto: (url: string) => Promise<void>
+  /** The address bar's submit path, which also parks a URL typed before the host page exists. */
+  onNavigateToUrl: (url: string) => void
   onReconnect: () => void
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
@@ -77,26 +78,37 @@ export function RemoteBrowserPageViewport({
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
 }): React.JSX.Element {
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
-  const remoteFailureUrl = browserTab.loadError?.validatedUrl ?? browserTab.url
+  // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
+  const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
+  if (
+    browserTab.loadError !== standingFailure &&
+    (browserTab.loadError || (!browserTab.loading && !busy))
+  ) {
+    setStandingFailure(browserTab.loadError)
+  }
+  const loadError =
+    browserTab.loadError ?? resolveActiveBrowserLoadFailure(standingFailure, browserTab.url)
+  const remoteFailureUrl = loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
-  const showRemoteFailureOverlay =
-    Boolean(browserTab.loadError) &&
-    remoteFailureUrl !== 'about:blank' &&
-    remoteFailureUrl !== ORCA_BROWSER_BLANK_URL
+  const showRemoteFailureOverlay = Boolean(loadError) && !isBlankBrowserUrl(remoteFailureUrl)
 
   return (
     <div
       ref={remoteViewportRef}
       tabIndex={-1}
-      className="relative min-h-0 flex-1 overflow-hidden bg-background"
+      // Why a size container: the frame letterboxes itself in cq units of this pane.
+      className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
     >
       {markup.isActive && markup.baseImage ? (
-        <MarkupOverlay
-          baseImage={markup.baseImage}
-          busy={markup.state === 'composing'}
-          onComplete={(input) => void markup.complete(input)}
-          onCancel={markup.cancel}
-        />
+        // Why the frame's own box: markup draws over the letterboxed page, not the whole pane.
+        <div className="absolute top-0 left-0" style={remoteFrameStyle}>
+          <MarkupOverlay
+            baseImage={markup.baseImage}
+            busy={markup.state === 'composing'}
+            onComplete={(input) => void markup.complete(input)}
+            onCancel={markup.cancel}
+          />
+        </div>
       ) : null}
       {frameUrl ? (
         <img
@@ -141,15 +153,19 @@ export function RemoteBrowserPageViewport({
           </div>
         </div>
       )}
-      {showRemoteFailureOverlay && browserTab.loadError ? (
+      {isBlankBrowserUrl(browserTab.url) ? (
+        <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
+      ) : null}
+      {showRemoteFailureOverlay && loadError ? (
         <BrowserLoadFailureOverlay
-          loadError={browserTab.loadError}
+          loadError={loadError}
           externalUrl={remoteFailureExternalUrl}
-          currentUrl={toDisplayUrl(remoteFailureUrl)}
-          httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}
-          onRetry={onReload}
-          onTryHttps={onGoto}
-          onCopy={(url) => void window.api.ui.writeClipboardText(url)}
+          // Why: reloading the server's error page only refreshes it; re-attempt the URL that failed.
+          onRetry={() => onGoto(remoteFailureUrl)}
+          autoRetry={{
+            active: isActive,
+            loading: browserTab.loading
+          }}
           onOpenExternal={(url) => void window.api.shell.openUrl(url)}
           certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
           expectedBrowserPageId={

@@ -5,6 +5,7 @@ import {
   resolveCodexUsageDelta,
   type CodexUsageRawUsage
 } from './codex-usage-token-delta'
+import { LONG_CONTEXT_THRESHOLD_TOKENS } from './codex-model-pricing'
 import type { CodexUsageParsedEvent } from './types'
 
 type CodexUsageRawRecord = {
@@ -97,9 +98,7 @@ export function parseCodexUsageRecord(
 
   const info = parsed.payload.info
   if (info == null || typeof info !== 'object') {
-    // Why: Codex emits token_count snapshots with null info for rate-limit
-    // updates. Treating them as malformed usage would make active sessions look
-    // flaky and create false scan errors for perfectly valid logs.
+    // Rate-limit updates legitimately emit token_count records with null info.
     return null
   }
 
@@ -122,7 +121,7 @@ export function parseCodexUsageRecord(
     return null
   }
 
-  let delta = {
+  const delta = {
     ...resolvedUsage.delta,
     cachedInputTokens: Math.min(
       resolvedUsage.delta.cachedInputTokens,
@@ -142,6 +141,8 @@ export function parseCodexUsageRecord(
 
   context.previousTotals = resolvedUsage.nextTotals
 
+  // Price long context per request; total-only deltas may span several requests.
+  const isLongContext = lastUsage !== null && delta.inputTokens > LONG_CONTEXT_THRESHOLD_TOKENS
   const resolvedModel = extractModel(parsed.payload) ?? context.currentModel
   const hasInferredPricing = resolvedModel === null
 
@@ -156,6 +157,9 @@ export function parseCodexUsageRecord(
     cachedInputTokens: delta.cachedInputTokens,
     outputTokens: delta.outputTokens,
     reasoningOutputTokens: delta.reasoningOutputTokens,
-    totalTokens: delta.totalTokens
+    totalTokens: delta.totalTokens,
+    longContextInputTokens: isLongContext ? delta.inputTokens : 0,
+    longContextCachedInputTokens: isLongContext ? delta.cachedInputTokens : 0,
+    longContextOutputTokens: isLongContext ? delta.outputTokens : 0
   }
 }

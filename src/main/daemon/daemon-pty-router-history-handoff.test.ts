@@ -103,13 +103,11 @@ describe('DaemonPtyRouter history handoff', () => {
   it('moves a slept v29 session to v30 with its full large history', async () => {
     const sessionId = 'large-legacy-session'
     const marker = 'V29-HISTORY-HANDOFF-MARKER'
-    // Why: this fixture plays an OLD daemon binary, whose sessions retained ~5000 rows. New code
-    // applies the flat window at session create, which would shrink the history below the chunked
-    // seed threshold and silently skip the transfer path this test exists to cover.
+    // Model the legacy 5,000-row window so the fixture exceeds the chunked-seed threshold.
     vi.stubEnv('ORCA_DAEMON_SESSION_SCROLLBACK_ROWS', '5000')
     await legacyAdapter.spawn({ sessionId, cols: 400, rows: 24 })
     legacySubprocess.emitData(`${'x'.repeat(TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS + 1)}${marker}`)
-    // Keep only the played legacy session deep; the receiving daemon must use today's flat window.
+    // Restore the receiving daemon's smaller live window.
     vi.stubEnv('ORCA_DAEMON_SESSION_SCROLLBACK_ROWS', String(DAEMON_SESSION_SCROLLBACK_ROWS))
     router = new DaemonPtyRouter({ current: currentAdapter, legacy: [legacyAdapter] })
     await router.discoverLegacySessions()

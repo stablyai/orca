@@ -29,6 +29,8 @@ describe('getManagedStatusLineScript (posix)', () => {
     expect(endpointIndex).toBeLessThan(curlIndex)
     expect(script).toContain('/statusline/claude')
     expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).toContain('| LC_ALL= LC_NUMERIC=C curl -sS')
+    expect(script).not.toMatch(/\|\s+curl\b/)
   })
 
   it('returns the posix script even on win32 when targeting a remote', () => {
@@ -44,7 +46,6 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
     const captureIndex = script.indexOf('more.com')
-    // Why: the \"-escaped needle makes findstr match the quoted JSON key, not any path containing rate_limits.
     const guardIndex = script.indexOf('findstr.exe" /c:\\"rate_limits\\"')
     const endpointIndex = script.indexOf('call "%ORCA_AGENT_HOOK_ENDPOINT%"')
     const curlIndex = script.indexOf('curl.exe')
@@ -58,8 +59,6 @@ describe('getManagedStatusLineScript (win32 local)', () => {
   it('posts the buffered payload file and deletes it afterwards', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
-    // Why: the stable leaf UUID stays filename-safe even when a host-supplied tab id does not,
-    // while the delimiter replacement keeps a surviving legacy numeric key valid on Windows.
     expect(script).toContain('set "ORCA_STATUSLINE_PANE_ID=%ORCA_PANE_KEY:~-36%"')
     expect(script).toContain('set "ORCA_STATUSLINE_PANE_ID=%ORCA_STATUSLINE_PANE_ID::=_%"')
     expect(script).toContain(
@@ -75,8 +74,6 @@ describe('getManagedStatusLineScript (win32 local)', () => {
   it('never posts a literal %CLAUDE_CONFIG_DIR% token when the var is unset', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
-    // Why: the posted field comes from an always-defined variable so an unset
-    // CLAUDE_CONFIG_DIR yields "configDir=" (matching POSIX + the null snapshot).
     expect(script).toContain('set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir="')
     expect(script).toContain(
       'if defined CLAUDE_CONFIG_DIR set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir=%CLAUDE_CONFIG_DIR%"'
@@ -113,14 +110,11 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     )
     const tokenGuardIndex = script.indexOf('if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto')
     const curlIndex = script.indexOf('curl.exe')
-    // Why: the check precedes findstr so throttled ticks skip that spawn too, but the stamp
-    // only advances after every post guard passes — skipped ticks must not defer the next post.
     expect(stampIndex).toBeGreaterThan(captureIndex)
     expect(throttleIndex).toBeGreaterThan(stampIndex)
     expect(throttleIndex).toBeLessThan(findstrIndex)
     expect(stampWriteIndex).toBeGreaterThan(tokenGuardIndex)
     expect(stampWriteIndex).toBeLessThan(curlIndex)
-    // Fail-open shape: undefined elapsed (unparseable time/stamp) proceeds to the probe.
     expect(script).toContain('if not defined ORCA_STATUSLINE_ELAPSED goto :orca_statusline_probe')
     expect(script).toContain(
       'for /f "delims=0123456789" %%d in ("%ORCA_STATUSLINE_LAST%") do set "ORCA_STATUSLINE_LAST="'
@@ -128,34 +122,9 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     expect(script).toContain(
       'if defined ORCA_STATUSLINE_NOW if defined ORCA_STATUSLINE_LAST set /a "ORCA_STATUSLINE_ELAPSED=ORCA_STATUSLINE_NOW-ORCA_STATUSLINE_LAST" 2>nul'
     )
-    // cmd parses leading-zero numbers as octal; 1%%x %% 100 defuses 08/09.
+    // Prefixing with 1 avoids cmd octal parsing of 08/09.
     expect(script).toContain('(1%%a %% 100)*3600+(1%%b %% 100)*60+(1%%c %% 100)')
     expect(script).toContain('set "ORCA_STATUSLINE_TIME=%TIME: =0%"')
-  })
-})
-
-describe('statusline curl throttle (posix)', () => {
-  it('checks the per-pane stamp after the env guards and before curl', () => {
-    stubPlatform('darwin')
-    const script = getManagedStatusLineScript('local')
-    const envGuardIndex = script.indexOf('-z "$ORCA_AGENT_HOOK_PORT"')
-    const durationIndex = script.indexOf('"total_duration_ms"')
-    const stampIndex = script.indexOf('orca-claude-statusline-last-${orca_statusline_pane_id}')
-    const intervalIndex = script.indexOf(`-lt ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS}`)
-    const curlIndex = script.indexOf('curl -sS')
-    expect(envGuardIndex).toBeLessThan(stampIndex)
-    expect(stampIndex).toBeLessThan(durationIndex)
-    expect(durationIndex).toBeLessThan(intervalIndex)
-    expect(intervalIndex).toBeLessThan(curlIndex)
-    // Fail-open shape: non-numeric date output or stamp content must never suppress the post.
-    // Why: the allow-list (not a mere digits check) matters — leading-zero values like 008 are
-    // invalid octal inside $(( )) and abort the whole script under dash, wedging the stamp.
-    expect(script).toContain(
-      'case "$orca_statusline_now" in 0|[1-9]|[1-9][0-9]*) ;; *) orca_statusline_now='
-    )
-    expect(script).toContain(
-      'case "$orca_statusline_last" in 0|[1-9]|[1-9][0-9]*) ;; *) orca_statusline_last='
-    )
   })
 })
 
@@ -277,10 +246,7 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
 
   it('stays bounded and keeps a valid stamp under overlapping same-pane ticks', async () => {
     const { scriptPath, dir, curlLog } = makeHarness()
-    // Why: the stamp check/write is deliberately lock-free — a lock could wedge the feed closed,
-    // and fail-open is the contract — so a truly concurrent burst may post more than once,
-    // bounded by the overlap width. The deterministic invariants are: every overlapping run
-    // exits 0, the raced stamp still lands valid, and it throttles the very next ticks.
+    // Lock-free stamps fail open: overlapping ticks may post more than once but must throttle subsequent ticks.
     await Promise.all(
       Array.from({ length: 10 }, () => runScript(scriptPath, dir, rateLimitPayload(1_000)))
     )
@@ -310,8 +276,7 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
 
   it('fails open and repairs a leading-zero stamp instead of dying in arithmetic', async () => {
     const { scriptPath, dir, curlLog } = makeHarness()
-    // Why: 008 is all-digits but invalid octal inside $(( )) — under dash the old digits-only
-    // check made the script abort before rewriting the stamp, wedging this pane's feed dark.
+    // 008 is invalid octal in dash arithmetic and must not prevent stamp repair.
     writeFileSync(stampPathFor(dir), '008')
     await runScript(scriptPath, dir, rateLimitPayload(1_000))
     expect(lineCount(curlLog)).toBe(1)

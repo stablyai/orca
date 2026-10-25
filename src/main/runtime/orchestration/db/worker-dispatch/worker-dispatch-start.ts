@@ -41,6 +41,8 @@ export function createStartingWorkerDispatch(
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
+    /** A worker's own Dispatch that authorized this helper; it must still be the creator here. */
+    requiredCreatorDispatchId?: string
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -89,10 +91,20 @@ export function createStartingWorkerDispatch(
       const taskId = params.taskId ?? ''
       throw taskNotFoundError(`Task ${taskId} was not found.`, { taskId })
     }
+    let priorFailures = 0
     if (params.retryOf) {
       const prior = this.getDispatchContextById(params.retryOf)
       const priorWorker = this.getWorkerDispatch(params.retryOf)
       const latest = this.getDispatchContext(task.id)
+      if (prior?.task_id === task.id && prior.status === 'circuit_broken') {
+        throw taskNotStartableError(
+          this,
+          `Task ${task.id} failed ${prior.failure_count} times, so Orca will not retry it again (last error: ${prior.last_failure ?? 'unknown'}). Report the failure to the user instead of retrying.`,
+          task,
+          params.retryOf,
+          prior.failure_count
+        )
+      }
       // Why: a context-only Dispatch has no worker row, so its settled state lives on the Dispatch row.
       const priorSettled = priorWorker
         ? ['failed', 'stopped', 'abandoned'].includes(priorWorker.state)
@@ -111,6 +123,8 @@ export function createStartingWorkerDispatch(
           params.retryOf
         )
       }
+      // Only a retry chain inherits failures; a fresh start after a worker exit keeps its own count.
+      priorFailures = prior.failure_count
     } else if (task.status !== 'ready') {
       throw taskNotStartableError(
         this,
@@ -121,6 +135,16 @@ export function createStartingWorkerDispatch(
 
     const id = generateId('ctx')
     const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
+    if (
+      params.requiredCreatorDispatchId !== undefined &&
+      creatorDispatchId !== params.requiredCreatorDispatchId
+    ) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Dispatch ${params.requiredCreatorDispatchId} is no longer this caller's active work, so it cannot start a helper.`,
+        { effectsApplied: false }
+      )
+    }
     if (params.mutationReceipt) {
       this.db
         .prepare(
@@ -142,6 +166,7 @@ export function createStartingWorkerDispatch(
       launchTokenHash: params.launchTokenHash ?? null,
       depth: this.resolveChildDispatchDepth(params.creator, params.maxDepth),
       retryOfDispatchId: params.retryOf ?? null,
+      priorFailures,
       creatorDispatchId,
       ...recordedCreatorIdentity(params.creator)
     })

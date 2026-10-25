@@ -19,7 +19,7 @@ import {
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from './mobile-web-bundle-capability'
 
 const BUILD_ID = 'a'.repeat(64)
-const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
+const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4
 
 function hexDigest(input: string): string {
   return Array.from(sha256(new TextEncoder().encode(input)), (byte) =>
@@ -168,12 +168,11 @@ describe('mobileWeb.bundle.chunk result', () => {
     ).toBe(false)
   })
 
-  it('leaves the padding slack the +8 term buys, so the host enforces the chunk size', () => {
+  it('is exact: base64 of one byte past a full chunk is refused', () => {
+    expect(MAX_DATA_BASE64_LENGTH).toBe(65536)
     const overshoot = Buffer.alloc(MOBILE_WEB_BUNDLE_CHUNK_BYTES + 1).toString('base64')
-    expect(overshoot.length).toBeLessThanOrEqual(MAX_DATA_BASE64_LENGTH)
-    const wellPast = Buffer.alloc(MOBILE_WEB_BUNDLE_CHUNK_BYTES + 64).toString('base64')
     expect(
-      MobileWebBundleChunkResultSchema.safeParse(chunkResult({ dataBase64: wellPast })).success
+      MobileWebBundleChunkResultSchema.safeParse(chunkResult({ dataBase64: overshoot })).success
     ).toBe(false)
   })
 

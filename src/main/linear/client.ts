@@ -21,7 +21,8 @@ import {
   clearTokenFile,
   loadToken,
   replaceLegacyWorkspace,
-  saveWorkspaceToken
+  saveWorkspaceToken,
+  getWorkspaceTokenProtection
 } from './linear-token-store'
 import { CredentialDecryptionError } from '../integration-credential-file'
 import type {
@@ -39,9 +40,7 @@ export type LinearClientForWorkspace = {
 
 export const LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS = 60 * 60
 
-// ── Client factory ───────────────────────────────────────────────────
-// Why: issues/teams modules call this for real Linear actions — at that point
-// decrypting the token and surfacing a keychain prompt is expected.
+// User-initiated Linear actions may decrypt credentials and trigger keychain prompts.
 export function getClient(workspaceId?: string | null): LinearClient | null {
   const token = loadToken({
     force: true,
@@ -54,7 +53,8 @@ export function getClient(workspaceId?: string | null): LinearClient | null {
 }
 
 export function getClients(
-  workspaceId?: LinearWorkspaceSelection | null
+  workspaceId?: LinearWorkspaceSelection | null,
+  signal?: AbortSignal
 ): LinearClientForWorkspace[] {
   const state = getWorkspaceState()
   const isAllSelection = workspaceId === 'all'
@@ -68,11 +68,7 @@ export function getClients(
     try {
       token = loadToken({ force: true, workspaceId: workspace.id })
     } catch (error) {
-      // Why: under an 'all' selection one un-decryptable workspace must not
-      // collapse reads for the healthy ones. loadToken already recorded the
-      // per-workspace credentialError for getStatus to surface, so skip this
-      // workspace like a missing token. A specific-workspace selection still
-      // rethrows so the renderer can surface the decrypt banner promptly.
+      // All-workspace reads skip recorded decrypt failures; explicit selections rethrow for immediate recovery.
       if (isAllSelection && error instanceof CredentialDecryptionError) {
         continue
       }
@@ -83,31 +79,30 @@ export function getClients(
     }
     clients.push({
       workspace,
-      client: new (loadLinearSdk().LinearClient)({ apiKey: token }),
+      client: new (loadLinearSdk().LinearClient)({ apiKey: token, ...(signal ? { signal } : {}) }),
       apiKey: token
     })
   }
   return clients
 }
 
-export function getPublicFileUrlClient(entry: LinearClientForWorkspace): LinearClient {
+export function getPublicFileUrlClient(
+  entry: LinearClientForWorkspace,
+  signal?: AbortSignal
+): LinearClient {
   return new (loadLinearSdk().LinearClient)({
     apiKey: entry.apiKey,
+    ...(signal ? { signal } : {}),
     headers: {
       'public-file-urls-expire-in': String(LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
     }
   })
 }
 
-// ── Auth error detection ─────────────────────────────────────────────
-// Why: 401 errors must trigger token clearing and a re-auth prompt in the
-// renderer. All other errors are swallowed with console.warn to match GitHub
-// client's graceful degradation.
 export function isAuthError(error: unknown): boolean {
   return error instanceof loadLinearSdk().AuthenticationLinearError
 }
 
-// ── Connect / disconnect / status ────────────────────────────────────
 export async function connect(
   apiKey: string
 ): Promise<
@@ -176,6 +171,12 @@ export function getStatus(): LinearConnectionStatus {
   const credentialError = state.workspaces
     .map((workspace) => getCredentialError(workspace.id))
     .find((message) => message !== undefined)
+  // Host-wide protection must report any plaintext workspace, even when the active one is sealed.
+  const credentialProtection = state.workspaces.some(
+    (workspace) => getWorkspaceTokenProtection(workspace.id) === 'plaintext'
+  )
+    ? 'plaintext'
+    : null
 
   return {
     connected: state.workspaces.length > 0,
@@ -183,7 +184,8 @@ export function getStatus(): LinearConnectionStatus {
     workspaces: state.workspaces,
     activeWorkspaceId: state.activeWorkspaceId,
     selectedWorkspaceId: state.selectedWorkspaceId,
-    ...(credentialError ? { credentialError } : {})
+    ...(credentialError ? { credentialError } : {}),
+    credentialProtection
   }
 }
 
@@ -228,8 +230,7 @@ export async function testConnection(
   }
 }
 
-// Why: called at main-process startup. We warm plaintext metadata only; tokens
-// stay encrypted on disk until a user performs an actual Linear action.
+// Warm metadata at startup without decrypting credentials or triggering keychain prompts.
 export function initLinearToken(): void {
   getWorkspaceFile()
   getLegacyViewer()

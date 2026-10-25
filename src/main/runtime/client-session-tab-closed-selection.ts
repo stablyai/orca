@@ -2,13 +2,18 @@ import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
-import type { ClientSessionTabSelection } from './client-session-tab-selection'
+import type {
+  ClientSessionTabSelection,
+  ClientSessionTabTopology
+} from './client-session-tab-selection-projection'
 
 export type StoredClientSessionTabSelection = {
   selection: ClientSessionTabSelection
   revision: number
   shouldPersist: boolean
   closedTabIds: ReadonlySet<string>
+  /** What this client was shown while its pick was still there; not persisted. */
+  topologyBeforeClose?: ClientSessionTabTopology
 }
 
 function topLevelTabId(tab: RuntimeMobileSessionClientTab): string {
@@ -61,18 +66,11 @@ export function forgetClosedClientSessionSelection(
   const closedTabIds = new Set([...existingClosedTabIds, ...forgotten])
   const activeTabId =
     selection.activeTabId && forgotten.has(selection.activeTabId) ? null : selection.activeTabId
-  const activeTabIdByGroupId = Object.fromEntries(
-    Object.entries(selection.activeTabIdByGroupId).filter(
-      ([, selectedTabId]) => !forgotten.has(selectedTabId)
-    )
-  )
+  // Why: the group picks stay so the next projection moves them by the close rule.
   return {
-    selection: { ...selection, activeTabId, activeTabIdByGroupId },
+    selection: { ...selection, activeTabId },
     closedTabIds,
-    selectionChanged:
-      activeTabId !== selection.activeTabId ||
-      Object.keys(activeTabIdByGroupId).length !==
-        Object.keys(selection.activeTabIdByGroupId).length,
+    selectionChanged: activeTabId !== selection.activeTabId,
     closureChanged: closedTabIds.size !== existingClosedTabIds.size
   }
 }
@@ -93,9 +91,9 @@ export function forgetClosedClientSessionTabsByWorktree(
       continue
     }
     statesByWorktree.set(worktreeId, {
+      ...state,
       selection: closed.selection,
       revision: state.revision + 1,
-      shouldPersist: state.shouldPersist,
       closedTabIds: closed.closedTabIds
     })
     persistedSelectionChanged ||= state.shouldPersist && closed.selectionChanged

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -14,16 +14,22 @@ import {
   listWorktrees,
   listWorktreesStrict,
   lstat,
+  localWorktreeFilesystem,
+  mkdir,
   mkdtemp,
-  registerSshGitProvider,
+  restoreLocalWatcherAfterFailedRemovalMock,
   removeWorktree,
   removeWorktreeLinkedPathsMock,
   rm,
   runHook,
   tmpdir,
-  unregisterSshGitProvider
+  writeFile
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -43,7 +49,7 @@ import {
 } from '../orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('does not inspect or delete a local path when SSH runtime orphan cleanup has no filesystem provider', async () => {
+  it('does not inspect or delete a local path for an SSH runtime orphan this process does not serve', async () => {
     const localPath = await mkdtemp(join(tmpdir(), 'orca-runtime-ssh-missing-fs-'))
     const repo = {
       id: 'repo-runtime-ssh-missing-fs',
@@ -60,7 +66,7 @@ describe('OrcaRuntimeService', () => {
         orcaCreationSource: 'ssh'
       })
     }
-    const removeWorktreeMeta = vi.fn((id: string) => {
+    const removeWorktreeMeta = vi.fn(({ id }: HostWorktreeTarget) => {
       delete metaById[id]
     })
     const runtimeStore = {
@@ -69,36 +75,23 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === repo.id ? repo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (id: string) => metaById[id],
-      setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
         return metaById[id]
       },
       removeWorktreeMeta
     }
-    const gitProvider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: repo.path,
-          head: 'main',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
-        }
-      ])
-    }
-    registerSshGitProvider(repo.connectionId, gitProvider as never)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
       await expect(
         runtime.removeManagedWorktree(`id:${worktreeId}`, { force: true })
-      ).rejects.toThrow('SSH filesystem provider unavailable')
+      ).rejects.toThrow('Remote connection dropped')
 
       await expect(lstat(localPath)).resolves.toBeTruthy()
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
     } finally {
-      unregisterSshGitProvider(repo.connectionId)
       await rm(localPath, { recursive: true, force: true })
     }
   })
@@ -330,7 +323,10 @@ describe('OrcaRuntimeService', () => {
         stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
       })
     )
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+    onTestFinished(() => gitSpy.mockRestore())
 
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
     expect(removeWorktree).toHaveBeenCalledWith(
@@ -342,6 +338,160 @@ describe('OrcaRuntimeService', () => {
       })
     )
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+  })
+
+  it('retains metadata when an unproven orphan directory survives cleanup', async () => {
+    const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-orphan-retention-'))
+    const repoPath = join(parentDir, 'repo')
+    const orphanPath = join(parentDir, 'orphan')
+    const worktreeId = `${TEST_REPO_ID}::${orphanPath}`
+    await mkdir(orphanPath, { recursive: true })
+    const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
+    const runtimeStoreWithRepoPath = {
+      ...runtimeStore,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: repoPath,
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1
+        }
+      ],
+      getRepo: (id: string) =>
+        id === TEST_REPO_ID
+          ? {
+              id: TEST_REPO_ID,
+              path: repoPath,
+              displayName: 'repo',
+              badgeColor: 'blue',
+              addedAt: 1
+            }
+          : undefined
+    }
+    const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
+    const registeredWorktree = {
+      path: orphanPath,
+      head: 'abc',
+      branch: 'feature/orphan',
+      isBare: false,
+      isMainWorktree: false
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([registeredWorktree])
+    vi.mocked(listWorktreesStrict).mockResolvedValue([registeredWorktree])
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${orphanPath}' is not a working tree`
+      })
+    )
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('status failed'), {
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+    const pruneCallsBefore = gitSpy.mock.calls.filter(([args]) => args[0] === 'worktree').length
+
+    try {
+      await expect(runtime.removeManagedWorktree(worktreeId)).rejects.toThrow(
+        'Worktree is no longer registered with Git but its directory remains.'
+      )
+      await expect(lstat(orphanPath)).resolves.toBeTruthy()
+      expect(removeWorktreeMeta).not.toHaveBeenCalled()
+      expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(orphanPath)
+      expect(gitSpy.mock.calls.filter(([args]) => args[0] === 'worktree')).toHaveLength(
+        pruneCallsBefore
+      )
+
+      await rm(orphanPath, { recursive: true, force: true })
+      vi.mocked(listWorktrees).mockResolvedValue([])
+      await expect(runtime.removeManagedWorktree(worktreeId)).resolves.toEqual({})
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
+    } finally {
+      gitSpy.mockRestore()
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('retains metadata when proven orphan cleanup cannot remove the directory', async () => {
+    const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-orphan-removal-failure-'))
+    const repoPath = join(parentDir, 'repo')
+    const orphanPath = join(parentDir, 'orphan')
+    const adminWorktreePath = join(repoPath, '.git', 'worktrees', 'orphan')
+    const worktreeId = `${TEST_REPO_ID}::${orphanPath}`
+    await mkdir(orphanPath, { recursive: true })
+    await mkdir(adminWorktreePath, { recursive: true })
+    await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
+    await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
+    const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
+    const runtimeStoreWithRepoPath = {
+      ...runtimeStore,
+      getRepos: () => [
+        {
+          id: TEST_REPO_ID,
+          path: repoPath,
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1
+        }
+      ],
+      getRepo: (id: string) =>
+        id === TEST_REPO_ID
+          ? {
+              id: TEST_REPO_ID,
+              path: repoPath,
+              displayName: 'repo',
+              badgeColor: 'blue',
+              addedAt: 1
+            }
+          : undefined
+    }
+    const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
+    const registeredWorktree = {
+      path: orphanPath,
+      head: 'abc',
+      branch: 'feature/orphan',
+      isBare: false,
+      isMainWorktree: false
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([registeredWorktree])
+    vi.mocked(listWorktreesStrict).mockResolvedValue([registeredWorktree])
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${orphanPath}' is not a working tree`
+      })
+    )
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('status failed'), {
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+    const removePathSpy = vi
+      .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
+      .mockRejectedValue(new Error('injected removal failure'))
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+
+    try {
+      await expect(runtime.removeManagedWorktree(worktreeId)).rejects.toThrow(
+        'Worktree is no longer registered with Git but its directory remains.'
+      )
+      await expect(lstat(orphanPath)).resolves.toBeTruthy()
+      expect(removePathSpy).toHaveBeenCalledWith(orphanPath, {})
+      expect(removeWorktreeMeta).not.toHaveBeenCalled()
+      expect(gitSpy).not.toHaveBeenCalledWith(['worktree', 'prune'], expect.anything())
+    } finally {
+      removePathSpy.mockRestore()
+      gitSpy.mockRestore()
+      await rm(parentDir, { recursive: true, force: true })
+    }
   })
 
   it('drops the bounded scan cache when orphan-cleanup removal completes', async () => {
@@ -357,7 +507,10 @@ describe('OrcaRuntimeService', () => {
         stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
       })
     )
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+    onTestFinished(() => gitSpy.mockRestore())
 
     // Prime the bounded raw scan cache with the worktree still present.
     await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
@@ -413,7 +566,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -558,7 +710,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -600,7 +751,7 @@ describe('OrcaRuntimeService', () => {
       updateRepo: () => undefined as never,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         const existingMeta = metaById[worktreeId]
         const nextMeta: WorktreeMeta = {
           displayName: meta.displayName ?? existingMeta?.displayName ?? '',

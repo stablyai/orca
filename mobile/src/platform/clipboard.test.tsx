@@ -1,12 +1,12 @@
 /** The native form of the clipboard seam: the app's own `expo-clipboard`, and what it answers. */
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ClipboardReader, ClipboardWriter } from './clipboard'
+import type { ClipboardImage, ClipboardReader, ClipboardWriter } from './clipboard'
 
 const clipboard = vi.hoisted(() => ({
   setStringAsync: vi.fn(() => Promise.resolve(true)),
   getStringAsync: vi.fn(() => Promise.resolve('')),
-  getImageAsync: vi.fn(() => Promise.resolve(null)),
+  getImageAsync: vi.fn<() => Promise<ClipboardImage | null>>(() => Promise.resolve(null)),
   hasStringAsync: vi.fn(() => Promise.resolve(false)),
   hasImageAsync: vi.fn(() => Promise.resolve(false))
 }))
@@ -73,12 +73,10 @@ describe('writing the clipboard on a phone', () => {
     expect(clipboard.setStringAsync.mock.calls).toEqual([['copied']])
   })
 
-  it('rejects when the pasteboard refused it, rather than reporting a copy', async () => {
-    // `setStringAsync` answers whether the write landed, and a caller showing "Copied" over a
-    // write that did not is the failure this seam exists to avoid.
-    clipboard.setStringAsync.mockImplementation(() => Promise.resolve(false))
+  it('propagates a pasteboard write failure', async () => {
+    clipboard.setStringAsync.mockRejectedValue(new Error('Clipboard unavailable'))
     const writer = mountWriter()
-    await expect(writer.writeText('copied')).rejects.toThrow(/did not accept/)
+    await expect(writer.writeText('copied')).rejects.toThrow('Clipboard unavailable')
   })
 })
 
@@ -88,8 +86,15 @@ describe('reading the clipboard on a phone', () => {
     await expect(mountReader().readText()).resolves.toBe('pasted')
   })
 
-  it('asks for a PNG, which is the format the upload path re-encodes to', async () => {
-    await expect(mountReader().readImage()).resolves.toBeNull()
+  it('asks for PNG and returns the image and its dimensions', async () => {
+    clipboard.getImageAsync.mockResolvedValue({
+      data: 'data:image/png;base64,AQID',
+      size: { width: 3, height: 1 }
+    })
+    await expect(mountReader().readImage()).resolves.toEqual({
+      data: 'data:image/png;base64,AQID',
+      size: { width: 3, height: 1 }
+    })
     expect(clipboard.getImageAsync.mock.calls).toEqual([[{ format: 'png' }]])
   })
 

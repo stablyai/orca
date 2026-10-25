@@ -14,8 +14,7 @@ const {
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
-vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
-vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('./ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
@@ -25,7 +24,7 @@ vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
-/** Mirrors AUTO_UPDATE_CHECK_INTERVAL_MS in updater.ts. */
+// Matches updater/updater-state.ts.
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 warmUpdaterModule()
@@ -76,11 +75,7 @@ describe('updater', () => {
     }
   )
 
-  // Why this refuses rather than trying: electron-updater would download the
-  // whole installer and then fail it with a raw ERR_UPDATER_INVALID_SIGNATURE,
-  // because a signed build verifies every installer against the publisherName
-  // baked into its own app-update.yml. The picker disables this, but IPC is
-  // reachable regardless.
+  // Signed Windows builds verify publisherName; refuse unsigned dev jumps before downloading.
   it('refuses to pin a Windows dev build from a signed build, and says what to do', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
@@ -104,8 +99,7 @@ describe('updater', () => {
     }
   })
 
-  // The way out of a dev channel must stay in-app: an unsigned build carries no
-  // publisherName, so electron-updater skips verification entirely.
+  // Unsigned dev builds can return to stable because they carry no publisherName.
   it.each([
     ['another dev build', 'adhoc', 'v1.4.160-adhoc.20260728140533'],
     ['back to stable', 'stable', 'v1.4.160']
@@ -342,20 +336,17 @@ describe('updater', () => {
         expect.objectContaining({ state: 'available', source: 'local' })
       )
 
-      // Why: assert through this window rather than the shared updater mock — a status only lands here
-      // when this module instance owns the check attempt, so sibling tests' timers can't fake a pass.
+      // This window observes only its owning module's attempts, excluding stale sibling timers.
       autoUpdaterMock.checkForUpdates.mockReset().mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         autoUpdaterMock.emit('update-not-available')
         return Promise.resolve(undefined)
       })
 
-      // The scheduled release check fires while the local session still owns the feed, so it defers.
       send.mockClear()
       await vi.advanceTimersByTimeAsync(AUTO_UPDATE_CHECK_INTERVAL_MS)
       expect(send).not.toHaveBeenCalledWith('updater:status', { state: 'not-available' })
 
-      // A failed local download ends the session and restores the release source.
       downloadUpdate()
       await vi.advanceTimersByTimeAsync(0)
       expect(autoUpdaterMock.allowDowngrade).toBe(false)
@@ -466,7 +457,7 @@ describe('updater', () => {
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    // Why: recent timestamp defers the startup check so we observe updater state before any RC-mode call, without racing.
+    // Defer startup checks to inspect initial state without racing an RC check.
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     const setupFeedUrlCalls = autoUpdaterMock.setFeedURL.mock.calls.length
     expect(autoUpdaterMock.allowPrerelease).not.toBe(true)

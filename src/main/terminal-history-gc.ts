@@ -16,20 +16,12 @@ import { hashWorktreeId } from './terminal-history-id'
 import { forEachWithConcurrency } from '../shared/map-with-concurrency'
 import { yieldToEventLoop } from '../shared/event-loop-yield'
 
-// Why 5 minutes: GC runs ~10s after startup, and the live-worktree snapshot is
-// taken just before. A worktree created between the snapshot and GC execution
-// won't appear in liveWorktreeIds, so without an age guard GC would delete its
-// freshly-created history directory (TOCTOU race). 5 minutes is generous enough
-// to cover any realistic snapshot-to-scan delay.
+// Protect history created after the live-worktree snapshot was taken.
 const GC_MIN_AGE_MS = 5 * 60 * 1000
 
-// Why a fixed worker pool over a frontier and not per-entry promise fan-out: a real
-// history root holds thousands of directories, and starting every one at once queues
-// tens of thousands of libuv requests before the first completes. 16 is deep enough to
-// keep the default 4-thread pool saturated without monopolising the disk during startup.
+// Bound filesystem fan-out so large roots do not monopolize startup I/O.
 const HISTORY_GC_SCAN_CONCURRENCY = 16
-// Why yield at all when every step already awaits I/O: a fully cached root resolves each
-// await in a microtask, which never returns to the macrotask queue. This bounds that run.
+// Cached I/O can resolve entirely in microtasks; yield so timers still run.
 const HISTORY_GC_YIELD_EVERY = 32
 
 let scheduledHistoryGcTimer: ReturnType<typeof setTimeout> | null = null
@@ -42,11 +34,9 @@ type GcRootScan = {
   totalDirs: number
   orphaned: number
   pruned: number
-  /** Every fish data dir a meta.json in this root names, for the orphan sweep. */
   fishHistoryDirs: Set<string>
 }
 
-/** Inspect one history directory, tombstoning it when its worktree is gone. */
 async function gcScanEntry(
   root: string,
   entry: Dirent,
@@ -56,8 +46,7 @@ async function gcScanEntry(
 ): Promise<void> {
   const entryPath = join(root, entry.name)
   try {
-    // Why stat only for links: a dirent describes the link itself, and the pre-dirent walk
-    // stat'd every entry, so a symlink to a history directory was and stays a directory here.
+    // Dirents describe links, so symlinked directories still need a stat.
     const isDirectory = entry.isSymbolicLink()
       ? (await stat(entryPath)).isDirectory()
       : entry.isDirectory()
@@ -66,8 +55,7 @@ async function gcScanEntry(
     }
     result.totalDirs++
 
-    // A missing, truncated, oversized or malformed meta.json reads back as null, and a
-    // null meta is never pruned — an entry whose ownership we cannot establish is kept.
+    // Keep entries whose ownership cannot be established.
     const meta = await readHistoryMetaAsync(entryPath)
     if (meta?.fishHistoryDir) {
       result.fishHistoryDirs.add(meta.fishHistoryDir)
@@ -77,9 +65,6 @@ async function gcScanEntry(
     }
 
     if (!liveWorktreeIds.has(meta.worktreeId)) {
-      // Why: avoid a TOCTOU race where a worktree is created after the
-      // live-ID snapshot but before GC runs. Directories younger than
-      // GC_MIN_AGE_MS are presumed still live and skipped.
       if (meta.createdAt) {
         const ageMs = now - new Date(meta.createdAt).getTime()
         if (ageMs < GC_MIN_AGE_MS) {
@@ -88,19 +73,17 @@ async function gcScanEntry(
       }
 
       result.orphaned++
-      // Why: a large orphaned tree recursive-rm'd here would stall the main process ~10s after
-      // launch — the same freeze the explicit-delete path already tombstones its way out of.
+      // Tombstone before async removal to avoid a recursive walk on the main thread.
       if (scheduleWorktreeHistoryTreeDeletion(entryPath, root)) {
         result.pruned++
         console.log(`[pty:history:gc] Pruned orphaned history: ${meta.worktreeId}`)
       }
     }
   } catch {
-    // Skip individual entries that fail.
+    // Unreadable entries must not prevent collecting the rest.
   }
 }
 
-/** Scan a single history root directory, pruning orphaned entries. */
 async function gcScanRoot(
   root: string,
   liveWorktreeIds: Set<string>,
@@ -115,16 +98,12 @@ async function gcScanRoot(
 
   let entries: Dirent[]
   try {
-    // Why withFileTypes: the root listing already carries each entry's type, so asking for it
-    // here removes one stat per history directory from the startup pass.
     entries = await readdir(root, { withFileTypes: true })
   } catch {
-    // Absent or unreadable root: nothing to collect.
     return result
   }
 
   const now = Date.now()
-  // Why: pending-delete is a tombstone queue drained asynchronously, not a live worktree hash.
   const frontier = entries.filter((entry) => entry.name !== PENDING_DELETE_DIR_NAME)
 
   await forEachWithConcurrency(
@@ -145,31 +124,22 @@ async function gcScanRoot(
 
 async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSignal): Promise<void> {
   try {
-    // Why: finish tombstones left by quit mid-rm before scanning live worktree hashes.
-    // Safe ahead of the guard below: these entries were already condemned by a
-    // completed GC, and leaving them renamed-but-present strands disk forever.
-    schedulePendingHistoryTreeRemovals(getHistoryRoot())
-    // Why refuse rather than treat every entry as orphaned: an empty live set is
-    // what a store that fell back to default state looks like, and it cannot be
-    // told apart from a user who genuinely has no worktrees — who also has no
-    // history to collect. So refusing costs nothing, and it is the difference
-    // between a recoverable bad load and every worktree's shell history being
-    // deleted. `sweepOrphanedFishHistoryFiles` refuses it for the same reason;
-    // this is the path that deletes more.
+    // Previously tombstoned entries are safe to drain even if the live set below is unavailable.
+    await schedulePendingHistoryTreeRemovals(getHistoryRoot())
+    // An empty live set may mean state loading failed; do not delete recoverable history.
     if (liveWorktreeIds.size === 0) {
       console.log('[pty:history:gc] Skipped: live worktree set is empty')
       return
     }
     const main = await gcScanRoot(getHistoryRoot(), liveWorktreeIds, signal)
 
-    // Also scan WSL history directories (each distro has its own subdirectory).
     const wslTotals = { totalDirs: 0, orphaned: 0, pruned: 0 }
     const liveFishHistoryDirs = new Set(main.fishHistoryDirs)
     for (const distroRoot of listWslHistoryRoots()) {
       if (signal.aborted) {
         break
       }
-      schedulePendingHistoryTreeRemovals(distroRoot)
+      await schedulePendingHistoryTreeRemovals(distroRoot)
       const r = await gcScanRoot(distroRoot, liveWorktreeIds, signal)
       wslTotals.totalDirs += r.totalDirs
       wslTotals.orphaned += r.orphaned
@@ -184,11 +154,7 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
       return
     }
 
-    // Why a sweep on top of per-worktree deletion: a fish history file lives in
-    // the user's fish data dir, so it outlives the directory that names it. A
-    // crash between tombstone and removal, or a hand-deleted history dir, leaves
-    // one with nothing left to point at it. Collecting the dirs the live meta
-    // files name covers a machine whose XDG_DATA_HOME changed between runs.
+    // Fish files can outlive their metadata; include recorded dirs in case XDG_DATA_HOME changed.
     const fishDirs = new Set([resolveFishHistoryDir()])
     for (const dir of liveFishHistoryDirs) {
       fishDirs.add(dir)
@@ -212,12 +178,8 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
   }
 }
 
-/** Run background GC to prune history directories for worktrees that are no
- *  longer in Orca's known live-worktree set. Resolves when the pass finishes. */
 export function runHistoryGc(liveWorktreeIds: Set<string>): Promise<void> {
-  // Why join instead of starting a second pass: two walks would race each other's
-  // tombstone renames, and the loser's `scheduleWorktreeHistoryTreeDeletion` would
-  // report a failure for a directory the winner already condemned.
+  // Concurrent passes would race each other's tombstone renames.
   if (activeHistoryGc) {
     return activeHistoryGc
   }
@@ -230,29 +192,23 @@ export function runHistoryGc(liveWorktreeIds: Set<string>): Promise<void> {
   return activeHistoryGc
 }
 
-/** Drop a pending GC and stop an in-flight walk at its next entry. */
 export function cancelHistoryGc(): void {
   if (scheduledHistoryGcTimer !== null) {
     clearTimeout(scheduledHistoryGcTimer)
     scheduledHistoryGcTimer = null
   }
-  // Why a flag as well: the timer has already fired while the live-worktree lookup is
-  // in flight, and there is no controller to abort until the scan itself starts.
+  // The timer may have fired before live-worktree lookup settles and a controller exists.
   historyGcCancelled = true
   activeHistoryGcAbort?.abort()
 }
 
-/** Schedule GC after a delay so it runs after workspace hydration completes.
- *  `getLiveWorktreeIds` should use already-known IDs, not probe repo paths. */
+/** Use already-known worktree IDs; do not probe repo paths. */
 export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>): void {
-  // Why: main-window services can reattach during reload/reactivation; one
-  // pending/running disk GC is enough and avoids duplicate startup I/O.
   if (scheduledHistoryGcTimer !== null || historyGcStarting || activeHistoryGc !== null) {
     return
   }
   historyGcCancelled = false
-  // Why 10s: avoids competing with startup-critical I/O while still running
-  // early enough to clean up before the user notices disk usage (§7.6).
+  // Let workspace hydration finish before competing for disk I/O.
   scheduledHistoryGcTimer = setTimeout(async () => {
     scheduledHistoryGcTimer = null
     historyGcStarting = true

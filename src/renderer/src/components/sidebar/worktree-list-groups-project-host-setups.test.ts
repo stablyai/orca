@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { getGroupKeyForWorktree } from './worktree-list/grouping/worktree-group-keys'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
+import { getGroupKeyForWorktree } from '../../../../shared/sidebar-list/worktree-group-keys'
 import {
   LOCAL_HOST_LABEL,
   repo,
@@ -544,7 +544,6 @@ describe('buildRows with pinned worktrees', () => {
         new Map([[remoteRepo.id, remoteRepo]]),
         null,
         undefined,
-        undefined,
         grouping
       ),
       getGroupKeyForWorktree(
@@ -552,7 +551,6 @@ describe('buildRows with pinned worktrees', () => {
         runtimeWorktree,
         new Map([[runtimeRepo.id, runtimeRepo]]),
         null,
-        undefined,
         undefined,
         grouping
       )
@@ -621,7 +619,6 @@ describe('buildRows with pinned worktrees', () => {
         { ...worktree, id: `wt-${entry.id}`, repoId: entry.id, path: entry.path },
         new Map([[entry.id, entry]]),
         null,
-        undefined,
         undefined,
         grouping
       )

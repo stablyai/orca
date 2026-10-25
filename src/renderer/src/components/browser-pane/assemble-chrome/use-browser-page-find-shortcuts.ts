@@ -2,8 +2,9 @@ import { useEffect, type Dispatch, type SetStateAction } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
-import { browserOverlayOwnsShortcutTarget } from '../describe-page/browser-overlay-shortcut-target'
+import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useBrowserPageFindShortcuts({
   browserTabId,
@@ -31,18 +32,15 @@ export function useBrowserPageFindShortcuts({
       if (!keybindingMatchesAction('browser.find', e, shortcutPlatform, keybindings)) {
         return
       }
-      if (
-        chromeShortcutScope === 'owned-target' &&
-        !browserOverlayOwnsShortcutTarget(e.target, workspaceId)
-      ) {
+      if (!browserChromeShortcutOwnsEvent(chromeShortcutScope, e, workspaceId)) {
         return
       }
       e.preventDefault()
       e.stopPropagation()
       setFindOpen(true)
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, keybindings, setFindOpen, workspaceId])
 
   // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)

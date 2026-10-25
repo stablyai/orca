@@ -1,5 +1,19 @@
 import { z } from 'zod'
 
+export const ManagedDataAccountProviderParams = z.object({
+  provider: z.enum(['opencode', 'devin'])
+})
+export const AddDataAccountParams = ManagedDataAccountProviderParams.extend({
+  sourceDataHome: z.string().min(1),
+  label: z.string().trim().min(1).max(120)
+})
+export const SelectDataAccountParams = ManagedDataAccountProviderParams.extend({
+  accountId: z.uuid().nullable()
+})
+export const RemoveDataAccountParams = ManagedDataAccountProviderParams.extend({
+  accountId: z.uuid()
+})
+
 export const CodexResetTarget = z.discriminatedUnion('runtime', [
   z.object({ runtime: z.literal('host'), wslDistro: z.null() }).strict(),
   // Why: reset scope must identify one exact WSL distro; null means all slots only for selection.
@@ -42,8 +56,8 @@ export const CodexResetExpectedScope = z
 
 export const ConsumeCodexResetCreditParams = z
   .object({
-    // Why: the phone owns the logical attempt key so a lost response can be
-    // retried without spending a finite earned credit twice.
+    // Why: one key per client attempt; the host ledger answers a retry of the same offer or
+    // account with the attempt it already recorded, so a credit is never spent twice.
     idempotencyKey: z.uuid('Invalid idempotencyKey'),
     expectedScope: CodexResetExpectedScope
   })
@@ -78,4 +92,36 @@ export const AccountsUnsubscribeParams = z.object({
     .unknown()
     .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
     .pipe(z.string().min(1, 'Missing subscriptionId'))
+})
+
+const ClaudeSignInTarget = {
+  runtime: z.enum(['host', 'wsl']).optional(),
+  wslDistro: z.string().nullish()
+}
+
+export const BeginClaudeSignInParams = z
+  .object({ accountId: z.string().min(1).optional(), ...ClaudeSignInTarget })
+  .strict()
+
+export const FinishClaudeSignInParams = z
+  .object({ accountId: z.string().min(1), ...ClaudeSignInTarget })
+  .strict()
+
+export const HostAccountSignInStartParams = z.object({ provider: z.enum(['claude', 'codex']) })
+
+export const HostAccountSignInWaitParams = z.object({
+  flowId: z.string().min(1).max(64),
+  afterRevision: z.number().int().nonnegative().default(0)
+})
+
+export const HostAccountSignInFlowParams = z.object({ flowId: z.string().min(1).max(64) })
+
+export const HostAccountSignInCodeParams = HostAccountSignInFlowParams.extend({
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Paste the code from the sign-in page.')
+    .max(4_096)
+    // Why: the code becomes one line on the login's stdin; a newline inside it would answer twice.
+    .regex(/^[^\s\p{Cc}]+$/u, 'That code has spaces or line breaks in it. Copy it again.')
 })

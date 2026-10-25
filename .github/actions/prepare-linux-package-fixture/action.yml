@@ -1,0 +1,47 @@
+name: Prepare cached Linux package fixture
+description: Restore Docker build layers; only the main warmer builds and saves missing images.
+inputs:
+  fixture:
+    description: Directory name below config/docker.
+    required: true
+  save-cache:
+    description: Build and save a missing fixture on the default branch.
+    default: 'false'
+  load:
+    description: Load the image here; 'false' only restores, so the caller can load it in a background run step.
+    default: 'true'
+outputs:
+  image:
+    description: Loaded image to use as a Docker build cache, or empty on a cache miss.
+    value: ${{ steps.image.outputs.image }}
+  cache-hit:
+    description: Whether the fixture archive was restored under the exact key.
+    value: ${{ steps.cache.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Restore fixture image
+      id: cache
+      uses: actions/cache/restore@v5
+      continue-on-error: true
+      with:
+        path: ${{ runner.temp }}/orca-package-fixtures/${{ inputs.fixture }}.tar
+        key: linux-package-fixture-v1-${{ runner.os }}-${{ runner.arch }}-linux-amd64-${{ inputs.fixture }}-${{ hashFiles(format('config/docker/{0}/**', inputs.fixture), '.github/actions/prepare-linux-package-fixture/action.yml', '.github/actions/prepare-linux-package-fixture/load-fixture.sh') }}
+
+    - name: Load or seed fixture build cache
+      id: image
+      if: inputs.load != 'false'
+      shell: bash
+      env:
+        FIXTURE: ${{ inputs.fixture }}
+        SAVE_CACHE: ${{ inputs.save-cache }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: bash "$GITHUB_ACTION_PATH/load-fixture.sh"
+
+    - name: Save fixture image
+      if: inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' && steps.image.outputs.built == 'true'
+      uses: actions/cache/save@v5
+      continue-on-error: true
+      with:
+        path: ${{ runner.temp }}/orca-package-fixtures/${{ inputs.fixture }}.tar
+        key: ${{ steps.cache.outputs.cache-primary-key }}

@@ -1,8 +1,12 @@
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from './paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 import { generateKeyPair, publicKeyToBase64 } from './e2ee-crypto'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
+import { encodePairingOffer, parsePairingCode } from './pairing'
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import {
   REMOTE_RUNTIME_MAX_PENDING_REQUESTS,
@@ -16,10 +20,10 @@ import {
   retainedRemoteRuntimeJsonStringBytes,
   serializeRemoteRuntimeRpcRequest
 } from './remote-runtime-memory-limits'
-import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepared-request-admission'
-import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connection'
-import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
-import { waitForSharedControlReadyWithTimeout } from './remote-runtime-shared-control-ready'
+import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime/requests/remote-runtime-prepared-request-admission'
+import { RemoteRuntimeRequestConnection } from './remote-runtime/requests/remote-runtime-request-connection'
+import { RemoteRuntimeSharedControlConnection } from './remote-runtime/control/remote-runtime-shared-control-connection'
+import { waitForSharedControlReadyWithTimeout } from './remote-runtime/control/remote-runtime-shared-control-ready'
 
 type InspectableRequestConnection = {
   close: () => void
@@ -124,7 +128,7 @@ describe('remote runtime outbound admission', () => {
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
-        deviceToken: pairing.deviceToken,
+        deviceToken: pairing.credential.deviceToken,
         method: 'status.large',
         params
       })
@@ -181,7 +185,7 @@ describe('remote runtime outbound admission', () => {
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
-        deviceToken: pairing.deviceToken,
+        deviceToken: pairing.credential.deviceToken,
         method: 'status.large',
         params
       })
@@ -267,7 +271,7 @@ describe('remote runtime outbound admission', () => {
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
-        deviceToken: pairing.deviceToken,
+        deviceToken: pairing.credential.deviceToken,
         method: 'status.large',
         params
       })
@@ -350,7 +354,10 @@ describe('remote runtime outbound admission', () => {
   })
 })
 
-async function createServer(): Promise<{ pairing: PairingOffer; server: WebSocketServer }> {
+async function createServer(): Promise<{
+  pairing: PairedRuntimeConnection
+  server: WebSocketServer
+}> {
   const keyPair = generateKeyPair()
   // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
@@ -368,5 +375,5 @@ async function createServer(): Promise<{ pairing: PairingOffer; server: WebSocke
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing, server }
+  return { pairing: pairedRuntimeConnectionFromOffer(pairing), server }
 }

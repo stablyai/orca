@@ -1,3 +1,5 @@
+import { parseWslUncPath } from './wsl-paths'
+
 export type LocalWindowsRuntimePreference =
   | { kind: 'inherit-global' }
   | { kind: 'windows-host' }
@@ -105,6 +107,18 @@ export function normalizeProjectRuntimePreference(value: unknown): LocalWindowsR
   }
 
   return { kind: 'inherit-global' }
+}
+
+/** A project with no saved runtime runs a workspace that lives in a WSL share inside that distro. */
+export function getWorkspaceRuntimePreference(
+  projectPreference: LocalWindowsRuntimePreference | undefined,
+  workspacePath: string | null | undefined
+): LocalWindowsRuntimePreference {
+  if (projectPreference) {
+    return projectPreference
+  }
+  const distro = workspacePath ? parseWslUncPath(workspacePath)?.distro : undefined
+  return distro ? { kind: 'wsl', distro } : { kind: 'inherit-global' }
 }
 
 export function normalizeGlobalWindowsRuntimeDefault(value: unknown): GlobalWindowsRuntimeDefault {

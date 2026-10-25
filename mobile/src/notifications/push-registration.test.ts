@@ -47,8 +47,6 @@ const IOS_TOKEN: MobilePushToken = {
   apnsEnvironment: 'production'
 }
 
-// Every await in the module resolves immediately, so one macrotask drains the whole
-// per-host reconcile chain no matter how many hops deep it happens to be.
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0))
 }
@@ -239,6 +237,9 @@ describe('push registration token changes', () => {
     await setRemotePushEnabled(true)
     attachPushRegistration('host-1', client)
     await flush()
+    const second = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
+    attachPushRegistration('host-2', second.client)
+    await flush()
     const stop = startPushTokenSync()
 
     onTokenChange?.({ platform: 'ios', token: 'b'.repeat(64), apnsEnvironment: 'sandbox' })
@@ -250,6 +251,15 @@ describe('push registration token changes', () => {
       token: 'b'.repeat(64),
       apnsEnvironment: 'sandbox'
     })
+    const secondRegisters = second.sent.filter(
+      (request) => request.method === 'notifications.registerPush'
+    )
+    expect(secondRegisters).toHaveLength(2)
+    expect(secondRegisters[1]?.params).toMatchObject({
+      token: 'b'.repeat(64),
+      apnsEnvironment: 'sandbox'
+    })
+    expect(stored.registeredHostIds).toEqual(['host-1', 'host-2'])
     stop()
   })
 })
@@ -328,6 +338,12 @@ describe('push unregistration', () => {
     attachPushRegistration('host-1', client)
     await flush()
 
+    expect(client.sendRequest).toHaveBeenCalledExactlyOnceWith(
+      'notifications.unregisterPush',
+      null,
+      { timeoutMs: 5_000, failWhenDisconnected: true }
+    )
+    expect(stored.registeredHostIds).toEqual(['host-1'])
     expect(stored.pendingUnregisterHostIds).toEqual(['host-1'])
   })
 
@@ -409,7 +425,7 @@ describe('push unregistration', () => {
   })
 })
 
-it('does not register or renew when a connected phone is in the background', async () => {
+it('registers only after a connected phone becomes active', async () => {
   AppState.currentState = 'background'
   const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
   await setRemotePushEnabled(true)

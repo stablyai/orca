@@ -67,7 +67,11 @@ function renderRow(
     detailsExpanded?: boolean
     worktreeInfo?: AiVaultSessionWorktreeInfo | null
     onToggleDetails?: () => void
+    onJumpToOriginalPane?: () => void
+    onResume?: () => void
+    resumeHidden?: boolean
     onRequestDelete?: () => void
+    onPick?: () => void
   } = {}
 ) {
   return render(
@@ -83,9 +87,11 @@ function renderRow(
         vaultScope="all"
         detailsExpanded={overrides.detailsExpanded ?? false}
         resumeDisabled={false}
+        resumeHidden={overrides.resumeHidden}
         onToggleDetails={overrides.onToggleDetails ?? vi.fn()}
+        onJumpToOriginalPane={overrides.onJumpToOriginalPane}
         showJumpToWorktree={false}
-        onResume={vi.fn()}
+        onResume={overrides.onResume ?? vi.fn()}
         resumeLabel="Resume in New Tab"
         resumeActions={{
           worktree: { worktreeId: null, disabled: true },
@@ -96,6 +102,7 @@ function renderRow(
         onCopyId={vi.fn()}
         onCopyPath={vi.fn()}
         onRequestDelete={overrides.onRequestDelete ?? vi.fn()}
+        onPick={overrides.onPick}
       />
     </TooltipProvider>
   )
@@ -139,6 +146,82 @@ describe('VaultSessionRow details toggle', () => {
     await user.click(title as Element)
 
     expect(onToggleDetails).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('VaultSessionRow in the /resume picker', () => {
+  it('only resumes on click: no menus, drag or action buttons, and the chevron still shows details', async () => {
+    const onPick = vi.fn()
+    const onToggleDetails = vi.fn()
+    const subagent = {
+      ...session,
+      id: 'sub',
+      title: 'Sub task',
+      filePath: '/home/a/.gemini/sub.json'
+    }
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        aiVault: {
+          getFirstUserPrompt: vi.fn().mockResolvedValue({ prompt: null }),
+          listSubagentSessions: vi.fn().mockResolvedValue({ sessions: [subagent], issues: [] })
+        }
+      }
+    })
+    const { container } = renderRow({
+      session: { ...session, subagentTranscriptCount: 1 },
+      onPick,
+      onToggleDetails,
+      detailsExpanded: true
+    })
+    const user = userEvent.setup()
+
+    expect(await screen.findByText('Sub task')).toBeTruthy()
+    expect(screen.queryByTitle('View Log')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Copy/ })).toBeNull()
+    expect(screen.queryByTestId('ai-vault-session-more-actions')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Resume in New Tab' })).toBeNull()
+    expect(container.querySelector('[draggable="true"]')).toBeNull()
+    const title = screen.getAllByText('A session')[0]
+    fireEvent.contextMenu(title)
+    expect(screen.queryByRole('menuitem')).toBeNull()
+
+    await user.click(title)
+    await user.click(screen.getByTestId('ai-vault-session-toggle-details'))
+    expect(onPick).toHaveBeenCalledOnce()
+    expect(onToggleDetails).toHaveBeenCalledOnce()
+  })
+})
+
+describe('VaultSessionRow native session actions', () => {
+  it('shows the jump action instead of Resume for an open structured session', async () => {
+    const onJumpToOriginalPane = vi.fn()
+    const onResume = vi.fn()
+    renderRow({ resumeHidden: true, onJumpToOriginalPane, onResume })
+
+    expect(screen.queryByTestId('ai-vault-session-resume')).toBeNull()
+    fireEvent.click(screen.getByTestId('ai-vault-session-jump-original-pane'))
+
+    expect(onJumpToOriginalPane).toHaveBeenCalledOnce()
+    expect(onResume).not.toHaveBeenCalled()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+    expect(await screen.findByRole('menuitem', { name: 'Jump to Original Pane' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Resume in New Tab' })).toBeNull()
+  })
+
+  it('hides Delete for structured native sessions', async () => {
+    const nativeSession = {
+      ...session,
+      structuredSession: { sessionId: 'native-1', workspaceId: 'workspace-1' }
+    }
+
+    renderRow({ session: nativeSession })
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull()
   })
 })
 

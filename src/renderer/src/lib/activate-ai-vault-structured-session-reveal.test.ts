@@ -14,18 +14,14 @@ const mocks = vi.hoisted(() => ({
   environmentIdFor: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', async () => {
-  // The real target resolution is the thing under test; only the transport is stubbed.
-  const { getActiveRuntimeTarget } = await import('@/runtime/runtime-client-target')
-  return {
-    getActiveRuntimeTarget,
-    callRuntimeRpc: mocks.call,
-    runtimeEnvironmentSupportsCapability: mocks.supports
-  }
-})
+// The real target resolution is the thing under test; only the transport is stubbed.
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.call,
+  runtimeEnvironmentSupportsCapability: mocks.supports
+}))
 
 vi.mock('./worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.environmentIdFor
+  runtimeEnvironmentIdOrLocalUnlessTwin: mocks.environmentIdFor
 }))
 
 import { revealStructuredSession } from './activate-ai-vault-structured-session'
@@ -71,6 +67,22 @@ describe('revealStructuredSession', () => {
       'agentSession.reveal',
       { sessionId: 'session-1' },
       expect.objectContaining({ timeoutMs: expect.any(Number) })
+    )
+  })
+
+  it('keeps a known recipient target when the active workspace would resolve locally', async () => {
+    const host = { kind: 'environment', environmentId: 'recipient-host' } as const
+    await expect(revealStructuredSession({ ...target, target: host })).resolves.toBe('revealed')
+    expect(mocks.supports).toHaveBeenCalledWith(
+      'recipient-host',
+      STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+      expect.any(Number)
+    )
+    expect(mocks.call).toHaveBeenCalledWith(
+      host,
+      'agentSession.reveal',
+      { sessionId: 'session-1' },
+      expect.any(Object)
     )
   })
 

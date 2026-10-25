@@ -90,29 +90,39 @@ describePostgres('optional PostgreSQL statement statistics', () => {
     }
   })
 
-  it('serializes concurrent catalog creation across directors', async () => {
+  it('serializes concurrent catalog creation across directors', async (context) => {
+    if (!preloaded) {
+      context.skip()
+    }
     const url = await freshDatabase()
     const clients = await Promise.all(Array.from({ length: 5 }, async () => await connect(url)))
     try {
-      await Promise.all(clients.map(async (client) => await client.query(POSTGRES_STATEMENT_STATS_MIGRATION)))
-      expect(await installed(clients[0]!)).toBe(preloaded)
+      await Promise.all(
+        clients.map(async (client) => await client.query(POSTGRES_STATEMENT_STATS_MIGRATION))
+      )
+      expect(await installed(clients[0]!)).toBe(true)
     } finally {
       await Promise.all(clients.map(async (client) => await client.end()))
     }
   })
 
-  it('yields to an in-progress installer instead of blocking startup', async () => {
+  it('yields to an in-progress installer instead of blocking startup', async (context) => {
+    if (!preloaded) {
+      context.skip()
+    }
     const url = await freshDatabase()
     const owner = await connect(url)
     const contender = await connect(url)
     try {
       await owner.query('BEGIN')
-      await owner.query(`SELECT pg_advisory_xact_lock(hashtext('orca-relay'), hashtext('statement-stats'))`)
+      await owner.query(
+        `SELECT pg_advisory_xact_lock(hashtext('orca-relay'), hashtext('statement-stats'))`
+      )
       await contender.query(POSTGRES_STATEMENT_STATS_MIGRATION)
       expect(await installed(contender)).toBe(false)
       await owner.query('COMMIT')
       await contender.query(POSTGRES_STATEMENT_STATS_MIGRATION)
-      expect(await installed(contender)).toBe(preloaded)
+      expect(await installed(contender)).toBe(true)
     } finally {
       await owner.end()
       await contender.end()

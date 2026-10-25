@@ -1,32 +1,9 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.markdown-save",
   "family": "session.markdown-save",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
-  "scenarioSha256": "389c6118f3137b78e88af6b901554b0331c652063a00d8ba3119e0883ce82f25",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "13f8c99bcf0e": {
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "v1",
-          "content": "# a",
-          "editable": true,
-          "isDirty": true,
-          "localContent": "# b",
-          "saveError": "outer refused",
-          "saving": false,
-          "status": "ready"
-        }
-      }
-    },
     "14b3351c66dc": {
       "name": "markdown.saveTab#1",
       "ordinal": 1,
@@ -58,6 +35,21 @@
         "value": {
           "id": "frame-1",
           "ok": true
+        }
+      }
+    },
+    "2801e2d0462e": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "localRevision": 2,
+          "saveError": "outer refused",
+          "saving": false,
+          "status": "ready"
         }
       }
     },
@@ -133,18 +125,6 @@
         }
       }
     },
-    "36de5fd645a3": {
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "v2",
-          "content": "# b",
-          "editable": true,
-          "isDirty": false,
-          "localContent": "# b",
-          "status": "ready"
-        }
-      }
-    },
     "48e7060a8031": {
       "name": "markdown.saveTab#1",
       "ordinal": 2,
@@ -185,6 +165,34 @@
             "error": "inner refused",
             "ok": false
           }
+        }
+      }
+    },
+    "77a16acb1308": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "localRevision": 2,
+          "saveError": "Unknown method",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
+    "7fadfe6b63b6": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v2",
+          "content": "# b",
+          "editable": true,
+          "isDirty": false,
+          "localContent": "# b",
+          "localRevision": 2,
+          "status": "ready"
         }
       }
     },
@@ -273,6 +281,21 @@
         }
       }
     },
+    "a88e51b8c57a": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "localRevision": 2,
+          "saveError": "transport failure",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
     "aace46fea9ad": {
       "name": "markdown.saveTab#1",
       "ordinal": 1,
@@ -307,20 +330,6 @@
           "result": {
             "error": "refused"
           }
-        }
-      }
-    },
-    "ae15e570e49e": {
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "v1",
-          "content": "# a",
-          "editable": true,
-          "isDirty": true,
-          "localContent": "# b",
-          "saveError": "Save failed",
-          "saving": false,
-          "status": "ready"
         }
       }
     },
@@ -363,7 +372,7 @@
         }
       }
     },
-    "c1e52e8ff7d9": {
+    "d57554414248": {
       "markdown": {
         "tab-md": {
           "baseVersion": "v1",
@@ -371,21 +380,8 @@
           "editable": true,
           "isDirty": true,
           "localContent": "# b",
-          "saveError": "Unknown method",
-          "saving": false,
-          "status": "ready"
-        }
-      }
-    },
-    "cb4014f2aac3": {
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "v1",
-          "content": "# a",
-          "editable": true,
-          "isDirty": true,
-          "localContent": "# b",
-          "saveError": "transport failure",
+          "localRevision": 2,
+          "saveError": "Save failed",
           "saving": false,
           "status": "ready"
         }
@@ -467,7 +463,7 @@
         }
       }
     },
-    "dd571f3b0f9c": {
+    "e01519bc814b": {
       "markdown": {
         "tab-md": {
           "baseVersion": "v1",
@@ -475,6 +471,7 @@
           "editable": true,
           "isDirty": true,
           "localContent": "# b",
+          "localRevision": 2,
           "saveError": "The host sent a reply this app could not read (markdown.saveTab)",
           "saving": false,
           "status": "ready"
@@ -536,7 +533,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "36de5fd645a3",
+          "state": "7fadfe6b63b6",
           "effects": ["807e68f28cfd"]
         }
       },
@@ -548,7 +545,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "dd571f3b0f9c",
+          "state": "e01519bc814b",
           "effects": []
         }
       },
@@ -560,7 +557,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "dd571f3b0f9c",
+          "state": "e01519bc814b",
           "effects": []
         }
       },
@@ -572,7 +569,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "dd571f3b0f9c",
+          "state": "e01519bc814b",
           "effects": []
         }
       },
@@ -584,7 +581,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "dd571f3b0f9c",
+          "state": "e01519bc814b",
           "effects": []
         }
       },
@@ -596,7 +593,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "dd571f3b0f9c",
+          "state": "e01519bc814b",
           "effects": []
         }
       },
@@ -608,7 +605,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "13f8c99bcf0e",
+          "state": "2801e2d0462e",
           "effects": []
         }
       },
@@ -620,7 +617,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "ae15e570e49e",
+          "state": "d57554414248",
           "effects": []
         }
       },
@@ -632,7 +629,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "c1e52e8ff7d9",
+          "state": "77a16acb1308",
           "effects": []
         }
       },
@@ -644,7 +641,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "cb4014f2aac3",
+          "state": "a88e51b8c57a",
           "effects": []
         }
       },
@@ -656,7 +653,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "ae15e570e49e",
+          "state": "d57554414248",
           "effects": []
         }
       }

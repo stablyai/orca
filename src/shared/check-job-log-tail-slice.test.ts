@@ -53,7 +53,7 @@ describe('sliceCheckLogTail', () => {
     expect(Buffer.from(sliced, 'utf8').byteLength).toBeLessThanOrEqual(PR_CHECK_LOG_TAIL_BYTES)
   })
 
-  it('still applies the byte cap after combining earlier errors with the recent tail', () => {
+  it('caps a large multiline recent tail', () => {
     const logLines = Array.from({ length: 220 }, (_, index) => `line ${index} ${'x'.repeat(120)}`)
     const sliced = sliceCheckLogTail(logLines.join('\n'))
 

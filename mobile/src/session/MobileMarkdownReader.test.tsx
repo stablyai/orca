@@ -50,6 +50,8 @@ const readyDoc: MarkdownDocState = {
 
 describe('MobileMarkdownReader', () => {
   let renderer: ReactTestRenderer | null = null
+  const onSave = vi.fn()
+  const onDiscard = vi.fn()
 
   function render(keyboardLift: number, doc: MarkdownDocState = readyDoc): ReactTestRenderer {
     act(() => {
@@ -60,9 +62,9 @@ describe('MobileMarkdownReader', () => {
           keyboardLift,
           onRefresh: vi.fn(),
           onChange: vi.fn(),
-          onSave: vi.fn(),
+          onSave,
           onCopy: vi.fn(),
-          onDiscard: vi.fn()
+          onDiscard
         })
       )
     })
@@ -102,10 +104,22 @@ describe('MobileMarkdownReader', () => {
   })
 
   it('keeps document actions available without offering dismissal when the keyboard is closed', () => {
-    const instance = render(0, { ...readyDoc, isDirty: true })
+    const instance = render(0, { ...readyDoc, localContent: '# Edited', isDirty: true })
 
     expect(dismissButtons(instance)).toHaveLength(0)
-    expect(instance.root.findAllByType('Text').length).toBeGreaterThan(0)
+    expect(instance.root.findAllByType('Text').map((node) => node.props.children)).toEqual([
+      'Discard',
+      'Save'
+    ])
+    const actions = instance.root.findAllByType('Pressable')
+    expect(actions).toHaveLength(2)
+    expect(actions[1]?.props.disabled).not.toBe(true)
+    act(() => actions[0]?.props.onPress())
+    expect(onDiscard).toHaveBeenCalledOnce()
+    expect(onSave).not.toHaveBeenCalled()
+    act(() => actions[1]?.props.onPress())
+    expect(onSave).toHaveBeenCalledOnce()
+    expect(onDiscard).toHaveBeenCalledOnce()
   })
 
   it('treats a WebView-reported inset as an open keyboard when native lift reports none', () => {

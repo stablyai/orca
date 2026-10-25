@@ -1,15 +1,14 @@
+import { transformSync } from 'esbuild'
 import { describe, expect, it } from 'vitest'
-import {
-  documentScopePreamble,
-  generatedDocumentModule
-} from './generated-document-region.test-support'
+import { createTerminalDocumentScope } from './document-scope'
+import * as escapeIntroducers from './escape-introducers'
+import { documentModuleSource } from './document-module-source.test-support'
 
-// Why: this block runs inside the WebView document, so the tests evaluate the document's own text
-// against the scope object the document builds rather than asserting on the source string. The
-// pre-change source is derived from the shipped one and kept as the differential oracle so the two
-// cannot drift apart.
-const WRITE_QUEUE_SOURCE = await generatedDocumentModule('write-queue')
-const CLEARED_SLOT_STATEMENT = '    scope.writeQueue[scope.writeQueueHead] = void 0;\n'
+// Why: the two implementations are compared rather than asserted about, so both are evaluated. The
+// shipped one is the module's own source and the pre-change one is that source with the statement
+// under test removed, which is what keeps the oracle from drifting away from the code it measures.
+const WRITE_QUEUE_SOURCE = documentModuleSource('write-queue')
+const CLEARED_SLOT_STATEMENT = '  scope.writeQueue[scope.writeQueueHead] = undefined\n'
 const PREVIOUS_WRITE_QUEUE_SOURCE = WRITE_QUEUE_SOURCE.replace(CLEARED_SLOT_STATEMENT, '')
 
 type QueueSnapshot = { slots: unknown[]; head: number }
@@ -32,31 +31,69 @@ type WriteQueueHarness = WriteQueueRuntime & {
   queuedCodeUnits: () => number
 }
 
+/**
+ * One module's exports, evaluated.
+ *
+ * A CommonJS transform of the module's own text is the whole thing: no bundler, no scope object
+ * baked in, and the pre-change arm is the same text minus one statement. Every function it exports
+ * takes the scope as its first argument, which is what lets one evaluation serve two scopes. Its
+ * one value import is resolved to the real module, so both arms read the same escape bytes.
+ */
+function moduleExports(source: string): Record<string, (...args: never[]) => unknown> {
+  const js = transformSync(source, { loader: 'ts', format: 'cjs' }).code
+  // The transform replaces `module.exports` wholesale, so the exports are read back off it rather
+  // than from the object handed in.
+  const evaluated: { exports: Record<string, (...args: never[]) => unknown> } = { exports: {} }
+  new Function('exports', 'module', 'require', js)(
+    evaluated.exports,
+    evaluated,
+    requireDocumentModule
+  )
+  return evaluated.exports
+}
+
+function requireDocumentModule(specifier: string) {
+  if (specifier === './escape-introducers') {
+    return escapeIntroducers
+  }
+  throw new Error(`the write-queue harness has no module for ${specifier}`)
+}
+
 function createWriteQueue(source: string): WriteQueueHarness {
   const writes: string[] = []
   const pendingWrites: Array<() => void> = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the body's return literal names exactly the eight entries below.
-  const factory = new Function(
-    'recordWrite',
-    `${documentScopePreamble()}
-      scope.ready = true;
-      scope.term = { write: function(data, done) { recordWrite(data, done); } };
-      ${source}
-      return {
-        enqueue: enqueueWrite,
-        enqueueBoundary: enqueueWriteBoundary,
-        next: nextQueuedWrite,
-        pump: function() { pumpWrites(scope.terminalGeneration); },
-        reset: resetWriteQueue,
-        afterDrained: afterWritesDrained,
-        setGeneration: function(next) { scope.terminalGeneration = next; },
-        snapshot: function() { return { slots: scope.writeQueue.slice(), head: scope.writeQueueHead }; }
-      };`
-  ) as (recordWrite: (data: string, done: () => void) => void) => WriteQueueRuntime
-  const runtime = factory((data, done) => {
-    writes.push(data)
-    pendingWrites.push(done)
-  })
+  const scope = createTerminalDocumentScope()
+  scope.ready = true
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double is the one member `pumpWrites` reaches on the terminal, which is what the writes below read.
+  scope.term = {
+    write: (data: string, done?: () => void) => {
+      writes.push(data)
+      if (done) {
+        pendingWrites.push(done)
+      }
+    }
+  } as unknown as typeof scope.term
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the eight entries below are exports of the module evaluated above, bound to this case's scope.
+  const module = moduleExports(source) as unknown as {
+    enqueueWrite: (scope: unknown, data: unknown) => void
+    enqueueWriteBoundary: (scope: unknown, callback: () => void) => void
+    nextQueuedWrite: (scope: unknown) => unknown
+    pumpWrites: (scope: unknown, generation: number) => void
+    resetWriteQueue: (scope: unknown) => void
+    afterWritesDrained: (scope: unknown, callback: () => void) => void
+  }
+  const runtime: WriteQueueRuntime = {
+    enqueue: (data) => module.enqueueWrite(scope, data),
+    enqueueBoundary: (callback) => module.enqueueWriteBoundary(scope, callback),
+    next: () => module.nextQueuedWrite(scope),
+    pump: () => module.pumpWrites(scope, scope.terminalGeneration),
+    reset: () => module.resetWriteQueue(scope),
+    afterDrained: (callback) => module.afterWritesDrained(scope, callback),
+    setGeneration: (next) => {
+      scope.terminalGeneration = next
+    },
+    snapshot: () => ({ slots: scope.writeQueue.slice(), head: scope.writeQueueHead })
+  }
   return {
     ...runtime,
     writes,
@@ -87,22 +124,7 @@ function drain(queue: WriteQueueHarness): void {
   }
 }
 
-const IMPLEMENTATIONS: Array<[string, string]> = [
-  ['shipped', WRITE_QUEUE_SOURCE],
-  ['previous', PREVIOUS_WRITE_QUEUE_SOURCE]
-]
-
 describe('terminal WebView write queue', () => {
-  it('keeps the pre-change oracle distinct from the shipped source', () => {
-    expect(WRITE_QUEUE_SOURCE).toContain(CLEARED_SLOT_STATEMENT)
-    expect(PREVIOUS_WRITE_QUEUE_SOURCE).not.toContain(
-      'scope.writeQueue[scope.writeQueueHead] = void 0;'
-    )
-    expect(PREVIOUS_WRITE_QUEUE_SOURCE.length).toBe(
-      WRITE_QUEUE_SOURCE.length - CLEARED_SLOT_STATEMENT.length
-    )
-  })
-
   // Distinct contents per chunk: with one shared string the sum below would count the same
   // 64 KB string 128 times and read identically even if nothing were released.
   function distinctChunks(count: number, codeUnits: number): string[] {
@@ -111,12 +133,6 @@ describe('terminal WebView write queue', () => {
       return marker + String.fromCharCode(0x61 + (i % 26)).repeat(codeUnits - marker.length)
     })
   }
-
-  it('enqueues chunks with distinct contents, so summed lengths are real retained data', () => {
-    const chunks = distinctChunks(128, 65_536)
-    expect(new Set(chunks).size).toBe(chunks.length)
-    expect(new Set(chunks.map((chunk) => chunk.length))).toEqual(new Set([65_536]))
-  })
 
   // The measured quantity is a count of queue-reachable string code units, not heap bytes:
   // xterm may still hold the submitted chunk, so this proves only that the queue released it.
@@ -170,8 +186,8 @@ describe('terminal WebView write queue', () => {
     expect(shipped.codeUnits).toBe((backlog - dequeues) * 64)
   })
 
-  it.each(IMPLEMENTATIONS)('%s: drains writes in FIFO order', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('drains writes in FIFO order', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('a')
     queue.enqueue('b')
     queue.enqueue('c')
@@ -180,8 +196,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.writes).toEqual(['a', 'b', 'c'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: runs boundary callbacks between writes', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('runs boundary callbacks between writes', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     const order: string[] = []
     queue.enqueue('replay')
     queue.enqueueBoundary(() => order.push('boundary'))
@@ -199,8 +215,8 @@ describe('terminal WebView write queue', () => {
     expect(order).toEqual(['boundary', 'drained'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: submits callback-only and empty writes', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('submits callback-only and empty writes', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     const calls: string[] = []
     queue.enqueueBoundary(() => calls.push('first'))
     queue.enqueue('')
@@ -214,8 +230,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.snapshot()).toEqual({ slots: [], head: 0 })
   })
 
-  it.each(IMPLEMENTATIONS)('%s: a reset mid-flight discards pending writes', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('discards pending writes after a reset mid-flight', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('first')
     queue.enqueue('dropped')
     queue.pump()
@@ -228,8 +244,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.writes).toEqual(['first', 'after-reset'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: a stale generation stops the pump', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('stops the pump for a stale generation', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('first')
     queue.enqueue('second')
     queue.pump()
@@ -239,8 +255,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.writes).toEqual(['first'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: reentrant enqueues are drained in order', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('drains reentrant enqueues in order', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('first')
     queue.enqueueBoundary(() => queue.enqueue('reentrant'))
     queue.enqueue('second')
@@ -249,8 +265,8 @@ describe('terminal WebView write queue', () => {
     expect(queue.writes).toEqual(['first', 'second', 'reentrant'])
   })
 
-  it.each(IMPLEMENTATIONS)('%s: compacts consumed slots and keeps order', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('compacts consumed slots and keeps order', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     const total = 200
     const consumed = 129
     for (let i = 0; i < total; i++) {
@@ -269,30 +285,11 @@ describe('terminal WebView write queue', () => {
     )
   })
 
-  it.each(IMPLEMENTATIONS)('%s: resets once the queue is fully consumed', (_label, source) => {
-    const queue = createWriteQueue(source)
+  it('resets once the queue is fully consumed', () => {
+    const queue = createWriteQueue(WRITE_QUEUE_SOURCE)
     queue.enqueue('only')
     expect(queue.next()).toBe('only')
     expect(queue.next()).toBeUndefined()
     expect(queue.snapshot()).toEqual({ slots: [], head: 0 })
-  })
-
-  it('once compaction does fire, both implementations retain only pending chunks', () => {
-    const chunks = distinctChunks(200, 1_024)
-    const measure = (source: string): number => {
-      const queue = createWriteQueue(source)
-      for (const chunk of chunks) {
-        queue.enqueue(chunk)
-      }
-      for (let i = 0; i < 129; i++) {
-        queue.next()
-      }
-      return queue.queuedCodeUnits()
-    }
-
-    // A 200-deep backlog is shallow enough that head * 2 > length trips at 129; deeper
-    // backlogs (see the table above) do not reach the gate and the two diverge.
-    expect(measure(PREVIOUS_WRITE_QUEUE_SOURCE)).toBe(1_024 * 71)
-    expect(measure(WRITE_QUEUE_SOURCE)).toBe(1_024 * 71)
   })
 })

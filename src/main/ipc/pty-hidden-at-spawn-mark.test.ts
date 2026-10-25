@@ -4,9 +4,9 @@ import { posixOnlyIt, makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
 import { join } from 'node:path'
-// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+// Wrapper roots are content-addressed.
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -64,7 +64,6 @@ describe('registerPtyHandlers', () => {
   } = setupPtyIpcSuite()
 
   describe('hidden-at-spawn mark (initiallyHidden)', () => {
-    // terminal-query-authority.md §races: hidden-at-spawn marks the PTY before byte one, closing the spawn-time DA1-loss window.
     function createRuntimeMock() {
       return {
         setPtyController: vi.fn(),
@@ -101,7 +100,7 @@ describe('registerPtyHandlers', () => {
         await Promise.resolve()
         mainWindow.webContents.send.mockClear()
 
-        // Daemon PTYs can emit prompt bytes before spawn() resolves, so the pre-spawn mark must already gate them.
+        // Daemon output can precede spawn resolution; the hidden mark must already apply.
         expect(isHiddenRendererPty('daemon-session')).toBe(true)
         daemon.emitData('daemon-session', 'pre-spawn prompt\x1b[c')
         vi.advanceTimersByTime(50)
@@ -115,6 +114,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: 'daemon-session',
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop',
           markerSeq: 42
         })
@@ -164,6 +164,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
       } finally {
@@ -196,7 +197,7 @@ describe('registerPtyHandlers', () => {
       }
     })
     it('answers DA1 from the model on the first chunk of a hidden-at-spawn PTY', async () => {
-      // End-to-end through a REAL runtime: spawn-marked → first chunk dropped → emulator parses query → replies; main answers, the renderer never saw the bytes.
+      // Exercise real runtime parsing/reply while renderer delivery drops the first query chunk.
       const daemon = installObservableDaemonTestProvider()
       const runtime = new OrcaRuntimeService({
         getRepo: () => undefined,
@@ -249,7 +250,7 @@ describe('registerPtyHandlers', () => {
       })) as { id: string }
       mainWindow.webContents.send.mockClear()
 
-      // 3 MB in one entry: the scrollback-scaled cap (2 MB default) drops to O(1) memory; one restore marker fires, droppedOutput routes to the snapshot repaint.
+      // A single oversized entry must become a bounded drop marker and snapshot restore.
       mockProc.emitData('x'.repeat(1024 * 1024) + 'y'.repeat(2 * 1024 * 1024))
 
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
@@ -258,7 +259,6 @@ describe('registerPtyHandlers', () => {
         reason: 'pending-cap'
       })
 
-      // A second overflow before the entry drains must not re-mark.
       mockProc.emitData('z'.repeat(64 * 1024))
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
 
@@ -279,7 +279,7 @@ describe('registerPtyHandlers', () => {
   ])(
     'keeps the pending cap active without a restore marker when the %s kill switch is off',
     async (_name, settings) => {
-      // Why: the pending cap ships independently of the gate (#7150) — droppedOutput repaint survives kill switches; only the restore marker is switch-scoped.
+      // Pending caps apply independently of the hidden-delivery kill switch (#7150).
       vi.useFakeTimers()
       const mockProc = createMockProc()
       spawnMock.mockReturnValue(mockProc.proc)

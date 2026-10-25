@@ -126,18 +126,17 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       return
     }
     try {
-      // Why: the route stays on the record for the whole commit, which spans many round trips -- a
-      // cancel arriving mid-stream has to find something to abort or the bytes land anyway.
+      // Keep the route reachable so cancellation can abort a remote commit in progress.
       const remoteDestination = await route.complete(download.filename)
       download.clientRoute = null
       download.remoteDestination = remoteDestination
-      // Why: the staged copy is deleted, so a client save path would name a file that no longer exists.
+      // The local staged copy has been deleted.
       download.savePath = ''
       this.finishDownloadInternal(download.downloadId, 'completed', null)
     } catch (error) {
       download.clientRoute = null
       if (download.terminalEvent) {
-        // A cancel already reported the outcome; this rejection is that cancel taking effect.
+        // Cancellation already reported this outcome.
         return
       }
       console.error('[browser-download] Failed to save download to the remote workspace:', error)
@@ -149,7 +148,11 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
   }
 
-  protected cancelDownloadInternal(downloadId: string, reason: string): void {
+  protected cancelDownloadInternal(
+    downloadId: string,
+    reason: string,
+    status: 'canceled' | 'failed' = 'canceled'
+  ): void {
     const download = this.downloadsById.get(downloadId)
     if (!download) {
       return
@@ -162,16 +165,16 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       download.cleanup()
       download.cleanup = null
     }
-    const shouldSendCancel = !download.terminalEvent
+    const shouldSendFinish = !download.terminalEvent
 
     try {
       download.item.cancel()
     } catch {
-      // Why: cancel() can throw on an already-finalized item; best-effort since UI state is authoritative.
+      // The item may already be finalized.
     }
 
-    if (shouldSendCancel) {
-      this.finishDownloadInternal(downloadId, 'canceled', reason || null)
+    if (shouldSendFinish) {
+      this.finishDownloadInternal(downloadId, status, reason || null)
       return
     }
 
@@ -199,7 +202,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     browserDownloadDestinationReservations.release(download.reservationKey)
     download.reservationKey = null
     if (download.clientRoute) {
-      // Why: a cancel path can reach here before the relay settled; the staged copy must not survive.
+      // Cancellation may finish before the relay; remove staged bytes too.
       void download.clientRoute.abort().catch(() => undefined)
       download.clientRoute = null
     }

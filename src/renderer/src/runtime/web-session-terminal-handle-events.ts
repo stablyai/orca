@@ -2,10 +2,13 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
+import { hostSnapshotAffirmsWorktreeContents } from './host-session-snapshot-authority'
 
 export type WebSessionTerminalHandleUpdate = {
   surfacePresent: boolean
   terminalHandle: string | null
+  /** The published handle's process lifetime, when the host stamps one. */
+  incarnationId?: string | null
 }
 
 type TerminalHandleSubscriber = {
@@ -48,7 +51,8 @@ function resolveSubscriberUpdate(
     mirroredSurfaces.find((surface) => surface.status === 'ready')
   return {
     surfacePresent: true,
-    terminalHandle: readySurface?.terminal ?? null
+    terminalHandle: readySurface?.terminal ?? null,
+    ...(readySurface?.incarnationId ? { incarnationId: readySurface.incarnationId } : {})
   }
 }
 
@@ -82,7 +86,8 @@ export function queueAcceptedWebSessionTerminalSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string
 ): void {
-  if (subscribersBySession.size === 0) {
+  // Why: a frame the host synthesized before publishing says nothing about any surface.
+  if (subscribersBySession.size === 0 || !hostSnapshotAffirmsWorktreeContents(snapshot)) {
     return
   }
   const key = sessionKey(environmentId, snapshot.worktree)

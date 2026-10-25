@@ -1,10 +1,9 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
   getDefaultWorkspaceSession,
-  registerSshGitProvider,
-  setPlatform,
-  unregisterSshGitProvider
+  setPlatform
 } from '../orca-runtime-test-mocks.spec'
 import type { OrchestrationDb } from '../orchestration/db'
 import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
@@ -83,14 +82,16 @@ describe('OrcaRuntimeService', () => {
       rows: 24
     })
     const runtime = new OrcaRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getRepos: () => [remoteRepo],
         getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
         getWorkspaceSession,
         setWorkspaceSession,
+        // Every partition the store holds, as the profile Store lists them.
+        getWorkspaceSessionHostIds: () => ['local' as const, `ssh:${connectionId}` as const],
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -129,47 +130,32 @@ describe('OrcaRuntimeService', () => {
       })
     )
     runtime.setNotifier({ revealTerminalSession } as never)
-    registerSshGitProvider(connectionId, {
-      listWorktrees: vi.fn(async () => [
-        {
-          path: TEST_WORKTREE_PATH,
-          head: 'abc',
-          branch: 'main',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-    } as never)
 
-    try {
-      await expect(
-        runtime.reconcileLegacyWorkerTerminals({
-          connectionId: 'ssh-wrong-host',
-          materializeRenderer: true
-        })
-      ).resolves.toMatchObject({
-        adoptedDispatchIds: [],
-        exitedDispatchIds: [],
-        deferredDispatchIds: ['dispatch-ssh']
+    await expect(
+      runtime.reconcileLegacyWorkerTerminals({
+        connectionId: 'ssh-wrong-host',
+        materializeRenderer: true
       })
-      expect(listProcesses).not.toHaveBeenCalled()
-      expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
-      expect(localSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
+    ).resolves.toMatchObject({
+      adoptedDispatchIds: [],
+      exitedDispatchIds: [],
+      deferredDispatchIds: ['dispatch-ssh']
+    })
+    expect(listProcesses).not.toHaveBeenCalled()
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
+    expect(localSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
 
-      await expect(
-        runtime.reconcileLegacyWorkerTerminals({
-          connectionId,
-          materializeRenderer: true
-        })
-      ).resolves.toMatchObject({
-        adoptedDispatchIds: ['dispatch-ssh'],
-        exitedDispatchIds: [],
-        deferredDispatchIds: []
+    await expect(
+      runtime.reconcileLegacyWorkerTerminals({
+        connectionId,
+        materializeRenderer: true
       })
-      expect(listProcesses).toHaveBeenLastCalledWith(connectionId, LIST_PROVIDER_DEADLINE)
-    } finally {
-      unregisterSshGitProvider(connectionId)
-    }
+    ).resolves.toMatchObject({
+      adoptedDispatchIds: ['dispatch-ssh'],
+      exitedDispatchIds: [],
+      deferredDispatchIds: []
+    })
+    expect(listProcesses).toHaveBeenLastCalledWith(`ssh:${connectionId}`, LIST_PROVIDER_DEADLINE)
 
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(getWorkspaceSession).toHaveBeenCalledWith(`ssh:${connectionId}`)
@@ -220,7 +206,7 @@ describe('OrcaRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getProjects: () => [
           {
@@ -228,17 +214,17 @@ describe('OrcaRuntimeService', () => {
             displayName: 'repo',
             badgeColor: 'blue',
             sourceRepoIds: [TEST_REPO_ID],
-            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+            localWindowsRuntimePreference: { kind: 'wsl' as const, distro: 'Ubuntu' },
             createdAt: 0,
             updatedAt: 0
           }
         ],
         getSettings: () => ({
           ...store.getSettings(),
-          localWindowsRuntimeDefault: { kind: 'windows-host' }
+          localWindowsRuntimeDefault: { kind: 'windows-host' as const }
         }),
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -309,10 +295,18 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(revealTerminalSession).toHaveBeenCalledOnce()
     expect(listProcesses).toHaveBeenCalledTimes(5)
-    expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([null, null, null, null, null])
+    expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([
+      'local',
+      'local',
+      'local',
+      'local',
+      'local'
+    ])
   })
 
   it('restores orphan pane and group topology without replacing a newer host-owned tab', async () => {
+    // Pane ids are unique in a partition; the newer tab's pane has its own.
+    const newerLeafId = '44444444-4444-4444-8444-444444444444'
     const session: WorkspaceSessionState = {
       ...makeWorkspaceSessionWithHeadlessTerminal({
         activeTabIdByWorktree: { [TEST_WORKTREE_ID]: 'terminal-3' },
@@ -331,7 +325,7 @@ describe('OrcaRuntimeService', () => {
           ]
         },
         terminalLayoutsByTabId: {
-          'terminal-3': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: 'pty-new' })
+          'terminal-3': makeHeadlessTerminalLayout({ [newerLeafId]: 'pty-new' })
         }
       }),
       tabGroups: {
@@ -349,11 +343,13 @@ describe('OrcaRuntimeService', () => {
       },
       activeGroupIdByWorktree: { [TEST_WORKTREE_ID]: 'group-live' },
       terminalPtyIncarnationsByPaneKey: {
-        [`terminal-3:${HEADLESS_LEAF_ID}`]: 'inc-new'
+        [`terminal-3:${newerLeafId}`]: 'inc-new'
       }
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -504,6 +500,14 @@ describe('OrcaRuntimeService', () => {
       'tab-agent',
       'tab-shell'
     ])
+    // Each adopted tab gets its tab-bar entry, in the group that lists it.
+    expect(
+      getSession().unifiedTabs?.[TEST_WORKTREE_ID]?.map((tab) => [tab.id, tab.groupId])
+    ).toEqual([
+      ['terminal-3', 'group-live'],
+      ['tab-agent', 'group-old-left'],
+      ['tab-shell', 'group-old-right']
+    ])
   })
 
   it('canonicalizes an equivalent persisted worktree key without duplicating terminal topology', async () => {
@@ -524,7 +528,9 @@ describe('OrcaRuntimeService', () => {
       }
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

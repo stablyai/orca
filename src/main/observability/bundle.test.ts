@@ -62,7 +62,10 @@ describe('bundle — collection', () => {
     { kind: 'empty', names: [] },
     { kind: 'ASCII', names: ['plain'] },
     { kind: 'Unicode', names: ['漢字🙂', '\ud800'] },
-    { kind: 'capped', names: Array.from({ length: 600 }, () => '漢字🙂'.repeat(1000)) }
+    {
+      kind: 'capped',
+      names: Array.from({ length: 600 }, () => '漢字🙂'.repeat(1000))
+    }
   ])('reports the exact UTF-8 payload size for $kind records', ({ names }) => {
     writeFileSync(traceFile, makeNDJSON(names.map((name) => makeSpan({ name }))))
     const bundle = collectBundle({
@@ -165,7 +168,12 @@ describe('bundle — collection', () => {
     writeFileSync(
       daemonFile,
       makeNDJSON([
-        { src: 'daemon', ts: new Date().toISOString(), pid: 1, event: 'startup' },
+        {
+          src: 'daemon',
+          ts: new Date().toISOString(),
+          pid: 1,
+          event: 'startup'
+        },
         {
           src: 'daemon',
           // 1h ago — outside the 30m window, must be dropped.
@@ -190,6 +198,121 @@ describe('bundle — collection', () => {
     expect(bundle.payload).toContain('"event":"startup"')
     expect(bundle.payload).toContain('"name":"recent"')
     expect(bundle.payload).not.toContain('"event":"session-exited"')
+  })
+
+  it('keeps daemon log lines when trace spans alone would fill the cap', () => {
+    const daemonFile = join(dir, 'daemon.log')
+    const filler = 'x'.repeat(4096)
+    writeFileSync(
+      traceFile,
+      makeNDJSON(Array.from({ length: 1500 }, () => makeSpan({ name: 'git.exec', filler })))
+    )
+    writeFileSync(
+      daemonFile,
+      makeNDJSON([
+        {
+          src: 'daemon',
+          ts: new Date().toISOString(),
+          pid: 1,
+          event: 'session-created'
+        }
+      ])
+    )
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      daemonLogFilePath: daemonFile,
+      daemonLogMaxFiles: 3,
+      appVersion: '1',
+      platform: 'win32',
+      arch: 'x64',
+      osRelease: 'test',
+      orcaChannel: 'stable'
+    })
+    expect(bundle.payload).toContain('"event":"session-created"')
+    expect(bundle.payload).toContain('"name":"git.exec"')
+    expect(bundle.bytes).toBe(Buffer.byteLength(bundle.payload))
+    expect(bundle.bytes).toBeLessThanOrEqual(_internalsForTests.MAX_BUNDLE_BYTES)
+    // An almost-empty daemon log leaves the rest of the cap to traces.
+    expect(bundle.bytes).toBeGreaterThan(_internalsForTests.MAX_BUNDLE_BYTES - 8192)
+  })
+
+  it('gives the daemon log whatever quiet traces leave unused', () => {
+    const daemonFile = join(dir, 'daemon.log')
+    writeFileSync(traceFile, makeNDJSON([makeSpan({ name: 'recent' })]))
+    const detail = 'd'.repeat(1024)
+    writeFileSync(
+      daemonFile,
+      makeNDJSON(
+        Array.from({ length: 3000 }, (_, index) => ({
+          src: 'daemon',
+          ts: new Date().toISOString(),
+          pid: 1,
+          event: `session-attached-${index}`,
+          detail
+        }))
+      )
+    )
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      daemonLogFilePath: daemonFile,
+      daemonLogMaxFiles: 3,
+      appVersion: '1',
+      platform: 'win32',
+      arch: 'x64',
+      osRelease: 'test',
+      orcaChannel: 'stable'
+    })
+    expect(bundle.payload).toContain('"name":"recent"')
+    // All ~3 MiB of daemon lines fit beside one span; the share is a floor, not a cap.
+    expect(bundle.payload).toContain('"event":"session-attached-0"')
+    expect(bundle.payload).toContain('"event":"session-attached-2999"')
+    expect(bundle.bytes).toBe(Buffer.byteLength(bundle.payload))
+    expect(bundle.bytes).toBeLessThanOrEqual(_internalsForTests.MAX_BUNDLE_BYTES)
+  })
+
+  it('keeps the newest daemon share when both sources overflow the cap', () => {
+    const daemonFile = join(dir, 'daemon.log')
+    const filler = 'x'.repeat(4096)
+    writeFileSync(
+      traceFile,
+      makeNDJSON(Array.from({ length: 1500 }, () => makeSpan({ name: 'git.exec', filler })))
+    )
+    const detail = 'd'.repeat(1024)
+    writeFileSync(
+      daemonFile,
+      makeNDJSON(
+        Array.from({ length: 6000 }, (_, index) => ({
+          src: 'daemon',
+          ts: new Date().toISOString(),
+          pid: 1,
+          event: `session-attached-${index}`,
+          detail
+        }))
+      )
+    )
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      daemonLogFilePath: daemonFile,
+      daemonLogMaxFiles: 3,
+      appVersion: '1',
+      platform: 'win32',
+      arch: 'x64',
+      osRelease: 'test',
+      orcaChannel: 'stable'
+    })
+    const daemonBytes = bundle.payload
+      .split('\n')
+      .filter((line) => line.includes('"src":"daemon"'))
+      .reduce((total, line) => total + Buffer.byteLength(line) + 1, 0)
+    expect(bundle.payload).toContain('"name":"git.exec"')
+    expect(bundle.payload).toContain('"event":"session-attached-5999"')
+    expect(daemonBytes).toBeGreaterThan(_internalsForTests.DAEMON_LOG_BUDGET_BYTES - 4096)
+    // Plus the sliver spans could not use: less than one 4 KiB span record.
+    expect(daemonBytes).toBeLessThan(_internalsForTests.DAEMON_LOG_BUDGET_BYTES + 8192)
+    expect(bundle.bytes).toBeLessThanOrEqual(_internalsForTests.MAX_BUNDLE_BYTES)
   })
 
   it('collects no daemon log lines when no daemon log path is given', () => {
@@ -288,7 +411,10 @@ describe('bundle — collection', () => {
       name: 'oldest',
       attributes: { message: 'x'.repeat(_internalsForTests.MAX_BUNDLE_BYTES) }
     })
-    const newSpan = makeSpan({ name: 'newest', attributes: { message: 'recent crash' } })
+    const newSpan = makeSpan({
+      name: 'newest',
+      attributes: { message: 'recent crash' }
+    })
     writeFileSync(traceFile, makeNDJSON([oldSpan, newSpan]))
     const bundle = collectBundle({
       traceFilePath: traceFile,
@@ -327,12 +453,18 @@ describe('bundle — collection', () => {
   })
 
   it('skips oversized middle spans after accepting newer context', () => {
-    const olderUseful = makeSpan({ name: 'older-useful', attributes: { message: 'older context' } })
+    const olderUseful = makeSpan({
+      name: 'older-useful',
+      attributes: { message: 'older context' }
+    })
     const oversizedMiddle = makeSpan({
       name: 'oversized-middle',
       attributes: { message: 'x'.repeat(_internalsForTests.MAX_BUNDLE_BYTES) }
     })
-    const newestUseful = makeSpan({ name: 'newest-useful', attributes: { message: 'new context' } })
+    const newestUseful = makeSpan({
+      name: 'newest-useful',
+      attributes: { message: 'new context' }
+    })
     writeFileSync(traceFile, makeNDJSON([olderUseful, oversizedMiddle, newestUseful]))
     const bundle = collectBundle({
       traceFilePath: traceFile,
@@ -595,7 +727,10 @@ describe('uploadBundle and deleteBundle', () => {
       res.setHeader('content-type', 'application/json')
       res.end('{}')
     })
-    await deleteBundle({ tokenEndpoint: `${baseUrl}/diagnostics/token`, ticketId })
+    await deleteBundle({
+      tokenEndpoint: `${baseUrl}/diagnostics/token`,
+      ticketId
+    })
     expect(seen).toEqual([`/diagnostics/delete/${ticketId}`])
   })
 })

@@ -1,6 +1,24 @@
 import type { AppState } from '@/store/types'
-import { AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS, graphState } from './graph-state'
-import type { AgentStatusProjectionCacheEntry } from './types'
+import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
+import { programStatusFacetContent } from '../../../../shared/program-status/facet'
+
+const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
+
+type AgentStatusProjectionCacheEntry = {
+  entry: AppState['agentStatusByPaneKey'][string]
+  projection: string
+}
+type AgentStatusProjectionCache = {
+  source: AppState['agentStatusByPaneKey']
+  entries: Map<string, AgentStatusProjectionCacheEntry>
+  projection: string
+}
+
+let cachedAgentStatusProjection: AgentStatusProjectionCache | null = null
+
+function mainAgentKey(mainAgent: AgentMainAgentStatus | undefined) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
 
 function serializeAgentStatusEntry(
   paneKey: string,
@@ -14,13 +32,17 @@ function serializeAgentStatusEntry(
     prompt: entry.prompt,
     updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
     stateStartedAt: entry.stateStartedAt,
+    turnStartedAt: entry.turnStartedAt ?? null,
+    turnEndedAt: entry.turnEndedAt ?? null,
+    turnEndDisposition: entry.turnEndDisposition ?? null,
     agentType: entry.agentType ?? null,
     terminalTitle: entry.terminalTitle ?? null,
     stateHistory: entry.stateHistory.map((history) => ({
       state: history.state,
       prompt: history.prompt,
       startedAt: history.startedAt,
-      interrupted: history.interrupted ?? null
+      interrupted: history.interrupted ?? null,
+      mainAgent: mainAgentKey(history.mainAgent)
     })),
     toolName: entry.toolName ?? null,
     toolInput: entry.toolInput ?? null,
@@ -28,14 +50,17 @@ function serializeAgentStatusEntry(
     interactivePrompt: entry.interactivePrompt ?? null,
     lastAssistantMessage: entry.lastAssistantMessage ?? null,
     lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-    interrupted: entry.interrupted ?? null
+    interrupted: entry.interrupted ?? null,
+    // A failure changes the verdict and leaves `interrupted` as it was.
+    mainAgent: mainAgentKey(entry.mainAgent),
+    programStatus: entry.programStatus ? programStatusFacetContent(entry.programStatus) : null
   })
 }
 
 export function buildRuntimeMobileAgentStatusProjection(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey']
 ): string {
-  const cached = graphState.cachedAgentStatusProjection
+  const cached = cachedAgentStatusProjection
   if (cached?.source === agentStatusByPaneKey) {
     return cached.projection
   }
@@ -50,7 +75,7 @@ export function buildRuntimeMobileAgentStatusProjection(
     nextEntries.length === cached.entries.size &&
     nextEntries.every(([paneKey, entry]) => cached.entries.get(paneKey)?.entry === entry)
   ) {
-    graphState.cachedAgentStatusProjection = {
+    cachedAgentStatusProjection = {
       ...cached,
       source: agentStatusByPaneKey
     }
@@ -76,7 +101,7 @@ export function buildRuntimeMobileAgentStatusProjection(
   }
   // Same-bucket heartbeats must not rejoin every pane's accumulated preview text.
   const projection = projectionUnchanged && cached ? cached.projection : `[${parts.join(',')}]`
-  graphState.cachedAgentStatusProjection = {
+  cachedAgentStatusProjection = {
     source: agentStatusByPaneKey,
     entries,
     projection
@@ -94,5 +119,5 @@ export const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS =
   AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS
 
 export function resetRuntimeMobileAgentStatusProjectionCacheForTests(): void {
-  graphState.cachedAgentStatusProjection = null
+  cachedAgentStatusProjection = null
 }

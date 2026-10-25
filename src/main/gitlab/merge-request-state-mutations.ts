@@ -1,7 +1,7 @@
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import {
   acquire,
-  glabHostnameArgs,
+  glabHostEnvOptions,
   glabRepoExecOptions,
   glabExecFileAsync,
   release,
@@ -26,21 +26,14 @@ export async function closeMR(
     async (projectRef, repoFlag) => {
       await acquire()
       try {
-        await glabExecFileAsync(
-          [
-            'mr',
-            'close',
-            String(iid),
-            '-R',
-            repoFlag,
-            ...glabHostnameArgs(projectRef, connectionId)
-          ],
-          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-        )
+        await glabExecFileAsync(['mr', 'close', String(iid), '-R', repoFlag], {
+          ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
+          ...glabHostEnvOptions(projectRef, connectionId)
+        })
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // Why: glab exits non-zero when the MR is already closed — treat as success.
+        // glab signals already-closed with nonzero exit; treat the repeated transition as success.
         if (msg.toLowerCase().includes('already')) {
           return { ok: true }
         }
@@ -70,17 +63,10 @@ export async function reopenMR(
     async (projectRef, repoFlag) => {
       await acquire()
       try {
-        await glabExecFileAsync(
-          [
-            'mr',
-            'reopen',
-            String(iid),
-            '-R',
-            repoFlag,
-            ...glabHostnameArgs(projectRef, connectionId)
-          ],
-          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-        )
+        await glabExecFileAsync(['mr', 'reopen', String(iid), '-R', repoFlag], {
+          ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
+          ...glabHostEnvOptions(projectRef, connectionId)
+        })
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -114,21 +100,14 @@ export async function mergeMR(
     async (projectRef, repoFlag) => {
       await acquire()
       try {
-        // Why: omitting both --squash and --rebase yields a regular merge commit.
         const methodFlag =
           method === 'squash' ? ['--squash'] : method === 'rebase' ? ['--rebase'] : []
         await glabExecFileAsync(
-          [
-            'mr',
-            'merge',
-            String(iid),
-            '-R',
-            repoFlag,
-            '--yes',
-            ...methodFlag,
-            ...glabHostnameArgs(projectRef, connectionId)
-          ],
-          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+          ['mr', 'merge', String(iid), '-R', repoFlag, '--yes', ...methodFlag],
+          {
+            ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
+            ...glabHostEnvOptions(projectRef, connectionId)
+          }
         )
         return { ok: true }
       } catch (err) {

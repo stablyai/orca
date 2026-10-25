@@ -37,9 +37,11 @@ export function BrowserGuestAnnotateOverlays({
   grabAnnotations,
   containerRef,
   markupPortalContainer,
+  markupControlsContainer,
   webviewRef,
   browserOverlayViewport,
-  worktreeId
+  worktreeId,
+  currentUrl
 }: {
   markup: MarkupModeController
   grab: GrabModeHook
@@ -47,9 +49,11 @@ export function BrowserGuestAnnotateOverlays({
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
   containerRef: RefObject<HTMLDivElement | null>
   markupPortalContainer?: HTMLDivElement | null
+  markupControlsContainer?: HTMLDivElement | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
+  currentUrl?: string
 }): React.JSX.Element {
   const {
     pendingAnnotationPayload,
@@ -67,12 +71,12 @@ export function BrowserGuestAnnotateOverlays({
   const markupTarget = markupPortalContainer ?? containerRef.current
   const {
     browserAnnotations,
-    browserAnnotationTrayOpen,
     annotationTraySendOpen,
     handleAnnotationTraySendOpenChange,
     activeGroupId,
     browserAnnotationsPrompt,
     handleBrowserAnnotationsSentToAgent,
+    handleBrowserAnnotationsHandedOff,
     handleCopyBrowserAnnotations,
     browserAnnotationsCopied,
     handleClearBrowserAnnotations,
@@ -89,6 +93,7 @@ export function BrowserGuestAnnotateOverlays({
               busy={markup.state === 'composing'}
               onComplete={(input) => void markup.complete(input)}
               onCancel={markup.cancel}
+              controlsContainer={markupControlsContainer}
             />,
             markupTarget
           )
@@ -96,26 +101,31 @@ export function BrowserGuestAnnotateOverlays({
       {pendingAnnotationPayload ? (
         <PendingBrowserAnnotationCard
           payload={pendingAnnotationPayload}
-          anchor={getBrowserOverlayAnchor(
-            pendingAnnotationPayload,
-            containerRef.current,
-            webviewRef.current,
-            browserOverlayViewport
-          )}
+          resolveAnchor={(cardHeight) =>
+            getBrowserOverlayAnchor(
+              pendingAnnotationPayload,
+              containerRef.current,
+              webviewRef.current,
+              browserOverlayViewport,
+              cardHeight
+            )
+          }
           portalContainer={containerRef.current}
           onAdd={handleAddBrowserAnnotation}
           onCancel={handleCancelPendingBrowserAnnotation}
         />
       ) : null}
-      {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
+      {browserAnnotations.length > 0 ? (
         <BrowserPageAnnotationTray
           browserAnnotations={browserAnnotations}
+          currentUrl={currentUrl}
           annotationTraySendOpen={annotationTraySendOpen}
           handleAnnotationTraySendOpenChange={handleAnnotationTraySendOpenChange}
           worktreeId={worktreeId}
           activeGroupId={activeGroupId}
           browserAnnotationsPrompt={browserAnnotationsPrompt}
           handleBrowserAnnotationsSentToAgent={handleBrowserAnnotationsSentToAgent}
+          handleBrowserAnnotationsHandedOff={handleBrowserAnnotationsHandedOff}
           handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}
           browserAnnotationsCopied={browserAnnotationsCopied}
           handleClearBrowserAnnotations={handleClearBrowserAnnotations}

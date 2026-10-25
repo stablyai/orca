@@ -4,20 +4,29 @@
  * push. One app-global snapshot, not per-PTY — per-pane font zoom never
  * affects these attributes and the color/cursor settings are global.
  *
- * Null until the first push, and the responder answers NO view-attribute
- * query while null (silent-until-first-push): a fabricated default would
- * resurrect the default-black OSC-11 bug. Staleness is bounded by one IPC
- * hop; subscribed TUIs are corrected by the renderer-owned 2031/997 flip.
+ * Null until the first push; the hidden-pane model responder answers its
+ * OSC 4/12 and ?996n queries only once it is set. OSC 10/11 never reach it
+ * from a current PTY owner, which answers them itself from the viewer colours
+ * below. Staleness is bounded by one IPC hop; subscribed TUIs are corrected by
+ * the renderer-owned 2031/997 flip.
  */
 import {
   terminalViewAttributesEqual,
+  terminalViewColorQueryReplyColors,
   type TerminalViewAttributes
 } from '../../shared/terminal-view-attributes'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import { colorQueryReplyColorsEqual } from '../../shared/pty-owner-color-query-colors'
 
 // Why module state (pattern of pty-hidden-delivery-gate.ts): pty.ts receives
 // the push, the runtime emulators consult it at reply time via the getter.
 let currentAttributes: TerminalViewAttributes | null = null
+
+// Why one value for every pane: the host shows the same panes to every viewer. This host's own
+// window answers when it has one; a paired client's push answers only on a headless host.
+let pairedViewerColors: TerminalOscColorQueryReplyColors | null = null
+let seedColors: TerminalOscColorQueryReplyColors | null = null
+let viewerColorsListener: ((colors: TerminalOscColorQueryReplyColors) => void) | null = null
 
 // Why appliers (pattern of registerConptyDa1OverrideInstaller): each push
 // must also reach already-live emulators — cursor options under the replay
@@ -41,32 +50,61 @@ export function setTerminalViewAttributes(attributes: TerminalViewAttributes): v
   if (currentAttributes && terminalViewAttributesEqual(currentAttributes, attributes)) {
     return
   }
+  const before = getTerminalViewerColors()
   currentAttributes = attributes
   for (const applier of pushAppliers) {
     applier(attributes)
   }
+  notifyIfViewerColorsChanged(before)
 }
 
 export function getTerminalViewAttributes(): TerminalViewAttributes | null {
   return currentAttributes
 }
 
-function rgbToCssHex(rgb: readonly [number, number, number]): string {
-  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+export function getTerminalViewColorQueryReplyColors(): TerminalOscColorQueryReplyColors | null {
+  return currentAttributes ? terminalViewColorQueryReplyColors(currentAttributes) : null
 }
 
-export function getTerminalViewColorQueryReplyColors(): TerminalOscColorQueryReplyColors | null {
-  if (!currentAttributes) {
-    return null
+/** The colours OSC 10/11 answer with on this host: its own window, else a paired client, else
+ *  the saved theme. */
+export function getTerminalViewerColors(): TerminalOscColorQueryReplyColors | null {
+  return getTerminalViewColorQueryReplyColors() ?? pairedViewerColors ?? seedColors
+}
+
+/** A paired client's theme, from terminal.setViewerColors or the colours on terminal.create. */
+export function setPairedViewerColors(colors: TerminalOscColorQueryReplyColors): void {
+  const before = getTerminalViewerColors()
+  pairedViewerColors = colors
+  notifyIfViewerColorsChanged(before)
+}
+
+/** The saved theme, answering until a viewer reports its colours. */
+export function seedTerminalViewerColors(colors: TerminalOscColorQueryReplyColors): void {
+  const before = getTerminalViewerColors()
+  seedColors = colors
+  notifyIfViewerColorsChanged(before)
+}
+
+function notifyIfViewerColorsChanged(before: TerminalOscColorQueryReplyColors | null): void {
+  const colors = getTerminalViewerColors()
+  if (colors && !colorQueryReplyColorsEqual(before, colors)) {
+    viewerColorsListener?.(colors)
   }
-  return {
-    foreground: rgbToCssHex(currentAttributes.foreground),
-    background: rgbToCssHex(currentAttributes.background)
-  }
+}
+
+/** One listener: the PTY IPC layer re-installs it on macOS re-activation. */
+export function setTerminalViewerColorsListener(
+  listener: ((colors: TerminalOscColorQueryReplyColors) => void) | null
+): void {
+  viewerColorsListener = listener
 }
 
 /** Test seam: reset module state between tests. */
 export function _resetTerminalViewAttributesForTest(): void {
   currentAttributes = null
   pushAppliers.clear()
+  pairedViewerColors = null
+  seedColors = null
+  viewerColorsListener = null
 }

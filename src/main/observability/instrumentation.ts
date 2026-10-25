@@ -270,11 +270,9 @@ export function addWorktreeCreatePhaseAttributes(
   if (timing.preparedCheckout) {
     span.setAttribute('worktree.create.prepared_checkout', timing.preparedCheckout.status)
     if (timing.preparedCheckout.status === 'hit') {
-      // A retargeted hit still pays a reset, so it must not be read as a free hit.
-      span.setAttribute(
-        'worktree.create.prepared_checkout_retargeted',
-        timing.preparedCheckout.retargeted
-      )
+      // A hit that had to reset still paid for it, so it must not be read as a free hit.
+      span.setAttribute('worktree.create.prepared_checkout_reset', timing.preparedCheckout.reset)
+      span.setAttribute('worktree.create.prepared_checkout_origin', timing.preparedCheckout.origin)
     } else {
       span.setAttribute('worktree.create.prepared_checkout_miss', timing.preparedCheckout.reason)
     }
@@ -284,10 +282,15 @@ export function addWorktreeCreatePhaseAttributes(
   }
   // What the phases do not cover is the number that matters when create feels slow for no visible
   // reason, so name it rather than leaving it to subtraction.
-  span.setAttribute(
-    'worktree.create.unattributed_ms',
-    Math.max(0, Math.round(timing.totalDurationMs - measuredWallClockMs(timing.phases)))
-  )
+  span.setAttribute('worktree.create.unattributed_ms', worktreeCreateUnattributedMs(timing))
+}
+
+/** Wall-clock time of a create that no timed phase covers; overlapping phases count once. */
+export function worktreeCreateUnattributedMs(timing: {
+  totalDurationMs: number
+  phases: readonly WorktreePhaseInterval[]
+}): number {
+  return Math.max(0, Math.round(timing.totalDurationMs - measuredWallClockMs(timing.phases)))
 }
 
 /** Closed set so a typo can't silently mint an orphan span name. */
@@ -297,7 +300,6 @@ export type WorktreeRemoveStage =
   | 'git_remove'
   | 'metadata_purge'
   | 'pty_sweep'
-  | 'trash_rename'
   | 'watcher_gate'
 
 /** Wrap one stage of a worktree removal. Children share the parent's `kind` so `kind`-filtered

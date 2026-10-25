@@ -259,31 +259,34 @@ describe('ws outbound backpressure queue', () => {
     let bufferedAmount = 100
     let pendingTimer: (() => void) | null = null
     const sent: string[] = []
-    const queue = createWsOutboundBackpressureQueue<string>({
-      send: (frame) => sent.push(frame),
-      byteLengthOf: (frame) => frame.length,
-      getBufferedAmount: () => bufferedAmount,
-      isWritable: () => true,
-      onOverflow: overflow,
-      softCapBytes: 10,
-      setTimer: (callback) => {
-        pendingTimer = callback
-        return 1 as unknown as ReturnType<typeof setTimeout>
-      },
-      clearTimer: () => {
-        pendingTimer = null
-      },
-      claimQueuedBytes: (bytes) => {
-        if (denyClaims) {
-          return null
+    const createQueue = () =>
+      createWsOutboundBackpressureQueue<string>({
+        send: (frame) => sent.push(frame),
+        byteLengthOf: (frame) => frame.length,
+        getBufferedAmount: () => bufferedAmount,
+        isWritable: () => true,
+        onOverflow: overflow,
+        softCapBytes: 10,
+        setTimer: (callback) => {
+          pendingTimer = callback
+          // SAFETY: clearTimer only tracks this callback; no native timer API consumes the handle.
+          return 1 as unknown as ReturnType<typeof setTimeout>
+        },
+        clearTimer: () => {
+          pendingTimer = null
+        },
+        claimQueuedBytes: (bytes) => {
+          if (denyClaims) {
+            return null
+          }
+          claimedBytes += bytes
+          return () => {
+            claimedBytes -= bytes
+          }
         }
-        claimedBytes += bytes
-        return () => {
-          claimedBytes -= bytes
-        }
-      }
-    })
+      })
 
+    const queue = createQueue()
     queue.enqueue('one')
     expect(claimedBytes).toBe(3)
     bufferedAmount = 0
@@ -304,6 +307,13 @@ describe('ws outbound backpressure queue', () => {
     expect(overflow).toHaveBeenCalledOnce()
     expect(claimedBytes).toBe(0)
     queue.dispose()
+    expect(claimedBytes).toBe(0)
+
+    denyClaims = false
+    const disposal = createQueue()
+    disposal.enqueue('retained')
+    expect(claimedBytes).toBe(8)
+    disposal.dispose()
     expect(claimedBytes).toBe(0)
   })
 

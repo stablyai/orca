@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import { registerLivePty } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import {
+  expectDesktopDropsPane,
+  expectDesktopDropsTab
+} from '../__fixtures__/main-layout-close-fixture'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -102,6 +108,12 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
+    for (const [leafId, ptyId] of [
+      [HEADLESS_LEAF_ID, 'pty-a'],
+      [HEADLESS_SECOND_LEAF_ID, 'pty-b']
+    ]) {
+      registerLivePty(runtime, ptyId, TEST_WORKTREE_ID, null, { tabId: 'host-tab', leafId })
+    }
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
     expect(kill).toHaveBeenCalledWith('pty-a')
@@ -185,6 +197,10 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
+    registerLivePty(runtime, servePtyId, TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
     expect(kill).toHaveBeenCalledWith(servePtyId)
@@ -192,7 +208,7 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
     // Best-effort renderer notify so no adopted pane is left dead.
-    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
   })
 
   it('delegates a renderer-owned daemon-session (worktreeId@@uuid) local terminal to the renderer', async () => {
@@ -254,6 +270,12 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // #31571: main owns the tab's layout, so it closes the tab and stops its terminal itself.
+      expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
+      expect(kill).toHaveBeenCalledWith(daemonPtyId)
+      return
+    }
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
     expect(kill).not.toHaveBeenCalled()
     // Not torn down by the runtime — left for the renderer's own close to prune.
@@ -302,7 +324,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
-    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
   })
 
   it('defers a renderer-published pending tab to the renderer instead of tearing it down', async () => {
@@ -356,6 +378,12 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // #31571: main owns the tab's layout, so it closes the tab and stops the terminal it binds.
+      expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
+      expect(kill).toHaveBeenCalledWith('persisted-pty')
+      return
+    }
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
     expect(forgetTabs).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
@@ -421,6 +449,11 @@ describe('OrcaRuntimeService', () => {
     // notifier that may decline it, so tombstoning would hide a live tab from
     // paired clients forever. Only a host-committed close may tombstone.
     expect(result).toEqual({ closed: true })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // #31571: main commits the close in its own layout, so nothing is delegated.
+      expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
+      return
+    }
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
     expect(forgetTabs).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
@@ -446,10 +479,15 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
 
-    expect(kill).not.toHaveBeenCalled()
+    // #31571: main's close stops the terminal its layout binds; the window-era close kills none.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(kill).toHaveBeenCalledWith('persisted-pty')
+    } else {
+      expect(kill).not.toHaveBeenCalled()
+    }
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
-    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expectDesktopDropsTab({ closeTerminal, getSession }, 'host-tab')
   })
 
   it('closes only the addressed serve-owned split leaf so siblings survive even with a renderer attached', async () => {
@@ -478,6 +516,7 @@ describe('OrcaRuntimeService', () => {
     )
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
+    const closeTerminalPane = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       write: () => true,
@@ -485,7 +524,8 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    runtime.setNotifier({ closeTerminal } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these close paths call only the listed notifier methods.
+    runtime.setNotifier({ closeTerminal, closeTerminalPane } as never)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -516,6 +556,12 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
+    for (const [leafId, ptyId] of [
+      [HEADLESS_LEAF_ID, 'serve-left'],
+      [HEADLESS_SECOND_LEAF_ID, 'serve-right']
+    ]) {
+      registerLivePty(runtime, ptyId, TEST_WORKTREE_ID, null, { tabId: 'host-tab', leafId })
+    }
     await runtime.closeMobileSessionTab(
       `id:${TEST_WORKTREE_ID}`,
       `host-tab::${HEADLESS_SECOND_LEAF_ID}`
@@ -524,8 +570,13 @@ describe('OrcaRuntimeService', () => {
     // Exact split leaf: kill only that leaf's PTY, keep the sibling, don't tear down the parent.
     expect(kill).toHaveBeenCalledWith('serve-right')
     expect(kill).not.toHaveBeenCalledWith('serve-left')
+    // Only the leaf-addressed notice for the closed pane; never a whole-tab close.
+    expectDesktopDropsPane({ closeTerminalPane, getSession }, 'host-tab', HEADLESS_SECOND_LEAF_ID)
     expect(closeTerminal).not.toHaveBeenCalled()
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
-    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
+    expect(getSession().terminalLayoutsByTabId['host-tab']?.root).toEqual({
+      type: 'leaf',
+      leafId: HEADLESS_LEAF_ID
+    })
   })
 })

@@ -3,6 +3,9 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
+import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import { collectTabGroupLayoutGroupIds } from '../../shared/workspace-layout/tab-group-moves'
+import { isStructuredAgentSessionHostTabId } from '../../shared/structured-agent-session-host-tab-id'
 import {
   collectHeadlessParentTabOrder,
   getHeadlessMobileSessionGroupId
@@ -53,13 +56,62 @@ export function getMobileSessionSnapshotTabIdentityKeys(
   return [tab.id]
 }
 
+/** The ids a group tab order may name this tab by. */
+export function getMobileSessionTabOrderIds(tab: RuntimeMobileSessionSnapshotTab): string[] {
+  if (tab.type === 'terminal') {
+    return [tab.id, tab.parentTabId]
+  }
+  if (tab.type === 'browser') {
+    return [tab.id, tab.browserWorkspaceId]
+  }
+  return [tab.id]
+}
+
+/**
+ * The tab strip in the order a desktop client draws it: groups left to right, each in its tab
+ * order. Stable, so split panes keep their order and tabs no group lists stay last.
+ */
+export function orderMobileSessionTabsByGroups<T extends RuntimeMobileSessionSnapshotTab>(
+  tabs: readonly T[],
+  groups: readonly RuntimeMobileSessionTabGroup[],
+  layout: TabGroupLayoutNode | null | undefined
+): T[] {
+  const groupRank = [...collectTabGroupLayoutGroupIds(layout)]
+  const rankOfGroup = (group: RuntimeMobileSessionTabGroup): number => {
+    const rank = groupRank.indexOf(group.id)
+    return rank === -1 ? Number.POSITIVE_INFINITY : rank
+  }
+  const orderedGroups = groups.toSorted((a, b) => compareRanks(rankOfGroup(a), rankOfGroup(b)))
+  const rankById = new Map<string, number>()
+  for (const tabId of orderedGroups.flatMap((group) => group.tabOrder)) {
+    if (!rankById.has(tabId)) {
+      rankById.set(tabId, rankById.size)
+    }
+  }
+  const rankOf = (tab: T): number =>
+    Math.min(
+      ...getMobileSessionTabOrderIds(tab).map((id) => rankById.get(id) ?? Number.POSITIVE_INFINITY)
+    )
+  return tabs
+    .map((tab) => ({ tab, rank: rankOf(tab) }))
+    .toSorted((a, b) => compareRanks(a.rank, b.rank))
+    .map(({ tab }) => tab)
+}
+
+// Why not subtraction: unranked entries are Infinity, and Infinity - Infinity is NaN.
+function compareRanks(a: number, b: number): number {
+  return a === b ? 0 : a < b ? -1 : 1
+}
+
 export function mergeMobileSessionTabGroups(
   worktreeId: string,
   groups: readonly RuntimeMobileSessionTabGroup[],
-  terminalTabs: readonly RuntimeMobileSessionTerminalTab[],
+  tabs: readonly RuntimeMobileSessionSnapshotTab[],
   activeTab: RuntimeMobileSessionTerminalTab | null
 ): RuntimeMobileSessionTabGroup[] {
-  const parentTabOrder = collectHeadlessParentTabOrder(terminalTabs)
+  const parentTabOrder = collectHeadlessParentTabOrder(
+    tabs.filter((tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal')
+  )
   if (parentTabOrder.length === 0) {
     return [...groups]
   }
@@ -84,7 +136,13 @@ export function mergeMobileSessionTabGroups(
       ownerGroupId.set(tabId, group.id)
     }
   }
-  const liveTabIds = new Set(parentTabOrder)
+  // Why: chats, editors and browsers keep the place the publisher gave them; only terminals are
+  // placed here. A window lists a chat before main restores its row, and closing one removes its
+  // id, so a listed chat id holds its place even without a row.
+  const liveTabIds = new Set([
+    ...tabs.flatMap(getMobileSessionTabOrderIds),
+    ...groups.flatMap((group) => group.tabOrder.filter(isStructuredAgentSessionHostTabId))
+  ])
   const activeParentId = activeTab?.parentTabId ?? null
   const activeGroupId =
     (activeParentId ? ownerGroupId.get(activeParentId) : undefined) ?? nextGroups[0]!.id
@@ -128,4 +186,74 @@ export function mergeMobileSessionTabGroups(
       }
     })
     .filter((group) => group.tabOrder.length > 0)
+}
+
+/**
+ * A tab list rebuilt from persisted state, plus the chat tabs only `prior` holds. Chat tabs exist
+ * only in the runtime's snapshot, so no persisted terminal or layout state can recreate them.
+ */
+export function keepSnapshotChatTabs(
+  rebuilt: readonly RuntimeMobileSessionSnapshotTab[],
+  prior:
+    | { tabs: readonly RuntimeMobileSessionSnapshotTab[]; activeTabId: string | null }
+    | undefined
+): RuntimeMobileSessionSnapshotTab[] {
+  const chatTabs = prior?.tabs.filter((tab) => tab.type === 'agent-session') ?? []
+  if (chatTabs.length === 0) {
+    return [...rebuilt]
+  }
+  // One active tab: a rebuilt terminal's own flag must not outrank the chat the snapshot showed.
+  const activeChatId = chatTabs.find((tab) => tab.id === prior?.activeTabId)?.id ?? null
+  return [
+    ...rebuilt.map((tab) => (activeChatId && tab.isActive ? { ...tab, isActive: false } : tab)),
+    ...chatTabs.map((tab) => ({ ...tab, isActive: tab.id === activeChatId }))
+  ]
+}
+
+/**
+ * Puts chat tabs back into the group order a terminal-only merge rebuilt without them: each in the
+ * group that listed it before (else the first), after the tab it followed there.
+ */
+export function appendChatTabOrder(
+  groups: readonly RuntimeMobileSessionTabGroup[],
+  priorGroups: readonly RuntimeMobileSessionTabGroup[] | undefined,
+  tabs: readonly RuntimeMobileSessionSnapshotTab[],
+  activeTabId: string | null = tabs.find((tab) => tab.isActive)?.id ?? null
+): RuntimeMobileSessionTabGroup[] {
+  const chatTabIds = tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.id)
+  if (chatTabIds.length === 0) {
+    return [...groups]
+  }
+  const next = groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
+  for (const tabId of chatTabIds) {
+    const priorGroup = priorGroups?.find((group) => group.tabOrder.includes(tabId))
+    const target =
+      next.find((group) => group.tabOrder.includes(tabId)) ??
+      next.find((group) => group.id === priorGroup?.id) ??
+      next[0]
+    if (!target) {
+      continue
+    }
+    if (!target.tabOrder.includes(tabId)) {
+      const at = chatInsertIndex(target.tabOrder, priorGroup?.tabOrder ?? [], tabId)
+      target.tabOrder.splice(at, 0, tabId)
+    }
+    if (tabId === activeTabId) {
+      target.activeTabId = tabId
+    }
+  }
+  return next
+}
+
+function chatInsertIndex(
+  order: readonly string[],
+  priorOrder: readonly string[],
+  tabId: string
+): number {
+  const priorIndex = priorOrder.indexOf(tabId)
+  if (priorIndex === -1) {
+    return order.length
+  }
+  const previous = priorOrder.slice(0, priorIndex).findLast((id) => order.includes(id))
+  return previous === undefined ? 0 : order.indexOf(previous) + 1
 }

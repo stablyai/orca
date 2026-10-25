@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { is } from '@electron-toolkit/utils'
+import { isMacInstallRequested } from '../updater-mac-install'
 import { withUpdaterSpan } from '../observability/instrumentation'
 import {
   AUTO_UPDATE_CHECK_INTERVAL_MS,
@@ -45,6 +45,13 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected runBackgroundUpdateCheck(
     nudgeId: string | null = this.getPersistedPendingUpdateNudgeId()
   ): boolean {
+    if (
+      this.pendingQuitAndInstallTimer ||
+      this.quitAndInstallInProgress ||
+      isMacInstallRequested()
+    ) {
+      return false
+    }
     // Why: a pinned dev jump owns the feed until it settles; a background check would repoint it mid-flight and download the wrong build.
     if (
       this.activeUpdateSource !== 'release' ||
@@ -57,7 +64,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     if (this.backgroundCheckLaunchPending || this.currentStatus.state === 'checking') {
       return false
     }
-    if (!app.isPackaged || is.dev) {
+    if (!app.isPackaged) {
       this.sendStatus({ state: 'not-available' })
       return false
     }
@@ -69,6 +76,13 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
     const launch = (): Promise<unknown> | undefined => {
+      if (
+        this.pendingQuitAndInstallTimer ||
+        this.quitAndInstallInProgress ||
+        isMacInstallRequested()
+      ) {
+        return undefined
+      }
       if (!this.isActiveUpdateCheckAttempt(attemptId)) {
         return undefined
       }

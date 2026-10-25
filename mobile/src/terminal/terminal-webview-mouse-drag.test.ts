@@ -11,6 +11,7 @@ describe('terminal WebView external mouse drag', () => {
 
   it('sends press, per-cell motion, and release for a drag-tracking mouse drag', () => {
     mouse.boot()
+    mouse.writeLegacyMouseEncoding()
     mouse.activeTerminal().modes.mouseTrackingMode = 'drag'
 
     mouse.mouseDrag(40, 60, 160, 60)
@@ -29,6 +30,7 @@ describe('terminal WebView external mouse drag', () => {
 
   it('does not report motion or release for an x10 click-only TUI drag', () => {
     mouse.boot()
+    mouse.writeLegacyMouseEncoding()
     mouse.activeTerminal().modes.mouseTrackingMode = 'x10'
 
     mouse.mouseDrag(40, 60, 160, 60)
@@ -53,8 +55,20 @@ describe('terminal WebView external mouse drag', () => {
     expect(modes).toEqual([{ type: 'set-select-mode', enabled: true }])
   })
 
+  it('selects text instead of reporting a drag while the encoding is unproven', () => {
+    mouse.boot(`${ESC}[?1002h`)
+    mouse.activeTerminal().modes.mouseTrackingMode = 'drag'
+    mouse.clearPostedMessages()
+
+    mouse.mouseDrag(40, 60, 160, 90)
+
+    expect(mouse.terminalInputBytes()).toBe('')
+    expect(mouse.selectionSpy()).toHaveBeenCalled()
+  })
+
   it('releases a tracked drag when the button state shows the pointerup was lost', () => {
     mouse.boot()
+    mouse.writeLegacyMouseEncoding()
     mouse.activeTerminal().modes.mouseTrackingMode = 'drag'
 
     mouse.dispatchPointer('pointerdown', { x: 40, y: 60, button: 0, buttons: 1 })
@@ -74,6 +88,7 @@ describe('terminal WebView external mouse drag', () => {
 
   it('releases a tracked drag when the pointer is cancelled mid-gesture', () => {
     mouse.boot()
+    mouse.writeLegacyMouseEncoding()
     mouse.activeTerminal().modes.mouseTrackingMode = 'drag'
 
     mouse.dispatchPointer('pointerdown', { x: 40, y: 60, button: 0, buttons: 1 })

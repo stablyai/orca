@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '../types'
 import { createPreflightSlice } from './preflight'
 import { createRuntimeStatusSlice } from './runtime-status'
@@ -20,13 +21,8 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
   clearRecentRuntimeCompatibilityFailure: vi.fn(),
   clearRuntimeCompatibilityCache: vi.fn(),
-  unwrapRuntimeRpcResult: <T>(response: { result?: T }) => response.result as T,
-  getActiveRuntimeTarget: (
-    settings?: { activeRuntimeEnvironmentId?: string | null } | null
-  ): { kind: 'local' } | { kind: 'environment'; environmentId: string } => {
-    const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
-    return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
-  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test responses always carry the typed result.
+  unwrapRuntimeRpcResult: <T>(response: { result?: T }) => response.result as T
 }))
 
 globalThis.window = {
@@ -361,6 +357,58 @@ describe('createPreflightSlice', () => {
     await Promise.all([first, second])
     expect(store.getState().preflightStatusContextKey).toBe('runtime:runtime-2#0')
     expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('checks integrations on the focused worktree host, not the default host', async () => {
+    resetPreflightMocks()
+    callRuntimeRpc.mockResolvedValue(makeStatus(true))
+    preflightCheck.mockResolvedValue(makeStatus(false))
+    const store = createTestStore()
+    const remoteRepo = makeRepo({
+      id: 'repo-r',
+      path: '/srv/repo',
+      executionHostId: 'runtime:runtime-9'
+    })
+    const remoteWorktree = makeWorktree({
+      id: 'repo-r::/srv/repo',
+      repoId: 'repo-r',
+      path: '/srv/repo'
+    })
+    store.setState({
+      repos: [remoteRepo],
+      worktreesByRepo: { 'repo-r': [remoteWorktree] },
+      activeRepoId: 'repo-r',
+      activeWorktreeId: remoteWorktree.id
+    })
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'runtime-9' },
+      'preflight.check',
+      {}
+    )
+    expect(store.getState().preflightStatusContextKey).toMatch(/^runtime:runtime-9#\d+$/)
+
+    const localRepo = makeRepo({ id: 'repo-l', path: '/Users/a/repo', executionHostId: 'local' })
+    const localWorktree = makeWorktree({
+      id: 'repo-l::/Users/a/repo',
+      repoId: 'repo-l',
+      path: '/Users/a/repo'
+    })
+    store.setState({
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-9' },
+      repos: [remoteRepo, localRepo],
+      worktreesByRepo: { 'repo-r': [remoteWorktree], 'repo-l': [localWorktree] },
+      activeRepoId: 'repo-l',
+      activeWorktreeId: localWorktree.id
+    })
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenCalledTimes(1)
+    expect(store.getState().preflightStatusContextKey).toBe('host')
   })
 
   it('keeps a paired preflight result bound to the active runtime session', async () => {

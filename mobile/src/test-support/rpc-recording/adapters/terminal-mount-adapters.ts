@@ -12,9 +12,10 @@ function terminalWebViewHandle(
   dims: { cols: number; rows: number }
 ) {
   return {
-    measureFitDimensions: (frameHeight?: number) => {
-      effect('measure-fit', { frameHeight: frameHeight ?? null })
-      return Promise.resolve(dims)
+    awaitReady: () => Promise.resolve(),
+    fitDimensions: (frame: { height: number }) => {
+      effect('measure-fit', { frameHeight: frame.height })
+      return dims
     },
     reflow: (cols: number, rows: number) => effect('reflow', { cols, rows })
   }
@@ -102,21 +103,19 @@ export function terminalMountAdapters(
       const connState = 'connected'
       let notifications: ReturnType<typeof useRefit>
       const hook = hookMount(() => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the refs and callbacks the hook reads.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the terminal fake implements only the handle methods the refit calls.
         notifications = useRefit({
           activeHandleRef: { current: HANDLE },
           terminalRefs,
-          terminalFrameHeightRef: { current: 600 },
+          terminalFrameRef: { current: { width: 390, height: 600 } },
           viewportRef,
           viewportMeasuredRef,
           nativeChatCoveredRef: { current: false },
           clientRef: { current: client },
           deviceTokenRef: { current: DEVICE_TOKEN },
-          initializedHandlesRef: { current: new Set([HANDLE]) },
           connState,
           tabStripVisible: true,
           textScale: 1,
-          terminalFrameWidth: 390,
           unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
           subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle })
         } as unknown as Parameters<typeof useRefit>[0])

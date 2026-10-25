@@ -4,6 +4,21 @@ import { acquireWebviewsDragPassthrough } from '../host-guest/webview-drag-passt
 import { webviewRegistry } from '../host-guest/webview-registry'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 
+function attach(previewId: string, container: HTMLDivElement) {
+  return attachDocPreviewWebview({
+    previewId,
+    container,
+    url: 'orca-preview://grant/index.html',
+    ariaLabel: 'HTML preview',
+    onLoadStarted: vi.fn(),
+    onLoadStopped: vi.fn(),
+    onLoadFailed: vi.fn(),
+    onNavigated: vi.fn(),
+    onTitleUpdated: vi.fn(),
+    onViewportMessage: vi.fn()
+  })
+}
+
 it('restores pointer input when a drag ends after attaching a document preview', () => {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -13,17 +28,7 @@ it('restores pointer input when a drag ends after attaching a document preview',
     return Node.prototype.appendChild.call(container, node)
   })
   const release = acquireWebviewsDragPassthrough()
-  const attached = attachDocPreviewWebview({
-    previewId: 'preview-drag',
-    container,
-    url: 'orca-preview://grant/index.html',
-    ariaLabel: 'HTML preview',
-    onLoadStarted: vi.fn(),
-    onLoadStopped: vi.fn(),
-    onLoadFailed: vi.fn(),
-    onNavigated: vi.fn(),
-    onTitleUpdated: vi.fn()
-  })
+  const attached = attach('preview-drag', container)
 
   try {
     expect(webviewRegistry.get('preview-drag')).toBe(attached.webview)
@@ -37,4 +42,10 @@ it('restores pointer input when a drag ends after attaching a document preview',
     append.mockRestore()
   }
   expect(webviewRegistry.has('preview-drag')).toBe(false)
+})
+
+it('attaches an opaque guest so dark-scheme documents get a dark canvas', () => {
+  const attached = attach('preview-opaque', document.createElement('div'))
+  expect(attached.webview.getAttribute('webpreferences')).toContain('transparent=false')
+  attached.detach()
 })

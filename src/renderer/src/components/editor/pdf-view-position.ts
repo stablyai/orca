@@ -83,7 +83,7 @@ export type PdfViewPositionRecorder = {
  * race guard below would otherwise ship uncovered.
  *
  * `dispose` is terminal: afterwards `record` is inert, so a late timer can
- * never resurrect an entry `useClosedEditorTabCleanup` just swept.
+ * never overwrite newer view state after its owner has detached.
  */
 export function createPdfViewPositionRecorder({
   key,

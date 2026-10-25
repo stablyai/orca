@@ -5,7 +5,6 @@ import {
 } from '../../../shared/keybindings'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import {
-  buildPluginCommandKeybindingDefinitions,
   findPluginCommandForKeybinding,
   getEffectivePluginCommandKeybindings,
   pluginCommandKeybindingActionId,
@@ -39,16 +38,6 @@ describe('plugin command keybindings', () => {
       getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: ['Mod+Shift+T'] })
     ).toEqual(['Mod+Shift+T'])
     expect(getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: [] })).toEqual([])
-  })
-
-  it('keeps removed-plugin overrides inert and restores them on reinstall', () => {
-    const actionId = pluginCommandKeybindingActionId(command)
-    const overrides = { [actionId]: ['Mod+Shift+T'] }
-
-    expect(buildPluginCommandKeybindingDefinitions([])).toEqual([])
-    expect(getEffectivePluginCommandKeybindings(command, 'linux', overrides)).toEqual([
-      'Mod+Shift+T'
-    ])
   })
 
   it('matches effective overrides and honors explicit disablement', () => {

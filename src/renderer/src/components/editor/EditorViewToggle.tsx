@@ -66,9 +66,7 @@ const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = 
   }
 }
 
-// Why: CSV/TSV files reuse the 'rich' view mode slot but the rendered surface
-// is a read-only table, not an editor. The Pencil icon implies editability,
-// which we don't offer, so callers can override the per-mode presentation.
+// CSV/TSV uses a table icon for both editable tables and read-only previews.
 export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
   rich: {
     get label() {

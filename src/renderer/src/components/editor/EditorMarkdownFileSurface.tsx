@@ -6,6 +6,7 @@ import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { formatBytes } from '../status-bar/workspace-space-format'
 import { MarkdownPreview, RichMarkdownEditor } from './editor-lazy-views'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
+import { exceedsMarkdownRenderOverrideSizeLimit } from './markdown-rich-size-limit'
 import type { MarkdownRenderState } from './markdown-render-mode'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
@@ -57,6 +58,8 @@ export function EditorMarkdownFileSurface({
   if (renderMode === 'source' && mdViewMode === 'rich') {
     // Why: only a size fallback is recoverable — unsupported syntax would round-trip badly, so it gets no override.
     const isSizeFallback = richModeUnsupportedMessage === null
+    const canOverrideSize =
+      isSizeFallback && !exceedsMarkdownRenderOverrideSizeLimit(currentContent)
     const richFallbackMessage =
       richModeUnsupportedMessage ??
       translate(
@@ -68,7 +71,7 @@ export function EditorMarkdownFileSurface({
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center gap-3 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1">{richFallbackMessage}</span>
-          {isSizeFallback ? (
+          {canOverrideSize ? (
             <Button
               type="button"
               variant="outline"
@@ -146,7 +149,7 @@ export function EditorMarkdownFileSurface({
         {/* Why: fall back to the stable preview renderer when Tiptap can't safely own the document. */}
         <div className="min-h-0 flex-1">
           <MarkdownPreview
-            key={viewStateScopeId}
+            key={`${viewStateScopeId}:${editorViewStateKey}`}
             content={currentContent}
             filePath={activeFile.filePath}
             sourceFileId={activeFile.id}

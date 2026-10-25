@@ -11,6 +11,8 @@ import type {
   RuntimeEnsureAgentSessionRequest
 } from '../agent-session-host-authority'
 import { isTuiAgent } from '../tui-agent-config'
+import { RESTORE_SPAWN_INTENTS } from '../host-spawn-admission'
+import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 
@@ -36,14 +38,16 @@ export const WorktreeSelector = StrictNonEmptyString(
 
 export const Presentation = z.enum(['background', 'focused'])
 
+/** A caller-chosen terminal tab id; the length bound is the one the PTY spawn reservation keys on. */
+export const TerminalTabIdParam = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine(isValidTerminalTabId, 'Invalid terminal tab ID')
+
 export const Placement = z
   .object({
-    tabId: z
-      .string()
-      .min(1)
-      .max(512)
-      .refine(isValidTerminalTabId, 'Invalid terminal tab ID')
-      .optional(),
+    tabId: TerminalTabIdParam.optional(),
     leafId: z.string().min(1).max(128).optional()
   })
   .strict()
@@ -66,6 +70,9 @@ export const LaunchPreferences = z
   .strict()
 
 export const PromptDelivery = z.enum(['auto-submit', 'draft'])
+
+/** Sent only to hosts advertising `terminal.spawn-intent.v1`; presence opts into deferral. */
+export const SpawnIntentParam = z.enum(RESTORE_SPAWN_INTENTS)
 
 export const AgentArgs = z
   .string()
@@ -130,7 +137,10 @@ export const ExplicitEnsure = z
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
     presentation: Presentation.optional(),
-    placement: Placement.optional()
+    placement: Placement.optional(),
+    spawnIntent: SpawnIntentParam.optional(),
+    /** Sent only to hosts advertising `agent-session.account-env.v1`; outside replay identity. */
+    accountEnv: AgentLaunchAccountEnv.optional()
   })
   .strict()
   .superRefine((value, context) => {
@@ -177,7 +187,9 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
-    viewMode: z.enum(['terminal', 'chat']).optional()
+    viewMode: z.enum(['terminal', 'chat']).optional(),
+    /** Sent only to hosts advertising `agent-session.account-env.v1`; outside the fingerprint. */
+    accountEnv: AgentLaunchAccountEnv.optional()
   })
   .strict()
   .superRefine((value, context) => {

@@ -1,19 +1,46 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnItem,
-  AgentJournalTurnLifecycle,
-  AgentJournalTurnLifecycleState,
-  AgentJournalTurnOutcome
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnItem,
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnLifecycleState,
+  type AgentJournalTurnOutcome
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import { CODEX_USER_MESSAGE_ORDINAL } from './codex-turn-ordinals'
+import { resolveAgentJournalTurnRowWrite } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type {
   StructuredAgentSessionEventSink,
+  StructuredAgentSessionRevisionJournal,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { estimateStructuredAgentSessionItemBytes } from '../native-chat/agent-session-wire/structured-agent-session-event-sink-estimate'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
+
+/** Reserve for Codex's context report; the larger shared bound would overrun history restores. */
+const CODEX_TURN_ROW_KEPT_BYTES = 1_024
+
+function codexTurnRowReservedBytes(
+  identity: AgentJournalItemIdentity,
+  lifecycle: AgentJournalTurnItem
+): number {
+  return estimateStructuredAgentSessionItemBytes(identity, lifecycle) + CODEX_TURN_ROW_KEPT_BYTES
+}
+
+/** Preserve fields this lifecycle writer does not own, including context usage. */
+export function reviseCodexTurnRow(
+  journal: StructuredAgentSessionRevisionJournal,
+  identity: AgentJournalItemIdentity,
+  lifecycle: AgentJournalTurnItem
+): AgentJournalTurnItem {
+  const reservedBytes = codexTurnRowReservedBytes(identity, lifecycle)
+  return (
+    resolveAgentJournalTurnRowWrite(journal, { identity }, { lifecycle }, reservedBytes)?.body ??
+    lifecycle
+  )
+}
 
 export function codexTurnLifecycleIdentity(
   sessionId: string,
@@ -27,7 +54,6 @@ export function codexTurnLifecycleIdentity(
   }
 }
 
-/** Provider key of the user message that opened the turn; deterministic, so never remembered. */
 export function codexTurnUserItemId(threadId: string, turnId: string): string {
   return agentJournalItemKey({
     provider: 'codex',
@@ -43,23 +69,14 @@ export function codexTurnLifecycleBody(
   return agentJournalTurnBody(turnLifecycle)
 }
 
-/** `turn/completed` is Codex's only turn-end notification; a missing status is a clean finish. */
+/** Failed turns are completed; codexTurnOutcome carries their failure verdict. */
 export function codexTurnLifecycleState(
   status: string | null
 ): Extract<AgentJournalTurnLifecycleState, 'completed' | 'interrupted'> {
-  return status === null || status === 'completed' ? 'completed' : 'interrupted'
+  return status === 'interrupted' ? 'interrupted' : 'completed'
 }
 
-/**
- * Codex's own verdict on a turn, or null when this host cannot place one.
- *
- * `TurnStatus` in the app-server protocol is `completed | interrupted | failed |
- * inProgress` and `status` is REQUIRED on every `Turn`, on the live notification
- * and in resumed history alike. So a missing or unrecognised status is a payload
- * this host did not get, not a clean finish — unlike `codexTurnLifecycleState`,
- * which still has to name a terminal lifecycle arm for the row. `inProgress` on
- * a turn-end contradicts itself and is no verdict either.
- */
+/** Missing, unknown or inProgress statuses at turn-end cannot establish a verdict. */
 export function codexTurnOutcome(status: string | null): AgentJournalTurnOutcome | null {
   switch (status) {
     case 'completed':
@@ -68,7 +85,6 @@ export function codexTurnOutcome(status: string | null): AgentJournalTurnOutcome
       return 'failure'
     case 'interrupted':
       return 'cancellation'
-    // The fourth protocol arm, plus the two shapes that are no verdict at all.
     case 'inProgress':
     case null:
     default:
@@ -83,7 +99,7 @@ export function publishCodexTurnLifecycle(input: {
   threadId: string
   turnId: string
   state: AgentJournalTurnLifecycleState
-  /** Absent whenever Codex named no verdict, which reads as unknown. */
+  /** Absent means unknown, not success. */
   outcome?: AgentJournalTurnOutcome
   userItemId?: string
   startedAt?: number
@@ -105,22 +121,30 @@ export function publishCodexTurnLifecycle(input: {
     ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
     ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {})
   })
-  // The running row's `ts` is the host's turn-start receipt so clients can anchor a live counter.
+  // Anchor live counters to the host's turn-start receipt.
   const appendOptions = {
     lifecycle: true,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
     ...(input.state === 'running' && input.startedAt !== undefined
       ? { observedAt: input.startedAt }
       : {})
   }
-  if (input.sink.tryAppendItem) {
-    const admission = input.sink.tryAppendItem(identity, body, appendOptions)
-    if (!admission.accepted) {
-      return admission
-    }
+  let admission = ADMITTED
+  if (input.sink.tryReviseResolvedItem) {
+    admission = input.sink.tryReviseResolvedItem(
+      codexTurnRowReservedBytes(identity, body),
+      (journal) => ({ identity, body: reviseCodexTurnRow(journal, identity, body) }),
+      appendOptions
+    )
+  } else if (input.sink.tryAppendItem) {
+    admission = input.sink.tryAppendItem(identity, body, appendOptions)
   } else {
     input.sink.appendItem(identity, body, appendOptions)
   }
-  // Preserve first-work evidence when completion arrives before the journal drains.
+  if (!admission.accepted) {
+    return admission
+  }
+  // Keep queued start publications separate from completion publications.
   const publishOptions = {
     lifecycle: true,
     ...(input.state === 'running'

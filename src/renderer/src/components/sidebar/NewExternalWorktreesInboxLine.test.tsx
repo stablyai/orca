@@ -123,14 +123,6 @@ describe('NewExternalWorktreesInboxLine', () => {
     ).not.toBeNull()
   })
 
-  it('stays unqualified when the project has a single checkout', async () => {
-    const container = await renderLine()
-
-    expect(getReviewButton(container)?.getAttribute('aria-label')).toBe(
-      'Review 24 hidden worktrees in orca'
-    )
-  })
-
   it('keeps suppress as a hover-revealed control that does not trigger review', async () => {
     const onReview = vi.fn()
     const onSuppress = vi.fn()

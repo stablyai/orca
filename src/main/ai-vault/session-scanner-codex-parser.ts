@@ -34,12 +34,12 @@ import {
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
-import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
+import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
 import {
-  extractCodexSessionMetadataTitle,
-  isCodexWorkerSession
-} from './session-scanner-codex-session-meta'
+  readCodexNonUserOrigin,
+  type CodexNonUserOrigin
+} from './session-scanner-codex-non-user-origin'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
@@ -64,35 +64,14 @@ export async function parseCodexSessionFile(
   })
 }
 
-export async function parseCodexSessionContent(args: {
-  file: FileWithMtime
-  content: string | AsyncIterable<string>
-  platform?: NodeJS.Platform
-  codexHome?: string | null
-  executionHostId?: ExecutionHostId
-  executionHostPlatform?: NodeJS.Platform | null
-  readIndexedTitle?: (sessionId: string) => Promise<string | null>
-  signal?: AbortSignal
-}): Promise<AiVaultSession | null> {
-  return parseCodexSessionLines({
-    file: args.file,
-    lines: remoteSessionContentLines(args.content, args.signal),
-    platform: args.platform ?? process.platform,
-    codexHome: args.codexHome ?? null,
-    executionHostId: args.executionHostId,
-    executionHostPlatform: args.executionHostPlatform,
-    titleReader: args.readIndexedTitle
-  })
-}
-
 type CodexSessionParseState = {
   accumulator: SessionAccumulator
   previousTotals: CodexUsageSnapshot | null
-  rejectedWorkerSession: boolean
+  // Non-user origin excludes worker and internal transcripts stored alongside user sessions.
+  nonUserOrigin: CodexNonUserOrigin | null
   sawSessionMeta: boolean
   historyMode: string | null
-  // Which source set the current title; an index-file title outranks the raw
-  // first user prompt, so finalize must know whether 'meta' already won.
+  // Metadata titles outrank indexed titles, which outrank raw user prompts.
   titleSource: 'meta' | 'user' | null
 }
 
@@ -108,7 +87,7 @@ function createCodexParseState(
       messages
     }),
     previousTotals: null,
-    rejectedWorkerSession: false,
+    nonUserOrigin: null,
     sawSessionMeta: false,
     historyMode: null,
     titleSource: null
@@ -124,7 +103,7 @@ function cloneCodexParseState(state: CodexSessionParseState): CodexSessionParseS
 }
 
 function consumeCodexRecordLine(state: CodexSessionParseState, line: string): void {
-  if (state.rejectedWorkerSession) {
+  if (state.nonUserOrigin) {
     return
   }
   const record = parseJsonObject(line)
@@ -136,11 +115,10 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   updateTimeline(accumulator, extractString(record.timestamp))
 
   const payload = asRecord(record.payload)
-  if (record.type === 'session_meta' && payload) {
-    if (isCodexWorkerSession(payload)) {
-      // Why: Codex writes internal worker/sub-agent transcripts into the same
-      // history tree; AI Vault should show user-started sessions only.
-      state.rejectedWorkerSession = true
+  // Forks may copy parent metadata later; the first session_meta defines this thread.
+  if (record.type === 'session_meta' && payload && !state.sawSessionMeta) {
+    state.nonUserOrigin = readCodexNonUserOrigin(payload)
+    if (state.nonUserOrigin) {
       return
     }
     state.sawSessionMeta = true
@@ -239,14 +217,12 @@ async function finalizeCodexParseState(
     executionHostPlatform?: NodeJS.Platform | null
   }
 ): Promise<AiVaultSession | null> {
-  if (state.rejectedWorkerSession) {
+  if (state.nonUserOrigin) {
     return null
   }
   // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
-  // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
-  // per finalize (the index read is signature-cached) — a title that appears
-  // after the transcript was first parsed must still replace the raw prompt.
+  // Recheck the signature-cached index: a title can arrive after the transcript stops growing.
   if (snapshot.sawSessionMeta && snapshot.titleSource !== 'meta') {
     const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
     if (indexedTitle) {
@@ -290,7 +266,7 @@ function codexResumeStateFromParseState(
         consumeCodexRecordLine(state, line.toString('utf8'))
       }
     },
-    shouldStop: () => state.rejectedWorkerSession,
+    shouldStop: () => state.nonUserOrigin !== null,
     identity: () => accumulatorSessionIdentity(state.accumulator),
     clone: () =>
       codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
@@ -315,8 +291,7 @@ async function parseCodexSessionLines(args: {
   const state = createCodexParseState(args.file, args.messages)
   for await (const line of args.lines) {
     consumeCodexRecordLine(state, line)
-    if (state.rejectedWorkerSession) {
-      // Worker transcripts are excluded outright; stop reading early.
+    if (state.nonUserOrigin) {
       return null
     }
   }

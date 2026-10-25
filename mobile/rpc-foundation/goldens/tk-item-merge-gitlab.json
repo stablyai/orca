@@ -1,26 +1,10 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.item-merge-gitlab",
   "family": "tasks.item-merge-gitlab",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
-  "scenarioSha256": "28d8dfb15fec1ecaaa1c675c9c8c0cdc196e184a6884625c44dfe1f0f9fc8e7e",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "3ea7248d382b": {
-      "name": "actionItem",
-      "ordinal": 5,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "af959aaccf63": {
+    "3272022b3a4e": {
       "name": "gitlab.mergeMR#1",
       "ordinal": 3,
       "args": [
@@ -33,7 +17,10 @@
           "value": {
             "iid": 7,
             "method": "squash",
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           }
         },
@@ -57,7 +44,14 @@
         }
       }
     },
-    "b6a6630b4d40": {
+    "3ea7248d382b": {
+      "name": "actionItem",
+      "ordinal": 5,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "589373883844": {
       "error": "",
       "item": {
         "$rpc": "null"
@@ -69,7 +63,10 @@
             "id": "gitlab:mr:7",
             "labels": [],
             "number": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repoId": "repo-1",
             "state": "opened",
             "type": "mr"
@@ -94,10 +91,10 @@
         "provider": "gitlab"
       }
     },
-    "c6efd8599d7e": {
+    "af6d48e640c6": {
       "name": "gitlab.mergeMR#1",
       "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.mergeMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"method\":\"squash\",\"projectRef\":\"group/project\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.mergeMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"method\":\"squash\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"}}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -129,13 +126,13 @@
       {
         "id": "merge-settled",
         "observation": {
-          "sender": ["af959aaccf63"],
-          "payloads": ["c6efd8599d7e"],
+          "sender": ["3272022b3a4e"],
+          "payloads": ["af6d48e640c6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "merge-0": "eb79a9b3682a"
           },
-          "state": "b6a6630b4d40",
+          "state": "589373883844",
           "effects": ["fd2fad47bec2", "ed3a7d6bc894", "3ea7248d382b", "ecf9003e4ef1"]
         }
       }

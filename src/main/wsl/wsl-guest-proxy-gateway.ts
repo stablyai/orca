@@ -1,7 +1,7 @@
 import { isIP } from 'node:net'
 import { normalizeProxyUrl, type NetworkProxySettings } from '../../shared/network-proxy'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { runWslProcess } from './wsl-runner'
 
 /**

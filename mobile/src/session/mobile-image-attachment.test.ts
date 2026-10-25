@@ -25,6 +25,40 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 }
 
 describe('attachMobileImageToTerminal', () => {
+  it.each([null, 'unknown', 'codex'])(
+    'uploads an image as an attachment path when terminal agent is %s',
+    async (agent) => {
+      const client = clientWithResponses([
+        ok('start', { uploadId: 'upload-1' }),
+        ok('append', { receivedBase64Length: 4 }),
+        ok('commit', '/tmp/codex-shot.png'),
+        ok('send', { send: { accepted: true } })
+      ])
+
+      expect(
+        await attachMobileImageToTerminal('library', {
+          client,
+          agent,
+          terminal: 'codex-term',
+          deviceToken: null,
+          getConnectionId: async () => 'connection-ssh',
+          pickImage: async () => ({ base64: 'AAAA' })
+        })
+      ).toBe(true)
+      expect(
+        client.calls.find((call) => call.method === 'clipboard.startImageUpload')?.params
+      ).toMatchObject({ connectionId: 'connection-ssh' })
+      expect(client.calls.at(-1)).toEqual({
+        method: 'terminal.send',
+        params: {
+          terminal: 'codex-term',
+          text: '\x1b[200~/tmp/codex-shot.png\x1b[201~ ',
+          enter: false
+        }
+      })
+    }
+  )
+
   it('keeps the captured OMP format while the picker is pending', async () => {
     const client = clientWithResponses([
       {
@@ -94,7 +128,7 @@ describe('attachMobileImageToTerminal', () => {
     })
   })
 
-  it('passes the active worktree connectionId to the upload', async () => {
+  it('uploads the selected image bytes with the active worktree connectionId', async () => {
     const client = clientWithResponses([
       {
         id: 'start',
@@ -116,7 +150,7 @@ describe('attachMobileImageToTerminal', () => {
     })
 
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
-    expect(saveCall?.params).toMatchObject({ connectionId: 'conn-ssh' })
+    expect(saveCall?.params).toEqual({ contentBase64: 'BBBB', connectionId: 'conn-ssh' })
   })
 
   it('does nothing and returns false when the picker is cancelled', async () => {

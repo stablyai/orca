@@ -1,3 +1,5 @@
+import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../shared/browser-annotation-viewport-bridge'
+
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
   host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:all;cursor:crosshair;';
@@ -5,18 +7,15 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
 
   var shadow = host.attachShadow({ mode: 'closed' });
 
-  // Visual container for highlight/label — pointer-events:none so clicks go to host
   var overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483647;';
   shadow.appendChild(overlay);
 
-  // Why: the highlight uses a white border with a dark outer shadow so it
-  // reads well on both light and dark page backgrounds.
+  // A light border and dark shadow keep the outline legible on arbitrary page backgrounds.
   var highlightBox = document.createElement('div');
   highlightBox.style.cssText = 'position:fixed;border:2px solid rgba(255,255,255,0.9);border-radius:3px;pointer-events:none;transition:all 0.05s ease-out;display:none;background:rgba(255,255,255,0.08);box-shadow:0 0 0 1px rgba(0,0,0,0.3),0 2px 8px rgba(0,0,0,0.15);';
   overlay.appendChild(highlightBox);
 
-  // Hover label — dark neutral pill
   var hoverLabel = document.createElement('div');
   hoverLabel.style.cssText = 'position:fixed;padding:3px 8px;background:rgba(30,30,30,0.92);color:#e5e5e5;font:11px/1.4 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;border-radius:4px;pointer-events:none;white-space:nowrap;display:none;max-width:300px;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
   overlay.appendChild(hoverLabel);
@@ -38,7 +37,6 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     highlightBox.style.height = rect.height + 'px';
     highlightBox.style.display = 'block';
 
-    // Build label text
     var tag = el.tagName.toLowerCase();
     var role = el.getAttribute('role');
     var text = getBoundedText(el, 40);
@@ -51,7 +49,6 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     parts.push(w + 'x' + h);
     hoverLabel.textContent = parts.join('  ');
 
-    // Position label below the element, or above if near bottom
     var labelY = rect.bottom + 6;
     if (labelY + 28 > window.innerHeight) {
       labelY = rect.top - 28;
@@ -62,7 +59,7 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   }
 
   function onPointerMove(e) {
-    // Temporarily hide the overlay to hit-test the element underneath
+    // Exclude the overlay from hit testing to find the page element underneath.
     host.style.pointerEvents = 'none';
     var el = document.elementFromPoint(e.clientX, e.clientY);
     host.style.pointerEvents = 'all';
@@ -71,26 +68,78 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     }
   }
 
-  // Why: mousemove on the host (not document) because the host is the
-  // full-viewport click catcher that receives all pointer events.
   host.addEventListener('mousemove', onPointerMove);
 
-  // Store state for awaitClick/finalize/teardown access
+  var selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
+  var selectedEl = null;
+  var selectedValue = null;
+  var previousSelectedValue = null;
+  var frozenFrame = 0;
+  var frozenResizeObserver = null;
+
+  function refreshFrozenHighlight() {
+    frozenFrame = 0;
+    if (selectedEl && selectedEl.isConnected) {
+      updateHighlight(selectedEl);
+    } else {
+      highlightBox.style.display = 'none';
+      hoverLabel.style.display = 'none';
+    }
+  }
+
+  function scheduleFrozenHighlight() {
+    if (!frozenFrame) frozenFrame = requestAnimationFrame(refreshFrozenHighlight);
+  }
+
+  function stopTrackingSelection() {
+    window.removeEventListener('scroll', scheduleFrozenHighlight, true);
+    window.removeEventListener('resize', scheduleFrozenHighlight, true);
+    if (frozenResizeObserver) frozenResizeObserver.disconnect();
+    frozenResizeObserver = null;
+    if (frozenFrame) cancelAnimationFrame(frozenFrame);
+    frozenFrame = 0;
+    if (selectedEl && selectedEl.getAttribute(selectedAttribute) === selectedValue) {
+      try {
+        if (previousSelectedValue === null) selectedEl.removeAttribute(selectedAttribute);
+        else selectedEl.setAttribute(selectedAttribute, previousSelectedValue);
+      } catch(e) {}
+    }
+    selectedEl = null;
+    selectedValue = null;
+    previousSelectedValue = null;
+  }
+
   window.__orcaGrab = {
     host: host,
     extractPayload: extractPayload,
     getCurrentElement: function() { return currentEl; },
-    // Why: freeze the highlight so the selected element stays outlined while
-    // the renderer shows the copy menu. Disabling pointer-events on the host
-    // lets the cursor return to normal and prevents the crosshair from showing
-    // over the dropdown menu's area in the webview.
-    freezeHighlight: function() {
+    // Release pointer events while preserving the selection outline for the copy menu.
+    freezeHighlight: function(selectionId) {
       host.removeEventListener('mousemove', onPointerMove);
       host.style.pointerEvents = 'none';
       host.style.cursor = 'default';
+      // Capture scrolls so selection tracking includes nested scroll containers.
+      selectedEl = currentEl;
+      if (!selectedEl) return;
+      // A DOM marker crosses isolated worlds without exposing the viewport bridge's token.
+      previousSelectedValue = selectedEl.getAttribute(selectedAttribute);
+      selectedValue = selectionId;
+      selectedEl.setAttribute(selectedAttribute, selectionId);
+      highlightBox.style.transition = 'none';
+      window.addEventListener('scroll', scheduleFrozenHighlight, true);
+      window.addEventListener('resize', scheduleFrozenHighlight, true);
+      if (typeof ResizeObserver === 'function') {
+        frozenResizeObserver = new ResizeObserver(scheduleFrozenHighlight);
+        frozenResizeObserver.observe(selectedEl, { box: 'border-box' });
+        // A scrollbar appearing narrows the page without a window resize.
+        if (selectedEl !== document.documentElement) {
+          frozenResizeObserver.observe(document.documentElement);
+        }
+      }
     },
     cleanup: function() {
       host.removeEventListener('mousemove', onPointerMove);
+      stopTrackingSelection();
       try { host.remove(); } catch(e) {}
       delete window.__orcaGrab;
     }

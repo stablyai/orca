@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react'
 import { openExternalLink } from '../platform/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
-import { resolveMobileNativeChatFileSessionId } from './mobile-native-chat-eligibility'
+import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
@@ -32,7 +32,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     hostId,
     worktreeId,
     worktreeName: routeWorktreeName,
-    nativeChatSessionId: resolveMobileNativeChatFileSessionId(activeSessionTab),
+    nativeChatSessionId: resolveMobileNativeChatSessionId(activeSessionTab),
     activeHandleRef,
     terminalCwdRef,
     openBrowser: (url) => void handleCreateBrowserRef.current?.(url),

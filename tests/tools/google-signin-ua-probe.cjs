@@ -241,7 +241,7 @@ app.whenReady().then(async () => {
       return
     }
     if (isAppMode) {
-      // Mirror applyGoogleAuthUserAgent: Firefox UA on auth navs, restore the
+      // Mirror presentTabIdentityAtNavigationStart: Firefox UA on auth navs, restore the
       // cleaned session UA otherwise. This WebContents UA is what leaks onto
       // cross-host subresource requests while the auth document is on screen.
       const current = window.webContents.getUserAgent()

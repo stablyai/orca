@@ -18,14 +18,17 @@ type MockDebugger = {
   removeListener: Mock<(event: string, handler: DebuggerListener) => void>
 }
 
-// Why: annotate the return explicitly so the exported inferred type stays nameable under
-// composite declaration emit — otherwise the vi.fn() mocks leak @vitest/spy's Procedure
-// and tsgo reports TS2883.
+// Explicit mock types avoid unnameable @vitest/spy Procedure types during declaration emit (TS2883).
 export type MockWebContents = {
   webContents: {
     debugger: MockDebugger
     isDestroyed: () => boolean
+    isCrashed: () => boolean
     focus: Mock<() => void>
+    // Offscreen by default; use 'webview' for guest-direct input.
+    getType: Mock<() => string>
+    sendInputEvent: Mock<(event: Electron.KeyboardInputEvent) => void>
+    setIgnoreMenuShortcuts: Mock<(ignore: boolean) => void>
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
     reloadIgnoringCache: Mock<() => void>
@@ -51,7 +54,8 @@ export function createMockWebContents(): MockWebContents {
       debuggerAttached = false
     }),
     sendCommand: vi.fn(
-      async (_method?: string, _params?: Record<string, unknown>, _sessionId?: string) => ({})
+      async (method?: string, _params?: Record<string, unknown>, _sessionId?: string) =>
+        method === 'Page.captureScreenshot' ? { data: 'png' } : {}
     ),
     on: vi.fn((event: string, handler: DebuggerListener) => {
       const arr = listeners.get(event) ?? []
@@ -71,7 +75,11 @@ export function createMockWebContents(): MockWebContents {
     webContents: {
       debugger: debuggerObj,
       isDestroyed: () => destroyed,
+      isCrashed: () => false,
       focus: vi.fn(),
+      getType: vi.fn(() => 'window'),
+      sendInputEvent: vi.fn(),
+      setIgnoreMenuShortcuts: vi.fn(),
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),
       reloadIgnoringCache: vi.fn(),

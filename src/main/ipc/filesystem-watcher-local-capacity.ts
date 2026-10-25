@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { onWatcherChildCapacityAvailable } from './parcel-watcher-child-registry'
+import { onWatcherChildCapacityAvailable } from './filesystem/watcher-process/parcel-watcher-child-registry'
 import type { LocalWatcherCapacityRetry } from './filesystem-watcher-lifecycle-state'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
@@ -7,6 +7,7 @@ import {
   registerWatcherSenderCleanup
 } from './filesystem-watcher-listener-lifecycle'
 import { isWatcherRemovalInProgressError } from './watcher-removal-gate'
+import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 
 export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<void>
 
@@ -42,6 +43,15 @@ export function scheduleLocalCapacityRetry(
             console.error(`[filesystem-watcher] capacity retry failed for ${rootKey}:`, error)
           }
         })
+        // Writes after IPC returned but before installation require a resync.
+        const root = watcherLifecycleState.watchedRoots.get(rootKey)
+        if (root?.listeners.has(listener.id) && !listener.isDestroyed()) {
+          listener.send('fs:changed', {
+            worktreePath: root.rootPath,
+            events: [{ kind: 'overflow', absolutePath: root.rootPath }],
+            resync: true
+          } satisfies FsChangedPayload)
+        }
       })
     )
   })

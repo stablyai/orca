@@ -1,11 +1,11 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 import type {
   ConnectionLogEntry,
   ConnectionState,
   MobileConnectionDiagnosticPath
 } from '../transport/types'
-import { normalizeHostAppVersion } from '../transport/host-app-version-store'
+import { normalizeHostAppVersion } from '../transport/host-app-version'
 import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
 import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'
@@ -28,6 +28,8 @@ export function buildConnectionDiagnosticsReport(args: {
   entries: readonly ConnectionLogEntry[]
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
+  /** The page bridge version this shell speaks. */
+  bridgeProtocolVersion: number
   nowMs?: number
 }): string {
   const now = args.nowMs ?? Date.now()
@@ -43,8 +45,12 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push('Orca Mobile connection diagnostics')
   lines.push(`Generated: ${new Date(now).toISOString()}`)
   lines.push(`App: Orca Mobile ${args.appVersion} · ${args.platform}`)
-  const desktopAppVersion = normalizeHostAppVersion(args.desktopAppVersion)
-  lines.push(`Host Orca version: ${desktopAppVersion ?? 'unknown'}`)
+  lines.push(`Bridge protocol: ${args.bridgeProtocolVersion}`)
+  const desktopAppVersion =
+    args.state === 'connected' ? normalizeHostAppVersion(args.desktopAppVersion) : null
+  lines.push(
+    `Host Orca version: ${desktopAppVersion ?? (args.state === 'connected' ? 'unknown' : 'unknown (not currently connected)')}`
+  )
   lines.push(`Host: ${redactConnectionLogText(args.hostName)}`)
   lines.push(
     `Endpoint: ${formatEndpoint(args.endpoint)}${isTailscaleEndpoint(args.endpoint) ? ' (Tailscale)' : ''}`

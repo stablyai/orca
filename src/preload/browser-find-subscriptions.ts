@@ -5,12 +5,9 @@ type BrowserFindCallback = () => void
 export function createBrowserFindSubscriptions(): {
   dispatch: (target: unknown) => void
   subscribe: (source: BrowserFindSource, callback: BrowserFindCallback) => () => void
-  /** Pages currently holding subscribers. This registry outlives every pane, so a cleanup that
-   * leaves entries behind grows without bound over a session. */
   subscribedPageCount: () => number
 } {
-  // Why: page first, workspace second — a target that names only the page must still reach the one
-  // pane that owns it, while active splits sharing this renderer stay separable by workspace.
+  // Page-only targets must reach every workspace holding that page.
   const callbacksByPage = new Map<string, Map<string, Set<BrowserFindCallback>>>()
 
   return {

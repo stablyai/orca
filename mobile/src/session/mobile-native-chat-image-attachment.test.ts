@@ -53,14 +53,13 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/orca-attach.png',
-        previewUri: 'file:///photo.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///photo.jpg'
       }
     ])
     // Native chat defers the paste to submit — nothing is sent to the terminal here.
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
-    expect(saveCall?.params).toMatchObject({ connectionId: 'conn-7' })
+    expect(saveCall?.params).toEqual({ contentBase64: 'AAAA', connectionId: 'conn-7' })
   })
 
   it('uploads all three selected images in picker order', async () => {
@@ -94,18 +93,15 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/a.png',
-        previewUri: 'file:///a.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///a.jpg'
       },
       {
         path: '/tmp/b.png',
-        previewUri: 'file:///b.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///b.jpg'
       },
       {
         path: '/tmp/c.png',
-        previewUri: 'file:///c.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///c.jpg'
       }
     ])
     expect(order).toEqual([
@@ -118,7 +114,7 @@ describe('uploadMobileNativeChatImages', () => {
     ])
   })
 
-  it('returns null when the picker is cancelled and uploads nothing', async () => {
+  it('returns an empty array when the picker is cancelled and uploads nothing', async () => {
     const client = clientWithResponses([])
 
     const result = await uploadMobileNativeChatImages('library', {
@@ -154,8 +150,7 @@ describe('uploadMobileNativeChatImages', () => {
     expect(onImageUploaded).toHaveBeenCalledOnce()
     expect(onImageUploaded).toHaveBeenCalledWith({
       path: '/tmp/a.png',
-      previewUri: 'file:///a.jpg',
-      contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      previewUri: 'file:///a.jpg'
     })
   })
 
@@ -171,8 +166,7 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/x.png',
-        previewUri: 'data:image/png;base64,BBBB',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'data:image/png;base64,BBBB'
       }
     ])
   })

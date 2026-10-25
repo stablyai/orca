@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getFullComposerCreateDisabled,
   getQuickComposerCreateDisabled,
   type ComposerCreateGateInput
 } from './new-workspace-create-gates'
@@ -9,8 +8,6 @@ const readyInput: ComposerCreateGateInput = {
   repoId: 'repo-1',
   workspaceSeedName: 'feature',
   creating: false,
-  shouldWaitForSetupCheck: false,
-  shouldWaitForIssueAutomationCheck: false,
   requiresExplicitSetupChoice: false,
   hasSetupDecision: false,
   selectedRepoRequiresConnection: false,
@@ -18,32 +15,6 @@ const readyInput: ComposerCreateGateInput = {
 }
 
 describe('new workspace create gates', () => {
-  it('keeps the full composer disabled while setup and issue automation probes are pending', () => {
-    expect(
-      getFullComposerCreateDisabled({
-        ...readyInput,
-        shouldWaitForSetupCheck: true
-      })
-    ).toBe(true)
-
-    expect(
-      getFullComposerCreateDisabled({
-        ...readyInput,
-        shouldWaitForIssueAutomationCheck: true
-      })
-    ).toBe(true)
-  })
-
-  it('lets quick create submit while background setup and issue probes are pending', () => {
-    expect(
-      getQuickComposerCreateDisabled({
-        ...readyInput,
-        shouldWaitForSetupCheck: true,
-        shouldWaitForIssueAutomationCheck: true
-      })
-    ).toBe(false)
-  })
-
   it('keeps quick create clickable when no repo is selected so submit can validate inline', () => {
     expect(getQuickComposerCreateDisabled({ ...readyInput, repoId: '' })).toBe(false)
   })
@@ -66,10 +37,9 @@ describe('new workspace create gates', () => {
     )
   })
 
-  it('blocks full and quick create synchronously for unresolved source intent', () => {
+  it('blocks quick create synchronously for unresolved source intent', () => {
     const blocked = { ...readyInput, sourceIntentBlocksCreate: true }
 
-    expect(getFullComposerCreateDisabled(blocked)).toBe(true)
     expect(getQuickComposerCreateDisabled(blocked)).toBe(true)
     expect(getQuickComposerCreateDisabled({ ...blocked, sourceIntentBlocksCreate: false })).toBe(
       false

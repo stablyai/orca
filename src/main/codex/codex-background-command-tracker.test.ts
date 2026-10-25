@@ -35,23 +35,21 @@ function command(method: string, id = 'exec', threadId = 'root') {
 }
 
 describe('persistent command ownership', () => {
-  it('preflights finite metadata capacity and admits work again after process completion', () => {
-    const tracker = new CodexBackgroundCommandTracker('root', 700)
-    const first = command('item/started', 'first')
-    const second = command('item/started', 'second')
-    expect(tracker.canObserve(first)).toBe(true)
-    tracker.observe(first)
-    expect(tracker.canObserve(second)).toBe(false)
-    expect(() => tracker.observe(second)).toThrow('not admitted')
+  it('promotes only the launching turn and recognizes a start delivered after its end', () => {
+    const tracker = new CodexBackgroundCommandTracker('root')
+    tracker.observe(command('item/started'))
+    expect(tracker.tasks()).toEqual([])
+    expect(tracker.endTurn('root', 'another-turn')).toEqual([])
+    expect(tracker.endTurn('child', 'turn')).toEqual([])
+    expect(tracker.tasks()).toEqual([])
+    expect(tracker.endTurn('root', 'turn')).toHaveLength(1)
     expect(tracker.tasks()).toHaveLength(1)
-    expect(tracker.retainedMetadataBytes).toBeLessThanOrEqual(700)
-    tracker.observe(command('item/completed', 'first'))
-    expect(tracker.canObserve(second)).toBe(true)
-    tracker.observe(second)
-    expect(tracker.tasks()).toHaveLength(1)
-    expect(tracker.retainedMetadataBytes).toBeLessThanOrEqual(700)
+    expect(tracker.endTurn('root', 'turn')).toEqual([])
+    tracker.observe(command('item/started', 'late'))
+    expect(tracker.tasks()).toHaveLength(2)
     tracker.clear()
-    expect(tracker.retainedMetadataBytes).toBe(0)
+    tracker.observe(command('item/started', 'new'))
+    expect(tracker.tasks()).toEqual([])
   })
 
   it('keeps the journal running across turn completion and accepts late output and exit', () => {
@@ -73,10 +71,11 @@ describe('persistent command ownership', () => {
     deliver(command('item/started'))
     const originalKey = rows.find(({ body }) => body.kind === 'tool-call')?.key
     deliver(notification('turn/completed', { turn: { id: 'turn' } }))
+    tracker.endTurn('root', 'turn')
     expect(rows.filter(({ body }) => body.kind === 'tool-call').map(({ body }) => body)).toEqual([
       expect.objectContaining({ state: 'running' })
     ])
-    expect(tracker.tasks()).toHaveLength(1)
+    expect(tracker.threadCommands('root')).toHaveLength(1)
     deliver(
       notification('item/commandExecution/outputDelta', { itemId: 'exec', delta: 'late output' })
     )
@@ -102,6 +101,7 @@ describe('persistent command ownership', () => {
       })
     )
     expect(tracker.tasks(new Set(['child']))).toEqual([])
+    tracker.endTurn('child', 'turn')
     expect(tracker.tasks()).toEqual([
       { id: 'codex-command:thread:child:child-exec', kind: 'command', description: 'sleep 30' }
     ])
@@ -119,6 +119,7 @@ describe('persistent command ownership', () => {
       tracker.observe(command('item/started', `short-${index}`))
       tracker.observe(command('item/completed', `short-${index}`))
     }
+    tracker.endTurn('root', 'turn')
     expect(tracker.tasks()).toEqual([
       { id: 'codex-command:primary:long-lived', kind: 'command', description: 'sleep 30' }
     ])

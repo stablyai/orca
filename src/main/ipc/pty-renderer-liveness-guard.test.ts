@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../shared/terminal-input'
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { subscribeToPtyEndpointLoss } from '../runtime/terminal/pty-endpoint-loss-signal'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -48,15 +49,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
-/**
- * A destroyed WebContents under a still-alive BrowserWindow is the STA-2373 state:
- * `webContents` can die a beat before its window during close (see createMainWindow.ts
- * forceRepaint), and `webContents.send` throws `Object has been destroyed` there. An
- * uncaught throw in the main process is fatal — the app exits with every terminal in it,
- * clean exit code and no crash report — so both `pty:writeUnavailable` senders must check
- * the WebContents, not just the window. #15927 briefly reduced these to a window-only
- * check; these tests fail against that regression (STA-5373).
- */
+/** WebContents can die before its BrowserWindow; unguarded sends then throw in main and kill every terminal (STA-2373, STA-5373). */
 describe('pty:writeUnavailable renderer-liveness guard', () => {
   const {
     handlers,
@@ -89,11 +82,7 @@ describe('pty:writeUnavailable renderer-liveness guard', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:writeUnavailable', { id })
     })
 
-    // Why a chunked write: the single-chunk path is already fenced by
-    // isPtyWriteEventFromMainWindow, which rejects the event outright once the WebContents
-    // is gone. A multi-chunk write awaits a macrotask between chunks, so the sender check
-    // passes while alive and the renderer dies mid-write — the only way this sender is
-    // reached with a destroyed WebContents, and what makes its own guard load-bearing.
+    // Multi-chunk writes yield after the sender check, allowing WebContents to die before a later write fails.
     it('stays silent when the WebContents dies mid-write under a live window', async () => {
       let writeCount = 0
       installDaemonTestProvider({
@@ -125,7 +114,6 @@ describe('pty:writeUnavailable renderer-liveness guard', () => {
   })
 
   describe('the daemon-death fan-out', () => {
-    /** Registers handlers and returns the fan-out callback the provider hands the session. */
     function installProviderCapturingFanout(): (payload: { id: string }) => void {
       let fanout: ((payload: { id: string }) => void) | null = null
       installDaemonTestProvider({
@@ -162,6 +150,20 @@ describe('pty:writeUnavailable renderer-liveness guard', () => {
         'pty:writeUnavailable',
         expect.anything()
       )
+    })
+
+    it('reaches remote terminal streams without a live window', () => {
+      // Headless clients depend on streams even when no renderer can receive the event.
+      const fanout = installProviderCapturingFanout()
+      mainWindow.webContents.isDestroyed.mockReturnValue(true)
+      const streamListener = vi.fn()
+      const unsubscribe = subscribeToPtyEndpointLoss('pane-1', streamListener)
+      try {
+        fanout({ id: 'pane-1' })
+        expect(streamListener).toHaveBeenCalledOnce()
+      } finally {
+        unsubscribe()
+      }
     })
   })
 })

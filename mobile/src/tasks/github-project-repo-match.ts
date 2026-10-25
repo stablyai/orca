@@ -163,9 +163,17 @@ export function filterGitHubProjectRowsForRepos<
   slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined> = {},
   projectHost?: string
 ): Row[] {
-  return rows.filter((row) =>
-    Boolean(
-      findRepoForGitHubProjectRepository(row.content.repository, repos, slugsByRepoId, projectHost)
+  const matchedRepositories = new Map<string | null | undefined, boolean>()
+  return rows.filter((row) => {
+    const repository = row.content.repository
+    const cached = matchedRepositories.get(repository)
+    if (cached !== undefined) {
+      return cached
+    }
+    const matched = Boolean(
+      findRepoForGitHubProjectRepository(repository, repos, slugsByRepoId, projectHost)
     )
-  )
+    matchedRepositories.set(repository, matched)
+    return matched
+  })
 }

@@ -2,9 +2,7 @@ import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
-/** The session's ordered output pipeline: the recovery barrier feeding the
- *  output plane. Built together because the barrier's owner is what the
- *  plane's snapshots publish, and the plane's emit is the barrier's sink. */
+/** Couple barrier emissions and snapshot ownership so neither can lag the output plane. */
 export function createSessionOutputPipeline(opts: {
   cols: number
   rows: number

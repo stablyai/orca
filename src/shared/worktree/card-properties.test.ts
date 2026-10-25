@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  COMPACT_WORKTREE_CARD_PROPERTIES,
-  DEFAULT_WORKTREE_CARD_PROPERTIES,
-  TASK_WORKTREE_CARD_PROPERTIES,
+  getWorktreeCardDetails,
   getWorktreeCardModeProperties,
   getWorktreeCardModeUpdates,
   isDefaultedCompactWorktreeCardProperties,
@@ -10,44 +8,6 @@ import {
 } from './card-properties'
 
 describe('worktree card properties', () => {
-  it('defines Default with inline agents and without branch', () => {
-    const props = getWorktreeCardModeProperties('Default')
-
-    expect(props).toContain('inline-agents')
-    expect(props).not.toContain('branch')
-    expect(props).toContain('pr')
-    expect(props).toContain('automation')
-    expect(props).toEqual(DEFAULT_WORKTREE_CARD_PROPERTIES)
-  })
-
-  it('defines Compact as the status-only quiet preset', () => {
-    const props = getWorktreeCardModeProperties('Compact')
-
-    expect(props).toEqual(['status'])
-    expect(props).toEqual(COMPACT_WORKTREE_CARD_PROPERTIES)
-    expect(props).not.toContain('inline-agents')
-    expect(props).not.toContain('issue')
-    expect(props).not.toContain('linear-issue')
-    expect(props).not.toContain('jira-issue')
-    expect(props).not.toContain('comment')
-    expect(props).not.toContain('ports')
-    expect(props).not.toContain('branch')
-    expect(props).not.toContain('pr')
-    expect(props).not.toContain('automation')
-  })
-
-  it('keeps status enabled in both presets', () => {
-    expect(getWorktreeCardModeProperties('Default')).toEqual(expect.arrayContaining(['status']))
-    expect(getWorktreeCardModeProperties('Compact')).toEqual(expect.arrayContaining(['status']))
-  })
-
-  it('keeps provider-specific task metadata together in Default mode', () => {
-    expect(getWorktreeCardModeProperties('Default')).toEqual(
-      expect.arrayContaining(TASK_WORKTREE_CARD_PROPERTIES)
-    )
-    expect(TASK_WORKTREE_CARD_PROPERTIES).toEqual(['issue', 'linear-issue', 'jira-issue'])
-  })
-
   it('normalizes fixed and legacy properties while preserving selected properties', () => {
     expect(normalizeWorktreeCardProperties(['ci', 'branch', 'pr', 'automation', 'unread'])).toEqual(
       ['status', 'unread', 'ci', 'branch', 'pr', 'automation']
@@ -71,5 +31,48 @@ describe('worktree card properties', () => {
     expect(isDefaultedCompactWorktreeCardProperties(['status', 'unread', 'automation'])).toBe(true)
     expect(isDefaultedCompactWorktreeCardProperties(['automation', 'status'])).toBe(false)
     expect(isDefaultedCompactWorktreeCardProperties(['status', 'automation', 'pr'])).toBe(false)
+  })
+})
+
+describe('getWorktreeCardDetails', () => {
+  it('shows each chosen property, and compact cards leave out the host and agent rows', () => {
+    const chosen = ['pr', 'host', 'inline-agents'] as const
+    expect(
+      getWorktreeCardDetails(chosen, { compactWorktreeCards: false, newCardStyle: false })
+    ).toMatchObject({
+      compactCards: false,
+      repoInTitle: false,
+      metaRow: true,
+      pr: true,
+      host: true,
+      inlineAgents: true,
+      comment: false
+    })
+    expect(
+      getWorktreeCardDetails(chosen, { compactWorktreeCards: true, newCardStyle: false })
+    ).toMatchObject({
+      compactCards: true,
+      repoInTitle: true,
+      metaRow: false,
+      pr: true,
+      host: false,
+      inlineAgents: false
+    })
+  })
+
+  it('lets the new card style override the Compact layout', () => {
+    expect(
+      getWorktreeCardDetails(['host', 'inline-agents'], {
+        compactWorktreeCards: true,
+        newCardStyle: true
+      })
+    ).toMatchObject({
+      compactCards: false,
+      // The new card style keeps a meta row but uses the title chip for the repo.
+      repoInTitle: true,
+      metaRow: true,
+      host: true,
+      inlineAgents: true
+    })
   })
 })

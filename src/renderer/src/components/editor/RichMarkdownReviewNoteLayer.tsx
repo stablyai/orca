@@ -134,10 +134,8 @@ export function RichMarkdownReviewNoteLayer({
                         'This note'
                       ),
                       notes: comment.sentAt ? [] : [comment as MarkdownReviewNote],
-                      prompt: formatMarkdownReviewNotes(
-                        [comment as MarkdownReviewNote],
-                        markdownReviewContent
-                      )
+                      formatPrompt: (notes) =>
+                        formatMarkdownReviewNotes(notes, markdownReviewContent)
                     }
                   ]}
                   targetModeLabel="This note"

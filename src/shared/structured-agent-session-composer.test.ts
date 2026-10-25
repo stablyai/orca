@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
+  structuredAgentSessionGoalObjective,
+  structuredSessionSlashCommands,
   structuredSlashCommands
 } from './structured-agent-session-composer'
 
@@ -75,6 +77,41 @@ describe('structuredSlashCommands', () => {
       'model',
       'effort',
       'compact'
+    ])
+  })
+})
+
+describe('structuredSessionSlashCommands', () => {
+  const names = (commands: readonly { name: string }[]) => commands.map(({ name }) => name)
+
+  // Pi and the ACP agents report only their own commands; the host's used to vanish with the report.
+  it("keeps the host's commands first once the session reports its own", () => {
+    const reported = [
+      { name: 'llama', kind: 'command' as const },
+      { name: 'mcp', kind: 'command' as const },
+      { name: 'skill:caveman', kind: 'skill' as const }
+    ]
+    expect(names(structuredSessionSlashCommands('pi', ['clear', 'compact'], undefined))).toEqual(
+      names(structuredSlashCommands(['clear', 'compact'], 'pi'))
+    )
+    expect(names(structuredSessionSlashCommands('pi', ['clear', 'compact'], reported))).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact',
+      'llama',
+      'mcp'
+    ])
+  })
+
+  it("offers the host's row in place of an agent command of the same name", () => {
+    const offered = structuredSessionSlashCommands(
+      'opencode',
+      ['clear', 'compact'],
+      [{ name: 'compact', kind: 'command', description: 'compact the session' }]
+    )
+    expect(offered.filter(({ name }) => name === 'compact')).toEqual([
+      { name: 'compact', description: 'Compact conversation context' }
     ])
   })
 })
@@ -191,6 +228,48 @@ describe('agent-implemented commands pass through to the agent', () => {
         agent: 'codex'
       })
     ).toEqual(PASSED_THROUGH)
+  })
+
+  it('sets the goal through the host where the host can, instead of sending prose', async () => {
+    const setThreadGoalObjective = vi.fn(async () => true)
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand('/goal  ship the fix ', {
+        ...controller,
+        agent: 'codex',
+        setThreadGoalObjective
+      })
+    ).toEqual({ handled: true, accepted: true, error: null })
+    expect(setThreadGoalObjective).toHaveBeenCalledWith('ship the fix')
+
+    // A refused goal keeps the draft; the session error surface explains why.
+    setThreadGoalObjective.mockResolvedValueOnce(false)
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand('/goal ship the fix', {
+        ...controller,
+        agent: 'codex',
+        setThreadGoalObjective
+      })
+    ).toEqual({ handled: true, accepted: false, error: null })
+  })
+
+  it('reads the objective a goal-mode draft names, with or without a typed /goal', () => {
+    expect(structuredAgentSessionGoalObjective('  Ship the parser  ')).toBe('Ship the parser')
+    expect(structuredAgentSessionGoalObjective('/goal  Ship the parser ')).toBe('Ship the parser')
+    expect(structuredAgentSessionGoalObjective('/GOAL')).toBe('')
+    // Another command is prose here: goal mode sets objectives, not commands.
+    expect(structuredAgentSessionGoalObjective('/model gpt-5')).toBe('/model gpt-5')
+  })
+
+  it('asks for an objective when a goal-capable host gets a bare /goal', async () => {
+    const setThreadGoalObjective = vi.fn(async () => true)
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand('/goal', {
+        ...controller,
+        agent: 'codex',
+        setThreadGoalObjective
+      })
+    ).toEqual({ handled: true, accepted: false, error: 'Describe the goal after /goal.' })
+    expect(setThreadGoalObjective).not.toHaveBeenCalled()
   })
 
   it('keeps refusing a Codex command the model cannot carry out', async () => {

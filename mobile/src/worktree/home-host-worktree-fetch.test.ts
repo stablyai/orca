@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -50,7 +50,7 @@ function fakeSession(): FakeSession {
 }
 
 // Drains the promise chain so a retry queued in a .catch has reached the transport.
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+const flush = () => vi.advanceTimersByTimeAsync(0)
 
 function catalogResponse(count: number, active: number): RpcResponse {
   const worktrees = Array.from({ length: count }, (_, index) => ({
@@ -79,6 +79,13 @@ function infoStore() {
 const notDisposed = () => false
 
 describe('fetchHomeHostWorktreeInfo', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(1_700_000_000_000)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
   it('keeps the last proven counts when the in-flight read rejects', async () => {
     const store = infoStore()
     const host = fakeSession()
@@ -106,15 +113,13 @@ describe('fetchHomeHostWorktreeInfo', () => {
   it('stamps when the host proved the counts', async () => {
     const store = infoStore()
     const host = fakeSession()
-    const before = Date.now()
 
     const loaded = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, notDisposed)
     host.settle(catalogResponse(3, 1))
     await loaded
 
     const provenAt = store.current['host-1'].countsProvenAt
-    expect(provenAt).toBeGreaterThanOrEqual(before)
-    expect(provenAt).toBeLessThanOrEqual(Date.now())
+    expect(provenAt).toBe(1_700_000_000_000)
   })
 
   it('marks a host whose catalog never loaded as unavailable, not empty', async () => {
@@ -231,10 +236,23 @@ describe('fetchHomeHostWorktreeInfo', () => {
     const store = infoStore()
     const host = fakeSession()
 
-    const done = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, () => true)
+    let disposed = false
+    const done = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, () => disposed)
+    disposed = true
     host.settle(new Error('socket closed mid-request'))
     await done
+    expect(store.current['host-1']).toBeUndefined()
 
+    disposed = false
+    const successful = fetchHomeHostWorktreeInfo(
+      host.client,
+      'host-1',
+      store.setInfo,
+      () => disposed
+    )
+    disposed = true
+    host.settle(catalogResponse(3, 1))
+    await successful
     expect(store.current['host-1']).toBeUndefined()
   })
 })

@@ -22,8 +22,6 @@ const REMOTE_IMAGE = { type: 'image-ref' as const, url: 'https://example.test/a.
 describe('claudeDispatchMessageContent', () => {
   it('puts the text block last so a slash command still expands with an attachment', async () => {
     const content = await claudeDispatchMessageContent(
-      // The composer builds text-then-images; Claude only treats a leading `/` as a
-      // command when the LAST block is text.
       userMessage([{ type: 'text', text: '/goal ship the parser' }, REMOTE_IMAGE])
     )
 
@@ -85,7 +83,6 @@ describe('claudeDispatchMessageContent', () => {
   })
 
   it('joins several text blocks so a command is not stranded ahead of trailing prose', async () => {
-    // Appending each block would leave `thanks` trailing, and Claude reads only that block.
     const content = await claudeDispatchMessageContent(
       userMessage([
         { type: 'text', text: '/goal ship' },
@@ -135,7 +132,6 @@ describe('claudeDispatchInvokesSlashCommand', () => {
         { type: 'text', text: '/goal ship' }
       ])
     ).toBe(true)
-    // The pre-fix order: Claude recovers no prompt at all, so no command runs.
     expect(
       claudeDispatchInvokesSlashCommand([
         { type: 'text', text: '/goal ship' },
@@ -145,7 +141,6 @@ describe('claudeDispatchInvokesSlashCommand', () => {
   })
 
   it('reads the joined prompt, so a command behind leading prose is not one', async () => {
-    // Keeping the blocks separate would leave `/goal ship` trailing and falsely claim a command.
     const content = await claudeDispatchMessageContent(
       userMessage([
         { type: 'text', text: 'take a look' },

@@ -46,7 +46,7 @@ describe('selectHostWorkspaceListState', () => {
     expect(selectHostWorkspaceListState(input({ worktreesLoaded: false }))).toBe('loading')
   })
 
-  it('shows the spinner while connecting regardless of error state', () => {
+  it('shows the spinner for an empty connecting list, including a prior error', () => {
     expect(
       selectHostWorkspaceListState(input({ connState: 'reconnecting', catalogError: 'x' }))
     ).toBe('loading')

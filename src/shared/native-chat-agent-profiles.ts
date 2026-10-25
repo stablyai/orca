@@ -1,16 +1,37 @@
 import type { AgentType } from './agent-status-types'
-import { getAgentSlashCommands, type SlashCommandSuggestion } from './native-chat-slash-commands'
+import type { SkillDiscoverySource } from './skills'
+import {
+  getAgentSlashCommands,
+  type NativeChatCommandReply,
+  type SlashCommandSuggestion
+} from './native-chat-slash-commands'
 
 export type NativeChatAgentProfile = {
   skillPrefix: '$' | '/'
   /** OpenClaude reads Claude-owned roots, so this can differ from the agent. */
   skillSourceOwner: AgentType
+  /** The agent reports and invokes each skill under this prefix, e.g. Pi's `skill:<name>`. */
+  skillNamePrefix?: string
+  /** Another agent whose own skill folders, though not its plugins, this agent also reads. */
+  readsSkillFoldersOf?: AgentType
+  /** The agent's command report may list some skills among its commands (OpenCode 1.x) or none
+   *  (2.x), so a running chat keeps the skill folders' list. */
+  keepsScannedSkills?: true
   /** The agent's own harness expands a slash command out of the message text, so
    *  the chat host claims only the commands it implements itself. */
   expandsSlashCommandsFromText?: true
   /** Catalog commands the model acts on when they arrive as prose, even though
    *  the runtime has no slash parser of its own. */
   textDrivenCommands?: readonly string[]
+}
+
+// Both lines read `.claude/skills` beside their own folders, and 2.x reports no skill as a command.
+const OPENCODE_PROFILE: NativeChatAgentProfile = {
+  skillPrefix: '/',
+  skillSourceOwner: 'opencode',
+  readsSkillFoldersOf: 'claude',
+  keepsScannedSkills: true,
+  expandsSlashCommandsFromText: true
 }
 
 const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfile>> = {
@@ -31,10 +52,31 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillSourceOwner: 'claude',
     expandsSlashCommandsFromText: true
   },
+  opencode: OPENCODE_PROFILE,
+  opencode2: OPENCODE_PROFILE,
   grok: {
     skillPrefix: '/',
     skillSourceOwner: 'grok'
+  },
+  // Pi expands only `/skill:<name>`; a bare `/<name>` reaches the model as text.
+  pi: {
+    skillPrefix: '/',
+    skillSourceOwner: 'pi',
+    skillNamePrefix: 'skill:'
   }
+}
+
+/** Whether skills under `source` reach `profile`'s agent: shared roots, its own, and the skill
+ *  folders of an agent it also reads. */
+export function readsSkillSource(
+  profile: Pick<NativeChatAgentProfile, 'skillSourceOwner' | 'readsSkillFoldersOf'>,
+  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>
+): boolean {
+  return (
+    source.owner === null ||
+    source.owner === profile.skillSourceOwner ||
+    (source.owner === profile.readsSkillFoldersOf && source.sourceKind !== 'plugin')
+  )
 }
 
 export function getNativeChatAgentProfile(
@@ -48,6 +90,27 @@ export function getNativeChatAgentProfile(
  *  surface stays skills-only — this is the single place that policy lives. */
 export function getVerifiedNativeChatCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return agent === 'grok' ? [] : getAgentSlashCommands(agent)
+}
+
+/** How the chat finds the reply to a verified command over a terminal session;
+ *  null when the agent answers it in the terminal or the command is unknown. */
+export function getNativeChatCommandReply(
+  agent: AgentType,
+  commandName: string
+): NativeChatCommandReply | null {
+  return (
+    getVerifiedNativeChatCommands(agent).find((command) => command.name === commandName)?.reply ??
+    null
+  )
+}
+
+/** The verified catalog minus commands only the desktop chat answers: a surface
+ *  without the composer's answers or the transcript's reply rows (mobile) would
+ *  offer a command that appears to do nothing. */
+export function getAgentAnsweredNativeChatCommands(
+  agent: AgentType
+): readonly SlashCommandSuggestion[] {
+  return getVerifiedNativeChatCommands(agent).filter((command) => command.reply === undefined)
 }
 
 /** The mirror of the claimed set: catalog commands this agent acts on when they

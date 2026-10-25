@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ARCHIVE_HOOK_TIMEOUT_MS } from '../../../../shared/worktree/archive-hook-removal-gate'
+import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archive-hook-removal-gate'
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
   createTestStore,
   mockApi,
@@ -35,9 +36,15 @@ describe('worktree remote runtime mutations', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('removes worktrees through the active remote runtime environment', async () => {
+  it("removes worktrees through their owning server, the row's stamp", async () => {
     const store = createTestStore()
-    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-rm',
       ok: true,
@@ -66,7 +73,7 @@ describe('worktree remote runtime mutations', () => {
         runHooks: true
       },
       // Hooks run here, so the client must outlast the host's archive-hook budget (#19334).
-      timeoutMs: ARCHIVE_HOOK_TIMEOUT_MS + 60_000,
+      timeoutMs: worktreeRemovalReplyTimeoutMs(true),
       expectedEnvironmentPairingRevision: undefined,
       expectedRuntimeId: undefined
     })
@@ -81,6 +88,23 @@ describe('worktree remote runtime mutations', () => {
       backendOwnsPtyTeardown: true
     })
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
+  })
+
+  it('never removes an unstamped worktree through the focused server', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({
+      settings: { ...getDefaultSettings('/home'), activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'repo1', path: '/path', displayName: 'r', badgeColor: '#000', addedAt: 0 }],
+      worktreesByRepo: { repo1: [wt] }
+    })
+
+    await store.getState().removeWorktree({ id: wt.id, executionHostId: null }, false)
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.rm' })
+    )
+    expect(mockApi.worktrees.remove).toHaveBeenCalled()
   })
 
   it('cleans up a preserved branch through the same host qualifier the removal used', async () => {
@@ -130,7 +154,7 @@ describe('worktree remote runtime mutations', () => {
         runHooks: true
       },
       // Hooks run here, so the client must outlast the host's archive-hook budget (#19334).
-      timeoutMs: ARCHIVE_HOOK_TIMEOUT_MS + 60_000,
+      timeoutMs: worktreeRemovalReplyTimeoutMs(true),
       expectedEnvironmentPairingRevision: undefined,
       expectedRuntimeId: undefined
     })
@@ -188,6 +212,13 @@ describe('worktree remote runtime mutations', () => {
       runtimeOwnerEnvironmentId: 'owner-hub'
     })
     runtimeEnvironmentCall
+      // Why: the archive-hook check runs on the HUB too; this app cannot reach its SSH target.
+      .mockResolvedValueOnce({
+        id: 'rpc-hooks-check',
+        ok: true,
+        result: { hasHooks: false, hooks: null, mayNeedUpdate: false },
+        _meta: { runtimeId: 'runtime-owner-hub' }
+      })
       .mockResolvedValueOnce({
         id: 'rpc-rm-nested',
         ok: true,
@@ -220,6 +251,12 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'owner-hub',
+      method: 'repo.hooksCheck',
+      params: { repo: 'repo-ssh' },
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'owner-hub',
       method: 'worktree.rm',
       params: {
         worktree: `id:${wt.id}`,
@@ -229,7 +266,7 @@ describe('worktree remote runtime mutations', () => {
         runHooks: true
       },
       // Hooks run here, so the client must outlast the host's archive-hook budget (#19334).
-      timeoutMs: ARCHIVE_HOOK_TIMEOUT_MS + 60_000
+      timeoutMs: worktreeRemovalReplyTimeoutMs(true)
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([])
@@ -239,7 +276,7 @@ describe('worktree remote runtime mutations', () => {
       .forceDeletePreservedBranch(wt.id, 'feature/nested', 'saved-head')
 
     expect(forceResult).toEqual({ ok: true, deleted: true })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
       selector: 'owner-hub',
       method: 'worktree.forceDeleteBranch',
       params: {

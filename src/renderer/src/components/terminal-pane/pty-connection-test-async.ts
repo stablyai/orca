@@ -37,7 +37,7 @@ export async function drainPendingTimeouts(
   }
 }
 
-export function writeHeadlessTerminal(term: Terminal, data: string): Promise<void> {
+export function writeHeadlessTerminal(term: Terminal, data: string | Uint8Array): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))
 }
 

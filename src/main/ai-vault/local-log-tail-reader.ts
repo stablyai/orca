@@ -1,4 +1,5 @@
 import { open } from 'node:fs/promises'
+import { LOCAL_READ_OPEN_FLAGS } from '../ipc/filesystem/local-regular-file-read'
 import {
   LOCAL_LOG_TAIL_CHUNK_BYTES,
   type LocalLogTailReadResult
@@ -9,8 +10,7 @@ export function localLogFileIdentity(stats: {
   ino: number
   birthtimeMs: number
 }): string {
-  // Why: inode catches atomic replacement on POSIX while birthtime covers
-  // platforms/filesystems that report an unusable inode value.
+  // Inodes detect POSIX replacement; birthtime covers filesystems with unusable inode values.
   return `${stats.dev}:${stats.ino}:${stats.birthtimeMs}`
 }
 
@@ -23,7 +23,7 @@ export async function readLocalLogTailRange(
     throw new Error('Invalid local log tail byte offset')
   }
 
-  const handle = await open(filePath, 'r')
+  const handle = await open(filePath, LOCAL_READ_OPEN_FLAGS)
   try {
     const initialStats = await handle.stat()
     if (!initialStats.isFile()) {
@@ -51,8 +51,7 @@ export async function readLocalLogTailRange(
     const nextByteOffset = fromByteOffset + bytesRead
     const finalStats = await handle.stat()
 
-    // Why: truncation can race the ranged read on the same open handle. Do not
-    // let an offset beyond the new EOF become the baseline for later appends.
+    // Concurrent truncation must not leave the next append offset beyond EOF.
     if (nextByteOffset > finalStats.size) {
       return {
         contentBase64: '',

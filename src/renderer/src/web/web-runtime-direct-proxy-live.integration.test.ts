@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -18,7 +19,7 @@ function requireResult<T>(response: RuntimeRpcResponse<unknown>): T {
 }
 
 async function openClient(offer: WebPairingOffer): Promise<WebRuntimeClient> {
-  const client = new WebRuntimeClient(offer)
+  const client = new WebRuntimeClient(pairedRuntimeConnectionFromOffer(offer))
   requireResult(await client.call('status.get', undefined, { timeoutMs: 15_000 }))
   return client
 }

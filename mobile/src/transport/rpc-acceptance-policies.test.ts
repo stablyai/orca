@@ -34,7 +34,7 @@ const resultPartitions: [string, unknown][] = [
 
 describe('requireRpcResultOrThrowCodedError', () => {
   it.each(resultPartitions)('returns the %s untouched', (_label, result) => {
-    expect(requireRpcResultOrThrowCodedError(success(result))).toEqual(result)
+    expect(requireRpcResultOrThrowCodedError(success(result))).toBe(result)
   })
 
   it('returns an absent result field as undefined', () => {

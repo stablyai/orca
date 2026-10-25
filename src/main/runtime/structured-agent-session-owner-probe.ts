@@ -4,14 +4,13 @@ import {
   probeAgentSessionProcessIdentities,
   probeAgentSessionProcessIdentity,
   probeAgentSessionReservation
-} from './agent-session-process-identity-probe'
-import { findAgentSessionSpawnTokenProcesses } from './agent-session-spawn-token-process-scan'
-import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-readback'
+} from './agent-session/ownership/agent-session-process-identity-probe'
+import { findAgentSessionSpawnTokenProcesses } from './agent-session/ownership/agent-session-spawn-token-process-scan'
+import { readEchoedAgentSessionSpawnToken } from './agent-session/ownership/agent-session-spawn-token-readback'
 
 /**
  * The lease's only source of truth about a previous owner. Everything it cannot
- * answer PID-reuse-safely reports `indeterminate`. An exact owner stays fenced in `recovering`;
- * an ownerless, unattributable reservation enters `manual-recovery`.
+ * answer PID-reuse-safely reports `indeterminate`, and recovery resolution concludes from there.
  */
 export function createStructuredAgentSessionOwnerProbe(
   hostId: string,
@@ -21,9 +20,6 @@ export function createStructuredAgentSessionOwnerProbe(
   return async (record) => {
     const owner = record.lease.ownerProcess
     if (!owner) {
-      if (record.lease.processlessAt !== undefined && record.lease.processlessAt !== null) {
-        return { outcome: 'reservation-unused' }
-      }
       const spawnToken = record.lease.reservedSpawnToken
       if (spawnToken === null) {
         if (record.lease.claimStatus === 'reserved') {

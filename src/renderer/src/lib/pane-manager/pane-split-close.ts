@@ -21,6 +21,7 @@ import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
+import { findClosedPaneSuccessor } from './pane-close-focus-successor'
 import { releaseTerminalScrollIntentKey } from './terminal-scroll-intent-key-store'
 
 type MovedPaneSplitState = {
@@ -34,6 +35,8 @@ type SplitManagedPaneArgs = {
   direction: 'vertical' | 'horizontal'
   opts?: PaneSplitOptions
   sourceContainer?: HTMLElement
+  /** Before publishing, so the pane-created tree already has the final order. */
+  newPaneFirst?: boolean
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
   styleOptions: PaneStyleOptions
@@ -65,9 +68,12 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
 
   const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
 
-  wrapInSplit(existingContainer, newPane.container, isVertical, divider, args.opts)
+  wrapInSplit(existingContainer, newPane.container, isVertical, divider, {
+    ratio: args.opts?.ratio,
+    newPaneFirst: args.newPaneFirst
+  })
   args.setActivePaneId(newPane.id)
-  openSplitPane(args, newPane, args.opts?.cwd)
+  openSplitPane(args, newPane, existing.leafId, args.opts?.cwd)
 
   for (const movedPaneState of movedPaneStates) {
     scheduleSplitScrollRestore(
@@ -139,6 +145,7 @@ function findManagedPanesInContainer(
 function openSplitPane(
   args: SplitManagedPaneArgs,
   newPane: ManagedPaneInternal,
+  parentLeafId: string,
   cwd?: string
 ): void {
   openTerminal(newPane, {
@@ -151,12 +158,17 @@ function openSplitPane(
   updateMultiPaneState(args.getDragCallbacks())
   // Why: forward one-shot spawn/adoption hints so the new pane inherits the
   // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
-  const spawnHints = {
+  args.publishPaneCreated(newPane, {
     ...(cwd ? { cwd } : {}),
     ...(args.opts?.cwdPromise ? { cwdPromise: args.opts.cwdPromise } : {}),
-    ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {})
-  }
-  args.publishPaneCreated(newPane, Object.keys(spawnHints).length > 0 ? spawnHints : undefined)
+    ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {}),
+    placement: {
+      kind: 'split',
+      parentLeafId,
+      direction: args.direction,
+      ...(args.opts?.ratio !== undefined ? { ratio: args.opts.ratio } : {})
+    }
+  })
   args.managerOptions.onLayoutChanged?.()
 }
 
@@ -181,6 +193,8 @@ function teardownManagedPane(
     return
   }
   const closedLeafId = pane.leafId
+  const successor =
+    args.activePaneId === args.paneId ? findClosedPaneSuccessor(pane.container, args.panes) : null
   args.releasePaneIdentity(args.paneId)
   removePaneContainer(args, pane)
   if (reason === 'close') {
@@ -189,7 +203,7 @@ function teardownManagedPane(
     // must still be able to restore it.
     releaseTerminalScrollIntentKey(closedLeafId)
   }
-  const nextActivePaneId = activateReplacementPane(args)
+  const nextActivePaneId = activateReplacementPane(args, successor)
   applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
   for (const p of args.panes.values()) {
     safeFit(p)
@@ -245,11 +259,15 @@ function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneIntern
   }
 }
 
-function activateReplacementPane(args: CloseManagedPaneArgs): number | null {
+function activateReplacementPane(
+  args: CloseManagedPaneArgs,
+  successor: ManagedPaneInternal | null
+): number | null {
   if (args.activePaneId !== args.paneId) {
     return args.activePaneId
   }
-  const next = args.panes.values().next().value as ManagedPaneInternal | undefined
+  const next =
+    successor && args.panes.has(successor.id) ? successor : args.panes.values().next().value
   const nextActivePaneId = next?.id ?? null
   args.setActivePaneId(nextActivePaneId)
   next?.terminal.focus()

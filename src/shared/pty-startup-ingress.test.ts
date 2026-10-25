@@ -8,6 +8,9 @@ import {
 const COLORS = { foreground: '#2e3434', background: '#ffffff' }
 const FOREGROUND_REPLY = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
 const BACKGROUND_REPLY = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+// Orca's default dark theme, which answers until a viewer reports colours.
+const DEFAULT_FOREGROUND_REPLY = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
+const DEFAULT_BACKGROUND_REPLY = '\x1b]11;rgb:2828/2c2c/3434\x1b\\'
 // The two echo shapes a cooked POSIX tty produces for a written reply: ECHOCTL
 // caret forms, and readline eating `ESC ]` / ST while self-inserting the rest.
 const POSIX_COOKED_ECHOES = [
@@ -152,7 +155,8 @@ describe('PtyStartupIngress', () => {
     ])
   })
 
-  it('consumes a native ConPTY color query before any downstream responder at every split', () => {
+  it('answers a ConPTY query with no known colours from the default theme at every split', () => {
+    // #22332: this used to be swallowed with no reply, so Codex drew no message shading.
     const query = '\x1b]11;?\x1b\\'
     for (let split = 0; split <= query.length; split += 1) {
       const writes: string[] = []
@@ -167,7 +171,7 @@ describe('PtyStartupIngress', () => {
       ingress.accept(query.slice(split))
       ingress.drainAndClose()
 
-      expect(writes, `split ${split}`).toEqual([])
+      expect(writes, `split ${split}`).toEqual([DEFAULT_BACKGROUND_REPLY])
       expect(visible(emissions), `split ${split}`).toBe('')
       expect(emissions, `split ${split}`).toEqual([
         { data: '', rawStartSeq: 0, rawEndSeq: query.length, transformed: true }
@@ -198,7 +202,8 @@ describe('PtyStartupIngress', () => {
     for (const barrier of ['close', 'expire', 'snapshot'] as const) {
       const emissions: PtyIngressEmission[] = []
       const ingress = new PtyStartupIngress({
-        ...(barrier === 'expire' ? { intent: { colors: COLORS, deadlineMs: 5_000 } } : {}),
+        // Why a short window: the torn query's own 500 ms hold must not be what ends it here.
+        ...(barrier === 'expire' ? { intent: { colors: COLORS, deadlineMs: 100 } } : {}),
         ownerBackend: 'windows-conpty',
         write: () => {},
         onEmission: (emission) => emissions.push(emission)
@@ -207,7 +212,7 @@ describe('PtyStartupIngress', () => {
       if (barrier === 'close') {
         ingress.closeQueryAuthority()
       } else if (barrier === 'expire') {
-        vi.advanceTimersByTime(5_000)
+        vi.advanceTimersByTime(100)
       } else {
         ingress.snapshotBarrier()
       }
@@ -234,49 +239,80 @@ describe('PtyStartupIngress', () => {
     expect(visible(malformedEmissions)).toBe('\x1b]10;not-a-query\x07')
   })
 
-  it('releases a partial query immediately when source authority closes', () => {
+  it('keeps a POSIX query torn across the authority close and answers it', () => {
+    const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
-      write: () => {},
+      write: (data) => writes.push(data),
       onEmission: (emission) => emissions.push(emission)
     })
 
     ingress.accept('\x1b]10;')
-    expect(emissions).toEqual([])
     ingress.closeQueryAuthority()
+    ingress.snapshotBarrier()
+    expect(emissions).toEqual([])
+    ingress.accept('?\x07')
 
-    expect(visible(emissions)).toBe('\x1b]10;')
+    expect(writes).toEqual([FOREGROUND_REPLY])
+    expect(visible(emissions)).toBe('')
   })
 
-  it('keeps POSIX, WSL, malformed, and unrelated output unchanged', () => {
+  it('answers a query long after startup on every backend and leaves other output alone', () => {
+    // #22332: a Codex typed into a shell tab older than the old 5 s window.
     const input = 'typed\x1b[A\x1b]12;?\x1b\\\x1b]10;not-a-query\x07'
     vi.useFakeTimers()
-    for (const ownerBackend of ['posix-pty', 'windows-wsl'] as const) {
+    for (const ownerBackend of ['posix-pty', 'windows-wsl', 'windows-conpty'] as const) {
+      const writes: string[] = []
       const emissions: PtyIngressEmission[] = []
       const ingress = new PtyStartupIngress({
+        intent: { colors: COLORS, deadlineMs: 5_000 },
         ownerBackend,
-        write: () => {},
+        write: (data) => writes.push(data),
         onEmission: (emission) => emissions.push(emission)
       })
-      ingress.accept(`\x1b]10;?\x07${input}`)
-      expect(visible(emissions)).toBe(`\x1b]10;?\x07${input}`)
-    }
+      ingress.closeQueryAuthority()
+      vi.advanceTimersByTime(60_000)
+      ingress.accept(`${input}\x1b]10;?\x07`)
 
+      expect(writes, ownerBackend).toEqual([FOREGROUND_REPLY])
+      expect(visible(emissions), ownerBackend).toBe(input)
+    }
+  })
+
+  it('answers from host colours over spawn colours, reading them per query', () => {
+    let hostColors: { foreground: string; background: string } | null = null
+    const writes: string[] = []
+    const ingress = new PtyStartupIngress({
+      intent: { colors: COLORS, deadlineMs: 5_000 },
+      resolveHostColors: () => hostColors,
+      write: (data) => writes.push(data),
+      onEmission: () => {}
+    })
+
+    ingress.accept('\x1b]11;?\x07')
+    hostColors = { foreground: '#000000', background: '#123456' }
+    ingress.accept('\x1b]11;?\x07')
+    hostColors = { foreground: 'not-a-color', background: '#123456' }
+    ingress.accept('\x1b]11;?\x07')
+
+    expect(writes).toEqual([BACKGROUND_REPLY, '\x1b]11;rgb:1212/3434/5656\x1b\\', BACKGROUND_REPLY])
+  })
+
+  it('answers a PTY nobody reported colours for from the default theme', () => {
+    // #22500: a headless host starts the agent before any viewer attaches.
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
-    const nativeIngress = new PtyStartupIngress({
-      intent: { colors: COLORS, deadlineMs: 5_000 },
-      ownerBackend: 'windows-conpty',
+    const ingress = new PtyStartupIngress({
       write: (data) => writes.push(data),
       onEmission: (emission) => emissions.push(emission)
     })
-    vi.advanceTimersByTime(5_001)
-    nativeIngress.accept(`${input}\x1b]10;?\x07`)
 
-    expect(writes).toEqual([])
-    expect(visible(emissions)).toBe(input)
+    ingress.accept('before\x1b]10;?;?\x1b\\after')
+
+    expect(writes).toEqual([DEFAULT_FOREGROUND_REPLY, DEFAULT_BACKGROUND_REPLY])
+    expect(visible(emissions)).toBe('beforeafter')
   })
 
   it('swallows a cooked POSIX echo of its own reply without re-sending it', () => {
@@ -515,37 +551,7 @@ describe('PtyStartupIngress', () => {
     expect(visible(emissions)).toBe(`${printed}${collision}`)
   })
 
-  it('bounds echo suppression to a few hundred bytes past the startup deadline', () => {
-    // Why: reset() keeps a raced reply recognizable, but an unbounded projection would
-    // keep deleting matching spans out of ordinary output for the rest of the session.
-    vi.useFakeTimers()
-    const writes: string[] = []
-    const emissions: PtyIngressEmission[] = []
-    const ingress = new PtyStartupIngress({
-      intent: { colors: COLORS, deadlineMs: 5_000 },
-      ownerBackend: 'posix-pty',
-      write: (data) => writes.push(data),
-      onEmission: (emission) => emissions.push(emission)
-    })
-
-    vi.advanceTimersByTime(4_999)
-    ingress.accept('\x1b]10;?\x07')
-    vi.advanceTimersByTime(2)
-    expect(writes).toEqual([FOREGROUND_REPLY])
-
-    const printed = 'a\r\n'.repeat(200)
-    ingress.accept(printed)
-    const collision = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
-    ingress.accept(collision)
-    ingress.drainAndClose()
-
-    expect(visible(emissions)).toBe(`${printed}${collision}`)
-  })
-
-  it('drops its answered claim when a deferred write fails so a retry falls through', () => {
-    // Why: the deferred write already reported success, so the first query was consumed
-    // on its behalf. Without the rollback the slot stays claimed forever and no
-    // downstream color authority ever sees the query either.
+  it('answers a retry after a failed write', () => {
     vi.useFakeTimers()
     let failWrites = true
     const emissions: PtyIngressEmission[] = []
@@ -742,10 +748,7 @@ describe('PtyStartupIngress', () => {
     expect(writes).toEqual([FOREGROUND_REPLY])
   })
 
-  it('keeps a landed reply claimed when the sibling query write fails', () => {
-    // Why: ConPTY writes inside the query's own turn, so one span can land slot 10 and
-    // lose slot 11. Forgetting every claim would answer 10 a second time, and a
-    // duplicate reply corrupts a parser already mid-read.
+  it('answers every query exactly once, including a repeat after a failed sibling write', () => {
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
     const ingress = new PtyStartupIngress({
@@ -763,7 +766,8 @@ describe('PtyStartupIngress', () => {
     ingress.accept('\x1b]10;?\x07\x1b]11;?\x07')
     ingress.accept('\x1b]10;?\x07\x1b]11;?\x07')
     ingress.drainAndClose()
-    expect(writes).toEqual([FOREGROUND_REPLY])
+    expect(writes).toEqual([FOREGROUND_REPLY, FOREGROUND_REPLY])
+    expect(visible(emissions)).toBe('')
   })
 
   it('ignores callbacks after teardown without recreating the raw sequence domain', () => {

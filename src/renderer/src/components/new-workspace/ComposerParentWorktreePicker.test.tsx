@@ -88,56 +88,6 @@ vi.mock('@/components/ui/popover', async () => {
   }
 })
 
-vi.mock('@/components/ui/command', () => ({
-  Command: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <div className={className}>{children}</div>
-  ),
-  CommandInput: ({
-    ref,
-    value,
-    placeholder,
-    onValueChange,
-    onKeyDown,
-    onKeyUp,
-    onCompositionStart,
-    onCompositionEnd
-  }: {
-    ref?: React.Ref<HTMLInputElement>
-    value?: string
-    placeholder?: string
-    onValueChange?: (value: string) => void
-    onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
-    onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>
-    onCompositionStart?: React.CompositionEventHandler<HTMLInputElement>
-    onCompositionEnd?: React.CompositionEventHandler<HTMLInputElement>
-  }) => (
-    <input
-      ref={ref}
-      data-slot="command-input"
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onValueChange?.(event.target.value)}
-      onKeyDown={onKeyDown}
-      onKeyUp={onKeyUp}
-      onCompositionStart={onCompositionStart}
-      onCompositionEnd={onCompositionEnd}
-    />
-  ),
-  CommandList: ({
-    ref,
-    children,
-    className
-  }: {
-    ref?: React.Ref<HTMLDivElement>
-    children: React.ReactNode
-    className?: string
-  }) => (
-    <div ref={ref} className={className}>
-      {children}
-    </div>
-  )
-}))
-
 // The virtual window needs real layout the test DOM has none of; render every row.
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
@@ -305,7 +255,7 @@ describe('ComposerParentWorktreePicker', () => {
     expect(rows()).toHaveLength(0)
   })
 
-  it('excludes archived worktrees and worktrees from another repo', () => {
+  it('offers parents from another repo while excluding archived worktrees', () => {
     seed(
       [
         makeWorktree({ id: 'alpha', displayName: 'Alpha' }),
@@ -320,10 +270,10 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Alpha')
     expect(candidateLabels().join(' ')).not.toContain('Archived')
-    expect(candidateLabels().join(' ')).not.toContain('Other repo')
+    expect(candidateLabels().join(' ')).toContain('Other repo')
   })
 
-  it('excludes candidates on another execution host or project', () => {
+  it('offers another project on the same host and excludes another host', () => {
     seed([
       makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local', projectId: 'proj1' }),
       makeWorktree({
@@ -353,7 +303,7 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Same host')
     expect(candidateLabels().join(' ')).not.toContain('Other host')
-    expect(candidateLabels().join(' ')).not.toContain('Other project')
+    expect(candidateLabels().join(' ')).toContain('Other project')
   })
 
   // A worktree with no recorded hostId inherits its repo's host, which is the child's host too.

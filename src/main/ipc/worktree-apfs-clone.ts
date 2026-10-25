@@ -11,7 +11,7 @@ type ExecFileAsync = (
 ) => Promise<{ stdout: string; stderr: string }>
 
 const execFileAsync = promisify(execFile) as ExecFileAsync
-// Why: bound the df/diskutil volume probes so a wedged mount can't stall worktree creation.
+// Bound volume probes so hung mounts cannot stall worktree creation.
 const APFS_FILESYSTEM_PROBE_TIMEOUT_MS = 5_000
 
 export type ApfsCloneDeps = {
@@ -29,10 +29,7 @@ type DarwinFilesystemInfo = {
   filesystemName: string
 }
 
-/** Per-materialization cache keyed by `stat().dev`. Copying N `.worktreeinclude`
- *  paths would otherwise re-run df+diskutil per path (4 subprocesses each) even
- *  though source and worktree almost always share one volume; caching collapses
- *  that to one probe per distinct volume. */
+/** Share volume probes by device within one materialization instead of spawning df/diskutil per copied path. */
 export type DarwinFilesystemCache = Map<number, Promise<DarwinFilesystemInfo>>
 
 export class ApfsCloneUnavailableError extends Error {
@@ -88,8 +85,7 @@ async function getCachedDarwinFilesystemInfo(
   if (cached) {
     return cached
   }
-  // Why: cache the pending (or rejected) probe so every path on this volume
-  // reuses one df+diskutil pair instead of respawning them per copy.
+  // Cache pending and rejected probes so every path on a volume shares the same process pair.
   const pending = getDarwinFilesystemInfo(path, deps)
   cache.set(deviceId, pending)
   return pending
@@ -125,11 +121,7 @@ async function assertSameApfsVolume(
   }
 }
 
-/** Whether copying `source` into `targetDirectory` would take the clonefile
- *  path. Pure probe: it reuses the cached df+diskutil pair the clone itself
- *  runs and writes nothing, so a caller can size the work before any bytes
- *  land. A failed probe answers "no", matching the clone's own fallback to a
- *  real copy. */
+/** Probe without writing, sharing clone volume detection; failure selects the ordinary-copy fallback. */
 export async function canCloneWithApfs(
   source: string,
   targetDirectory: string,
@@ -152,8 +144,7 @@ async function cloneFileWithApfs(
   try {
     await deps.execFileAsync('/bin/cp', ['-c', source, tempTarget])
     try {
-      // Why: link(2) is an atomic no-clobber publish for files; rename(2) can
-      // overwrite a target that appeared after the earlier existence check.
+      // link atomically refuses an existing target; rename could clobber one created after preflight.
       await link(tempTarget, target)
     } catch (error) {
       if (isAlreadyExistsError(error)) {
@@ -173,8 +164,7 @@ async function cloneDirectoryWithApfs(
 ): Promise<void> {
   const sourceMode = (await stat(source)).mode & 0o777
   try {
-    // Why: reserve the final directory path before copying into it so a raced
-    // user-created directory cannot be replaced by a final rename.
+    // Reserve the final directory before copying so a raced user directory cannot be replaced.
     await mkdir(target)
   } catch (error) {
     if (isAlreadyExistsError(error)) {
@@ -184,15 +174,11 @@ async function cloneDirectoryWithApfs(
   }
 
   try {
-    // Why: the top-level directory is reserved before cp runs, so use `-n`
-    // to keep a raced nested file from being overwritten during the copy.
-    // Why: copy `source/.` into the reserved target so contents land at the
-    // requested path even when the source is a symlinked directory.
+    // Copy source/. into the reserved target; -n protects raced nested files, including symlinked source directories.
     await deps.execFileAsync('/bin/cp', ['-n', '-c', '-R', `${source}${sep}.`, target])
     await chmod(target, sourceMode)
   } catch (error) {
-    // Why: remove only the empty reservation. If cp wrote anything, or another
-    // process raced files into the directory, leave it for Git/user review.
+    // Remove only an empty reservation; preserve copied or raced contents for review.
     await rmdir(target).catch(() => undefined)
     throw error
   }
@@ -207,9 +193,7 @@ export async function cloneWorktreePathWithApfs(
 ): Promise<void> {
   await mkdir(dirname(target), { recursive: true })
   await assertSameApfsVolume(source, target, deps, filesystemCache)
-  // Why: Node's COPYFILE_FICLONE_FORCE returns ENOSYS on macOS in our runtime,
-  // while Darwin's cp exposes APFS clonefile via -c. Preflight the volume so
-  // cp's non-APFS full-copy fallback cannot surprise users.
+  // Node clone-force returns ENOSYS here; preflight APFS before cp -c to avoid a surprise full copy.
   await (sourceIsDirectory
     ? cloneDirectoryWithApfs(source, target, deps)
     : cloneFileWithApfs(source, target, deps))

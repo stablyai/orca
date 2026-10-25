@@ -1,7 +1,7 @@
 'use strict'
 
 /**
- * Prove the COMPILED addon understands `CREATIONTIME`, not just the patched JS.
+ * Prove the compiled addon supports table and synchronous process creation-time reads.
  *
  * Unlike node-pty, this package ships a prebuilt `.node` at the same
  * `build/Release/` path node-gyp writes to, so neither a load nor a path check
@@ -23,17 +23,19 @@ function assertWindowsProcessTreeCreationTime({ module, platform = process.platf
     return
   }
   const supported = module?.supportedProcessDataFlags
-  if (typeof supported === 'number' && (supported & CREATION_TIME_FLAG) !== 0) {
+  if (
+    typeof supported === 'number' &&
+    (supported & CREATION_TIME_FLAG) !== 0 &&
+    typeof module?.getProcessCreationTime === 'function'
+  ) {
     return
   }
   throw new Error(
     [
-      '@vscode/windows-process-tree does not report CreationTime support',
+      '@vscode/windows-process-tree does not report CreationTime support with a synchronous identity getter',
       `(supportedProcessDataFlags=${String(supported)}).`,
-      'That is the tarball prebuilt, not a build of the patched source, so every',
-      'process row comes back without creationTimeMs: Windows descendant exit',
-      'verification cannot identify a PID and structured Claude/Codex chat runs',
-      'with an unprovable child-tree reaper.',
+      'This is an unpatched or older binary, so process identities or synchronous',
+      'profile-owner recovery are unavailable.',
       'Rebuild it from source so config/patches/@vscode__windows-process-tree@0.8.0.patch applies.'
     ].join(' ')
   )

@@ -1,4 +1,4 @@
-import type { GitHubAssignableUser } from '../../shared/github/pull-request-types'
+import type { GitHubAssignableUser, GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { LocalGitExecOptions } from './gh-utils'
 import {
@@ -11,19 +11,21 @@ export async function listLabels(
   repoPath: string,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  repositoryOverride?: GitHubOwnerRepo | null
 ): Promise<string[]> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
-    async () =>
-      (
-        await resolveIssueGitHubApiRepositorySource(
-          repoPath,
-          preference,
-          connectionId,
-          localGitOptions
-        )
-      ).source,
+    repositoryOverride ??
+      (async () =>
+        (
+          await resolveIssueGitHubApiRepositorySource(
+            repoPath,
+            preference,
+            connectionId,
+            localGitOptions
+          )
+        ).source),
     connectionId,
     localGitOptions
   )
@@ -57,19 +59,21 @@ export async function listAssignableUsers(
   repoPath: string,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  repositoryOverride?: GitHubOwnerRepo | null
 ): Promise<GitHubAssignableUser[]> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
-    async () =>
-      (
-        await resolveIssueGitHubApiRepositorySource(
-          repoPath,
-          preference,
-          connectionId,
-          localGitOptions
-        )
-      ).source,
+    repositoryOverride ??
+      (async () =>
+        (
+          await resolveIssueGitHubApiRepositorySource(
+            repoPath,
+            preference,
+            connectionId,
+            localGitOptions
+          )
+        ).source),
     connectionId,
     localGitOptions
   )
@@ -78,11 +82,7 @@ export async function listAssignableUsers(
   }
   await acquire()
   try {
-    // Why: paginate through all assignable users — GraphQL's assignableUsers
-    // maxes out at 100 per page and large orgs/repos silently lose assignees
-    // beyond the first page. REST /assignees with --paginate walks every page;
-    // --jq collapses per-page arrays into NDJSON so we don't have to stitch
-    // JSON arrays that gh concatenates back-to-back.
+    // REST pagination covers all assignees; jq emits NDJSON instead of concatenated page arrays.
     const { stdout } = await ghExecFileAsync(
       [
         'api',

@@ -49,6 +49,7 @@ export {
 } from './telemetry-app-event-schemas'
 export {
   hookInstallAgentSchema,
+  profileStateAuthoritySelectedSchema,
   runtimeRpcStartErrorClassSchema
 } from './telemetry-daemon-event-schemas'
 export type { HookInstallAgent, RuntimeRpcStartErrorClass } from './telemetry-daemon-event-schemas'

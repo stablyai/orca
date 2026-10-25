@@ -193,9 +193,7 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     const perAccountSkillsPath = join(perAccountHome, 'skills')
     expect(readFileSync(join(perAccountSkillsPath, 'review', 'SKILL.md'), 'utf-8')).toBe('skill\n')
     expectSymbolicLinkTargetIfLinked(perAccountSkillsPath, join(getSystemCodexHomePath(), 'skills'))
-    // The shared runtime mirror is untouched by an explicit per-account sync.
     expect(existsSync(join(getRuntimeCodexHomePath(), 'skills'))).toBe(false)
-    // ~/.codex gains nothing — resources are only read from it, never written back.
     expect(existsSync(join(getSystemCodexHomePath(), 'codex-accounts'))).toBe(false)
   })
 
@@ -306,15 +304,12 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
 
     const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
     expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# WSL instructions\n')
-    // Why: WSL homes are \\wsl.localhost UNC paths, so a host-side symlink would
-    // store a target the distro cannot resolve; global instructions must be a
-    // real copy even when symlinks are available.
+    // WSL cannot resolve host-side symlink targets, even when the host permits symlinks.
     expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
     expect(existsSync(join(managedHomePath, 'skills'))).toBe(false)
   })
 
-  // Why: creating file symlinks on Windows requires developer mode; the
-  // runtime-home integration test still enforces real-copy behavior there.
+  // Windows file symlinks require developer mode; the integration test still checks real copies.
   it.skipIf(process.platform === 'win32')(
     'materializes symlinked global instructions as a real file for WSL',
     () => {

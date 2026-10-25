@@ -12,10 +12,12 @@ import {
   focusRendererTerminalHandle
 } from './terminal-handle-links'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
+  revealFloatingWorkspacePanel: vi.fn(),
   storeState: {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
@@ -25,6 +27,8 @@ const mocks = vi.hoisted(() => ({
     runtimeAgentOrchestrationByPaneKey: {},
     setActiveWorktree: vi.fn(),
     markWorktreeVisited: vi.fn(),
+    recordWorktreeVisit: vi.fn(),
+    isNavigatingHistory: false,
     setActiveView: vi.fn(),
     setActiveTabType: vi.fn(),
     revealWorktreeInSidebar: vi.fn(),
@@ -40,6 +44,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
+}))
+
+vi.mock('@/lib/floating-workspace-panel-reveal', () => ({
+  revealFloatingWorkspacePanel: mocks.revealFloatingWorkspacePanel
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -241,7 +249,38 @@ describe('focusRendererTerminalHandle', () => {
 
     expect(mocks.storeState.setActiveWorktree).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveView).toHaveBeenCalledWith('terminal')
-    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
+    expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('opens the floating panel for a floating terminal instead of selecting it in the main window', () => {
+    mocks.storeState.tabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: 'tab-1',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          ptyId: 'term_direct',
+          title: 'Terminal',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    }
+
+    expect(focusRendererTerminalHandle('term_direct')).toBe(true)
+
+    expect(mocks.revealFloatingWorkspacePanel).toHaveBeenCalledOnce()
+    expect(mocks.storeState.setActiveWorktree).not.toHaveBeenCalled()
+    expect(mocks.storeState.setActiveView).not.toHaveBeenCalled()
+    expect(mocks.storeState.recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(mocks.storeState.revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith(
+      'terminal',
+      FLOATING_TERMINAL_WORKTREE_ID
+    )
     expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
   })
@@ -471,7 +510,7 @@ describe('createTerminalHandleLinkProvider', () => {
     expect(mocks.storeState.setActiveWorktree).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.markWorktreeVisited).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveView).toHaveBeenCalledWith('terminal')
-    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(mocks.storeState.revealWorktreeInSidebar).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')

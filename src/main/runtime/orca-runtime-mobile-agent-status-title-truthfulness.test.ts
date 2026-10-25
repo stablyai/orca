@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { projectSessionTabAgentStatus } from './rpc/methods/session-tab-agent-status-projection'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -261,6 +262,49 @@ describe('mobile session tabs: identity-only fallback freshness', () => {
     runtime.onPtyData(PTY_ID, 'still building...\r\n', T0 + 120_000)
     expect(await projectAgentStatus(runtime)).toEqual(
       expect.objectContaining({ updatedAt: titleObservedAt })
+    )
+  })
+})
+
+// STA-12043: a restored host starts a new shell in the pane; the old run's Done is not this one's.
+describe('mobile session tabs: a process started after its pane last reported', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('publishes identity only, and legacy done to clients that cannot read it', async () => {
+    const completedBeforeRestart: AgentStatusIpcPayload = {
+      paneKey: PANE_KEY,
+      state: 'done',
+      prompt: 'ship it',
+      agentType: 'codex',
+      connectionId: null,
+      receivedAt: T0 - 120_000,
+      stateStartedAt: T0 - 120_000,
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      providerSession: PROVIDER_SESSION
+    }
+    const runtime = await createRuntime([completedBeforeRestart])
+    runtime.noteTerminalSpawnCommit({ id: PTY_ID })
+    runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0)
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
+      expect.objectContaining({ restoredUnconfirmed: true, providerSession: PROVIDER_SESSION })
+    )
+    const legacy = projectSessionTabAgentStatus(result, 'runtime', []).tabs[0]
+    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).toEqual(
+      expect.objectContaining({ state: 'done', providerSession: PROVIDER_SESSION })
+    )
+    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).not.toHaveProperty(
+      'restoredUnconfirmed'
     )
   })
 })

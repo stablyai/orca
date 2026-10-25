@@ -5,6 +5,7 @@ import {
   isKeybindingActionId,
   keybindingFromInput,
   keybindingFromInputForAction,
+  keybindingMatchesInput,
   keybindingMatchesAction,
   normalizeKeybinding,
   normalizeKeybindingListForAction,
@@ -103,7 +104,26 @@ describe('keybindings', () => {
         { key: '¡', code: 'Digit1', meta: true, control: false, alt: true, shift: false },
         'darwin'
       )
-    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+    ).toEqual({ ok: true, value: 'Mod+Alt+1' })
+  })
+
+  it('round-trips a macOS Option digit outside the 1–9 selection range', () => {
+    const input = { key: 'º', code: 'Digit0', alt: true }
+    expect(keybindingFromInput(input, 'darwin')).toEqual({ ok: true, value: 'Alt+0' })
+    expect(keybindingMatchesInput('Alt+0', input, 'darwin')).toBe(true)
+    expect(keybindingMatchesInput('Alt+1', input, 'darwin')).toBe(false)
+  })
+
+  it('keeps logical keys ahead of physical Option digit capture', () => {
+    const input = { key: '[', code: 'Digit2', alt: true }
+    expect(keybindingFromInput(input, 'darwin')).toEqual({ ok: true, value: 'Alt+BracketLeft' })
+    expect(keybindingMatchesInput('Alt+BracketLeft', input, 'darwin')).toBe(true)
+    expect(keybindingMatchesInput('Alt+2', input, 'darwin')).toBe(false)
+    expect(keybindingFromInput({ ...input, key: '3' }, 'darwin')).toEqual({
+      ok: true,
+      value: 'Alt+3'
+    })
+    expect(keybindingMatchesInput('Alt+2', { ...input, key: '3' }, 'darwin')).toBe(false)
   })
 
   it('applies per-action bare-key rules while capturing shortcuts', () => {

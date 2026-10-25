@@ -10,7 +10,6 @@ import {
 
 export type LocalHttpsServer = {
   secureUrl: string
-  schemeLessUrl: string
   documentRequestCount: () => number
   assetRequestCount: () => number
   webSocketConnectionCount: () => number
@@ -109,7 +108,6 @@ export async function startLocalHttpsServer(): Promise<LocalHttpsServer> {
 
   return {
     secureUrl: `${secureOrigin}/`,
-    schemeLessUrl: `127.0.0.1:${port}/`,
     documentRequestCount: () => documentRequestCount,
     assetRequestCount: () => assetRequestCount,
     webSocketConnectionCount: () => webSocketConnectionCount,

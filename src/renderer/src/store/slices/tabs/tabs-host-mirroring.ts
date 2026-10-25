@@ -1,7 +1,7 @@
 import type { AppState } from '../../types'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import { findTabAndWorktree } from '../tab-group-state'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { locateTerminalTab } from '../../terminals/terminal-tab-location'
 
 /**
@@ -33,12 +33,12 @@ export function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: 
   if (
     !found ||
     found.tab.contentType !== 'terminal' ||
-    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+    !runtimeEnvironmentIdOrLocalUnlessTwin(state, found.worktreeId)
   ) {
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
     setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
   )
 }
@@ -55,12 +55,12 @@ export function mirrorTabViewModeToHost(
   if (
     !found ||
     found.tab.contentType !== 'terminal' ||
-    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+    !runtimeEnvironmentIdOrLocalUnlessTwin(state, found.worktreeId)
   ) {
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
     setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
   )
 }

@@ -78,7 +78,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
-      antigravity: this.state.antigravity
+      antigravity: this.state.antigravity,
+      cursor: this.state.cursor,
+      zcode: this.state.zcode
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({
       provider: provider as ActiveRateLimitProvider,
@@ -93,7 +95,11 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         return { kind: 'full' }
       }
       if (limits.status === 'ok' || limits.status === 'unavailable') {
-        if (now - limits.updatedAt >= MIN_REFETCH_MS) {
+        if (this.shouldSkipAutomatedFetch(provider, limits)) {
+          continue
+        }
+        const checkedAt = provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
+        if (checkedAt === null || now - checkedAt >= MIN_REFETCH_MS) {
           return { kind: 'full' }
         }
         continue

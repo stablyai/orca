@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type {
   SourceControlActionRecipe,
@@ -14,6 +15,8 @@ import { runSourceControlAgentActionStart } from './runSourceControlAgentActionS
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
 
 type UseSourceControlAgentActionStartArgs = {
+  open: boolean
+  connectionId?: string | null
   selectedAgent: TuiAgent | null
   commandInput: string
   trimmedCommandInput: string
@@ -35,6 +38,7 @@ type UseSourceControlAgentActionStartArgs = {
    * drop the Linux-only `orca-ide` rename to match the real launch. */
   isRemote?: boolean
   launchSource: LaunchSource
+  recoveryContext?: RuntimeGitContext | null
   connectionUnavailable: boolean
   refreshDetectedAgents: () => Promise<TuiAgent[]>
   onStart?: (args: {
@@ -55,13 +59,14 @@ type UseSourceControlAgentActionStartArgs = {
 }
 
 type SourceControlAgentActionStartWithDetectedAgentsArgs = {
-  detectedAgents: TuiAgent[]
+  detectedAgents?: TuiAgent[]
   saveTargetValueOverride?: string
 }
 
 type UseSourceControlAgentActionStartResult = {
   deliveryPlan: SourceControlAgentActionDeliveryPlanState
   resetDeliveryPlan: () => void
+  cancelStart: () => void
   isStarting: boolean
   handleStart: () => Promise<void>
   startWithDetectedAgents: (
@@ -70,6 +75,8 @@ type UseSourceControlAgentActionStartResult = {
 }
 
 export function useSourceControlAgentActionStart({
+  open,
+  connectionId,
   selectedAgent,
   commandInput,
   trimmedCommandInput,
@@ -88,6 +95,7 @@ export function useSourceControlAgentActionStart({
   launchPlatform,
   isRemote,
   launchSource,
+  recoveryContext,
   connectionUnavailable,
   refreshDetectedAgents,
   onStart,
@@ -101,53 +109,44 @@ export function useSourceControlAgentActionStart({
     status: 'idle'
   })
   const [isStarting, setIsStarting] = useState(false)
-  const isStartingRef = useRef(false)
+  const attemptRef = useRef<AbortController | null>(null)
   const resetDeliveryPlan = useCallback(() => setDeliveryPlan({ status: 'idle' }), [])
-
-  const buildPlan = useCallback(
-    async (agentsOverride?: TuiAgent[]): Promise<SourceControlAgentActionDeliveryPlanState> => {
-      const currentDetectedAgents = agentsOverride ?? (await refreshDetectedAgents())
-      return buildSourceControlAgentDeliveryPlan({
-        selectedAgent,
-        commandInput,
-        // Why: the previewed command must show what the launch will really apply.
-        agentArgs: agentArgsApply ? agentArgs : undefined,
-        promptDelivery,
-        detectedAgents: currentDetectedAgents,
-        connectionUnavailable,
-        launchPlatform,
-        isRemote
-      })
-    },
-    [
-      agentArgs,
-      agentArgsApply,
-      commandInput,
-      connectionUnavailable,
-      promptDelivery,
-      refreshDetectedAgents,
-      selectedAgent,
-      launchPlatform,
-      isRemote
-    ]
-  )
+  const cancelStart = useCallback(() => {
+    attemptRef.current?.abort()
+    attemptRef.current = null
+    setIsStarting(false)
+  }, [])
+  useEffect(() => cancelStart, [open, worktreeId, connectionId, actionId, cancelStart])
 
   const startWithDetectedAgents = useCallback(
     async ({
       detectedAgents: nextAgents,
       saveTargetValueOverride
     }: SourceControlAgentActionStartWithDetectedAgentsArgs): Promise<boolean> => {
-      if (!selectedAgent || isStartingRef.current) {
+      if (!open || !selectedAgent || attemptRef.current) {
         return false
       }
       if (connectionUnavailable) {
         setDeliveryPlan(buildSourceControlAgentConnectionErrorPlan())
         return false
       }
-      isStartingRef.current = true
+      const attempt = new AbortController()
+      attemptRef.current = attempt
       setIsStarting(true)
       try {
-        const nextPlan = await buildPlan(nextAgents)
+        const detectedAgents = nextAgents ?? (await refreshDetectedAgents())
+        if (attempt.signal.aborted) {
+          return false
+        }
+        const nextPlan = buildSourceControlAgentDeliveryPlan({
+          selectedAgent,
+          commandInput,
+          agentArgs: agentArgsApply ? agentArgs : undefined,
+          detectedAgents,
+          connectionUnavailable,
+          launchPlatform,
+          isRemote
+        })
         if (nextPlan.status === 'error') {
           setDeliveryPlan(nextPlan)
           return false
@@ -169,6 +168,8 @@ export function useSourceControlAgentActionStart({
           promptDelivery,
           launchPlatform,
           launchSource,
+          recoveryContext,
+          signal: attempt.signal,
           onStart,
           onSaveAgentDefault,
           onLaunchAccepted,
@@ -180,19 +181,23 @@ export function useSourceControlAgentActionStart({
           }
         })
       } finally {
-        isStartingRef.current = false
-        setIsStarting(false)
+        if (attemptRef.current === attempt) {
+          attemptRef.current = null
+          setIsStarting(false)
+        }
       }
     },
     [
       actionId,
       agentArgs,
       agentArgsApply,
-      buildPlan,
+      commandInput,
       commandTemplate,
       connectionUnavailable,
       groupId,
+      isRemote,
       launchSource,
+      recoveryContext,
       launchPlatform,
       onClose,
       onLaunchAborted,
@@ -200,8 +205,10 @@ export function useSourceControlAgentActionStart({
       onLaunched,
       onSaveAgentDefault,
       onStart,
+      open,
       promptDelivery,
       resetDeliveryPlan,
+      refreshDetectedAgents,
       repo,
       repoId,
       saveLaunchRecipe,
@@ -214,14 +221,15 @@ export function useSourceControlAgentActionStart({
   )
 
   const handleStart = useCallback(async () => {
-    if (!selectedAgent || isStartingRef.current) {
-      return
-    }
-    // Why: manual starts intentionally re-check the current host, while the
-    // saved-receipt bypass reuses the detection result that unlocked it.
-    const nextAgents = await refreshDetectedAgents()
-    await startWithDetectedAgents({ detectedAgents: nextAgents })
-  }, [refreshDetectedAgents, selectedAgent, startWithDetectedAgents])
+    await startWithDetectedAgents({})
+  }, [startWithDetectedAgents])
 
-  return { deliveryPlan, resetDeliveryPlan, isStarting, handleStart, startWithDetectedAgents }
+  return {
+    deliveryPlan,
+    resetDeliveryPlan,
+    cancelStart,
+    isStarting,
+    handleStart,
+    startWithDetectedAgents
+  }
 }

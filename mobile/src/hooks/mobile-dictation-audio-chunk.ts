@@ -4,7 +4,7 @@ import {
 } from './mobile-dictation-pending-audio-budget'
 import { bytesToBase64 } from './mobile-dictation-session-state'
 import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
-import type { MicrophoneDataEvent } from '@orca/expo-two-way-audio'
+import type { DictationCaptureChunk } from '../platform/dictation-capture-contract'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -18,11 +18,11 @@ type MobileDictationAudioChunkQueue = {
 export function enqueueMobileDictationAudioChunk(
   client: RpcClient,
   dictationId: string,
-  event: MicrophoneDataEvent,
+  chunk: DictationCaptureChunk,
   queue: MobileDictationAudioChunkQueue
 ): void {
-  const raw = event.data
-  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
+  // The seam normalises what the engine handed over, so there is nothing to widen here.
+  const bytes = chunk.data
   const byteLength = bytes.byteLength
   if (!queue.pendingAudioBudget.tryReserve(byteLength)) {
     queue.failActiveDictation(

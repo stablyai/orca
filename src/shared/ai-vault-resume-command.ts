@@ -1,6 +1,12 @@
 // Resume-command construction for Agent Session History rows: turns a scanned
 // session into the shell line that re-enters it, quoted for the target platform
 // and (when known) the live tab's shell.
+import { quoteCmdDoubleQuoted } from './shell-argument-quoting'
+import {
+  isAntigravityReferenceSession,
+  antigravityTranscriptReferencePrompt
+} from './antigravity-session-origin'
+import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   clearEnvCommand,
@@ -37,11 +43,15 @@ export function buildAiVaultResumeCommand(args: {
       : sessionId
   const sessionArg =
     shell === 'cmd'
-      ? quoteWindowsCmdArg(resumeTarget)
+      ? quoteCmdDoubleQuoted(resumeTarget)
       : shell
         ? quoteStartupArg(resumeTarget, shell)
         : quoteShellArg(resumeTarget, platform)
-  const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
+  const referencePath = normalizeAiVaultResumeFilePath(resumeFilePath ?? undefined, platform)
+  const resumeCommand =
+    isAntigravityReferenceSession({ agent, filePath: referencePath }) && referencePath
+      ? `${baseCommand} --prompt-interactive ${quoteResumeArg(antigravityTranscriptReferencePrompt(referencePath), platform, shell)}`
+      : buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
   return buildAiVaultResumeShellCommand({
     resumeCommand,
@@ -109,15 +119,15 @@ export function buildAiVaultResumeShellCommand(args: {
   if (platform === 'win32' && shell === 'cmd') {
     // Why: an interactive cmd splits the doubled quotes required by a nested
     // `cmd /s /c` wrapper, so queued commands must use direct cmd syntax.
-    return `${clearPrefix}${cwd ? `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}` : resumeCommand}`
+    return `${clearPrefix}${cwd ? `cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}` : resumeCommand}`
   }
   if (!cwd) {
     return `${clearPrefix}${resumeCommand}`
   }
 
   if (platform === 'win32') {
-    const inner = `${clearPrefix}cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}`
-    return `cmd /d /s /c ${quoteWindowsCmdArg(inner)}`
+    const inner = `${clearPrefix}cd /d ${quoteCmdDoubleQuoted(cwd)} && ${resumeCommand}`
+    return `cmd /d /s /c ${quoteCmdDoubleQuoted(inner)}`
   }
 
   return `cd ${quoteResumeArg(cwd, platform, shell)} && ${resumeCommand}`
@@ -184,8 +194,9 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'hermes') {
     return 'hermes'
   }
-  if (agent === 'rovo') {
-    return 'acli'
+  // Preserve launch subcommands and mode flags when resuming.
+  if (agent === 'rovo' || agent === 'opencode2' || agent === 'kiro') {
+    return TUI_AGENT_CONFIG[agent].launchCmd
   }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
@@ -199,9 +210,9 @@ function buildAgentResumeInvocation(
     case 'codex':
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
-      return `${baseCommand} rovodev run --restore ${sessionArg}`
+      // Why: the base is the full launch command, as a settings override is.
+      return `${baseCommand} --restore ${sessionArg}`
     case 'opencode2':
-      return `${baseCommand} --standalone --session ${sessionArg}`
     case 'opencode':
     case 'pi':
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
@@ -212,9 +223,16 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
+    // Why: `muse resume <uuid>` reopens the session (resume is workspace-scoped,
+    // so the cwd prefix from buildAiVaultResumeCommand is required).
+    case 'muse':
+      return `${baseCommand} resume ${sessionArg}`
     case 'cline':
       return `${baseCommand} --id ${sessionArg}`
+    case 'qoder':
+    case 'codebuddy':
     case 'claude':
+    case 'zcode':
     case 'cursor':
     case 'gemini':
     case 'grok':
@@ -222,6 +240,7 @@ function buildAgentResumeInvocation(
     case 'devin':
     case 'openclaw':
     case 'droid':
+    case 'jcode':
     // Why: OMP and Prime Agent resume by absolute transcript path (see
     // buildAiVaultResumeCommand), but the `--resume <arg>` invocation form is
     // identical to the others here.
@@ -231,6 +250,8 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':
       return `${baseCommand} --conversation ${sessionArg}`
+    case 'kiro':
+      return `${baseCommand} --resume-id ${sessionArg}`
   }
 }
 
@@ -243,7 +264,7 @@ function codexHomeEnvPrefix(
     return ''
   }
   if (platform === 'win32') {
-    return `set ${quoteWindowsCmdArg(`CODEX_HOME=${codexHome}`)} && `
+    return `set ${quoteCmdDoubleQuoted(`CODEX_HOME=${codexHome}`)} && `
   }
   // fish accepts the `NAME=value cmd` prefix (3.1+), but not sh's quoting.
   return `CODEX_HOME=${quoteResumeArg(codexHome, platform, shell)} `
@@ -264,9 +285,5 @@ function quoteResumeArg(
  *  `quoteStartupArg` keeps one spelling regardless of whether a caller happened
  *  to pass a shell. */
 function quoteShellArg(value: string, platform: NodeJS.Platform): string {
-  return platform === 'win32' ? quoteWindowsCmdArg(value) : quoteStartupArg(value, 'posix')
-}
-
-function quoteWindowsCmdArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
+  return platform === 'win32' ? quoteCmdDoubleQuoted(value) : quoteStartupArg(value, 'posix')
 }

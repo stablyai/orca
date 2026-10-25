@@ -3,7 +3,8 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { BrowserTabCreateResult } from '../../../shared/runtime-types'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
-import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
 import { waitForWebRuntimeBrowserPageMaterialization } from './web-runtime-browser-materialization-wait'
@@ -16,6 +17,7 @@ import {
   completeWebRuntimeBrowserCreation,
   createWebRuntimeBrowserCreationContext,
   rehomeWebRuntimeBrowserCreation,
+  resolveWebRuntimeBrowserClientTargetGroupId,
   restageWebRuntimeBrowserCreation,
   stageWebRuntimeBrowserCreation,
   type CreateWebRuntimeSessionBrowserTabArgs
@@ -30,6 +32,11 @@ import {
 } from './web-runtime-browser-creation-e2e-fault'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
+import { registerPairedBrowserTabCreator } from '../store/slices/browser/paired-browser-tab-creator'
+import {
+  forgetStagedBrowserTabHandover,
+  wasStagedBrowserTabHandedToFrames
+} from '@/lib/staged-browser-frame-handover'
 
 export async function createWebRuntimeSessionBrowserTab(
   args: CreateWebRuntimeSessionBrowserTabArgs
@@ -42,8 +49,10 @@ export async function createWebRuntimeSessionBrowserTab(
     return false
   }
   const context = createWebRuntimeBrowserCreationContext(args, environmentId)
+  let stagedWorkspaceId: string | undefined
   try {
     stageWebRuntimeBrowserCreation(context)
+    stagedWorkspaceId = context.staged?.workspaceId
     const placementPreference = args.placementPreference ?? 'auto'
     let placement: BrowserPageCreationPlacement = { kind: 'server' }
     // Why no cached-capability gate here: the renderer's runtime status can hold a pre-upgrade
@@ -125,12 +134,27 @@ export async function createWebRuntimeSessionBrowserTab(
     // Why (accepted bound): the host page has no name until the create answers, so a cancel during
     // that round-trip leaves it alive for up to the RPC timeout. That is the same bound the
     // unreconciled-cleanup path has always accepted, so no sweep is added for it.
-    if (context.staged && !isStagedWebRuntimeBrowserTabLive(context.staged, args.worktreeId)) {
+    // Why: in a frame-drawn workspace the frames replace the staged rows with their own tab for
+    // the page; that is the create landing, not the user's close (L284).
+    // Their tab gets no handle until its pane mounts, so the handover alone is the create landing.
+    const handedToFrames = (): boolean =>
+      stagedWorkspaceId !== undefined &&
+      wasStagedBrowserTabHandedToFrames(stagedWorkspaceId, created.browserPageId)
+    const stagedClosedByUser = (): boolean =>
+      context.staged !== null &&
+      !isStagedWebRuntimeBrowserTabLive(context.staged, args.worktreeId) &&
+      !handedToFrames()
+    if (stagedClosedByUser()) {
       throw new StagedWebRuntimeBrowserTabCancelledError()
     }
     if (created.browserPageId !== context.provisionalPageId) {
       rehomeWebRuntimeBrowserCreation(context, created.browserPageId)
     }
+    // Why: a staged row the user moved is judged where it renders now, not where it was requested.
+    const resolveExpectedGroupId = (): string | undefined =>
+      (context.staged
+        ? resolveStagedWebRuntimeBrowserTabGroupId(context.staged, args.worktreeId)
+        : undefined) ?? resolveWebRuntimeBrowserClientTargetGroupId(args)
     try {
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: context.intentOwner.pairingRevision,
@@ -140,36 +164,35 @@ export async function createWebRuntimeSessionBrowserTab(
       })
     } catch (error) {
       if (
+        !handedToFrames() &&
         !hasMaterializedWebRuntimeBrowserPage(
           useAppStore.getState(),
           environmentId,
           args.worktreeId,
           created.browserPageId,
-          args.clientTargetGroupId ?? args.targetGroupId
+          resolveExpectedGroupId()
         )
       ) {
         throw error
       }
     }
-    const expectedGroupId =
-      (context.staged
-        ? resolveStagedWebRuntimeBrowserTabGroupId(context.staged, args.worktreeId)
-        : undefined) ??
-      args.clientTargetGroupId ??
-      args.targetGroupId
-    let materialized = hasMaterializedWebRuntimeBrowserPage(
-      useAppStore.getState(),
-      environmentId,
-      args.worktreeId,
-      created.browserPageId,
-      expectedGroupId
-    )
+    const expectedGroupId = resolveExpectedGroupId()
+    let materialized =
+      handedToFrames() ||
+      hasMaterializedWebRuntimeBrowserPage(
+        useAppStore.getState(),
+        environmentId,
+        args.worktreeId,
+        created.browserPageId,
+        expectedGroupId
+      )
     if (!materialized) {
       materialized = await waitForWebRuntimeBrowserPageMaterialization({
         environmentId,
         worktreeId: args.worktreeId,
         remotePageId: created.browserPageId,
-        ...(expectedGroupId ? { expectedGroupId } : {})
+        ...(expectedGroupId ? { expectedGroupId } : {}),
+        handedToFrames
       })
     }
     if (!materialized && expectedGroupId) {
@@ -196,7 +219,7 @@ export async function createWebRuntimeSessionBrowserTab(
     // X-ed is gone. The whole materialization wait above is a live window for that X, so re-check the
     // row here before the stage is surrendered, or the create reports success and never retires the
     // host page.
-    if (context.staged && !isStagedWebRuntimeBrowserTabLive(context.staged, args.worktreeId)) {
+    if (stagedClosedByUser()) {
       throw new StagedWebRuntimeBrowserTabCancelledError()
     }
     // Why: materialization means the snapshot has taken ownership of these rows, so nothing
@@ -251,5 +274,11 @@ export async function createWebRuntimeSessionBrowserTab(
       }
     }
     return finishWebRuntimeBrowserCreationFailure(context, failure, error)
+  } finally {
+    if (stagedWorkspaceId) {
+      forgetStagedBrowserTabHandover(stagedWorkspaceId)
+    }
   }
 }
+
+registerPairedBrowserTabCreator(createWebRuntimeSessionBrowserTab)

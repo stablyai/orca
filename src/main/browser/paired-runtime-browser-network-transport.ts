@@ -1,14 +1,14 @@
 import {
   BrowserNetworkTunnelEvent,
-  type BrowserHostLeaseAuthority,
-  type BrowserNetworkExecutionHost
+  type BrowserHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
-import type { PairingOffer } from '../../shared/pairing'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
+import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import {
   subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription,
-  type RemoteRuntimeSubscriptionOptions
+  type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -22,7 +22,7 @@ const BROWSER_TUNNEL_WS_SOFT_CAP_BYTES = 1024 * 1024
 const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
 
 type PairedRuntimeBrowserNetworkTransportOptions = {
-  pairing: PairingOffer
+  connection: PairedRuntimeConnection
   lease: BrowserHostLeaseAuthority
   executionHost: BrowserNetworkExecutionHost
   timeoutMs: number
@@ -94,7 +94,7 @@ export class PairedRuntimeBrowserNetworkTransport {
     let readyTimeout: ReturnType<typeof setTimeout> | null = null
     try {
       const subscription = await subscribeRemoteRuntimeRequest(
-        this.options.pairing,
+        this.options.connection,
         'network.browserTunnel',
         {
           authorityRuntimeId: this.options.lease.authorityRuntimeId,

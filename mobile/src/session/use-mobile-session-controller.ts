@@ -81,7 +81,7 @@ export function useMobileSessionController() {
   const lifecycle = Object.assign(tabReconciliation, useMobileSessionLifecycle(tabReconciliation))
   const keyboardState = Object.assign(lifecycle, useMobileSessionKeyboardState(lifecycle))
   useMobileSessionStartup(keyboardState)
-  useMobileSessionPreferenceFocus(keyboardState)
+  const preferences = useMobileSessionPreferenceFocus(keyboardState)
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
   useNotificationPaneNavigation(tabSwitching)
   const terminalWebview = Object.assign(tabSwitching, useMobileSessionTerminalWebview(tabSwitching))
@@ -120,7 +120,7 @@ export function useMobileSessionController() {
     presentation,
     useMobileSessionPanelRouteActions(presentation)
   )
-  return panelRouteActions
+  return Object.assign(panelRouteActions, preferences)
 }
 
 export type MobileSessionController = ReturnType<typeof useMobileSessionController>

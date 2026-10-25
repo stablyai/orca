@@ -3,11 +3,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import { TerminalHost } from './terminal-host'
 
-vi.mock('../pty-descendant-termination', () => ({
-  killWithDescendantSweep: () => {
-    throw new Error('The retention fixture must not signal real processes')
-  }
-}))
+import './mock-descendant-sweep'
 
 function subprocess() {
   let dataListener: ((data: string) => void) | undefined

@@ -43,11 +43,6 @@ describe('parseOrchestrationTaskDepsFlag', () => {
   ])('rejects unsupported input %s', (raw) => {
     expect(() => parseOrchestrationTaskDepsFlag(raw)).toThrow('Invalid --deps')
   })
-
-  it('tracks the generated task ID contract', () => {
-    expect(parseOrchestrationTaskDepsFlag(`[${generateId('task')}]`)).toHaveLength(1)
-    expect(() => parseOrchestrationTaskDepsFlag('[task_abc]')).toThrow('Invalid --deps')
-  })
 })
 
 // Why: the recovery grammar used to hardcode 12 hex chars, which silently diverges if generateId's

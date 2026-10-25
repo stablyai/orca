@@ -1,14 +1,14 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import { detectAgentStatusFromTitle, getAgentLabel } from '../../../shared/agent-detection'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  agentStatusEvidenceObservedAt,
   type AgentStatusEntry,
   type AgentStatusState,
   type AgentType
 } from '../../../shared/agent-status-types'
+import { isAgentStatusFresh } from '../../../shared/agent-status-freshness'
 
 // Why: explicit agent status entries (from hook-based reports) can go stale if
 // the agent process exits without sending a final update. This helper lets
@@ -27,12 +27,7 @@ export function isExplicitAgentStatusFresh(
   now: number,
   staleAfterMs: number
 ): boolean {
-  // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
-  return (
-    entry.restoredUnconfirmed !== true &&
-    (entry.structuredHostOwned === true ||
-      now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)
-  )
+  return isAgentStatusFresh(entry, now, staleAfterMs)
 }
 
 /**
@@ -57,7 +52,7 @@ export function resolveTitleActivityLabel(title: string): string | null {
 }
 
 /** See resolveTitleActivityLabel — the strict facet for identity decisions. */
-export function resolveCommittedTitleAgentType(title: string): TuiAgent | null {
+export function resolveCommittedTitleAgentType(title: string): TerminalAgent | null {
   return resolveExplicitTerminalTitleAgentType(title)
 }
 

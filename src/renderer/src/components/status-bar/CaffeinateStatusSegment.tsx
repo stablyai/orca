@@ -13,7 +13,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAppStore } from '@/store'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { translate } from '@/i18n/i18n'
-import { getAgentAwakeModeLabel, getAgentAwakeTitle } from '../settings/agent-awake-copy'
+import {
+  getAgentAwakeLidNote,
+  getAgentAwakeModeLabel,
+  getAgentAwakeTitle
+} from '../settings/agent-awake-copy'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
@@ -110,7 +114,7 @@ export function CaffeinateStatusSegment({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {ariaLabel}
+          {ariaLabel}. {getAgentAwakeLidNote()}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent

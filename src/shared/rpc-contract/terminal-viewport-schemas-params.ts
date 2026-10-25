@@ -1,4 +1,10 @@
 import { z } from 'zod'
+import {
+  TERMINAL_VIEWPORT_MAX_COLS,
+  TERMINAL_VIEWPORT_MAX_ROWS,
+  TERMINAL_VIEWPORT_MIN_COLS,
+  TERMINAL_VIEWPORT_MIN_ROWS
+} from '../terminal-viewport'
 import { requiredString } from './rpc-param-primitives'
 
 export const TerminalHandle = z.object({ terminal: requiredString('Missing terminal handle') })
@@ -29,7 +35,9 @@ export const TerminalUnsubscribe = z.object({
     .object({
       id: requiredString('Missing client ID')
     })
-    .optional()
+    .optional(),
+  // Why: the `terminal.subscribe` frame id; addresses that exact request, so a stale unsubscribe can't end a newer stream on the same slot.
+  requestId: z.string().min(1).optional()
 })
 
 // Why: in-place update avoids an unsubscribe→resubscribe that flashed the lock banner and stranded the PTY at phone dims (docs/mobile-presence-lock.md).
@@ -39,8 +47,8 @@ export const TerminalUpdateViewport = TerminalHandle.extend({
     type: z.enum(['mobile', 'desktop']).default('mobile').optional()
   }),
   viewport: z.object({
-    cols: z.number().int().min(20).max(240),
-    rows: z.number().int().min(8).max(120)
+    cols: z.number().int().min(TERMINAL_VIEWPORT_MIN_COLS).max(TERMINAL_VIEWPORT_MAX_COLS),
+    rows: z.number().int().min(TERMINAL_VIEWPORT_MIN_ROWS).max(TERMINAL_VIEWPORT_MAX_ROWS)
   }),
   claim: z.boolean().optional()
 })

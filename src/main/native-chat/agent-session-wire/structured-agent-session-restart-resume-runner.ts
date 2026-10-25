@@ -1,37 +1,31 @@
-// Spending the markers: the one path that turns a resumable candidate back into a live agent.
-//
-// The manual "Resume" button and the automatic setting both land here, so the two can never drift
-// into different eligibility or different double-fire protection.
-//
-// Resume itself is a HOLD, not a send. The first resume-capable hold on a childless session
-// re-acquires the provider at the cursor the record already proved — Claude's `resume` +
-// `resumeSessionAt`, Codex's thread id — which is native continuation. Nothing re-sends the user's
-// prompt: that is what makes an agent redo work it already finished.
+// Manual/automatic Resume share admission and send a continuation, never replaying the original prompt.
 
-import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
+import {
+  isAgentSessionRefusalError,
+  type AgentSessionAnyRefusalDetails
+} from '../../../shared/agent-session-wire-refusals'
+import { availableParallelism } from 'node:os'
+import { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import type { StructuredAgentSessionResumeCandidate } from './structured-agent-session-restart-resume-set'
 
-/** Providers are expensive to start and 20-30 marked chats is an ordinary morning. Resumes go out
- *  a few at a time so a launch cannot spawn every app-server at once. */
-export const STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY = 3
+/** Bound CPU-heavy startup per host core; ready chats run concurrently. */
+export const STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY = Math.max(1, availableParallelism())
 
 export const STRUCTURED_AGENT_SESSION_RESUME_IN_PROGRESS =
   'agent_session_resume_already_in_progress'
 
+export const STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE = 'agent_session_resume_not_eligible'
+
 export type StructuredAgentSessionResumeOutcome = {
   sessionId: string
   outcome: 'resumed' | 'refused'
-  /** Refusal code; `agent_session_resume_already_in_progress` names the live owner in `owner`. */
+  /** Refusal code; in-progress refusals identify the live owner. */
   reason?: string
+  /** Keep details separate from the stable refusal code. */
+  details?: AgentSessionAnyRefusalDetails
   owner?: string
 }
 
-/**
- * The refusal a second caller gets, carrying WHO holds the session.
- *
- * A named error with a typed field rather than a bag assigned onto `new Error`: the catch site then
- * recognises it by identity and reads `owner` as a string, instead of poking at an unknown value.
- */
 export class StructuredAgentSessionResumeInProgressError extends Error {
   constructor(readonly owner: string) {
     super(STRUCTURED_AGENT_SESSION_RESUME_IN_PROGRESS)
@@ -39,33 +33,44 @@ export class StructuredAgentSessionResumeInProgressError extends Error {
   }
 }
 
-/** The live holder named by a refusal, or null for any other failure. */
 function resumeAdmissionOwner(error: unknown): string | null {
   return error instanceof StructuredAgentSessionResumeInProgressError ? error.owner : null
 }
 
-/**
- * One resume per session at a time, whoever is asking.
- *
- * Two surfaces can reach for the same chat at once — the banner's "Resume all" and a user clicking
- * one row — and both would otherwise take a hold, race the acquisition, and leave the loser's
- * refusal looking like a real failure. The second caller is told who holds it instead.
- */
+/** Share host startup slots and exclusive per-session ownership across all callers. */
 export class StructuredAgentSessionResumeAdmission {
   private readonly owners = new Map<string, string>()
+  private readonly starts: PrioritySemaphore
+
+  constructor(startLimit: number = STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY) {
+    this.starts = new PrioritySemaphore(startLimit)
+  }
 
   liveOwner(sessionId: string): string | null {
     return this.owners.get(sessionId) ?? null
   }
 
-  async run<T>(sessionId: string, owner: string, task: () => Promise<T>): Promise<T> {
+  async run<T>(
+    sessionId: string,
+    owner: string,
+    task: () => Promise<T>,
+    onPhase?: (phase: 'queued' | 'starting') => void
+  ): Promise<T> {
     const live = this.owners.get(sessionId)
     if (live !== undefined) {
       throw new StructuredAgentSessionResumeInProgressError(live)
     }
+    // Claim before waiting for capacity so competing callers see the queued owner.
     this.owners.set(sessionId, owner)
     try {
-      return await task()
+      onPhase?.('queued')
+      const release = await this.starts.acquire(0)
+      try {
+        onPhase?.('starting')
+        return await task()
+      } finally {
+        release()
+      }
     } finally {
       this.owners.delete(sessionId)
     }
@@ -74,11 +79,11 @@ export class StructuredAgentSessionResumeAdmission {
 
 export type StructuredAgentSessionResumeRunnerDeps = {
   admission: StructuredAgentSessionResumeAdmission
-  /** Spends the runtime claim. False means another request already took it. */
+  onPhase?: (sessionId: string, phase: 'queued' | 'starting') => void
+  onRefused?: (sessionId: string) => void
   consumeMarker: (sessionId: string) => Promise<boolean>
-  /** Takes the resume-capable hold that re-acquires the provider child. */
+  /** Resolve at handover/start failure, before the provider’s final answer. */
   resume: (sessionId: string) => Promise<void>
-  concurrency?: number
 }
 
 export async function resumeStructuredAgentSessionsFromRestart(
@@ -86,15 +91,15 @@ export async function resumeStructuredAgentSessionsFromRestart(
   candidates: readonly StructuredAgentSessionResumeCandidate[],
   owner: string
 ): Promise<StructuredAgentSessionResumeOutcome[]> {
-  const outcomes: StructuredAgentSessionResumeOutcome[] = []
-  await forEachWithConcurrency(
-    candidates,
-    deps.concurrency ?? STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY,
-    async (candidate) => {
-      outcomes.push(await resumeOne(deps, candidate.sessionId, owner))
-    }
+  return Promise.all(
+    candidates.map(async (candidate) => {
+      const outcome = await resumeOne(deps, candidate.sessionId, owner)
+      if (outcome.outcome === 'refused') {
+        deps.onRefused?.(candidate.sessionId)
+      }
+      return outcome
+    })
   )
-  return outcomes
 }
 
 async function resumeOne(
@@ -103,22 +108,32 @@ async function resumeOne(
   owner: string
 ): Promise<StructuredAgentSessionResumeOutcome> {
   try {
-    return await deps.admission.run(sessionId, owner, async () => {
-      // Consumed BEFORE the hold, not after it succeeds. A crash between the two costs one resume
-      // the user can start by hand; the other order costs them the same agent running twice.
-      if (!(await deps.consumeMarker(sessionId))) {
-        return { sessionId, outcome: 'refused' as const, reason: 'agent_session_resume_consumed' }
-      }
-      await deps.resume(sessionId)
-      return { sessionId, outcome: 'resumed' as const }
-    })
+    return await deps.admission.run(
+      sessionId,
+      owner,
+      async () => {
+        // Validate reservation before acquisition; failed attempts may reopen only after action settlement.
+        if (!(await deps.consumeMarker(sessionId))) {
+          return {
+            sessionId,
+            outcome: 'refused' as const,
+            reason: STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE
+          }
+        }
+        await deps.resume(sessionId)
+        return { sessionId, outcome: 'resumed' as const }
+      },
+      (phase) => deps.onPhase?.(sessionId, phase)
+    )
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     const owner = resumeAdmissionOwner(error)
+    const details = isAgentSessionRefusalError(error) ? error.refusal.details : undefined
     return {
       sessionId,
       outcome: 'refused',
       reason,
+      ...(details ? { details } : {}),
       ...(owner === null ? {} : { owner })
     }
   }

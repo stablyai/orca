@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "components.execution-target",
   "family": "components.execution-target",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
-  "scenarioSha256": "79a49cddf66935007afb9be8a30593b778f02237894e5fd4d2898b526fc125df",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "0355054e5e71": {
       "name": "ssh.connect#1",
@@ -120,6 +111,18 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
     },
+    "1212a28487d8": {
+      "detected": ["codex"],
+      "gate": {
+        "connectInProgress": false,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": "connected"
+      }
+    },
     "3dbb3eccbac3": {
       "name": "preflight.detectRemoteAgents#1",
       "ordinal": 3,
@@ -159,17 +162,6 @@
       "name": "preflight.detectRemoteAgents#2",
       "ordinal": 8,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
-    },
-    "4e2e9a890ced": {
-      "detected": ["codex"],
-      "gate": {
-        "connectInProgress": false,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": "connected"
-      }
     },
     "4f7c1dcd099d": {
       "name": "preflight.detectRemoteAgents#1",
@@ -311,13 +303,14 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
     },
-    "88ecd0c754ca": {
+    "86a281a96c72": {
       "detected": [],
       "gate": {
         "connectInProgress": false,
         "error": {
           "$rpc": "null"
         },
+        "needsDesktopServerRecovery": false,
         "requiresConnection": false,
         "status": "connected"
       }
@@ -527,21 +520,6 @@
         }
       }
     },
-    "d23b91bd7660": {
-      "detected": {
-        "$rpc": "null"
-      },
-      "gate": {
-        "connectInProgress": false,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": true,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -583,6 +561,22 @@
           }
         }
       }
+    },
+    "fe6c500525e6": {
+      "detected": {
+        "$rpc": "null"
+      },
+      "gate": {
+        "connectInProgress": false,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": true,
+        "status": {
+          "$rpc": "null"
+        }
+      }
     }
   },
   "recording": {
@@ -596,7 +590,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d23b91bd7660",
+          "state": "fe6c500525e6",
           "effects": []
         }
       },
@@ -609,7 +603,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "4e2e9a890ced",
+          "state": "1212a28487d8",
           "effects": []
         }
       },
@@ -622,7 +616,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -635,7 +629,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -648,7 +642,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -661,7 +655,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -674,7 +668,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -687,7 +681,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -700,7 +694,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -713,7 +707,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -726,7 +720,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       },
@@ -739,7 +733,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "88ecd0c754ca",
+          "state": "86a281a96c72",
           "effects": []
         }
       }

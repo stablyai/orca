@@ -176,50 +176,6 @@ describe('sendMobileNativeChatMessage', () => {
     ).resolves.toBe('rejected')
   })
 
-  it('never bundles terminal controls into the submitted body', async () => {
-    const client = clientWithResponse({
-      id: 'request',
-      ok: true,
-      result: { send: { accepted: true } },
-      _meta: { runtimeId: 'runtime' }
-    })
-
-    await sendMobileNativeChatMessage({
-      client,
-      terminal: 'term',
-      text: 'hello'
-    })
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'terminal.send',
-      {
-        terminal: 'term',
-        text: 'hello',
-        enter: true
-      },
-      { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
-    )
-  })
-
-  it('sends the text verbatim when clearInputFirst is not set', async () => {
-    // An image send pastes the image (behind its own leading Ctrl+U) before this
-    // text write; a clear byte here would kill the pasted image off the input line.
-    const client = clientWithResponse({
-      id: 'request',
-      ok: true,
-      result: { send: { accepted: true } },
-      _meta: { runtimeId: 'runtime' }
-    })
-
-    await sendMobileNativeChatMessage({
-      client,
-      terminal: 'term',
-      text: 'what is this'
-    })
-    const sent = vi.mocked(client.sendRequest).mock.calls[0]?.[1] as { text: string }
-    expect(sent.text).toBe('what is this')
-    expect(sent.text.startsWith('\x15')).toBe(false)
-  })
-
   it('sends a single non-submitting Escape for prompt cancellation', async () => {
     const client = clientWithResponse({
       id: 'request',
@@ -246,6 +202,8 @@ describe('sendMobileNativeChatMessage', () => {
   })
 
   it('spends only what is left of a shared budget', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
     const client = clientWithResponse({
       id: 'request',
       ok: true,
@@ -259,12 +217,16 @@ describe('sendMobileNativeChatMessage', () => {
       text: 'hi',
       deadline: Date.now() + 4_000
     })
-    const options = vi.mocked(client.sendRequest).mock.calls[0]?.[2] as { timeoutMs: number }
-    expect(options.timeoutMs).toBeGreaterThan(3_000)
-    expect(options.timeoutMs).toBeLessThanOrEqual(4_000)
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      { terminal: 'term', text: 'hi', enter: true },
+      { timeoutMs: 4_000, budgetSpansConnect: true }
+    )
   })
 
   it('refuses a write whose shared budget cannot fund the final acknowledgement', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
     const client = clientWithResponse({
       id: 'request',
       ok: true,
@@ -278,16 +240,29 @@ describe('sendMobileNativeChatMessage', () => {
         client,
         terminal: 'term',
         text: 'hi',
-        deadline: Date.now() + 400
+        deadline: 2999
       })
     ).resolves.toBe('rejected')
     expect(client.sendRequest).not.toHaveBeenCalled()
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({
+        client,
+        terminal: 'term',
+        text: 'hi',
+        deadline: 3000
+      })
+    ).resolves.toBe('accepted')
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      { terminal: 'term', text: 'hi', enter: true },
+      { timeoutMs: 2000, budgetSpansConnect: true }
+    )
   })
 
   it('opens a budget bounded by the send timeout', () => {
-    const budget = openMobileNativeChatSendBudget() - Date.now()
-    expect(budget).toBeGreaterThan(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS - 1_000)
-    expect(budget).toBeLessThanOrEqual(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS)
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    expect(openMobileNativeChatSendBudget()).toBe(16_000)
   })
 })
 

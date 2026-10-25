@@ -16,19 +16,27 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { removeSshTargetWithBestEffortCleanup } from '../settings/ssh-target-remove'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
+import { projectRemovalTargets } from './removal-unsaved-files'
 import { clearHostRename } from './host-rename-remove'
 import type { HostRemovalTarget } from './host-rename-remove'
 import { resolveSshHostRemoval } from './ssh-host-remove-resolution'
 import { clearSshHostWorkspaces } from './ssh-host-remove-workspaces'
+import { removeWslHost } from './wsl-host-removal'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 type HostRemoveDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   hostId: ExecutionHostId
   label: string
-  target: NonNullable<HostRemovalTarget>
+  /** `wsl`: a WSL host, removed in place (Settings → Orca servers → WSL hosts). */
+  target: NonNullable<HostRemovalTarget> | { kind: 'wsl'; environmentId: string }
 }
 
 export function HostRemoveDialog({
@@ -47,7 +55,8 @@ export function HostRemoveDialog({
   const mountedRef = useMountedRef()
 
   const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
 
   // Resolve which workspaces live on the target so the dialog can offer to
@@ -64,6 +73,20 @@ export function HostRemoveDialog({
     })
   }, [target, repos, worktreesByRepo, sshConnectionStates])
 
+  const unsavedTargets = useMemo(() => {
+    if (!sshResolution || !deleteWorkspaces) {
+      return []
+    }
+    const hostId = toSshExecutionHostId(sshResolution.targetId)
+    return [
+      ...sshResolution.workspaceWorktreeIds.map((id) => ({ id, hostId })),
+      ...projectRemovalTargets(
+        { worktreesByRepo, detectedWorktreesByRepo },
+        sshResolution.hostRepoIds.map((repoId) => ({ repoId, hostId }))
+      )
+    ]
+  }, [deleteWorkspaces, detectedWorktreesByRepo, sshResolution, worktreesByRepo])
+
   const workspaceCount = sshResolution?.workspaceCount ?? 0
   const hasWorkspaces = workspaceCount > 0
   const isConnected = sshResolution?.isConnected ?? false
@@ -78,7 +101,8 @@ export function HostRemoveDialog({
   }
 
   const removeSshTarget = async (targetId: string): Promise<void> => {
-    await removeSshTargetWithBestEffortCleanup(window.api.ssh, targetId)
+    // Main refuses a managed server's host; the error says why.
+    await window.api.ssh.removeTarget({ id: targetId })
     // Why: clear deferred reconnect metadata so focused SSH tabs stop retrying
     // the deleted target — mirrors the SSH settings pane removal flow.
     useAppStore.getState().clearRemovedSshTargetState(targetId)
@@ -96,16 +120,17 @@ export function HostRemoveDialog({
   }
 
   const runSshRemoval = async (): Promise<void> => {
-    if (target.kind !== 'ssh') {
+    if (target.kind === 'runtime') {
       return
     }
     setBusy(true)
     try {
-      if (deleteWorkspaces && sshResolution) {
+      if (target.kind === 'ssh' && deleteWorkspaces && sshResolution) {
         // Connected → real remote removal; offline/ghost → local forget.
         const { failedIds } = await clearSshHostWorkspaces(
           sshResolution,
-          isConnected ? 'delete-remote' : 'forget-local'
+          isConnected ? 'delete-remote' : 'forget-local',
+          confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
         )
         // Why: don't remove the SSH target (and report success) while some of its
         // workspaces failed to clear — that would strand ghost rows behind a
@@ -125,7 +150,12 @@ export function HostRemoveDialog({
           return
         }
       }
-      await removeSshTarget(target.targetId)
+      if (target.kind === 'wsl') {
+        await removeWslHost(target.environmentId)
+        dropOverridesForHost()
+      } else {
+        await removeSshTarget(target.targetId)
+      }
       if (mountedRef.current) {
         onOpenChange(false)
       }
@@ -162,21 +192,27 @@ export function HostRemoveDialog({
         )
 
   const description =
-    target.kind === 'runtime'
+    target.kind === 'wsl'
       ? translate(
-          'auto.components.sidebar.HostRemoveDialog.4d5e6f7a8b',
-          'This opens the Orca servers settings where you can remove this server.'
+          'auto.components.sidebar.HostRemoveDialog.wslHostEndsTerminals',
+          'Removes {{value0}} from Orca, ends its open terminals and stops Orca’s server in that distro. Files in the distro are untouched.',
+          { value0: label }
         )
-      : hasWorkspaces
+      : target.kind === 'runtime'
         ? translate(
-            'auto.components.sidebar.HostRemoveDialog.hostHasWorkspacesDefault',
-            'Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.',
-            { value0: label, value1: workspaceCountLabel }
+            'auto.components.sidebar.HostRemoveDialog.4d5e6f7a8b',
+            'This opens the Orca servers settings where you can remove this server.'
           )
-        : translate(
-            'auto.components.sidebar.HostRemoveDialog.5e6f7a8b9c',
-            'This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.'
-          )
+        : hasWorkspaces
+          ? translate(
+              'auto.components.sidebar.HostRemoveDialog.hostHasWorkspacesDefault',
+              'Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.',
+              { value0: label, value1: workspaceCountLabel }
+            )
+          : translate(
+              'auto.components.sidebar.HostRemoveDialog.5e6f7a8b9c',
+              'This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.'
+            )
 
   // The destructive opt-in wording depends on whether we delete remote files or
   // only forget Orca's records (offline/ghost host).
@@ -194,7 +230,7 @@ export function HostRemoveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent surface="security" className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
             {translate(
@@ -263,6 +299,8 @@ export function HostRemoveDialog({
             </div>
           </div>
         ) : null}
+
+        <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={open} />
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button

@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillInstallProgress } from '../../../../shared/skill-sharing-contract'
 import { useSkillInstallProgress } from './skill-install-progress-state'
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('useSkillInstallProgress', () => {
   it('announces aggregate bundle progress and the current skill', () => {

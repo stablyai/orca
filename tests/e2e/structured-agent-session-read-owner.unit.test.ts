@@ -17,7 +17,7 @@ import {
   hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredAgentSessionStatus
 } from '../../src/shared/structured-agent-session-projection'
-import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../../src/main/native-chat/agent-session-wire/agent-session-history-page'
 import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-subscribers'
 import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -32,6 +32,8 @@ import {
   getStructuredAgentSessionReadOwner,
   resetStructuredAgentSessionReadOwnersForTests
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const
@@ -55,9 +57,9 @@ async function fixture() {
       workspaceId: 'folder-workspace',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
-    journalDir: join(root, 'journal')
+    stateDirectory: join(root, 'journal')
   })
   async function appendOutput(index: number) {
     await journal.appendItem(
@@ -120,11 +122,12 @@ describe('structured session cursor/body regression', () => {
   })
 
   it.each([40, 401])(
-    'replays an off-page dispatch after %i missed rows without stranding pending state',
+    'catches up an off-page dispatch after %i missed rows without stranding pending state',
     async (missedRows) => {
       const { journal, appendOutput, accept } = await fixture()
       let hostSummary: AgentSessionStatusSummary | undefined
       const feed = new StructuredAgentSessionStatusFeed({
+        logger: createStructuredAgentSessionLogger(),
         sessions: new Map([
           [
             SESSION,
@@ -231,12 +234,18 @@ describe('structured session cursor/body regression', () => {
       expect(
         projectStructuredAgentSessionStatus(settled.items, settled.submissions, settled.fence)
       ).toBe(hostSummary?.status)
-      expect(settled.submissions).toEqual(journal.snapshot().submissions)
+      expect(settled.submissions).toEqual(
+        missedRows > 200 ? tail.submissions : journal.snapshot().submissions
+      )
       expect({
         cursor: caughtUp.cursor?.sequence,
         dispatch: caughtUp.submissions[0]?.dispatchState,
         unansweredDispatch: hasUnansweredStructuredAgentSessionDispatch(caughtUp.submissions, 1)
-      }).toEqual({ cursor: 100 + missedRows, dispatch: 'accepted', unansweredDispatch: false })
+      }).toEqual({
+        cursor: 100 + missedRows,
+        dispatch: missedRows > 200 ? undefined : 'accepted',
+        unansweredDispatch: false
+      })
       expect(mocks.call).toHaveBeenCalledTimes(1)
       expect(mocks.subscribe).toHaveBeenCalledTimes(2)
       expect(mocks.subscribe.mock.calls[1]?.[1]).toEqual({

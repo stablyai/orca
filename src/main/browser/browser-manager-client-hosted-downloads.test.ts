@@ -88,7 +88,7 @@ describe('client-hosted downloads', () => {
       return null
     })
     browserManager.attachGuestPolicies(guest as never)
-    // Exactly what client-hosted page creation does; the renderer never registers a client page.
+    // Client-hosted pages bind in main without renderer registration.
     createBrowserClientPageGuestBinding(browserManager).bind({
       registration: {
         partition: `persist:orca-browser-v1-${'a'.repeat(64)}`,
@@ -105,7 +105,6 @@ describe('client-hosted downloads', () => {
       webContentsId: SERVER_GUEST_WEB_CONTENTS_ID,
       rendererWebContentsId
     })
-    // Every client-hosted WebContents in this suite is a route guest or one of its popups.
     setBrowserClientRouteWebContentsProbe((id) => id !== SERVER_GUEST_WEB_CONTENTS_ID)
   })
 
@@ -133,7 +132,7 @@ describe('client-hosted downloads', () => {
 
     browserManager.handleGuestWillDownload({ guestWebContentsId: POPUP_WEB_CONTENTS_ID, item })
 
-    // The popup has no logical page of its own, so ownership resolves to the opener's page.
+    // Popups have no logical page; route downloads through the opener.
     expect(routed).toEqual([GUEST_WEB_CONTENTS_ID])
     expect(item.setSavePath).toHaveBeenCalledWith('/tmp/staging/transfer-1/download')
     expect(item.cancel).not.toHaveBeenCalled()
@@ -213,7 +212,6 @@ describe('client-hosted downloads', () => {
       releaseFirstWrite()
       await vi.waitFor(() => expect(aborts).toHaveLength(1))
 
-      // The commit never reaches its final chunk, so nothing is committed on the remote.
       expect(writes.map((write) => write.final)).toEqual([false])
       expect(aborts[0].transferId).toBe(writes[0].transferId)
       const finished = sentPayload(rendererSendMock, 'browser:download-finished')

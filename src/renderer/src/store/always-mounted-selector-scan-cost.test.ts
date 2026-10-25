@@ -10,7 +10,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { WORKTREE_ID_SEPARATOR } from '../../../shared/worktree/id'
 import { getLocalPreflightContext } from '../lib/local-preflight-context'
-import { getProjectRuntimeSessionSummary } from '../components/settings/repository-runtime-session-summary'
+import { getProjectRuntimeSessionSummary } from '../components/settings/repository/execution/repository-runtime-session-summary'
 import type { AppState } from './types'
 import { selectRepoByIdForActiveWorkspace } from './selectors'
 
@@ -66,19 +66,24 @@ function lastWorktreeId(worktreesByRepo: AppState['worktreesByRepo']): string {
 }
 
 describe('local preflight context worktree lookup', () => {
-  it('builds the worktree index once instead of rescanning per store write', () => {
+  function countPreflightReads(runtimeEnvironments: readonly { id: string }[]): {
+    worktreeReads: number
+    repoReads: number
+  } {
     const worktreeReads: ReadCounter = { count: 0 }
     const repoReads: ReadCounter = { count: 0 }
     const worktreesByRepo = makeWorktreesByRepo(worktreeReads)
     const activeWorktreeId = lastWorktreeId(worktreesByRepo)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preflight lookup reads only these AppState fields.
     const state = {
       activeRepoId: `repo-${REPO_COUNT - 1}`,
       activeWorktreeId,
       repos: makeRepoRows(repoReads),
       worktreesByRepo,
-      projects: []
+      projects: [],
+      runtimeEnvironments,
+      runtimeEnvironmentCatalogHydrated: true
     } as unknown as AppState
-    const rowCount = REPO_COUNT * WORKTREES_PER_REPO
     worktreeReads.count = 0
     repoReads.count = 0
 
@@ -87,10 +92,23 @@ describe('local preflight context worktree lookup', () => {
         wslDistro: 'Ubuntu'
       })
     }
+    return { worktreeReads: worktreeReads.count, repoReads: repoReads.count }
+  }
+
+  it('builds the worktree index once instead of rescanning per store write', () => {
+    const reads = countPreflightReads([])
 
     // One index build per snapshot, not one scan per store write.
-    expect(worktreeReads.count).toBeLessThanOrEqual(rowCount)
-    expect(repoReads.count).toBeLessThanOrEqual(REPO_COUNT)
+    expect(reads.worktreeReads).toBeLessThanOrEqual(REPO_COUNT * WORKTREES_PER_REPO)
+    expect(reads.repoReads).toBeLessThanOrEqual(REPO_COUNT)
+  })
+
+  it('builds each index once per snapshot in a window with a paired server', () => {
+    const reads = countPreflightReads([{ id: 'env-1' }])
+
+    // Focused-host owner index plus the local runtime index; each is shared with other selectors.
+    expect(reads.worktreeReads).toBeLessThanOrEqual(2 * REPO_COUNT * WORKTREES_PER_REPO)
+    expect(reads.repoReads).toBeLessThanOrEqual(2 * REPO_COUNT)
   })
 
   it('rebuilds against a replacement snapshot', () => {

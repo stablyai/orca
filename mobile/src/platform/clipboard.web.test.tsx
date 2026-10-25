@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // runtime this test does not have. Nothing below calls one.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -80,6 +80,13 @@ describe('writing the clipboard from inside the shell', () => {
     const written = writer.writeText('copied from the page')
     await pair.flush()
     await expect(written).resolves.toBeUndefined()
+    expect(pair.readToShell()).toContainEqual(
+      expect.objectContaining({
+        type: 'request',
+        method: 'native.clipboard.write',
+        params: { mime: 'text', value: 'copied from the page' }
+      })
+    )
     // The whole point of the verb: it never reached the desktop.
     expect(pair.rpc.requests).toEqual([])
   })

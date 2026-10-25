@@ -1,12 +1,13 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { assertEnvironmentSupportsExtraAgentArgs } from './automation-capability-probe'
 import type {
   Automation,
   AutomationCreateInput,
   AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -51,8 +52,21 @@ export function getAutomationTargetFromHostId(
     : { kind: 'local' }
 }
 
+/**
+ * The authority a host id is listed under on this client. A paired web client's local and SSH
+ * hosts are its server's, which the catalog lists only as that runtime.
+ */
+export function getAutomationListedTargetFromHostId(
+  hostId: string | null | undefined,
+  state: { runtimeEnvironments?: readonly { id: string }[] }
+): AutomationHostTarget {
+  const target = getAutomationTargetFromHostId(hostId)
+  const environmentId = target.kind === 'local' ? getPairedWebClientEnvironmentId(state) : null
+  return environmentId ? { kind: 'environment', environmentId } : target
+}
+
 export function getAutomationAuthorityTarget(
-  authority: AutomationAuthorityRef
+  authority: StableAutomationAuthorityRef
 ): AutomationHostTarget {
   return authority.kind === 'runtime'
     ? { kind: 'environment', environmentId: authority.environmentId }
@@ -132,26 +146,15 @@ export async function listAutomationRunsForTarget(
   return result.runs
 }
 
-export async function listAutomationRunsPageForTarget(
-  target: AutomationHostTarget,
-  automationId: string,
-  options: { limit?: number; cursor?: string } = {}
-): Promise<AutomationRunsPage> {
-  const result = await callRuntimeRpc<AutomationRunsPage | { runs: AutomationRun[] }>(
-    target,
-    'automation.runs',
-    { automationId, ...options },
-    { timeoutMs: 15_000 }
-  )
-  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
-}
-
 export async function updateAutomationForTarget(
   automation: Automation,
   updates: AutomationUpdateInput,
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
+  if (target.kind === 'environment') {
+    await assertEnvironmentSupportsExtraAgentArgs(target.environmentId, updates.extraAgentArgs)
+  }
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',

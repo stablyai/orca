@@ -1,20 +1,47 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fetchMock = vi.fn()
 vi.mock('electron', () => ({ net: { fetch: (...args: unknown[]) => fetchMock(...args) } }))
 
-const { listReleaseBuilds, resolveTargetBuild } = await import('./updater-release-builds')
+const tokenMock = vi.fn<() => Promise<string | null>>()
+let tokenScope = 'native:github.com'
+const rejectTokenMock = vi.fn()
+vi.mock('./updater-release-api-token', () => ({
+  resolveReleaseApiToken: async () => {
+    const token = await tokenMock()
+    return token === null ? null : { token, rateLimitScope: tokenScope }
+  },
+  rejectReleaseApiToken: () => rejectTokenMock()
+}))
 
-function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
+const blockedUntilMock = vi.fn<(bucket: string, now: number, scope: string) => number | null>()
+const recordRateLimitMock = vi.fn()
+vi.mock('./git/gh-rate-limit-breaker', () => ({
+  getGhRateLimitBlockedUntilMs: (...args: Parameters<typeof blockedUntilMock>) =>
+    blockedUntilMock(...args),
+  recordGhPrimaryRateLimit: (...args: unknown[]) => recordRateLimitMock(...args)
+}))
+
+const { describeRateLimitReset, listReleaseBuilds, rateLimitResetAtMs, resolveTargetBuild } =
+  await import('./updater-release-builds')
+
+function jsonResponse(
+  body: unknown,
+  init: { ok?: boolean; status?: number; headers?: Record<string, string> } = {}
+) {
   return {
     ok: init.ok ?? true,
     status: init.status ?? 200,
+    headers: new Headers(init.headers ?? {}),
     json: () => Promise.resolve(body)
   }
 }
 
-/** Every platform's manifest by default, so a case that is not about asset
- *  filtering stays readable and stays green whatever platform is passed. */
+function requestHeaders(call = 0): Record<string, string> {
+  return fetchMock.mock.calls[call][1].headers
+}
+
+// Non-filtering cases need installable assets on every tested platform.
 const allPlatformAssets = [
   { name: 'latest-mac.yml' },
   { name: 'orca-macos-arm64.dmg' },
@@ -35,7 +62,18 @@ const release = (tag: string, extra: Record<string, unknown> = {}) => ({
 
 describe('listReleaseBuilds', () => {
   beforeEach(() => {
+    tokenScope = 'native:github.com'
     fetchMock.mockReset()
+    rejectTokenMock.mockReset()
+    recordRateLimitMock.mockReset()
+    tokenMock.mockReset()
+    tokenMock.mockResolvedValue(null)
+    blockedUntilMock.mockReset()
+    blockedUntilMock.mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('lists hourly builds from the dedicated repo, newest first', async () => {
@@ -76,8 +114,6 @@ describe('listReleaseBuilds', () => {
     ])
   })
 
-  // Why: the main repo serves stable and rc from one endpoint, so an unfiltered
-  // list would offer RC tags under the Stable channel.
   it('separates stable from rc in the shared main repo', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([release('v1.4.160-rc.2'), release('v1.4.159'), release('v1.4.158')])
@@ -95,8 +131,6 @@ describe('listReleaseBuilds', () => {
     ).resolves.toEqual(['1.4.160-rc.2'])
   })
 
-  // Why: a draft release has no downloadable assets; offering it makes the
-  // switch action fail with a 404 after the user commits to it.
   it('skips drafts and unparseable tags', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
@@ -111,10 +145,6 @@ describe('listReleaseBuilds', () => {
     expect(builds.map((build) => build.version)).toEqual(['1.4.159'])
   })
 
-  // Why: the hourly workflow composes the release title and the picker renders it
-  // verbatim, so the two can never drift. A title that only repeats the tag says
-  // nothing the version beside it does not, and must not become a picker row
-  // reading "v1.4.163-hourly.202607311933".
   it('keeps a composed release title and drops one that repeats the tag', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
@@ -134,9 +164,6 @@ describe('listReleaseBuilds', () => {
     ])
   })
 
-  // Why: the mac and Windows legs publish into one release independently, and
-  // either can fail. Offering a row the running platform has no artifact for
-  // sends the user into a download that 404s after they commit to it.
   it('hides builds that published no artifact for this platform', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
@@ -152,8 +179,6 @@ describe('listReleaseBuilds', () => {
     ).resolves.toEqual(['1.4.163-hourly.202607312054'])
   })
 
-  // The mac-only releases every dev channel published before Windows builds
-  // existed must simply not appear on Windows, rather than erroring.
   it('returns an empty list when no build has this platform artifact', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
@@ -176,8 +201,7 @@ describe('listReleaseBuilds', () => {
     ).resolves.toEqual(['1.4.163-hourly.202607312054'])
   })
 
-  // Why: on Windows a signed stable cannot reach a dev channel through the
-  // updater, so the picker needs a direct download to hand the user instead.
+  // Signed Windows builds cannot switch to unsigned channels in-app; offer the direct installer.
   it('resolves the platform installer download url', async () => {
     fetchMock.mockResolvedValue(jsonResponse([release('v1.4.163-hourly.202607312054')]))
 
@@ -209,14 +233,250 @@ describe('listReleaseBuilds', () => {
     await expect(listReleaseBuilds('hourly', 'win32')).resolves.toEqual([])
   })
 
-  it('surfaces a rate limit as an actionable message', async () => {
+  it('sends the local gh token as a bearer header when one is available', async () => {
+    tokenMock.mockResolvedValue('gho_abc')
+    fetchMock.mockResolvedValue(jsonResponse([release('v1.4.159')]))
+
+    await listReleaseBuilds('stable', 'darwin')
+
+    expect(requestHeaders()).toEqual({
+      Accept: 'application/vnd.github+json',
+      Authorization: 'Bearer gho_abc'
+    })
+  })
+
+  it('sends no authorization header when gh has no token', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([release('v1.4.159')]))
+
+    await listReleaseBuilds('stable', 'darwin')
+
+    expect(requestHeaders()).toEqual({ Accept: 'application/vnd.github+json' })
+  })
+
+  it('retries unauthenticated once when GitHub rejects the token', async () => {
+    tokenMock.mockResolvedValue('gho_stale')
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(null, { ok: false, status: 401 }))
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.159')]))
+
+    await expect(
+      listReleaseBuilds('stable', 'darwin').then((builds) => builds.map((build) => build.version))
+    ).resolves.toEqual(['1.4.159'])
+
+    expect(rejectTokenMock).toHaveBeenCalledTimes(1)
+    expect(requestHeaders(1)).toEqual({ Accept: 'application/vnd.github+json' })
+  })
+
+  it('does not retry a 401 that was already unauthenticated', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(null, { ok: false, status: 401 }))
+
+    await expect(listReleaseBuilds('stable', 'darwin')).rejects.toThrow(/HTTP 401/)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(rejectTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the per-IP bucket when the token is rate limited and tells the gh breaker', async () => {
+    tokenMock.mockResolvedValue('gho_abc')
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(null, {
+          ok: false,
+          status: 403,
+          headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1800000600' }
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([release('v1.4.159')]))
+
+    await expect(
+      listReleaseBuilds('stable', 'darwin').then((builds) => builds.map((build) => build.version))
+    ).resolves.toEqual(['1.4.159'])
+
+    expect(recordRateLimitMock).toHaveBeenCalledWith('core', 1_800_000_600_000, 'native:github.com')
+    expect(rejectTokenMock).not.toHaveBeenCalled()
+    expect(requestHeaders(1)).toEqual({ Accept: 'application/vnd.github+json' })
+  })
+
+  // Secondary limits can also report zero remaining; Retry-After forbids even an unauthenticated retry.
+  it('reports a secondary limit carrying retry-after without retrying or tripping the breaker', async () => {
+    const nowMs = 1_800_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(nowMs)
+    tokenMock.mockResolvedValue('gho_abc')
+    fetchMock.mockResolvedValue(
+      jsonResponse(null, {
+        ok: false,
+        status: 403,
+        headers: {
+          'x-ratelimit-remaining': '0',
+          'x-ratelimit-reset': String(nowMs / 1000 + 60 * 60),
+          'retry-after': '60'
+        }
+      })
+    )
+
+    await expect(listReleaseBuilds('stable', 'darwin')).rejects.toThrow(
+      'GitHub rate limit reached. Try again in about a minute.'
+    )
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(recordRateLimitMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['native:github.com', 'wsl:ubuntu:github.com'])(
+    'records a primary limit in the token scope %s',
+    async (scope) => {
+      tokenScope = scope
+      tokenMock.mockResolvedValue('gho_abc')
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse(null, {
+            ok: false,
+            status: 403,
+            headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1800000600' }
+          })
+        )
+        .mockResolvedValueOnce(jsonResponse([release('v1.4.159')]))
+
+      await listReleaseBuilds('stable', 'win32')
+
+      expect(recordRateLimitMock).toHaveBeenCalledExactlyOnceWith('core', 1_800_000_600_000, scope)
+    }
+  )
+
+  it.each([
+    ['native:github.com', 'wsl:ubuntu:github.com'],
+    ['wsl:ubuntu:github.com', 'native:github.com'],
+    ['wsl:ubuntu:github.com', 'wsl:debian:github.com']
+  ])('keeps %s authenticated when only %s is blocked', async (scope, blockedScope) => {
+    tokenScope = scope
+    tokenMock.mockResolvedValue('gho_abc')
+    blockedUntilMock.mockImplementation((_bucket, now, queriedScope) =>
+      queriedScope === blockedScope ? now + 60_000 : null
+    )
+    fetchMock.mockResolvedValue(jsonResponse([release('v1.4.159')]))
+
+    await listReleaseBuilds('stable', 'win32')
+
+    expect(blockedUntilMock).toHaveBeenCalledWith('core', expect.any(Number), scope)
+    expect(requestHeaders().Authorization).toBe('Bearer gho_abc')
+  })
+
+  it.each(['native:github.com', 'wsl:ubuntu:github.com'])(
+    'skips the token while its scope %s is blocked',
+    async (scope) => {
+      tokenScope = scope
+      blockedUntilMock.mockReturnValue(Date.now() + 60_000)
+      tokenMock.mockResolvedValue('gho_abc')
+      fetchMock.mockResolvedValue(
+        jsonResponse(null, { ok: false, status: 403, headers: { 'x-ratelimit-remaining': '0' } })
+      )
+
+      const failure = listReleaseBuilds('stable', 'darwin')
+      await expect(failure).rejects.toThrow(/rate limit reached/)
+      await expect(failure).rejects.not.toThrow(/gh auth login/)
+
+      expect(tokenMock).toHaveBeenCalledTimes(1)
+      expect(blockedUntilMock).toHaveBeenCalledWith('core', expect.any(Number), scope)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(requestHeaders()).toEqual({ Accept: 'application/vnd.github+json' })
+    }
+  )
+
+  it('surfaces a rate limit with its reset time and a sign-in hint when unauthenticated', async () => {
+    const nowMs = 1_800_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(nowMs)
+    fetchMock.mockResolvedValue(
+      jsonResponse(null, {
+        ok: false,
+        status: 403,
+        headers: {
+          'x-ratelimit-remaining': '0',
+          'x-ratelimit-reset': String(nowMs / 1000 + 28 * 60)
+        }
+      })
+    )
+
+    await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(
+      "GitHub rate limit reached. Try again in about 28 minutes, or run `gh auth login` so Orca can use your account's higher limit."
+    )
+  })
+
+  it('omits the sign-in hint when the rate-limited request was authenticated', async () => {
+    tokenMock.mockResolvedValue('gho_abc')
+    fetchMock.mockResolvedValue(
+      jsonResponse(null, { ok: false, status: 403, headers: { 'x-ratelimit-remaining': '0' } })
+    )
+
+    const failure = listReleaseBuilds('hourly', 'darwin')
+    await expect(failure).rejects.toThrow(/rate limit reached/)
+    await expect(failure).rejects.not.toThrow(/gh auth login/)
+  })
+
+  it('treats 429 as a rate limit', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(null, { ok: false, status: 429, headers: { 'retry-after': '90' } })
+    )
+
+    await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(/in about 2 minutes/)
+  })
+
+  it('reports a 403 without rate-limit headers as a plain HTTP error', async () => {
     fetchMock.mockResolvedValue(jsonResponse(null, { ok: false, status: 403 }))
-    await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(/rate limit/i)
+
+    const failure = listReleaseBuilds('hourly', 'darwin')
+    await expect(failure).rejects.toThrow(/HTTP 403/)
+    await expect(failure).rejects.not.toThrow(/rate limit/)
   })
 
   it('reports a missing hourly repo distinctly', async () => {
     fetchMock.mockResolvedValue(jsonResponse(null, { ok: false, status: 404 }))
     await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(/No releases repository/i)
+  })
+})
+
+describe('rateLimitResetAtMs', () => {
+  const nowMs = 1_800_000_000_000
+
+  it('is null when GitHub sent no reset', () => {
+    expect(rateLimitResetAtMs(new Headers(), nowMs)).toBeNull()
+  })
+
+  it('prefers retry-after over the primary reset epoch', () => {
+    const headers = new Headers({
+      'x-ratelimit-reset': String(nowMs / 1000 + 10 * 60),
+      'retry-after': '30'
+    })
+    expect(rateLimitResetAtMs(headers, nowMs)).toBe(nowMs + 30_000)
+  })
+
+  it('falls back to the primary reset epoch when there is no retry-after', () => {
+    const headers = new Headers({ 'x-ratelimit-reset': String(nowMs / 1000 + 10 * 60) })
+    expect(rateLimitResetAtMs(headers, nowMs)).toBe(nowMs + 10 * 60_000)
+  })
+
+  it('reads retry-after as seconds', () => {
+    expect(rateLimitResetAtMs(new Headers({ 'retry-after': '90' }), nowMs)).toBe(nowMs + 90_000)
+  })
+
+  it('reads retry-after as an HTTP date', () => {
+    const headers = new Headers({ 'retry-after': new Date(nowMs + 5 * 60_000).toUTCString() })
+    expect(rateLimitResetAtMs(headers, nowMs)).toBe(nowMs + 5 * 60_000)
+  })
+})
+
+describe('describeRateLimitReset', () => {
+  const nowMs = 1_800_000_000_000
+
+  it('falls back to a vague wait when the reset is unknown', () => {
+    expect(describeRateLimitReset(null, nowMs)).toBe('in a few minutes')
+  })
+
+  it('rounds a sub-minute reset up to a minute', () => {
+    expect(describeRateLimitReset(nowMs + 20_000, nowMs)).toBe('in about a minute')
+  })
+
+  it('rounds a partial minute up', () => {
+    expect(describeRateLimitReset(nowMs + 9 * 60_000 + 1, nowMs)).toBe('in about 10 minutes')
   })
 })
 

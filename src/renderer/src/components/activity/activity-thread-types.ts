@@ -20,7 +20,10 @@ export type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring'
 export type ActivityEvent = {
   id: string
   state: ActivityEventState
+  /** The state's own start time; unread and "Clear completed" compare against it. */
   timestamp: number
+  /** When Orca saw the switch into this state; orders the timeline and keys the event. */
+  observedAt: number
   worktree: Worktree
   repo: Repo | null
   entry: AgentStatusEntry
@@ -51,6 +54,8 @@ export type AgentPaneThread = {
   agentType: AgentType
   currentAgentState: ActivityLiveAgentState | null
   currentAgentEntry: AgentStatusEntry | null
+  /** The pane's own status row, live or not; its state outranks the newest event's. */
+  paneEntry?: AgentStatusEntry
   responsePreview: string
   latestTimestamp: number
   latestEvent: ActivityEvent | null

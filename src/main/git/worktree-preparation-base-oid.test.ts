@@ -1,9 +1,18 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import type * as WorktreeBaseRefresh from './worktree-base-refresh'
+import type * as WorktreePreparationLock from './worktree-preparation-lock'
 
 const gitExec = vi.hoisted(() => vi.fn())
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExec }))
-vi.mock('./worktree-base-refresh', () => ({
-  refreshLocalBaseRefForWorktreeCreate: vi.fn(),
+vi.mock('./worktree-preparation-lock', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreePreparationLock>()),
+  verifyWorktreePreparationLock: vi.fn(async () => '/owned-lock'),
+  verifyWorktreePreparationLockAtPath: vi.fn(),
+  unlockWorktreePreparationAtPath: vi.fn()
+}))
+vi.mock('./worktree-base-refresh', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeBaseRefresh>()),
+  refreshLocalBaseRefForWorktreeCreate: vi.fn(async () => undefined),
   getLocalBaseRefUpdateSuggestionForWorktreeCreate: vi.fn()
 }))
 vi.mock('./status', () => ({ runWithGitReadCacheInvalidation: (run: () => unknown) => run() }))
@@ -28,10 +37,16 @@ beforeEach(() => {
 })
 
 it('reuses the current base-resolution oid and preserves WSL routing', async () => {
-  await finalizePreparedWorktree('/repo', '/prepared', '/final', 'feature', 'main', false, {
-    wslDistro: 'Ubuntu',
-    timeout: 8000
-  })
+  await finalizePreparedWorktree(
+    '/repo',
+    '/prepared',
+    '/final',
+    'feature',
+    'main',
+    false,
+    { wslDistro: 'Ubuntu', timeout: 8000 },
+    'owner'
+  )
   const revisions = gitExec.mock.calls.filter(([args]) => args[0] === 'rev-parse')
   expect(revisions.map(([args]) => args)).toEqual([
     ['rev-parse', '--verify', '--quiet', 'refs/heads/main^{commit}'],
@@ -56,7 +71,8 @@ it.each([
     'feature',
     test.base,
     test.refresh,
-    test.options
+    test.options,
+    'owner'
   )
   expect(gitExec).toHaveBeenCalledWith(
     ['rev-parse', '--verify', 'refs/heads/main^{commit}'],
@@ -82,7 +98,16 @@ it('starts both independent probes before either resolves and settles them befor
   })
   let settled = false
   const error = new Error('prepared HEAD unreadable')
-  const result = finalizePreparedWorktree('/repo', '/prepared', '/final', 'feature', 'main')
+  const result = finalizePreparedWorktree(
+    '/repo',
+    '/prepared',
+    '/final',
+    'feature',
+    'main',
+    false,
+    {},
+    'owner'
+  )
   const checked = expect(result).rejects.toBe(error)
   void result.then(
     () => (settled = true),

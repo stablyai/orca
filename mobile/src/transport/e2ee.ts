@@ -4,6 +4,7 @@
 // stream frames use the raw byte bundle.
 import nacl from 'tweetnacl'
 import * as ExpoCrypto from 'expo-crypto'
+import { decodeBase64Bytes, encodeBase64Bytes } from './base64-byte-codec'
 
 // Why: Hermes (React Native's JS engine) lacks crypto.getRandomValues,
 // which tweetnacl requires. expo-crypto provides a native secure RNG
@@ -27,29 +28,16 @@ export function generateKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Arra
   return { publicKey: u8(kp.publicKey), secretKey: u8(kp.secretKey) }
 }
 
+export function randomBytes(length: number): Uint8Array {
+  return u8(nacl.randomBytes(length))
+}
+
 export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Array): Uint8Array {
   return u8(nacl.box.before(u8(peerPublicKey), u8(ourSecretKey)))
 }
 
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!)
-  }
-  return btoa(binary)
-}
-
-function base64ToUint8(b64: string): Uint8Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return bytes
-}
-
 export function publicKeyFromBase64(b64: string): Uint8Array {
-  const key = base64ToUint8(b64)
+  const key = decodeBase64Bytes(b64)
   if (key.length !== 32) {
     throw new Error(
       `Invalid public key: expected 32 bytes, got ${key.length} from "${b64.slice(0, 20)}..."`
@@ -59,21 +47,24 @@ export function publicKeyFromBase64(b64: string): Uint8Array {
 }
 
 export function publicKeyToBase64(key: Uint8Array): string {
-  return uint8ToBase64(key)
+  return encodeBase64Bytes(key)
 }
 
 export function encrypt(plaintext: string, sharedKey: Uint8Array): string {
   const messageBytes = u8(new TextEncoder().encode(plaintext))
-  return uint8ToBase64(encryptBytes(messageBytes, sharedKey))
+  return encodeBase64Bytes(encryptBytes(messageBytes, sharedKey))
 }
 
 export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
-  const bundle = base64ToUint8(encrypted)
+  const bundle = decodeBase64Bytes(encrypted)
   const plaintext = decryptBytes(bundle, sharedKey)
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 
-function encryptBytes(plaintext: Uint8Array, sharedKey: Uint8Array): Uint8Array {
+export function encryptBytes(
+  plaintext: Uint8Array,
+  sharedKey: Uint8Array
+): Uint8Array<ArrayBuffer> {
   const nonce = u8(nacl.randomBytes(nacl.box.nonceLength))
   const ciphertext = nacl.box.after(u8(plaintext), nonce, u8(sharedKey))
 

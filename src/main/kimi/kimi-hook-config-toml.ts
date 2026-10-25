@@ -1,10 +1,4 @@
-// Kimi Code keeps all preferences in TOML (`~/.kimi-code/config.toml`) and reads
-// lifecycle hooks from an array of `[[hooks]]` tables. There is no JSON settings
-// file to reuse the shared JSON installer with, and no TOML library is vendored,
-// so Orca manages only its own marker-delimited block: install rewrites the
-// block, remove strips it, and user config is left untouched apart from hook
-// tables Orca itself emitted. Appending table headers is always valid TOML, so
-// the block can live at the end of any existing file.
+// Preserve user TOML while managing marker blocks and positively recognized Orca hook tables.
 
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import {
@@ -16,9 +10,6 @@ import {
   type RecognizedManagedTable
 } from '../agent-hooks/managed-toml-ownership'
 
-// Why: mirror the Claude-compatible events Orca normalizes for status. Kimi uses
-// these exact event names (see normalizeKimiEvent), so each maps to a
-// working/waiting/done transition.
 export const KIMI_HOOK_EVENTS = [
   'UserPromptSubmit',
   'PreToolUse',
@@ -37,15 +28,7 @@ const HOOK_TABLE_HEADER = '[[hooks]]'
 
 export type ManagedCommandMatcher = (command: string | undefined) => boolean
 
-// A `[[hooks]]` table that invokes Orca's managed script is Orca's hook: that
-// command path is the only reason it fires, and it is there because Orca put it
-// there. Extra keys are a user customising our hook, not authoring their own, so
-// uninstall still owns it — leaving it would keep feeding Orca their events
-// after they asked it to stop, and reinstall would double-fire the event.
-//
-// The key run is still parsed strictly: an unrecognized line shape (a multi-line
-// array or string, say) means the table's extent is unknown, and guessing it
-// would splice the wrong bytes. That case fails closed.
+// Command paths confer ownership even with extra keys; unknown multiline extents fail closed to preserve user bytes.
 function matchManagedHookTable(
   lines: readonly string[],
   index: number,
@@ -70,10 +53,7 @@ function matchManagedHookTable(
     pairs.set(pair[1], pair[2].trim())
     cursor++
   }
-  // TOML lets blank lines and comments sit between keys of one table, so a gap
-  // is not proof the table ended. If more keys follow it, the run above covered
-  // only part of the table and splicing it would strand the rest without its
-  // header — the extent is unknown, so fail closed.
+  // TOML gaps do not end tables; later keys make this partial run unsafe to splice.
   if (keysFollowGap(lines, cursor)) {
     return null
   }
@@ -85,8 +65,6 @@ function matchManagedHookTable(
   return { lineCount: cursor - index, value: readEventName(pairs.get('event')) }
 }
 
-// True when a key line follows the gap before the next table header, meaning
-// the table extends past the bounded key run above.
 function keysFollowGap(lines: readonly string[], from: number): boolean {
   for (let cursor = from; cursor < lines.length; cursor++) {
     const line = lines[cursor].trim()
@@ -103,11 +81,7 @@ function readTomlString(value: string | undefined): string | undefined {
   return value?.match(/^"((?:[^"\\]|\\.)*)"/)?.[1] ?? value?.match(/^'([^']*)'/)?.[1]
 }
 
-// Ownership keys on the command, so an event Orca cannot parse must still
-// register: status reporting `not_installed` for a table remove() will strip is
-// the exact split this recognizer exists to close. An unreadable literal falls
-// back to its raw text, which matches no known event and lands status on
-// `partial` rather than claiming nothing is installed.
+// Unreadable command-owned events must report partial, not absent; raw text cannot match a known event.
 function readEventName(value: string | undefined): string | null {
   if (value === undefined) {
     return null
@@ -124,8 +98,7 @@ function recognizeManagedTables(
   )
 }
 
-// Orca owns two things here: whatever sits inside a matched marker pair, and
-// every table it can positively recognize wherever that table ended up.
+// Own matched marker pairs and positively recognized tables wherever edits moved them.
 function findOwnedRegions(
   configText: string,
   isManagedCommand: ManagedCommandMatcher
@@ -136,9 +109,7 @@ function findOwnedRegions(
   ]
 }
 
-// TOML basic (double-quoted) string. The managed command may contain single
-// quotes (from POSIX quoting) but no double quotes or backslashes on the paths
-// Orca generates; escape both defensively anyway.
+// Escape Windows fallback paths for TOML basic strings.
 function tomlBasicString(value: string): string {
   const escaped = value
     .replace(/\\/g, '\\\\')
@@ -152,10 +123,7 @@ function tomlBasicString(value: string): string {
 
 export function buildManagedKimiHooksBlock(command: string, eol = '\n'): string {
   const commandLiteral = tomlBasicString(command)
-  // Omit `matcher`: Kimi treats it as a regex (so Claude's literal "*" is
-  // invalid) and an absent matcher already matches every tool.
-  // `timeout` is the host-level backstop; the shell wrapper's curl budget is
-  // the normal dead-endpoint bound.
+  // Omit matcher: Kimi treats it as regex, so * is invalid. Host timeout backs up the normal curl deadline.
   const entries = KIMI_HOOK_EVENTS.map((event) =>
     [
       HOOK_TABLE_HEADER,
@@ -203,10 +171,7 @@ export function removeManagedKimiHooks(
   return { text: trimmed.length > 0 ? `${trimmed}${eol}` : '', changed: true }
 }
 
-// Events a managed table is live for, counted wherever the table sits (by script
-// filename, so a moved userData path is still seen). Status must include tables
-// stranded outside the markers — those still fire, so reporting them absent
-// would tell the user a hook is uninstalled while Orca keeps receiving events.
+// Count managed tables outside markers too: they still emit events and must not appear uninstalled.
 export function readManagedKimiHookEvents(
   configText: string,
   isManagedCommand: ManagedCommandMatcher

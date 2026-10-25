@@ -25,8 +25,11 @@ describe('getAgentRowConversationName', () => {
   })
 
   it('keeps OpenCode semantic session titles whole', () => {
-    const tab = makeTab({ title: 'OC | build the release pipeline' })
+    const tab = makeTab({ title: 'OC | build the release pipeline', generatedTitle: 'Older title' })
     expect(getAgentRowConversationName(tab, 'opencode', false)).toBe(
+      'OC | build the release pipeline'
+    )
+    expect(getAgentRowConversationName(tab, 'opencode', true)).toBe(
       'OC | build the release pipeline'
     )
   })
@@ -40,6 +43,11 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe(
       'Fix the lease probe'
     )
+    expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's2')).toBe(
+      'Fix intake flow'
+    )
+    expect(getAgentRowConversationName(tab, 'codex', true, undefined, 's1')).toBe('Fix intake flow')
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
   })
 
   it('lets a manual rename and a quick command still outrank the provider title', () => {
@@ -184,7 +192,37 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(makeTab({ title: 'Agent' }), 'claude', false)).toBeNull()
   })
 
+  it("rejects jcode's live identity title so the row shows the prompt instead", () => {
+    // Why: jcode repaints its title every second with its session codename and the
+    // turn's diff/duration. Accepting it pinned the row to "jcode Puppy…" while
+    // Claude's row in the same sidebar showed the prompt and the reply.
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: '🌐 jcode Puppy · +3 -0 · last ~23s' }),
+        'jcode',
+        false
+      )
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(makeTab({ title: '🐍 jcode Snake · work ~6s' }), 'jcode', false)
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(makeTab({ title: '🐍 jcode/creek Snake' }), 'jcode', false)
+    ).toBeNull()
+    // A name the user gave the tab still wins.
+    expect(
+      getAgentRowConversationName(makeTab({ title: 'Fix the greet helper' }), 'jcode', false)
+    ).toBe('Fix the greet helper')
+  })
+
   it('rejects empty, glyph-only, and default terminal titles', () => {
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: 'Workbench', defaultTitle: 'Workbench' }),
+        'claude',
+        false
+      )
+    ).toBeNull()
     expect(getAgentRowConversationName(makeTab(), 'claude', false)).toBeNull()
     expect(getAgentRowConversationName(makeTab({ title: '✳' }), 'claude', false)).toBeNull()
     expect(

@@ -65,8 +65,8 @@ describe('createIpcPtyTransport', () => {
       const transport = createIpcPtyTransport({})
       await transport.connect({ url: '', callbacks: { onWriteUnavailable: recovery } })
 
-      expect(transport.sendInput('input')).toBe(true)
-      expect(transport.sendInput('later-input')).toBe(false)
+      expect(transport.sendInput('input', 'driving')).toBe(true)
+      expect(transport.sendInput('later-input', 'driving')).toBe(false)
 
       expect(recovery).toHaveBeenCalledOnce()
       expect(warn).toHaveBeenCalledWith('[pty-input-write-queue] drain failed:', failure)
@@ -80,8 +80,8 @@ describe('createIpcPtyTransport', () => {
     const localTransport = createIpcPtyTransport({})
 
     await localTransport.connect({ url: '', callbacks: {} })
-    await expect(localTransport.sendInputAccepted?.('\x03')).resolves.toBe(true)
-    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', '\x03')
+    await expect(localTransport.sendInputAccepted?.('\x03', 'driving')).resolves.toBe(true)
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', '\x03', 'driving')
 
     const sshTransport = createIpcPtyTransport({ connectionId: 'ssh-1' })
     await sshTransport.connect({ url: '', callbacks: {} })
@@ -103,8 +103,8 @@ describe('createIpcPtyTransport', () => {
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
 
     const connecting = transport.connect({ url: '', callbacks: {} })
-    expect(transport.sendInput('first-')).toBe(true)
-    const accepted = transport.sendInputAccepted?.('second-')
+    expect(transport.sendInput('first-', 'driving')).toBe(true)
+    const accepted = transport.sendInputAccepted?.('second-', 'driving')
     expect(transport.sendInputImmediate('third')).toBe(true)
     expect(window.api.pty.write).not.toHaveBeenCalled()
     expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
@@ -133,21 +133,21 @@ describe('createIpcPtyTransport', () => {
     const transport = createIpcPtyTransport({
       bufferInputUntilConnect: true,
       preconnectInput: [
-        { data: 'before-remount-', kind: 'ordinary' },
-        { data: '\x1b[0n', kind: 'immediate' },
-        { data: '\x03', kind: 'accepted' }
+        { data: 'before-remount-', kind: 'ordinary', inputKind: 'driving' },
+        { data: '\x1b[0n', kind: 'immediate', inputKind: 'query-reply' },
+        { data: '\x03', kind: 'accepted', inputKind: 'driving' }
       ],
       onPreconnectInput
     })
 
     const connecting = transport.connect({ url: '', callbacks: {} })
-    expect(transport.sendInput('new-ordinary-')).toBe(true)
+    expect(transport.sendInput('new-ordinary-', 'driving')).toBe(true)
     expect(transport.sendInputImmediate('new-immediate-')).toBe(true)
-    const accepted = transport.sendInputAccepted?.('new-accepted')
+    const accepted = transport.sendInputAccepted?.('new-accepted', 'driving')
     expect(onPreconnectInput.mock.calls).toEqual([
-      [{ data: 'new-ordinary-', kind: 'ordinary' }],
-      [{ data: 'new-immediate-', kind: 'immediate' }],
-      [{ data: 'new-accepted', kind: 'accepted' }]
+      [{ data: 'new-ordinary-', kind: 'ordinary', inputKind: 'driving' }],
+      [{ data: 'new-immediate-', kind: 'immediate', inputKind: 'query-reply' }],
+      [{ data: 'new-accepted', kind: 'accepted', inputKind: 'driving' }]
     ])
 
     spawn.resolve({ id: 'pty-1' })
@@ -180,8 +180,8 @@ describe('createIpcPtyTransport', () => {
       onPreconnectInput: (input) => captured.push(input)
     })
 
-    const predecessorAccepted = predecessor.sendInputAccepted?.('\x03')
-    expect(captured).toEqual([{ data: '\x03', kind: 'accepted' }])
+    const predecessorAccepted = predecessor.sendInputAccepted?.('\x03', 'driving')
+    expect(captured).toEqual([{ data: '\x03', kind: 'accepted', inputKind: 'driving' }])
 
     const successor = createIpcPtyTransport({ preconnectInput: captured })
     const connecting = successor.connect({ url: '', callbacks: {} })
@@ -205,17 +205,17 @@ describe('createIpcPtyTransport', () => {
       onPreconnectInput
     })
 
-    expect(transport.sendInput('ordinary')).toBe(true)
+    expect(transport.sendInput('ordinary', 'driving')).toBe(true)
     expect(transport.sendInputImmediate('immediate')).toBe(true)
-    const accepted = transport.sendInputAccepted?.('accepted')
+    const accepted = transport.sendInputAccepted?.('accepted', 'driving')
     expect(onPreconnectInput).toHaveBeenCalledTimes(3)
 
     await transport.connect({ url: '', callbacks: {} })
 
     await expect(accepted).resolves.toBe(true)
-    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'ordinary')
-    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'immediate')
-    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', 'accepted')
+    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'ordinary', 'driving')
+    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'immediate', 'query-reply')
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', 'accepted', 'driving')
   })
 
   it('keeps live acknowledged input ahead of later ordinary and immediate writes', async () => {
@@ -235,9 +235,9 @@ describe('createIpcPtyTransport', () => {
       const transport = createIpcPtyTransport({})
       await transport.connect({ url: '', callbacks: {} })
 
-      expect(transport.sendInput('first')).toBe(true)
-      const accepted = transport.sendInputAccepted?.('second')
-      expect(transport.sendInput('third')).toBe(true)
+      expect(transport.sendInput('first', 'driving')).toBe(true)
+      const accepted = transport.sendInputAccepted?.('second', 'driving')
+      expect(transport.sendInput('third', 'driving')).toBe(true)
       expect(transport.sendInputImmediate('fourth')).toBe(true)
       await flushAsyncTicks()
 
@@ -275,11 +275,11 @@ describe('createIpcPtyTransport', () => {
       const slowInput = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
 
       const connecting = transport.connect({ url: '', callbacks: {} })
-      expect(transport.sendInput(slowInput)).toBe(true)
+      expect(transport.sendInput(slowInput, 'driving')).toBe(true)
       await connecting
 
-      const accepted = transport.sendInputAccepted?.('accepted')
-      expect(transport.sendInput('later')).toBe(true)
+      const accepted = transport.sendInputAccepted?.('accepted', 'driving')
+      expect(transport.sendInput('later', 'driving')).toBe(true)
       expect(transport.sendInputImmediate('reply')).toBe(true)
       expect(delivered).toEqual([])
 
@@ -318,14 +318,14 @@ describe('createIpcPtyTransport', () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
 
-    expect(transport.sendInput('ordinary')).toBe(true)
-    const accepted = transport.sendInputAccepted?.('accepted')
+    expect(transport.sendInput('ordinary', 'driving')).toBe(true)
+    const accepted = transport.sendInputAccepted?.('accepted', 'driving')
     await transport.destroy?.()
 
     await expect(accepted).resolves.toBe(false)
-    expect(transport.sendInput('after-destroy')).toBe(false)
+    expect(transport.sendInput('after-destroy', 'driving')).toBe(false)
     expect(transport.sendInputImmediate('after-destroy')).toBe(false)
-    await expect(transport.sendInputAccepted?.('after-destroy')).resolves.toBe(false)
+    await expect(transport.sendInputAccepted?.('after-destroy', 'driving')).resolves.toBe(false)
     expect(window.api.pty.write).not.toHaveBeenCalled()
     expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
   })
@@ -341,11 +341,11 @@ describe('createIpcPtyTransport', () => {
       const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
 
       const connecting = transport.connect({ url: '', callbacks: {} })
-      const accepted = transport.sendInputAccepted?.('first')
-      expect(transport.sendInput('later')).toBe(true)
+      const accepted = transport.sendInputAccepted?.('first', 'driving')
+      expect(transport.sendInput('later', 'driving')).toBe(true)
       spawn.resolve({ id: 'pty-1' })
       await flushAsyncTicks()
-      expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', 'first')
+      expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', 'first', 'driving')
 
       if (teardown === 'disconnect') {
         transport.disconnect()
@@ -358,7 +358,7 @@ describe('createIpcPtyTransport', () => {
       await expect(accepted).resolves.toBe(false)
       await expect(connecting).resolves.toBe('pty-1')
       expect(window.api.pty.write).not.toHaveBeenCalled()
-      expect(transport.sendInput('after-teardown')).toBe(false)
+      expect(transport.sendInput('after-teardown', 'driving')).toBe(false)
 
       acceptedWrite.resolve(true)
       await flushAsyncTicks()
@@ -377,10 +377,10 @@ describe('createIpcPtyTransport', () => {
       const transport = createIpcPtyTransport({})
       await transport.connect({ url: '', callbacks: {} })
 
-      const accepted = transport.sendInputAccepted?.('first')
-      expect(transport.sendInput('later')).toBe(true)
+      const accepted = transport.sendInputAccepted?.('first', 'driving')
+      expect(transport.sendInput('later', 'driving')).toBe(true)
       await flushAsyncTicks()
-      expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', 'first')
+      expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', 'first', 'driving')
 
       if (teardown === 'disconnect') {
         transport.disconnect()
@@ -392,7 +392,7 @@ describe('createIpcPtyTransport', () => {
 
       await expect(accepted).resolves.toBe(false)
       expect(window.api.pty.write).not.toHaveBeenCalled()
-      expect(transport.sendInput('after-teardown')).toBe(false)
+      expect(transport.sendInput('after-teardown', 'driving')).toBe(false)
 
       acceptedWrite.resolve(true)
       await flushAsyncTicks()
@@ -412,7 +412,7 @@ describe('createIpcPtyTransport', () => {
       const onConnect = vi.fn()
 
       const connecting = transport.connect({ url: '', callbacks: { onConnect } })
-      const accepted = transport.sendInputAccepted?.('pending')
+      const accepted = transport.sendInputAccepted?.('pending', 'driving')
       if (teardown === 'disconnect') {
         transport.disconnect()
       } else {
@@ -551,18 +551,18 @@ describe('createIpcPtyTransport', () => {
       const chunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
       await transport.connect({ url: '', callbacks: {} })
 
-      expect(transport.sendInput(`${chunk}${chunk}`)).toBe(true)
-      expect(window.api.pty.write).toHaveBeenCalledExactlyOnceWith('pty-1', chunk)
+      expect(transport.sendInput(`${chunk}${chunk}`, 'driving')).toBe(true)
+      expect(window.api.pty.write).toHaveBeenCalledExactlyOnceWith('pty-1', chunk, 'driving')
 
       onExit?.({ id: 'pty-1', code: 0 })
       transport.attach({ existingPtyId: 'pty-1', callbacks: {} })
-      expect(transport.sendInput('fresh')).toBe(true)
+      expect(transport.sendInput('fresh', 'driving')).toBe(true)
 
       await vi.runAllTimersAsync()
 
       expect(vi.mocked(window.api.pty.write).mock.calls).toEqual([
-        ['pty-1', chunk],
-        ['pty-1', 'fresh']
+        ['pty-1', chunk, 'driving'],
+        ['pty-1', 'fresh', 'driving']
       ])
     } finally {
       vi.useRealTimers()
@@ -577,22 +577,22 @@ describe('createIpcPtyTransport', () => {
     const chunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
     await transport.connect({ url: '', callbacks: {} })
 
-    const accepted = transport.sendInputAccepted?.(`${chunk}stale-tail`)
+    const accepted = transport.sendInputAccepted?.(`${chunk}stale-tail`, 'driving')
     await flushAsyncTicks()
-    expect(window.api.pty.writeAccepted).toHaveBeenCalledExactlyOnceWith('pty-1', chunk)
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledExactlyOnceWith('pty-1', chunk, 'driving')
 
     onExit?.({ id: 'pty-1', code: 0 })
     transport.attach({ existingPtyId: 'pty-1', callbacks: {} })
-    expect(transport.sendInput('fresh')).toBe(true)
+    expect(transport.sendInput('fresh', 'driving')).toBe(true)
 
     await expect(accepted).resolves.toBe(false)
     await flushAsyncTicks()
-    expect(window.api.pty.write).toHaveBeenCalledExactlyOnceWith('pty-1', 'fresh')
+    expect(window.api.pty.write).toHaveBeenCalledExactlyOnceWith('pty-1', 'fresh', 'driving')
 
     acceptedWrite.resolve(true)
     await flushAsyncTicks()
 
-    expect(window.api.pty.writeAccepted).toHaveBeenCalledExactlyOnceWith('pty-1', chunk)
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledExactlyOnceWith('pty-1', chunk, 'driving')
     await expect(accepted).resolves.toBe(false)
   })
 
@@ -601,13 +601,13 @@ describe('createIpcPtyTransport', () => {
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
 
     expect(transport.sendInputImmediate('immediate')).toBe(true)
-    const accepted = transport.sendInputAccepted?.('accepted')
+    const accepted = transport.sendInputAccepted?.('accepted', 'driving')
     transport.disconnect()
 
     await expect(accepted).resolves.toBe(false)
-    expect(transport.sendInput('after-disconnect')).toBe(false)
+    expect(transport.sendInput('after-disconnect', 'driving')).toBe(false)
     expect(transport.sendInputImmediate('after-disconnect')).toBe(false)
-    await expect(transport.sendInputAccepted?.('after-disconnect')).resolves.toBe(false)
+    await expect(transport.sendInputAccepted?.('after-disconnect', 'driving')).resolves.toBe(false)
     expect(window.api.pty.write).not.toHaveBeenCalled()
     expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
   })
@@ -619,13 +619,13 @@ describe('createIpcPtyTransport', () => {
     bufferPreHandlerPtyExit(ptyId, 0)
     const { createIpcPtyTransport } = await import('./pty-transport')
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
-    const accepted = transport.sendInputAccepted?.('input')
+    const accepted = transport.sendInputAccepted?.('input', 'driving')
 
     transport.attach({ existingPtyId: ptyId, callbacks: {} })
 
     await expect(accepted).resolves.toBe(false)
     expect(transport.isConnected()).toBe(false)
-    expect(transport.sendInput('after-exit')).toBe(false)
+    expect(transport.sendInput('after-exit', 'driving')).toBe(false)
     clearPreHandlerPtyState(ptyId)
   })
 
@@ -635,7 +635,7 @@ describe('createIpcPtyTransport', () => {
     })
     const { createIpcPtyTransport } = await import('./pty-transport')
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
-    const accepted = transport.sendInputAccepted?.('input')
+    const accepted = transport.sendInputAccepted?.('input', 'driving')
 
     expect(() => transport.attach({ existingPtyId: 'pty-attach-failure', callbacks: {} })).toThrow(
       'dispatcher attach failed'
@@ -643,7 +643,7 @@ describe('createIpcPtyTransport', () => {
 
     await expect(accepted).resolves.toBe(false)
     expect(transport.isConnected()).toBe(false)
-    expect(transport.sendInput('after-failure')).toBe(false)
+    expect(transport.sendInput('after-failure', 'driving')).toBe(false)
   })
 
   it('settles and drops preconnect input when the split spawn fails', async () => {
@@ -652,14 +652,14 @@ describe('createIpcPtyTransport', () => {
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
     const onError = vi.fn()
 
-    expect(transport.sendInput('ordinary')).toBe(true)
-    const accepted = transport.sendInputAccepted?.('accepted')
+    expect(transport.sendInput('ordinary', 'driving')).toBe(true)
+    const accepted = transport.sendInputAccepted?.('accepted', 'driving')
     await transport.connect({ url: '', callbacks: { onError } })
 
     await expect(accepted).resolves.toBe(false)
-    expect(transport.sendInput('after-failure')).toBe(false)
+    expect(transport.sendInput('after-failure', 'driving')).toBe(false)
     expect(transport.sendInputImmediate('after-failure')).toBe(false)
-    await expect(transport.sendInputAccepted?.('after-failure')).resolves.toBe(false)
+    await expect(transport.sendInputAccepted?.('after-failure', 'driving')).resolves.toBe(false)
     expect(onError).toHaveBeenCalledWith('spawn failed')
     expect(window.api.pty.write).not.toHaveBeenCalled()
     expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
@@ -673,16 +673,16 @@ describe('createIpcPtyTransport', () => {
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
 
     const connecting = transport.connect({ url: '', callbacks: {} })
-    expect(transport.sendInput('first')).toBe(true)
-    const accepted = transport.sendInputAccepted?.('second')
-    expect(transport.sendInput('third')).toBe(true)
+    expect(transport.sendInput('first', 'driving')).toBe(true)
+    const accepted = transport.sendInputAccepted?.('second', 'driving')
+    expect(transport.sendInput('third', 'driving')).toBe(true)
 
     spawn.resolve({ id: 'pty-1' })
     await connecting
 
     await expect(accepted).resolves.toBe(false)
     expect(window.api.pty.write).toHaveBeenCalledOnce()
-    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'first')
+    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'first', 'driving')
   })
 
   it('drops acknowledged preconnect input when an earlier ordinary write fails', async () => {
@@ -695,8 +695,8 @@ describe('createIpcPtyTransport', () => {
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
 
     try {
-      expect(transport.sendInput('first')).toBe(true)
-      const accepted = transport.sendInputAccepted?.('second')
+      expect(transport.sendInput('first', 'driving')).toBe(true)
+      const accepted = transport.sendInputAccepted?.('second', 'driving')
       await transport.connect({ url: '', callbacks: {} })
 
       await expect(accepted).resolves.toBe(false)
@@ -712,12 +712,14 @@ describe('createIpcPtyTransport', () => {
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
 
     for (let index = 0; index < PTY_PRECONNECT_INPUT_MAX_ENTRIES; index += 1) {
-      expect(transport.sendInput('x')).toBe(true)
+      expect(transport.sendInput('x', 'driving')).toBe(true)
     }
-    expect(transport.sendInput('overflow')).toBe(false)
+    expect(transport.sendInput('overflow', 'driving')).toBe(false)
 
     const oversized = createIpcPtyTransport({ bufferInputUntilConnect: true })
-    expect(oversized.sendInput('x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS + 1))).toBe(false)
+    expect(
+      oversized.sendInput('x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS + 1), 'driving')
+    ).toBe(false)
     await transport.destroy?.()
     await oversized.destroy?.()
   })
@@ -731,14 +733,14 @@ describe('createIpcPtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
 
-      expect(transport.sendInput(`${chunk}tail`)).toBe(true)
+      expect(transport.sendInput(`${chunk}tail`, 'driving')).toBe(true)
       expect(window.api.pty.write).toHaveBeenCalledTimes(1)
-      expect(window.api.pty.write).toHaveBeenNthCalledWith(1, 'pty-1', chunk)
+      expect(window.api.pty.write).toHaveBeenNthCalledWith(1, 'pty-1', chunk, 'driving')
 
       await vi.runOnlyPendingTimersAsync()
 
       expect(window.api.pty.write).toHaveBeenCalledTimes(2)
-      expect(window.api.pty.write).toHaveBeenNthCalledWith(2, 'pty-1', 'tail')
+      expect(window.api.pty.write).toHaveBeenNthCalledWith(2, 'pty-1', 'tail', 'driving')
     } finally {
       vi.useRealTimers()
     }
@@ -755,7 +757,7 @@ describe('createIpcPtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
       expect(transport.sendInputImmediate(first)).toBe(true)
-      expect(transport.sendInput(ordinary)).toBe(true)
+      expect(transport.sendInput(ordinary, 'driving')).toBe(true)
       for (const reply of replies) {
         expect(transport.sendInputImmediate(reply)).toBe(true)
       }
@@ -763,11 +765,11 @@ describe('createIpcPtyTransport', () => {
       await vi.runAllTimersAsync()
 
       expect(vi.mocked(window.api.pty.write).mock.calls).toEqual([
-        ['pty-1', first],
-        ['pty-1', ordinary],
+        ['pty-1', first, 'query-reply'],
+        ['pty-1', ordinary, 'driving'],
         ...replies
           .slice(-PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES)
-          .map((reply) => ['pty-1', reply])
+          .map((reply) => ['pty-1', reply, 'query-reply'])
       ])
     } finally {
       vi.useRealTimers()
@@ -783,7 +785,7 @@ describe('createIpcPtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
 
-      expect(transport.sendInput(text)).toBe(true)
+      expect(transport.sendInput(text, 'driving')).toBe(true)
       expect(window.api.pty.write).not.toHaveBeenCalled()
 
       await vi.runAllTimersAsync()
@@ -805,7 +807,7 @@ describe('createIpcPtyTransport', () => {
 
     await transport.connect({ url: '', callbacks: {} })
 
-    expect(transport.sendInput('x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1))).toBe(false)
+    expect(transport.sendInput('x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1), 'driving')).toBe(false)
     expect(window.api.pty.write).not.toHaveBeenCalled()
   })
 
@@ -818,16 +820,16 @@ describe('createIpcPtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
 
-      const accepted = transport.sendInputAccepted?.(`${chunk}tail`)
+      const accepted = transport.sendInputAccepted?.(`${chunk}tail`, 'driving')
       await Promise.resolve()
       expect(window.api.pty.writeAccepted).toHaveBeenCalledTimes(1)
-      expect(window.api.pty.writeAccepted).toHaveBeenNthCalledWith(1, 'pty-1', chunk)
+      expect(window.api.pty.writeAccepted).toHaveBeenNthCalledWith(1, 'pty-1', chunk, 'driving')
 
       await vi.runOnlyPendingTimersAsync()
 
       await expect(accepted).resolves.toBe(true)
       expect(window.api.pty.writeAccepted).toHaveBeenCalledTimes(2)
-      expect(window.api.pty.writeAccepted).toHaveBeenNthCalledWith(2, 'pty-1', 'tail')
+      expect(window.api.pty.writeAccepted).toHaveBeenNthCalledWith(2, 'pty-1', 'tail', 'driving')
     } finally {
       vi.useRealTimers()
     }
@@ -842,7 +844,7 @@ describe('createIpcPtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
 
-      const accepted = transport.sendInputAccepted?.(text)
+      const accepted = transport.sendInputAccepted?.(text, 'driving')
       await Promise.resolve()
       expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
 
@@ -867,7 +869,7 @@ describe('createIpcPtyTransport', () => {
     await transport.connect({ url: '', callbacks: {} })
 
     await expect(
-      transport.sendInputAccepted?.('x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1))
+      transport.sendInputAccepted?.('x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1), 'driving')
     ).resolves.toBe(false)
     expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
   })

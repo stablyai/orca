@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
@@ -8,11 +7,14 @@ import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../
 import { createTerminalOutputBatcher } from './terminal-output-batcher'
 import { appendPendingMultiplexOutput } from './terminal-stream-replay'
 import { updateViewportForClient } from './terminal-viewport-update'
-import type {
-  MultiplexSubscribeRequest,
-  TerminalMultiplexConnection
+import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
+import {
+  isMultiplexStreamAttached,
+  type MultiplexSubscribeRequest,
+  type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import { subscribeToPtyEndpointLoss } from '../../../terminal/pty-endpoint-loss-signal'
 
 export async function initializeMultiplexStream(
   state: TerminalMultiplexConnection,
@@ -20,25 +22,9 @@ export async function initializeMultiplexStream(
   ptyId: string,
   onInstalled: (stream: TerminalMultiplexStream) => void
 ): Promise<TerminalMultiplexStream | null> {
-  const { runtime, connectionId, streams, sourceRangeRegistry, registerBinaryStreamHandler } = state
+  const { runtime, connectionId, streams, registerBinaryStreamHandler } = state
   const isMobile = request.client?.type === 'mobile'
   const remoteDesktopSubscriptionKey = `multiplex:${connectionId}:${request.streamId}`
-  const streamGeneration = randomUUID()
-  const requestedSourceRangeConsumer =
-    request.capabilities?.ackOutput === 1 && request.capabilities?.ackOutputSourceRanges === 1
-  const sourceRangeLedger = requestedSourceRangeConsumer
-    ? sourceRangeRegistry.open(streamGeneration)
-    : null
-  const sourceRangeConsumerAttached =
-    sourceRangeLedger !== null &&
-    runtime.attachRemoteTerminalSourceRangeConsumer({
-      ptyId,
-      consumerId: remoteDesktopSubscriptionKey,
-      streamGeneration
-    })
-  if (!sourceRangeConsumerAttached) {
-    sourceRangeLedger?.close()
-  }
   const stream: TerminalMultiplexStream = {
     streamId: request.streamId,
     terminal: request.terminal,
@@ -46,15 +32,16 @@ export async function initializeMultiplexStream(
     client: request.client,
     isMobile,
     ackOutput: request.capabilities?.ackOutput === 1,
-    ackOutputSourceRanges: sourceRangeConsumerAttached,
-    streamGeneration,
-    sourceRangeLedger: sourceRangeConsumerAttached ? sourceRangeLedger : null,
-    sourceRangeConsumerAttached,
-    sourceRangeReplacement: null,
     ackInFlightBytes: 0,
     ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
     supportsOutputPause: request.capabilities?.outputPause === 1,
+    supportsOutputPauseDropNotice:
+      request.capabilities?.outputPause === 1 && request.capabilities.outputPauseDropNotice === 1,
+    pausedOutputDropNoticeSent: false,
     supportsWriteUnavailable: request.capabilities?.writeUnavailable === 1,
+    supportsEndpointLossNotice:
+      request.capabilities?.writeUnavailable === 1 && request.capabilities.endpointLossNotice === 1,
+    inputSessionId: request.capabilities?.inputAck === 1 ? (request.inputSessionId ?? null) : null,
     outputPaused: false,
     supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
     desktopClaimTail: Promise.resolve(true),
@@ -67,6 +54,7 @@ export async function initializeMultiplexStream(
     ackPendingOutputBytes: 0,
     ackPendingOutputOverflowed: false,
     ackRecoverySnapshotInFlight: false,
+    ackRecoveryHistoryOwed: false,
     pendingOutput: [],
     pendingOutputBytes: 0,
     pendingOutputOverflowed: false,
@@ -99,10 +87,11 @@ export async function initializeMultiplexStream(
   onInstalled(stream)
 
   const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
-    if (state.closed || streams.get(request.streamId) !== stream) {
+    if (!isMultiplexStreamAttached(state, stream)) {
       return
     }
     if (stream.outputPaused) {
+      notePausedOutputDropped(state, stream)
       return
     }
     if (stream.buffering) {
@@ -111,11 +100,23 @@ export async function initializeMultiplexStream(
     }
     stream.outputBatcher.push(data, meta)
   })
-  // Why: a multiplexed stream feeds a remote xterm view with query authority, so the main model responder yields while attached (terminal-query-authority.md).
-  const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
+  // Why: a multiplexed stream feeds a remote xterm view with query authority, so the main model responder yields while it receives output; a paused stream drops it, so main answers.
+  const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
+    ptyId,
+    () => stream.outputPaused
+  )
+  // Why: the pane must hear its daemon died now, not when its next keystroke is refused.
+  const unsubscribeEndpointLoss = stream.supportsEndpointLossNotice
+    ? subscribeToPtyEndpointLoss(ptyId, () => {
+        if (isMultiplexStreamAttached(state, stream)) {
+          state.sendFrame(stream.streamId, TerminalStreamOpcode.WriteUnavailable)
+        }
+      })
+    : () => {}
   stream.unsubscribeData = () => {
     releaseViewSubscriber()
     unsubscribeStreamData()
+    unsubscribeEndpointLoss()
   }
 
   if (isMobile && request.client?.id) {
@@ -144,7 +145,7 @@ export async function initializeMultiplexStream(
       !stream.supportsDesktopViewportClaims
     )
   }
-  if (state.closed || streams.get(request.streamId) !== stream) {
+  if (!isMultiplexStreamAttached(state, stream)) {
     return null
   }
   return stream

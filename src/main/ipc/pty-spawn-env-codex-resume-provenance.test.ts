@@ -5,7 +5,9 @@ import { posixOnlyIt, TEST_MANAGED_ROOT } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
-import { registerPtyHandlers, setLocalPtyProvider, type PrepareCodexSessionResume } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { setLocalPtyProvider } from './pty/provider/registry'
+import type { PrepareCodexSessionResume } from './pty/host-env/types'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -68,10 +70,7 @@ describe('registerPtyHandlers', () => {
         `rollout-2026-07-20T12-00-00-${RESUME_SESSION_ID}.jsonl`
       )
 
-      // Why: main's real provenance rule via the same prepareCodexSessionResume that
-      // index.ts calls, so the outcome wiring is exercised rather than restated. This
-      // suite mocks fs, so the rollout is declared present — the only variable left is
-      // whether its home is trusted, which is exactly the case the guard exists for.
+      // Use real resume preparation with a present rollout; trust is the only rejection variable.
       const prepareResumeWithTrustedHomes =
         (trustedHomes: readonly string[]): PrepareCodexSessionResume =>
         ({ providerSession }) =>
@@ -79,8 +78,7 @@ describe('registerPtyHandlers', () => {
             sessionId: providerSession.id,
             transcriptPath: providerSession.transcriptPath,
             trustedCodexHomes: trustedHomes,
-            // Why: these cases assert the argv drop, never the legacy rescan's home ranking
-            // (#10801) — each passes a single trusted home, so no ranking can move the winner.
+            // One trusted home removes legacy rescan ranking from these argv-removal cases (#10801).
             getSelectedAccountCodexHome: () => null,
             systemCodexHomePath: null,
             sharedRuntimeCodexHomePath: null,
@@ -121,8 +119,7 @@ describe('registerPtyHandlers', () => {
         })) as { agentResumeUnavailable?: true }
       }
 
-      /** A daemon-shaped provider: the only local path that reports reattach results and
-       *  the only one that surfaces the resolved spawn options this guard rewrites. */
+      /** Daemon-shaped provider exposes rewritten options and reattach results. */
       function setupResumeDaemonProvider(spawnResult: { isReattach?: true } = {}) {
         const daemonSpawn = vi.fn(
           async (options: {
@@ -154,8 +151,7 @@ describe('registerPtyHandlers', () => {
       posixOnlyIt(
         'launches plain codex when a REAL rollout sits under a home Orca no longer trusts',
         async () => {
-          // Why: the discriminating case — the rollout exists, so only the trust check can
-          // reject it. Falling through would resume it under the selected account.
+          // The rollout exists; only provenance trust can reject cross-account resume.
           const mockProc = createMockProc()
           spawnMock.mockReturnValue(mockProc.proc)
           vi.useFakeTimers()
@@ -174,7 +170,6 @@ describe('registerPtyHandlers', () => {
               expect.stringContaining(RESUME_SESSION_ID)
             )
             expect(spawned.agentResumeUnavailable).toBe(true)
-            // The pane still runs under the selected account — but with nothing to resume.
             const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
             expect(env.CODEX_HOME).toBe(OTHER_HOME)
             expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe('codex')
@@ -224,8 +219,7 @@ describe('registerPtyHandlers', () => {
         }
       })
       posixOnlyIt('reports a dropped resume that carried no transcript path at all', async () => {
-        // Why: legacy sleeping-agent and relay records persist only the session id. The
-        // argv still gets stripped, so silence would leave an empty pane unexplained.
+        // Legacy records may lack transcript paths; stripped resume arguments still need an explanation.
         const mockProc = createMockProc()
         spawnMock.mockReturnValue(mockProc.proc)
         vi.useFakeTimers()
@@ -248,7 +242,7 @@ describe('registerPtyHandlers', () => {
         }
       })
       it('refuses an unstrippable resume whose metadata claimed Codex layout', async () => {
-        // Why: the locator survives in the command, so launching could still cross accounts.
+        // A retained locator could still resume across accounts.
         registerWithTrustedHomes([OTHER_HOME], OTHER_HOME)
 
         await expect(
@@ -260,8 +254,7 @@ describe('registerPtyHandlers', () => {
       posixOnlyIt(
         'launches an unstrippable resume unchanged when metadata never claimed Codex layout',
         async () => {
-          // Why: a pane mislabeled "codex" carrying ~/.claude metadata launched fine before
-          // this guard existed; refusing its spawn would be a new hard failure.
+          // Other-agent metadata must not turn a mislabeled Codex pane into a new hard failure.
           const mockProc = createMockProc()
           spawnMock.mockReturnValue(mockProc.proc)
           vi.useFakeTimers()
@@ -278,7 +271,7 @@ describe('registerPtyHandlers', () => {
             await Promise.resolve()
             vi.runAllTimers()
 
-            expect(mockProc.proc.write).toHaveBeenCalledWith(`${command}\n`)
+            expect(mockProc.proc.write).toHaveBeenCalledWith(`${command}\r`)
             expect(spawned.agentResumeUnavailable).toBeUndefined()
           } finally {
             vi.useRealTimers()
@@ -286,8 +279,7 @@ describe('registerPtyHandlers', () => {
         }
       )
       it('strips the resume argv from the sequenced startup command too', async () => {
-        // Why: buildPtyHostEnv prefers this env var over the launch command and the
-        // sequenced wrapper `eval`s it, so leaving it intact resumes under the wrong account.
+        // Sequenced startup overrides the launch command; strip its resume arguments too.
         const daemonSpawn = setupResumeDaemonProvider()
         registerWithTrustedHomes([OTHER_HOME], OTHER_HOME)
 
@@ -313,9 +305,7 @@ describe('registerPtyHandlers', () => {
       posixOnlyIt(
         'strips the sequenced startup command on the local-provider spawn path too',
         async () => {
-          // Why: the daemon branch is the only one that re-derives the spawn env from
-          // baseEnv, so a local spawn is where a strip that lands on the wrong variable
-          // silently survives — and the wrapper would `eval` the resume anyway.
+          // Local spawning must use the stripped environment even though only daemon spawning rebuilds it.
           const mockProc = createMockProc()
           spawnMock.mockReturnValue(mockProc.proc)
           registerWithTrustedHomes([OTHER_HOME], OTHER_HOME)
@@ -353,8 +343,7 @@ describe('registerPtyHandlers', () => {
         expect(spawned.agentResumeUnavailable).toBeUndefined()
       })
       it('drops the resume argv on the runtime controller spawn path', async () => {
-        // Why: the runtime/relay controller is a second spawn entry point; the invariant
-        // has to hold there too even though it has no channel for the notice.
+        // Runtime/relay spawning needs the same guard despite having no notice channel.
         const daemonSpawn = setupResumeDaemonProvider()
         const runtime = {
           setPtyController: vi.fn(),

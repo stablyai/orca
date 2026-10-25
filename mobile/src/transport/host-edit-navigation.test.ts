@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  mobileHostEditHostRoute,
-  mobileHostEditRouteTarget,
   navigateToMobileHostEdit,
   type MobileHostEditNavigationState
 } from './host-edit-navigation'
@@ -54,7 +52,7 @@ describe('mobile host edit navigation', () => {
 
     navigateToMobileHostEdit(harness.navigation, { push, replace: vi.fn() }, 'host/1')
 
-    expect(push).toHaveBeenCalledWith(mobileHostEditHostRoute('host/1'))
+    expect(push).toHaveBeenCalledWith('/h/host%2F1')
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
     // The host route commits before its stack mounts; the old root-only predicate fired here.
@@ -68,7 +66,7 @@ describe('mobile host edit navigation', () => {
       type: 'REPLACE',
       target: '/h',
       source: 'host-index',
-      payload: mobileHostEditRouteTarget('host/1')
+      payload: { name: '[hostId]/edit', params: { hostId: 'host/1' } }
     })
   })
 

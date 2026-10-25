@@ -1,7 +1,7 @@
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
 import { realpath } from 'node:fs/promises'
 import { openMock, resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createRuntimeFileCommands,
   useRuntimeFileCommandsLifecycle
@@ -27,20 +27,8 @@ vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
-  '../ipc/rg-availability',
-  async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
-)
-vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
-)
-vi.mock(
-  '../ipc/filesystem-search-git',
-  async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
-)
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
 )
 
 describe('RuntimeFileCommands', () => {
@@ -69,7 +57,7 @@ describe('RuntimeFileCommands', () => {
           absolutePath: expectedPath
         }
       })
-      expect(resolveAuthorizedPathMock).toHaveBeenCalledWith(expectedPath, expect.anything())
+      expect(resolveAuthorizedPathMock.mock.calls[0]?.[0]).toBe(expectedPath)
     })
 
     it('does not translate UNC-style paths as WSL POSIX paths', async () => {
@@ -190,7 +178,7 @@ describe('RuntimeFileCommands', () => {
       })
     })
 
-    it('opens host-qualified remote POSIX terminal links when the source terminal verified the host', async () => {
+    it('refuses host-qualified terminal links on an SSH workspace instead of reading this machine', async () => {
       const resolveTerminalFileUriHostname = vi.fn(() => 'remote-host')
       const hasRecentTerminalOutputPath = vi.fn(() => true)
       const { commands, store } = createRuntimeFileCommands({
@@ -199,69 +187,25 @@ describe('RuntimeFileCommands', () => {
         hasRecentTerminalOutputPath
       })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      const stat = vi.fn().mockResolvedValue({ type: 'file', size: 2, mtime: 3 })
-      const realpath = vi.fn(async (p: string) => p)
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat, realpath } as never)
 
-      const result = await resolveTerminalArtifactPath(commands, '//remote-host/tmp/result.json')
-
-      expect(resolveTerminalFileUriHostname).toHaveBeenCalledWith('term-1')
-      expect(hasRecentTerminalOutputPath).toHaveBeenCalledWith(
-        'term-1',
-        '//remote-host/tmp/result.json',
-        '/tmp/result.json'
-      )
-      expect(stat).toHaveBeenCalledWith('/tmp/result.json')
-      expect(result).toMatchObject({
-        relativePath: null,
-        absolutePath: '/tmp/result.json',
-        exists: true,
-        openTarget: {
-          kind: 'absolute-file',
-          provider: 'ssh',
-          absolutePath: '/tmp/result.json'
-        }
-      })
-    })
-
-    it('opens host-qualified Windows SSH worktree file URLs with a drive path', async () => {
-      const resolveTerminalFileUriHostname = vi.fn(() => 'remote-host')
-      const { commands, store } = createRuntimeFileCommands({
-        path: 'C:/Users/me/repo',
-        resolveTerminalFileUriHostname
-      })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      const stat = vi.fn().mockResolvedValue({ type: 'file', size: 2, mtime: 3 })
-      const realpath = vi.fn(async (p: string) => p)
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat, realpath } as never)
-
-      const result = await commands.resolveTerminalPath(
-        'id:wt-1',
-        '//remote-host/C:/Users/me/repo/src/app.ts',
-        null,
-        'client-a',
-        'term-1'
-      )
-
-      expect(result).toMatchObject({
-        relativePath: 'src/app.ts',
-        absolutePath: 'C:/Users/me/repo/src/app.ts',
-        exists: true,
-        openTarget: {
-          kind: 'worktree-file',
-          provider: 'ssh',
-          relativePath: 'src/app.ts',
-          absolutePath: 'C:/Users/me/repo/src/app.ts'
-        }
-      })
+      await expect(
+        resolveTerminalArtifactPath(commands, '//remote-host/tmp/result.json')
+      ).rejects.toThrow(SshHostNotServedError)
+      await expect(
+        commands.resolveTerminalPath(
+          'id:wt-1',
+          '//remote-host/C:/Users/me/repo/src/app.ts',
+          null,
+          'client-a',
+          'term-1'
+        )
+      ).rejects.toThrow(SshHostNotServedError)
+      expect(hasRecentTerminalOutputPath).not.toHaveBeenCalled()
     })
 
     it('rejects host-qualified remote POSIX terminal links without a verified host match', async () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/home/me/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      const stat = vi.fn().mockResolvedValue({ type: 'file', size: 2, mtime: 3 })
-      const realpath = vi.fn(async (p: string) => p)
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat, realpath } as never)
 
       const result = await commands.resolveTerminalPath(
         'id:wt-1',
@@ -270,7 +214,7 @@ describe('RuntimeFileCommands', () => {
         'client-a'
       )
 
-      expect(stat).not.toHaveBeenCalled()
+      expect(statMock).not.toHaveBeenCalled()
       expect(result).toEqual({
         worktree: 'wt-1',
         relativePath: null,

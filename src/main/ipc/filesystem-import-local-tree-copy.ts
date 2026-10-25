@@ -1,12 +1,8 @@
 import { constants } from 'node:fs'
-import { lstat, mkdir, open, readdir, unlink } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, rm, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 
-/**
- * Pre-scan a directory tree for symlinks. Returns true if any symlink
- * is found anywhere in the subtree.
- */
 export async function preScanForSymlinks(dirPath: string): Promise<boolean> {
   const entries = await readdir(dirPath, { withFileTypes: true })
   for (const entry of entries) {
@@ -23,13 +19,18 @@ export async function preScanForSymlinks(dirPath: string): Promise<boolean> {
   return false
 }
 
-/**
- * Recursively copy a directory and all its contents. Uses copyFile for
- * individual files to leverage native OS copy primitives instead of
- * buffering entire files into memory.
- */
 export async function recursiveCopyDir(srcDir: string, destDir: string): Promise<void> {
+  // A failed exclusive mkdir gives us no ownership to roll back.
   await mkdir(destDir, { recursive: false })
+  try {
+    await copyDirectoryContents(srcDir, destDir)
+  } catch (error) {
+    await rm(destDir, { recursive: true, force: true }).catch(() => {})
+    throw error
+  }
+}
+
+async function copyDirectoryContents(srcDir: string, destDir: string): Promise<void> {
   const entries = await readdir(srcDir, { withFileTypes: true })
   for (const entry of entries) {
     const srcPath = join(srcDir, entry.name)
@@ -39,7 +40,8 @@ export async function recursiveCopyDir(srcDir: string, destDir: string): Promise
       throw new Error(`Symlink not allowed in '${entry.name}'`)
     }
     if (statResult.isDirectory()) {
-      await recursiveCopyDir(srcPath, dstPath)
+      await mkdir(dstPath, { recursive: false })
+      await copyDirectoryContents(srcPath, dstPath)
       continue
     }
     if (!statResult.isFile()) {
@@ -81,9 +83,7 @@ export async function copyLocalFileNoFollow(
     ) {
       throw new Error(`File changed during import: '${basename(srcPath)}'`)
     }
-    // Why: copyFile(path, path) would follow a source symlink if the source is
-    // swapped after validation. Streaming from an O_NOFOLLOW handle keeps the
-    // authorized file identity pinned for the copy.
+    // Copy from the authorized O_NOFOLLOW handle so a swapped source cannot redirect through a symlink.
     destinationHandle = await open(dstPath, 'wx')
     destinationCreated = true
     await pipeline(sourceHandle.createReadStream(), destinationHandle.createWriteStream())

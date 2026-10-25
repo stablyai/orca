@@ -1,4 +1,8 @@
 import { delimiter, join } from 'node:path'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import type * as NodeOs from 'node:os'
+import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
 import {
@@ -7,7 +11,6 @@ import {
   resolveCliCommands
 } from './node-cli-command-resolution'
 import { buildPosixFallbackPathPrelude } from './posix-version-manager-bin-dirs'
-import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
 
 /**
  * The install-dir fallback answers "is this agent CLI installed?" whenever the
@@ -23,7 +26,10 @@ const fsFixture = vi.hoisted(() => ({ executables: new Set<string>() }))
 
 const MOCK_HOME = '/home/tester'
 
-vi.mock('node:os', () => ({ homedir: () => MOCK_HOME }))
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeOs>()),
+  homedir: () => MOCK_HOME
+}))
 
 vi.mock('node:fs', () => ({
   constants: { X_OK: 1 },
@@ -61,9 +67,7 @@ function resolveAll(
   commands: string[],
   options: { platform: NodeJS.Platform; homePath: string }
 ): Record<string, string> {
-  return Object.fromEntries(
-    resolveCliCommands(commands, { ...options, pathEnv: GUI_LAUNCH_PATH })
-  ) as Record<string, string>
+  return Object.fromEntries(resolveCliCommands(commands, { ...options, pathEnv: GUI_LAUNCH_PATH }))
 }
 
 beforeEach(() => {
@@ -235,42 +239,53 @@ describe('agent CLI install-dir fallback', () => {
     }
   )
 
-  it('carries the system install dirs into the POSIX guest fallback prelude', () => {
-    const prelude = buildPosixFallbackPathPrelude()
-    const systemDirs = [
-      '"/usr/local/bin"',
-      '"/snap/bin"',
-      '"/home/linuxbrew/.linuxbrew/bin"',
-      '"/nix/var/nix/profiles/default/bin"',
-      '"$HOME/.nix-profile/bin"',
-      '"$HOME/.opencode/bin"',
-      '"$HOME/.vite-plus/bin"'
-    ]
-    const offsets = systemDirs.map((dir) => prelude.indexOf(dir))
-    expect(offsets.every((offset) => offset >= 0)).toBe(true)
-    expect([...offsets].sort((a, b) => a - b)).toEqual(offsets)
-    // Why after: the guest prelude appends, so a version manager must still win.
-    expect(prelude.indexOf('.nvm/versions/node/*/bin')).toBeLessThan(offsets[0])
-    // Why absent: a WSL guest is Linux, so /opt/homebrew is never its brew prefix.
-    expect(prelude).not.toContain('/opt/homebrew')
-  })
-
-  // Why derived: the native and guest lists drifted apart once by hand. Every
-  // version-manager dir the native resolver knows must precede the guest's
-  // first system dir, and the guest's system block must be the native one.
-  it('keeps the WSL guest prelude in step with the native Linux lists', () => {
-    const prelude = buildPosixFallbackPathPrelude()
-    const asGuest = (dir: string): string => `"${dir.split('\\').join('/')}"`
-    const systemDirs = getSystemCliInstallDirectories('linux', '$HOME').map(asGuest)
-    const firstSystemOffset = prelude.indexOf(systemDirs[0])
-    expect(firstSystemOffset).toBeGreaterThan(0)
-    for (const dir of getVersionManagerBinPaths({ platform: 'linux', homePath: '$HOME' })) {
-      const offset = prelude.indexOf(asGuest(dir))
-      expect(offset, dir).toBeGreaterThanOrEqual(0)
-      expect(offset, dir).toBeLessThan(firstSystemOffset)
+  // Real host (WSL 2.7.10): the guest's ambient PATH reached a /mnt/c npm shim after the
+  // filtered walk had already rejected it, reporting a Windows codex as installed.
+  it.skipIf(process.platform === 'win32')(
+    'searches the PATH detection searched, not the ambient one',
+    () => {
+      const shimDir = '/mnt/c/Users/u/AppData/Roaming/npm'
+      stage(join(shimDir, 'codex'))
+      vi.stubEnv('PATH', [GUI_LAUNCH_PATH, shimDir].join(delimiter))
+      expect(detectCommandsInInstallDirs(['codex'])).toEqual(new Set(['codex']))
+      expect(detectCommandsInInstallDirs(['codex'], GUI_LAUNCH_PATH)).toEqual(new Set())
     }
-    const systemOffsets = systemDirs.map((dir) => prelude.indexOf(dir))
-    expect(systemOffsets.every((offset) => offset >= firstSystemOffset)).toBe(true)
-    expect([...systemOffsets].sort((a, b) => a - b)).toEqual(systemOffsets)
-  })
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps login PATH first, then resolves nvm and installer fallbacks with spaces in HOME',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-guest-fallback-'))
+      const home = join(root, 'home with space')
+      const login = join(root, 'login-bin')
+      const directories = [
+        login,
+        join(home, '.nvm', 'versions', 'node', 'v24.0.0', 'bin'),
+        join(home, '.opencode', 'bin'),
+        join(home, '.vite-plus', 'bin')
+      ]
+      const command = 'orca-fallback-fixture'
+      try {
+        for (const directory of directories) {
+          await mkdir(directory, { recursive: true })
+          await writeFile(join(directory, command), '#!/bin/sh\n', { mode: 0o755 })
+        }
+        for (const directory of directories) {
+          const result = await runProcess({
+            program: '/bin/sh',
+            args: ['-c', `${buildPosixFallbackPathPrelude()}\ncommand -v ${command}`],
+            env: { HOME: home, PATH: login, ORCA_BACKGROUND_LAUNCH: '1' },
+            timeoutMs: 10_000,
+            terminationBarrier: true
+          })
+          expect(result.code, result.stderr).toBe(0)
+          expect(result.timedOut).toBe(false)
+          expect(result.stdout.trim()).toBe(join(directory, command))
+          await rm(join(directory, command))
+        }
+      } finally {
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  )
 })

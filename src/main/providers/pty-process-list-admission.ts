@@ -6,7 +6,7 @@ import {
   cloneForegroundProcessEvidence,
   isForegroundProcessEvidence
 } from '../../shared/foreground-process-evidence'
-import type { PtyProcessInfo } from './types'
+import type { PtyProcessInfo } from './pty-provider-contract'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_BYTES = 32 * 1024 * 1024
@@ -53,6 +53,8 @@ export class PtyProcessListAdmission {
     const idBytes = retainedStringBytes(value.id)
     const cwdBytes = retainedStringBytes(value.cwd)
     const titleBytes = retainedStringBytes(value.title)
+    const foregroundProcessBytes = retainedOptionalStringBytes(value.foregroundProcess)
+    const inventorySourceBytes = retainedOptionalStringBytes(value.inventorySourceId)
     const worktreeIdBytes = retainedOptionalStringBytes(value.worktreeId)
     const terminalHandleBytes = retainedOptionalStringBytes(value.terminalHandle)
     const wslDistroBytes =
@@ -67,6 +69,9 @@ export class PtyProcessListAdmission {
       idBytes === null ||
       cwdBytes === null ||
       titleBytes === null ||
+      foregroundProcessBytes === null ||
+      inventorySourceBytes === null ||
+      (value.routed !== undefined && typeof value.routed !== 'boolean') ||
       worktreeIdBytes === null ||
       terminalHandleBytes === null ||
       wslDistroBytes === null ||
@@ -101,6 +106,8 @@ export class PtyProcessListAdmission {
       idBytes +
       cwdBytes +
       titleBytes +
+      foregroundProcessBytes +
+      inventorySourceBytes +
       worktreeIdBytes +
       terminalHandleBytes +
       wslDistroBytes +
@@ -121,11 +128,19 @@ export class PtyProcessListAdmission {
       id: value.id,
       cwd: value.cwd,
       title: value.title,
+      ...(value.inventorySourceId !== undefined
+        ? { inventorySourceId: value.inventorySourceId }
+        : {}),
+      ...(value.routed !== undefined ? { routed: value.routed } : {}),
+      ...(value.foregroundProcess !== undefined
+        ? { foregroundProcess: value.foregroundProcess }
+        : {}),
       ...(value.incarnationId !== undefined ? { incarnationId: value.incarnationId } : {}),
       ...(value.rootProcessId !== undefined ? { rootProcessId: value.rootProcessId } : {}),
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
+      ...(value.exiting === true ? { exiting: true as const } : {}),
       ...(value.foregroundProcessEvidence !== undefined
         ? {
             foregroundProcessEvidence: cloneForegroundProcessEvidence(

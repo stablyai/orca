@@ -36,10 +36,7 @@ export async function getProjectSlug(
   return getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
 }
 
-/**
- * Fetch a single merge request with pipeline status rolled up.
- * Returns null when the MR doesn't exist or glab fails.
- */
+/** Failures and confirmed absence return null. */
 export async function getMergeRequest(
   repoPath: string,
   iid: number,
@@ -77,17 +74,13 @@ export async function getMergeRequest(
   }
 }
 
-/**
- * Find the explicitly linked merge request, or the newest MR whose source branch matches.
- * Returns null when neither exists.
- */
 export async function getMergeRequestForBranch(
   repoPath: string,
   branch: string,
   linkedMRIid?: number | null,
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {},
-  // Why: when true, a failed lookup throws instead of returning null, so callers never report a false not_found.
+  // Strict callers need failures distinguished from confirmed missing reviews.
   throwOnFailure = false
 ): Promise<MRInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
@@ -124,10 +117,7 @@ export async function getMergeRequestForBranch(
         [
           'api',
           ...glabHostnameArgs(projectRef, connectionId),
-          // Why: GitLab does not proactively recompute merge status on list endpoints, so this row
-          // can sit at `unchecked` forever — and the sidebar merge button gates on MERGEABLE. Ask
-          // for the async recalculation (best-effort; ignored for non-Developers when
-          // `restrict_merge_status_recheck` is on) so polling converges instead of stalling.
+          // List endpoints need asynchronous merge-status recheck; GitLab may restrict this to Developers.
           `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
@@ -138,10 +128,9 @@ export async function getMergeRequestForBranch(
       })[]
       if (Array.isArray(data) && data.length > 0) {
         const raw = data[0]
-        // Why: older GitLab list payloads expose `pipeline` instead of `head_pipeline`.
+        // Older GitLab uses pipeline instead of head_pipeline.
         const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
         const info = mapMRInfo(raw, pipelineStatus)
-        // Why (#9171): discard a non-open implicit branch match on the repo default branch.
         const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
           state: info.state,
           reviewNumber: info.number,
@@ -166,9 +155,7 @@ export async function getMergeRequestForBranch(
   }
 }
 
-/**
- * Like getMergeRequestForBranch but throws glab failures instead of returning null, so callers report 'unavailable' not a false "not found".
- */
+/** Preserve lookup failures as unavailable rather than confirmed missing reviews. */
 export function getMergeRequestForBranchOrThrow(
   repoPath: string,
   branch: string,

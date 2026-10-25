@@ -1,15 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import {
-  X,
-  ExternalLink,
-  Copy,
-  CopyX,
-  Pin,
-  PinOff,
-  PanelLeftClose,
-  PanelRightClose
-} from 'lucide-react'
+import { X, ExternalLink, Copy, CopyX, Pin, PinOff } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,11 +8,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { TabHoverCard } from './TabHoverCard'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { getLiveBrowserUrl } from '../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
@@ -33,12 +24,15 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
-import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
+import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
 export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -73,13 +67,11 @@ export default function BrowserTab({
   isActive,
   isPinned,
   hasTabsToRight,
-  hasTabsToLeft,
   tabCount,
   onActivate,
   onClose,
   onCloseOthers,
-  onCloseToRight,
-  onCloseToLeft,
+  onCloseSplitPane,
   onDuplicate,
   onTogglePin,
   dragData,
@@ -97,6 +89,7 @@ export default function BrowserTab({
   onCloseOthers: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
+  onCloseSplitPane?: () => void
   onDuplicate?: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
@@ -148,6 +141,7 @@ export default function BrowserTab({
   // Why: defer activation to pointer-up so dragging the tab (reorder / move into
   // another pane / split) does not switch the active tab mid-gesture.
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
+  const slotProps = useTabStripSlotProps(tab.id, isActive)
 
   const tabRoot = (
     <div
@@ -219,7 +213,7 @@ export default function BrowserTab({
   return (
     <>
       <div
-        className={TAB_CONTAINER_WIDTH_CLASSES}
+        {...slotProps}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -230,16 +224,17 @@ export default function BrowserTab({
         {menuOpen ? (
           tabRoot
         ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              sideOffset={6}
-              className="max-w-80 whitespace-normal break-words text-left"
-            >
-              {tabLabel}
-            </TooltipContent>
-          </Tooltip>
+          <TabHoverCard
+            title={tabLabel}
+            icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
+            programName={
+              isBlankBrowserTab(tab)
+                ? translate('tabHoverCard.browser', 'Browser')
+                : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
+            }
+          >
+            {tabRoot}
+          </TabHoverCard>
         )}
       </div>
 
@@ -280,6 +275,7 @@ export default function BrowserTab({
               ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
+          <CopyTabIdMenuItem unifiedTabId={dragData.unifiedTabId} />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
             <X className="size-3.5" />
@@ -289,14 +285,7 @@ export default function BrowserTab({
             <CopyX className="size-3.5" />
             {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
-            <PanelRightClose className="size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
-            <PanelLeftClose className="size-3.5" />
-            {translate('components.tab.bar.BrowserTab.closeTabsToLeft', 'Close Tabs To The Left')}
-          </DropdownMenuItem>
+          <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
           <DropdownMenuItem
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}

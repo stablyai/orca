@@ -4,20 +4,19 @@ import type {
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
 import { projectStructuredAgentSessionStatus } from '../../shared/structured-agent-session-projection'
 import {
   createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventTarget
+  type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { MAX_CODEX_ACTIVE_TURNS } from './codex-structured-journal-translation-turn-state'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { deferredTarget } from './codex-deferred-sink-target-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -49,7 +48,6 @@ function recorder() {
   }
 }
 
-/** Latest body per identity, in first-seen order: what the journal reducer keeps. */
 function reduced(rows: readonly Row[]): Row[] {
   const latest = new Map<string, Row>()
   for (const row of rows) {
@@ -58,7 +56,6 @@ function reduced(rows: readonly Row[]): Row[] {
   return [...latest.values()]
 }
 
-/** Fires the coalescing window on demand instead of on wall time. */
 function manualWindow() {
   const pending: (() => void)[] = []
   return {
@@ -96,37 +93,9 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
   return { translator, tap, window }
 }
 
-function deferredTarget(
-  log: AgentJournalItemBody[],
-  publishes: string[] = []
-): StructuredAgentSessionEventTarget {
-  return {
-    fence: 7,
-    journal: {
-      appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-        log.push(body)
-        return { cursor: { epoch: 'e', sequence: log.length } }
-      }),
-      appendTombstone: vi.fn(async () => ({ epoch: 'e', sequence: log.length })),
-      appendLifecycleBatch: vi.fn(
-        async (input: { mutations: readonly JournalLifecycleMutationInput[] }) => {
-          for (const mutation of input.mutations) {
-            if (mutation.kind === 'item') {
-              log.push(mutation.body)
-            }
-          }
-          return { epoch: 'e', sequence: log.length }
-        }
-      )
-    } as unknown as StructuredAgentSessionEventTarget['journal'],
-    publish: vi.fn(() => {
-      publishes.push('publish')
-    })
-  }
-}
-
 function hardWatermarkDeferred() {
   return createDeferredStructuredAgentSessionEventSink({
+    ...testEventSinkLogging(),
     watermarks: {
       pauseQueuedBytes: 1,
       maxQueuedBytes: 1,
@@ -139,31 +108,6 @@ function hardWatermarkDeferred() {
 }
 
 describe('codex journal translation', () => {
-  it('refuses an active-turn overflow before publishing an un-settleable lifecycle row', () => {
-    const tap = recorder()
-    const translator = createCodexJournalTranslator({
-      sink: tap.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    for (let index = 0; index < MAX_CODEX_ACTIVE_TURNS; index += 1) {
-      expect(
-        translator.handle(notification('turn/started', { turn: { id: `turn-${index}` } }))
-      ).toEqual({ accepted: true })
-    }
-    expect(
-      translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
-    ).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(MAX_CODEX_ACTIVE_TURNS)
-
-    expect(translator.handle(notification('turn/completed', { turn: { id: 'turn-0' } }))).toEqual({
-      accepted: true
-    })
-    expect(
-      translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
-    ).toEqual({ accepted: true })
-  })
-
   it('projects turns restored by thread/resume into durable conversation rows', () => {
     const { translator, tap } = translatorWith()
 
@@ -272,8 +216,6 @@ describe('codex journal translation', () => {
       expect.objectContaining({ kind: 'turn', turnId: 'turn-later', state: 'interrupted' })
     ])
     expect(tap.tombstones).toEqual([])
-    // Both running rows are revised to interrupted, so no lifecycle identity
-    // remains live after a session end.
     expect(
       projectStructuredAgentSessionStatus(
         reduced(tap.rows).map((row, sequence) => ({
@@ -285,6 +227,111 @@ describe('codex journal translation', () => {
         }))
       )
     ).toBe('idle')
+  })
+
+  describe('a turn-ending error is a row on the turn it names, and the completion ends it', () => {
+    function statusOf(rows: readonly Row[]) {
+      return projectStructuredAgentSessionStatus(
+        reduced(rows).map((row, sequence) => ({
+          itemId: row.key,
+          revision: 1,
+          sequence: sequence + 1,
+          observedAt: sequence + 1,
+          body: row.body
+        }))
+      )
+    }
+
+    function errorNotification(fields: Record<string, unknown>) {
+      return notification('error', {
+        threadId: THREAD_ID,
+        error: { message: 'Selected model is at capacity. Please try a different model.' },
+        ...fields
+      })
+    }
+
+    const FAILED_COMPLETION = notification('turn/completed', {
+      turn: { id: TURN_ID, status: 'failed', durationMs: 2_400 }
+    })
+
+    it('keeps the turn working through the error, and the failed completion settles it', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      translator.handle(errorNotification({ turnId: TURN_ID, willRetry: false }))
+
+      expect(statusOf(tap.rows)).toBe('working')
+      expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(1)
+
+      translator.handle(FAILED_COMPLETION)
+
+      expect(statusOf(tap.rows)).toBe('idle')
+      expect(reduced(tap.rows).map((row) => row.body)).toContainEqual(
+        expect.objectContaining({
+          kind: 'turn',
+          turnId: TURN_ID,
+          state: 'completed',
+          outcome: 'failure',
+          durationMs: 2_400
+        })
+      )
+      expect(reduced(tap.rows).map((row) => row.body)).toContainEqual(
+        expect.objectContaining({
+          kind: 'status',
+          text: 'Selected model is at capacity. Please try a different model.',
+          tone: 'error'
+        })
+      )
+    })
+
+    it('leaves the turn running for a stream error Codex is about to retry', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      translator.handle(errorNotification({ turnId: TURN_ID, willRetry: true }))
+
+      expect(statusOf(tap.rows)).toBe('working')
+      expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(1)
+    })
+
+    it('writes only its row for an error after the turn completed', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      translator.handle(FAILED_COMPLETION)
+      const settled = reduced(tap.rows).find((row) => row.body.kind === 'turn')?.body
+
+      translator.handle(errorNotification({ turnId: TURN_ID, willRetry: false }))
+
+      expect(reduced(tap.rows).find((row) => row.body.kind === 'turn')?.body).toEqual(settled)
+      expect(statusOf(tap.rows)).toBe('idle')
+    })
+
+    it('settles nothing when the error names no turn', () => {
+      const tap = recorder()
+      const translator = createCodexJournalTranslator({
+        sink: tap.sink,
+        primaryThreadId: () => THREAD_ID
+      })
+
+      translator.handle(TURN_STARTED)
+      translator.handle(errorNotification({ willRetry: false }))
+
+      expect(statusOf(tap.rows)).toBe('working')
+      expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(1)
+    })
   })
 
   it('matches out-of-order completions to each turn identity', () => {
@@ -374,7 +421,6 @@ describe('codex journal translation', () => {
     translator.handle(notification('item/agentMessage/delta', { itemId: 'item-1', delta: 'llo' }))
     window.fire()
 
-    // `item/started` had no text to journal; only the coalesced snapshot lands.
     expect(tap.rows).toEqual([
       {
         key: 'codex:thread-abc:turn-1:0',
@@ -398,8 +444,6 @@ describe('codex journal translation', () => {
     )
     window.fire()
 
-    // One key, so the reducer keeps the last write; the stale snapshot cannot
-    // come back after the window it was pending on fires.
     expect(new Set(tap.rows.map((row) => row.key))).toEqual(new Set(['codex:thread-abc:turn-1:0']))
     expect(tap.rows.map((row) => row.body)).toEqual([
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'part' }] },
@@ -510,6 +554,7 @@ describe('codex journal translation', () => {
     const publishes: string[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
+      ...testEventSinkLogging(),
       watermarks: {
         pauseQueuedBytes: 1,
         maxQueuedBytes: 1,

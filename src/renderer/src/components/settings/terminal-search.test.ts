@@ -8,6 +8,17 @@ import {
 import { matchesSettingsSearch } from './settings-search'
 
 describe('getTerminalPaneSearchEntries', () => {
+  it('indexes desktop administrator mode only for Windows clients', () => {
+    const windows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const remoteWindows = getTerminalPaneSearchEntries({
+      isWindows: false,
+      isWindowsTerminalHost: true,
+      isMac: true
+    })
+    expect(windows.some((entry) => entry.title === 'Administrator mode')).toBe(true)
+    expect(matchesSettingsSearch('uac', windows)).toBe(true)
+    expect(remoteWindows.some((entry) => entry.title === 'Administrator mode')).toBe(false)
+  })
   it('includes the Windows right-click setting on Windows', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(true)
@@ -84,6 +95,16 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(scrollbackEntry).toBeDefined()
     expect(matchesSettingsSearch('rows', [scrollbackEntry!])).toBe(true)
     expect(entries.some((entry) => entry.title === 'Scrollback Size')).toBe(false)
+  })
+
+  it('indexes the Unix terminal shell profile without exposing it on Windows', () => {
+    const unixEntries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    const windowsEntries = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const shellEntry = unixEntries.find((entry) => entry.title === 'Terminal shell')
+
+    expect(shellEntry).toBeDefined()
+    expect(matchesSettingsSearch('rcfile', [shellEntry!])).toBe(true)
+    expect(windowsEntries.some((entry) => entry.title === 'Terminal shell')).toBe(false)
   })
 
   it('includes the OSC 52 clipboard setting on all platforms', () => {

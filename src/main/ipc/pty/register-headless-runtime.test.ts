@@ -33,6 +33,7 @@ describe('registerHeadlessPtyRuntime', () => {
 
     expect(events).toEqual(['handlers', 'hydrate'])
     expect(registerHandlersMock).toHaveBeenCalledOnce()
+    expect(registerHandlersMock.mock.calls[0]?.[0]).toBeUndefined()
     expect(hydrateMock).toHaveBeenCalledWith(store)
 
     resolveHydration()

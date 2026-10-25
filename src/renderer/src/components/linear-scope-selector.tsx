@@ -38,7 +38,7 @@ type LinearScopeTeamSelectionInput = {
 
 export const LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isLinearScopeTeamFilterQueryTooLarge(
+function isLinearScopeTeamFilterQueryTooLarge(
   query: string,
   maxBytes = LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES
 ): boolean {

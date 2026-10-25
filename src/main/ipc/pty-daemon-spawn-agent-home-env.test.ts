@@ -9,7 +9,7 @@ import { delimiter, join } from 'node:path'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../pty/legacy-terminal-shim-dir'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -67,7 +67,7 @@ describe('registerPtyHandlers', () => {
         daemonSpawnAndGetEnv
       } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
 
-      // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
+      // Daemon spawns bypass LocalPtyProvider.buildSpawnEnv; main must inject host-local environment.
       it('overrides an unmarked custom home for an authoritative daemon resume', async () => {
         const daemonSpawn = setupDaemonAdapter()
         const selectedHome = vi.fn(() => '/managed/current/home')
@@ -173,13 +173,13 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
         expect(spawnOptions.envToDelete).toContain('REMOVE_ME')
       })
-      it('prepares Codex project trust before a daemon-backed interactive launch', async () => {
+      it('prepares Codex launch state before a daemon-backed interactive launch', async () => {
         const workspacePath = '/repo/worktrees/new-feature'
         const resolveHome = vi.fn(
           (
             _target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
             _launchEnv?: NodeJS.ProcessEnv,
-            _launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+            _launchContext?: { unavailableManagedHomePath?: string }
           ) => null
         )
 
@@ -191,7 +191,6 @@ describe('registerPtyHandlers', () => {
         })
 
         expect(resolveHome.mock.calls[0]?.[0]).toEqual({ runtime: 'host' })
-        expect(resolveHome.mock.calls[0]?.[2]).toEqual({ workspacePath, launchAgent: 'codex' })
       })
       it('injects explicit proxy settings on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, () => ({
@@ -330,6 +329,40 @@ describe('registerPtyHandlers', () => {
           spy.mockRestore()
         }
       })
+      // Guest overlays are OpenCode-major-specific; the wrong variant silently disables hooks.
+      const guestOverlayCases: {
+        launchAgent?: TuiAgent
+        expectedAgent: 'opencode' | 'opencode2'
+      }[] = [
+        { expectedAgent: 'opencode' },
+        { launchAgent: 'opencode2', expectedAgent: 'opencode2' }
+      ]
+      it.each(guestOverlayCases)(
+        'selects the $expectedAgent guest overlay for a WSL spawn',
+        async ({ launchAgent, expectedAgent }) => {
+          const guestDirs = {
+            opencode: '/home/jin/.orca-relay/opencode-overlays/abc',
+            opencode2: '/home/jin/.orca-relay/opencode2-overlays/def'
+          }
+          const spy = vi
+            .spyOn(wslHookRelayManager, 'getOpenCodeOverlayDir')
+            .mockImplementation((_distro, agent = 'opencode') => guestDirs[agent])
+          try {
+            await withWin32Platform(async () => {
+              const env = await daemonSpawnAndGetEnv({}, undefined, undefined, undefined, {
+                shellOverride: 'wsl.exe',
+                ...(launchAgent ? { launchAgent } : {})
+              })
+              expect(spy.mock.calls.map(([, agent]) => agent)).toEqual([expectedAgent])
+              expect(env.ORCA_OPENCODE_AGENT).toBe(expectedAgent)
+              expect(env.OPENCODE_CONFIG_DIR).toBe(guestDirs[expectedAgent])
+              expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe(guestDirs[expectedAgent])
+            })
+          } finally {
+            spy.mockRestore()
+          }
+        }
+      )
       it('strips the daemon-inherited Orca-owned CODEX_HOME for real-home routing', async () => {
         const spawnOptions = await daemonSpawnAndGetOptions(
           {},
@@ -361,9 +394,7 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.envToDelete ?? []).not.toEqual(expect.arrayContaining(['CODEX_HOME']))
       })
       it('strips inherited Claude child-session stamps from daemon spawns', async () => {
-        // Why: a daemon forked from inside a Claude Code session inherits these
-        // stamps and would mark every terminal as a nested Claude child, which
-        // silently disables transcript persistence for real user sessions.
+        // Inherited Claude child stamps disable transcript persistence in otherwise independent sessions.
         const spawnOptions = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
           CLAUDE_CODE_CHILD_SESSION: '1',
           CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
@@ -377,9 +408,18 @@ describe('registerPtyHandlers', () => {
           ])
         )
       })
+      it('strips an inherited agent session id', async () => {
+        // Inherited structured-session IDs must not identify independent panes as the parent orchestration caller.
+        const inherited = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
+          ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+          ORCA_STRUCTURED_SESSION: '1'
+        })
+        expect(inherited.envToDelete).toEqual(
+          expect.arrayContaining(['ORCA_AGENT_SESSION_ID', 'ORCA_STRUCTURED_SESSION'])
+        )
+      })
       it('preserves an explicitly requested Claude child-session stamp', async () => {
-        // Why: only inherited values are poison; a caller deliberately spawning a
-        // nested Claude child passes the stamp in args.env and must keep it.
+        // Preserve child stamps explicitly supplied by a caller creating a nested session.
         const spawnOptions = await daemonSpawnAndGetOptions(
           { CLAUDE_CODE_CHILD_SESSION: '1' },
           undefined,
@@ -398,13 +438,13 @@ describe('registerPtyHandlers', () => {
           value: 'linux'
         })
         try {
-          // Why: overriding process.platform doesn't change the loaded node:path dialect; keep this synthetic PATH consistent.
+          // Mocking process.platform does not change the loaded node:path delimiter.
           const env = await daemonSpawnAndGetEnv({
             PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter)
           })
           const entries = env.PATH.split(delimiter)
           const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
-          // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca (the GNOME screen reader) in Orca terminals (#7904).
+          // Orca terminals must resolve this CLI before the GNOME screen reader (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
           expect(env.ORCA_CLI_COMMAND).toBeUndefined()
@@ -526,9 +566,7 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GH')
       })
       it('strips inherited Claude child-session stamps from runtime-created PTYs', async () => {
-        // Why: the runtime controller is the `orca` CLI / automation spawn path and
-        // assembles envToDelete separately from the renderer's pty:spawn handler;
-        // without its own case the two paths can silently drift apart.
+        // Cover the independent CLI/automation envToDelete path as well as renderer IPC.
         type RuntimeSpawnController = {
           spawn(args: {
             cols: number

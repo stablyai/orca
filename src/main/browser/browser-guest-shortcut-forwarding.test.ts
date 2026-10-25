@@ -13,269 +13,10 @@ import {
   resolveGuestMouseWheelZoomDirection,
   setupGuestMouseWheelZoomForwarding
 } from './browser-guest-wheel-zoom'
-import { setupGuestContextMenu } from './browser-guest-context-menu'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 
-describe('setupGuestContextMenu', () => {
-  const browserTabId = 'tab-1'
-  let rendererSendMock: ReturnType<typeof vi.fn>
-  let guestOnMock: ReturnType<typeof vi.fn>
-  let guestOffMock: ReturnType<typeof vi.fn>
-
-  function makeGuest(overrides: Record<string, unknown> = {}) {
-    return {
-      getURL: vi.fn(() => 'https://example.com'),
-      canGoBack: vi.fn(() => true),
-      canGoForward: vi.fn(() => false),
-      navigationHistory: {
-        canGoBack: vi.fn(() => true),
-        canGoForward: vi.fn(() => false)
-      },
-      on: guestOnMock,
-      off: guestOffMock,
-      ...overrides
-    } as unknown as Electron.WebContents
-  }
-
-  function makeRenderer() {
-    return { send: rendererSendMock } as unknown as Electron.WebContents
-  }
-
-  beforeEach(() => {
-    rendererSendMock = vi.fn()
-    guestOnMock = vi.fn()
-    guestOffMock = vi.fn()
-    screenGetCursorScreenPointMock.mockReturnValue({ x: 0, y: 0 })
-  })
-
-  function triggerContextMenu(
-    _guest: Electron.WebContents,
-    params: Partial<Electron.ContextMenuParams>
-  ) {
-    const handler = guestOnMock.mock.calls.find((call) => call[0] === 'context-menu')?.[1] as
-      | ((event: unknown, params: Electron.ContextMenuParams) => void)
-      | undefined
-
-    expect(handler).toBeTypeOf('function')
-    handler!({}, { x: 0, y: 0, linkURL: '', ...params } as Electron.ContextMenuParams)
-  }
-
-  it('passes through guest viewport coordinates (params.x/y) to the renderer', () => {
-    const guest = makeGuest()
-    const renderer = makeRenderer()
-
-    setupGuestContextMenu({
-      browserTabId,
-      guest,
-      resolveRenderer: () => renderer
-    })
-
-    triggerContextMenu(guest, { x: 150, y: 275 })
-
-    expect(rendererSendMock).toHaveBeenCalledWith(
-      'browser:context-menu-requested',
-      expect.objectContaining({ x: 150, y: 275 })
-    )
-  })
-
-  it('includes navigation state and page URL alongside coordinates', () => {
-    screenGetCursorScreenPointMock.mockReturnValue({ x: 500, y: 375 })
-    const guest = makeGuest({
-      getURL: vi.fn(() => 'https://test.dev/page'),
-      navigationHistory: {
-        canGoBack: vi.fn(() => true),
-        canGoForward: vi.fn(() => true)
-      }
-    })
-    const renderer = makeRenderer()
-
-    setupGuestContextMenu({
-      browserTabId,
-      guest,
-      resolveRenderer: () => renderer
-    })
-
-    triggerContextMenu(guest, { x: 50, y: 75, linkURL: 'https://test.dev/link' })
-
-    expect(rendererSendMock).toHaveBeenCalledWith('browser:context-menu-requested', {
-      browserPageId: browserTabId,
-      x: 50,
-      y: 75,
-      screenX: 500,
-      screenY: 375,
-      pageUrl: 'https://test.dev/page',
-      linkUrl: 'https://test.dev/link',
-      selectionText: '',
-      canGoBack: true,
-      canGoForward: true
-    })
-  })
-
-  it('forwards the native selection text so the renderer can offer Copy', () => {
-    const guest = makeGuest()
-    const renderer = makeRenderer()
-
-    setupGuestContextMenu({
-      browserTabId,
-      guest,
-      resolveRenderer: () => renderer
-    })
-
-    triggerContextMenu(guest, { x: 10, y: 20, selectionText: 'copied selection' })
-
-    expect(rendererSendMock).toHaveBeenCalledWith(
-      'browser:context-menu-requested',
-      expect.objectContaining({ selectionText: 'copied selection' })
-    )
-  })
-
-  it('reads navigation state from navigationHistory', () => {
-    const deprecatedCanGoBack = vi.fn(() => false)
-    const deprecatedCanGoForward = vi.fn(() => false)
-    const guest = makeGuest({
-      canGoBack: deprecatedCanGoBack,
-      canGoForward: deprecatedCanGoForward,
-      navigationHistory: {
-        canGoBack: vi.fn(() => true),
-        canGoForward: vi.fn(() => true)
-      }
-    })
-    const renderer = makeRenderer()
-
-    setupGuestContextMenu({
-      browserTabId,
-      guest,
-      resolveRenderer: () => renderer
-    })
-
-    triggerContextMenu(guest, { x: 50, y: 75 })
-
-    expect(deprecatedCanGoBack).not.toHaveBeenCalled()
-    expect(deprecatedCanGoForward).not.toHaveBeenCalled()
-    expect(rendererSendMock).toHaveBeenCalledWith(
-      'browser:context-menu-requested',
-      expect.objectContaining({ canGoBack: true, canGoForward: true })
-    )
-  })
-
-  it('does not send when renderer is unavailable', () => {
-    const guest = makeGuest()
-
-    setupGuestContextMenu({
-      browserTabId,
-      guest,
-      resolveRenderer: () => null
-    })
-
-    triggerContextMenu(guest, { x: 100, y: 200 })
-
-    expect(rendererSendMock).not.toHaveBeenCalled()
-  })
-
-  it('cleans up context-menu listener on teardown', () => {
-    const guest = makeGuest()
-
-    const cleanup = setupGuestContextMenu({
-      browserTabId,
-      guest,
-      resolveRenderer: () => makeRenderer()
-    })
-
-    cleanup()
-
-    expect(guestOffMock).toHaveBeenCalledWith('context-menu', expect.any(Function))
-  })
-
-  describe('dismiss handler', () => {
-    function triggerMouseEvent(button: string, type: string = 'mouseDown') {
-      const beforeMouseHandler = guestOnMock.mock.calls.find(
-        (call) => call[0] === 'before-mouse-event'
-      )?.[1] as ((event: unknown, mouse: { type: string; button: string }) => void) | undefined
-
-      expect(beforeMouseHandler).toBeTypeOf('function')
-      beforeMouseHandler!({}, { type, button })
-    }
-
-    it('dismisses context menu on left-click', () => {
-      const guest = makeGuest()
-      const renderer = makeRenderer()
-
-      setupGuestContextMenu({
-        browserTabId,
-        guest,
-        resolveRenderer: () => renderer
-      })
-
-      triggerContextMenu(guest, { x: 100, y: 200 })
-      rendererSendMock.mockClear()
-
-      triggerMouseEvent('left')
-
-      expect(rendererSendMock).toHaveBeenCalledWith('browser:context-menu-dismissed', {
-        browserPageId: browserTabId
-      })
-    })
-
-    it('does not dismiss context menu on right-click', () => {
-      const guest = makeGuest()
-      const renderer = makeRenderer()
-
-      setupGuestContextMenu({
-        browserTabId,
-        guest,
-        resolveRenderer: () => renderer
-      })
-
-      triggerContextMenu(guest, { x: 100, y: 200 })
-      rendererSendMock.mockClear()
-
-      triggerMouseEvent('right')
-
-      expect(rendererSendMock).not.toHaveBeenCalledWith(
-        'browser:context-menu-dismissed',
-        expect.anything()
-      )
-    })
-
-    it('dismisses context menu on middle-click', () => {
-      const guest = makeGuest()
-      const renderer = makeRenderer()
-
-      setupGuestContextMenu({
-        browserTabId,
-        guest,
-        resolveRenderer: () => renderer
-      })
-
-      triggerContextMenu(guest, { x: 100, y: 200 })
-      rendererSendMock.mockClear()
-
-      triggerMouseEvent('middle')
-
-      expect(rendererSendMock).toHaveBeenCalledWith('browser:context-menu-dismissed', {
-        browserPageId: browserTabId
-      })
-    })
-
-    it('ignores non-mouseDown events', () => {
-      const guest = makeGuest()
-      const renderer = makeRenderer()
-
-      setupGuestContextMenu({
-        browserTabId,
-        guest,
-        resolveRenderer: () => renderer
-      })
-
-      triggerContextMenu(guest, { x: 100, y: 200 })
-      rendererSendMock.mockClear()
-
-      triggerMouseEvent('left', 'mouseMove')
-
-      expect(rendererSendMock).not.toHaveBeenCalled()
-    })
-  })
-})
+const zoomTo = (direction: 'in' | 'out' | 'reset') => ({ browserPageId: 'tab-1', direction })
+const historyTo = (direction: 'back' | 'forward') => ({ browserPageId: 'tab-1', direction })
 
 describe('guest mouse wheel browser zoom', () => {
   const browserTabId = 'tab-1'
@@ -366,8 +107,8 @@ describe('guest mouse wheel browser zoom', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(outPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', zoomTo('in'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', zoomTo('out'))
   })
 
   it('consumes guest ctrl wheel even when the renderer is unavailable', () => {
@@ -498,7 +239,7 @@ describe('setupGuestShortcutForwarding', () => {
       const tabReleasePreventDefault = triggerBeforeInput({ ...ctrlTabInput, type: 'keyUp' })
       const keyUpPreventDefault = triggerBeforeInput(releaseInput)
 
-      // Why: keydown must not preventDefault or Electron drops the commit keyup.
+      // Preventing keydown loses the commit keyup in Electron.
       expect(keyDownPreventDefault).not.toHaveBeenCalled()
       expect(tabReleasePreventDefault).not.toHaveBeenCalled()
       expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
@@ -537,12 +278,12 @@ describe('setupGuestShortcutForwarding', () => {
     expect(numpadSubtractPreventDefault).toHaveBeenCalledTimes(1)
     expect(resetPreventDefault).toHaveBeenCalledTimes(1)
     expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:zoomBrowserPage', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:zoomBrowserPage', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:zoomBrowserPage', 'reset')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', zoomTo('in'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', zoomTo('in'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:zoomBrowserPage', zoomTo('out'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:zoomBrowserPage', zoomTo('out'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:zoomBrowserPage', zoomTo('reset'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', zoomTo('in'))
   })
 
   it('forwards browser history shortcuts from focused guest pages', () => {
@@ -566,8 +307,16 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(backPreventDefault).toHaveBeenCalledTimes(1)
     expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:browserHistoryNavigate', 'back')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(
+      1,
+      'ui:browserHistoryNavigate',
+      historyTo('back')
+    )
+    expect(rendererSendMock).toHaveBeenNthCalledWith(
+      2,
+      'ui:browserHistoryNavigate',
+      historyTo('forward')
+    )
   })
 
   it('forwards browser Find with its registered page and workspace owner', () => {
@@ -587,8 +336,6 @@ describe('setupGuestShortcutForwarding', () => {
     })
   })
 
-  // A client-hosted guest is registered by main's host runtime, whose wire command carries no
-  // workspace. Withholding the chord there suppressed Cmd+F in the guest and delivered nothing.
   it('forwards browser Find by page alone when no workspace owner is registered', () => {
     setupGuestShortcutForwarding({
       browserTabId,
@@ -697,7 +444,7 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(defaultPreventDefault).not.toHaveBeenCalled()
     expect(customPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', zoomTo('in'))
   })
 
   it('forwards native guest zoom commands to browser page zoom when default zoom keys are bound', () => {
@@ -714,8 +461,8 @@ describe('setupGuestShortcutForwarding', () => {
     expect(zoomOutPreventDefault).toHaveBeenCalledTimes(1)
     expect(zoomInPreventDefault).toHaveBeenCalledTimes(1)
     expect(resetPreventDefault).not.toHaveBeenCalled()
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', zoomTo('out'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', zoomTo('in'))
   })
 
   it('does not double-forward ctrl wheel when Electron also emits a native zoom command', () => {
@@ -744,7 +491,7 @@ describe('setupGuestShortcutForwarding', () => {
     expect(wheelPreventDefault).toHaveBeenCalledTimes(1)
     expect(zoomCommandPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', zoomTo('in'))
   })
 
   it('ignores native guest zoom commands when matching default zoom keys are unbound', () => {
@@ -847,11 +594,8 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).not.toHaveBeenCalledWith('ui:openQuickOpen')
   })
 
-  // A floating-workspace-owned guest routes close/index chords to the floating-scoped
-  // IPC *carrying its source id*; a main-owned guest keeps main routing.
   describe('source-aware close/index routing', () => {
     const closeInput = { code: 'KeyW', key: 'w' }
-    // workspace.selectByIndex default is Mod+1; tab.selectByIndex default is Ctrl+1 (darwin) / Alt+1 (other).
     const workspaceIndexInput = { code: 'Digit1', key: '1' }
     const tabIndexInput =
       process.platform === 'darwin'

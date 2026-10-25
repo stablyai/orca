@@ -216,7 +216,9 @@ export function useNativeChatSessionOptions(args: {
     const matched =
       agent === 'omp'
         ? reportedModel.trim()
-        : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel)
+        : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel, {
+            allowUnlisted: agent === 'codex'
+          })
     if (!matched || appliedReportedModelRef.current === matched) {
       return
     }
@@ -253,7 +255,8 @@ export function useNativeChatSessionOptions(args: {
     ensureNativeChatModelEnrichment({
       agent,
       hostKey: discoveryContext.hostKey,
-      discover: () => discoverNativeChatCatalogModels(agent, discoveryContext.runtime)
+      discover: () =>
+        discoverNativeChatCatalogModels(agent, discoveryContext.runtime, discoveryContext.hostKey)
     })
     return unsubscribe
   }, [agent, discoveryContext, surface])

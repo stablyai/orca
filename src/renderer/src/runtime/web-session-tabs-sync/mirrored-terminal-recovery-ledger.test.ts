@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { TerminalTab, TerminalTabRecoveryLedger } from '../../../../shared/terminal-tab-types'
 import { buildMirroredTerminalTabs } from './terminal-build'
-import { toWebTerminalSurfaceTabId } from '../web-terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 
 /**
  * The recovery ledger is client-local. The host publishes no such field, so a
@@ -55,7 +55,15 @@ function rebuild(existing?: Partial<TerminalTab>): TerminalTab {
   const existingById = new Map<string, TerminalTab>(
     existing ? [[localTabId, { id: localTabId, ...existing } as TerminalTab]] : []
   )
-  const [mirrored] = buildMirroredTerminalTabs(snapshot(), ENVIRONMENT, existingById, {}, 0, 1_000)
+  const [mirrored] = buildMirroredTerminalTabs(
+    snapshot(),
+    ENVIRONMENT,
+    existingById,
+    {},
+    {},
+    0,
+    1_000
+  )
   return mirrored!.tab
 }
 

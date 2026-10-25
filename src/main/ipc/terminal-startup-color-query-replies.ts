@@ -1,31 +1,11 @@
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress-intent'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
+import { recognizeAgentLaunchCommand } from '../../shared/agent-command-line-intent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { agentKindSchema } from '../../shared/telemetry-events'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
-import {
-  terminalOscColorQueryReply,
-  type TerminalOscColorQueryReplyColors
-} from '../../shared/terminal-osc-color-reply'
 
-function normalizeTerminalColorQueryReplyColors(
-  value: unknown
-): TerminalOscColorQueryReplyColors | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-  const record = value as { foreground?: unknown; background?: unknown }
-  const colors = {
-    ...(typeof record.foreground === 'string' ? { foreground: record.foreground } : {}),
-    ...(typeof record.background === 'string' ? { background: record.background } : {})
-  }
-  if (!terminalOscColorQueryReply(colors, 10) || !terminalOscColorQueryReply(colors, 11)) {
-    return null
-  }
-  return colors
-}
-
-function shouldReplyToStartupTerminalColorQueries(args: {
+function isAgentLaunch(args: {
   launchAgent?: unknown
   telemetry?: { agent_kind?: unknown } | undefined
   command?: string
@@ -42,7 +22,21 @@ function shouldReplyToStartupTerminalColorQueries(args: {
     return true
   }
   const command = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
-  return recognizeAgentProcessFromCommandLine(command) !== null
+  return recognizeAgentLaunchCommand(command) !== null
+}
+
+// jcode queries before TUI input is ready; suppress cooked replies via agent, telemetry kind or quick-launch command.
+export function agentSkipsStartupOscColorQueryReplies(args: {
+  launchAgent?: unknown
+  telemetry?: { agent_kind?: unknown } | undefined
+  command?: string
+  launchConfig?: SleepingAgentLaunchConfig
+}): boolean {
+  if (args.launchAgent === 'jcode' || args.telemetry?.agent_kind === 'jcode') {
+    return true
+  }
+  const command = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
+  return command.length > 0 && recognizeAgentLaunchCommand(command)?.agent === 'jcode'
 }
 
 export function getStartupTerminalIngressIntent(args: {
@@ -53,12 +47,13 @@ export function getStartupTerminalIngressIntent(args: {
   terminalColorQueryReplies?: unknown
   terminalKittyKeyboardProtocol?: boolean
 }) {
-  if (!shouldReplyToStartupTerminalColorQueries(args)) {
-    return undefined
-  }
+  // Seed every PTY: agents launched later from plain shells can also query before viewer colors arrive.
+  const colors = agentSkipsStartupOscColorQueryReplies(args)
+    ? {}
+    : (normalizeColorQueryReplyColors(args.terminalColorQueryReplies) ?? {})
   return parsePtyStartupIngressIntent({
-    colors: normalizeTerminalColorQueryReplyColors(args.terminalColorQueryReplies) ?? {},
-    kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol,
+    kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol === true && isAgentLaunch(args),
+    colors,
     deadlineMs: 5_000
   })
 }

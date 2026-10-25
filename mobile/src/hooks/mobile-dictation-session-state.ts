@@ -26,9 +26,10 @@ export type UseMobileDictationResult = {
 
 export const DICTATION_FINISH_TIMEOUT_MS = 75_000
 
-// Recording start waits at most this long for the best-effort wake tag; a
-// slow or hung native keep-awake module must not hold the mic in 'starting'.
-export const MOBILE_DICTATION_KEEP_AWAKE_STARTUP_BUDGET_MS = 500
+/** Shown when the composer stops accepting input under a start the user tapped: the tap has to end
+ *  in something the composer can render, and only the user's own cancel may end in silence. */
+export const MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE =
+  'Voice dictation stopped because this session is no longer accepting input. Try again.'
 
 export function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64')
@@ -48,18 +49,14 @@ export function isCurrentMobileDictationStart(
   return currentGeneration === generation && enabled && activeId === dictationId
 }
 
+/** A finish is still this dictation's while nothing has superseded it: `cancel`, a disable, an
+ *  unmount and a newer start each bump the generation or clear the active id, and most do both. */
 export function isCurrentMobileDictationFinish(
   currentGeneration: number,
   generation: number,
   enabled: boolean,
   activeId: string | null,
-  finishingId: string | null,
   dictationId: string
 ): boolean {
-  return (
-    currentGeneration === generation &&
-    enabled &&
-    activeId === dictationId &&
-    finishingId === dictationId
-  )
+  return currentGeneration === generation && enabled && activeId === dictationId
 }

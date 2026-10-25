@@ -2,15 +2,17 @@
 // String normalizers shared by every agent-status payload field: trim/fold to
 // a single line for previews, preserve structure for multiline bodies, and
 // truncate without splitting surrogate pairs. Extracted from
-// agent-status-types.ts, which owns the payload shapes and per-field caps.
+// agent-status-types.ts, which owns the payload shapes and the caps no other module applies.
 
-import {
-  compactDispatchPromptForStatus,
-  isOrcaDispatchStatusPrompt
-} from './orca-dispatch-status-prompt'
+import { compactDispatchPromptForStatus } from './orca-dispatch-status-prompt'
 
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
+/** Maximum character length for the toolInput preview. */
+export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
+/** Maximum character length for the agentType label. Truncated on parse. */
+export const AGENT_TYPE_MAX_LENGTH = 40
+export const AGENT_MODEL_MAX_LENGTH = 120
 
 const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
 const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8
@@ -45,14 +47,13 @@ export function normalizePromptField(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
   }
-  if (isOrcaDispatchStatusPrompt(value)) {
-    return compactDispatchPromptForStatus(
+  return (
+    compactDispatchPromptForStatus(
       value,
       AGENT_STATUS_MAX_FIELD_LENGTH,
       normalizeSingleLinePreview
-    )
-  }
-  return normalizeSingleLinePreview(value, AGENT_STATUS_MAX_FIELD_LENGTH)
+    ) ?? normalizeSingleLinePreview(value, AGENT_STATUS_MAX_FIELD_LENGTH)
+  )
 }
 
 function normalizeSingleLinePreview(value: string, maxLength: number): string {
@@ -177,11 +178,68 @@ function isEcmaTrimWhitespace(code: number): boolean {
 // Why: tool/assistant fields are optional on the entry (absence = "no update
 // for this field"). We only surface them when the caller actually provided a
 // string value so a missing field doesn't overwrite the prior cached state.
+// Why: some agents submit option labels verbatim, so only presentation-only fields may shrink.
+const COMPACTABLE_INTERACTIVE_PROMPT_FIELDS = new Set([
+  'description',
+  'detail',
+  'header',
+  'question',
+  'summary'
+])
+
+function compactInteractivePromptValue(value: unknown, maxStringLength: number): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => compactInteractivePromptValue(item, maxStringLength))
+  }
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      typeof item === 'string' && COMPACTABLE_INTERACTIVE_PROMPT_FIELDS.has(key)
+        ? truncatePreservingSurrogates(item, maxStringLength)
+        : compactInteractivePromptValue(item, maxStringLength)
+    ])
+  )
+}
+
+/** Longest form of `prompt` that `fits` accepts, or null. A JSON prompt stays valid JSON with
+ *  every option label intact by shortening only its presentation text; other text is cut. */
+export function fitInteractivePrompt(
+  prompt: string,
+  fits: (candidate: string) => boolean
+): string | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(prompt)
+  } catch {
+    parsed = undefined
+  }
+  const promptAtLimit = (limit: number): string =>
+    parsed === undefined
+      ? truncatePreservingSurrogates(prompt, limit)
+      : JSON.stringify(compactInteractivePromptValue(parsed, limit))
+  let low = 1
+  let high = prompt.length
+  let fitted: string | null = null
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    const candidate = promptAtLimit(mid)
+    if (fits(candidate)) {
+      fitted = candidate
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+  return fitted
+}
+
 // Why: interactivePrompt carries raw JSON (`{ questions: [...] }`) that clients
 // JSON.parse to render a structured card. Unlike the other normalizers we must
 // NOT trim, collapse newlines, or fold blank-line runs — any of those would
-// corrupt the JSON or alter option text inside it. Only guard the length cap
-// (preserving surrogate pairs) and drop empty strings to undefined.
+// corrupt the JSON or alter option text inside it. Drop empty strings to undefined.
 export function normalizeInteractivePromptField(
   value: unknown,
   maxLength: number
@@ -189,8 +247,18 @@ export function normalizeInteractivePromptField(
   if (typeof value !== 'string' || value.length === 0) {
     return undefined
   }
-  const truncated = truncatePreservingSurrogates(value, maxLength)
-  return truncated.length > 0 ? truncated : undefined
+  if (value.length <= maxLength) {
+    return value
+  }
+  const fitted = fitInteractivePrompt(value, (candidate) => candidate.length <= maxLength)
+  if (fitted !== null) {
+    return fitted
+  }
+  // Why: labels alone over the cap keep the plain cut; readers treat unparseable JSON as capped.
+  console.warn(
+    `[agent-status] interactivePrompt of ${value.length} chars cannot fit ${maxLength} with its option labels; no card will show`
+  )
+  return truncatePreservingSurrogates(value, maxLength)
 }
 
 export function normalizeOptionalField(value: unknown, maxLength: number): string | undefined {

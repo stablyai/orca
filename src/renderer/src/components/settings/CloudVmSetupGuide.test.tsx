@@ -19,8 +19,8 @@ describe('CloudVmSetupGuide', () => {
 
     act(() => root.render(<CloudVmSetupGuide />))
 
-    expect(container.textContent).toContain('Create a Cloud VM')
-    expect(container.textContent).toContain('Create a workspace')
+    expect(container.textContent).toContain('Cloud VMs')
+    expect(container.textContent).toContain('environment recipe')
 
     const button = container.querySelector('button')
     if (!button) {

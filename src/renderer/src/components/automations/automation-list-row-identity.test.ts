@@ -25,7 +25,12 @@ import {
   matchAutomationListSearchRowKeys
 } from './automation-list-search-rows'
 import { REPO_ID } from './automations-page-fixtures'
-import { automationRepoForRow, automationWorktreeForRow } from './automation-list-row-identity'
+import { makeFolderWorkspace } from '../sidebar/folder-workspace-composer-submit-fixtures'
+import {
+  automationFolderWorktreeForRow,
+  automationRepoForRow,
+  automationWorktreeForRow
+} from './automation-list-row-identity'
 
 const repoMap = new Map([
   [REPO_ID, { id: REPO_ID, displayName: 'orca', path: '/src/orca' } as Repo]
@@ -176,5 +181,18 @@ describe('automation list row identity across hosts', () => {
         )?.displayName
       })
     ).toEqual(['Desktop workspace', 'Runtime workspace'])
+  })
+
+  it('resolves a folder workspace target inside each row authority', () => {
+    const rows = collidedListRows().rows
+    const folders = [
+      makeFolderWorkspace({ id: 'fw-1', name: 'Desktop folder' }),
+      makeFolderWorkspace({ id: 'fw-1', name: 'Runtime folder', executionHostId: 'runtime:gpu' })
+    ]
+
+    expect(
+      rows.map((row) => automationFolderWorktreeForRow(row, folders, 'folder:fw-1')?.displayName)
+    ).toEqual(['Desktop folder', 'Runtime folder'])
+    expect(automationFolderWorktreeForRow(rows[0], folders, 'ws-1')).toBeUndefined()
   })
 })

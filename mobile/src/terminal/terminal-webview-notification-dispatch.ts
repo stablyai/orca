@@ -29,6 +29,10 @@ export function dispatchTerminalWebViewNotification(
   } else if (msg.type === 'selection') {
     const text = typeof msg.text === 'string' ? msg.text : ''
     handlers.onSelectionCopy?.(text)
+  } else if (msg.type === 'clipboard-write') {
+    if (typeof msg.text === 'string') {
+      handlers.onClipboardWrite?.(msg.text)
+    }
   } else if (msg.type === 'selection-evicted') {
     handlers.onSelectionEvicted?.()
   } else if (msg.type === 'modes') {
@@ -49,7 +53,11 @@ export function dispatchTerminalWebViewNotification(
   } else if (msg.type === 'terminal-input') {
     const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
     if (bytes.length > 0) {
-      handlers.onTerminalInput?.(bytes)
+      if (msg.click === true) {
+        handlers.onTerminalInput?.(bytes, { click: true })
+      } else {
+        handlers.onTerminalInput?.(bytes)
+      }
     }
   } else if (msg.type === 'terminal-tap') {
     handlers.onTerminalTap?.()

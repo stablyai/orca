@@ -1,5 +1,6 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
+  mainAgentStatusEqual,
   agentSubagentsEqual,
   isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
@@ -7,7 +8,6 @@ import {
   pickParsedAgentStatusPayload,
   AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
@@ -17,6 +17,11 @@ import {
 } from './agent-status-types'
 import type { AgentType, WellKnownAgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
+import {
+  ORCA_DISPATCH_PROMPT_LEAD_LINE,
+  ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
+} from './orca-dispatch-status-prompt'
+import { parseAskFromStatus } from './native-chat-ask'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -187,6 +192,32 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(result!.prompt).not.toContain('marker parsing')
   })
 
+  it('compacts a Claude hook prompt carrying the typed lead line and paste wrapper', () => {
+    const preamble = `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX}\nYour task ID is: task_lead\n\n=== TASK ===\nAdd greet()`
+    const normalize = (prompt: string): string =>
+      normalizeAgentStatusPayload({ state: 'working', prompt })!.prompt
+    const compact = `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX} Your task ID is: task_lead === TASK === Add greet()`
+
+    // Why: the shape Claude Code's UserPromptSubmit hook reports for a typed lead plus a paste.
+    expect(
+      normalize(
+        `${ORCA_DISPATCH_PROMPT_LEAD_LINE}\n\n<pasted_content id="aac2">\n${preamble}\n</pasted_content id="aac2">\n`
+      )
+    ).toBe(compact)
+    expect(normalize(`\n\n<pasted_content id="965a">\n${preamble}`)).toBe(compact)
+    expect(normalize(`<pasted_content ${'x'.repeat(80)}>${preamble}`)).not.toBe(compact)
+    expect(normalize(`<pasted_content ${'x'.repeat(30_000)}`)).not.toContain('TASK')
+    expect(normalize(`please review: ${preamble}`)).toBe(
+      `please review: ${preamble.replace(/\n+/g, ' ')}`
+    )
+    // Why: the closing paste tag must not become the task body of an empty spec.
+    expect(
+      normalize(
+        `<pasted_content id="1">\n${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX}\n=== TASK ===\n</pasted_content id="1">`
+      )
+    ).toBe(ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX)
+  })
+
   it('keeps dispatch detection bounded for oversized whitespace prompts', () => {
     const trimStartSpy = vi.spyOn(String.prototype, 'trimStart')
     const prompt = ' '.repeat(1_000_000)
@@ -208,11 +239,12 @@ Fix dispatch fallback preview for normalized status prompts`
   })
 
   it('accepts custom non-empty agentType values', () => {
-    const result = parseAgentStatusPayload('{"state":"working","agentType":"cursor"}')
+    const agentType: AgentType = 'some-in-house-agent'
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'working', agentType }))
     expect(result).toEqual({
       state: 'working',
       prompt: '',
-      agentType: 'cursor'
+      agentType
     })
   })
 
@@ -275,7 +307,25 @@ Fix dispatch fallback preview for normalized status prompts`
       JSON.stringify({ state: 'waiting', interactivePrompt: long })
     )
     expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
-    expect(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH).toBe(16000)
+  })
+
+  it('shortens an oversized question prompt into a card that still parses with every option', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [
+        {
+          question: 'q'.repeat(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH + 4000),
+          header: 'Plan',
+          options: [{ label: 'Ship it', description: 'd'.repeat(3000) }, { label: 'Wait' }]
+        }
+      ]
+    })
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
+    expect(result!.interactivePrompt!.length).toBeLessThanOrEqual(
+      AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
+    )
+    const ask = parseAskFromStatus(result!.interactivePrompt, 'ask_user_question')
+    expect(ask!.questions[0].question.startsWith('qqq')).toBe(true)
+    expect(ask!.questions[0].options.map((option) => option.label)).toEqual(['Ship it', 'Wait'])
   })
 
   it('leaves interactivePrompt undefined when absent or non-string', () => {
@@ -541,7 +591,7 @@ Fix dispatch fallback preview for normalized status prompts`
     }
   })
 
-  it('normalizes the subagents field, dropping invalid entries and bounding count', () => {
+  it('normalizes the subagents field, dropping invalid entries and keeping every valid one', () => {
     const result = parseAgentStatusPayload(
       JSON.stringify({
         state: 'working',
@@ -552,7 +602,7 @@ Fix dispatch fallback preview for normalized status prompts`
           { id: '', state: 'working', startedAt: 1 },
           { id: 'bad-state', state: 'running', startedAt: 1 },
           'garbage',
-          ...Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 5 }, (_, i) => ({
+          ...Array.from({ length: 37 }, (_, i) => ({
             id: `extra-${i}`,
             state: 'idle',
             startedAt: i
@@ -560,7 +610,7 @@ Fix dispatch fallback preview for normalized status prompts`
         ]
       })
     )
-    expect(result?.subagents?.length).toBe(AGENT_STATUS_MAX_SUBAGENTS)
+    expect(result?.subagents?.length).toBe(40)
     expect(result?.subagents?.[0]).toEqual({
       id: 'a1',
       state: 'working',
@@ -701,9 +751,73 @@ describe('WellKnownAgentType', () => {
       'rovo'
     ])
   })
+})
 
-  it('keeps AgentType open to custom agent names', () => {
-    const custom: AgentType = 'some-in-house-agent'
-    expect(custom).toBe('some-in-house-agent')
+describe('the main agent field on a status payload', () => {
+  it('admits a well-formed main agent with its verdict only while the main agent is done', () => {
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"working","mainAgent":{"state":"done","outcome":"cancellation","stateStartedAt":5}}'
+      )?.mainAgent
+    ).toEqual({ state: 'done', outcome: 'cancellation', stateStartedAt: 5 })
+    // A verdict belongs to a finished turn; one riding on a live main agent state is stale.
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"working","mainAgent":{"state":"working","outcome":"failure","stateStartedAt":5}}'
+      )?.mainAgent
+    ).toEqual({ state: 'working', stateStartedAt: 5 })
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"done","mainAgent":{"state":"done","outcome":"maybe","stateStartedAt":5}}'
+      )?.mainAgent
+    ).toEqual({ state: 'done', stateStartedAt: 5 })
+  })
+
+  it('admits the host-observed verdicts, and reads an arm it cannot name as no verdict', () => {
+    for (const outcome of ['interruption', 'unconfirmed'] as const) {
+      expect(
+        parseAgentStatusPayload(
+          `{"state":"done","mainAgent":{"state":"done","outcome":"${outcome}","stateStartedAt":5}}`
+        )?.mainAgent
+      ).toEqual({ state: 'done', outcome, stateStartedAt: 5 })
+    }
+    // A newer host's arm drops the verdict, never the row: the row reads today's done.
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"done","prompt":"keep me","mainAgent":{"state":"done","outcome":"from-a-newer-host","stateStartedAt":5}}'
+      )
+    ).toMatchObject({ state: 'done', prompt: 'keep me', mainAgent: { state: 'done' } })
+  })
+
+  it('drops a malformed main agent but never the row it rides on', () => {
+    for (const mainAgent of [
+      '"done"',
+      '{"state":"running","stateStartedAt":5}',
+      '{"state":"done"}',
+      '{"state":"done","stateStartedAt":"5"}',
+      '{"stateStartedAt":5}',
+      'null'
+    ]) {
+      const parsed = parseAgentStatusPayload(
+        `{"state":"working","prompt":"keep me","mainAgent":${mainAgent}}`
+      )
+      expect(parsed, mainAgent).toMatchObject({ state: 'working', prompt: 'keep me' })
+      expect(parsed?.mainAgent, mainAgent).toBeUndefined()
+    }
+  })
+
+  it('is carried by the client-visible projection and compared structurally', () => {
+    const mainAgent = { state: 'done' as const, stateStartedAt: 7 }
+    expect(
+      pickParsedAgentStatusPayload({ state: 'working', prompt: '', mainAgent }).mainAgent
+    ).toEqual(mainAgent)
+    expect(pickParsedAgentStatusPayload({ state: 'working', prompt: '' })).not.toHaveProperty(
+      'mainAgent'
+    )
+    expect(mainAgentStatusEqual(mainAgent, { ...mainAgent })).toBe(true)
+    expect(mainAgentStatusEqual(mainAgent, { ...mainAgent, outcome: 'failure' })).toBe(false)
+    expect(mainAgentStatusEqual(mainAgent, { ...mainAgent, stateStartedAt: 8 })).toBe(false)
+    expect(mainAgentStatusEqual(undefined, undefined)).toBe(true)
+    expect(mainAgentStatusEqual(mainAgent, undefined)).toBe(false)
   })
 })

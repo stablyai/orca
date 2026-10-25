@@ -32,3 +32,12 @@ export function assertRuntimeStatusCompatible(status: RuntimeStatus): void {
     throw error
   }
 }
+
+export function isRuntimeStatusCompatible(status: RuntimeStatus): boolean {
+  try {
+    assertRuntimeStatusCompatible(status)
+    return true
+  } catch {
+    return false
+  }
+}

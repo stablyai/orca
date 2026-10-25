@@ -26,6 +26,8 @@ describe('createAgentStatusEpochClock', () => {
     expect(clock(2)).toBe(200)
     expect(clock(2)).toBe(200)
     expect(clock(3)).toBe(300)
+    expect(clock(1)).toBe(400)
+    expect(clock(1)).toBe(400)
   })
 })
 
