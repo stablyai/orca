@@ -44,6 +44,7 @@ function reuseThreadIfEqual(
     previous.worktree === next.worktree &&
     previous.repo === next.repo &&
     previous.tab === next.tab &&
+    previous.executionHostId === next.executionHostId &&
     previous.agentType === next.agentType &&
     previous.currentAgentState === next.currentAgentState &&
     previous.currentAgentEntry === next.currentAgentEntry &&
@@ -81,6 +82,7 @@ export function buildAgentPaneThreads(
         worktree: event.worktree,
         repo: event.repo,
         tab: event.tab,
+        executionHostId: event.executionHostId,
         agentType: event.agentType,
         currentAgentState: null,
         currentAgentEntry: null,
@@ -122,6 +124,7 @@ export function buildAgentPaneThreads(
         worktree: liveAgent.worktree,
         repo: liveAgent.repo,
         tab: liveAgent.tab,
+        executionHostId: liveAgent.executionHostId,
         agentType: liveAgent.agentType,
         currentAgentState: liveAgent.state,
         currentAgentEntry: liveAgent.entry,
@@ -138,6 +141,7 @@ export function buildAgentPaneThreads(
     existing.paneTitle = paneTitleForEntry(liveAgent.entry, liveAgent.tab, generatedTitlesEnabled)
     existing.worktree = liveAgent.worktree
     existing.repo = liveAgent.repo
+    existing.executionHostId = liveAgent.executionHostId
     existing.tab = liveAgent.tab
     existing.agentType = liveAgent.agentType
     existing.currentAgentState = liveAgent.state

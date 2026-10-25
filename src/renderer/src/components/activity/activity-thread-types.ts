@@ -4,6 +4,7 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../../shared/agent-status-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -28,6 +29,8 @@ export type ActivityEvent = {
   repo: Repo | null
   entry: AgentStatusEntry
   tab: TerminalTab
+  /** Remote host the session itself names (tab stamp or PTY); absent defers to the worktree/repo owner. */
+  executionHostId?: ExecutionHostId
   agentType: AgentType
   agentAlive: boolean
   migrationUnsupportedPtyId?: string
@@ -41,6 +44,7 @@ export type ActivityLiveAgentSnapshot = {
   repo: Repo | null
   entry: AgentStatusEntry
   tab: TerminalTab
+  executionHostId?: ExecutionHostId
   agentType: AgentType
 }
 
@@ -51,6 +55,7 @@ export type AgentPaneThread = {
   worktree: Worktree
   repo: Repo | null
   tab: TerminalTab
+  executionHostId?: ExecutionHostId
   agentType: AgentType
   currentAgentState: ActivityLiveAgentState | null
   currentAgentEntry: AgentStatusEntry | null

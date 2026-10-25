@@ -1,21 +1,15 @@
 import React, { useCallback, useMemo } from 'react'
-import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 'lucide-react'
+import { Copy, FolderGit2, GitBranch, LocateFixed } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
+import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import {
-  getExecutionHostLabel,
-  getWorktreeExecutionHostId,
-  parseExecutionHostId
-} from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
 import { DetailHeader, MetadataActionIcon } from '../sidebar/WorktreeCardMetadataControls'
 import {
@@ -25,44 +19,26 @@ import {
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
 import { activityThreadRowCopy, threadAgentStateLabel } from './activity-thread-presentation'
 import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
+import {
+  ExecutionHostGlyph,
+  getActivityThreadExecutionHostId,
+  useActivityThreadHostLabel
+} from './activity-thread-host'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export function ActivityThreadHoverCardSummary({
   thread,
-  settings,
   onJumpToWorkspace,
   canJumpToWorkspace
 }: {
   thread: AgentPaneThread
-  settings: GlobalSettings | null | undefined
   onJumpToWorkspace?: (event: React.MouseEvent) => void
   canJumpToWorkspace?: boolean
 }): React.JSX.Element {
   const { worktree, repo } = thread
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
-  const parsedHost = parseExecutionHostId(executionHostId)
-  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const hostDisplayLabel = useMemo(() => {
-    const override = hostLabelOverrides.get(executionHostId)
-    if (override) {
-      return override
-    }
-    if (parsedHost?.kind === 'runtime') {
-      const environment = runtimeEnvironments.find((entry) => entry.id === parsedHost.environmentId)
-      if (environment?.name) {
-        return environment.name
-      }
-    }
-    if (parsedHost?.kind === 'ssh') {
-      const target = sshTargetLabels.get(parsedHost.targetId)
-      if (target) {
-        return target
-      }
-    }
-    return getExecutionHostLabel(executionHostId)
-  }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
+  const sessionHostId = getActivityThreadExecutionHostId(thread)
+  const hostDisplayLabel = useActivityThreadHostLabel(thread, 'display')
   const branchIdentityDisplay = useMemo(() => getWorktreeGitIdentityDisplay(worktree), [worktree])
   const { taskTitle, needsAttention } = activityThreadRowCopy(thread)
   const workspaceTitle = getActivityThreadWorkspaceTitle(worktree)
@@ -203,13 +179,7 @@ export function ActivityThreadHoverCardSummary({
           ) : null}
 
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            {parsedHost?.kind === 'runtime' ? (
-              <Cloud className="size-3 shrink-0" />
-            ) : parsedHost?.kind === 'ssh' ? (
-              <Server className="size-3 shrink-0" />
-            ) : (
-              <Laptop className="size-3 shrink-0" />
-            )}
+            <ExecutionHostGlyph hostId={sessionHostId} className="size-3" />
             <span className="truncate font-medium">{hostDisplayLabel}</span>
           </div>
 

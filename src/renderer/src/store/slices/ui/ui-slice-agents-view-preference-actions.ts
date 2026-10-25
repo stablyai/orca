@@ -44,6 +44,11 @@ export function createAgentsViewPreferenceActions(set: UISliceSet): Partial<UISl
       set({ agentsCompactMode: v })
       window.api.ui.set({ agentsCompactMode: v }).catch(console.error)
     },
+    agentsAlwaysShowSessionHost: false,
+    setAgentsAlwaysShowSessionHost: (v) => {
+      set({ agentsAlwaysShowSessionHost: v })
+      window.api.ui.set({ agentsAlwaysShowSessionHost: v }).catch(console.error)
+    },
     agentsShowSearch: true,
     setAgentsShowSearch: (v) => {
       set({ agentsShowSearch: v })

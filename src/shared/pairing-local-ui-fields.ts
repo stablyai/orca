@@ -19,6 +19,7 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsHideCliCreatedWorkspaces',
   'agentsShowChildAgents',
   'agentsCompactMode',
+  'agentsAlwaysShowSessionHost',
   'agentsShowSearch',
   'agentsReadFilter',
   'agentsGroupBy',

@@ -20,6 +20,12 @@ Each entry in the feed is one of:
 
 Threads are grouped by status — running agents stay pinned at the top so you can spot the ones still working at a glance.
 
+## Showing which host a session runs on
+
+Open the feed's options menu and turn on **Always show session host** under **View**. Each session card then shows a small host icon and name next to its workspace — your own computer, an SSH target, or a paired server — so you can tell machines apart without hovering. A host you've renamed shows its new name, and a host with no recognizable name is left off rather than guessed. When space is tight, the workspace name shortens before the host does.
+
+The setting is off by default and is remembered per client. The card's hover preview always lists the host under **Workspace**.
+
 ## Interplay with notifications
 
 The Agents feed doesn't replace the [header bell](/docs/notifications) or system notifications — those still fire on agent-finished pings. The feed is the catch-up surface when you've been away from Orca: instead of scrolling each worktree to find what changed, scan it.

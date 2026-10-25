@@ -3,6 +3,7 @@ import type {
   AgentStateHistoryEntry,
   AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -51,6 +52,7 @@ type PaneEventInputs = {
   entry: AgentStatusEntry
   worktree: Worktree
   repo: Repo | null
+  executionHostId?: ExecutionHostId
   tab: TerminalTab
   agentType: AgentStatusEntry['agentType']
   agentAlive: boolean
@@ -85,6 +87,7 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
       repo: args.repo,
       entry,
       tab: args.tab,
+      executionHostId: args.executionHostId,
       agentType: args.agentType ?? 'unknown',
       agentAlive: args.agentAlive,
       migrationUnsupportedPtyId: args.migrationUnsupportedPtyId,

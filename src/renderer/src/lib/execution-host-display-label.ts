@@ -40,6 +40,21 @@ export function selectExecutionHostDisplayLabel(
   return getExecutionHostLabel(hostId)
 }
 
+/** A host's display name, or null when no name a person could recognize exists: the unresolved-owner sentinel or an unnamed paired server. */
+export function selectNamedExecutionHostLabel(
+  state: AppState,
+  hostId: ExecutionHostId,
+  options: { sshEnvironmentId?: string | null } = {}
+): string | null {
+  if (isUnresolvedOwnerHostId(hostId)) {
+    return null
+  }
+  const label = selectExecutionHostDisplayLabel(state, hostId, options)
+  const parsed = parseExecutionHostId(hostId)
+  // A raw environment id is routing identity, not a name.
+  return parsed?.kind === 'runtime' && label === parsed.environmentId ? null : label
+}
+
 /** Return null for contested ownership; unresolved-owner is routing bookkeeping, never a user-visible machine name. */
 export function selectWorktreeHostDisplayLabel(state: AppState, worktreeId: string): string | null {
   const hostId = getExecutionHostIdForWorktree(state, worktreeId)

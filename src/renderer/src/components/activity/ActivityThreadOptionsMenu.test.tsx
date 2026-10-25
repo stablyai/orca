@@ -150,6 +150,35 @@ describe('ActivityThreadOptionsMenu', () => {
     }
   })
 
+  it('toggles and persists the always-show-session-host preference', async () => {
+    const originalState = useAppStore.getState()
+    const persist = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { set: persist } })
+    useAppStore.setState({ agentsAlwaysShowSessionHost: false })
+    try {
+      await act(async () => root.render(<Harness />))
+      const trigger = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Thread list options"]'
+      )
+      await act(async () => {
+        trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+      })
+      const item = Array.from(
+        document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
+      ).find((entry) => entry.textContent === 'Always show session host')
+      expect(item?.getAttribute('aria-checked')).toBe('false')
+      await act(async () => {
+        item?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+      })
+
+      expect(useAppStore.getState().agentsAlwaysShowSessionHost).toBe(true)
+      expect(persist).toHaveBeenCalledWith({ agentsAlwaysShowSessionHost: true })
+    } finally {
+      act(() => useAppStore.setState(originalState))
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('keeps the focused menu button described through repeated opens and rerenders', async () => {
     for (let cycle = 0; cycle < 3; cycle += 1) {
       await act(async () => {

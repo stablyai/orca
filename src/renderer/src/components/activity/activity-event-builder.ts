@@ -108,6 +108,7 @@ export function buildActivityEvents(
         orchestration,
         worktree: owner.worktree,
         repo: owner.repo,
+        executionHostId: owner.executionHostId,
         tab: context.tab,
         agentType: entry.agentType ?? 'unknown',
         agentAlive: true,
