@@ -256,6 +256,51 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+  # Reports, never gates: flags in the job summary when a pull request changes the Expo fingerprint,
+  # i.e. dev clients need a native rebuild. Only mobile's install, without scripts: the fingerprint
+  # hashes project sources and dependency paths, never installed package contents.
+  native-fingerprint:
+    name: Mobile native fingerprint
+    if: github.event_name == 'pull_request'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 15
+    continue-on-error: true
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
+      # The base commit may predate the fingerprint tools, so run the head's copy against both.
+      - name: Compare native fingerprint with the base
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/native-fingerprint"
+          mkdir -p "$tools"
+          cp scripts/native-client.mjs scripts/native-build-cache.cjs "$tools/"
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/head.json"
+          git checkout --quiet --detach HEAD^1
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/base.json"
+          node "$tools/native-client.mjs" compare "$tools/base.json" "$tools/head.json" \
+            --project . --summary "$GITHUB_STEP_SUMMARY"
+
   main-tests:
     name: Mobile tests on main
     env:
