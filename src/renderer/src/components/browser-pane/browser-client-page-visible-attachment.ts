@@ -107,7 +107,12 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   let appliedBounds = ''
   const syncViewport = (): void => {
     const bounds = container.getBoundingClientRect()
-    const next = `${bounds.left}|${bounds.top}|${bounds.width}|${bounds.height}`
+    const scroller = container.closest('[data-browser-page-scroller]')
+    const clip = scroller?.getBoundingClientRect()
+    const clipPath = clip
+      ? `inset(${Math.max(0, clip.top - bounds.top)}px ${Math.max(0, bounds.right - clip.right)}px ${Math.max(0, bounds.bottom - clip.bottom)}px ${Math.max(0, clip.left - bounds.left)}px)`
+      : ''
+    const next = `${bounds.left}|${bounds.top}|${bounds.width}|${bounds.height}|${clipPath}`
     if (next === appliedBounds) {
       return
     }
@@ -116,7 +121,8 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
       left: `${bounds.left}px`,
       top: `${bounds.top}px`,
       width: `${bounds.width}px`,
-      height: `${bounds.height}px`
+      height: `${bounds.height}px`,
+      clipPath
     })
   }
   const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncViewport)
