@@ -1,4 +1,5 @@
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
+import { readConversationTranscript } from './conversation-transcript-reader'
 import { aiVaultScanWork, trackAiVaultScanProgress } from './ai-vault-scan-progress'
 import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 import type { AiVaultSessionTitle } from '../../shared/ai-vault-session-title'
@@ -104,6 +105,12 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
       return {
         operation: 'firstPrompt',
         value: await readAiVaultFirstUserPrompt(request.request)
+      }
+    }
+    if (request.operation === 'conversationRead') {
+      return {
+        operation: 'conversationRead',
+        value: await readConversationTranscript(request.request, controller.signal)
       }
     }
     const startedAt = performance.now()

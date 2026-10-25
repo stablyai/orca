@@ -143,6 +143,8 @@ export const EXECUTION_HOST_METHODS = [
   'markdown.readTab',
   'markdown.saveTab',
   'nativeChat.readSession',
+  'conversation.createReference',
+  'conversation.read',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
   // Why: the phone reports a takeover out of band, the same signal the desktop renderer sends.

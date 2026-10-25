@@ -1,4 +1,6 @@
 import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
+import { NativeChatConversationReferencePill } from './NativeChatConversationReferencePill'
+import { CONVERSATION_REFERENCE_NODE } from '../../../../shared/conversation-reference'
 import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
@@ -8,6 +10,18 @@ import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
 export { promptTextContent } from './native-chat-prompt-document-text'
+
+export const NativeChatConversationReference = Node.create({
+  name: CONVERSATION_REFERENCE_NODE,
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addNodeView: () => ReactNodeViewRenderer(NativeChatConversationReferencePill),
+  addAttributes: () => ({ token: { default: '' }, uri: { default: '' }, title: { default: '' } }),
+  renderText: ({ node }) => node.attrs.token,
+  renderHTML: ({ node }) => ['span', { 'data-native-chat-conversation-reference': node.attrs.uri }]
+})
 
 export const NativeChatSkill = Node.create({
   name: 'nativeChatSkill',

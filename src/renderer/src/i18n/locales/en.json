@@ -18934,6 +18934,26 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "conversationReference": {
+        "reference": "Reference conversation",
+        "source": "Referenced conversation",
+        "differentHost": "This agent cannot reach the conversation on its source host. Open the chat on that host to reference it.",
+        "loading": "Reading conversation",
+        "retry": "Retry",
+        "more": "Load more",
+        "drag": "Drag into a message to reference this conversation",
+        "copy": "Copy conversation reference",
+        "user": "User",
+        "assistant": "Assistant",
+        "tool": "Tool",
+        "empty": "This conversation has no readable text.",
+        "addedToDraft": "The conversation reference was added to the draft of the chat it was meant for.",
+        "unavailable": "This conversation cannot be referenced.",
+        "noComposer": "Open a chat to reference this conversation in its message box.",
+        "ambiguousComposer": "Click the message box of the chat to reference this conversation in, then try again.",
+        "composerUnavailable": "The open chat cannot take a message right now.",
+        "draftSaveFailed": "The conversation reference could not be saved to the target draft."
+      },
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…"
       },

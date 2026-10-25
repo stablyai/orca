@@ -6,8 +6,10 @@ import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchRepoIconWithManualRedirects } from './electron-repo-icon-fetch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { forwardConversationReference } from '../ai-vault/conversation-reference-routing'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
+  forwardConversationReference,
   translateNotification: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
   showNotification: ({ title, body }) => {

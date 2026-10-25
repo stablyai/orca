@@ -1,4 +1,5 @@
 import { isAiVaultAgent, type AiVaultAgent } from '../../../shared/ai-vault-types'
+import { writeConversationReferenceDrag } from './conversation-reference-drag'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -134,6 +135,19 @@ export function writeAiVaultSessionDragData(
   dataTransfer: DataTransfer,
   payload: AiVaultSessionDragPayload
 ): void {
+  writeConversationReferenceDrag(dataTransfer, {
+    source: payload.structuredSession
+      ? { kind: 'structured', ...payload.structuredSession }
+      : {
+          kind: 'transcript',
+          agent: payload.agent,
+          sessionId: payload.sessionId,
+          ...(payload.sessionFilePath ? { filePath: payload.sessionFilePath } : {}),
+          codexHome: payload.codexHome
+        },
+    title: payload.title.slice(0, 1024),
+    executionHostId: payload.sessionExecutionHostId ?? 'local'
+  })
   const serialized = JSON.stringify({ kind: 'ai-vault-session', version: 1, ...payload })
   if (isAiVaultSessionDragPayloadTooLarge(serialized)) {
     activeAiVaultSessionDragPayload = null

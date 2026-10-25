@@ -1,6 +1,10 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import {
+  conversationReferenceDropTarget,
+  forwardConversationReferenceDrop
+} from '@/lib/conversation-reference-drop-target'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
@@ -21,67 +25,13 @@ import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { prepareAiVaultTerminalResumeRequest } from '@/lib/ai-vault-session-resume-preparation'
 import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
 import { useAppStore } from '@/store'
-import { resolveDropZone } from './tab-drop-zone'
-import type { TabDropZone } from './useTabDragSplit'
+import {
+  containsPoint,
+  resolvePaneDropTarget,
+  type PaneDropTarget
+} from './ai-vault-pane-drop-target'
 import { translate } from '@/i18n/i18n'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-
-type PaneDropTarget = {
-  groupId: string
-  zone: TabDropZone
-  overlayStyle: CSSProperties
-}
-
-function getZoneOverlayStyle(rect: DOMRect, layerRect: DOMRect, zone: TabDropZone): CSSProperties {
-  const left = rect.left - layerRect.left
-  const top = rect.top - layerRect.top
-  const width = rect.width
-  const height = rect.height
-
-  switch (zone) {
-    case 'up':
-      return { left, top, width, height: height / 2 }
-    case 'down':
-      return { left, top: top + height / 2, width, height: height / 2 }
-    case 'left':
-      return { left, top, width: width / 2, height }
-    case 'right':
-      return { left: left + width / 2, top, width: width / 2, height }
-    case 'center':
-      return { left, top, width, height }
-  }
-}
-
-function containsPoint(rect: DOMRect, x: number, y: number): boolean {
-  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-}
-
-function resolvePaneDropTarget(
-  worktreeId: string,
-  layerRect: DOMRect,
-  point: { x: number; y: number }
-): PaneDropTarget | null {
-  const elements = Array.from(
-    document.querySelectorAll<HTMLElement>('[data-tab-group-body-id][data-worktree-id]')
-  )
-  for (const element of elements) {
-    if (element.dataset.worktreeId !== worktreeId) {
-      continue
-    }
-    const groupId = element.dataset.tabGroupBodyId
-    const rect = element.getBoundingClientRect()
-    if (!groupId || rect.width <= 0 || rect.height <= 0 || !containsPoint(rect, point.x, point.y)) {
-      continue
-    }
-    const zone = resolveDropZone(rect, point)
-    return {
-      groupId,
-      zone,
-      overlayStyle: getZoneOverlayStyle(rect, layerRect, zone)
-    }
-  }
-  return null
-}
 
 export default function AiVaultSessionDropLayer({
   worktreeId,
@@ -91,11 +41,13 @@ export default function AiVaultSessionDropLayer({
   enabled: boolean
 }): React.JSX.Element {
   const [isDragActive, setIsDragActive] = useState(false)
+  const [overComposer, setOverComposer] = useState(false)
   const [target, setTarget] = useState<PaneDropTarget | null>(null)
   const layerRef = useRef<HTMLDivElement>(null)
 
   const clearDragState = useCallback(() => {
     setIsDragActive(false)
+    setOverComposer(false)
     setTarget(null)
     clearAiVaultSessionDragData()
   }, [])
@@ -118,6 +70,12 @@ export default function AiVaultSessionDropLayer({
         return null
       }
       const layerRect = layerElement.getBoundingClientRect()
+      const composer = conversationReferenceDropTarget(point)
+      setOverComposer(composer !== null)
+      if (composer) {
+        setTarget(null)
+        return null
+      }
       const nextTarget = resolvePaneDropTarget(worktreeId, layerRect, {
         x: point.x,
         y: point.y
@@ -149,6 +107,10 @@ export default function AiVaultSessionDropLayer({
       }
     ): boolean => {
       if (!hasAiVaultSessionDragData(dataTransfer)) {
+        return false
+      }
+
+      if (conversationReferenceDropTarget(point)) {
         return false
       }
 
@@ -319,11 +281,16 @@ export default function AiVaultSessionDropLayer({
     const markIfVaultDrag = (event: DragEvent): void => {
       if (event.dataTransfer && hasAiVaultSessionDragData(event.dataTransfer)) {
         markDragActive()
+        updateTarget(event.dataTransfer, { x: event.clientX, y: event.clientY })
       }
     }
 
     const handleWindowDrop = (event: DragEvent): void => {
       if (!event.dataTransfer || !hasAiVaultSessionDragData(event.dataTransfer)) {
+        return
+      }
+      if (forwardConversationReferenceDrop(event)) {
+        clearDragState()
         return
       }
       // Electron sometimes accepts dragover on the overlay but skips React's
@@ -350,7 +317,7 @@ export default function AiVaultSessionDropLayer({
       window.removeEventListener(AI_VAULT_SESSION_DRAG_START_EVENT, markDragActive)
       window.removeEventListener(AI_VAULT_SESSION_DRAG_END_EVENT, clearDragState)
     }
-  }, [clearDragState, enabled, handleSessionDrop])
+  }, [clearDragState, enabled, handleSessionDrop, updateTarget])
 
   const handleDragOver = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
@@ -364,7 +331,11 @@ export default function AiVaultSessionDropLayer({
         x: event.clientX,
         y: event.clientY
       })
-      event.dataTransfer.dropEffect = nextTarget ? 'copy' : 'none'
+      // Why: the layer stands over a composer until it re-renders; a drop there is forwarded to it.
+      event.dataTransfer.dropEffect =
+        nextTarget || conversationReferenceDropTarget({ x: event.clientX, y: event.clientY })
+          ? 'copy'
+          : 'none'
     },
     [updateTarget]
   )
@@ -399,7 +370,7 @@ export default function AiVaultSessionDropLayer({
       data-ai-vault-session-drop-layer="true"
       data-worktree-id={worktreeId}
       className={`absolute inset-0 z-[10000] ${
-        isDragActive ? 'pointer-events-auto' : 'pointer-events-none'
+        isDragActive && !overComposer ? 'pointer-events-auto' : 'pointer-events-none'
       }`}
       onDragOver={handleDragOver}
       onDrop={handleDrop}

@@ -1,4 +1,8 @@
 import type { BrowserWindow, IpcMainEvent, WebContents } from 'electron'
+import type {
+  ConversationReferenceCreate,
+  ConversationReferenceRead
+} from '../../shared/conversation-reference'
 
 /**
  * The desktop facilities `OrcaRuntimeService` uses, which a Node host does not have.
@@ -31,6 +35,11 @@ export type RuntimeDesktopSurface = {
   encodeRepoIconPng?(bytes: Uint8Array, maxEdge: number): Uint8Array | null
   /** A GET answering redirects with the 3xx, without proxy login; absent where fetch already does. */
   fetchRepoIcon?(url: string, init: RequestInit): Promise<Response>
+  /** Desktop-owned connections can read references on their paired source hosts. */
+  forwardConversationReference?(
+    method: 'conversation.createReference' | 'conversation.read',
+    request: ConversationReferenceCreate | ConversationReferenceRead
+  ): Promise<unknown>
 }
 
 const inertDesktopSurface: RuntimeDesktopSurface = {

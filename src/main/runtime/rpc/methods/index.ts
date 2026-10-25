@@ -3,6 +3,7 @@ import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad-migration'
 import { AI_VAULT_METHODS } from './ai-vault'
+import { CONVERSATION_METHODS } from './conversation'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
@@ -82,6 +83,7 @@ export const ALL_RPC_METHODS = [
   ...ORCAD_MIGRATION_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
+  ...CONVERSATION_METHODS,
   ...ARTIFACT_METHODS,
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,

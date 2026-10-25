@@ -42,6 +42,8 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca agent-context [--json]',
   '  orca search <query> [--scope conversation|all] [--fresh] [--limit <n>] [--cursor <c>] [--agent <id>] [--path <p>] [--since <iso>] [--sort relevance|newest] [--debug] [--json]',
   '  orca search --index-status [--json]',
+  '  orca conversation read <reference-uri> [--cursor <cursor>] [--json]',
+  '  orca conversation search <reference-uri> --query <words> [--cursor <cursor>] [--json]',
   '  orca account add [--agent claude|codex] [--json]',
   '  orca account list [--json]',
   '  orca host list [--json]',

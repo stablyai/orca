@@ -18592,6 +18592,26 @@
   },
   "components": {
     "native-chat": {
+      "conversationReference": {
+        "reference": "引用对话",
+        "source": "引用的对话",
+        "differentHost": "当前智能体无法访问该对话所在的主机，请在来源主机上打开聊天后引用。",
+        "loading": "正在读取对话",
+        "retry": "重试",
+        "more": "继续读取",
+        "drag": "拖入输入框引用此对话",
+        "copy": "复制对话引用",
+        "user": "用户",
+        "assistant": "助手",
+        "tool": "工具",
+        "empty": "此对话没有可读取的文字。",
+        "addedToDraft": "已将对话引用加入原聊天的草稿。",
+        "unavailable": "无法引用此对话。",
+        "noComposer": "请先打开一个聊天，再将此对话引用到输入框。",
+        "ambiguousComposer": "请点击要引用到的聊天输入框，然后重试。",
+        "composerUnavailable": "当前打开的聊天暂时无法接收消息。",
+        "draftSaveFailed": "无法将对话引用保存到目标草稿。"
+      },
       "install": {
         "checking": "正在检查 {{agent}} 是否已在此主机上就绪…"
       },

@@ -4,6 +4,7 @@ import {
   type DecodedSessionMessage,
   type DecodedToolCall
 } from './session-decoded-message'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { sliceAtCodeUnitLimit } from './session-scanner-text-normalization'
 import type { AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
 import type { TranscriptMessage, TranscriptMessageRole } from './session-transcript-consumers'
@@ -11,6 +12,15 @@ import type { TranscriptMessage, TranscriptMessageRole } from './session-transcr
 // Bound pathological messages; consumers may impose tighter limits.
 const TRANSCRIPT_MESSAGE_TEXT_LIMIT = 256 * 1024
 const TOOL_ARGUMENT_SCAN_LIMIT = 2000
+const fullTranscriptText = new AsyncLocalStorage<boolean>()
+
+export function withFullTranscriptText<T>(read: () => T): T {
+  return fullTranscriptText.run(true, read)
+}
+
+function transcriptTextLimit(): number {
+  return fullTranscriptText.getStore() ? Number.POSITIVE_INFINITY : TRANSCRIPT_MESSAGE_TEXT_LIMIT
+}
 
 type PreviewRole = AiVaultSessionPreviewMessage['role']
 type TranscriptText = { text: string | null; textTruncated: boolean }
@@ -25,7 +35,12 @@ export function toolCallContent(name: unknown, input: unknown): TranscriptText {
 
 function toolCallTextFromDecoded(call: DecodedToolCall): TranscriptText {
   const { name, argument } = call
-  const bounded = argument ? sliceAtCodeUnitLimit(argument, TOOL_ARGUMENT_SCAN_LIMIT) : null
+  const bounded = argument
+    ? sliceAtCodeUnitLimit(
+        argument,
+        fullTranscriptText.getStore() ? Number.POSITIVE_INFINITY : TOOL_ARGUMENT_SCAN_LIMIT
+      )
+    : null
   return {
     text: name && bounded ? `${name}: ${bounded}` : (name ?? bounded),
     textTruncated: argument !== null && bounded !== null && bounded.length < argument.length
@@ -37,7 +52,7 @@ function toolResultText(textParts: Iterable<string>): TranscriptText {
   let length = 0
   let omitted = false
   for (const text of textParts) {
-    if (length >= TRANSCRIPT_MESSAGE_TEXT_LIMIT) {
+    if (length >= transcriptTextLimit()) {
       omitted = true
       break
     }
@@ -92,7 +107,7 @@ function boundedJoinedText(parts: readonly string[]): TranscriptText {
   }
   const prefixes: string[] = []
   // One extra code unit preserves truncation at a trailing high surrogate.
-  let remaining = TRANSCRIPT_MESSAGE_TEXT_LIMIT + 1
+  let remaining = transcriptTextLimit() + 1
   for (const part of parts) {
     if (prefixes.length > 0) {
       remaining--
@@ -141,6 +156,6 @@ export function transcriptMessageFromText(
 }
 
 export function boundedText(value: string): string | null {
-  const bounded = sliceAtCodeUnitLimit(value, TRANSCRIPT_MESSAGE_TEXT_LIMIT)
+  const bounded = sliceAtCodeUnitLimit(value, transcriptTextLimit())
   return bounded.trim() ? bounded : null
 }

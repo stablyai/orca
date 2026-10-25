@@ -57,6 +57,8 @@ export function SessionRowTrailingActions({
   onResumeInNewChat,
   onResumeInNewCli,
   onCopyResume,
+  onReferenceConversation,
+  onCopyReference,
   onCopyId,
   onCopyPath,
   onOpenLog,
@@ -84,6 +86,8 @@ export function SessionRowTrailingActions({
   onResumeInNewChat?: () => void
   onResumeInNewCli?: () => void
   onCopyResume?: () => void
+  onReferenceConversation?: () => void
+  onCopyReference?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
   onOpenLog?: () => void
@@ -267,6 +271,8 @@ export function SessionRowTrailingActions({
           </Tooltip>
           <DropdownMenuContent align="end">
             <SessionActionMenuItems
+              onReferenceConversation={onReferenceConversation}
+              onCopyReference={onCopyReference}
               resumeDisabled={resumeDisabled}
               resumeHidden={resumeHidden}
               resumeLabel={resumeLabel}

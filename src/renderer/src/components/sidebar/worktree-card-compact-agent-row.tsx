@@ -1,4 +1,10 @@
 import React, { useCallback, useEffect, useRef } from 'react'
+import { writeConversationReferenceDrag } from '@/lib/conversation-reference-drag'
+import {
+  agentRowConversationReference,
+  canReferenceAgentRow
+} from '@/lib/agent-row-conversation-reference'
+import { AgentRowContextMenu } from '@/components/AgentRowContextMenu'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
@@ -288,31 +294,41 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   )
 
   return (
-    <div
-      draggable={false}
-      className={cn(
-        'compact-agent-row agent-disclosure-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
-        'text-muted-foreground worktree-agent-row-hover',
-        hasChildDisclosure && 'worktree-agent-lineage-parent-row',
-        isLineageChild && 'worktree-agent-lineage-child-row',
-        'flex h-6 items-center gap-1',
-        isFocusedPane && 'bg-worktree-sidebar-accent',
-        sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
-        sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
-      )}
-      onClickCapture={handleSendTargetClickCapture}
-      onClick={handleActivate}
-      onMouseDown={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-      onDragStart={(e) => e.stopPropagation()}
-      data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
-      data-agent-send-target={sendTargetStatus}
-      role={agent.lineage ? 'treeitem' : undefined}
-      aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
-      aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={sendTargetDisabledReason}
-    >
-      {rowBody}
-    </div>
+    <AgentRowContextMenu agent={agent} title={primary} disabled={Boolean(sendTargetStatus)}>
+      <div
+        draggable={!sendTargetStatus && canReferenceAgentRow(agent)}
+        className={cn(
+          'compact-agent-row agent-disclosure-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
+          'text-muted-foreground worktree-agent-row-hover',
+          hasChildDisclosure && 'worktree-agent-lineage-parent-row',
+          isLineageChild && 'worktree-agent-lineage-child-row',
+          'flex h-6 items-center gap-1',
+          isFocusedPane && 'bg-worktree-sidebar-accent',
+          sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
+          sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
+        )}
+        onClickCapture={handleSendTargetClickCapture}
+        onClick={handleActivate}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onDragStart={(event) => {
+          event.stopPropagation()
+          const reference = agentRowConversationReference(agent, primary)
+          if (!reference || sendTargetStatus) {
+            event.preventDefault()
+            return
+          }
+          writeConversationReferenceDrag(event.dataTransfer, reference)
+        }}
+        data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
+        data-agent-send-target={sendTargetStatus}
+        role={agent.lineage ? 'treeitem' : undefined}
+        aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
+        aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
+        title={sendTargetDisabledReason}
+      >
+        {rowBody}
+      </div>
+    </AgentRowContextMenu>
   )
 })

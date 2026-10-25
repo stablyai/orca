@@ -100,6 +100,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'aiVault.resolveSessionTitles',
   'aiVault.searchSessions',
   'aiVault.searchStatus',
+  'conversation.createReference',
+  'conversation.read',
   // User preferences live on the Mac; the phone's settings screens mirror the desktop's.
   'settings.get',
   'settings.getTerminalQuickCommands',

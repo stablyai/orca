@@ -3,6 +3,18 @@ const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'conversation read': {
+    from: '--from <index>         Start at this messageIndex (zero-based, as returned by search)',
+    reference: '--reference <uri>      Conversation link attached to a message',
+    cursor: '--cursor <cursor>      Opaque nextCursor returned by the previous read',
+    limit: '--limit <n>            Message slices per page (default 20, maximum 100)'
+  },
+  'conversation search': {
+    reference: '--reference <uri>      Conversation link attached to a message',
+    query: '--query <text>         Literal text to find inside this conversation',
+    cursor: '--cursor <cursor>      Opaque nextCursor returned by the same search',
+    limit: '--limit <n>            Matching message slices per page (default 20, maximum 100)'
+  },
   'reference add': {
     url: '--url <url-or-jira-key> Full review/issue URL or Jira key; use positionals or repeated --url',
     'reference-site': '--reference-site <id> Jira site for bare keys; see orca jira connection'

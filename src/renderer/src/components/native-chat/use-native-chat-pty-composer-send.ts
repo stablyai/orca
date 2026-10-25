@@ -2,6 +2,7 @@ import {
   admitNativeChatPastedText,
   resolveNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
+import { withConversationReferenceInstructions } from '../../../../shared/conversation-reference'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
@@ -75,6 +76,7 @@ export function useNativeChatPtyComposerSend(args: {
       return
     }
     text = resolveNativeChatPastedText(args.draftScopeKey, text)
+    text = withConversationReferenceInstructions(text)
     const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,

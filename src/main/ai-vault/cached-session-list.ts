@@ -10,7 +10,8 @@ import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,
-  type AiVaultListResult
+  type AiVaultListResult,
+  type AiVaultSession
 } from '../../shared/ai-vault-types'
 import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
@@ -57,6 +58,21 @@ type CachedAiVaultList = {
 }
 
 let cachedList: CachedAiVaultList | null = null
+
+export function findCachedAiVaultSession(
+  source: Pick<AiVaultSession, 'agent' | 'sessionId'> &
+    Partial<Pick<AiVaultSession, 'filePath' | 'codexHome'>>
+): AiVaultSession | null {
+  const matches =
+    cachedList?.result.sessions.filter(
+      (session) =>
+        session.agent === source.agent &&
+        session.sessionId === source.sessionId &&
+        (!source.filePath || session.filePath === source.filePath) &&
+        (source.codexHome === undefined || session.codexHome === source.codexHome)
+    ) ?? []
+  return matches.length === 1 ? matches[0]! : null
+}
 let scanCoordinator = new AiVaultScanCoordinator()
 let sources: AiVaultSessionSources = {}
 // Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.

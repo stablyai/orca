@@ -1,6 +1,11 @@
 import type { JSONContent } from '@tiptap/react'
 import { splitImageReferences } from '../../../../shared/native-chat-image-reference'
 import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from './native-chat-pasted-text-reference'
+import {
+  CONVERSATION_REFERENCE_NODE,
+  splitConversationReferences,
+  conversationReferenceToken
+} from '../../../../shared/conversation-reference'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
 export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
@@ -12,18 +17,31 @@ export function promptTextContent(text: string): JSONContent {
     type: 'doc',
     content: text.split('\n').map((line) => ({
       type: 'paragraph',
-      content: splitImageReferences(line).flatMap((part) =>
-        typeof part === 'string'
-          ? part
-              .split(NATIVE_CHAT_PASTED_TEXT_TOKEN)
-              .flatMap((piece, index): JSONContent[] =>
-                piece === ''
-                  ? []
-                  : index % 2 === 1
-                    ? [{ type: FILE_REFERENCE_NODE, attrs: { token: piece, path: '' } }]
-                    : [{ type: 'text', text: piece }]
-              )
-          : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
+      content: splitConversationReferences(line).flatMap((reference) =>
+        typeof reference !== 'string'
+          ? [
+              {
+                type: CONVERSATION_REFERENCE_NODE,
+                attrs: {
+                  uri: reference.uri,
+                  title: reference.title,
+                  token: conversationReferenceToken(reference)
+                }
+              }
+            ]
+          : splitImageReferences(reference).flatMap((part) =>
+              typeof part === 'string'
+                ? part
+                    .split(NATIVE_CHAT_PASTED_TEXT_TOKEN)
+                    .flatMap((piece, index): JSONContent[] =>
+                      piece === ''
+                        ? []
+                        : index % 2 === 1
+                          ? [{ type: FILE_REFERENCE_NODE, attrs: { token: piece, path: '' } }]
+                          : [{ type: 'text', text: piece }]
+                    )
+                : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
+            )
       )
     }))
   }

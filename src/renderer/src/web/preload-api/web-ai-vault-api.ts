@@ -30,6 +30,16 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     'relay'
   )
   return {
+    createConversationReference: (request) => {
+      if (
+        request.executionHostId !== undefined &&
+        !addressesOwnRuntime(normalizeExecutionHostId(request.executionHostId) ?? 'all')
+      ) {
+        return Promise.reject(new Error('The source conversation belongs to another host.'))
+      }
+      return callRuntimeResult('conversation.createReference', request)
+    },
+    readConversationReference: (request) => callRuntimeResult('conversation.read', request),
     // A browser searches only its selected paired runtime.
     searchSessions: (request, executionHostScope) =>
       addressesOwnRuntime(executionHostScope)

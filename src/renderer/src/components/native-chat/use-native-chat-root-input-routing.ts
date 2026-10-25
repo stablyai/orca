@@ -16,6 +16,18 @@ import {
 
 // Revealed chat roots in this window: a floating panel can reveal one beside the workspace's.
 const revealedChatRoots = new Set<HTMLElement>()
+// The chat root focus last entered: the evidence that picks one of several revealed chats.
+let lastFocusedChatRoot: HTMLElement | null = null
+
+/** The chat visible in the focused group; with several revealed, the one last focused, if any. */
+export function focusedNativeChatRoot(): HTMLElement | 'ambiguous' | null {
+  if (revealedChatRoots.size <= 1) {
+    return revealedChatRoots.values().next().value ?? null
+  }
+  return lastFocusedChatRoot && revealedChatRoots.has(lastFocusedChatRoot)
+    ? lastFocusedChatRoot
+    : 'ambiguous'
+}
 
 /** Brings focus to the chat's input when it is revealed, and sends keys typed or dictated in the
  *  chat, or with nothing focused around it, to that input. */
@@ -54,11 +66,19 @@ export function useNativeChatRootInputRouting(
         composerRef.current?.focus()
       }
     }
+    const onFocusIn = (): void => {
+      lastFocusedChatRoot = root
+    }
     revealedChatRoots.add(root)
+    if (root.contains(root.ownerDocument.activeElement)) {
+      lastFocusedChatRoot = root
+    }
+    root.addEventListener('focusin', onFocusIn)
     root.ownerDocument.addEventListener('keydown', onKeyDown)
     root.ownerDocument.addEventListener(DICTATION_FOCUS_INPUT_EVENT, onDictationFocusInput)
     return () => {
       revealedChatRoots.delete(root)
+      root.removeEventListener('focusin', onFocusIn)
       root.ownerDocument.removeEventListener('keydown', onKeyDown)
       root.ownerDocument.removeEventListener(DICTATION_FOCUS_INPUT_EVENT, onDictationFocusInput)
     }

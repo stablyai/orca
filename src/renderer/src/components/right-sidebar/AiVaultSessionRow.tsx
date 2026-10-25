@@ -1,6 +1,12 @@
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
+import { writeConversationReferenceDrag } from '@/lib/conversation-reference-drag'
+import { aiVaultConversationReference } from '@/lib/ai-vault-conversation-reference'
+import {
+  copyConversationReference,
+  referenceConversationInFocusedChat
+} from '../native-chat/conversation-reference-insertion'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import type React from 'react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
@@ -115,15 +121,35 @@ export function VaultSessionRow({
   const requestDelete = session.structuredSession
     ? undefined
     : (): void => onRequestDelete?.(session)
-  const draggable = !resumeDisabled && !onPick
+  const referenceable =
+    session.messageCount > 0 ||
+    session.previewMessages.length > 0 ||
+    Boolean(session.structuredSession)
+  const draggable = !onPick && referenceable
+  const referenceActions = referenceable
+    ? {
+        onReferenceConversation: (): void =>
+          void referenceConversationInFocusedChat(aiVaultConversationReference(session, title)),
+        onCopyReference: (): void =>
+          void copyConversationReference(aiVaultConversationReference(session, title))
+      }
+    : {}
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
+  const pressedActionsRef = useRef(false)
   const startResumeDrag = useCallback(
     (event: React.DragEvent<HTMLElement>): void => {
       event.stopPropagation()
-      if (!draggable) {
+      if (!draggable || pressedActionsRef.current) {
         event.preventDefault()
+        return
+      }
+      if (resumeDisabled) {
+        writeConversationReferenceDrag(
+          event.dataTransfer,
+          aiVaultConversationReference(session, title)
+        )
         return
       }
       writeAiVaultSessionDragData(event.dataTransfer, {
@@ -145,7 +171,7 @@ export function VaultSessionRow({
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [draggable, realHomeResumeStartup, session, resumeStartup, title]
+    [draggable, resumeDisabled, realHomeResumeStartup, session, resumeStartup, title]
   )
 
   const body = (
@@ -169,28 +195,38 @@ export function VaultSessionRow({
         }
       }}
     >
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
+      {/* Why: only the header is the drag handle — the preview and expanded details need text
+          selection and a normal pointer. A press on its buttons never starts a drag. */}
+      <div
+        className={cn(
+          'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1',
+          draggable && 'cursor-grab active:cursor-grabbing'
+        )}
+        data-ai-vault-session-drag-handle={draggable ? 'true' : undefined}
+        draggable={draggable}
+        onPointerDownCapture={(event) => {
+          pressedActionsRef.current =
+            event.target instanceof Element &&
+            event.target.closest('[data-ai-vault-session-actions]') !== null
+        }}
+        onDragStart={startResumeDrag}
+        onDragEnd={() => {
+          window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
+        }}
+      >
         <div
           className={cn(
             'min-w-0 text-[13px] font-medium leading-5 text-foreground',
-            // Why: only the title is the resume drag handle — expanded
-            // details/preview need text selection and a normal pointer.
-            draggable && 'cursor-grab active:cursor-grabbing',
             detailsExpanded ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'line-clamp-1'
           )}
-          draggable={draggable}
           title={
             !draggable
               ? undefined
               : translate(
-                  'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
-                  'Drag to resume in a new tab'
+                  'components.native-chat.conversationReference.drag',
+                  'Drag into a message to reference this conversation'
                 )
           }
-          onDragStart={startResumeDrag}
-          onDragEnd={() => {
-            window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
-          }}
         >
           {title}
         </div>
@@ -212,6 +248,7 @@ export function VaultSessionRow({
           onResumeInNewChat={onResumeInNewChat}
           onResumeInNewCli={onResumeInNewCli}
           onCopyResume={onCopyResume}
+          {...referenceActions}
           onCopyId={onCopyId}
           onCopyPath={onCopyPath}
           onOpenLog={onOpenLog}
@@ -291,6 +328,7 @@ export function VaultSessionRow({
           onResumeInNewChat={onResumeInNewChat}
           onResumeInNewCli={onResumeInNewCli}
           onCopyResume={onCopyResume}
+          {...referenceActions}
           onCopyId={onCopyId}
           onCopyPath={onCopyPath}
           onOpenLog={onOpenLog}

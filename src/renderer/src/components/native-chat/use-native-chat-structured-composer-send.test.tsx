@@ -69,6 +69,16 @@ function harness(
   return { send: result.current, structuredTransport, setDraft }
 }
 
+it('sends conversation reading instructions with a reference token', async () => {
+  const reference =
+    '[Earlier discussion](orca-conversation://reference/00000000-0000-4000-8000-000000000001?host=local)'
+  const { send, structuredTransport } = harness('codex')
+  await send(reference, [])
+  const sent = vi.mocked(structuredTransport.send).mock.calls[0]?.[0]
+  expect(sent).toContain(reference)
+  expect(sent).toContain('orca conversation read')
+})
+
 // The guard exists because a host command sends no message, so its attachments
 // would be dropped without a word. A pass-through command IS the message, so the
 // attachments ride along with it.

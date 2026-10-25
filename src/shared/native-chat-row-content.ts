@@ -16,6 +16,7 @@ import {
 } from './native-chat-types'
 import { splitNativeChatBlocks } from './native-chat/tools/native-chat-tool-fold'
 import { nativeChatProseToMarkdown } from './native-chat-prose'
+import { withoutConversationReferenceInstructions } from './conversation-reference'
 
 /** Inferred from `derive` so the shape cannot drift from what it returns. */
 export type NativeChatRowContent = ReturnType<typeof derive>
@@ -49,7 +50,7 @@ function derive(blocks: readonly NativeChatBlock[]) {
     tools: split.tools,
     subagentGroups: groups,
     backgroundTasks: tasks,
-    markdown: nativeChatProseToMarkdown(prose),
+    markdown: withoutConversationReferenceInstructions(nativeChatProseToMarkdown(prose)),
     hasImages: prose.some((block) => block.type === 'image-ref')
   }
 }

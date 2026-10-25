@@ -141,7 +141,7 @@ describe('VaultSessionRow details toggle', () => {
     // The session title: inside the row body, so its click reaches the row's
     // own handler — the path a user takes to expand a row. Queried first-match
     // because Radix's asChild trigger repeats the subtree.
-    const title = container.querySelector('[title="Drag to resume in a new tab"]')
+    const title = container.querySelector('[draggable="true"]')
     expect(title).not.toBeNull()
     await user.click(title as Element)
 

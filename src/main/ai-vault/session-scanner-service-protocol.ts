@@ -1,4 +1,6 @@
 import type { AiVaultListResult, AiVaultSubagentListResult } from '../../shared/ai-vault-types'
+import type { ConversationReferencePage } from '../../shared/conversation-reference'
+import type { ConversationTranscriptRead } from './conversation-transcript-reader'
 import type {
   AiVaultSessionTitle,
   AiVaultSessionTitleRequest,
@@ -27,6 +29,7 @@ export type AiVaultServiceOperation =
   | 'titles'
   | 'subagents'
   | 'firstPrompt'
+  | 'conversationRead'
   | 'searchSessions'
   | 'searchStatus'
   | 'searchReconcile'
@@ -37,6 +40,7 @@ const AI_VAULT_SERVICE_OPERATIONS: ReadonlySet<string> = new Set<AiVaultServiceO
   'titles',
   'subagents',
   'firstPrompt',
+  'conversationRead',
   'searchSessions',
   'searchStatus',
   'searchReconcile',
@@ -63,6 +67,7 @@ export type AiVaultServiceInit = {
 }
 
 export type AiVaultServiceRequestBody =
+  | { type: 'request'; operation: 'conversationRead'; request: ConversationTranscriptRead }
   | { type: 'request'; operation: 'scan'; options: AiVaultServiceScanOptions }
   | {
       type: 'request'
@@ -107,6 +112,7 @@ export type AiVaultServiceParentMessage =
   | { type: 'shutdown' }
 
 export type AiVaultServiceResultValue =
+  | { operation: 'conversationRead'; value: Omit<ConversationReferencePage, 'reference'> }
   | {
       operation: 'scan'
       // Throttled progress may omit the final work tally.

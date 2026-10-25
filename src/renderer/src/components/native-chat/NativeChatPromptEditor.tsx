@@ -25,6 +25,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import {
   fileReferenceContent,
   NativeChatFileReference,
+  NativeChatConversationReference,
   NativeChatImageReference,
   NativeChatSkill,
   promptLeafText,
@@ -88,6 +89,7 @@ export function NativeChatPromptEditor({
         }),
         NativeChatSkill,
         NativeChatFileReference,
+        NativeChatConversationReference,
         NativeChatImageReference,
         // A disabled box still says why it is disabled, as the plain text box's placeholder does.
         Placeholder.configure({

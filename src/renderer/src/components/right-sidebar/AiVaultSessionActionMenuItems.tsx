@@ -1,9 +1,11 @@
 import {
   Copy,
+  MessageCircle,
   FileJson,
   FolderOpen,
   LocateFixed,
   MessageSquarePlus,
+  MessageSquareQuote,
   PanelTopOpen,
   Play,
   Trash2
@@ -29,6 +31,8 @@ export function SessionActionMenuItems({
   jumpWorkspaceId,
   onJumpToWorktree,
   onCopyResume,
+  onReferenceConversation,
+  onCopyReference,
   onCopyId,
   onCopyPath,
   onOpenLog,
@@ -53,6 +57,9 @@ export function SessionActionMenuItems({
   // Absent for zero-turn sessions: copying a resume command that lands in an
   // empty conversation would contradict the "not saved" state.
   onCopyResume?: () => void
+  /** Puts the reference in the message box of the chat visible in the focused group. */
+  onReferenceConversation?: () => void
+  onCopyReference?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
   onOpenLog?: () => void
@@ -91,6 +98,24 @@ export function SessionActionMenuItems({
 
   return (
     <>
+      {onReferenceConversation ? (
+        <Item onSelect={onReferenceConversation}>
+          <MessageSquareQuote className="size-3.5" />
+          {translate(
+            'components.native-chat.conversationReference.reference',
+            'Reference conversation'
+          )}
+        </Item>
+      ) : null}
+      {onCopyReference ? (
+        <Item onSelect={onCopyReference}>
+          <MessageCircle className="size-3.5" />
+          {translate(
+            'components.native-chat.conversationReference.copy',
+            'Copy conversation reference'
+          )}
+        </Item>
+      ) : null}
       {onJumpToOriginalPane ? (
         <Item onSelect={onJumpToOriginalPane}>
           <LocateFixed className="size-3.5" />

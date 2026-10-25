@@ -1,11 +1,14 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
+import { withoutConversationReferenceInstructions } from '../../../../shared/conversation-reference'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
 import { promptMarkersToImageReferences } from '../../../../shared/native-chat-image-transcript-markers'
 
 /** The text a message body carries, as the composer shows it. */
 export function structuredAgentSessionMessageText(body: AgentJournalMessageItem): string {
-  return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+  return withoutConversationReferenceInstructions(
+    body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+  )
 }
 
 /** Puts a message's text and images into a composer, after whatever is there. True once the text

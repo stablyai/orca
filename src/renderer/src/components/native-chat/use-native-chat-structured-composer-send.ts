@@ -1,4 +1,5 @@
 import { getAgentLabel } from '@/lib/agent-catalog'
+import { withConversationReferenceInstructions } from '../../../../shared/conversation-reference'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
@@ -111,7 +112,7 @@ export function useNativeChatStructuredComposerSend({
       const submitted = readNativeChatComposerDraft(draftScopeKey)
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
-        text,
+        withConversationReferenceInstructions(text),
         attachments,
         promptSkillRefs(submitted.document)
       )

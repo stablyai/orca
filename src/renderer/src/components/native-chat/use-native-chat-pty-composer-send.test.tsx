@@ -70,6 +70,15 @@ it('routes a Claude chat send outcome to its own pending echo', () => {
   expect(callbacks.unconfirmed).toHaveBeenCalledWith('pending-1')
 })
 
+it('sends conversation reading instructions with a reference token', () => {
+  const reference =
+    '[Earlier discussion](orca-conversation://reference/00000000-0000-4000-8000-000000000001?host=local)'
+  send('codex', 'chat', reference)
+  const sent = vi.mocked(sendNativeChatMessage).mock.calls[0]?.[1]
+  expect(sent).toContain(reference)
+  expect(sent).toContain('orca conversation read')
+})
+
 it('routes a Claude image send outcome to its own pending echo', () => {
   const callbacks = send('claude', 'chat', 'look', ['/tmp/shot.png'])
   vi.mocked(sendNativeChatMessageWithImageAttachments).mock.calls[0]?.[4]?.onWriteRejected?.()

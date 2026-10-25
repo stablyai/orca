@@ -1,4 +1,5 @@
 import { app, ipcMain } from 'electron'
+import { registerConversationReferenceHandlers } from './conversation-reference'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions as listCachedLocalAiVaultSessions,
@@ -226,6 +227,7 @@ async function scanLocalAiVaultSessions(
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
+  registerConversationReferenceHandlers(options.ensureStructuredSessionOwnership)
   handlerOptions = options
   // Configure the same source/cache instance used by runtime RPC and headless serve.
   configureAiVaultSessionSources(options)

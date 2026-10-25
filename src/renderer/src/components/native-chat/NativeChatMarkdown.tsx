@@ -23,6 +23,11 @@ import {
   NativeChatMarkdownImageLinkContext
 } from './NativeChatMarkdownImage'
 import './native-chat-markdown.css'
+import {
+  parseConversationReferenceUri,
+  withoutConversationReferenceInstructions
+} from '../../../../shared/conversation-reference'
+import { NativeChatConversationReference } from './NativeChatConversationReference'
 
 /** Existing words stay opaque when a reply first starts growing. */
 function useWordFadeArmed(fadeWords: boolean): boolean {
@@ -71,6 +76,14 @@ function createNativeChatImageExtension(
         <NativeChatMarkdownImage src={src} alt={alt} onLinkClick={onLinkClick} />
       ),
       a: (props) => {
+        if (props.href && parseConversationReferenceUri(props.href)) {
+          return (
+            <NativeChatConversationReference
+              uri={props.href}
+              title={Children.toArray(props.children).join('')}
+            />
+          )
+        }
         const renderAnchor = (children: ReactNode): ReactNode =>
           typeof Anchor === 'function' ? (
             <Anchor {...props}>{children}</Anchor>
@@ -129,7 +142,7 @@ export function NativeChatMarkdown({
         content={
           visualExtension && streaming
             ? withoutPendingNativeChatVisualDirectiveTail(content)
-            : content
+            : withoutConversationReferenceInstructions(content)
         }
         extension={extension}
         fileLinkExists={fileLinkExists}

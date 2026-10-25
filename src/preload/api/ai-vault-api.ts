@@ -1,4 +1,10 @@
 import type {
+  ConversationReference,
+  ConversationReferenceCreate,
+  ConversationReferenceRead,
+  ConversationReferencePage
+} from '../../shared/conversation-reference'
+import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
@@ -30,6 +36,12 @@ import type {
 } from '../../shared/ai-vault-scan-progress'
 
 export type AiVaultApi = {
+  createConversationReference: (
+    request: ConversationReferenceCreate
+  ) => Promise<ConversationReference>
+  readConversationReference: (
+    request: ConversationReferenceRead
+  ) => Promise<ConversationReferencePage>
   /** Omitted host means this host; `all` is merged by this desktop across every enumerated host. */
   searchSessions: (
     request: AiVaultSearchRequest,

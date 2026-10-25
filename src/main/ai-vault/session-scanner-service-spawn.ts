@@ -1,4 +1,6 @@
 import { localAiVaultScanRoots } from './cached-session-list'
+import type { ConversationTranscriptRead } from './conversation-transcript-reader'
+import type { ConversationReferencePage } from '../../shared/conversation-reference'
 import type { SessionSearchHostScope } from '../ai-vault-search/session-search-service'
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -103,6 +105,16 @@ export function readAiVaultFirstUserPromptInService(
   signal?: AbortSignal
 ): Promise<ReadAiVaultFirstUserPromptResult> {
   return getSharedClient().request({ type: 'request', operation: 'firstPrompt', request }, signal)
+}
+
+export function readConversationTranscriptInService(
+  request: ConversationTranscriptRead,
+  signal?: AbortSignal
+): Promise<Omit<ConversationReferencePage, 'reference'>> {
+  return getSharedClient().request(
+    { type: 'request', operation: 'conversationRead', request },
+    signal
+  )
 }
 
 export function searchSessionsInService(
