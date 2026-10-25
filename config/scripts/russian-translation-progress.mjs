@@ -91,9 +91,25 @@ export function russianTranslationProgress(english, russian, countKeys = new Set
       ...(typeof target === 'string' ? { previousTranslation: target } : {})
     }
   }
-  for (const key of ruEntries.keys()) {
-    if (!resolveLocaleSourceKey(enEntries, 'ru', key)) {
+  for (const [key, target] of ruEntries) {
+    const sourceKey = resolveLocaleSourceKey(enEntries, 'ru', key)
+    if (!sourceKey) {
       extra.push(key)
+      continue
+    }
+    const source = enEntries.get(sourceKey)
+    if (
+      !enEntries.has(key) &&
+      target === source &&
+      !unchangedIsInvariant(key, source) &&
+      !unchangedIsInvariant(sourceKey, source)
+    ) {
+      unreviewedCopies.push(key)
+      domains[translationDomain(key)].ru[key] = {
+        source,
+        translation: '',
+        previousTranslation: target
+      }
     }
   }
   const missingPluralForms = []
@@ -109,7 +125,10 @@ export function russianTranslationProgress(english, russian, countKeys = new Set
         continue
       }
       missingPluralForms.push(key)
-      domains[translationDomain(key)].ru[key] = { source, translation: '' }
+      domains[translationDomain(key)].ru[key] = {
+        source: enEntries.get(key) ?? source,
+        translation: ''
+      }
     }
   }
   return {

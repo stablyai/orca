@@ -48,12 +48,14 @@ export function countLookupKeys(filePath, source) {
       node.tagName.getText(file) === 'Trans'
     ) {
       const attributes = node.attributes.properties.filter(ts.isJsxAttribute)
-      const key = attributes.find(
+      const initializer = attributes.find(
         (attribute) => attribute.name.getText(file) === 'i18nKey'
       )?.initializer
+      const key =
+        initializer && ts.isJsxExpression(initializer) ? initializer.expression : initializer
       if (
         key &&
-        ts.isStringLiteral(key) &&
+        ts.isStringLiteralLike(key) &&
         attributes.some((attribute) => attribute.name.getText(file) === 'count')
       ) {
         keys.add(key.text)

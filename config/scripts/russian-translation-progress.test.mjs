@@ -59,3 +59,32 @@ it('requires Russian categories only for count-resolved source families', () => 
     ).missingPluralForms
   ).toEqual([])
 })
+
+it('marks copied additional plural forms as unreviewed and emits a replaceable delta', () => {
+  const english = { items_one: '{{count}} item', items_other: '{{count}} items' }
+  const russian = {
+    items_one: '{{count}} элемент',
+    items_other: '{{count}} элемента',
+    items_few: '{{count}} items',
+    items_many: '{{count}} items'
+  }
+  const report = russianTranslationProgress(english, russian, new Set(['items']))
+  expect(report.unreviewedCopies).toEqual(['items_few', 'items_many'])
+  expect(report.domains['navigation-workspace-runtime'].ru.items_few).toEqual({
+    source: '{{count}} items',
+    translation: '',
+    previousTranslation: '{{count}} items'
+  })
+  expect(
+    russianTranslationProgress(
+      { providers_other: 'Codex' },
+      {
+        providers_other: 'Codex',
+        providers_one: 'Codex',
+        providers_few: 'Codex',
+        providers_many: 'Codex'
+      },
+      new Set(['providers'])
+    ).unreviewedCopies
+  ).toEqual([])
+})

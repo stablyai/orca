@@ -116,3 +116,32 @@ it('allows punctuation outside an unchanged prose URL to be translated', async (
   await applyTranslationDelta(root, delta)
   expect(JSON.parse(await readFile(target, 'utf8')).action).toBe(translation)
 })
+
+it('applies generated missing plural deltas using each exact English form', async () => {
+  const english = { items_one: '{{count}} item', items_other: '{{count}} items' }
+  const report = russianTranslationProgress(english, {}, new Set(['items']))
+  const entries = report.domains['navigation-workspace-runtime'].ru
+  expect(entries.items_one.source).toBe('{{count}} item')
+  expect(entries.items_few.source).toBe('{{count}} items')
+  const words = {
+    items_one: 'элемент',
+    items_other: 'элемента',
+    items_few: 'элемента',
+    items_many: 'элементов'
+  }
+  const reviewed = Object.fromEntries(
+    Object.entries(entries).map(([key, entry]) => [
+      key,
+      { ...entry, translation: `{{count}} ${words[key]}` }
+    ])
+  )
+  const { root, target, delta } = await fixture(english)
+  await writeFile(delta, JSON.stringify({ ru: reviewed }))
+  await applyTranslationDelta(root, delta)
+  expect(JSON.parse(await readFile(target, 'utf8'))).toEqual({
+    items_one: '{{count}} элемент',
+    items_other: '{{count}} элемента',
+    items_few: '{{count}} элемента',
+    items_many: '{{count}} элементов'
+  })
+})
