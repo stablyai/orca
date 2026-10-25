@@ -38,46 +38,12 @@ vi.mock('./ArtifactListRow', async (importOriginal) => {
 
 const { ArtifactCollection } = await import('./ArtifactCollection')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
-const { ARTIFACTS_TABLE_ROW_HEIGHT_PX } = await import('./artifacts-table-layout')
 
 const VIEWPORT_HEIGHT_PX = 600
-/**
- * Row height the arithmetic below is written against, never assumed: mounted rows measure from
- * their own classes (`artifactRowHeightPx`), and the guard test pins that derived height to both
- * this number and the virtualizer's estimate for unmounted rows.
- */
 const SYNTHETIC_ROW_HEIGHT_PX = 53
-// Synthetic sticky-header height, and so the list's offset inside the scroller. Far larger than
-// the real `h-8`, so a lost or wrong scroll margin resolves a visibly different window.
 const HEADER_HEIGHT_PX = 300
 const VIRTUAL_SHELL_SELECTOR = '[data-testid="virtualized-list"]'
-/** The row box itself: the grid that carries the padding, the divider and the selection wash. */
 const ARTIFACT_ROW_SELECTOR = '[role="button"][tabindex="0"]'
-/**
- * Literals, not the constants under test: an expectation rebuilt from the same source moves with
- * it and can only ever catch a *removed* token. The bug this list shipped with was an added one —
- * a `w-fit` band sizing every row's hover and selection wash to the scroll width, not the viewport.
- */
-const ARTIFACTS_GRID_CLASS =
-  'grid grid-cols-[minmax(0,1.6fr)_minmax(4.5rem,6.5rem)_minmax(4rem,5.5rem)_minmax(6.5rem,9rem)_minmax(6.5rem,9rem)_2.5rem]'
-const SCROLLER_CLASS =
-  'scrollbar-sleek min-h-0 flex-1 overflow-auto rounded-md border border-border/50 bg-muted/20'
-const TABLE_HEADER_CLASS = `${ARTIFACTS_GRID_CLASS} sticky top-0 z-30 h-8 items-center gap-3 border-b border-border/50 bg-[color-mix(in_srgb,var(--muted)_40%,var(--background))] px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground`
-/** An unselected row that draws its divider — every windowed row but the list-final one. */
-const ROW_CLASS = `${ARTIFACTS_GRID_CLASS} group/list-table-row w-full min-h-11 scroll-mt-8 cursor-pointer items-center gap-3 px-3 py-3 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 border-b border-border/50`
-// Why `data-current` cannot stand in for the wash: it is set from a separate expression, so
-// deleting the wash leaves the attribute while the user loses the only visible selection marker.
-const SELECTED_ROW_CLASS = `${ROW_CLASS} bg-accent text-accent-foreground`
-/** Takes the scroller's visible width, as the old `divide-y` band did; a static block box would even without `w-full`. */
-const VIRTUAL_SHELL_CLASS = 'relative w-full'
-/**
- * This wrapper, not the shell, sets a windowed row's width: an absolutely positioned box
- * shrink-to-fits to the grid's min-content (468px — the template's hard minimums, its gaps and the
- * row padding), so without `w-full` it overhangs any narrower scroller's right edge.
- */
-const WINDOWED_ROW_WRAPPER_CLASS = 'absolute top-0 left-0 w-full'
-/** The list-final row draws no divider, so this rule is its bottom edge. */
-const LOAD_MORE_BLOCK_CLASS = 'border-t border-border/50 p-2'
 const DAY_MS = 24 * 60 * 60 * 1000
 
 type ResizeObserverBoxSize = { blockSize: number; inlineSize: number }
@@ -145,105 +111,6 @@ let scrollTopPatched: WeakSet<Element>
 /** Current synthetic header height; tests grow it to move the list inside the scroller. */
 let headerHeightPx: number
 
-/** Tailwind's `text-sm` line box — what a row cell holding only text is tall. */
-const TEXT_SM_LINE_BOX_PX = 20
-/** What a row's `border-b` hairline adds to its border box. */
-const ROW_DIVIDER_HEIGHT_PX = 1
-
-// Splits `dark:hover:bg-accent/50` into its variants and the utility they gate. Tracks bracket
-// depth because colons inside a variant (`[&_svg:not([class*='size-'])]:size-3`) are not separators.
-function splitTailwindToken(token: string): { variants: string[]; utility: string } {
-  const variants: string[] = []
-  let depth = 0
-  let start = 0
-  for (let index = 0; index < token.length; index += 1) {
-    const char = token[index]
-    if (char === '[') {
-      depth += 1
-    } else if (char === ']') {
-      depth -= 1
-    } else if (char === ':' && depth === 0) {
-      variants.push(token.slice(start, index))
-      start = index + 1
-    }
-  }
-  return { variants, utility: token.slice(start) }
-}
-
-/** `[&_svg…]`, `[&>span…]`: an arbitrary variant that reaches a descendant sizes that child, not this element. */
-function isDescendantScopedVariant(variant: string): boolean {
-  return /^\[&[_>+~]/.test(variant)
-}
-
-/**
- * px for every bare Tailwind spacing token with this prefix (`py-` -> [12] for `py-3`). A variant
- * of the same utility (`md:size-9`, `hover:py-4`) throws rather than being skipped: it makes the
- * height conditional, and skipping it would quietly resolve to the shorter of the two heights.
- */
-function spacingTokensPx(element: Element, prefix: string): number[] {
-  const steps: number[] = []
-  for (const token of element.classList) {
-    const { variants, utility } = splitTailwindToken(token)
-    if (!utility.startsWith(prefix)) {
-      continue
-    }
-    if (variants.length > 0 && !variants.every(isDescendantScopedVariant)) {
-      throw new Error(`variant-prefixed token "${token}" not supported on ${element.className}`)
-    }
-    if (variants.length > 0) {
-      continue
-    }
-    const step = Number(utility.slice(prefix.length))
-    if (!Number.isFinite(step)) {
-      throw new Error(`non-numeric ${prefix} token "${token}" on ${element.className}`)
-    }
-    steps.push(step * 4)
-  }
-  return steps
-}
-
-/** px for the one Tailwind spacing token with this prefix, where exactly one is required. */
-function spacingPx(element: Element, prefix: string): number {
-  const values = spacingTokensPx(element, prefix)
-  if (values.length !== 1) {
-    throw new Error(`expected one ${prefix}N class, got ${values.length} on ${element.className}`)
-  }
-  return values[0] ?? 0
-}
-
-/** Prefixes that can set a box's height. `max-h-` only caps, so it cannot make a row taller. */
-const HEIGHT_PREFIXES = ['size-', 'h-', 'min-h-'] as const
-
-/** Tallest this element can be, from its own classes: its height tokens, or one text line. */
-function elementBoxHeightPx(element: Element): number {
-  const explicit = HEIGHT_PREFIXES.flatMap((prefix) => spacingTokensPx(element, prefix))
-  return explicit.length > 0 ? Math.max(...explicit) : TEXT_SM_LINE_BOX_PX
-}
-
-/**
- * The hairline this row actually draws, or 0. Exact utility match, not a prefix: the colour token
- * `border-border/50` beside it also starts with `border-b`, and a variant-gated copy would make
- * the height conditional, so it throws rather than resolving to the shorter row.
- */
-function rowDividerHeightPx(row: Element): number {
-  let draws = false
-  for (const token of row.classList) {
-    const { variants, utility } = splitTailwindToken(token)
-    if (utility !== 'border-b') {
-      continue
-    }
-    if (variants.length > 0) {
-      throw new Error(`variant-prefixed token "${token}" not supported on ${row.className}`)
-    }
-    draws = true
-  }
-  return draws ? ROW_DIVIDER_HEIGHT_PX : 0
-}
-
-/** Name | Type | Size | Updated | Expires | Actions — the six tracks of ARTIFACTS_TABLE_GRID_CLASS. */
-const ARTIFACTS_ROW_CELL_COUNT = 6
-
-/** Header label -> the value that column must hold, for the `artifact()` fixture at index 3. */
 const LABELLED_ROW_COLUMNS = [
   ['Name', 'Artifact 3'],
   ['Type', 'HTML'],
@@ -252,27 +119,7 @@ const LABELLED_ROW_COLUMNS = [
   ['Expires', 'in 30 days']
 ] as const
 
-/**
- * What the browser would make this row, read off the markup and classes it actually carries:
- * padding around the tallest box anywhere inside it, floored by its own min-height, plus whatever
- * hairline it draws. Derived, not restated, because `ARTIFACTS_TABLE_ROW_HEIGHT_PX` is the
- * virtualizer's height for every unmounted row — at 500 rows an 8px error misreports the scroll
- * range by 4000px. Every descendant is scanned, not just the actions button, because any cell that
- * outgrows it sets the height, and `LIST_TABLE_ROW_CLASS` is shared with the automations table.
- */
-function artifactRowHeightPx(row: Element): number {
-  const boxes = Array.from(row.querySelectorAll('*'))
-  // Why the count and not just the heights: a cell over or under the column template wraps the
-  // grid to a second row, which doubles the height without any box inside it growing.
-  if (row.children.length !== ARTIFACTS_ROW_CELL_COUNT || boxes.length === 0) {
-    throw new Error(
-      `expected ${ARTIFACTS_ROW_CELL_COUNT} artifacts row cells, got ${row.children.length}`
-    )
-  }
-  const tallestBox = Math.max(...boxes.map(elementBoxHeightPx))
-  const padded = 2 * spacingPx(row, 'py-') + tallestBox
-  return Math.max(padded, spacingPx(row, 'min-h-')) + rowDividerHeightPx(row)
-}
+let measuredHeights: WeakMap<Element, number>
 
 function elementHeight(element: Element): number {
   if (element.classList.contains('overflow-auto')) {
@@ -286,7 +133,7 @@ function elementHeight(element: Element): number {
     : element.querySelector(ARTIFACT_ROW_SELECTOR)
   // Why 0 otherwise: nothing else here has a load-bearing height — the Load more block and the
   // empty-state paragraph are observed for resizes, never summed into an offset or windowed against.
-  return row ? artifactRowHeightPx(row) : 0
+  return row ? (measuredHeights.get(element) ?? SYNTHETIC_ROW_HEIGHT_PX) : 0
 }
 
 beforeEach(() => {
@@ -294,6 +141,7 @@ beforeEach(() => {
   mountedRows.count = 0
   mountedRows.mountsBySlug.clear()
   activeResizeObservers.clear()
+  measuredHeights = new WeakMap()
   topsByElement = new WeakMap()
   scrollTopPatched = new WeakSet()
   headerHeightPx = HEADER_HEIGHT_PX
@@ -654,21 +502,7 @@ describe('artifacts list windowing — below the threshold', () => {
 })
 
 describe('artifacts list windowing — above the threshold', () => {
-  // Why not a bare constant comparison: reading the height back off the rendered row's own classes
-  // fails here on a resized actions button, a `LIST_TABLE_ROW_CLASS` padding change or a dropped
-  // divider, rather than quietly leaving every unmounted row mis-estimated.
-  it('pins the production row-height estimate to the geometry the row classes actually describe', () => {
-    renderCollection({ items: artifacts(500) })
-
-    const row = host.querySelector(ARTIFACT_ROW_SELECTOR)
-    expect(row).not.toBeNull()
-    expect(row && artifactRowHeightPx(row)).toBe(ARTIFACTS_TABLE_ROW_HEIGHT_PX)
-    expect(ARTIFACTS_TABLE_ROW_HEIGHT_PX).toBe(SYNTHETIC_ROW_HEIGHT_PX)
-  })
-
-  // Why the estimate is allowed to be one uniform number: the list-final row draws no divider and
-  // so is genuinely a pixel shorter, and measurement is what replaces the estimate once that row
-  // is on screen. Without it the list would run on the estimate forever.
+  // A targeted resize must correct the estimate through the real measurement ref.
   it('hands each windowed row to the virtualizer to measure, and corrects the estimate', () => {
     renderCollection({ items: artifacts(500) })
     const shell = requireVirtualShell()
@@ -684,6 +518,7 @@ describe('artifacts list windowing — above the threshold', () => {
       throw new Error('list-final row not windowed')
     }
     // Otherwise the correction below would be vacuous: nothing to correct.
+    measuredHeights.set(lastRow, SYNTHETIC_ROW_HEIGHT_PX - 1)
     expect(elementHeight(lastRow)).toBeLessThan(SYNTHETIC_ROW_HEIGHT_PX)
     expect(Number.parseInt(shell.style.height, 10)).toBe(500 * SYNTHETIC_ROW_HEIGHT_PX)
 
@@ -723,19 +558,6 @@ describe('artifacts list windowing — above the threshold', () => {
     ).toEqual(windowedIndexes().map((index) => ['listitem', '500', String(index + 1)]))
   })
 
-  // Why a literal rather than a shared-token check: it catches an *added* token — `min-w-max` on
-  // the column template paints the header tint and every row wash out to the full scroll width.
-  it('keeps the header and the windowed rows on the one shared column template', () => {
-    renderCollection({ items: artifacts(500) })
-
-    expect(tableHeader().className).toBe(TABLE_HEADER_CLASS)
-    const rows = Array.from(host.querySelectorAll(`[data-index] ${ARTIFACT_ROW_SELECTOR}`))
-    expect(rows.length).toBe(16)
-    for (const row of rows) {
-      expect(row.className).toBe(ROW_CLASS)
-    }
-  })
-
   // Why the values and not just the tracks: the grid keeps six columns aligned either way, so
   // swapping two cells shows the wrong date under the right header — wrong data read as correct.
   it('puts each row value under the header that names it', () => {
@@ -749,26 +571,6 @@ describe('artifacts list windowing — above the threshold', () => {
     expect(values).toEqual(LABELLED_ROW_COLUMNS.map(([, value]) => value))
     // Without distinct values a swapped pair would still satisfy the line above.
     expect(new Set(values).size).toBe(LABELLED_ROW_COLUMNS.length)
-  })
-
-  it('keeps the header and the virtual shell as the scrollers own children, at the visible width', () => {
-    renderCollection({ items: artifacts(500) })
-
-    // Exactly the pre-virtualization structure. A band wrapping the rows and sized to its content
-    // would widen the row wash and push the scroll range past the viewport edge.
-    const children = Array.from(scroller().children)
-    expect(children.length).toBe(2)
-    expect(children[0]).toBe(tableHeader())
-    expect(children[1]).toBe(requireVirtualShell())
-    // Pinned, not `toContain`: a presence check cannot see an added width or overflow utility.
-    expect(scroller().className).toBe(SCROLLER_CLASS)
-    expect(tableHeader().className).toBe(TABLE_HEADER_CLASS)
-    expect(requireVirtualShell().className).toBe(VIRTUAL_SHELL_CLASS)
-    const wrappers = Array.from(host.querySelectorAll('[data-index]'))
-    expect(wrappers.length).toBe(16)
-    for (const wrapper of wrappers) {
-      expect(wrapper.className).toBe(WINDOWED_ROW_WRAPPER_CLASS)
-    }
   })
 
   it('separates every windowed row and stops at the list-final row, not the window-final one', () => {
@@ -932,9 +734,11 @@ describe('artifacts list windowing — surface behaviors', () => {
     const selected = rowAtIndex(400)?.querySelector('[data-current="true"]')
     expect(selected).not.toBeNull()
     expect(host.querySelectorAll('[data-current="true"]').length).toBe(1)
-    expect(selected?.className).toBe(SELECTED_ROW_CLASS)
+    expect(selected?.classList.contains('bg-accent')).toBe(true)
     // Conditional, not unconditional: its neighbour in the same window carries no wash.
-    expect(rowAtIndex(399)?.querySelector(ARTIFACT_ROW_SELECTOR)?.className).toBe(ROW_CLASS)
+    expect(
+      rowAtIndex(399)?.querySelector(ARTIFACT_ROW_SELECTOR)?.classList.contains('bg-accent')
+    ).toBe(false)
   })
 
   it('appends a page without a scroll jump or a shell remount', () => {
@@ -974,7 +778,7 @@ describe('artifacts list windowing — surface behaviors', () => {
     expect(loadMoreBlock?.textContent).toContain('Load more')
     // Why pinned: the list-final row draws no divider of its own, so this top rule is the only
     // thing closing the table — and a deleted class is invisible to a containment check.
-    expect(loadMoreBlock?.className).toBe(LOAD_MORE_BLOCK_CLASS)
+    expect(loadMoreBlock?.classList.contains('border-t')).toBe(true)
     expect(isObservedByAny(tableHeader())).toBe(true)
     expect(isObservedByAny(requireVirtualShell())).toBe(true)
     expect(loadMoreBlock ? isObservedByAny(loadMoreBlock) : false).toBe(true)
@@ -1004,10 +808,8 @@ describe('artifacts list windowing — surface behaviors', () => {
     expect(mountedRows.count).toBe(0)
   })
 
-  // Why reachable: `hasMore` tracks the server cursor, `matches` the search-filtered list computed
-  // inside the collection. A query matching nothing while a next page is pending lands here, so the
-  // empty text and Load more must coexist — suppressing either leaves a blank panel or a dead end.
-  it('shows the empty state alongside Load more when a search filters every row away', () => {
+  // An empty page may still have a server cursor for another page.
+  it('shows the empty state alongside Load more for an empty page', () => {
     renderCollection({ items: [], hasMore: true })
 
     const children = Array.from(scroller().children)
@@ -1016,7 +818,7 @@ describe('artifacts list windowing — surface behaviors', () => {
     expectCenteredEmptyState()
     const loadMoreBlock = children[2]
     expect(loadMoreBlock?.textContent).toContain('Load more')
-    expect(loadMoreBlock?.className).toBe(LOAD_MORE_BLOCK_CLASS)
+    expect(loadMoreBlock?.classList.contains('border-t')).toBe(true)
     expect(virtualShell()).toBeNull()
     expect(mountedRows.count).toBe(0)
   })

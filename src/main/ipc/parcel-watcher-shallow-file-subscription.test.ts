@@ -7,7 +7,7 @@ import {
   MISSING_FILE_SWEEP_INTERVAL_MS,
   startShallowFileWatcher
 } from './parcel-watcher-shallow-file-subscription'
-import type { ShallowWatcherSubscription } from './parcel-watcher-shallow-subscription'
+import type { ShallowWatcherSubscription } from './filesystem/watcher-process/parcel-watcher-shallow-subscription'
 
 let commonDir: string
 let subscription: ShallowWatcherSubscription | null

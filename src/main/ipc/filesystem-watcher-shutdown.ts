@@ -1,4 +1,4 @@
-import { disposeWatcherProcess } from './parcel-watcher-process'
+import { disposeWatcherProcess } from './filesystem/watcher-process/parcel-watcher-process'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { trackDetachedLocalUnsubscribe } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'

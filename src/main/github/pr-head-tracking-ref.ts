@@ -30,7 +30,10 @@ export async function fetchPrHeadTrackingRef(
   }
   await gitExecFileAsync(
     ['fetch', remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`],
-    options.localGitExecOptions ?? { cwd: repo.path }
+    {
+      ...(options.localGitExecOptions ?? { cwd: repo.path }),
+      timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS
+    }
   )
 }
 

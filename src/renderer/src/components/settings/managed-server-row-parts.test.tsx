@@ -77,10 +77,20 @@ const status: OrcadManagedRuntimeStatus = {
   }
 }
 
+const terminalsRunning = {
+  outcome: 'deferred' as const,
+  candidateVersion: '0.1.0+b',
+  code: 'orcad_update_terminals_running',
+  reason: '2 terminals are running on this host.',
+  forceable: true
+}
+
 async function render(
   rowStatus: OrcadManagedRuntimeStatus = status,
-  getStatus: () => Promise<OrcadManagedRuntimeStatus> = async () => rowStatus
+  getStatus: () => Promise<OrcadManagedRuntimeStatus> = async () => rowStatus,
+  updateResult: (args: { force?: boolean }) => unknown = () => terminalsRunning
 ) {
+  const update = vi.fn(async (args: { force?: boolean }) => updateResult(args))
   const stop = vi.fn(async () => ({ outcome: 'unlinked' }))
   const forget = vi.fn(async () => ({ outcome: 'forgotten' }))
   const recover = vi.fn(async (args: { acceptChangedState?: boolean }) =>
@@ -92,12 +102,13 @@ async function render(
           code: 'orcad_recovery_changed_state'
         }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row calls only getStatus, stop, forget and recover here.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row calls only getStatus, stop, forget, recover and update here.
   const api = {
     getStatus: vi.fn(getStatus),
     stop,
     forget,
-    recover
+    recover,
+    update
   } as unknown as ManagedOrcadPreloadApi
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only id and name.
   const environment = { id: 'env-1', name: 'Builder' } as PublicKnownRuntimeEnvironment
@@ -108,7 +119,7 @@ async function render(
   await act(async () => {
     root.render(<ManagedRowHarness api={api} environment={environment} />)
   })
-  return { container, stop, forget, recover }
+  return { container, stop, forget, recover, update }
 }
 
 const button = (container: HTMLElement, label: string) =>
@@ -175,5 +186,88 @@ describe('managed server row', () => {
 
     const stopped = await render({ ...status, activeVersion: null })
     expect(stopped.container.textContent).toContain('Not running')
+  })
+
+  it('offers Update for a newer bundled build and confirms before updating past running terminals', async () => {
+    const offered = {
+      ...status,
+      migration: null,
+      deferredUpdate: null,
+      activeAppVersion: '1.4.0',
+      availableUpdate: '0.1.0+b',
+      terminals: { liveSessions: 2, startedSinceActivation: 0, daemonProtocolVersion: 3 }
+    }
+    const { container, update } = await render(
+      offered,
+      async () => offered,
+      (args) =>
+        args.force
+          ? { outcome: 'updated', activeVersion: '0.1.0+b', environment: { id: 'env-1' } }
+          : terminalsRunning
+    )
+    expect(container.textContent).toContain('Orca on this host: 1.4.0')
+    await act(async () => button(container, 'Update')?.click())
+    expect(update).toHaveBeenLastCalledWith({ selector: 'env-1' })
+    expect(container.textContent).toContain('keep running through the update')
+    await act(async () => button(container, 'Update anyway')?.click())
+    expect(update).toHaveBeenLastCalledWith({
+      selector: 'env-1',
+      pastLiveTerminals: { incumbentVersion: '1.2.0' }
+    })
+  })
+
+  it('confirms past running terminals for a menu Update the row does not advertise', async () => {
+    const retried = { ...status, migration: null, deferredUpdate: null, availableUpdate: null }
+    const { container, update } = await render(retried, async () => retried)
+    await act(async () => button(container, 'Update Orca on this host')?.click())
+    await act(async () => button(container, 'Update anyway')?.click())
+    expect(update).toHaveBeenLastCalledWith({
+      selector: 'env-1',
+      pastLiveTerminals: { incumbentVersion: '1.2.0' }
+    })
+  })
+
+  it('replaces the Update anyway confirmation when the user picks Stop', async () => {
+    const offered = { ...status, migration: null, deferredUpdate: null, availableUpdate: '0.1.0+b' }
+    const { container } = await render(offered, async () => offered)
+    await act(async () => button(container, 'Update')?.click())
+    await act(async () => button(container, 'Stop…')?.click())
+    expect(button(container, 'Update anyway')).toBeUndefined()
+    expect(button(container, 'Stop and remove server')).toBeDefined()
+  })
+
+  it('drops the Update anyway confirmation once the host runs another build', async () => {
+    let current = {
+      ...status,
+      migration: null,
+      deferredUpdate: null,
+      availableUpdate: '0.1.0+b'
+    }
+    const { container, update } = await render(current, async () => current)
+    await act(async () => button(container, 'Update')?.click())
+    expect(button(container, 'Update anyway')).toBeDefined()
+    current = { ...current, activeVersion: '2.0.0' }
+    await act(async () => button(container, 'Refresh status')?.click())
+    expect(button(container, 'Update anyway')).toBeUndefined()
+    expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers no Update without an available build, and no Update anyway past terminals it would strand', async () => {
+    const current = await render({ ...status, recovery: null, availableUpdate: null })
+    expect(button(current.container, 'Update')).toBeUndefined()
+
+    const offered = { ...status, migration: null, availableUpdate: '0.1.0+b' }
+    const stranded = await render(
+      offered,
+      async () => offered,
+      () => ({
+        ...terminalsRunning,
+        code: 'orcad_update_strands_live_terminals',
+        forceable: false
+      })
+    )
+    await act(async () => button(stranded.container, 'Update')?.click())
+    expect(button(stranded.container, 'Update anyway')).toBeUndefined()
+    expect(stranded.update).toHaveBeenCalledTimes(1)
   })
 })

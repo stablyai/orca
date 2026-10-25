@@ -3,6 +3,8 @@ export type LocalBaseRefRefreshResult = {
   baseRef: string
   localBranch: string
   ownerWorktreePath?: string
+  /** A shallow clone hides the shared history, so Git cannot prove local is only behind. */
+  shallowHistory?: true
 }
 
 export type LocalBaseRefUpdateSuggestion = {

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { getWatcherProcessEntryPath } from '../ipc/parcel-watcher-entry-path'
+import { getWatcherProcessEntryPath } from '../ipc/filesystem/watcher-process/parcel-watcher-entry-path'
 import {
   AI_VAULT_SERVICE_ENTRY_FILENAME,
   getAiVaultServiceEntryPath

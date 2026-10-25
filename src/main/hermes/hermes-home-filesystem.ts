@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import type { ConfigParseResult, HermesConfig } from './hermes-config-yaml'
 import { parseHermesConfig } from './hermes-config-yaml'
+import { getHermesHome } from './hermes-default-home'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
 import { writeHooksJson } from '../agent-hooks/installer-utils'
 import {
@@ -12,11 +12,6 @@ import {
   getPluginInitSource,
   getPluginManifest
 } from './hermes-managed-plugin-source'
-
-export function getHermesHome(env: NodeJS.ProcessEnv = process.env): string {
-  const explicit = env.HERMES_HOME?.trim()
-  return explicit ? explicit : join(homedir(), '.hermes')
-}
 
 export function getConfigPath(): string {
   return join(getHermesHome(), 'config.yaml')

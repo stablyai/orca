@@ -131,6 +131,14 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         alive.push(session.sessionId)
         // Include background sessions in the final disconnect checkpoint.
         this.activeSessionIds.add(session.sessionId)
+        // Why: after a relaunch a pane the window has not reopened still sleeps, and reading its
+        // shell's folder then needs what only the daemon still knows about it.
+        if (session.wslDistro) {
+          this.wslDistrosBySessionId.set(session.sessionId, session.wslDistro)
+        }
+        if (session.wslDistro && session.paneKey) {
+          this.wslPaneKeysBySessionId.set(session.sessionId, session.paneKey)
+        }
         await this.reconcileLiveSessionHistory(session).catch((err) =>
           console.warn('[history] live-session reconciliation failed:', session.sessionId, err)
         )

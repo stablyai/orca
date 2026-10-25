@@ -1,4 +1,4 @@
-import { isWatcherProcessFailure } from '../../../ipc/parcel-watcher-process-failure'
+import { isWatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
 import type { FileWatchBatchCadence } from '../../../../shared/rpc-contract/files-target-params'

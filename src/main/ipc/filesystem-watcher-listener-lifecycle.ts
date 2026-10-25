@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { isWatcherProcessFailure } from './parcel-watcher-process-failure'
+import { isWatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import {
   type CancelledInstallWaiter,

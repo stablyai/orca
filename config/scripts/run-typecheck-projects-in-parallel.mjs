@@ -2,7 +2,7 @@ import { runProcessSync, spawnProcess } from '@orca/process-host'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism, totalmem } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { readPinnedBunVersion, resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 import { resolveTsrsTypecheckCommand, supportsTsrs } from './tsrs-typecheck-compiler.mjs'
@@ -19,6 +19,12 @@ export const TYPECHECK_PROJECTS = [
   { config: 'config/tsconfig.tc.cli.json', heapGib: 2 },
   // Root projects exclude workspace package tests; each runs with its package's compiler.
   { config: 'src/packages/process-host/tsconfig.test.json', heapGib: 1 }
+]
+
+// Selected only by --project: mobile is a separate install that root checks cannot assume.
+export const MOBILE_TYPECHECK_PROJECTS = [
+  { config: 'mobile/tsconfig.json', heapGib: 2 },
+  { config: 'mobile/tsconfig.test.json', heapGib: 3 }
 ]
 
 // The OS, node itself, and the runner agent need their share; the rest is what tsc may hold.
@@ -62,7 +68,7 @@ export function planTypecheckBatches(projects, { budgetGib, parallelism }) {
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 
 export function resolveProjectCompilerInfo(config, root = repoRoot) {
-  const require = createRequire(join(root, dirname(config), 'package.json'))
+  const require = createRequire(join(resolve(root, dirname(config)), 'package.json'))
   const manifestPath = require.resolve('typescript/package.json')
   const { bin, version } = JSON.parse(readFileSync(manifestPath, 'utf8'))
   return { program: join(dirname(manifestPath), typeof bin === 'string' ? bin : bin.tsc), version }
@@ -92,7 +98,9 @@ export function parseTypecheckOptions(args) {
       options.bunThreads = Number(argument.slice('--bun-threads='.length))
     } else if (argument.startsWith('--project=')) {
       const config = argument.slice('--project='.length)
-      const project = TYPECHECK_PROJECTS.find((candidate) => candidate.config === config)
+      const project = [...TYPECHECK_PROJECTS, ...MOBILE_TYPECHECK_PROJECTS].find(
+        (candidate) => candidate.config === config
+      )
       if (!project) {
         throw new Error(`Unknown typecheck project: ${config}`)
       }

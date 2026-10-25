@@ -151,7 +151,7 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
-  it('clears from a keyboard-reachable row action without selecting the row', async () => {
+  it('clears from the row action without selecting the row', async () => {
     const thread = createTestThread()
     const onClear = vi.fn()
     const onSelect = vi.fn()
@@ -232,7 +232,7 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     expect(container.querySelector('[data-testid="hover-card-content"]')).not.toBeNull()
   })
 
-  it('allows clicking row while preventing inner hover interactions from bubbling', async () => {
+  it('selects the thread when the row body is clicked', async () => {
     const onSelect = vi.fn()
     const thread = createTestThread()
 
